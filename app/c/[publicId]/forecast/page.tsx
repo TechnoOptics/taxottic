@@ -117,7 +117,9 @@ export default async function ForecastPage({ params }: { params: Params }) {
   }
   const { data: categoryRows } = await supabase
     .from("deduction_categories")
-    .select("code, label, description, schedule_c_line, irs_pub")
+    .select(
+      "code, label, description, schedule_c_line, irs_pub, irc_section, pub_chapter, irs_url",
+    )
     .in(
       "code",
       eligible.map((e) => e.code),
@@ -129,6 +131,9 @@ export default async function ForecastPage({ params }: { params: Params }) {
       description: string;
       schedule_c_line: string | null;
       irs_pub: string | null;
+      irc_section: string | null;
+      pub_chapter: string | null;
+      irs_url: string | null;
     }
   >();
   for (const c of (categoryRows ?? []) as Array<{
@@ -137,12 +142,18 @@ export default async function ForecastPage({ params }: { params: Params }) {
     description: string;
     schedule_c_line: string | null;
     irs_pub: string | null;
+    irc_section: string | null;
+    pub_chapter: string | null;
+    irs_url: string | null;
   }>) {
     categoryMeta.set(c.code, {
       label: c.label,
       description: c.description,
       schedule_c_line: c.schedule_c_line,
       irs_pub: c.irs_pub,
+      irc_section: c.irc_section,
+      pub_chapter: c.pub_chapter,
+      irs_url: c.irs_url,
     });
   }
   const scorecard = buildScorecard({ eligible, capturedByCode, categoryMeta });

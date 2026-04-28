@@ -78,6 +78,7 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
                     {formatCents(it.capturedCents)} this year
                     {it.scheduleC ? ` - ${it.scheduleC}` : ""}
                   </div>
+                  <IrsCitation item={it} />
                 </div>
               </li>
             ))}
@@ -106,6 +107,7 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
                     {it.reason}
                     {it.scheduleC ? ` (${it.scheduleC})` : ""}
                   </div>
+                  <IrsCitation item={it} />
                 </div>
               </li>
             ))}
@@ -122,8 +124,10 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
       ) : null}
 
       <p className="mt-6 text-[11px] leading-relaxed text-ink-muted">
-        The scorecard is a guide, not legal advice. Many deductions have
-        eligibility rules - confirm with a CPA for high-impact items.
+        The scorecard cites the Internal Revenue Code section and the
+        relevant IRS Publication chapter for each item. It is a guide, not
+        legal advice. Many deductions have eligibility rules - confirm with
+        a CPA for high-impact items.
       </p>
     </section>
   );
@@ -152,6 +156,61 @@ function ScoreBadge({
       <div className="mt-1 inline-flex items-center px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[0.2em] text-gold-700 border border-gold-300/60 bg-gold-50">
         {labels[milestone]}
       </div>
+    </div>
+  );
+}
+
+function IrsCitation({
+  item,
+}: {
+  item: {
+    ircSection: string | null;
+    pubChapter: string | null;
+    irsPub: string | null;
+    irsUrl: string | null;
+  };
+}) {
+  const irc = item.ircSection;
+  const pub = item.pubChapter ?? item.irsPub;
+  if (!irc && !pub) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-[0.15em]">
+      {irc ? (
+        <span className="inline-flex items-center rounded border border-forest-200 bg-white px-1.5 py-0.5 text-forest-800">
+          <span className="font-medium not-italic">IRC </span>
+          <span className="ml-1">{irc.replace(/^§+/, "")}</span>
+        </span>
+      ) : null}
+      {pub ? (
+        item.irsUrl ? (
+          <a
+            href={item.irsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center rounded border border-gold-300/70 bg-gold-50 px-1.5 py-0.5 text-gold-700 hover:bg-gold-100 normal-case tracking-normal"
+          >
+            <span className="font-medium">{pub}</span>
+            <svg
+              viewBox="0 0 12 12"
+              width="9"
+              height="9"
+              className="ml-1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 3 H9 V9" />
+              <path d="M9 3 L3 9" />
+            </svg>
+          </a>
+        ) : (
+          <span className="inline-flex items-center rounded border border-gold-300/70 bg-gold-50 px-1.5 py-0.5 text-gold-700 normal-case tracking-normal">
+            {pub}
+          </span>
+        )
+      ) : null}
     </div>
   );
 }

@@ -232,6 +232,9 @@ export type ScorecardItem = EligibleDeduction & {
   description: string;
   scheduleC: string | null;
   irsPub: string | null;
+  ircSection: string | null;
+  pubChapter: string | null;
+  irsUrl: string | null;
 };
 
 export type Scorecard = {
@@ -263,6 +266,9 @@ export function buildScorecard(args: {
       description: string;
       schedule_c_line: string | null;
       irs_pub: string | null;
+      irc_section: string | null;
+      pub_chapter: string | null;
+      irs_url: string | null;
     }
   >;
 }): Scorecard {
@@ -277,6 +283,9 @@ export function buildScorecard(args: {
       description: meta?.description ?? "",
       scheduleC: meta?.schedule_c_line ?? null,
       irsPub: meta?.irs_pub ?? null,
+      ircSection: meta?.irc_section ?? null,
+      pubChapter: meta?.pub_chapter ?? null,
+      irsUrl: meta?.irs_url ?? null,
     };
   });
 
