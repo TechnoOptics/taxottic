@@ -1,0 +1,300 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   Taxottic brand tokens
+   Aligned with sister brands Advottic + Techno Optics:
+   - Forest green primary (#0F2D24)
+   - Champagne gold accent (#D5BB7E)
+   - Warm cream surface (#F5EDD6)
+   - Charcoal ink (#18181B)
+   Fonts: Fraunces (display) + Inter (body) loaded via next/font in layout.tsx;
+   Conquera (custom) for the Taxottic wordmark only.
+============================================================================ */
+
+@font-face {
+  font-family: "Conquera";
+  src: url("/fonts/conquera.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --color-forest-50: #f0f5f3;
+  --color-forest-100: #d6e3dd;
+  --color-forest-200: #aac4b8;
+  --color-forest-300: #7ea58f;
+  --color-forest-400: #538867;
+  --color-forest-500: #356a4d;
+  --color-forest-600: #234e39;
+  --color-forest-700: #173a2c;
+  --color-forest-800: #0f2d24;
+  --color-forest-900: #0c241d;
+  --color-forest-950: #0a1f19;
+
+  --color-gold-50: #fbf6e6;
+  --color-gold-100: #f5edd6;
+  --color-gold-200: #ebd9ad;
+  --color-gold-300: #e0c590;
+  --color-gold-400: #d5bb7e;
+  --color-gold-500: #c4a25d;
+  --color-gold-600: #a78540;
+  --color-gold-700: #8a661f;
+
+  --color-cream: #fbf7e9;
+  --color-paper: #ffffff;
+  --color-ink: #18181b;
+  --color-ink-soft: #3f3f46;
+  --color-ink-muted: #71717a;
+
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-wordmark: "Conquera", var(--font-fraunces), ui-serif, serif;
+}
+
+/* ============================================================================
+   Base
+============================================================================ */
+
+:root {
+  /* iOS notch + Android nav bar safe areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-pad-top { padding-top: var(--safe-top); }
+.safe-pad-bottom { padding-bottom: var(--safe-bottom); }
+.safe-pad-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+
+html, body {
+  background-color: #fbf7e9; /* cream */
+  color: #18181b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Stop iOS rubber-banding past edges and pull-to-refresh inside the app */
+  overscroll-behavior: none;
+  /* Prevent stray oversized children from pushing horizontal scroll on mobile */
+  overflow-x: clip;
+  /* Prevent iOS auto-zoom on input focus (font-size >= 16px on form fields) */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Honor side safe areas without pushing top/bottom (those are handled by
+   `safe-pad-top` / `safe-pad-bottom` so layouts can opt in per page) */
+body {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+html {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--font-sans);
+  position: relative;
+}
+
+/* Atmospheric backdrop: warm gold veil top-right + forest accent bottom-left
+   + faint 32px grid. Masked to fade out toward bottom so foreground content
+   reads cleanly. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(1200px 600px at 90% -10%, rgba(213, 187, 126, 0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 100%, rgba(15, 45, 36, 0.07), transparent 60%),
+    linear-gradient(rgba(15, 45, 36, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 45, 36, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
+  mask-image: linear-gradient(180deg, black 0%, black 30%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* Keep page content above the backdrop */
+main, header, footer, nav {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
+   Components
+============================================================================ */
+
+@layer components {
+  .wordmark {
+    font-family: var(--font-wordmark);
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  /* Card: hairline border, paper background, gentle shadow.
+     .card-hover lifts and accents with gold on hover. */
+  .card {
+    background: #ffffff;
+    border: 1px solid rgba(15, 45, 36, 0.08);
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px rgba(15, 45, 36, 0.04), 0 4px 16px rgba(15, 45, 36, 0.04);
+  }
+  .card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-1px);
+    border-color: rgba(213, 187, 126, 0.5);
+    box-shadow: 0 2px 4px rgba(15, 45, 36, 0.05), 0 12px 28px rgba(15, 45, 36, 0.08);
+  }
+
+  /* Primary button: forest with subtle gold inner highlight + lift hover */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.75rem;
+    padding: 0 1.25rem;
+    border-radius: 0.625rem;
+    background: linear-gradient(180deg, #173a2c 0%, #0f2d24 100%);
+    color: #fbf7e9;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow:
+      inset 0 1px 0 rgba(213, 187, 126, 0.18),
+      0 1px 2px rgba(15, 45, 36, 0.2);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(213, 187, 126, 0.28),
+      0 6px 18px rgba(15, 45, 36, 0.25);
+  }
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Secondary button: ghost outline, forest text, hover fills cream */
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.75rem;
+    padding: 0 1.25rem;
+    border-radius: 0.625rem;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(15, 45, 36, 0.18);
+    color: #0f2d24;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  }
+  .btn-ghost:hover {
+    background: #f5edd6;
+    border-color: rgba(213, 187, 126, 0.6);
+    transform: translateY(-1px);
+  }
+
+  /* Form input: clean hairline + focus ring in forest.
+     font-size: 16px on iOS prevents the auto-zoom-on-focus jump. */
+  .input {
+    width: 100%;
+    height: 2.75rem;
+    padding: 0 0.875rem;
+    background: #ffffff;
+    border: 1px solid rgba(15, 45, 36, 0.18);
+    border-radius: 0.625rem;
+    color: #18181b;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  @media (min-width: 640px) {
+    .input { font-size: 0.875rem; }
+  }
+  .input:focus {
+    border-color: #0f2d24;
+    box-shadow: 0 0 0 3px rgba(15, 45, 36, 0.12);
+  }
+
+  /* Select uses .input plus a forest-colored chevron and right padding so the
+     value never collides with the icon. Hides the native arrow for a clean
+     cross-browser look. */
+  select.input,
+  .select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 2.5rem;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path fill='none' stroke='%230f2d24' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M4 6l4 4 4-4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.875rem center;
+    background-size: 16px 16px;
+    cursor: pointer;
+  }
+  select.input:disabled,
+  .select:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  /* Gold-shimmer text: used sparingly on headlines / accents */
+  .gold-shine {
+    background: linear-gradient(
+      135deg,
+      #8a661f 0%,
+      #c79532 18%,
+      #f2d896 38%,
+      #c79532 62%,
+      #8a661f 100%
+    );
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: co-gold-pan 8s ease-in-out infinite;
+  }
+  @keyframes co-gold-pan {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Header glow line: faint gold sweep beneath sticky headers */
+  .header-glow-line::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(213, 187, 126, 0.6) 30%,
+      rgba(213, 187, 126, 0.9) 50%,
+      rgba(213, 187, 126, 0.6) 70%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: co-header-shimmer 12s ease-in-out infinite;
+  }
+  @keyframes co-header-shimmer {
+    0%, 100% { background-position: 0% 0%; }
+    50% { background-position: 100% 0%; }
+  }
+}

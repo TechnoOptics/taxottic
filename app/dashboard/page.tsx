@@ -1,0 +1,282 @@
+import Link from "next/link";
+import { requireUser, getMyCompanies } from "@/lib/auth";
+import { AppHeader } from "@/components/AppHeader";
+import { evaluateBadges } from "@/lib/badges/evaluate";
+import { BADGES, TIER_STYLES } from "@/lib/badges/catalog";
+import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
+import { formatCents } from "@/lib/tax/forecast";
+
+export default async function DashboardPage() {
+  const { supabase, user } = await requireUser();
+  const taxYear = new Date().getUTCFullYear();
+
+  // Lazy-evaluate badges + ensure reminders exist on every dashboard hit.
+  // Both are idempotent and cheap.
+  await Promise.all([
+    evaluateBadges(supabase, user.id),
+    ensureQuarterlyReminders(supabase, user.id, taxYear),
+  ]);
+
+  const companies = await getMyCompanies();
+
+  if (companies.length === 0) {
+    const { data: pending } = await supabase
+      .from("invitations")
+      .select("id, company_id, role, company:companies(name, public_id)")
+      .is("accepted_at", null);
+
+    return (
+      <main className="min-h-screen">
+        <AppHeader email={user.email ?? undefined} />
+        <section className="max-w-2xl mx-auto px-6 py-16">
+          <div className="card p-10 text-center">
+            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+              Welcome
+            </div>
+            <h1 className="display mt-3 text-4xl text-forest-900">
+              Let&apos;s set up your first company.
+            </h1>
+            <p className="mt-3 text-sm text-ink-soft">
+              You&apos;re signed in as {user.email}.
+            </p>
+
+            {pending && pending.length > 0 ? (
+              <div className="mt-8 text-left">
+                <h2 className="text-sm font-medium text-forest-800">
+                  Pending invitations
+                </h2>
+                <ul className="mt-3 grid gap-2">
+                  {pending.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-forest-100 bg-white px-3 py-2 text-sm flex justify-between"
+                    >
+                      <span className="text-forest-800">
+                        {(p.company as unknown as { name: string }).name}
+                      </span>
+                      <span className="text-ink-muted">{p.role}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="mt-8">
+              <Link href="/onboarding/new-company" className="btn-primary">
+                Create a new company
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  // Pull dashboard data: upcoming reminders + active goals + earned badges
+  const [{ data: reminders }, { data: activeGoals }, { data: badges }] =
+    await Promise.all([
+      supabase
+        .from("reminders")
+        .select("id, kind, title, due_at")
+        .is("dismissed_at", null)
+        .gte("due_at", new Date().toISOString())
+        .order("due_at", { ascending: true })
+        .limit(3),
+      supabase
+        .from("goals")
+        .select(
+          "id, title, target_cents, saved_cents, status, deadline",
+        )
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase
+        .from("badges")
+        .select("badge_code, awarded_at")
+        .eq("user_id", user.id)
+        .order("awarded_at", { ascending: false }),
+    ]);
+
+  return (
+    <main className="min-h-screen">
+      <AppHeader email={user.email ?? undefined} />
+      <section className="max-w-5xl mx-auto px-6 py-10">
+        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+          Your workspace
+        </div>
+        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
+          Hello.
+        </h1>
+
+        {/* Upcoming reminders */}
+        {reminders && reminders.length > 0 ? (
+          <section className="mt-8">
+            <div className="flex items-end justify-between">
+              <h2 className="display text-xl text-forest-900">Coming up</h2>
+              <Link
+                href="/reminders"
+                className="text-sm text-ink-soft hover:text-forest-800"
+              >
+                All reminders &rarr;
+              </Link>
+            </div>
+            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {reminders.map((r) => {
+                const days = Math.max(
+                  0,
+                  Math.ceil(
+                    (new Date(r.due_at).getTime() - Date.now()) / 86_400_000,
+                  ),
+                );
+                return (
+                  <li
+                    key={r.id}
+                    className="card p-4"
+                  >
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                      In {days} day{days === 1 ? "" : "s"}
+                    </div>
+                    <div className="display text-base text-forest-900 mt-1">
+                      {r.title}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
+        {/* Companies */}
+        <section className="mt-8">
+          <div className="flex items-end justify-between">
+            <h2 className="display text-xl text-forest-900">Companies</h2>
+            <Link
+              href="/onboarding/new-company"
+              className="text-sm text-forest-700 hover:text-forest-900"
+            >
+              + New company
+            </Link>
+          </div>
+          <ul className="mt-3 grid gap-3">
+            {companies.map((m) => (
+              <li
+                key={m.company_id}
+                className="card card-hover p-5 flex items-center justify-between"
+              >
+                <div>
+                  <div className="display text-xl text-forest-900">
+                    {m.company.name}
+                  </div>
+                  <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
+                    {m.company.public_id} - {m.role}
+                  </div>
+                </div>
+                <Link
+                  href={`/c/${m.company.public_id}/forecast`}
+                  className="btn-ghost"
+                >
+                  Open
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Active goals */}
+        {activeGoals && activeGoals.length > 0 ? (
+          <section className="mt-8">
+            <div className="flex items-end justify-between">
+              <h2 className="display text-xl text-forest-900">Active goals</h2>
+              <Link
+                href="/goals"
+                className="text-sm text-ink-soft hover:text-forest-800"
+              >
+                All goals &rarr;
+              </Link>
+            </div>
+            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {activeGoals.map((g) => {
+                const pct =
+                  g.target_cents > 0
+                    ? Math.min(
+                        100,
+                        Math.round((g.saved_cents / g.target_cents) * 100),
+                      )
+                    : 0;
+                return (
+                  <li key={g.id} className="card p-4">
+                    <div className="display text-base text-forest-900 truncate">
+                      {g.title}
+                    </div>
+                    <div className="text-xs text-ink-muted mt-1">
+                      {formatCents(g.saved_cents)} of{" "}
+                      {formatCents(g.target_cents)}
+                    </div>
+                    <div className="mt-3 h-1.5 rounded-full bg-forest-50 overflow-hidden">
+                      <div
+                        className="h-full bg-gold-400"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : (
+          <section className="mt-8">
+            <div className="card p-5 flex items-center justify-between gap-4">
+              <div>
+                <div className="display text-base text-forest-900">
+                  Set a goal to stay ahead.
+                </div>
+                <p className="text-xs text-ink-muted mt-1">
+                  Pick a tax-savings target and watch the gap close.
+                </p>
+              </div>
+              <Link href="/goals" className="btn-ghost">
+                New goal
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {/* Badges */}
+        <section className="mt-8">
+          <div className="flex items-end justify-between">
+            <h2 className="display text-xl text-forest-900">
+              Your achievements
+            </h2>
+            <span className="text-xs text-ink-muted">
+              {badges?.length ?? 0} earned
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.values(BADGES).map((b) => {
+              const earned = (badges ?? []).some(
+                (x) => x.badge_code === b.code,
+              );
+              return (
+                <div
+                  key={b.code}
+                  className={
+                    "rounded-xl border px-3 py-2 text-xs flex items-center gap-2 " +
+                    (earned
+                      ? TIER_STYLES[b.tier]
+                      : "bg-white/40 border-forest-100 text-ink-muted")
+                  }
+                  title={b.description}
+                >
+                  <span className="text-base">{b.icon}</span>
+                  <span className="font-medium">
+                    {earned ? b.title : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </section>
+    </main>
+  );
+}
