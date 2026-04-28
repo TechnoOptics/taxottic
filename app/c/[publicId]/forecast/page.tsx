@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
+import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import {
   forecast,
@@ -10,6 +11,10 @@ import {
   type ForecastInput,
 } from "@/lib/tax/forecast";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
+import {
+  buildScorecard,
+  eligibleDeductions,
+} from "@/lib/deductions/eligibility";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -95,6 +100,52 @@ export default async function ForecastPage({ params }: { params: Params }) {
   const expenseByMonth = monthBuckets(
     (expenseRows ?? []).map((r) => ({ month: r.month, amount: r.amount_cents })),
   );
+
+  // Deduction scorecard: which eligible deductions has this business captured?
+  const eligible = eligibleDeductions({
+    entityType: (company.entity_type ?? "sole_prop") as EntityType,
+    hasEmployees: businessProfile?.has_employees ?? false,
+    hasVehicle: businessProfile?.has_vehicle ?? false,
+    hasHomeOffice: businessProfile?.has_home_office ?? false,
+  });
+  const capturedByCode = new Map<string, number>();
+  for (const r of expenseRows ?? []) {
+    capturedByCode.set(
+      r.category_code,
+      (capturedByCode.get(r.category_code) ?? 0) + r.amount_cents,
+    );
+  }
+  const { data: categoryRows } = await supabase
+    .from("deduction_categories")
+    .select("code, label, description, schedule_c_line, irs_pub")
+    .in(
+      "code",
+      eligible.map((e) => e.code),
+    );
+  const categoryMeta = new Map<
+    string,
+    {
+      label: string;
+      description: string;
+      schedule_c_line: string | null;
+      irs_pub: string | null;
+    }
+  >();
+  for (const c of (categoryRows ?? []) as Array<{
+    code: string;
+    label: string;
+    description: string;
+    schedule_c_line: string | null;
+    irs_pub: string | null;
+  }>) {
+    categoryMeta.set(c.code, {
+      label: c.label,
+      description: c.description,
+      schedule_c_line: c.schedule_c_line,
+      irs_pub: c.irs_pub,
+    });
+  }
+  const scorecard = buildScorecard({ eligible, capturedByCode, categoryMeta });
 
   return (
     <main className="min-h-screen">
@@ -188,6 +239,9 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </p>
           <MonthlyBars income={incomeByMonth} expenses={expenseByMonth} />
         </div>
+
+        {/* Deduction scorecard */}
+        <DeductionScorecard publicId={publicId} scorecard={scorecard} />
 
         {/* Hints */}
         {result.hints.length > 0 ? (
