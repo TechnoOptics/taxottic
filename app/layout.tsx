@@ -57,7 +57,7 @@ export default function RootLayout({
       lang="en"
       className={`${fraunces.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col safe-pad-top safe-pad-bottom">
+      <body className="min-h-full flex flex-col safe-pad-bottom">
         {children}
         <PWASetup />
       </body>

@@ -25,9 +25,6 @@ export function Wordmark({
       className={`wordmark ${sizeMap[size]} ${color} inline-flex items-baseline gap-1 select-none`}
     >
       <span>Taxottic</span>
-      <span className="gold-shine text-[0.6em] tracking-widest font-medium">
-        BY TECHNO OPTICS
-      </span>
     </Link>
   );
 }
