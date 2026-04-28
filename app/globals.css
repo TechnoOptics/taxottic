@@ -274,6 +274,62 @@ main, header, footer, nav {
     50% { background-position: 100% 50%; }
   }
 
+  /* Trophy-room frame: deep forest gradient with gold radial accents and a
+     micro grid texture so medal cards look like they sit in a display case. */
+  .rewards-frame {
+    background:
+      radial-gradient(900px 240px at 15% 0%, rgba(213, 187, 126, 0.22), transparent 70%),
+      radial-gradient(700px 240px at 100% 100%, rgba(213, 187, 126, 0.16), transparent 70%),
+      linear-gradient(160deg, #1d4538 0%, #0f2d24 55%, #0a201a 100%);
+    border: 1px solid rgba(213, 187, 126, 0.25);
+    box-shadow:
+      0 1px 0 rgba(213, 187, 126, 0.18) inset,
+      0 14px 40px -18px rgba(10, 32, 26, 0.55);
+    isolation: isolate;
+  }
+  .rewards-frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.45;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 28px 28px, 28px 28px;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 90%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 90%);
+  }
+  /* Subtle gold sweep along the top edge of the trophy room */
+  .rewards-frame::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1.5px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(213, 187, 126, 0.45) 30%,
+      rgba(242, 216, 150, 0.85) 50%,
+      rgba(213, 187, 126, 0.45) 70%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: co-header-shimmer 14s ease-in-out infinite;
+  }
+
+  /* Earned reward card hover: lifts and casts a faint gold glow */
+  .reward-card {
+    transition: filter 0.2s ease, transform 0.2s ease;
+  }
+  .reward-card:hover,
+  .reward-card:focus-visible {
+    filter: drop-shadow(0 6px 18px rgba(213, 187, 126, 0.25));
+  }
+
   /* Premium app header: forest gradient + animated gold sweep + subtle grain.
      Used on every authenticated page so the brand frames the experience. */
   .app-header {
