@@ -130,7 +130,9 @@ export async function applyTransactions(formData: FormData) {
     return;
   }
 
-  const taxYear = new Date().getUTCFullYear();
+  const now = new Date();
+  const taxYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
   const expenseInserts: Array<{
     company_id: string;
     user_id: string;
@@ -144,9 +146,14 @@ export async function applyTransactions(formData: FormData) {
   const txUpdates: { id: string }[] = [];
 
   for (const tx of applicable) {
-    const month = tx.posted_at
-      ? new Date(tx.posted_at + "T00:00:00Z").getUTCMonth() + 1
-      : new Date().getUTCMonth() + 1;
+    if (!tx.posted_at) continue; // skip transactions with no date
+    const posted = new Date(tx.posted_at + "T00:00:00Z");
+    const txYear = posted.getUTCFullYear();
+    const txMonth = posted.getUTCMonth() + 1;
+    // Skip rows that are not in the current tax year or are future-dated.
+    if (txYear !== taxYear) continue;
+    if (txMonth > currentMonth) continue;
+
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
     if (tx.amount_cents < 0) {
@@ -154,7 +161,7 @@ export async function applyTransactions(formData: FormData) {
         company_id: companyId,
         user_id: user.id,
         tax_year: taxYear,
-        month,
+        month: txMonth,
         amount_cents: absCents,
         category_code: tx.applied_category_code!,
         notes: tx.description,

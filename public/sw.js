@@ -3,9 +3,12 @@
  * Strategy: network-first for HTML/data, cache-first for static assets.
  * Goal: snappy navigations + survives a brief network blip.
  *
- * Bumping CACHE_VERSION invalidates the old cache on next activate.
+ * Update flow: when a new SW version is installed, it sits in the "waiting"
+ * state until the client explicitly tells it to take over. The client (see
+ * PWASetup) shows a "New version - Refresh" toast and posts SKIP_WAITING
+ * when the user taps it.
  */
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
@@ -19,7 +22,8 @@ self.addEventListener("install", (event) => {
       }),
     ),
   );
-  self.skipWaiting();
+  // NOTE: do NOT self.skipWaiting() here. We want the new SW to wait so the
+  // client can prompt the user before we replace the running version.
 });
 
 self.addEventListener("activate", (event) => {
@@ -35,19 +39,23 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
 
-  // Only handle GET; let everything else pass through.
   if (req.method !== "GET") return;
 
-  // Don't cache cross-origin or auth endpoints.
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
   if (url.pathname.startsWith("/auth/")) return;
 
-  // Static assets (Next chunks, fonts, images): cache-first.
+  // Static assets: cache-first.
   if (
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/fonts/") ||
@@ -66,7 +74,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // HTML / RSC: network-first, fall back to cache, fall back to /offline.
+  // HTML / RSC: network-first, fall back to cache, then offline shell.
   if (req.mode === "navigate" || req.headers.get("accept")?.includes("text/html")) {
     event.respondWith(
       fetch(req)

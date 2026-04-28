@@ -62,7 +62,7 @@ export default async function IncomePage({ params }: { params: Params }) {
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-forest-800">Month</span>
               <select name="month" className="input" defaultValue={currentMonth}>
-                {MONTH_LABELS.map((m, i) => (
+                {MONTH_LABELS.slice(0, currentMonth).map((m, i) => (
                   <option key={i} value={i + 1}>
                     {m}
                   </option>

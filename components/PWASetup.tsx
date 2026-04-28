@@ -8,48 +8,98 @@ type DeferredPrompt = Event & {
 };
 
 /**
- * Mounted once at the root layout. Two jobs:
+ * Mounted once at the root layout. Three jobs:
  * 1. Register the service worker so the app installs as a PWA on iOS/Android/desktop.
  * 2. Catch the `beforeinstallprompt` event and surface a small "Install Taxottic"
  *    button. iOS does not fire this event - on iOS we show a tooltip telling
  *    the user to use Share -> Add to Home Screen.
+ * 3. Detect when a new service worker is waiting and show an "Update available"
+ *    toast. When the user taps Refresh, post SKIP_WAITING to the waiting SW
+ *    and reload as soon as the new SW takes control.
  */
 export function PWASetup() {
   const [deferred, setDeferred] = useState<DeferredPrompt | null>(null);
   const [showIosHint, setShowIosHint] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [waitingWorker, setWaitingWorker] =
+    useState<ServiceWorker | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Service worker registration
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Fail silently; SW is progressive enhancement
-      });
+    let reg: ServiceWorkerRegistration | undefined;
+
+    async function registerSW() {
+      if (!("serviceWorker" in navigator)) return;
+      try {
+        reg = await navigator.serviceWorker.register("/sw.js");
+
+        // If a worker is already waiting when we register, surface it.
+        if (reg.waiting) setWaitingWorker(reg.waiting);
+
+        // When an update is found, watch its install state.
+        reg.addEventListener("updatefound", () => {
+          const newWorker = reg?.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener("statechange", () => {
+            if (
+              newWorker.state === "installed" &&
+              navigator.serviceWorker.controller
+            ) {
+              // A new version is ready, but the current page is still
+              // controlled by the old one. Wait for user opt-in.
+              setWaitingWorker(newWorker);
+            }
+          });
+        });
+
+        // Once the new SW takes control (after we post SKIP_WAITING), reload
+        // so the page picks up the new build.
+        let reloading = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (reloading) return;
+          reloading = true;
+          window.location.reload();
+        });
+
+        // Periodic check for updates while the tab is open. Cheap.
+        const interval = setInterval(() => {
+          reg?.update().catch(() => {});
+        }, 60_000);
+        // Also check when the tab regains focus.
+        const onFocus = () => reg?.update().catch(() => {});
+        window.addEventListener("focus", onFocus);
+
+        // Clean up on unmount (StrictMode double-mount safety).
+        return () => {
+          clearInterval(interval);
+          window.removeEventListener("focus", onFocus);
+        };
+      } catch {
+        // SW failures are non-fatal.
+      }
     }
+
+    registerSW();
 
     // Already installed?
     const standalone =
       window.matchMedia?.("(display-mode: standalone)").matches ||
-      // iOS Safari
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window.navigator as any).standalone === true;
     if (standalone) {
       setInstalled(true);
-      return;
     }
 
-    // iOS does not support beforeinstallprompt; detect and offer the hint.
+    // iOS install hint.
     const ua = window.navigator.userAgent.toLowerCase();
     const isIos = /iphone|ipad|ipod/.test(ua) && !/crios|fxios/.test(ua);
-    if (isIos) {
-      // Show after a short delay so it's not aggressive on first load
-      const t = setTimeout(() => {
+    let iosTimer: ReturnType<typeof setTimeout> | null = null;
+    if (isIos && !standalone) {
+      iosTimer = setTimeout(() => {
         const dismissed = localStorage.getItem("taxottic.iosInstallDismissed");
         if (!dismissed) setShowIosHint(true);
       }, 8000);
-      return () => clearTimeout(t);
     }
 
     const onBeforeInstall = (e: Event) => {
@@ -60,13 +110,47 @@ export function PWASetup() {
       setInstalled(true);
       setDeferred(null);
     };
-    window.addEventListener("beforeinstallprompt", onBeforeInstall);
-    window.addEventListener("appinstalled", onAppInstalled);
+    if (!isIos) {
+      window.addEventListener("beforeinstallprompt", onBeforeInstall);
+      window.addEventListener("appinstalled", onAppInstalled);
+    }
+
     return () => {
+      if (iosTimer) clearTimeout(iosTimer);
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onAppInstalled);
     };
   }, []);
+
+  function applyUpdate() {
+    if (!waitingWorker) return;
+    waitingWorker.postMessage({ type: "SKIP_WAITING" });
+    // controllerchange listener (above) will reload once the new SW activates.
+  }
+
+  // Update toast takes precedence over install prompts.
+  if (waitingWorker) {
+    return (
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 max-w-md w-full">
+        <div className="card flex items-center gap-3 px-4 py-3 shadow-lg border-gold-300/60">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-forest-900">
+              New version available
+            </div>
+            <div className="text-xs text-ink-muted">
+              Refresh to use the latest Taxottic.
+            </div>
+          </div>
+          <button
+            onClick={applyUpdate}
+            className="btn-primary text-xs h-9 px-3"
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (installed) return null;
 

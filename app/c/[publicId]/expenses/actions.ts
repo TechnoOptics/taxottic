@@ -37,6 +37,16 @@ export async function addExpense(formData: FormData) {
   ) {
     throw new Error("Invalid input");
   }
+  // Reject future-dated entries and entries from other tax years.
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
+  if (taxYear !== currentYear) {
+    throw new Error("You can only add entries for the current tax year.");
+  }
+  if (month < 1 || month > 12 || month > currentMonth) {
+    throw new Error("You cannot add entries for a future month.");
+  }
   if (!(await userBelongsToCompany(admin, user.id, companyId))) {
     throw new Error("Not a member of this company");
   }
