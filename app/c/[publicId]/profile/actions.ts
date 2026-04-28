@@ -48,6 +48,15 @@ export async function saveBusinessProfile(formData: FormData) {
     vehicle_method: text("vehicle_method"),
     vehicle_business_miles: num("vehicle_business_miles"),
     primary_industry: text("primary_industry"),
+    // Tax-export details
+    legal_name: text("legal_name"),
+    ein: text("ein"),
+    address_line1: text("address_line1"),
+    address_line2: text("address_line2"),
+    city: text("city"),
+    zip: text("zip"),
+    phone: text("phone"),
+    business_email: text("business_email"),
   });
   if (error) throw new Error(error.message);
 

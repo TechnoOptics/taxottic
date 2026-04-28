@@ -16,6 +16,14 @@ type Props = {
     homeTotalSqft: number | null;
     vehicleMethod: string | null;
     vehicleBusinessMiles: number | null;
+    ein: string | null;
+    legalName: string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city: string | null;
+    zip: string | null;
+    phone: string | null;
+    businessEmail: string | null;
   };
   // The server action passed in from the page (a Server Action reference).
   action: (formData: FormData) => Promise<void>;
@@ -137,6 +145,115 @@ export function BusinessProfileForm({
             className="input"
             disabled={!isManager}
             defaultValue={initial.vehicleBusinessMiles ?? ""}
+          />
+        </label>
+      </fieldset>
+
+      <fieldset className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-forest-100 pt-5">
+        <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+          For your tax preparer (optional)
+        </legend>
+        <p className="sm:col-span-2 text-xs text-ink-muted -mt-1 leading-relaxed">
+          These show up on the year-end PDF you can hand to a CPA. All
+          optional. EIN is your federal employer identification number if you
+          have one; sole proprietors often use their SSN instead and can leave
+          this blank.
+        </p>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-forest-800">
+            Legal business name
+          </span>
+          <input
+            name="legal_name"
+            type="text"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.legalName ?? ""}
+            placeholder="e.g. Acme Photography LLC"
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-forest-800">EIN</span>
+          <input
+            name="ein"
+            type="text"
+            inputMode="numeric"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.ein ?? ""}
+            placeholder="12-3456789"
+            maxLength={20}
+          />
+        </label>
+        <label className="grid gap-1.5 sm:col-span-2">
+          <span className="text-sm font-medium text-forest-800">
+            Street address
+          </span>
+          <input
+            name="address_line1"
+            type="text"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.addressLine1 ?? ""}
+            placeholder="1234 Main St"
+          />
+        </label>
+        <label className="grid gap-1.5 sm:col-span-2">
+          <span className="text-sm font-medium text-forest-800">
+            Suite / unit (optional)
+          </span>
+          <input
+            name="address_line2"
+            type="text"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.addressLine2 ?? ""}
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-forest-800">City</span>
+          <input
+            name="city"
+            type="text"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.city ?? ""}
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-forest-800">ZIP</span>
+          <input
+            name="zip"
+            type="text"
+            inputMode="numeric"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.zip ?? ""}
+            maxLength={10}
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-forest-800">Phone</span>
+          <input
+            name="phone"
+            type="tel"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.phone ?? ""}
+            placeholder="(555) 123-4567"
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium text-forest-800">
+            Business email
+          </span>
+          <input
+            name="business_email"
+            type="email"
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.businessEmail ?? ""}
+            placeholder="hello@yourbusiness.com"
           />
         </label>
       </fieldset>

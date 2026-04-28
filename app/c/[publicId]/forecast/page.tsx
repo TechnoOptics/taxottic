@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { DeductionScorecard } from "@/components/DeductionScorecard";
+import { FindCpaCard } from "@/components/FindCpaCard";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import {
   forecast,
@@ -271,6 +272,44 @@ export default async function ForecastPage({ params }: { params: Params }) {
             </ul>
           </div>
         ) : null}
+
+        {/* Tax-prep confidence section: export PDF + find a CPA near you */}
+        <section className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card p-6 sm:p-7">
+            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+              Year-end export
+            </div>
+            <h2 className="display mt-1 text-xl text-forest-900">
+              Walk into your CPA confident, not anxious.
+            </h2>
+            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+              The law lets your business come first. Use every deduction you
+              earned this year, then hand a clean year-end summary to your tax
+              preparer with EIN, address, income, expenses by Schedule C line,
+              and IRC citations included.
+            </p>
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              <Link
+                href={`/c/${publicId}/export?year=${taxYear}`}
+                className="btn-primary"
+              >
+                Open year-end summary
+              </Link>
+              <Link
+                href={`/c/${publicId}/profile`}
+                className="text-sm text-forest-700 hover:text-forest-900"
+              >
+                Add EIN + business address &rarr;
+              </Link>
+            </div>
+          </div>
+
+          <FindCpaCard
+            zip={businessProfile?.zip ?? null}
+            stateCode={taxProfile.state_code ?? company.state_code ?? null}
+            city={businessProfile?.city ?? null}
+          />
+        </section>
 
         {/* Quick actions */}
         <div className="mt-6 flex flex-wrap gap-3">
