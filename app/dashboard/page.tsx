@@ -371,8 +371,17 @@ export default async function DashboardPage() {
           </section>
         )}
 
-        {/* Trophy room: clickable medals on a forest showcase frame */}
+        {/* Achievements: each medal sits in a thick metal frame; earned ones
+            get an animated holographic shimmer wave. */}
         <section className="mt-8">
+          <div className="flex items-end justify-between">
+            <h2 className="display text-xl text-forest-900">
+              Your achievements
+            </h2>
+            <span className="text-xs text-ink-muted">
+              {badges?.length ?? 0} earned
+            </span>
+          </div>
           <AchievementsGrid
             earnedCodes={(badges ?? []).map((b) => b.badge_code)}
           />

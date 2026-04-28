@@ -14,13 +14,13 @@ const TIER_LABEL: Record<Badge["tier"], string> = {
   gold: "Gold",
 };
 
-// Metallic gradient borders matching each tier. Used to wrap each medal
-// card so earned medals literally wear the metal of their tier.
+// Thick metallic gradient borders matching each tier. Used to wrap each
+// medal card so earned medals literally wear the metal of their tier.
 const TIER_BORDER: Record<Badge["tier"], string> = {
   bronze:
-    "linear-gradient(135deg, #d99356 0%, #f0b97a 25%, #9b6f3a 55%, #7e4f1e 100%)",
+    "linear-gradient(135deg, #d99356 0%, #f0b97a 22%, #9b6f3a 55%, #7e4f1e 100%)",
   silver:
-    "linear-gradient(135deg, #e2e6ea 0%, #ffffff 22%, #9aa1a8 55%, #7c8389 100%)",
+    "linear-gradient(135deg, #e2e6ea 0%, #ffffff 22%, #9aa1a8 55%, #6c7178 100%)",
   gold:
     "linear-gradient(135deg, #f2d896 0%, #fff5d4 22%, #c79532 55%, #8a661f 100%)",
 };
@@ -43,73 +43,71 @@ const HOW_TO_EARN: Record<string, string> = {
   team_grower: "Invite at least one teammate to a company you manage.",
 };
 
+const TIER_DELAY: Record<Badge["tier"], string> = {
+  bronze: "0s",
+  silver: "1.2s",
+  gold: "2.4s",
+};
+
 export function AchievementsGrid({ earnedCodes }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const earned = new Set(earnedCodes);
 
   const all = Object.values(BADGES);
   const focused = selected ? BADGES[selected] : null;
-  const earnedCount = earnedCodes.length;
 
   return (
     <>
-      {/* Spectacular dark-green showcase frame */}
-      <div className="rewards-frame mt-4 rounded-2xl p-4 sm:p-6 relative overflow-hidden">
-        <div className="relative z-10 flex items-end justify-between mb-4 gap-4 flex-wrap">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.25em] text-gold-300">
-              Trophy room
-            </div>
-            <div className="display text-cream text-xl mt-0.5">
-              Your achievements
-            </div>
-          </div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-gold-300/80">
-            {earnedCount} of {all.length} earned
-          </div>
-        </div>
-
-        <div className="relative z-10 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
-          {all.map((b) => {
-            const isEarned = earned.has(b.code);
-            const borderBg = isEarned
-              ? TIER_BORDER[b.tier]
-              : "linear-gradient(135deg, rgba(213,187,126,0.18), rgba(213,187,126,0.06))";
-            return (
-              <button
-                type="button"
-                key={b.code}
-                onClick={() => setSelected(b.code)}
-                aria-label={`${b.title} - ${isEarned ? "earned" : "locked"}`}
-                className="reward-card group focus:outline-none"
-                style={{
-                  background: borderBg,
-                  padding: 1.5,
-                  borderRadius: 14,
-                }}
+      <div className="mt-4 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+        {all.map((b) => {
+          const isEarned = earned.has(b.code);
+          const borderBg = isEarned
+            ? TIER_BORDER[b.tier]
+            : "linear-gradient(135deg, rgba(15,45,36,0.18), rgba(15,45,36,0.08))";
+          return (
+            <button
+              type="button"
+              key={b.code}
+              onClick={() => setSelected(b.code)}
+              aria-label={`${b.title} - ${isEarned ? "earned" : "locked"}`}
+              className="reward-card group focus:outline-none"
+              style={{
+                background: borderBg,
+                padding: 4,
+                borderRadius: 16,
+              }}
+            >
+              <div
+                className={
+                  "relative rounded-[12px] px-3 py-3 flex flex-col items-center text-center gap-2 overflow-hidden transition-transform group-hover:-translate-y-0.5 " +
+                  (isEarned
+                    ? "bg-gradient-to-b from-cream via-white to-cream/60"
+                    : "bg-white/70")
+                }
               >
+                {/* Holographic shimmer wave - earned only */}
+                {isEarned ? (
+                  <span
+                    aria-hidden="true"
+                    className="reward-shimmer"
+                    style={{ animationDelay: TIER_DELAY[b.tier] }}
+                  />
+                ) : null}
+                <div className="relative z-[1]">
+                  <BadgeMedal code={b.code} earned={isEarned} size={48} />
+                </div>
                 <div
                   className={
-                    "rounded-[12px] px-3 py-3 flex flex-col items-center text-center gap-2 transition-transform group-hover:-translate-y-0.5 " +
-                    (isEarned
-                      ? "bg-gradient-to-b from-cream to-white shadow-sm"
-                      : "bg-forest-900/40 backdrop-blur-[2px]")
+                    "relative z-[1] text-[11px] font-medium leading-tight " +
+                    (isEarned ? "text-forest-900" : "text-ink-muted")
                   }
                 >
-                  <BadgeMedal code={b.code} earned={isEarned} size={48} />
-                  <div
-                    className={
-                      "text-[11px] font-medium leading-tight " +
-                      (isEarned ? "text-forest-900" : "text-cream/70")
-                    }
-                  >
-                    {b.title}
-                  </div>
+                  {b.title}
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {focused ? (
@@ -149,15 +147,18 @@ function BadgeDialog({
         onClick={(e) => e.stopPropagation()}
         style={{
           background: TIER_BORDER[badge.tier],
-          padding: 2,
-          borderRadius: 20,
+          padding: 4,
+          borderRadius: 22,
         }}
       >
-        <div className="rounded-[18px] bg-gradient-to-b from-cream to-white p-6 sm:p-8 text-center relative">
+        <div className="rounded-[18px] bg-gradient-to-b from-cream via-white to-cream/70 p-6 sm:p-8 text-center relative overflow-hidden">
+          {earned ? (
+            <span aria-hidden="true" className="reward-shimmer" />
+          ) : null}
           <button
             onClick={onClose}
             aria-label="Close"
-            className="absolute top-3 right-3 size-8 rounded-full grid place-items-center text-ink-soft hover:bg-cream hover:text-forest-900"
+            className="absolute top-3 right-3 size-8 rounded-full grid place-items-center text-ink-soft hover:bg-cream hover:text-forest-900 z-10"
           >
             <svg
               viewBox="0 0 16 16"
@@ -172,7 +173,7 @@ function BadgeDialog({
             </svg>
           </button>
 
-          <div className="flex flex-col items-center gap-3">
+          <div className="relative z-[1] flex flex-col items-center gap-3">
             <BadgeMedal code={badge.code} earned={earned} size={96} />
             <div className="text-[10px] uppercase tracking-[0.25em] text-gold-700">
               {TIER_LABEL[badge.tier]} {earned ? "earned" : "locked"}
