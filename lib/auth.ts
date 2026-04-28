@@ -7,6 +7,19 @@ export async function requireUser() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Enforce admin-applied block. Service-role read so RLS doesn't hide it.
+  const admin = createServiceClient();
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("is_blocked")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (prof?.is_blocked) {
+    await supabase.auth.signOut();
+    redirect("/account/suspended");
+  }
+
   return { supabase, user };
 }
 

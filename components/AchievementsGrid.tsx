@@ -82,15 +82,12 @@ export function AchievementsGrid({ earnedCodes }: Props) {
                   "reward-tile-inner relative rounded-[12px] px-3 py-3 flex flex-col items-center text-center gap-2 overflow-hidden transition-transform group-hover:-translate-y-0.5 " +
                   (isEarned ? "is-earned" : "is-locked")
                 }
+                style={
+                  isEarned
+                    ? { animationDelay: TIER_DELAY[b.tier] }
+                    : undefined
+                }
               >
-                {/* Holographic shimmer wave - earned only */}
-                {isEarned ? (
-                  <span
-                    aria-hidden="true"
-                    className="reward-shimmer"
-                    style={{ animationDelay: TIER_DELAY[b.tier] }}
-                  />
-                ) : null}
                 <div className="relative z-[1]">
                   <BadgeMedal code={b.code} earned={isEarned} size={48} />
                 </div>
@@ -155,9 +152,6 @@ function BadgeDialog({
             (earned ? "is-earned" : "is-locked")
           }
         >
-          {earned ? (
-            <span aria-hidden="true" className="reward-shimmer" />
-          ) : null}
           <button
             onClick={onClose}
             aria-label="Close"

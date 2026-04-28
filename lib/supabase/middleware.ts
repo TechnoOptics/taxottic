@@ -13,6 +13,8 @@ const PUBLIC_PATHS = [
   "/icon.svg",
   "/favicon.ico",
   "/sw.js",
+  "/account/suspended",
+  "/legal",
 ];
 
 export async function updateSession(request: NextRequest) {

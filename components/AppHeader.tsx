@@ -1,7 +1,11 @@
 import { Wordmark } from "./Wordmark";
 import { BellaFAB } from "./BellaFAB";
 import { UserMenu } from "./UserMenu";
+import { GdprBanner } from "./GdprBanner";
+import { FeedbackButton } from "./FeedbackButton";
 import { createClient } from "@/lib/supabase/server";
+import { recordGdprConsent } from "@/app/actions/consent";
+import { submitFeedback } from "@/app/actions/feedback";
 
 type AppHeaderProps = {
   email?: string;
@@ -9,21 +13,23 @@ type AppHeaderProps = {
 };
 
 export async function AppHeader({ email, bellaCompanyId }: AppHeaderProps) {
-  // Pull profile for avatar + display name. Cheap; we already auth above.
+  // Pull profile for avatar + display name + GDPR state.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   let fullName: string | null = null;
   let avatarUrl: string | null = null;
+  let needsConsent = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, avatar_url")
+      .select("full_name, avatar_url, gdpr_consented_at")
       .eq("id", user.id)
       .maybeSingle();
     fullName = profile?.full_name ?? null;
     avatarUrl = profile?.avatar_url ?? null;
+    needsConsent = !profile?.gdpr_consented_at;
   }
 
   return (
@@ -59,6 +65,8 @@ export async function AppHeader({ email, bellaCompanyId }: AppHeaderProps) {
         }}
       />
       <BellaFAB companyId={bellaCompanyId} />
+      <FeedbackButton submitAction={submitFeedback} />
+      {needsConsent ? <GdprBanner acceptAction={recordGdprConsent} /> : null}
     </>
   );
 }
