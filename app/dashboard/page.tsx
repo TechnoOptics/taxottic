@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { evaluateBadges } from "@/lib/badges/evaluate";
-import { BADGES } from "@/lib/badges/catalog";
-import { BadgeMedal } from "@/components/BadgeMedal";
+import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents } from "@/lib/tax/forecast";
 import { buildGreeting } from "@/lib/dashboard/greeting";
@@ -11,6 +11,25 @@ import { buildGreeting } from "@/lib/dashboard/greeting";
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
   const taxYear = new Date().getUTCFullYear();
+
+  // Invited employees: if they joined a company they didn't create and
+  // haven't been onboarded yet, route them to a quick "tell us your role"
+  // welcome before the regular dashboard. Managers (or already onboarded
+  // members) skip this.
+  const { data: pendingOnboarding } = await admin
+    .from("company_members")
+    .select("company_id, role, joined_at")
+    .eq("user_id", user.id)
+    .eq("role", "member")
+    .is("onboarded_at", null)
+    .order("joined_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (pendingOnboarding?.company_id) {
+    redirect(
+      `/onboarding/employee-role?company_id=${pendingOnboarding.company_id}`,
+    );
+  }
 
   // Lazy-evaluate badges + ensure reminders exist on every dashboard hit.
   // Both are idempotent and use admin client so the inserts work regardless
@@ -362,30 +381,9 @@ export default async function DashboardPage() {
               {badges?.length ?? 0} earned
             </span>
           </div>
-          <div className="mt-4 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
-            {Object.values(BADGES).map((b) => {
-              const earned = (badges ?? []).some(
-                (x) => x.badge_code === b.code,
-              );
-              return (
-                <div
-                  key={b.code}
-                  className="card p-3 flex flex-col items-center text-center gap-2"
-                  title={b.description}
-                >
-                  <BadgeMedal code={b.code} earned={earned} size={48} />
-                  <div
-                    className={
-                      "text-[11px] font-medium leading-tight " +
-                      (earned ? "text-forest-900" : "text-ink-muted")
-                    }
-                  >
-                    {b.title}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <AchievementsGrid
+            earnedCodes={(badges ?? []).map((b) => b.badge_code)}
+          />
         </section>
       </section>
     </main>

@@ -54,7 +54,10 @@ export default async function InvitePage({ params }: { params: Params }) {
       { p_token: token },
     );
     if (!error && companyPublicId) {
-      redirect(`/c/${companyPublicId}/manage`);
+      // Send fresh joiners through the role/title welcome before the company.
+      redirect(
+        `/onboarding/employee-role?next=/c/${companyPublicId}/forecast`,
+      );
     }
   }
 
