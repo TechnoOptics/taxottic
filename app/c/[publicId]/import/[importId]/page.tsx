@@ -48,7 +48,7 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
 
   return (
     <main className="min-h-screen">
-      <AppHeader email={user.email ?? undefined} />
+      <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-5xl mx-auto px-6 py-10">
         <Link
           href={`/c/${publicId}/import`}

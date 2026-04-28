@@ -16,8 +16,10 @@ type Message =
 
 export function BellaChat({
   companyPublicId,
+  compact = false,
 }: {
   companyPublicId?: string;
+  compact?: boolean;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -81,10 +83,14 @@ export function BellaChat({
   }
 
   return (
-    <div className="mt-6 flex-1 flex flex-col min-h-0">
+    <div className={(compact ? "" : "mt-6 ") + "flex-1 flex flex-col min-h-0"}>
       <div
         ref={scrollRef}
-        className="card flex-1 p-5 overflow-y-auto min-h-[320px] max-h-[60vh]"
+        className={
+          compact
+            ? "flex-1 overflow-y-auto"
+            : "card flex-1 p-5 overflow-y-auto min-h-[320px] max-h-[60vh]"
+        }
       >
         {messages.length === 0 ? (
           <Suggestions onPick={(s) => setInput(s)} />

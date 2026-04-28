@@ -41,7 +41,7 @@ export default async function IncomePage({ params }: { params: Params }) {
 
   return (
     <main className="min-h-screen">
-      <AppHeader email={user.email ?? undefined} />
+      <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-6 py-10">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           {company.public_id} - Tax year {taxYear}

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { evaluateBadges } from "@/lib/badges/evaluate";
-import { BADGES, TIER_STYLES } from "@/lib/badges/catalog";
+import { BADGES } from "@/lib/badges/catalog";
+import { BadgeMedal } from "@/components/BadgeMedal";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents } from "@/lib/tax/forecast";
 
@@ -253,7 +254,7 @@ export default async function DashboardPage() {
               {badges?.length ?? 0} earned
             </span>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
             {Object.values(BADGES).map((b) => {
               const earned = (badges ?? []).some(
                 (x) => x.badge_code === b.code,
@@ -261,18 +262,18 @@ export default async function DashboardPage() {
               return (
                 <div
                   key={b.code}
-                  className={
-                    "rounded-xl border px-3 py-2 text-xs flex items-center gap-2 " +
-                    (earned
-                      ? TIER_STYLES[b.tier]
-                      : "bg-white/40 border-forest-100 text-ink-muted")
-                  }
+                  className="card p-3 flex flex-col items-center text-center gap-2"
                   title={b.description}
                 >
-                  <span className="text-base">{b.icon}</span>
-                  <span className="font-medium">
-                    {earned ? b.title : "—"}
-                  </span>
+                  <BadgeMedal code={b.code} earned={earned} size={48} />
+                  <div
+                    className={
+                      "text-[11px] font-medium leading-tight " +
+                      (earned ? "text-forest-900" : "text-ink-muted")
+                    }
+                  >
+                    {b.title}
+                  </div>
                 </div>
               );
             })}

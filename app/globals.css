@@ -274,6 +274,62 @@ main, header, footer, nav {
     50% { background-position: 100% 50%; }
   }
 
+  /* Bella FAB: premium animated gold conic ring + dark forest core */
+  .bella-fab {
+    position: fixed;
+    isolation: isolate;
+  }
+  .bella-fab::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 9999px;
+    background: conic-gradient(
+      from var(--bella-angle, 0deg),
+      #8a661f 0%,
+      #f2d896 25%,
+      #ffffff 35%,
+      #f2d896 45%,
+      #8a661f 70%,
+      #0f2d24 100%
+    );
+    z-index: -1;
+    animation: bella-spin 6s linear infinite;
+  }
+  .bella-fab::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #234e39 0%, #0f2d24 100%);
+    z-index: -1;
+  }
+  .bella-fab-inner {
+    background: linear-gradient(
+      135deg,
+      #c79532 0%,
+      #f2d896 35%,
+      #c79532 65%,
+      #8a661f 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35));
+  }
+  @property --bella-angle {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+  }
+  @keyframes bella-spin {
+    to { --bella-angle: 360deg; }
+  }
+  /* Fallback for browsers without @property: just rotate the pseudo-element. */
+  @supports not (background: conic-gradient(from 1deg, red, blue)) {
+    .bella-fab::before { display: none; }
+  }
+
   /* Header glow line: faint gold sweep beneath sticky headers */
   .header-glow-line::after {
     content: "";
