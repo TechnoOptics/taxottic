@@ -78,6 +78,12 @@ export function UserMenu({ email, fullName, avatarUrl }: Props) {
             <MenuLink href="/dashboard" onClick={() => setOpen(false)}>
               Dashboard
             </MenuLink>
+            <MenuLink
+              href="/onboarding/tax-profile?next=/dashboard"
+              onClick={() => setOpen(false)}
+            >
+              Tax profile
+            </MenuLink>
             <MenuLink href="/goals" onClick={() => setOpen(false)}>
               Goals
             </MenuLink>

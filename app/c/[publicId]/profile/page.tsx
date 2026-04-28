@@ -47,6 +47,7 @@ export default async function ProfilePage({ params }: { params: Params }) {
               expectedRevenueCents: bp?.expected_revenue_cents ?? null,
               primaryIndustry: bp?.primary_industry ?? null,
               hasEmployees: bp?.has_employees ?? false,
+              employeeCount: bp?.employee_count ?? null,
               hasVehicle: bp?.has_vehicle ?? false,
               hasHomeOffice: bp?.has_home_office ?? false,
               homeOfficeSqft: bp?.home_office_sqft ?? null,

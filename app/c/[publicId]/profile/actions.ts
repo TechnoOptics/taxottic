@@ -36,11 +36,15 @@ export async function saveBusinessProfile(formData: FormData) {
     return raw === "" ? null : raw;
   };
 
+  const employeeCount = num("employee_count");
   const { error } = await admin.from("business_profiles").upsert({
     company_id: companyId,
     tax_year: taxYear,
     expected_revenue_cents: expectedCents,
-    has_employees: formData.get("has_employees") === "on",
+    has_employees:
+      formData.get("has_employees") === "on" ||
+      (employeeCount !== null && employeeCount > 0),
+    employee_count: employeeCount,
     has_vehicle: formData.get("has_vehicle") === "on",
     has_home_office: formData.get("has_home_office") === "on",
     home_office_sqft: num("home_office_sqft"),

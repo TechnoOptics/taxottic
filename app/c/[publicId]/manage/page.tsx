@@ -94,21 +94,38 @@ export default async function ManageCompanyPage({ params }: { params: Params }) 
             </h2>
             <form
               action={inviteMember}
-              className="mt-4 flex flex-col sm:flex-row gap-2"
+              className="mt-4 grid gap-2"
             >
-              <input type="hidden" name="company_id" value={company.id} />
-              <input
-                name="email"
-                type="email"
-                required
-                placeholder="employee@email.com"
-                className="input flex-1"
-              />
-              <select name="role" className="input sm:w-40" defaultValue="member">
-                <option value="member">Member</option>
-                <option value="manager">Manager</option>
-              </select>
-              <button className="btn-primary">Invite</button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input type="hidden" name="company_id" value={company.id} />
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="employee@email.com"
+                  className="input flex-1"
+                />
+                <select
+                  name="role"
+                  className="input sm:w-40"
+                  defaultValue="member"
+                >
+                  <option value="member">Member</option>
+                  <option value="manager">Manager</option>
+                </select>
+                <button className="btn-primary">Invite</button>
+              </div>
+              <label className="flex items-start gap-2 text-xs text-ink-soft cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="allow_bump_headcount"
+                  className="mt-0.5 size-3.5 accent-forest-800"
+                />
+                <span>
+                  If this invite exceeds my declared employee count, raise the
+                  headcount on the business profile automatically.
+                </span>
+              </label>
             </form>
 
             {invites && invites.length > 0 ? (

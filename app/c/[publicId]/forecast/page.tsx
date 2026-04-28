@@ -6,6 +6,9 @@ import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import {
+  ABOVE_THE_LINE_CODES,
+  computeHomeOfficeSimplifiedCents,
+  computeMileageDeductionCents,
   forecast,
   formatCents,
   type EntityType,
@@ -60,19 +63,40 @@ export default async function ForecastPage({ params }: { params: Params }) {
     redirect(`/onboarding/tax-profile?next=/c/${publicId}/forecast`);
   }
 
-  // Aggregate
+  // Aggregate. Bucket expense rows by category type so the engine can
+  // route SE health / retirement / HSA above-the-line.
   const ytdIncome = sum(incomeRows ?? [], (r) => r.amount_cents);
-  const ytdExpense = sum(expenseRows ?? [], (r) => r.amount_cents);
-  const ytdMeals = sum(
-    (expenseRows ?? []).filter((r) => r.category_code === "meals"),
-    (r) => r.amount_cents,
-  );
+  let ytdMeals = 0;
+  let ytdAboveTheLine = 0;
+  let ytdBizExpenses = 0;
+  for (const r of expenseRows ?? []) {
+    if (r.category_code === "meals") {
+      ytdMeals += r.amount_cents;
+    } else if (ABOVE_THE_LINE_CODES.has(r.category_code)) {
+      ytdAboveTheLine += r.amount_cents;
+    } else {
+      ytdBizExpenses += r.amount_cents;
+    }
+  }
   const monthsEntered = uniqueMonths(
     [
       ...(incomeRows ?? []).map((r) => r.month),
       ...(expenseRows ?? []).map((r) => r.month),
     ],
   );
+
+  // Auto-deductions from business profile.
+  const autoMileageCents = businessProfile?.has_vehicle &&
+    businessProfile?.vehicle_method === "standard"
+    ? computeMileageDeductionCents({
+        ytdMiles: businessProfile.vehicle_business_miles ?? 0,
+        monthsEntered: Math.max(1, monthsEntered),
+      })
+    : 0;
+  const autoHomeOfficeCents = computeHomeOfficeSimplifiedCents({
+    hasHomeOffice: businessProfile?.has_home_office ?? false,
+    homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
+  });
 
   const input: ForecastInput = {
     taxYear,
@@ -86,9 +110,12 @@ export default async function ForecastPage({ params }: { params: Params }) {
     estimatedPaymentsCents: taxProfile.estimated_payments_cents ?? 0,
     entityType: (company.entity_type ?? "sole_prop") as EntityType,
     ytdIncomeCents: ytdIncome,
-    ytdExpenseCents: ytdExpense,
+    ytdBusinessExpensesCents: ytdBizExpenses,
     ytdMealsCents: ytdMeals,
-    ytdItemizedCents: 0, // Phase 2.5 - read from personal expenses with personal scope
+    ytdAboveTheLineCents: ytdAboveTheLine,
+    ytdItemizedCents: 0,
+    autoMileageCents,
+    autoHomeOfficeCents,
     monthsEntered: Math.max(1, monthsEntered),
   };
 
@@ -178,23 +205,77 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="forecast" />
         </div>
 
-        {/* Hero number */}
-        <div className="card mt-8 p-7 sm:p-9">
+        {/* Story hero: the human-language forecast. */}
+        <div className="card mt-8 p-6 sm:p-9">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-            Projected total liability
+            Tax year {taxYear} forecast
           </div>
-          <div className="display mt-2 text-5xl sm:text-6xl text-forest-900">
-            {formatCents(result.totalTaxCents)}
-          </div>
-          <div className="mt-2 text-sm text-ink-soft">
-            Based on {input.monthsEntered} month
-            {input.monthsEntered === 1 ? "" : "s"} of entries, projected to
-            year-end.
+          <h2 className="display mt-2 text-2xl sm:text-3xl text-forest-900 leading-tight">
+            If you keep up at this pace,{" "}
+            <span className="text-forest-800 font-semibold">
+              {company.name}
+            </span>{" "}
+            will owe about{" "}
+            <span className="gold-shine">
+              {formatCents(result.totalTaxCents)}
+            </span>{" "}
+            for the year.
+          </h2>
+          <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-2xl">
+            Right now you have logged{" "}
+            <strong className="text-forest-900">
+              {formatCents(result.ytdIncomeCents)}
+            </strong>{" "}
+            of income and{" "}
+            <strong className="text-forest-900">
+              {formatCents(result.ytdDeductibleExpensesCents)}
+            </strong>{" "}
+            of deductible expenses across {input.monthsEntered} month
+            {input.monthsEntered === 1 ? "" : "s"}. We project that to year-
+            end and apply 2025 tax rules.
+          </p>
+
+          {/* YTD vs Projected side-by-side */}
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4">
+            <CompareColumn
+              kicker="So far this year"
+              tone="muted"
+              rows={[
+                { label: "Income", value: formatCents(result.ytdIncomeCents) },
+                {
+                  label: "Deductible expenses",
+                  value: formatCents(result.ytdDeductibleExpensesCents),
+                },
+                {
+                  label: "Net business income",
+                  value: formatCents(result.ytdNetBusinessIncomeCents),
+                },
+              ]}
+            />
+            <CompareColumn
+              kicker="Projected to year-end"
+              tone="bright"
+              rows={[
+                {
+                  label: "Income",
+                  value: formatCents(result.projectedIncomeCents),
+                },
+                {
+                  label: "Deductible expenses",
+                  value: formatCents(result.projectedExpensesCents),
+                },
+                {
+                  label: "Net business income",
+                  value: formatCents(result.projectedNetBusinessIncomeCents),
+                },
+              ]}
+            />
           </div>
 
+          {/* Save target */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Stat
-              label="Already paid (estimated)"
+              label="Already paid"
               value={formatCents(result.alreadyPaidCents)}
             />
             <Stat
@@ -203,7 +284,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
               accent
             />
             <Stat
-              label="Save per month"
+              label="Save per month to land at zero"
               value={formatCents(result.monthlySaveTargetCents)}
             />
           </div>
@@ -243,14 +324,41 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </Card>
         </div>
 
-        {/* Monthly chart */}
+        {/* Monthly chart + per-month grid */}
         <div className="mt-6 card p-7">
-          <h2 className="display text-xl text-forest-900">Monthly trend</h2>
+          <h2 className="display text-xl text-forest-900">
+            Month by month
+          </h2>
           <p className="text-xs text-ink-muted mt-1">
-            Income and deductible expenses through the year so far.
+            Each bar shows what you logged that month. The table below shows
+            the same numbers as a side-by-side ledger.
           </p>
           <MonthlyBars income={incomeByMonth} expenses={expenseByMonth} />
+          <MonthlyTable
+            incomeByMonth={incomeByMonth}
+            expenseByMonth={expenseByMonth}
+          />
         </div>
+
+        {/* How we calculated this */}
+        {result.assumptions.length > 0 ? (
+          <div className="mt-6 card p-6 border-gold-300/60">
+            <h2 className="display text-base text-forest-900">
+              How we got these numbers
+            </h2>
+            <ul className="mt-3 grid gap-2">
+              {result.assumptions.map((a, i) => (
+                <li
+                  key={i}
+                  className="text-sm text-ink-soft leading-relaxed flex gap-2"
+                >
+                  <span className="text-gold-700 mt-1">✓</span>
+                  <span>{a}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {/* Deduction scorecard */}
         <DeductionScorecard publicId={publicId} scorecard={scorecard} />
@@ -332,6 +440,110 @@ export default async function ForecastPage({ params }: { params: Params }) {
         </p>
       </section>
     </main>
+  );
+}
+
+function CompareColumn({
+  kicker,
+  tone,
+  rows,
+}: {
+  kicker: string;
+  tone: "muted" | "bright";
+  rows: { label: string; value: string }[];
+}) {
+  return (
+    <div
+      className={
+        "rounded-2xl p-4 sm:p-5 " +
+        (tone === "bright"
+          ? "bg-forest-800 text-cream"
+          : "bg-cream/60 border border-forest-100 text-forest-900")
+      }
+    >
+      <div
+        className={
+          "text-[10px] uppercase tracking-[0.2em] " +
+          (tone === "bright" ? "text-gold-300" : "text-gold-700")
+        }
+      >
+        {kicker}
+      </div>
+      <div className="mt-3 grid gap-2">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-baseline justify-between gap-2">
+            <span
+              className={
+                "text-xs " +
+                (tone === "bright" ? "text-cream/75" : "text-ink-soft")
+              }
+            >
+              {r.label}
+            </span>
+            <span className="display text-base sm:text-lg tabular-nums">
+              {r.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MonthlyTable({
+  incomeByMonth,
+  expenseByMonth,
+}: {
+  incomeByMonth: number[];
+  expenseByMonth: number[];
+}) {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return (
+    <div className="mt-5 overflow-x-auto -mx-2 px-2">
+      <table className="w-full text-sm border-collapse min-w-[460px]">
+        <thead>
+          <tr className="text-left text-[10px] uppercase tracking-wide text-ink-muted">
+            <th className="py-1.5 pr-3 font-medium">Month</th>
+            <th className="py-1.5 pr-3 font-medium text-right">Income</th>
+            <th className="py-1.5 pr-3 font-medium text-right">Expenses</th>
+            <th className="py-1.5 font-medium text-right">Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          {months.map((m, i) => {
+            const inc = incomeByMonth[i] ?? 0;
+            const exp = expenseByMonth[i] ?? 0;
+            const net = inc - exp;
+            const empty = inc === 0 && exp === 0;
+            return (
+              <tr
+                key={m}
+                className={
+                  "border-b border-forest-50 last:border-0 " +
+                  (empty ? "text-ink-muted" : "text-forest-900")
+                }
+              >
+                <td className="py-1.5 pr-3 font-medium">{m}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">
+                  {empty ? "—" : formatCents(inc)}
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">
+                  {empty ? "—" : formatCents(exp)}
+                </td>
+                <td
+                  className={
+                    "py-1.5 text-right tabular-nums " +
+                    (net < 0 && !empty ? "text-red-700" : "")
+                  }
+                >
+                  {empty ? "—" : formatCents(net)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

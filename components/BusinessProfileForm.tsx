@@ -10,6 +10,7 @@ type Props = {
     expectedRevenueCents: number | null;
     primaryIndustry: string | null;
     hasEmployees: boolean;
+    employeeCount: number | null;
     hasVehicle: boolean;
     hasHomeOffice: boolean;
     homeOfficeSqft: number | null;
@@ -103,6 +104,24 @@ export function BusinessProfileForm({
           defaultChecked={initial.hasEmployees}
           disabled={!isManager}
         />
+        <label className="grid gap-1.5 sm:max-w-xs">
+          <span className="text-sm font-medium text-forest-800">
+            Headcount (W-2 employees)
+          </span>
+          <input
+            name="employee_count"
+            type="number"
+            min={0}
+            step={1}
+            className="input"
+            disabled={!isManager}
+            defaultValue={initial.employeeCount ?? 0}
+          />
+          <span className="text-xs text-ink-muted">
+            Determines how many teammates you can invite. Adding more
+            teammates than this number will prompt you to update it.
+          </span>
+        </label>
         <Toggle
           name="has_vehicle"
           label="Uses a vehicle for business"
