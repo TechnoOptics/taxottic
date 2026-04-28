@@ -98,5 +98,11 @@ export async function evaluateBadges(
 
   if (toInsert.length === 0) return;
 
-  await supabase.from("badges").insert(toInsert);
+  // Best-effort: if the insert fails (e.g., RLS quirk in server-action /
+  // page-render context), don't crash the dashboard render.
+  try {
+    await supabase.from("badges").insert(toInsert);
+  } catch {
+    // ignore
+  }
 }

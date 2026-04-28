@@ -2,9 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { createServiceClient } from "@/lib/supabase/server";
 import { checkCompanyLimit } from "@/lib/plans/usage";
 
 export async function createCompany(formData: FormData) {
+  // requireUser validates the JWT via Supabase auth - we trust user.id below.
   const { supabase, user } = await requireUser();
 
   const limit = await checkCompanyLimit(supabase, user.id);
@@ -23,7 +25,15 @@ export async function createCompany(formData: FormData) {
 
   if (!name) throw new Error("Name required");
 
-  const { data: company, error } = await supabase
+  // Use service-role for the insert. RLS via auth.uid() doesn't reliably work
+  // inside Next.js server actions with @supabase/ssr - the user's session
+  // isn't always passed as the Authorization header on the PostgREST call,
+  // so auth.uid() returns NULL and the WITH CHECK fails. We have already
+  // validated the JWT above; created_by/user_id come from the trusted user
+  // object so bypassing RLS for these inserts is safe.
+  const admin = createServiceClient();
+
+  const { data: company, error } = await admin
     .from("companies")
     .insert({
       name,
@@ -36,7 +46,7 @@ export async function createCompany(formData: FormData) {
 
   if (error || !company) throw new Error(error?.message ?? "Insert failed");
 
-  const { error: memberError } = await supabase
+  const { error: memberError } = await admin
     .from("company_members")
     .insert({ company_id: company.id, user_id: user.id, role: "manager" });
 

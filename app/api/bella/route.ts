@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/bella/system-prompt";
 import { checkBellaLimit } from "@/lib/plans/usage";
 
@@ -129,8 +129,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Writes use service-role to avoid the SSR auth-cookie quirk in API routes.
+  const admin = createServiceClient();
+
   if (!conversationId) {
-    const { data: convo, error } = await supabase
+    const { data: convo, error } = await admin
       .from("bella_conversations")
       .insert({
         user_id: user.id,
@@ -149,7 +152,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Save the user message.
-  await supabase.from("bella_messages").insert({
+  await admin.from("bella_messages").insert({
     conversation_id: conversationId,
     role: "user",
     content: userMessage,
@@ -277,7 +280,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 8. Save assistant message + citations.
-  await supabase.from("bella_messages").insert({
+  await admin.from("bella_messages").insert({
     conversation_id: conversationId,
     role: "assistant",
     content: assistantText,

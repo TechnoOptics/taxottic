@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
 
 export async function addGoal(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const title = String(formData.get("title") ?? "").trim();
   const goalType = String(formData.get("goal_type") ?? "custom");
   const taxYear = Number(formData.get("tax_year"));
@@ -20,7 +20,7 @@ export async function addGoal(formData: FormData) {
     throw new Error("Invalid goal");
   }
 
-  const { error } = await supabase.from("goals").insert({
+  const { error } = await admin.from("goals").insert({
     user_id: user.id,
     company_id: companyId,
     tax_year: taxYear,
@@ -36,25 +36,25 @@ export async function addGoal(formData: FormData) {
 }
 
 export async function deleteGoal(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  await supabase.from("goals").delete().eq("id", id);
+  await admin.from("goals").delete().eq("id", id).eq("user_id", user.id);
   revalidatePath("/goals");
   revalidatePath("/dashboard");
 }
 
 export async function recordSaved(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
   const cents = parseDollarsToCents(String(formData.get("amount") ?? ""));
   if (!id || cents === null || cents <= 0) return;
 
-  // Read current saved, increment, write back.
-  const { data: g } = await supabase
+  const { data: g } = await admin
     .from("goals")
     .select("saved_cents, target_cents")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
   if (!g) return;
 
@@ -62,10 +62,11 @@ export async function recordSaved(formData: FormData) {
   const status =
     g.target_cents > 0 && newSaved >= g.target_cents ? "completed" : "active";
 
-  await supabase
+  await admin
     .from("goals")
     .update({ saved_cents: newSaved, status })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
 
   revalidatePath("/goals");
   revalidatePath("/dashboard");

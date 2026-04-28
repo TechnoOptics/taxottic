@@ -1,28 +1,30 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 
 export async function markReminderRead(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  await supabase
+  await admin
     .from("reminders")
     .update({ read_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
   revalidatePath("/reminders");
   revalidatePath("/dashboard");
 }
 
 export async function dismissReminder(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  await supabase
+  await admin
     .from("reminders")
     .update({ dismissed_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
   revalidatePath("/reminders");
   revalidatePath("/dashboard");
 }

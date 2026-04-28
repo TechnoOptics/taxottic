@@ -1,11 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
 
 export async function saveTaxProfile(formData: FormData, next: string) {
-  const { supabase, user } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
 
   const taxYear = Number(formData.get("tax_year"));
   const filingStatus = String(formData.get("filing_status") ?? "single");
@@ -26,7 +26,7 @@ export async function saveTaxProfile(formData: FormData, next: string) {
     String(formData.get("estimated_payments") ?? ""),
   );
 
-  const { error } = await supabase.from("tax_profiles").upsert({
+  const { error } = await admin.from("tax_profiles").upsert({
     user_id: user.id,
     tax_year: taxYear,
     filing_status: filingStatus,

@@ -1,11 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
 
+async function userBelongsToCompany(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  userId: string,
+  companyId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from("company_members")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function addExpense(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const taxYear = Number(formData.get("tax_year"));
   const month = Number(formData.get("month"));
@@ -23,8 +37,11 @@ export async function addExpense(formData: FormData) {
   ) {
     throw new Error("Invalid input");
   }
+  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+    throw new Error("Not a member of this company");
+  }
 
-  const { error } = await supabase.from("monthly_expenses").insert({
+  const { error } = await admin.from("monthly_expenses").insert({
     company_id: companyId,
     user_id: user.id,
     tax_year: taxYear,
@@ -35,7 +52,7 @@ export async function addExpense(formData: FormData) {
   });
   if (error) throw new Error(error.message);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
@@ -47,18 +64,19 @@ export async function addExpense(formData: FormData) {
 }
 
 export async function deleteExpense(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  const { error } = await supabase
+  const { error } = await admin
     .from("monthly_expenses")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) throw new Error(error.message);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)

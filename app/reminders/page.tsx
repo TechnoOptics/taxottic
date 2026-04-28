@@ -1,15 +1,15 @@
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { dismissReminder, markReminderRead } from "./actions";
 
 export default async function RemindersPage() {
-  const { supabase, user } = await requireUser();
+  const { supabase, admin, user } = await requireUserWithAdmin();
 
   // Idempotent: makes sure this year's quarterly + filing reminders exist
   // for the current user. Cheap on hot path.
   const taxYear = new Date().getUTCFullYear();
-  await ensureQuarterlyReminders(supabase, user.id, taxYear);
+  await ensureQuarterlyReminders(admin, user.id, taxYear);
 
   const { data: items } = await supabase
     .from("reminders")

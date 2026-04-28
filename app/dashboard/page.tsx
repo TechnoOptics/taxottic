@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser, getMyCompanies } from "@/lib/auth";
+import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { BADGES, TIER_STYLES } from "@/lib/badges/catalog";
@@ -7,14 +7,16 @@ import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents } from "@/lib/tax/forecast";
 
 export default async function DashboardPage() {
-  const { supabase, user } = await requireUser();
+  const { supabase, admin, user } = await requireUserWithAdmin();
   const taxYear = new Date().getUTCFullYear();
 
   // Lazy-evaluate badges + ensure reminders exist on every dashboard hit.
-  // Both are idempotent and cheap.
+  // Both are idempotent and use admin client so the inserts work regardless
+  // of cookie auth quirks. Reads filter explicitly by user_id so they remain
+  // scoped correctly even with admin privileges.
   await Promise.all([
-    evaluateBadges(supabase, user.id),
-    ensureQuarterlyReminders(supabase, user.id, taxYear),
+    evaluateBadges(admin, user.id),
+    ensureQuarterlyReminders(admin, user.id, taxYear),
   ]);
 
   const companies = await getMyCompanies();

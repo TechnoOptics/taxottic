@@ -2,17 +2,34 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import { checkCsvImportLimit } from "@/lib/plans/usage";
 
+async function userBelongsToCompany(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  userId: string,
+  companyId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from("company_members")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function uploadCsv(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase, admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const file = formData.get("file");
   if (!companyId || !(file instanceof File)) {
     throw new Error("Invalid upload");
+  }
+  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+    throw new Error("Not a member of this company");
   }
 
   const limit = await checkCsvImportLimit(supabase, user.id);
@@ -36,7 +53,7 @@ export async function uploadCsv(formData: FormData) {
 
   const dataRows = rows.slice(1);
 
-  const { data: importRow, error: importErr } = await supabase
+  const { data: importRow, error: importErr } = await admin
     .from("bank_imports")
     .insert({
       company_id: companyId,
@@ -66,15 +83,14 @@ export async function uploadCsv(formData: FormData) {
     };
   });
 
-  // Insert in batches of 500 to stay friendly to Supabase REST.
   const BATCH = 500;
   for (let i = 0; i < transactions.length; i += BATCH) {
     const slice = transactions.slice(i, i + BATCH);
-    const { error } = await supabase.from("bank_transactions").insert(slice);
+    const { error } = await admin.from("bank_transactions").insert(slice);
     if (error) throw new Error(error.message);
   }
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
@@ -85,19 +101,21 @@ export async function uploadCsv(formData: FormData) {
 }
 
 export async function applyTransactions(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const importId = String(formData.get("import_id") ?? "");
   const companyId = String(formData.get("company_id") ?? "");
   if (!importId || !companyId) return;
+  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+    throw new Error("Not a member of this company");
+  }
 
-  // Pull transactions ready to apply: not ignored, has applied_category_code,
-  // not already applied.
-  const { data: txs } = await supabase
+  const { data: txs } = await admin
     .from("bank_transactions")
     .select(
       "id, description, amount_cents, posted_at, applied_category_code, applied_expense_id, applied_income_id, ignored",
     )
-    .eq("import_id", importId);
+    .eq("import_id", importId)
+    .eq("company_id", companyId);
 
   const applicable = (txs ?? []).filter(
     (t) =>
@@ -112,8 +130,6 @@ export async function applyTransactions(formData: FormData) {
     return;
   }
 
-  // Group by month + category for efficient inserts.
-  // Negative amounts -> expenses; positive amounts -> income.
   const taxYear = new Date().getUTCFullYear();
   const expenseInserts: Array<{
     company_id: string;
@@ -125,7 +141,7 @@ export async function applyTransactions(formData: FormData) {
     notes: string;
   }> = [];
 
-  const txUpdates: { id: string; expense_id?: string }[] = [];
+  const txUpdates: { id: string }[] = [];
 
   for (const tx of applicable) {
     const month = tx.posted_at
@@ -145,30 +161,27 @@ export async function applyTransactions(formData: FormData) {
       });
       txUpdates.push({ id: tx.id });
     }
-    // Positive amounts (deposits) we leave for now; users add income via the
-    // dedicated Income page so we don't double-count refunds/transfers.
   }
 
   if (expenseInserts.length === 0) return;
 
-  const { data: createdExpenses, error: insErr } = await supabase
+  const { data: createdExpenses, error: insErr } = await admin
     .from("monthly_expenses")
     .insert(expenseInserts)
     .select("id");
   if (insErr) throw new Error(insErr.message);
 
-  // Map created expense IDs back to transactions in order, then mark applied.
   for (let i = 0; i < createdExpenses.length; i++) {
     const tx = txUpdates[i];
     const ex = createdExpenses[i];
     if (!tx || !ex) continue;
-    await supabase
+    await admin
       .from("bank_transactions")
       .update({ applied_expense_id: ex.id })
       .eq("id", tx.id);
   }
 
-  await supabase
+  await admin
     .from("bank_imports")
     .update({
       applied_count: createdExpenses.length,
@@ -176,7 +189,7 @@ export async function applyTransactions(formData: FormData) {
     })
     .eq("id", importId);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
@@ -188,12 +201,23 @@ export async function applyTransactions(formData: FormData) {
 }
 
 export async function setTxCategory(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
   const code = String(formData.get("category_code") ?? "");
   const importId = String(formData.get("import_id") ?? "");
   if (!id) return;
-  await supabase
+
+  // Verify the transaction belongs to a company the user is in.
+  const { data: tx } = await admin
+    .from("bank_transactions")
+    .select("company_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!tx || !(await userBelongsToCompany(admin, user.id, tx.company_id))) {
+    throw new Error("Not authorized");
+  }
+
+  await admin
     .from("bank_transactions")
     .update({
       applied_category_code: code || null,
@@ -204,11 +228,21 @@ export async function setTxCategory(formData: FormData) {
 }
 
 export async function ignoreTx(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
   const importId = String(formData.get("import_id") ?? "");
   if (!id) return;
-  await supabase
+
+  const { data: tx } = await admin
+    .from("bank_transactions")
+    .select("company_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!tx || !(await userBelongsToCompany(admin, user.id, tx.company_id))) {
+    throw new Error("Not authorized");
+  }
+
+  await admin
     .from("bank_transactions")
     .update({ ignored: true, applied_category_code: null })
     .eq("id", id);
@@ -217,10 +251,8 @@ export async function ignoreTx(formData: FormData) {
 
 function parseDate(raw: string): string | null {
   if (!raw) return null;
-  // Try MM/DD/YYYY, YYYY-MM-DD, or anything Date.parse can handle.
   const t = Date.parse(raw);
   if (!Number.isNaN(t)) return new Date(t).toISOString().slice(0, 10);
-  // MM/DD/YY
   const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
   if (m) {
     const yy = Number(m[3]);

@@ -39,7 +39,12 @@ export async function ensureQuarterlyReminders(
 
   if (toInsert.length === 0) return;
 
-  await supabase.from("reminders").insert(toInsert);
+  // Best-effort: failure here shouldn't prevent dashboard from rendering.
+  try {
+    await supabase.from("reminders").insert(toInsert);
+  } catch {
+    // ignore
+  }
 }
 
 function bodyFor(kind: string): string {

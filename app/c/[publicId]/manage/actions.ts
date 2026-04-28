@@ -1,12 +1,26 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { invitationToken } from "@/lib/ids";
 import { checkInviteLimit } from "@/lib/plans/usage";
 
+async function isManagerOf(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  userId: string,
+  companyId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  return data?.role === "manager";
+}
+
 export async function inviteMember(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase, admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const email = String(formData.get("email") ?? "")
     .trim()
@@ -14,6 +28,9 @@ export async function inviteMember(formData: FormData) {
   const role = String(formData.get("role") ?? "member") as "member" | "manager";
 
   if (!companyId || !email) throw new Error("Missing fields");
+  if (!(await isManagerOf(admin, user.id, companyId))) {
+    throw new Error("Only the company manager can invite teammates.");
+  }
 
   const limit = await checkInviteLimit(supabase, user.id, companyId);
   if (!limit.ok) {
@@ -22,7 +39,7 @@ export async function inviteMember(formData: FormData) {
     );
   }
 
-  const { error } = await supabase.from("invitations").insert({
+  const { error } = await admin.from("invitations").insert({
     company_id: companyId,
     email,
     role,
@@ -32,7 +49,7 @@ export async function inviteMember(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
@@ -42,11 +59,18 @@ export async function inviteMember(formData: FormData) {
 }
 
 export async function removeMember(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const userId = String(formData.get("user_id") ?? "");
 
-  const { error } = await supabase
+  if (!(await isManagerOf(admin, user.id, companyId))) {
+    throw new Error("Only the company manager can remove teammates.");
+  }
+  if (userId === user.id) {
+    throw new Error("You cannot remove yourself.");
+  }
+
+  const { error } = await admin
     .from("company_members")
     .delete()
     .eq("company_id", companyId)
@@ -54,7 +78,7 @@ export async function removeMember(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
@@ -64,16 +88,21 @@ export async function removeMember(formData: FormData) {
 }
 
 export async function revokeInvite(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const inviteId = String(formData.get("invite_id") ?? "");
 
-  const { data: invite } = await supabase
+  const { data: invite } = await admin
     .from("invitations")
     .select("company_id, companies(public_id)")
     .eq("id", inviteId)
     .single();
 
-  const { error } = await supabase
+  if (!invite) return;
+  if (!(await isManagerOf(admin, user.id, invite.company_id))) {
+    throw new Error("Only the company manager can revoke invites.");
+  }
+
+  const { error } = await admin
     .from("invitations")
     .delete()
     .eq("id", inviteId);

@@ -1,14 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
 
 export async function saveBusinessProfile(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const taxYear = Number(formData.get("tax_year"));
   if (!companyId || !taxYear) throw new Error("Invalid input");
+
+  // Manager-only: verify before write.
+  const { data: membership } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (membership?.role !== "manager") {
+    throw new Error("Only the company manager can edit the business profile.");
+  }
 
   const expectedCents = parseDollarsToCents(
     String(formData.get("expected_revenue") ?? ""),
@@ -25,7 +36,7 @@ export async function saveBusinessProfile(formData: FormData) {
     return raw === "" ? null : raw;
   };
 
-  const { error } = await supabase.from("business_profiles").upsert({
+  const { error } = await admin.from("business_profiles").upsert({
     company_id: companyId,
     tax_year: taxYear,
     expected_revenue_cents: expectedCents,
@@ -40,7 +51,7 @@ export async function saveBusinessProfile(formData: FormData) {
   });
   if (error) throw new Error(error.message);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)

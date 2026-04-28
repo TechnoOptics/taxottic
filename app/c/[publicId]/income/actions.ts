@@ -1,11 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
 
+async function userBelongsToCompany(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  userId: string,
+  companyId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from("company_members")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function addIncome(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const taxYear = Number(formData.get("tax_year"));
   const month = Number(formData.get("month"));
@@ -16,8 +30,11 @@ export async function addIncome(formData: FormData) {
   if (!companyId || !taxYear || !month || cents === null || cents <= 0) {
     throw new Error("Invalid input");
   }
+  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+    throw new Error("Not a member of this company");
+  }
 
-  const { error } = await supabase.from("monthly_income").insert({
+  const { error } = await admin.from("monthly_income").insert({
     company_id: companyId,
     user_id: user.id,
     tax_year: taxYear,
@@ -28,7 +45,7 @@ export async function addIncome(formData: FormData) {
   });
   if (error) throw new Error(error.message);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
@@ -40,15 +57,21 @@ export async function addIncome(formData: FormData) {
 }
 
 export async function deleteIncome(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  const { error } = await supabase.from("monthly_income").delete().eq("id", id);
+  // Scope delete by user_id so a user can only delete their own entries.
+  // Managers can delete via the admin/management UI separately.
+  const { error } = await admin
+    .from("monthly_income")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) throw new Error(error.message);
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
