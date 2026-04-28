@@ -79,10 +79,8 @@ export function AchievementsGrid({ earnedCodes }: Props) {
             >
               <div
                 className={
-                  "relative rounded-[12px] px-3 py-3 flex flex-col items-center text-center gap-2 overflow-hidden transition-transform group-hover:-translate-y-0.5 " +
-                  (isEarned
-                    ? "bg-gradient-to-b from-cream via-white to-cream/60"
-                    : "bg-white/70")
+                  "reward-tile-inner relative rounded-[12px] px-3 py-3 flex flex-col items-center text-center gap-2 overflow-hidden transition-transform group-hover:-translate-y-0.5 " +
+                  (isEarned ? "is-earned" : "is-locked")
                 }
               >
                 {/* Holographic shimmer wave - earned only */}
@@ -99,7 +97,7 @@ export function AchievementsGrid({ earnedCodes }: Props) {
                 <div
                   className={
                     "relative z-[1] text-[11px] font-medium leading-tight " +
-                    (isEarned ? "text-forest-900" : "text-ink-muted")
+                    (isEarned ? "text-cream" : "text-cream/45")
                   }
                 >
                   {b.title}
@@ -151,14 +149,19 @@ function BadgeDialog({
           borderRadius: 22,
         }}
       >
-        <div className="rounded-[18px] bg-gradient-to-b from-cream via-white to-cream/70 p-6 sm:p-8 text-center relative overflow-hidden">
+        <div
+          className={
+            "reward-tile-inner rounded-[18px] p-6 sm:p-8 text-center relative overflow-hidden " +
+            (earned ? "is-earned" : "is-locked")
+          }
+        >
           {earned ? (
             <span aria-hidden="true" className="reward-shimmer" />
           ) : null}
           <button
             onClick={onClose}
             aria-label="Close"
-            className="absolute top-3 right-3 size-8 rounded-full grid place-items-center text-ink-soft hover:bg-cream hover:text-forest-900 z-10"
+            className="absolute top-3 right-3 size-8 rounded-full grid place-items-center text-cream/70 hover:bg-forest-700/40 hover:text-cream z-10"
           >
             <svg
               viewBox="0 0 16 16"
@@ -175,18 +178,18 @@ function BadgeDialog({
 
           <div className="relative z-[1] flex flex-col items-center gap-3">
             <BadgeMedal code={badge.code} earned={earned} size={96} />
-            <div className="text-[10px] uppercase tracking-[0.25em] text-gold-700">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-gold-300">
               {TIER_LABEL[badge.tier]} {earned ? "earned" : "locked"}
             </div>
-            <h3 className="display text-2xl text-forest-900">{badge.title}</h3>
-            <p className="text-sm text-ink-soft leading-relaxed">
+            <h3 className="display text-2xl text-cream">{badge.title}</h3>
+            <p className="text-sm text-cream/75 leading-relaxed">
               {badge.description}
             </p>
-            <div className="w-full mt-2 rounded-xl bg-forest-50/60 border border-forest-100 px-4 py-3 text-left">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+            <div className="w-full mt-2 rounded-xl bg-forest-900/40 border border-gold-300/20 px-4 py-3 text-left">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-300">
                 {earned ? "How you earned it" : "How to earn it"}
               </div>
-              <p className="mt-1 text-sm text-forest-900 leading-relaxed">
+              <p className="mt-1 text-sm text-cream/85 leading-relaxed">
                 {howToEarn}
               </p>
             </div>

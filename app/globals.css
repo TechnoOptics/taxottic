@@ -283,6 +283,23 @@ main, header, footer, nav {
     filter: drop-shadow(0 8px 24px rgba(213, 187, 126, 0.32));
   }
 
+  /* Inner tile: deep forest gradient with a subtle radial highlight so the
+     medal sits on a backdrop that feels like display velvet. */
+  .reward-tile-inner.is-earned {
+    background:
+      radial-gradient(120% 80% at 30% 0%, rgba(213, 187, 126, 0.18), transparent 65%),
+      linear-gradient(160deg, #1d4538 0%, #0f2d24 55%, #0a201a 100%);
+    box-shadow:
+      0 1px 0 rgba(213, 187, 126, 0.18) inset,
+      0 -10px 24px -10px rgba(0, 0, 0, 0.35) inset;
+  }
+  .reward-tile-inner.is-locked {
+    background:
+      radial-gradient(120% 80% at 30% 0%, rgba(213, 187, 126, 0.05), transparent 60%),
+      linear-gradient(160deg, #1a3a2f 0%, #0e2620 100%);
+    box-shadow: 0 -8px 18px -8px rgba(0, 0, 0, 0.3) inset;
+  }
+
   /* Holographic shimmer wave that washes across earned medal tiles. The two
      stacked gradients give the foil-card iridescence: a wide gold band and a
      narrower bright highlight stripe, both panning slowly across the card. */
