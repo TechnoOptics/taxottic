@@ -43,7 +43,20 @@ export function PasskeySignInButton({ emailHint }: Props) {
       }
     } catch (err) {
       if (err instanceof Error && err.name === "NotAllowedError") return;
-      setError(err instanceof Error ? err.message : "Unknown error");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      // Common when the user has not yet registered a passkey on this device
+      // or the email hint matches no passkeys at all.
+      if (
+        message.toLowerCase().includes("no credentials") ||
+        message.toLowerCase().includes("not found") ||
+        message.toLowerCase().includes("no passkey")
+      ) {
+        setError(
+          "No passkey saved on this device yet. Sign in another way, then add a passkey under Settings → Security so it works next time.",
+        );
+      } else {
+        setError(message);
+      }
     } finally {
       setPending(false);
     }

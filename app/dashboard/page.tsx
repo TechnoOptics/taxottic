@@ -6,6 +6,7 @@ import { BADGES } from "@/lib/badges/catalog";
 import { BadgeMedal } from "@/components/BadgeMedal";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents } from "@/lib/tax/forecast";
+import { buildGreeting } from "@/lib/dashboard/greeting";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -21,6 +22,17 @@ export default async function DashboardPage() {
   ]);
 
   const companies = await getMyCompanies();
+
+  // Personalized greeting (full name from profile, falls back to email handle).
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  const greeting = buildGreeting({
+    fullName: profile?.full_name,
+    email: user.email,
+  });
 
   if (companies.length === 0) {
     const { data: pending } = await supabase
@@ -75,44 +87,140 @@ export default async function DashboardPage() {
     );
   }
 
-  // Pull dashboard data: upcoming reminders + active goals + earned badges
-  const [{ data: reminders }, { data: activeGoals }, { data: badges }] =
-    await Promise.all([
-      supabase
-        .from("reminders")
-        .select("id, kind, title, due_at")
-        .is("dismissed_at", null)
-        .gte("due_at", new Date().toISOString())
-        .order("due_at", { ascending: true })
-        .limit(3),
-      supabase
-        .from("goals")
-        .select(
-          "id, title, target_cents, saved_cents, status, deadline",
-        )
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(3),
-      supabase
-        .from("badges")
-        .select("badge_code, awarded_at")
-        .eq("user_id", user.id)
-        .order("awarded_at", { ascending: false }),
-    ]);
+  // Pull dashboard data: upcoming + overdue reminders + active goals + badges
+  const nowIso = new Date().toISOString();
+  const [
+    { data: upcomingReminders },
+    { data: overdueReminders },
+    { data: activeGoals },
+    { data: badges },
+  ] = await Promise.all([
+    supabase
+      .from("reminders")
+      .select("id, kind, title, due_at")
+      .is("dismissed_at", null)
+      .gte("due_at", nowIso)
+      .order("due_at", { ascending: true })
+      .limit(3),
+    supabase
+      .from("reminders")
+      .select("id, kind, title, due_at")
+      .is("dismissed_at", null)
+      .lt("due_at", nowIso)
+      .order("due_at", { ascending: true })
+      .limit(3),
+    supabase
+      .from("goals")
+      .select("id, title, target_cents, saved_cents, status, deadline")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(3),
+    supabase
+      .from("badges")
+      .select("badge_code, awarded_at")
+      .eq("user_id", user.id)
+      .order("awarded_at", { ascending: false }),
+  ]);
+
+  // Recap: figure out what most needs attention this visit.
+  const recap: { title: string; body: string; href: string; tone: "warn" | "info" }[] = [];
+
+  if (overdueReminders && overdueReminders.length > 0) {
+    recap.push({
+      title: `${overdueReminders.length} overdue reminder${overdueReminders.length === 1 ? "" : "s"}`,
+      body:
+        "These tax-payment dates already passed. Knock them out so they stop nagging.",
+      href: "/reminders",
+      tone: "warn",
+    });
+  }
+
+  // Did the user log any expense this month? If not, nudge.
+  const monthStart = new Date(
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+  ).toISOString();
+  const { count: thisMonthExpenseCount } = await admin
+    .from("monthly_expenses")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("created_at", monthStart);
+  if ((thisMonthExpenseCount ?? 0) === 0 && companies.length > 0) {
+    recap.push({
+      title: "No expenses logged this month",
+      body:
+        "Log even one and your forecast tightens. The first company can do it now.",
+      href: `/c/${companies[0].company.public_id}/expenses`,
+      tone: "info",
+    });
+  }
+
+  // Goals progress nudge: if any active goal is < 25% with deadline approaching
+  if (activeGoals && activeGoals.length > 0) {
+    const lagging = activeGoals.find(
+      (g) =>
+        g.target_cents > 0 &&
+        g.saved_cents / g.target_cents < 0.25 &&
+        g.deadline &&
+        new Date(g.deadline).getTime() - Date.now() < 60 * 86_400_000,
+    );
+    if (lagging) {
+      recap.push({
+        title: `Goal "${lagging.title}" is behind pace`,
+        body: "Fewer than two months to the deadline. A small contribution moves the needle.",
+        href: "/goals",
+        tone: "info",
+      });
+    }
+  }
 
   return (
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
-      <section className="max-w-5xl mx-auto px-6 py-10">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Your workspace
         </div>
         <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
-          Hello.
+          {greeting.head}
         </h1>
+        <p className="mt-2 text-sm sm:text-base text-ink-soft">
+          {greeting.pleasantry}
+        </p>
+
+        {/* Recap: what needs attention right now */}
+        {recap.length > 0 ? (
+          <section className="mt-6 grid gap-3">
+            {recap.map((r, i) => (
+              <Link
+                key={i}
+                href={r.href}
+                className={
+                  "card p-4 flex items-start gap-3 hover:border-gold-300 transition-colors " +
+                  (r.tone === "warn" ? "border-red-200" : "")
+                }
+              >
+                <div
+                  className={
+                    "mt-1 size-2 rounded-full shrink-0 " +
+                    (r.tone === "warn" ? "bg-red-500" : "bg-gold-400")
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="display text-base text-forest-900">
+                    {r.title}
+                  </div>
+                  <div className="text-xs text-ink-muted mt-0.5 leading-relaxed">
+                    {r.body}
+                  </div>
+                </div>
+                <span className="text-ink-muted text-sm">→</span>
+              </Link>
+            ))}
+          </section>
+        ) : null}
 
         {/* Upcoming reminders */}
-        {reminders && reminders.length > 0 ? (
+        {upcomingReminders && upcomingReminders.length > 0 ? (
           <section className="mt-8">
             <div className="flex items-end justify-between">
               <h2 className="display text-xl text-forest-900">Coming up</h2>
@@ -124,7 +232,7 @@ export default async function DashboardPage() {
               </Link>
             </div>
             <ul className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {reminders.map((r) => {
+              {upcomingReminders.map((r) => {
                 const days = Math.max(
                   0,
                   Math.ceil(

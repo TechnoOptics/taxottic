@@ -274,6 +274,53 @@ main, header, footer, nav {
     50% { background-position: 100% 50%; }
   }
 
+  /* Premium app header: forest gradient + animated gold sweep + subtle grain.
+     Used on every authenticated page so the brand frames the experience. */
+  .app-header {
+    background:
+      linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%);
+    border-bottom: 1px solid rgba(213, 187, 126, 0.14);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 8px 24px -10px rgba(10, 32, 26, 0.45);
+    color: #fbf7e9;
+    isolation: isolate;
+  }
+  /* Subtle film-grain / micro-pattern overlay for "texture" on the dark green */
+  .app-header::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    z-index: -1;
+    background-image:
+      radial-gradient(800px 200px at 20% 0%, rgba(213, 187, 126, 0.08), transparent 70%),
+      radial-gradient(600px 200px at 100% 100%, rgba(213, 187, 126, 0.06), transparent 70%),
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: auto, auto, 32px 32px, 32px 32px;
+  }
+  /* Animated thin gold sweep along the bottom edge - the signature line */
+  .app-header::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1.5px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(213, 187, 126, 0.55) 35%,
+      rgba(242, 216, 150, 0.95) 50%,
+      rgba(213, 187, 126, 0.55) 65%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: co-header-shimmer 14s ease-in-out infinite;
+  }
+
   /* Bella FAB: premium animated gold conic ring + dark forest core */
   .bella-fab {
     position: fixed;

@@ -64,7 +64,7 @@ export function UserMenu({ email, fullName, avatarUrl }: Props) {
       {open ? (
         <div
           role="menu"
-          className="absolute left-0 mt-2 w-64 card p-2 shadow-xl z-30"
+          className="absolute right-0 mt-2 w-64 card p-2 shadow-xl z-30"
         >
           <div className="px-3 py-2.5 border-b border-forest-100">
             <div className="text-sm font-medium text-forest-900 truncate">

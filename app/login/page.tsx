@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { PasskeySignInButton } from "@/components/PasskeySignInButton";
 
-type Provider = "google" | "azure" | "apple";
+type Provider = "google" | "azure";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -68,12 +68,8 @@ export default function LoginPage() {
             >
               Continue with Microsoft
             </button>
-            <button
-              onClick={() => oauth("apple")}
-              className="btn-ghost w-full"
-            >
-              Continue with Apple
-            </button>
+            {/* Apple SSO requires an Apple Developer membership and is not
+                yet enabled on this Supabase project. Hidden until configured. */}
           </div>
 
           <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
