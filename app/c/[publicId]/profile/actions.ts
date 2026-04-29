@@ -74,3 +74,120 @@ export async function saveBusinessProfile(formData: FormData) {
     revalidatePath(`/c/${company.public_id}/forecast`);
   }
 }
+
+/**
+ * Set or replace a company's logo URL. The actual upload to Supabase
+ * Storage already happened on the client (RLS on the storage bucket
+ * gates that to managers). This action only persists the resolved
+ * public URL onto the row, after re-confirming the caller is a
+ * manager so a stray POST can't smuggle a URL in.
+ */
+export async function setCompanyLogoUrl(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const companyId = String(formData.get("company_id") ?? "");
+  const logoUrl = String(formData.get("logo_url") ?? "").trim();
+
+  if (!companyId || !logoUrl) throw new Error("Missing input");
+  // Lightweight URL guard - we only accept https URLs from our
+  // Supabase Storage host. Prevents a manager (or a stale form) from
+  // setting an arbitrary external URL that could break print or leak
+  // referrers.
+  const supabaseHost = (() => {
+    try {
+      return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).host;
+    } catch {
+      return "";
+    }
+  })();
+  try {
+    const u = new URL(logoUrl);
+    if (u.protocol !== "https:" || u.host !== supabaseHost) {
+      throw new Error("Logo URL must be hosted on Supabase Storage.");
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Logo URL")) throw err;
+    throw new Error("Invalid logo URL");
+  }
+
+  const { data: membership } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (membership?.role !== "manager") {
+    throw new Error("Only the company manager can change the logo.");
+  }
+
+  const { error } = await admin
+    .from("companies")
+    .update({ logo_url: logoUrl })
+    .eq("id", companyId);
+  if (error) throw new Error(error.message);
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  if (company) {
+    revalidatePath(`/c/${company.public_id}/profile`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+    revalidatePath(`/c/${company.public_id}/export`);
+    revalidatePath(`/dashboard`);
+  }
+}
+
+/**
+ * Clear the logo. We null the column AND best-effort delete every
+ * object under the company's folder in storage so the file doesn't
+ * linger paid-for-storage on the user's behalf.
+ */
+export async function clearCompanyLogo(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const companyId = String(formData.get("company_id") ?? "");
+  if (!companyId) throw new Error("Missing input");
+
+  const { data: membership } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (membership?.role !== "manager") {
+    throw new Error("Only the company manager can change the logo.");
+  }
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+
+  if (company?.public_id) {
+    // List + delete every object in this company's folder. List can
+    // return up to 100 by default; that's plenty for "all the logos a
+    // single company ever uploaded" (we only keep the latest).
+    const { data: objs } = await admin.storage
+      .from("company-logos")
+      .list(company.public_id, { limit: 100 });
+    if (objs && objs.length > 0) {
+      await admin.storage
+        .from("company-logos")
+        .remove(objs.map((o) => `${company.public_id}/${o.name}`));
+    }
+  }
+
+  const { error } = await admin
+    .from("companies")
+    .update({ logo_url: null })
+    .eq("id", companyId);
+  if (error) throw new Error(error.message);
+
+  if (company) {
+    revalidatePath(`/c/${company.public_id}/profile`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+    revalidatePath(`/c/${company.public_id}/export`);
+    revalidatePath(`/dashboard`);
+  }
+}

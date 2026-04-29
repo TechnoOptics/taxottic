@@ -54,6 +54,7 @@ export type CompanyMembership = {
     id: string;
     public_id: string;
     name: string;
+    logo_url: string | null;
   };
 };
 
@@ -61,7 +62,9 @@ export async function getMyCompanies(): Promise<CompanyMembership[]> {
   const supabase = (await createClient());
   const { data } = await supabase
     .from("company_members")
-    .select("company_id, role, company:companies(id, public_id, name)")
+    .select(
+      "company_id, role, company:companies(id, public_id, name, logo_url)",
+    )
     .order("joined_at", { ascending: true });
   return (data ?? []) as unknown as CompanyMembership[];
 }

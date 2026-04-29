@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
+import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
@@ -295,14 +296,21 @@ export default async function DashboardPage() {
                   key={m.company_id}
                   className="card card-hover p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
-                  <div>
-                    <div className="display text-xl text-forest-900">
-                      {m.company.name}
-                    </div>
-                    <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
-                      {m.company.public_id}
-                      <span className="text-gold-500"> · </span>
-                      {isManager ? "Manager" : "Member"}
+                  <div className="flex items-center gap-4 min-w-0">
+                    <CompanyLogo
+                      src={m.company.logo_url}
+                      name={m.company.name}
+                      size={48}
+                    />
+                    <div className="min-w-0">
+                      <div className="display text-xl text-forest-900 truncate">
+                        {m.company.name}
+                      </div>
+                      <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
+                        {m.company.public_id}
+                        <span className="text-gold-500"> · </span>
+                        {isManager ? "Manager" : "Member"}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">

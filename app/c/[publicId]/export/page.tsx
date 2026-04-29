@@ -2,6 +2,7 @@ import Link from "next/link";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 import { PrintActionsClient } from "@/components/PrintActionsClient";
+import { CompanyLogo } from "@/components/CompanyLogo";
 
 type Params = Promise<{ publicId: string }>;
 type Search = Promise<{ year?: string }>;
@@ -131,21 +132,31 @@ export default async function ExportPage({
 
         {/* Hero / brand-and-philosophy block (visible on print too, abbreviated) */}
         <header className="border-b border-forest-100 pb-6 print:pb-4">
-          <div className="text-[10px] uppercase tracking-[0.25em] text-gold-700">
-            Year-end summary - Tax year {taxYear}
+          <div className="flex items-start gap-5">
+            <CompanyLogo
+              src={company.logo_url}
+              name={businessDisplayName}
+              size={72}
+              print
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-gold-700">
+                Year-end summary - Tax year {taxYear}
+              </div>
+              <h1
+                className="display mt-1 text-3xl sm:text-4xl text-forest-900"
+                style={{ fontFamily: "var(--font-fraunces)" }}
+              >
+                {businessDisplayName}
+              </h1>
+              <p className="mt-3 text-sm text-ink-soft max-w-2xl leading-relaxed">
+                Walk into your CPA confident, not anxious. Your business comes
+                first - the tax code allows it. This summary captures every income
+                entry and deductible expense logged for {taxYear} so your preparer
+                can do their job without guessing.
+              </p>
+            </div>
           </div>
-          <h1
-            className="display mt-1 text-3xl sm:text-4xl text-forest-900"
-            style={{ fontFamily: "var(--font-fraunces)" }}
-          >
-            {businessDisplayName}
-          </h1>
-          <p className="mt-3 text-sm text-ink-soft max-w-2xl leading-relaxed">
-            Walk into your CPA confident, not anxious. Your business comes
-            first - the tax code allows it. This summary captures every income
-            entry and deductible expense logged for {taxYear} so your preparer
-            can do their job without guessing.
-          </p>
         </header>
 
         {/* Business details */}

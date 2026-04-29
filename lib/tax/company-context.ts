@@ -7,13 +7,14 @@ export type CompanyRow = {
   name: string;
   entity_type: string | null;
   state_code: string | null;
+  logo_url: string | null;
 };
 
 export async function loadCompanyByPublicId(publicId: string) {
   const { supabase, user } = await requireUser();
   const { data: company } = await supabase
     .from("companies")
-    .select("id, public_id, name, entity_type, state_code")
+    .select("id, public_id, name, entity_type, state_code, logo_url")
     .eq("public_id", publicId)
     .single<CompanyRow>();
   if (!company) notFound();

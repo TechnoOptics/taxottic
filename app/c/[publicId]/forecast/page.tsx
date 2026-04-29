@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
+import { CompanyLogo } from "@/components/CompanyLogo";
 import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
@@ -399,20 +400,27 @@ export default async function ForecastPage({ params }: { params: Params }) {
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-              {company.public_id} <span className="text-gold-500">·</span>{" "}
-              Tax year {taxYear}
-            </div>
-            <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
-              {company.name}
-            </h1>
-            {/* Tapered gold flourish: a refined alternative to a hard rule. */}
-            <div
-              aria-hidden="true"
-              className="gold-flourish mt-3"
-            >
-              <span />
+          <div className="flex items-center gap-4">
+            <CompanyLogo
+              src={company.logo_url}
+              name={company.name}
+              size={64}
+            />
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+                {company.public_id} <span className="text-gold-500">·</span>{" "}
+                Tax year {taxYear}
+              </div>
+              <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
+                {company.name}
+              </h1>
+              {/* Tapered gold flourish: a refined alternative to a hard rule. */}
+              <div
+                aria-hidden="true"
+                className="gold-flourish mt-3"
+              >
+                <span />
+              </div>
             </div>
           </div>
         </div>

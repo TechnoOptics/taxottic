@@ -2,7 +2,12 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { BusinessProfileForm } from "@/components/BusinessProfileForm";
-import { saveBusinessProfile } from "./actions";
+import { CompanyLogoUploader } from "@/components/CompanyLogoUploader";
+import {
+  saveBusinessProfile,
+  setCompanyLogoUrl,
+  clearCompanyLogo,
+} from "./actions";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -37,6 +42,21 @@ export default async function ProfilePage({ params }: { params: Params }) {
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="profile" />
+        </div>
+
+        {/* Logo: shows up here, on the dashboard, and on the printable
+            year-end report. Sits above the rest of the form so managers
+            see it as the first edit. */}
+        <div className="card mt-6 p-6 sm:p-7">
+          <CompanyLogoUploader
+            companyId={company.id}
+            companyPublicId={company.public_id}
+            companyName={company.name}
+            initialLogoUrl={company.logo_url}
+            isManager={isManager}
+            setLogoAction={setCompanyLogoUrl}
+            clearLogoAction={clearCompanyLogo}
+          />
         </div>
 
         <div className="card mt-6 p-6 sm:p-7">
