@@ -1,89 +1,42 @@
-import { AppHeader } from "@/components/AppHeader";
-import { CompanyNav } from "@/components/CompanyNav";
+import { redirect } from "next/navigation";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
-import { TeamChat, type ChatMember, type ChatMessage } from "@/components/TeamChat";
-import { sendTeamMessage, deleteTeamMessage } from "./actions";
 
 type Params = Promise<{ publicId: string }>;
 
-export default async function ChatPage({ params }: { params: Params }) {
+/**
+ * Top-level chat route just bounces into the company's default
+ * "General" channel. Every company has one (auto-seeded by trigger),
+ * so this should always have a target.
+ */
+export default async function ChatLandingPage({
+  params,
+}: {
+  params: Params;
+}) {
   const { publicId } = await params;
-  const { supabase, user, company, isManager } =
-    await loadCompanyByPublicId(publicId);
+  const { supabase, company } = await loadCompanyByPublicId(publicId);
 
-  // Fetch the most recent 200 messages in chronological order. The
-  // realtime channel will keep the list live from here on.
-  const [{ data: messages }, { data: members }] = await Promise.all([
-    supabase
-      .from("team_messages")
-      .select("id, user_id, body, created_at")
-      .eq("company_id", company.id)
-      .order("created_at", { ascending: false })
-      .limit(200),
-    supabase
-      .from("company_members")
-      .select(
-        "user_id, profile:profiles(full_name, email)",
-      )
-      .eq("company_id", company.id),
-  ]);
+  const { data: defaultChannel } = await supabase
+    .from("chat_conversations")
+    .select("id")
+    .eq("company_id", company.id)
+    .eq("is_default", true)
+    .maybeSingle();
 
-  // The query above is descending so newest messages come back first;
-  // reverse to chronological for display.
-  const initialMessages: ChatMessage[] = ((messages ?? []) as ChatMessage[])
-    .slice()
-    .reverse();
+  if (defaultChannel) {
+    redirect(`/c/${publicId}/chat/${defaultChannel.id}`);
+  }
 
-  // The supabase-js types model the joined `profile:profiles(...)` as
-  // an array even when the FK is to-one, so we cast through unknown.
-  const memberList: ChatMember[] = (
-    (members ?? []) as unknown as Array<{
-      user_id: string;
-      profile:
-        | { full_name: string | null; email: string | null }
-        | { full_name: string | null; email: string | null }[]
-        | null;
-    }>
-  ).map((m) => {
-    const profile = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-    return {
-      user_id: m.user_id,
-      full_name: profile?.full_name ?? null,
-      email: profile?.email ?? null,
-    };
-  });
-
-  return (
-    <main className="min-h-screen">
-      <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          {company.public_id} <span className="text-gold-500">·</span> Team chat
-        </div>
-        <h1 className="display mt-2 text-3xl text-forest-900">
-          {company.name}
-        </h1>
-        <div aria-hidden="true" className="gold-flourish mt-3">
-          <span />
-        </div>
-
-        <div className="mt-6">
-          <CompanyNav publicId={publicId} active="chat" />
-        </div>
-
-        <div className="mt-6">
-          <TeamChat
-            companyId={company.id}
-            companyName={company.name}
-            currentUserId={user.id}
-            initialMessages={initialMessages}
-            members={memberList}
-            sendAction={sendTeamMessage}
-            deleteAction={deleteTeamMessage}
-            isManager={isManager}
-          />
-        </div>
-      </section>
-    </main>
-  );
+  // Extremely rare fallback: trigger somehow didn't fire. Pick any
+  // channel the user can see; if none, just bounce to forecast.
+  const { data: any } = await supabase
+    .from("chat_conversations")
+    .select("id")
+    .eq("company_id", company.id)
+    .eq("kind", "channel")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (any) redirect(`/c/${publicId}/chat/${any.id}`);
+  redirect(`/c/${publicId}/forecast`);
 }
