@@ -68,6 +68,76 @@
 .safe-pad-bottom { padding-bottom: var(--safe-bottom); }
 .safe-pad-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
 
+/* Scroll without showing a scrollbar. Used on horizontal tab strips and
+   side-scrolling lists where a visible Windows-style grey scrollbar
+   would shout louder than the content it's trying to enable. */
+.no-scrollbar {
+  -ms-overflow-style: none;        /* IE/legacy Edge */
+  scrollbar-width: none;            /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;                    /* Chrome / Safari */
+  width: 0;
+  height: 0;
+}
+
+/* ============================================================================
+   Elegance: page-title flourishes
+   These are reusable accents the H1 sections can opt into for a more
+   "fine jewelry" feel. Used as Tailwind's @apply equivalents in markup.
+============================================================================ */
+
+/* A thin tapered gold rule that sits below the kicker / above the H1.
+   Centered or left-aligned via the wrapping element. */
+.gold-rule {
+  display: inline-block;
+  width: 56px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-gold-500) 50%,
+    transparent 100%
+  );
+  border: 0;
+}
+
+/* A taller, thinner gold flourish for use beside H1s. Two tapered lines
+   with a small diamond pip in the middle. Pure CSS, no SVG. */
+.gold-flourish {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 8px;
+}
+.gold-flourish::before,
+.gold-flourish::after {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-gold-500) 80%
+  );
+}
+.gold-flourish::after {
+  background: linear-gradient(
+    90deg,
+    var(--color-gold-500) 20%,
+    transparent
+  );
+}
+.gold-flourish > span {
+  width: 4px;
+  height: 4px;
+  transform: rotate(45deg);
+  background: var(--color-gold-500);
+  box-shadow: 0 0 0 1px rgba(213, 187, 126, 0.25);
+}
+
 html, body {
   background-color: #fbf7e9; /* cream */
   color: #18181b;
@@ -139,15 +209,47 @@ main, header, footer, nav {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
     line-height: 1.05;
+    /* Premium typography: discretionary ligatures + old-style numerals
+       (so prices land on the same baseline as the text) + small contextual
+       alternates. Fraunces supports all three. */
+    font-feature-settings:
+      "ss01" 1,    /* stylistic set 1: refined cap shapes */
+      "kern" 1,
+      "calt" 1,
+      "liga" 1;
+    font-variant-numeric: oldstyle-nums proportional-nums;
   }
 
-  /* Card: hairline border, paper background, gentle shadow.
-     .card-hover lifts and accents with gold on hover. */
+  /* Card: hairline border, paper background, gentle shadow plus a thin
+     gold "lit from above" highlight along the top edge. Sits as a
+     pseudo-element so the radius stays clean. */
   .card {
+    position: relative;
     background: #ffffff;
     border: 1px solid rgba(15, 45, 36, 0.08);
     border-radius: 1rem;
-    box-shadow: 0 1px 2px rgba(15, 45, 36, 0.04), 0 4px 16px rgba(15, 45, 36, 0.04);
+    box-shadow:
+      0 1px 2px rgba(15, 45, 36, 0.04),
+      0 4px 16px rgba(15, 45, 36, 0.05),
+      inset 0 1px 0 rgba(213, 187, 126, 0.12);
+  }
+  /* Soft champagne highlight catching the top of the card. */
+  .card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 12%;
+    right: 12%;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(213, 187, 126, 0.55) 40%,
+      rgba(213, 187, 126, 0.55) 60%,
+      transparent
+    );
+    pointer-events: none;
+    border-radius: 1rem 1rem 0 0;
   }
   .card-hover {
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;

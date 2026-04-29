@@ -31,21 +31,35 @@ Open https://supabase.com/dashboard/project/enisnjjbxqaliydepacc/auth/url-config
 ### 3. SSO providers
 
 In https://supabase.com/dashboard/project/enisnjjbxqaliydepacc/auth/providers,
-enable each. The OAuth callback URL Supabase shows you (it will be
-`https://enisnjjbxqaliydepacc.supabase.co/auth/v1/callback`) goes into the
-provider's app config below.
+enable each.
+
+**Important**: Taxottic runs the OAuth handshake on its own domain so
+Google / Microsoft show "to continue to taxottic.com" on the consent
+screen instead of the Supabase project URL. Each provider therefore needs
+TWO redirect URIs (the Supabase one as fallback AND ours), and the same
+client_id + secret get pasted into both Supabase and `.env.local`.
 
 **Google**
 1. Google Cloud Console -> APIs & Services -> Credentials -> Create OAuth client ID -> Web application.
-2. Authorized redirect URI: the Supabase callback above.
-3. Copy Client ID + secret into Supabase Google provider.
+2. Authorized redirect URIs (add ALL of these):
+   - `https://enisnjjbxqaliydepacc.supabase.co/auth/v1/callback` (Supabase fallback)
+   - `https://taxottic.com/api/auth/google/callback` (production, our domain)
+   - `http://localhost:3000/api/auth/google/callback` (dev)
+3. Copy Client ID + secret into:
+   - Supabase Google provider (dashboard)
+   - `.env.local` and Vercel env: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
 
 **Microsoft (Azure AD)**
 1. portal.azure.com -> Microsoft Entra ID -> App registrations -> New.
 2. Supported account types: "any organizational directory and personal Microsoft accounts".
-3. Redirect URI (Web): the Supabase callback above.
+3. Redirect URIs (Web platform, add ALL of these):
+   - `https://enisnjjbxqaliydepacc.supabase.co/auth/v1/callback` (Supabase fallback)
+   - `https://taxottic.com/api/auth/azure/callback` (production, our domain)
+   - `http://localhost:3000/api/auth/azure/callback` (dev)
 4. Certificates & secrets -> New client secret. Copy the value.
-5. Application (client) ID + secret -> Supabase Azure provider.
+5. Copy Application (client) ID + secret into:
+   - Supabase Azure provider (dashboard)
+   - `.env.local` and Vercel env: `AZURE_OAUTH_CLIENT_ID`, `AZURE_OAUTH_CLIENT_SECRET`
 
 **Apple** (requires Apple Developer membership)
 1. developer.apple.com -> Identifiers -> create a Services ID. Enable "Sign in with Apple".

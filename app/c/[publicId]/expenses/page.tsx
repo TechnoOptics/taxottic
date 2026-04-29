@@ -3,6 +3,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 import { addExpense, deleteExpense } from "./actions";
+import { AddExpenseForm } from "@/components/AddExpenseForm";
 
 const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
@@ -17,6 +18,7 @@ type CategoryRow = {
   description: string;
   scope: "business" | "personal" | "both";
   is_meal: boolean;
+  is_typically_recurring: boolean;
 };
 
 export default async function ExpensesPage({ params }: { params: Params }) {
@@ -29,7 +31,7 @@ export default async function ExpensesPage({ params }: { params: Params }) {
     supabase
       .from("monthly_expenses")
       .select(
-        "id, month, amount_cents, category_code, notes, created_at, category:deduction_categories(label, is_meal)",
+        "id, month, amount_cents, category_code, recurrence, notes, created_at, category:deduction_categories(label, is_meal)",
       )
       .eq("company_id", company.id)
       .eq("tax_year", taxYear)
@@ -37,7 +39,9 @@ export default async function ExpensesPage({ params }: { params: Params }) {
       .order("created_at", { ascending: false }),
     supabase
       .from("deduction_categories")
-      .select("code, label, description, scope, is_meal")
+      .select(
+        "code, label, description, scope, is_meal, is_typically_recurring",
+      )
       .in("scope", ["business", "both"])
       .order("display_order"),
   ]);
@@ -48,12 +52,16 @@ export default async function ExpensesPage({ params }: { params: Params }) {
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-6 py-10">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          {company.public_id} - Tax year {taxYear}
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+          {company.public_id} <span className="text-gold-500">·</span>{" "}
+          Tax year {taxYear}
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">
           Expenses
         </h1>
+        <div aria-hidden="true" className="gold-flourish mt-3">
+          <span />
+        </div>
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="expenses" />
@@ -61,70 +69,13 @@ export default async function ExpensesPage({ params }: { params: Params }) {
 
         <div className="card mt-6 p-6">
           <h2 className="display text-xl text-forest-900">Add an expense</h2>
-          <form action={addExpense} className="mt-4 grid sm:grid-cols-2 gap-3">
-            <input type="hidden" name="company_id" value={company.id} />
-            <input type="hidden" name="tax_year" value={taxYear} />
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-forest-800">Month</span>
-              <select name="month" className="input" defaultValue={currentMonth}>
-                {MONTH_LABELS.slice(0, currentMonth).map((m, i) => (
-                  <option key={i} value={i + 1}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-forest-800">
-                Category
-              </span>
-              <select
-                name="category_code"
-                required
-                className="input"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Select category
-                </option>
-                {(categories as CategoryRow[] | null)?.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.label}
-                    {c.is_meal ? " (50% deductible)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 sm:col-span-2">
-              <span className="text-sm font-medium text-forest-800">
-                Amount (USD)
-              </span>
-              <input
-                name="amount"
-                type="text"
-                inputMode="decimal"
-                required
-                placeholder="$0.00"
-                className="input"
-              />
-            </label>
-            <label className="grid gap-1.5 sm:col-span-2">
-              <span className="text-sm font-medium text-forest-800">
-                Notes (optional)
-              </span>
-              <input
-                name="notes"
-                type="text"
-                className="input"
-                placeholder="Adobe Creative Cloud subscription"
-              />
-            </label>
-            <div className="sm:col-span-2">
-              <button className="btn-primary w-full sm:w-auto">
-                Add expense
-              </button>
-            </div>
-          </form>
+          <AddExpenseForm
+            companyId={company.id}
+            taxYear={taxYear}
+            currentMonth={currentMonth}
+            categories={(categories as CategoryRow[] | null) ?? []}
+            action={addExpense}
+          />
         </div>
 
         <div className="card mt-6 p-6">
@@ -154,6 +105,11 @@ export default async function ExpensesPage({ params }: { params: Params }) {
                             50%
                           </span>
                         ) : null}
+                        {r.recurrence && r.recurrence !== "one_off" ? (
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-forest-700 bg-forest-100 rounded px-1.5 py-0.5">
+                            {prettyCadence(r.recurrence)}
+                          </span>
+                        ) : null}
                       </div>
                       {r.notes ? (
                         <div className="text-xs text-ink-muted truncate">
@@ -163,6 +119,11 @@ export default async function ExpensesPage({ params }: { params: Params }) {
                     </div>
                     <div className="text-forest-900 font-medium tabular-nums">
                       {formatCents(r.amount_cents)}
+                      {r.recurrence && r.recurrence !== "one_off" ? (
+                        <span className="ml-1 text-[10px] text-ink-muted">
+                          / {shortCadence(r.recurrence)}
+                        </span>
+                      ) : null}
                     </div>
                     <form action={deleteExpense}>
                       <input
@@ -190,5 +151,27 @@ export default async function ExpensesPage({ params }: { params: Params }) {
         </div>
       </section>
     </main>
+  );
+}
+
+function prettyCadence(r: string): string {
+  return (
+    {
+      weekly: "Weekly",
+      monthly: "Monthly",
+      quarterly: "Quarterly",
+      annual: "Annual",
+    }[r] ?? r
+  );
+}
+
+function shortCadence(r: string): string {
+  return (
+    {
+      weekly: "wk",
+      monthly: "mo",
+      quarterly: "qtr",
+      annual: "yr",
+    }[r] ?? r
   );
 }

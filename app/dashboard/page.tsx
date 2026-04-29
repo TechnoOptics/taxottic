@@ -288,27 +288,53 @@ export default async function DashboardPage() {
             </Link>
           </div>
           <ul className="mt-3 grid gap-3">
-            {companies.map((m) => (
-              <li
-                key={m.company_id}
-                className="card card-hover p-5 flex items-center justify-between"
-              >
-                <div>
-                  <div className="display text-xl text-forest-900">
-                    {m.company.name}
-                  </div>
-                  <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
-                    {m.company.public_id} - {m.role}
-                  </div>
-                </div>
-                <Link
-                  href={`/c/${m.company.public_id}/forecast`}
-                  className="btn-ghost"
+            {companies.map((m) => {
+              const isManager = m.role === "manager";
+              return (
+                <li
+                  key={m.company_id}
+                  className="card card-hover p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
-                  Open
-                </Link>
-              </li>
-            ))}
+                  <div>
+                    <div className="display text-xl text-forest-900">
+                      {m.company.name}
+                    </div>
+                    <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
+                      {m.company.public_id}
+                      <span className="text-gold-500"> · </span>
+                      {isManager ? "Manager" : "Member"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Manager-only fast action: jump straight to the
+                        team / invite UI without having to first open the
+                        company and find the tab. */}
+                    {isManager ? (
+                      <Link
+                        href={`/c/${m.company.public_id}/manage`}
+                        className="btn-ghost text-sm"
+                        aria-label={`Invite an employee to ${m.company.name}`}
+                      >
+                        + Invite employee
+                      </Link>
+                    ) : null}
+                    <Link
+                      href={`/c/${m.company.public_id}/chat`}
+                      className="btn-ghost text-sm"
+                      aria-label={`Open team chat for ${m.company.name}`}
+                    >
+                      Team chat
+                    </Link>
+                    <Link
+                      href={`/c/${m.company.public_id}/forecast`}
+                      className="btn-primary text-sm"
+                    >
+                      Open
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
 

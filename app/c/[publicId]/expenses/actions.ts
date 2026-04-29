@@ -18,6 +18,14 @@ async function userBelongsToCompany(
   return !!data;
 }
 
+const VALID_RECURRENCES = new Set([
+  "one_off",
+  "weekly",
+  "monthly",
+  "quarterly",
+  "annual",
+]);
+
 export async function addExpense(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
@@ -26,6 +34,10 @@ export async function addExpense(formData: FormData) {
   const categoryCode = String(formData.get("category_code") ?? "");
   const cents = parseDollarsToCents(String(formData.get("amount") ?? ""));
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const recurrenceRaw = String(formData.get("recurrence") ?? "one_off");
+  const recurrence = VALID_RECURRENCES.has(recurrenceRaw)
+    ? recurrenceRaw
+    : "one_off";
 
   if (
     !companyId ||
@@ -58,6 +70,7 @@ export async function addExpense(formData: FormData) {
     month,
     amount_cents: cents,
     category_code: categoryCode,
+    recurrence,
     notes,
   });
   if (error) throw new Error(error.message);

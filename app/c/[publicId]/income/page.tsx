@@ -1,8 +1,8 @@
-import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
+import { RecurrencePicker } from "@/components/RecurrencePicker";
 import { addIncome, deleteIncome } from "./actions";
 
 const INCOME_SOURCES = [
@@ -31,7 +31,9 @@ export default async function IncomePage({ params }: { params: Params }) {
 
   const { data: rows } = await supabase
     .from("monthly_income")
-    .select("id, month, amount_cents, source, notes, created_at")
+    .select(
+      "id, month, amount_cents, source, recurrence, notes, created_at",
+    )
     .eq("company_id", company.id)
     .eq("tax_year", taxYear)
     .order("month", { ascending: false })
@@ -43,12 +45,16 @@ export default async function IncomePage({ params }: { params: Params }) {
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-6 py-10">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          {company.public_id} - Tax year {taxYear}
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+          {company.public_id} <span className="text-gold-500">·</span>{" "}
+          Tax year {taxYear}
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">
           Income
         </h1>
+        <div aria-hidden="true" className="gold-flourish mt-3">
+          <span />
+        </div>
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="income" />
@@ -79,6 +85,9 @@ export default async function IncomePage({ params }: { params: Params }) {
                 ))}
               </select>
             </label>
+            <div className="sm:col-span-2">
+              <RecurrencePicker />
+            </div>
             <label className="grid gap-1.5 sm:col-span-2">
               <span className="text-sm font-medium text-forest-800">
                 Amount (USD)
@@ -126,6 +135,11 @@ export default async function IncomePage({ params }: { params: Params }) {
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-forest-900">
                       {MONTH_LABELS[r.month - 1]} - {prettySource(r.source)}
+                      {r.recurrence && r.recurrence !== "one_off" ? (
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-forest-700 bg-forest-100 rounded px-1.5 py-0.5">
+                          {prettyCadence(r.recurrence)}
+                        </span>
+                      ) : null}
                     </div>
                     {r.notes ? (
                       <div className="text-xs text-ink-muted truncate">
@@ -135,6 +149,11 @@ export default async function IncomePage({ params }: { params: Params }) {
                   </div>
                   <div className="text-forest-900 font-medium tabular-nums">
                     {formatCents(r.amount_cents)}
+                    {r.recurrence && r.recurrence !== "one_off" ? (
+                      <span className="ml-1 text-[10px] text-ink-muted">
+                        / {shortCadence(r.recurrence)}
+                      </span>
+                    ) : null}
                   </div>
                   <form action={deleteIncome}>
                     <input type="hidden" name="company_id" value={company.id} />
@@ -173,5 +192,27 @@ function prettySource(s: string): string {
       royalty: "Royalty",
       other: "Other",
     }[s] ?? s
+  );
+}
+
+function prettyCadence(r: string): string {
+  return (
+    {
+      weekly: "Weekly",
+      monthly: "Monthly",
+      quarterly: "Quarterly",
+      annual: "Annual",
+    }[r] ?? r
+  );
+}
+
+function shortCadence(r: string): string {
+  return (
+    {
+      weekly: "wk",
+      monthly: "mo",
+      quarterly: "qtr",
+      annual: "yr",
+    }[r] ?? r
   );
 }

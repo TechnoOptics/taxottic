@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { PasskeySignInButton } from "@/components/PasskeySignInButton";
@@ -14,6 +14,25 @@ export default function LoginPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
+
+  // Surface server-side OAuth errors that came back as ?error=... on the
+  // /login redirect from /api/auth/<provider>/callback.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const oauthErr = url.searchParams.get("error");
+    if (oauthErr) {
+      const friendly: Record<string, string> = {
+        oauth_state_missing: "Sign-in expired. Please try again.",
+        oauth_state_mismatch: "Sign-in session was invalid. Please try again.",
+        oauth_token_exchange:
+          "We couldn't complete sign-in with your provider. Please try again.",
+        oauth_missing_id_token: "Provider didn't return an ID token.",
+        oauth_not_configured: "This sign-in provider isn't set up yet.",
+        access_denied: "You cancelled the sign-in.",
+      };
+      setError(friendly[oauthErr] ?? oauthErr);
+    }
+  }, []);
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -33,15 +52,13 @@ export default function LoginPage() {
     setStatus("sent");
   }
 
-  async function oauth(provider: Provider) {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: provider === "azure" ? "email openid profile" : undefined,
-      },
-    });
-    if (error) setError(error.message);
+  // Provider sign-in now flows through our own domain so the consent screen
+  // reads "to continue to taxottic.com" instead of the Supabase project URL.
+  // We just navigate; the route does the rest.
+  function oauth(provider: Provider) {
+    const url = new URL(window.location.href);
+    const next = url.searchParams.get("next") ?? "/dashboard";
+    window.location.href = `/api/auth/${provider}/start?next=${encodeURIComponent(next)}`;
   }
 
   return (

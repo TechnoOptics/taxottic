@@ -13,18 +13,27 @@ import {
   formatCents,
   type EntityType,
   type ForecastInput,
+  type ForecastResult,
 } from "@/lib/tax/forecast";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
 import {
   buildScorecard,
   eligibleDeductions,
 } from "@/lib/deductions/eligibility";
+import {
+  combineMonthly,
+  expandRowToMonthly,
+  totalOfMonthly,
+  ytdOfMonthly,
+  type Recurrence,
+} from "@/lib/tax/recurrence";
 
 type Params = Promise<{ publicId: string }>;
 
 export default async function ForecastPage({ params }: { params: Params }) {
   const { publicId } = await params;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, isManager } =
+    await loadCompanyByPublicId(publicId);
 
   const taxYear = new Date().getUTCFullYear();
 
@@ -49,12 +58,12 @@ export default async function ForecastPage({ params }: { params: Params }) {
       .maybeSingle(),
     supabase
       .from("monthly_income")
-      .select("amount_cents, month")
+      .select("amount_cents, month, recurrence")
       .eq("company_id", company.id)
       .eq("tax_year", taxYear),
     supabase
       .from("monthly_expenses")
-      .select("amount_cents, month, category_code")
+      .select("amount_cents, month, category_code, recurrence")
       .eq("company_id", company.id)
       .eq("tax_year", taxYear),
   ]);
@@ -63,42 +72,171 @@ export default async function ForecastPage({ params }: { params: Params }) {
     redirect(`/onboarding/tax-profile?next=/c/${publicId}/forecast`);
   }
 
-  // Aggregate. Bucket expense rows by category type so the engine can
-  // route SE health / retirement / HSA above-the-line.
-  const ytdIncome = sum(incomeRows ?? [], (r) => r.amount_cents);
-  let ytdMeals = 0;
-  let ytdAboveTheLine = 0;
-  let ytdBizExpenses = 0;
-  for (const r of expenseRows ?? []) {
-    if (r.category_code === "meals") {
-      ytdMeals += r.amount_cents;
-    } else if (ABOVE_THE_LINE_CODES.has(r.category_code)) {
-      ytdAboveTheLine += r.amount_cents;
-    } else {
-      ytdBizExpenses += r.amount_cents;
-    }
-  }
-  const monthsEntered = uniqueMonths(
-    [
-      ...(incomeRows ?? []).map((r) => r.month),
-      ...(expenseRows ?? []).map((r) => r.month),
-    ],
+  const currentMonth = new Date().getUTCMonth() + 1;
+
+  // Split rows by recurrence. One-off rows are samples that we still
+  // pace-project for the year-end view; recurring rows are deterministic
+  // rates that we expand to a per-month series so the YTD vs projected
+  // numbers are honest for users who have, say, $1000/mo rent.
+  type IncomeRow = {
+    amount_cents: number;
+    month: number;
+    recurrence: Recurrence | null;
+  };
+  type ExpenseRow = IncomeRow & { category_code: string };
+
+  const incomes = (incomeRows ?? []) as IncomeRow[];
+  const expenses = (expenseRows ?? []) as ExpenseRow[];
+
+  const isRecurring = (r: { recurrence: Recurrence | null }) =>
+    (r.recurrence ?? "one_off") !== "one_off";
+
+  // ---------- Pace projection for one-off rows ----------
+  // The user's expected behavior: "I logged income for the months that
+  // happened so far; project that to year-end." Recurring rows opt out
+  // of pace projection (they have an explicit cadence).
+  const oneOffIncomes = incomes.filter((r) => !isRecurring(r));
+  const oneOffExpenses = expenses.filter((r) => !isRecurring(r));
+  const monthsWithOneOff = uniqueMonths([
+    ...oneOffIncomes.map((r) => r.month),
+    ...oneOffExpenses.map((r) => r.month),
+  ]);
+  const oneOffPaceFactor = monthsWithOneOff > 0 ? 12 / monthsWithOneOff : 1;
+
+  // ---------- Recurring rows expanded ----------
+  const recurringIncomeMonthly = combineMonthly(
+    incomes.filter(isRecurring).map((r) =>
+      expandRowToMonthly({
+        month: r.month,
+        amount_cents: r.amount_cents,
+        recurrence: r.recurrence,
+      }),
+    ),
+  );
+  const recurringExpenseMonthly = combineMonthly(
+    expenses.filter(isRecurring).map((r) =>
+      expandRowToMonthly({
+        month: r.month,
+        amount_cents: r.amount_cents,
+        recurrence: r.recurrence,
+      }),
+    ),
   );
 
-  // Auto-deductions from business profile.
-  const autoMileageCents = businessProfile?.has_vehicle &&
+  // Bucket helper: sum amounts for a predicate from one-off rows.
+  const sumOneOff = (
+    rows: ExpenseRow[],
+    pick: (r: ExpenseRow) => boolean,
+  ): number =>
+    rows
+      .filter((r) => !isRecurring(r) && pick(r))
+      .reduce((a, r) => a + r.amount_cents, 0);
+
+  // Bucket recurring expenses by category type. We need per-bucket
+  // monthly arrays so we can take YTD or full-year for each.
+  const monthlyForExpenses = (pick: (r: ExpenseRow) => boolean): number[] =>
+    combineMonthly(
+      expenses
+        .filter((r) => isRecurring(r) && pick(r))
+        .map((r) =>
+          expandRowToMonthly({
+            month: r.month,
+            amount_cents: r.amount_cents,
+            recurrence: r.recurrence,
+          }),
+        ),
+    );
+
+  const recurringMealsMonthly = monthlyForExpenses(
+    (r) => r.category_code === "meals",
+  );
+  const recurringAboveTheLineMonthly = monthlyForExpenses((r) =>
+    ABOVE_THE_LINE_CODES.has(r.category_code),
+  );
+  const recurringBizExpenseMonthly = monthlyForExpenses(
+    (r) =>
+      r.category_code !== "meals" &&
+      !ABOVE_THE_LINE_CODES.has(r.category_code),
+  );
+
+  // ---------- "As-of-today" totals (close books today) ----------
+  const ytdIncomeRealised =
+    oneOffIncomes.reduce((a, r) => a + r.amount_cents, 0) +
+    ytdOfMonthly(recurringIncomeMonthly, currentMonth);
+  const ytdMealsRealised =
+    sumOneOff(expenses, (r) => r.category_code === "meals") +
+    ytdOfMonthly(recurringMealsMonthly, currentMonth);
+  const ytdAboveTheLineRealised =
+    sumOneOff(expenses, (r) => ABOVE_THE_LINE_CODES.has(r.category_code)) +
+    ytdOfMonthly(recurringAboveTheLineMonthly, currentMonth);
+  const ytdBizExpensesRealised =
+    sumOneOff(
+      expenses,
+      (r) =>
+        r.category_code !== "meals" &&
+        !ABOVE_THE_LINE_CODES.has(r.category_code),
+    ) + ytdOfMonthly(recurringBizExpenseMonthly, currentMonth);
+
+  // ---------- Year-end projected totals ----------
+  const projIncome =
+    oneOffIncomes.reduce((a, r) => a + r.amount_cents, 0) * oneOffPaceFactor +
+    totalOfMonthly(recurringIncomeMonthly);
+  const projMeals =
+    sumOneOff(expenses, (r) => r.category_code === "meals") *
+      oneOffPaceFactor +
+    totalOfMonthly(recurringMealsMonthly);
+  const projAboveTheLine =
+    sumOneOff(expenses, (r) => ABOVE_THE_LINE_CODES.has(r.category_code)) *
+      oneOffPaceFactor +
+    totalOfMonthly(recurringAboveTheLineMonthly);
+  const projBizExpenses =
+    sumOneOff(
+      expenses,
+      (r) =>
+        r.category_code !== "meals" &&
+        !ABOVE_THE_LINE_CODES.has(r.category_code),
+    ) *
+      oneOffPaceFactor +
+    totalOfMonthly(recurringBizExpenseMonthly);
+
+  // Auto-deductions from business profile. Mileage pace-projects from
+  // YTD miles using one-off-style logic; for the YTD view we don't
+  // project, we use the real YTD value.
+  const autoMileageProjected = businessProfile?.has_vehicle &&
     businessProfile?.vehicle_method === "standard"
     ? computeMileageDeductionCents({
         ytdMiles: businessProfile.vehicle_business_miles ?? 0,
-        monthsEntered: Math.max(1, monthsEntered),
+        monthsEntered: Math.max(1, monthsWithOneOff),
       })
     : 0;
-  const autoHomeOfficeCents = computeHomeOfficeSimplifiedCents({
+  const autoMileageYtd = businessProfile?.has_vehicle &&
+    businessProfile?.vehicle_method === "standard"
+    ? Math.round(autoMileageProjected * (currentMonth / 12))
+    : 0;
+  const autoHomeOfficeFull = computeHomeOfficeSimplifiedCents({
     hasHomeOffice: businessProfile?.has_home_office ?? false,
     homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
   });
+  // Home office simplified is a year-cap deduction; for the YTD view we
+  // pro-rate it to the share of year that has elapsed.
+  const autoHomeOfficeYtd = Math.round(
+    autoHomeOfficeFull * (currentMonth / 12),
+  );
 
-  const input: ForecastInput = {
+  // The engine is also our tax calculator. By passing monthsEntered=12
+  // we tell it "don't pace-project anything; the numbers I'm giving you
+  // ARE the year-end numbers". We then run it twice: once with the YTD
+  // figures (close books today) and once with the projected figures.
+  const sharedInput: Omit<
+    ForecastInput,
+    | "ytdIncomeCents"
+    | "ytdBusinessExpensesCents"
+    | "ytdMealsCents"
+    | "ytdAboveTheLineCents"
+    | "autoMileageCents"
+    | "autoHomeOfficeCents"
+    | "monthsEntered"
+  > = {
     taxYear,
     filingStatus: taxProfile.filing_status as FilingStatus,
     stateCode: taxProfile.state_code,
@@ -106,28 +244,80 @@ export default async function ForecastPage({ params }: { params: Params }) {
     isBlind: taxProfile.is_blind,
     itemize: taxProfile.itemize,
     dependents: taxProfile.dependents,
+    dependentsUnder17: taxProfile.dependents_under_17 ?? 0,
     spouseIncomeCents: taxProfile.spouse_income_cents ?? 0,
     estimatedPaymentsCents: taxProfile.estimated_payments_cents ?? 0,
+    ownerW2WagesCents: taxProfile.owner_w2_wages_cents ?? 0,
+    ownerW2WithheldCents: taxProfile.owner_w2_withheld_cents ?? 0,
+    ownerW2SsWagesCents: taxProfile.owner_w2_ss_wages_cents ?? 0,
+    spouseW2WagesCents: taxProfile.spouse_w2_wages_cents ?? 0,
+    spouseW2WithheldCents: taxProfile.spouse_w2_withheld_cents ?? 0,
+    spouseW2SsWagesCents: taxProfile.spouse_w2_ss_wages_cents ?? 0,
     entityType: (company.entity_type ?? "sole_prop") as EntityType,
-    ytdIncomeCents: ytdIncome,
-    ytdBusinessExpensesCents: ytdBizExpenses,
-    ytdMealsCents: ytdMeals,
-    ytdAboveTheLineCents: ytdAboveTheLine,
-    ytdItemizedCents: 0,
-    autoMileageCents,
-    autoHomeOfficeCents,
-    monthsEntered: Math.max(1, monthsEntered),
+    ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
   };
 
-  const result = forecast(input);
+  // YTD scenario: "if you closed your books today, what's the bill?"
+  const ytdResult: ForecastResult = forecast({
+    ...sharedInput,
+    ytdIncomeCents: Math.round(ytdIncomeRealised),
+    ytdBusinessExpensesCents: Math.round(ytdBizExpensesRealised),
+    ytdMealsCents: Math.round(ytdMealsRealised),
+    ytdAboveTheLineCents: Math.round(ytdAboveTheLineRealised),
+    autoMileageCents: autoMileageYtd,
+    autoHomeOfficeCents: autoHomeOfficeYtd,
+    monthsEntered: 12,
+  });
 
-  // Per-month income for the chart
-  const incomeByMonth = monthBuckets(
-    (incomeRows ?? []).map((r) => ({ month: r.month, amount: r.amount_cents })),
-  );
-  const expenseByMonth = monthBuckets(
-    (expenseRows ?? []).map((r) => ({ month: r.month, amount: r.amount_cents })),
-  );
+  // Projected scenario: "if you keep up at this pace + recurring rates."
+  const result: ForecastResult = forecast({
+    ...sharedInput,
+    ytdIncomeCents: Math.round(projIncome),
+    ytdBusinessExpensesCents: Math.round(projBizExpenses),
+    ytdMealsCents: Math.round(projMeals),
+    ytdAboveTheLineCents: Math.round(projAboveTheLine),
+    autoMileageCents: autoMileageProjected,
+    autoHomeOfficeCents: autoHomeOfficeFull,
+    monthsEntered: 12,
+  });
+
+  // Build a "summary input" that the existing UI references for things
+  // like the entity type display and the months-of-data hint string.
+  const input = {
+    monthsEntered: Math.max(
+      1,
+      monthsWithOneOff > 0
+        ? monthsWithOneOff
+        : Math.min(currentMonth, 12),
+    ),
+    entityType: (company.entity_type ?? "sole_prop") as EntityType,
+  };
+
+  // Per-month series for the chart now respects recurrence. One-off
+  // rows land in their own month; recurring rows spread across the
+  // months they actually occur.
+  const incomeByMonth = combineMonthly([
+    ...oneOffIncomes.map((r) =>
+      expandRowToMonthly({
+        month: r.month,
+        amount_cents: r.amount_cents,
+        recurrence: "one_off",
+      }),
+    ),
+    recurringIncomeMonthly,
+  ]);
+  const expenseByMonth = combineMonthly([
+    ...oneOffExpenses.map((r) =>
+      expandRowToMonthly({
+        month: r.month,
+        amount_cents: r.amount_cents,
+        recurrence: "one_off",
+      }),
+    ),
+    recurringBizExpenseMonthly,
+    recurringMealsMonthly,
+    recurringAboveTheLineMonthly,
+  ]);
 
   // Deduction scorecard: which eligible deductions has this business captured?
   const eligible = eligibleDeductions({
@@ -136,12 +326,30 @@ export default async function ForecastPage({ params }: { params: Params }) {
     hasVehicle: businessProfile?.has_vehicle ?? false,
     hasHomeOffice: businessProfile?.has_home_office ?? false,
   });
+  // Captured-by-code uses the projected year-end amount (one-off pace
+  // + recurring full year) so the deduction scorecard reflects what the
+  // user is actually likely to capture for the year.
   const capturedByCode = new Map<string, number>();
-  for (const r of expenseRows ?? []) {
-    capturedByCode.set(
-      r.category_code,
-      (capturedByCode.get(r.category_code) ?? 0) + r.amount_cents,
-    );
+  for (const r of expenses) {
+    if (isRecurring(r)) {
+      const yearTotal = totalOfMonthly(
+        expandRowToMonthly({
+          month: r.month,
+          amount_cents: r.amount_cents,
+          recurrence: r.recurrence,
+        }),
+      );
+      capturedByCode.set(
+        r.category_code,
+        (capturedByCode.get(r.category_code) ?? 0) + yearTotal,
+      );
+    } else {
+      capturedByCode.set(
+        r.category_code,
+        (capturedByCode.get(r.category_code) ?? 0) +
+          Math.round(r.amount_cents * oneOffPaceFactor),
+      );
+    }
   }
   const { data: categoryRows } = await supabase
     .from("deduction_categories")
@@ -192,12 +400,20 @@ export default async function ForecastPage({ params }: { params: Params }) {
       <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-              {company.public_id} - Tax year {taxYear}
+            <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+              {company.public_id} <span className="text-gold-500">·</span>{" "}
+              Tax year {taxYear}
             </div>
             <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
               {company.name}
             </h1>
+            {/* Tapered gold flourish: a refined alternative to a hard rule. */}
+            <div
+              aria-hidden="true"
+              className="gold-flourish mt-3"
+            >
+              <span />
+            </div>
           </div>
         </div>
 
@@ -235,20 +451,35 @@ export default async function ForecastPage({ params }: { params: Params }) {
             end and apply 2025 tax rules.
           </p>
 
-          {/* YTD vs Projected side-by-side */}
+          {/* YTD vs Projected side-by-side. The YTD column answers "if
+              you closed the books today, here's where you stand"; the
+              Projected column answers "if you keep up at this pace plus
+              your recurring rates, here's the year-end picture." */}
           <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4">
             <CompareColumn
               kicker="So far this year"
               tone="muted"
               rows={[
-                { label: "Income", value: formatCents(result.ytdIncomeCents) },
+                {
+                  label: "Income",
+                  value: formatCents(ytdResult.ytdIncomeCents),
+                },
                 {
                   label: "Deductible expenses",
-                  value: formatCents(result.ytdDeductibleExpensesCents),
+                  value: formatCents(ytdResult.ytdDeductibleExpensesCents),
                 },
                 {
                   label: "Net business income",
-                  value: formatCents(result.ytdNetBusinessIncomeCents),
+                  value: formatCents(ytdResult.ytdNetBusinessIncomeCents),
+                },
+                {
+                  label: "Taxable income",
+                  value: formatCents(ytdResult.taxableIncomeCents),
+                },
+                {
+                  label: "Taxes owed",
+                  value: formatCents(ytdResult.totalTaxCents),
+                  emphasised: true,
                 },
               ]}
             />
@@ -267,6 +498,15 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 {
                   label: "Net business income",
                   value: formatCents(result.projectedNetBusinessIncomeCents),
+                },
+                {
+                  label: "Taxable income",
+                  value: formatCents(result.taxableIncomeCents),
+                },
+                {
+                  label: "Taxes owed",
+                  value: formatCents(result.totalTaxCents),
+                  emphasised: true,
                 },
               ]}
             />
@@ -294,7 +534,16 @@ export default async function ForecastPage({ params }: { params: Params }) {
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card title="Federal income tax">
             <BigNumber>{formatCents(result.federalIncomeTaxCents)}</BigNumber>
-            <RowKV label="Taxable income" value={formatCents(result.taxableIncomeCents)} />
+            <RowKV
+              label="Taxable income"
+              value={formatCents(result.taxableIncomeCents)}
+            />
+            {result.childAndDependentCreditsCents > 0 ? (
+              <RowKV
+                label="Child / dependent credits"
+                value={`- ${formatCents(result.childAndDependentCreditsCents)}`}
+              />
+            ) : null}
             <RowKV label="Marginal rate" value={pct(result.marginalRate)} />
             <RowKV label="Effective rate" value={pct(result.effectiveRate)} />
           </Card>
@@ -430,6 +679,14 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <Link href={`/c/${publicId}/profile`} className="btn-ghost">
             Edit business profile
           </Link>
+          {isManager ? (
+            <Link href={`/c/${publicId}/manage`} className="btn-ghost">
+              + Invite employee
+            </Link>
+          ) : null}
+          <Link href={`/c/${publicId}/chat`} className="btn-ghost">
+            Open team chat
+          </Link>
         </div>
 
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
@@ -450,7 +707,7 @@ function CompareColumn({
 }: {
   kicker: string;
   tone: "muted" | "bright";
-  rows: { label: string; value: string }[];
+  rows: { label: string; value: string; emphasised?: boolean }[];
 }) {
   return (
     <div
@@ -470,21 +727,48 @@ function CompareColumn({
         {kicker}
       </div>
       <div className="mt-3 grid gap-2">
-        {rows.map((r) => (
-          <div key={r.label} className="flex items-baseline justify-between gap-2">
-            <span
+        {rows.map((r, i) => {
+          // Visual hierarchy: any row marked emphasised (currently the
+          // "Taxes owed" line) gets a top divider and a heavier numeric
+          // weight so the eye lands there last.
+          const prevEmphasised = i > 0 && rows[i - 1] && !rows[i - 1].emphasised;
+          const dividerClass =
+            r.emphasised && prevEmphasised
+              ? tone === "bright"
+                ? "border-t border-cream/15 pt-2 mt-1"
+                : "border-t border-forest-100 pt-2 mt-1"
+              : "";
+          return (
+            <div
+              key={r.label}
               className={
-                "text-xs " +
-                (tone === "bright" ? "text-cream/75" : "text-ink-soft")
+                "flex items-baseline justify-between gap-2 " + dividerClass
               }
             >
-              {r.label}
-            </span>
-            <span className="display text-base sm:text-lg tabular-nums">
-              {r.value}
-            </span>
-          </div>
-        ))}
+              <span
+                className={
+                  "text-xs " +
+                  (tone === "bright" ? "text-cream/75" : "text-ink-soft") +
+                  (r.emphasised ? " font-medium" : "")
+                }
+              >
+                {r.label}
+              </span>
+              <span
+                className={
+                  "display tabular-nums " +
+                  (r.emphasised
+                    ? tone === "bright"
+                      ? "text-lg sm:text-xl text-gold-300"
+                      : "text-lg sm:text-xl text-forest-900"
+                    : "text-base sm:text-lg")
+                }
+              >
+                {r.value}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -499,7 +783,7 @@ function MonthlyTable({
 }) {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return (
-    <div className="mt-5 overflow-x-auto -mx-2 px-2">
+    <div className="mt-5 overflow-x-auto no-scrollbar -mx-2 px-2">
       <table className="w-full text-sm border-collapse min-w-[460px]">
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-wide text-ink-muted">
@@ -658,18 +942,8 @@ function MonthlyBars({
   );
 }
 
-function sum<T>(rows: T[], pick: (r: T) => number): number {
-  return rows.reduce((a, r) => a + (pick(r) || 0), 0);
-}
-
 function uniqueMonths(months: number[]): number {
   return new Set(months).size;
-}
-
-function monthBuckets(rows: { month: number; amount: number }[]): number[] {
-  const buckets = Array(12).fill(0) as number[];
-  for (const r of rows) buckets[r.month - 1] += r.amount;
-  return buckets;
 }
 
 function pct(rate: number): string {

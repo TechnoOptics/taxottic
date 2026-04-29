@@ -1,5 +1,6 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { invitationToken } from "@/lib/ids";
@@ -19,6 +20,12 @@ async function isManagerOf(
   return data?.role === "manager";
 }
 
+// One-shot cookie used to ferry the freshly-minted invite link back to
+// the manage page so we can show a "share this link" success card after
+// the redirect, without making the URL itself part of the invite list
+// (the link must stay private to people the manager hands it to).
+const INVITE_LINK_COOKIE = "taxottic_last_invite_link";
+
 export async function inviteMember(formData: FormData) {
   const { supabase, admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
@@ -26,6 +33,9 @@ export async function inviteMember(formData: FormData) {
     .trim()
     .toLowerCase();
   const role = String(formData.get("role") ?? "member") as "member" | "manager";
+  const fullName = textOrNull(formData.get("full_name"));
+  const title = textOrNull(formData.get("title"));
+  const personalMessage = textOrNull(formData.get("personal_message"));
   // If the user opted in via "yes, raise my headcount", we'll bump the
   // business_profiles.employee_count to fit.
   const allowBumpHeadcount = formData.get("allow_bump_headcount") === "on";
@@ -84,12 +94,16 @@ export async function inviteMember(formData: FormData) {
       });
   }
 
+  const token = invitationToken();
   const { error } = await admin.from("invitations").insert({
     company_id: companyId,
     email,
     role,
-    token: invitationToken(),
+    token,
     invited_by: user.id,
+    full_name: fullName,
+    title,
+    personal_message: personalMessage,
   });
 
   if (error) throw new Error(error.message);
@@ -100,7 +114,41 @@ export async function inviteMember(formData: FormData) {
     .eq("id", companyId)
     .single();
 
+  // Stash the invite link in a short-lived cookie so the next render of
+  // /manage can pop a "share this link" card. We deliberately don't make
+  // this part of the URL: it would expose the token in the browser
+  // history of anyone who clicks Back. Cookie is HttpOnly so no JS can
+  // read it; cleared on next render.
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
+  const inviteUrl = `${origin}/invite/${token}`;
+  const cookieStore = await cookies();
+  cookieStore.set(INVITE_LINK_COOKIE, inviteUrl, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 5, // 5 minutes - long enough to render once after redirect
+  });
+
   if (company) revalidatePath(`/c/${company.public_id}/manage`);
+}
+
+/**
+ * Read-and-clear: pulls the most recent invite link out of the cookie
+ * (set by inviteMember) so the manage page can show a share card once,
+ * then deletes the cookie so reloading the page doesn't keep showing it.
+ */
+export async function readAndClearLastInviteLink(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const value = cookieStore.get(INVITE_LINK_COOKIE)?.value ?? null;
+  if (value) cookieStore.delete(INVITE_LINK_COOKIE);
+  return value;
+}
+
+function textOrNull(v: FormDataEntryValue | null): string | null {
+  if (v === null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
 }
 
 export async function removeMember(formData: FormData) {

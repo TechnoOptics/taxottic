@@ -1,10 +1,27 @@
 /**
- * Premium medal/trophy renderer for badges. Each badge code maps to:
- *  - tier (bronze / silver / gold) → ribbon + medallion gradient
- *  - symbol → an SVG glyph drawn inside the medallion
+ * Photoreal-leaning medal renderer. The previous version still read a
+ * little flat / sticker-like; this revision adds:
  *
- * Inspired by classical award medals: ribbon at top, circular medallion with
- * a beveled rim, symbolic glyph centered. No emoji, ever.
+ *   - A CONIC gradient highlight band that rolls around the disc the
+ *     way light catches a polished bezel. Real metal isn't lit from
+ *     one point; the curvature spreads the catch-light into an arc.
+ *   - A guilloche pattern: 36 fine radial spokes plus three concentric
+ *     hairline rings. Engine-turned guilloche is what makes a fine
+ *     watch dial or coin face look "made," not printed.
+ *   - A two-pass beveled rim - outer light/dark gradient AND an inner
+ *     reverse gradient sliver - so the rim has a visible cross-section.
+ *   - A starburst halo behind the engraving for depth in the field.
+ *   - A genuine engraved emblem: the symbol is composited with an
+ *     SVG inner-shadow filter so each stroke looks carved INTO the
+ *     surface, not painted on top.
+ *   - Knurled coin edge with 64 teeth (was 48), and the teeth are
+ *     drawn as tapered triangles, not rectangles, so they catch the
+ *     same light direction as the rim above.
+ *   - A drop shadow under the whole assembly.
+ *
+ * Locked medals use a darker patina palette so the engraving still
+ * reads, then we drop the conic highlight and starburst so the locked
+ * medal looks "untouched" rather than gray-washed.
  */
 
 import { BADGES, type Badge } from "@/lib/badges/catalog";
@@ -15,104 +32,498 @@ type Props = {
   size?: number;
 };
 
-const TIER_GRADIENTS: Record<Badge["tier"], { id: string; stops: [string, string, string]; ribbon: string }> = {
+type TierPalette = {
+  highlight: string;
+  mid: string;
+  shadow: string;
+  specular: string;
+  reflection: string;
+  ribbonLight: string;
+  ribbonMid: string;
+  ribbonDark: string;
+  patina: string;
+  patinaShadow: string;
+};
+
+const TIER: Record<Badge["tier"], TierPalette> = {
   bronze: {
-    id: "tx-tier-bronze",
-    stops: ["#9b6f3a", "#d99356", "#7e4f1e"],
-    ribbon: "#7e4f1e",
+    highlight: "#fad9a3",
+    mid: "#b87a3d",
+    shadow: "#4a2a08",
+    specular: "#fff3da",
+    reflection: "#d99356",
+    ribbonLight: "#a36436",
+    ribbonMid: "#7e4f1e",
+    ribbonDark: "#3a2008",
+    patina: "#5a432c",
+    patinaShadow: "#26180a",
   },
   silver: {
-    id: "tx-tier-silver",
-    stops: ["#9aa1a8", "#e2e6ea", "#7c8389"],
-    ribbon: "#5c6166",
+    highlight: "#ffffff",
+    mid: "#bcc3ca",
+    shadow: "#3b3f44",
+    specular: "#ffffff",
+    reflection: "#e2e6ea",
+    ribbonLight: "#7d848b",
+    ribbonMid: "#5c6166",
+    ribbonDark: "#1f2226",
+    patina: "#4f555c",
+    patinaShadow: "#1d2024",
   },
   gold: {
-    id: "tx-tier-gold",
-    stops: ["#8a661f", "#f2d896", "#a78540"],
-    ribbon: "#8a661f",
+    highlight: "#fff8d6",
+    mid: "#d4a64a",
+    shadow: "#52340c",
+    specular: "#fffdf2",
+    reflection: "#f2d896",
+    ribbonLight: "#9c7a2c",
+    ribbonMid: "#6a4612",
+    ribbonDark: "#2a1a02",
+    patina: "#5d4a23",
+    patinaShadow: "#2a2008",
   },
 };
 
 export function BadgeMedal({ code, earned = false, size = 48 }: Props) {
   const badge = BADGES[code];
   if (!badge) return null;
-  const tier = TIER_GRADIENTS[badge.tier];
+  const tier = TIER[badge.tier];
   const symbol = SYMBOLS[code] ?? SYMBOLS.default;
 
-  // Unique gradient ID per render so multiple medals don't share a fill.
-  const gid = `${tier.id}-${code}`;
-  const innerId = `${gid}-inner`;
-  const ringId = `${gid}-ring`;
+  const uid = `${badge.tier}-${code}`;
+  const id = (suffix: string) => `medal-${uid}-${suffix}`;
+
+  // Locked: keep the engraving readable but drop the lit-from-above
+  // shine. We swap to a darker, lower-saturation palette that looks
+  // like a tarnished, un-polished coin.
+  const face = earned
+    ? {
+        highlight: tier.highlight,
+        mid: tier.mid,
+        shadow: tier.shadow,
+        specular: tier.specular,
+        reflection: tier.reflection,
+      }
+    : {
+        highlight: "#7c8088",
+        mid: tier.patina,
+        shadow: tier.patinaShadow,
+        specular: "rgba(255,255,255,0.18)",
+        reflection: "rgba(255,255,255,0.05)",
+      };
+
+  // Geometry. 96x120 viewBox: ribbon at top, medallion centered around
+  // (cx, cy) with radius r. Inner emblem renders inside a "die" of
+  // radius rDie so we leave room for the guilloche ring and rim.
+  const cx = 48;
+  const cy = 70;
+  const r = 32;
+  const rGuilloche = r - 2.6;
+  const rDie = r - 8.8;
+
+  // Knurled outer edge: 64 tapered triangular teeth. Each tooth fans
+  // outward from a base point on the rim to a tip slightly farther out;
+  // we also widen the base so neighboring teeth touch and read as a
+  // continuous milled edge rather than a row of dots.
+  const TOOTH_COUNT = 64;
+  const teeth = Array.from({ length: TOOTH_COUNT }, (_, i) => {
+    const a = (i / TOOTH_COUNT) * Math.PI * 2;
+    const aPrev = a - Math.PI / TOOTH_COUNT;
+    const aNext = a + Math.PI / TOOTH_COUNT;
+    const baseR = r + 0.6;
+    const tipR = r + 2.7;
+    const x1 = cx + Math.cos(aPrev) * baseR;
+    const y1 = cy + Math.sin(aPrev) * baseR;
+    const x2 = cx + Math.cos(a) * tipR;
+    const y2 = cy + Math.sin(a) * tipR;
+    const x3 = cx + Math.cos(aNext) * baseR;
+    const y3 = cy + Math.sin(aNext) * baseR;
+    // Top half catches more light, bottom half is in shadow. Smooth
+    // sinusoid based on angle so neighboring teeth blend together.
+    const tone = 0.5 + 0.5 * Math.cos(a + Math.PI / 2);
+    const fill = `rgba(0,0,0,${0.65 - tone * 0.5})`;
+    return (
+      <polygon
+        key={i}
+        points={`${x1},${y1} ${x2},${y2} ${x3},${y3}`}
+        fill={fill}
+      />
+    );
+  });
+
+  // Guilloche radial spokes: 36 thin lines from rDie to rGuilloche,
+  // alternating very faint dark/light strokes. This is what gives a
+  // "machined" feel; without it the face looks like a flat sticker.
+  const SPOKE_COUNT = 36;
+  const spokes = Array.from({ length: SPOKE_COUNT }, (_, i) => {
+    const a = (i / SPOKE_COUNT) * Math.PI * 2;
+    const x1 = cx + Math.cos(a) * (rDie + 0.4);
+    const y1 = cy + Math.sin(a) * (rDie + 0.4);
+    const x2 = cx + Math.cos(a) * (rGuilloche - 0.4);
+    const y2 = cy + Math.sin(a) * (rGuilloche - 0.4);
+    return (
+      <line
+        key={i}
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={i % 2 === 0 ? "rgba(0,0,0,0.32)" : "rgba(255,255,255,0.18)"}
+        strokeWidth="0.4"
+      />
+    );
+  });
 
   return (
     <svg
-      viewBox="0 0 64 80"
+      viewBox="0 0 96 120"
       width={size}
-      height={(size * 80) / 64}
+      height={(size * 120) / 96}
       role="img"
       aria-label={badge.title}
-      className={earned ? "" : "opacity-30 grayscale"}
+      style={{ overflow: "visible" }}
     >
       <defs>
-        {/* Medallion fill: radial bevel */}
-        <radialGradient id={gid} cx="50%" cy="35%" r="65%">
-          <stop offset="0%" stopColor={tier.stops[1]} />
-          <stop offset="60%" stopColor={tier.stops[0]} />
-          <stop offset="100%" stopColor={tier.stops[2]} />
+        {/* Drop shadow under the whole medal */}
+        <filter
+          id={id("shadow")}
+          x="-30%"
+          y="-30%"
+          width="160%"
+          height="160%"
+        >
+          <feGaussianBlur in="SourceAlpha" stdDeviation="1.6" />
+          <feOffset dx="0" dy="1.6" result="offset" />
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="0.5" />
+          </feComponentTransfer>
+          <feMerge>
+            <feMergeNode />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        {/* Inner-shadow filter: makes engraved strokes look carved INTO
+            the surface. Source-alpha -> blur -> offset -> composite-out
+            to keep just the inner shadow region. */}
+        <filter
+          id={id("engrave")}
+          x="-50%"
+          y="-50%"
+          width="200%"
+          height="200%"
+        >
+          <feGaussianBlur in="SourceAlpha" stdDeviation="0.6" result="b" />
+          <feOffset in="b" dx="0.4" dy="0.6" result="o" />
+          <feFlood floodColor="#000" floodOpacity="0.7" />
+          <feComposite in2="o" operator="in" result="shadow" />
+          <feMerge>
+            <feMergeNode in="SourceGraphic" />
+            <feMergeNode in="shadow" />
+          </feMerge>
+        </filter>
+
+        {/* Face fill: 4-stop radial that suggests a rolled bevel. */}
+        <radialGradient
+          id={id("face")}
+          cx="38%"
+          cy="32%"
+          r="78%"
+          fx="36%"
+          fy="28%"
+        >
+          <stop offset="0%" stopColor={face.highlight} />
+          <stop offset="42%" stopColor={face.mid} />
+          <stop offset="82%" stopColor={face.mid} />
+          <stop offset="100%" stopColor={face.shadow} />
         </radialGradient>
-        {/* Inner emblem fill: subtle highlight */}
-        <radialGradient id={innerId} cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.55)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+
+        {/* Hot specular: tight near-white highlight in the upper-left.
+            Real polished metal has a sharper hot-spot than plastic. */}
+        <radialGradient
+          id={id("specular")}
+          cx="34%"
+          cy="22%"
+          r="28%"
+          fx="32%"
+          fy="18%"
+        >
+          <stop offset="0%" stopColor={face.specular} stopOpacity="0.95" />
+          <stop offset="50%" stopColor={face.specular} stopOpacity="0.18" />
+          <stop offset="100%" stopColor={face.specular} stopOpacity="0" />
         </radialGradient>
-        {/* Outer rim: thin metallic ring */}
-        <linearGradient id={ringId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.7)" />
-          <stop offset="100%" stopColor="rgba(0,0,0,0.25)" />
+
+        {/* Conic-rolling highlight: a long arc of light around the upper
+            edge of the disc, tapering off on each side. This is what
+            distinguishes "real metal" from "vector circle" - the
+            highlight follows the curvature of the rim. */}
+        <radialGradient
+          id={id("rim-light")}
+          cx="50%"
+          cy="0%"
+          r="80%"
+          fx="50%"
+          fy="-10%"
+        >
+          <stop offset="0%" stopColor={face.specular} stopOpacity="0.55" />
+          <stop offset="35%" stopColor={face.highlight} stopOpacity="0.25" />
+          <stop offset="70%" stopColor={face.highlight} stopOpacity="0" />
+        </radialGradient>
+
+        {/* Reflected light from below: cooler, broader. */}
+        <radialGradient
+          id={id("reflection")}
+          cx="68%"
+          cy="86%"
+          r="48%"
+          fx="68%"
+          fy="92%"
+        >
+          <stop offset="0%" stopColor={face.reflection} stopOpacity="0.6" />
+          <stop offset="100%" stopColor={face.reflection} stopOpacity="0" />
+        </radialGradient>
+
+        {/* Outer beveled rim: top-light, bottom-dark */}
+        <linearGradient id={id("rim")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+          <stop offset="50%" stopColor="rgba(255,255,255,0.05)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0.65)" />
+        </linearGradient>
+
+        {/* Inner ring: opposite direction so it reads as a carved groove */}
+        <linearGradient id={id("groove")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(0,0,0,0.7)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0.4)" />
+        </linearGradient>
+
+        {/* Starburst halo behind the engraving: subtle radial fade that
+            lifts the emblem off the field. */}
+        <radialGradient
+          id={id("halo")}
+          cx="50%"
+          cy="50%"
+          r="50%"
+        >
+          <stop offset="0%" stopColor={face.highlight} stopOpacity="0.45" />
+          <stop offset="55%" stopColor={face.highlight} stopOpacity="0.12" />
+          <stop offset="100%" stopColor={face.shadow} stopOpacity="0" />
+        </radialGradient>
+
+        {/* Ribbon: vertical gradient gives a fabric sheen */}
+        <linearGradient id={id("ribbon")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={tier.ribbonLight} />
+          <stop offset="50%" stopColor={tier.ribbonMid} />
+          <stop offset="100%" stopColor={tier.ribbonDark} />
+        </linearGradient>
+
+        {/* Ribbon weave pattern: diagonal cross-hatch suggesting silk */}
+        <pattern
+          id={id("ribbon-weave")}
+          patternUnits="userSpaceOnUse"
+          width="3"
+          height="3"
+        >
+          <path
+            d="M0,3 L3,0"
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth="0.4"
+          />
+          <path
+            d="M-1,1 L1,-1 M2,4 L4,2"
+            stroke="rgba(0,0,0,0.06)"
+            strokeWidth="0.4"
+          />
+        </pattern>
+
+        {/* Clasp bar gradient: same metal as the medal, top-light */}
+        <linearGradient id={id("clasp")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={face.highlight} />
+          <stop offset="50%" stopColor={face.mid} />
+          <stop offset="100%" stopColor={face.shadow} />
         </linearGradient>
       </defs>
 
-      {/* Ribbon (two trapezoids overlapping behind the medallion) */}
-      <polygon
-        points="20,2 44,2 38,28 26,28"
-        fill={tier.ribbon}
-        opacity="0.9"
-      />
-      <polygon
-        points="22,2 32,2 30,30 24,30"
-        fill="rgba(0,0,0,0.18)"
-      />
-      <polygon
-        points="32,2 42,2 40,30 34,30"
-        fill="rgba(255,255,255,0.18)"
-      />
+      <g filter={`url(#${id("shadow")})`}>
+        {/* RIBBON ---------------------------------------------------- */}
+        <path
+          d={`M 28 4 L 68 4 L 60 56 L 36 56 Z`}
+          fill={`url(#${id("ribbon")})`}
+          opacity={earned ? 1 : 0.7}
+        />
+        <path
+          d={`M 28 4 L 68 4 L 60 56 L 36 56 Z`}
+          fill={`url(#${id("ribbon-weave")})`}
+          opacity={earned ? 1 : 0.5}
+        />
+        {/* Center fold seam */}
+        <path
+          d={`M 48 4 L 48 56`}
+          stroke="rgba(0,0,0,0.4)"
+          strokeWidth="1.2"
+        />
+        {/* Side highlight pleats */}
+        <path
+          d={`M 33 4 L 39 4 L 38 56 L 36 56 Z`}
+          fill="rgba(255,255,255,0.18)"
+        />
+        <path
+          d={`M 57 4 L 63 4 L 60 56 L 58 56 Z`}
+          fill="rgba(0,0,0,0.22)"
+        />
+        {/* Top-cut V notch */}
+        <path
+          d={`M 28 4 L 48 14 L 68 4`}
+          fill="rgba(0,0,0,0.22)"
+        />
 
-      {/* Medallion */}
-      <circle cx="32" cy="48" r="22" fill={`url(#${gid})`} />
-      {/* Inner highlight */}
-      <circle cx="32" cy="48" r="22" fill={`url(#${innerId})`} />
-      {/* Beveled outer rim */}
-      <circle
-        cx="32"
-        cy="48"
-        r="22"
-        fill="none"
-        stroke={`url(#${ringId})`}
-        strokeWidth="1.5"
-      />
-      {/* Inner ring detail */}
-      <circle
-        cx="32"
-        cy="48"
-        r="17"
-        fill="none"
-        stroke="rgba(0,0,0,0.25)"
-        strokeWidth="0.6"
-      />
+        {/* CLASP BAR ------------------------------------------------- */}
+        <rect
+          x="32"
+          y="46"
+          width="32"
+          height="9"
+          rx="1.5"
+          fill={`url(#${id("clasp")})`}
+        />
+        <line
+          x1="33"
+          y1="49"
+          x2="63"
+          y2="49"
+          stroke="rgba(255,255,255,0.55)"
+          strokeWidth="0.4"
+        />
+        <line
+          x1="33"
+          y1="52"
+          x2="63"
+          y2="52"
+          stroke="rgba(0,0,0,0.45)"
+          strokeWidth="0.4"
+        />
 
-      {/* Centered symbol glyph */}
-      <g transform="translate(32 48)" stroke="rgba(20,20,20,0.85)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none">
-        {symbol}
+        {/* MEDALLION ------------------------------------------------- */}
+        {/* Knurled coin-edge teeth */}
+        <g>{teeth}</g>
+
+        {/* Outer thin shadow ring to cap the teeth and define the rim */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r + 0.5}
+          fill="none"
+          stroke="rgba(0,0,0,0.65)"
+          strokeWidth="0.8"
+        />
+
+        {/* Main face fill */}
+        <circle cx={cx} cy={cy} r={r} fill={`url(#${id("face")})`} />
+
+        {/* Reflected light from the table, lower-right */}
+        <circle cx={cx} cy={cy} r={r} fill={`url(#${id("reflection")})`} />
+
+        {/* Conic-rolling highlight that wraps the upper rim */}
+        {earned ? (
+          <circle cx={cx} cy={cy} r={r} fill={`url(#${id("rim-light")})`} />
+        ) : null}
+
+        {/* Hot specular point, upper-left */}
+        <circle cx={cx} cy={cy} r={r} fill={`url(#${id("specular")})`} />
+
+        {/* Beveled outer rim */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r - 0.4}
+          fill="none"
+          stroke={`url(#${id("rim")})`}
+          strokeWidth="1.6"
+        />
+        {/* Inner sliver of the bevel: reverse direction so the rim
+            cross-section reads correctly. */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r - 1.7}
+          fill="none"
+          stroke={`url(#${id("groove")})`}
+          strokeWidth="0.7"
+          opacity="0.6"
+        />
+
+        {/* Guilloche ring: spokes + concentric hairlines */}
+        <g>{spokes}</g>
+        <circle
+          cx={cx}
+          cy={cy}
+          r={rGuilloche}
+          fill="none"
+          stroke="rgba(0,0,0,0.55)"
+          strokeWidth="0.6"
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={rGuilloche - 0.9}
+          fill="none"
+          stroke="rgba(255,255,255,0.35)"
+          strokeWidth="0.4"
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={rDie + 0.4}
+          fill="none"
+          stroke="rgba(0,0,0,0.55)"
+          strokeWidth="0.6"
+        />
+
+        {/* Halo behind the emblem to give the field depth */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={rDie}
+          fill={`url(#${id("halo")})`}
+        />
+
+        {/* ENGRAVED EMBLEM ------------------------------------------ */}
+        {/* Three-pass engraving: dark drop, light catch, main stroke
+            wrapped in the inner-shadow filter so each line reads as
+            carved into the surface. */}
+        <g
+          transform={`translate(${cx + 0.5} ${cy + 0.6})`}
+          stroke={face.shadow}
+          strokeOpacity="0.95"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        >
+          {symbol}
+        </g>
+        <g
+          transform={`translate(${cx - 0.5} ${cy - 0.5})`}
+          stroke={face.highlight}
+          strokeOpacity={earned ? 0.85 : 0.5}
+          strokeWidth="1.1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        >
+          {symbol}
+        </g>
+        <g
+          transform={`translate(${cx} ${cy})`}
+          stroke={face.shadow}
+          strokeOpacity="0.95"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+          filter={`url(#${id("engrave")})`}
+        >
+          {symbol}
+        </g>
       </g>
     </svg>
   );
@@ -140,7 +551,7 @@ const SYMBOLS: Record<string, React.ReactNode> = {
       <path d="M-9 7 L9 7" />
       <path d="M-9 7 L-9 -8" />
       <path d="M-7 4 L-3 -1 L1 2 L7 -6" />
-      <circle cx="7" cy="-6" r="1.4" fill="rgba(20,20,20,0.85)" />
+      <circle cx="7" cy="-6" r="1.4" />
     </>
   ),
   // First income - dollar sign in circle
@@ -177,7 +588,7 @@ const SYMBOLS: Record<string, React.ReactNode> = {
     <>
       <circle cx="0" cy="0" r="9" />
       <circle cx="0" cy="0" r="5" />
-      <circle cx="0" cy="0" r="1.5" fill="rgba(20,20,20,0.85)" />
+      <circle cx="0" cy="0" r="1.5" />
     </>
   ),
   // Goal crusher - trophy cup
@@ -214,8 +625,8 @@ const SYMBOLS: Record<string, React.ReactNode> = {
   vehicle: (
     <>
       <path d="M-9 2 L-7 -3 L7 -3 L9 2 L9 5 L-9 5 Z" />
-      <circle cx="-5" cy="6" r="2" fill="rgba(20,20,20,0.85)" />
-      <circle cx="5" cy="6" r="2" fill="rgba(20,20,20,0.85)" />
+      <circle cx="-5" cy="6" r="2" />
+      <circle cx="5" cy="6" r="2" />
       <path d="M-5 -3 L-3 -7 L3 -7 L5 -3" />
     </>
   ),

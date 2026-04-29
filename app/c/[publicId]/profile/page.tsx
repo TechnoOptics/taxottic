@@ -24,12 +24,16 @@ export default async function ProfilePage({ params }: { params: Params }) {
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          {company.public_id} - Tax year {taxYear}
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+          {company.public_id} <span className="text-gold-500">·</span>{" "}
+          Tax year {taxYear}
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">
           Business profile
         </h1>
+        <div aria-hidden="true" className="gold-flourish mt-3">
+          <span />
+        </div>
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="profile" />

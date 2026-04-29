@@ -124,6 +124,26 @@ export const QBI_2025 = {
 // Source: IRS Notice 2025-3 (announced Dec 2024).
 export const MILEAGE_RATE_2025_PER_MILE_CENTS = 70;
 
+// Child Tax Credit (CTC) and Credit for Other Dependents (ODC).
+// 2025: $2,000 per qualifying child under 17 (CTC), $500 per other dependent
+// (ODC). Both phase out by $50 per $1,000 of AGI over the threshold.
+// Source: IRC §24, Rev. Proc. 2024-40.
+export const CHILD_TAX_CREDIT_2025 = {
+  ctcPerChildCents: cents(2_000),
+  odcPerOtherCents: cents(500),
+  // Phase-out begins above these AGI thresholds. Reduction is $50 per
+  // $1,000 (or fraction) of AGI above the threshold, applied to the total
+  // credit (CTC + ODC combined).
+  phaseOutStart: {
+    single: cents(200_000),
+    married_filing_jointly: cents(400_000),
+    married_filing_separately: cents(200_000),
+    head_of_household: cents(200_000),
+    qualifying_widow: cents(400_000),
+  } as Record<FilingStatus, number>,
+  phaseOutReductionPer1000: cents(50),
+};
+
 // Very simplified state tax estimates - flat rate by state.
 // This is a placeholder until we wire a real bracket lookup or an API.
 // Effective rates are rough averages; the UI labels this as an estimate.

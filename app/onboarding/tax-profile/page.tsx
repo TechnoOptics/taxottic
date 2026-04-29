@@ -1,10 +1,14 @@
-import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { US_STATES } from "@/data/us-states";
+import {
+  STANDARD_DEDUCTION_2025,
+  type FilingStatus,
+} from "@/lib/tax/constants-2025";
+import { formatCents } from "@/lib/tax/forecast";
 import { saveTaxProfile } from "./actions";
 
-const FILING_STATUSES = [
+const FILING_STATUSES: { value: FilingStatus; label: string }[] = [
   { value: "single", label: "Single" },
   { value: "married_filing_jointly", label: "Married, filing jointly" },
   { value: "married_filing_separately", label: "Married, filing separately" },
@@ -21,14 +25,19 @@ export default async function TaxProfilePage({
   const { next } = await searchParams;
   const taxYear = new Date().getUTCFullYear();
 
+  // supabase-js parses the select string at the type level via template
+  // literals - it must be a literal, not a runtime-built one.
   const { data: existing } = await supabase
     .from("tax_profiles")
     .select(
-      "filing_status, state_code, spouse_income_cents, dependents, age, is_blind, itemize, estimated_payments_cents",
+      "filing_status, state_code, spouse_income_cents, dependents, dependents_under_17, age, is_blind, itemize, itemized_total_cents, estimated_payments_cents, owner_w2_wages_cents, owner_w2_withheld_cents, owner_w2_ss_wages_cents, spouse_w2_wages_cents, spouse_w2_withheld_cents, spouse_w2_ss_wages_cents",
     )
     .eq("user_id", user.id)
     .eq("tax_year", taxYear)
     .maybeSingle();
+
+  const startingFilingStatus =
+    (existing?.filing_status as FilingStatus | undefined) ?? "single";
 
   return (
     <main className="min-h-screen">
@@ -62,7 +71,7 @@ export default async function TaxProfilePage({
               name="filing_status"
               required
               className="input"
-              defaultValue={existing?.filing_status ?? "single"}
+              defaultValue={startingFilingStatus}
             >
               {FILING_STATUSES.map((f) => (
                 <option key={f.value} value={f.value}>
@@ -91,7 +100,10 @@ export default async function TaxProfilePage({
           </Section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Section title="Dependents" sub="Number you'll claim.">
+            <Section
+              title="Total dependents"
+              sub="Anyone you claim on your return."
+            >
               <input
                 name="dependents"
                 type="number"
@@ -100,36 +112,90 @@ export default async function TaxProfilePage({
                 defaultValue={existing?.dependents ?? 0}
               />
             </Section>
-            <Section title="Your age" sub="Affects the standard deduction.">
+            <Section
+              title="Of those, kids under 17"
+              sub="$2,000 Child Tax Credit each. Others get a $500 credit."
+            >
               <input
-                name="age"
+                name="dependents_under_17"
                 type="number"
                 min={0}
-                max={120}
                 className="input"
-                defaultValue={existing?.age ?? ""}
-                placeholder="e.g. 34"
+                defaultValue={existing?.dependents_under_17 ?? 0}
               />
             </Section>
           </div>
 
-          <Section
-            title="Spouse income"
-            sub="Annual W-2 or other income for your spouse, if any. Leave at $0 if none."
-          >
+          <Section title="Your age" sub="Affects the standard deduction.">
             <input
-              name="spouse_income"
-              type="text"
-              inputMode="decimal"
+              name="age"
+              type="number"
+              min={0}
+              max={120}
               className="input"
-              placeholder="$0"
-              defaultValue={
-                existing?.spouse_income_cents
-                  ? (existing.spouse_income_cents / 100).toFixed(0)
-                  : ""
-              }
+              defaultValue={existing?.age ?? ""}
+              placeholder="e.g. 34"
             />
           </Section>
+
+          {/* Owner W-2 wages: many self-employed people moonlight a day job. */}
+          <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Your W-2 (if you also work a day job)
+            </legend>
+            <p className="sm:col-span-3 text-xs text-ink-muted -mt-1 leading-relaxed">
+              Many side-business owners also have a W-2. We need this so the
+              forecast doesn't double-count income or miss withholding you've
+              already paid. Leave at $0 if you don't have one.
+            </p>
+            <DollarField
+              name="owner_w2_wages"
+              label="Annual W-2 wages"
+              defaultCents={existing?.owner_w2_wages_cents ?? 0}
+            />
+            <DollarField
+              name="owner_w2_withheld"
+              label="Federal tax withheld"
+              defaultCents={existing?.owner_w2_withheld_cents ?? 0}
+            />
+            <DollarField
+              name="owner_w2_ss_wages"
+              label="Social Security wages"
+              defaultCents={existing?.owner_w2_ss_wages_cents ?? 0}
+              hint="Box 3 of your W-2"
+            />
+          </fieldset>
+
+          {/* Spouse: only meaningful if MFJ; we still capture it because some
+              people file MFS and want to model the joint household. */}
+          <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Spouse W-2 (if applicable)
+            </legend>
+            <p className="sm:col-span-3 text-xs text-ink-muted -mt-1 leading-relaxed">
+              Only meaningful when you file jointly. Leave at $0 otherwise.
+            </p>
+            <DollarField
+              name="spouse_w2_wages"
+              label="Annual W-2 wages"
+              defaultCents={
+                existing?.spouse_w2_wages_cents ??
+                existing?.spouse_income_cents ??
+                0
+              }
+            />
+            <DollarField
+              name="spouse_w2_withheld"
+              label="Federal tax withheld"
+              defaultCents={existing?.spouse_w2_withheld_cents ?? 0}
+            />
+            <DollarField
+              name="spouse_w2_ss_wages"
+              label="Social Security wages"
+              defaultCents={existing?.spouse_w2_ss_wages_cents ?? 0}
+              hint="Box 3 of their W-2"
+            />
+          </fieldset>
 
           <Section
             title="Estimated payments already made"
@@ -149,18 +215,21 @@ export default async function TaxProfilePage({
             />
           </Section>
 
-          <div className="grid gap-3">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                name="is_blind"
-                defaultChecked={existing?.is_blind ?? false}
-                className="mt-1 size-4 accent-forest-800"
-              />
-              <span className="text-sm text-ink-soft">
-                I qualify as legally blind (additional standard deduction).
-              </span>
-            </label>
+          {/* Standard vs itemized. We show the user their estimated standard
+              deduction up-front so they can decide informed, then collect
+              an itemized total only if they choose to itemize. */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Deduction
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Most filers take the standard deduction (
+              {formatCents(STANDARD_DEDUCTION_2025[startingFilingStatus])} for
+              your filing status, before age / blind add-ons). Itemize only if
+              your mortgage interest, state and local taxes (capped at
+              $10,000), charitable gifts, and large medical expenses together
+              exceed that.
+            </p>
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -173,7 +242,24 @@ export default async function TaxProfilePage({
                 deduction.
               </span>
             </label>
-          </div>
+            <DollarField
+              name="itemized_total"
+              label="Estimated itemized total (only if itemizing)"
+              defaultCents={existing?.itemized_total_cents ?? 0}
+              hint="SALT + mortgage interest + charitable + qualifying medical"
+            />
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="is_blind"
+                defaultChecked={existing?.is_blind ?? false}
+                className="mt-1 size-4 accent-forest-800"
+              />
+              <span className="text-sm text-ink-soft">
+                I qualify as legally blind (additional standard deduction).
+              </span>
+            </label>
+          </fieldset>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button className="btn-primary">Save and continue</button>
@@ -206,6 +292,35 @@ function Section({
         {sub ? <div className="text-xs text-ink-muted mt-0.5">{sub}</div> : null}
       </div>
       {children}
+    </label>
+  );
+}
+
+function DollarField({
+  name,
+  label,
+  defaultCents,
+  hint,
+}: {
+  name: string;
+  label: string;
+  defaultCents: number;
+  hint?: string;
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-sm font-medium text-forest-800">{label}</span>
+      <input
+        name={name}
+        type="text"
+        inputMode="decimal"
+        className="input"
+        placeholder="$0"
+        defaultValue={
+          defaultCents > 0 ? (defaultCents / 100).toFixed(0) : ""
+        }
+      />
+      {hint ? <span className="text-xs text-ink-muted">{hint}</span> : null}
     </label>
   );
 }

@@ -35,6 +35,7 @@
 
 import {
   ADDITIONAL_STD_DEDUCTION_2025,
+  CHILD_TAX_CREDIT_2025,
   FEDERAL_BRACKETS_2025,
   MILEAGE_RATE_2025_PER_MILE_CENTS,
   QBI_2025,
@@ -68,8 +69,28 @@ export type ForecastInput = {
   isBlind: boolean;
   itemize: boolean;
   dependents: number;
+  // Of the total dependents, how many are qualifying children under 17.
+  // The rest fall back to the Credit for Other Dependents ($500). If 0,
+  // we treat all dependents as "other".
+  dependentsUnder17: number;
+  // Generic spouse income fallback (kept for backwards compatibility with
+  // older profiles that haven't broken out W-2 yet). When the explicit
+  // spouseW2WagesCents is set, that takes precedence.
   spouseIncomeCents: number;
   estimatedPaymentsCents: number;
+
+  // Owner's W-2 wages (annual). Many self-employed users moonlight: a
+  // day-job W-2 plus a side-hustle. We need the W-2 income to land in
+  // taxable income, the W-2 withholding to count as already-paid, and
+  // the W-2 SS wages to reduce the remaining SS wage base for SE tax.
+  ownerW2WagesCents: number;
+  ownerW2WithheldCents: number;
+  ownerW2SsWagesCents: number;
+
+  // Spouse W-2 wages (annual), withholding, and SS wages.
+  spouseW2WagesCents: number;
+  spouseW2WithheldCents: number;
+  spouseW2SsWagesCents: number;
 
   entityType: EntityType;
   ytdIncomeCents: number;
@@ -98,6 +119,10 @@ export type ForecastResult = {
 
   selfEmploymentTaxCents: number;
   qbiDeductionCents: number;
+  // Total non-refundable family credits applied to federal income tax
+  // (CTC + ODC, after phase-out). Reported separately so the UI can
+  // surface it as "minus child / dependent credits".
+  childAndDependentCreditsCents: number;
   taxableIncomeCents: number;
   federalIncomeTaxCents: number;
   stateTaxCents: number;
@@ -172,13 +197,22 @@ export function forecast(input: ForecastInput): ForecastResult {
   );
   const netBiz = Math.max(0, projectedIncome - projectedExpenses);
 
-  // C-Corp short-circuit: flat 21% on net business income.
+  // C-Corp short-circuit: flat 21% on net business income at the entity
+  // level. Owner's personal W-2 / withholding / spouse income don't apply
+  // to the corporation itself; they'd be on the owner's separate 1040.
+  // We still surface the personal withholding as "already paid" so a
+  // sole-shareholder running both threads gets the right cash picture.
   if (input.entityType === "c_corp") {
     const cTax = Math.round(netBiz * C_CORP_RATE);
     const stRate = stateRate(input.stateCode);
     const stTax = Math.round(netBiz * stRate);
     const totalTax = cTax + stTax;
-    const remaining = Math.max(0, totalTax - input.estimatedPaymentsCents);
+    const w2WithheldTotal =
+      input.ownerW2WithheldCents + input.spouseW2WithheldCents;
+    const remaining = Math.max(
+      0,
+      totalTax - input.estimatedPaymentsCents - w2WithheldTotal,
+    );
     const monthsRemaining = remainingMonthsToFilingDeadline(input.taxYear);
     const monthlySaveTarget = Math.round(remaining / monthsRemaining);
     hints.push(
@@ -190,11 +224,12 @@ export function forecast(input: ForecastInput): ForecastResult {
       projectedNetBusinessIncomeCents: netBiz,
       selfEmploymentTaxCents: 0,
       qbiDeductionCents: 0,
+      childAndDependentCreditsCents: 0,
       taxableIncomeCents: netBiz,
       federalIncomeTaxCents: cTax,
       stateTaxCents: stTax,
       totalTaxCents: totalTax,
-      alreadyPaidCents: input.estimatedPaymentsCents,
+      alreadyPaidCents: input.estimatedPaymentsCents + w2WithheldTotal,
       stillOwedCents: remaining,
       monthlySaveTargetCents: monthlySaveTarget,
       effectiveRate: projectedIncome > 0 ? totalTax / projectedIncome : 0,
@@ -209,12 +244,27 @@ export function forecast(input: ForecastInput): ForecastResult {
 
   // SE tax (only for pass-throughs / sole prop / partnerships / 1099).
   // S-Corp owners pay payroll on W-2 wages instead; we don't model wages here.
+  //
+  // Wage-base interaction: the $176,100 Social Security wage base is
+  // shared between W-2 wages and SE earnings. If the owner already paid
+  // SS on W-2 wages, only the remaining headroom is subject to the SS
+  // portion of SE tax. Spouse W-2 SS wages do NOT count - the wage base
+  // is per-person.
   let seTax = 0;
   if (SE_ENTITY_TYPES.has(input.entityType)) {
-    seTax = computeSelfEmploymentTax(netBiz, input.filingStatus);
+    seTax = computeSelfEmploymentTax({
+      netBizCents: netBiz,
+      filingStatus: input.filingStatus,
+      ownerW2SsWagesCents: input.ownerW2SsWagesCents,
+    });
     assumptions.push(
       "Self-employment tax: 12.4% Social Security up to the $176,100 wage base + 2.9% Medicare uncapped, on 92.35% of net earnings (IRC §1401).",
     );
+    if (input.ownerW2SsWagesCents > 0) {
+      assumptions.push(
+        "Owner W-2 Social Security wages reduce the remaining SS wage base that applies to SE earnings.",
+      );
+    }
   }
   if (input.entityType === "s_corp") {
     hints.push(
@@ -225,17 +275,33 @@ export function forecast(input: ForecastInput): ForecastResult {
   // Half SE-tax is an above-the-line deduction (IRC §164(f)).
   const halfSeTaxDeduction = Math.round(seTax / 2);
 
-  // AGI = net biz + spouse income - half SE tax - other above-the-line items.
+  // Spouse income: prefer the explicit W-2 field if set, fall back to
+  // the legacy generic field for older profiles. Don't double-count.
+  const effectiveSpouseIncome =
+    input.spouseW2WagesCents > 0
+      ? input.spouseW2WagesCents
+      : input.spouseIncomeCents;
+
+  // AGI = net biz + owner W-2 wages + spouse income - half SE tax
+  //       - other above-the-line items.
+  // (W-2 wages are taxable income on the personal return, even though
+  // SS/Medicare/withholding were already settled by the employer.)
   const agi = Math.max(
     0,
     netBiz +
-      input.spouseIncomeCents -
+      input.ownerW2WagesCents +
+      effectiveSpouseIncome -
       halfSeTaxDeduction -
       projectedAboveTheLine,
   );
   if (projectedAboveTheLine > 0) {
     assumptions.push(
       "Self-employed health insurance, retirement contributions, and HSA deductions are applied above-the-line (Schedule 1), not as Schedule C expenses.",
+    );
+  }
+  if (input.ownerW2WagesCents > 0 || effectiveSpouseIncome > 0) {
+    assumptions.push(
+      "Household W-2 wages are added to taxable income, and federal withholding is credited as already-paid.",
     );
   }
 
@@ -270,7 +336,28 @@ export function forecast(input: ForecastInput): ForecastResult {
   }
 
   const taxableIncome = Math.max(0, agi - deduction - qbi);
-  const fedTax = computeFederalIncomeTax(taxableIncome, input.filingStatus);
+  const fedTaxBeforeCredits = computeFederalIncomeTax(
+    taxableIncome,
+    input.filingStatus,
+  );
+
+  // Apply Child Tax Credit + Credit for Other Dependents. Both are
+  // non-refundable here (we deliberately don't model the refundable
+  // Additional CTC because forecasting "you'll get money back" is more
+  // surprising than helpful for a save-target tool).
+  const credits = computeFamilyCredits({
+    dependents: input.dependents,
+    dependentsUnder17: input.dependentsUnder17,
+    filingStatus: input.filingStatus,
+    agiCents: agi,
+  });
+  if (credits > 0) {
+    assumptions.push(
+      "Family credits: $2,000 per qualifying child under 17 (CTC) + $500 per other dependent (ODC), phased out above the AGI threshold.",
+    );
+  }
+
+  const fedTax = Math.max(0, fedTaxBeforeCredits - credits);
 
   const stRate = stateRate(input.stateCode);
   const stTax = Math.round(taxableIncome * stRate);
@@ -281,7 +368,10 @@ export function forecast(input: ForecastInput): ForecastResult {
   }
 
   const totalTax = fedTax + seTax + stTax;
-  const remaining = Math.max(0, totalTax - input.estimatedPaymentsCents);
+  const w2WithheldTotal =
+    input.ownerW2WithheldCents + input.spouseW2WithheldCents;
+  const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
+  const remaining = Math.max(0, totalTax - alreadyPaid);
 
   const monthsRemaining = remainingMonthsToFilingDeadline(input.taxYear);
   const monthlySaveTarget = Math.round(remaining / monthsRemaining);
@@ -301,11 +391,12 @@ export function forecast(input: ForecastInput): ForecastResult {
     projectedNetBusinessIncomeCents: netBiz,
     selfEmploymentTaxCents: seTax,
     qbiDeductionCents: qbi,
+    childAndDependentCreditsCents: credits,
     taxableIncomeCents: taxableIncome,
     federalIncomeTaxCents: fedTax,
     stateTaxCents: stTax,
     totalTaxCents: totalTax,
-    alreadyPaidCents: input.estimatedPaymentsCents,
+    alreadyPaidCents: alreadyPaid,
     stillOwedCents: remaining,
     monthlySaveTargetCents: monthlySaveTarget,
     effectiveRate: effective,
@@ -396,22 +487,32 @@ function marginalFederalRate(
   return brackets[brackets.length - 1].rate;
 }
 
-function computeSelfEmploymentTax(
-  netBizCents: number,
-  filingStatus: FilingStatus,
-): number {
-  const seEarnings = Math.round(netBizCents * SE_TAX_2025.netEarningsFactor);
+function computeSelfEmploymentTax(args: {
+  netBizCents: number;
+  filingStatus: FilingStatus;
+  ownerW2SsWagesCents: number;
+}): number {
+  const seEarnings = Math.round(
+    args.netBizCents * SE_TAX_2025.netEarningsFactor,
+  );
   if (seEarnings <= 0) return 0;
 
+  // SS portion is capped at the wage base, but the wage base is shared
+  // with W-2 SS wages already earned in the year. Whatever's left of the
+  // base is what SE earnings can be taxed against.
   const ssCap = SE_TAX_2025.socialSecurityWageBase;
-  const ssBase = Math.min(seEarnings, ssCap);
+  const ssRemaining = Math.max(
+    0,
+    ssCap - Math.max(0, args.ownerW2SsWagesCents),
+  );
+  const ssBase = Math.min(seEarnings, ssRemaining);
   const ssTax = Math.round(ssBase * SE_TAX_2025.socialSecurityRate);
 
   const medicareTax = Math.round(seEarnings * SE_TAX_2025.medicareRate);
 
   let additional = 0;
   const threshold =
-    SE_TAX_2025.additionalMedicareThreshold[filingStatus] ?? 0;
+    SE_TAX_2025.additionalMedicareThreshold[args.filingStatus] ?? 0;
   if (seEarnings > threshold) {
     additional = Math.round(
       (seEarnings - threshold) * SE_TAX_2025.additionalMedicareRate,
@@ -419,6 +520,42 @@ function computeSelfEmploymentTax(
   }
 
   return ssTax + medicareTax + additional;
+}
+
+/**
+ * Non-refundable family credits: Child Tax Credit ($2,000 / qualifying
+ * child under 17) and Credit for Other Dependents ($500 each), reduced
+ * by $50 per $1,000 (or fraction thereof) of AGI above the phase-out
+ * threshold. The reduction applies to the COMBINED credit.
+ */
+export function computeFamilyCredits(args: {
+  dependents: number;
+  dependentsUnder17: number;
+  filingStatus: FilingStatus;
+  agiCents: number;
+}): number {
+  const totalDependents = Math.max(0, args.dependents);
+  const ctcChildren = Math.min(
+    Math.max(0, args.dependentsUnder17),
+    totalDependents,
+  );
+  const odcChildren = Math.max(0, totalDependents - ctcChildren);
+
+  const baseCredit =
+    ctcChildren * CHILD_TAX_CREDIT_2025.ctcPerChildCents +
+    odcChildren * CHILD_TAX_CREDIT_2025.odcPerOtherCents;
+  if (baseCredit <= 0) return 0;
+
+  const phaseOutStart =
+    CHILD_TAX_CREDIT_2025.phaseOutStart[args.filingStatus] ?? 0;
+  if (args.agiCents <= phaseOutStart) return baseCredit;
+
+  // Reduction: $50 per $1,000 (or fraction) over threshold. Math in
+  // cents: each $1,000 = 100,000 cents.
+  const overCents = args.agiCents - phaseOutStart;
+  const stepsOver = Math.ceil(overCents / 100_000);
+  const reduction = stepsOver * CHILD_TAX_CREDIT_2025.phaseOutReductionPer1000;
+  return Math.max(0, baseCredit - reduction);
 }
 
 /**
