@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { invitationToken } from "@/lib/ids";
+import {
+  enterpriseSiteOrigin,
+  sendFirmInviteMagicLink,
+} from "@/lib/email/send-firm-invite";
 
 /**
  * Approve a firm access request:
@@ -68,14 +72,27 @@ export async function approveFirmRequest(formData: FormData) {
     })
     .eq("id", requestId);
 
-  // Server-side console log so the super-admin can grab the invite
-  // URL until proper outbound email is wired up.
-  const enterpriseSite =
-    process.env.ENTERPRISE_SITE_URL ?? "https://enterprise.taxottic.com";
-  const inviteUrl = `${enterpriseSite}/invite/${token}`;
-  console.log(
-    `[firm-invite] approved firm "${req.firm_name}" -> invite url: ${inviteUrl}`,
-  );
+  // Send the welcome email via Supabase's OTP infra. The user clicks
+  // the magic link, lands on enterprise /auth/callback?next=/invite/<token>,
+  // gets signed in, and bounces to the invite landing where
+  // accept_firm_invitation runs. If the email send fails (e.g.,
+  // Supabase email provider down, redirect URL not allowlisted), we
+  // log the URL to the server console as a fallback so the super
+  // admin can hand the link off manually.
+  const sendResult = await sendFirmInviteMagicLink(admin, {
+    email: req.contact_email,
+    invitePath: `/invite/${token}`,
+    destinationOrigin: enterpriseSiteOrigin(),
+  });
+  if (!sendResult.ok) {
+    console.error(
+      `[firm-invite] email send FAILED for "${req.firm_name}" (${req.contact_email}): ${sendResult.reason}. Manual fallback URL: ${sendResult.inviteUrl}`,
+    );
+  } else {
+    console.log(
+      `[firm-invite] welcome email sent to ${req.contact_email} for "${req.firm_name}" -> ${sendResult.inviteUrl}`,
+    );
+  }
 
   revalidatePath(`/admin/firms`);
 }
