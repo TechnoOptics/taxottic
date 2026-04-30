@@ -174,6 +174,64 @@ export default async function DashboardPage() {
     });
   }
 
+  // Tax-preparer engagement nudges. Surfaced on the dashboard so a
+  // client doesn't have to drill into a company to discover that a
+  // firm has invited them to engage, or that they have a request
+  // sitting unanswered. Both directions handled.
+  if (companies.length > 0) {
+    const companyIds = companies.map((m) => m.company_id);
+    const { data: engagementNudges } = await admin
+      .from("firm_engagements")
+      .select(
+        "id, status, tax_year, kind, company_id, firm:firms(name, public_id)",
+      )
+      .in("company_id", companyIds)
+      .in("status", ["pending_client", "pending_firm"]);
+
+    type FirmRow = { name: string; public_id: string };
+    type EngRow = {
+      id: string;
+      status: string;
+      tax_year: number;
+      kind: string;
+      company_id: string;
+      firm: FirmRow | FirmRow[] | null;
+    };
+    const compById = new Map(
+      companies.map((m) => [m.company_id, m.company.public_id]),
+    );
+    const awaitingMine = ((engagementNudges ?? []) as unknown as EngRow[]).filter(
+      (e) => e.status === "pending_client",
+    );
+    const awaitingFirm = ((engagementNudges ?? []) as unknown as EngRow[]).filter(
+      (e) => e.status === "pending_firm",
+    );
+
+    for (const e of awaitingMine) {
+      const firm = (Array.isArray(e.firm) ? e.firm[0] : e.firm) as FirmRow | null;
+      const compPub = compById.get(e.company_id);
+      if (!compPub) continue;
+      recap.push({
+        title: `${firm?.name ?? "A tax preparer"} wants to engage you`,
+        body: `Tax year ${e.tax_year} · review and accept or decline.`,
+        href: `/c/${compPub}/preparer`,
+        tone: "warn",
+      });
+    }
+    if (awaitingFirm.length > 0) {
+      const firstComp = compById.get(awaitingFirm[0].company_id);
+      if (firstComp) {
+        recap.push({
+          title: `${awaitingFirm.length} preparer request${awaitingFirm.length === 1 ? "" : "s"} sent, awaiting acceptance`,
+          body:
+            "The firm hasn't responded yet. You'll get a heads-up here when they do.",
+          href: `/c/${firstComp}/preparer`,
+          tone: "info",
+        });
+      }
+    }
+  }
+
   // Goals progress nudge: if any active goal is < 25% with deadline approaching
   if (activeGoals && activeGoals.length > 0) {
     const lagging = activeGoals.find(
