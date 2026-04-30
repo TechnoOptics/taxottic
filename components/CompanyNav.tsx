@@ -9,7 +9,8 @@ type CompanyNavProps = {
     | "import"
     | "profile"
     | "team"
-    | "chat";
+    | "chat"
+    | "preparer";
 };
 
 const TABS = [
@@ -20,6 +21,7 @@ const TABS = [
   { key: "profile", label: "Profile", path: "profile" },
   { key: "team", label: "Team", path: "manage" },
   { key: "chat", label: "Chat", path: "chat" },
+  { key: "preparer", label: "Tax preparer", path: "preparer" },
 ] as const;
 
 /**
