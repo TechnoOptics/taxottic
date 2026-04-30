@@ -52,13 +52,28 @@ export default function LoginPage() {
     setStatus("sent");
   }
 
-  // Provider sign-in now flows through our own domain so the consent screen
-  // reads "to continue to taxottic.com" instead of the Supabase project URL.
-  // We just navigate; the route does the rest.
-  function oauth(provider: Provider) {
+  // Use Supabase's hosted OAuth flow. Earlier we shipped an "OAuth on
+  // our own domain" path via /api/auth/<provider>/start that needed
+  // GOOGLE_OAUTH_CLIENT_ID + AZURE_OAUTH_CLIENT_ID env vars set on
+  // Vercel. Those env vars were never configured, so the routes were
+  // returning 500 and breaking sign-in. Reverting to Supabase's
+  // signInWithOAuth keeps OAuth working immediately - the credentials
+  // already live in the Supabase Auth dashboard. Trade-off: the
+  // consent screen reads "to continue to <project-ref>.supabase.co"
+  // instead of taxottic.com. Acceptable for now; we can re-enable
+  // the on-our-domain path once the OAuth client configs are in place.
+  async function oauth(provider: Provider) {
+    setError(null);
     const url = new URL(window.location.href);
     const next = url.searchParams.get("next") ?? "/dashboard";
-    window.location.href = `/api/auth/${provider}/start?next=${encodeURIComponent(next)}`;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        scopes: provider === "azure" ? "email openid profile" : undefined,
+      },
+    });
+    if (error) setError(error.message);
   }
 
   return (
