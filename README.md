@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Taxottic
 
-## Getting Started
+Tax-forecasting SaaS for self-employed pros and small businesses. Sister
+product to Advottic; lives at https://taxottic.com. Built on Next.js
+App Router + Supabase + Stripe + Anthropic Claude.
 
-First, run the development server:
+The repo is cross-platform; everything below works the same on macOS,
+Linux, and Windows. Line endings are normalized via `.gitattributes`
+so a fresh clone never produces noisy diffs.
 
-```bash
+## Quickstart
+
+### macOS
+
+```sh
+# 1. Clone
+git clone https://github.com/TechnoOptics/taxottic.git
+cd taxottic
+
+# 2. Use the pinned Node version (.nvmrc reads as Node 22 LTS)
+#    If you don't have nvm: `brew install nvm` once, then:
+nvm install
+nvm use
+
+# 3. Install + run
+npm install
+cp .env.local.example .env.local   # fill in the keys per SETUP.md
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Windows (PowerShell)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+git clone https://github.com/TechnoOptics/taxottic.git
+cd taxottic
 
-## Learn More
+# Match the pinned Node version. With nvm-windows installed:
+nvm install 22
+nvm use 22
 
-To learn more about Next.js, take a look at the following resources:
+npm install
+copy .env.local.example .env.local
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Linux
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```sh
+git clone https://github.com/TechnoOptics/taxottic.git
+cd taxottic
+nvm install            # picks up .nvmrc
+npm install
+cp .env.local.example .env.local
+npm run dev
+```
 
-## Deploy on Vercel
+## Required setup before sign-in works
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`SETUP.md` is the source of truth, but the short version:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Paste your Supabase project URL + anon key + service role key into
+   `.env.local`.
+2. Add OAuth credentials (Google, Microsoft) and Stripe keys per the
+   relevant sections of `SETUP.md`.
+3. The Supabase migrations under `supabase/migrations/` have already
+   been applied to the production project. For a fresh project, run
+   them with the Supabase CLI in numerical order.
+
+## Useful scripts
+
+```sh
+npm run dev         # local dev server
+npm run build       # production build
+npm run start       # serve the production build
+npm run lint        # ESLint
+npm run typecheck   # tsc --noEmit, no JS emitted
+```
+
+## Deploying
+
+`main` auto-deploys to https://taxottic.com via Vercel. The DNS for
+`taxottic.com` lives on GoDaddy; A record points the apex at Vercel
+and a `www` CNAME does the same for the subdomain.
+
+## Tech stack
+
+- Next.js 16 (App Router) + React 19 + TypeScript
+- Tailwind CSS 4
+- Supabase (Postgres + Auth + Storage + Realtime)
+- Stripe (subscriptions)
+- Anthropic Claude (Bella, the in-app tax guide)
+- WebAuthn passkeys via `@simplewebauthn`

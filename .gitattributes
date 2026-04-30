@@ -1,0 +1,57 @@
+# Force LF line endings for all source / config / docs in the repo,
+# regardless of which OS the contributor is on. Without this, a Windows
+# committer's CRLF endings would land in the repo and a Mac / Linux
+# collaborator would either see noisy diffs or (worse) have shell
+# scripts and Node tooling misbehave on them.
+#
+# Pattern: "* text=auto eol=lf" tells git "treat everything as text by
+# default, normalize to LF on commit, check out as LF on every OS".
+# Specific binary types are then explicitly marked binary so they are
+# never line-end-normalized.
+
+* text=auto eol=lf
+
+# Source / config / docs - explicit LF
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+*.sql       text eol=lf
+*.sh        text eol=lf
+*.svg       text eol=lf
+.gitignore  text eol=lf
+.gitattributes text eol=lf
+.env*       text eol=lf
+*.example   text eol=lf
+
+# Binary assets - never touch
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.eot   binary
+*.zip   binary
+*.gz    binary
+*.tgz   binary
+*.mp4   binary
+*.mov   binary
+*.mp3   binary
+
+# Lockfile: git can stop trying to merge it line-by-line
+package-lock.json   text eol=lf merge=binary

@@ -86,10 +86,19 @@ instead, but only if the provider account uses the exact same email.
 
 ## Run locally
 
-```bash
-cd "C:\Users\abelm\Documents\Techno Optics LLc\taxottic"
+This works the same on macOS, Linux, and Windows. The repo pins
+Node 22 LTS via `.nvmrc` / `.node-version` and normalizes line endings
+via `.gitattributes` so a Mac clone never sees CRLF noise.
+
+```sh
+# from inside the cloned repo
+nvm use            # or: nvm install 22 && nvm use 22
+npm install
+cp .env.local.example .env.local   # fill in the values per the sections above
 npm run dev
 ```
+
+(Windows PowerShell: replace `cp` with `copy`.)
 
 Visit http://localhost:3000.
 
