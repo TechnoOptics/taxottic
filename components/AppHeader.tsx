@@ -3,6 +3,8 @@ import { BellaFAB } from "./BellaFAB";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { FeedbackButton } from "./FeedbackButton";
+import { NoCapture } from "./NoCapture";
+import { Watermark } from "./Watermark";
 import { createClient } from "@/lib/supabase/server";
 import { recordGdprConsent } from "@/app/actions/consent";
 import { submitFeedback } from "@/app/actions/feedback";
@@ -10,9 +12,17 @@ import { submitFeedback } from "@/app/actions/feedback";
 type AppHeaderProps = {
   email?: string;
   bellaCompanyId?: string;
+  /** Pass true on routes that are intentionally printable, e.g., the
+   *  year-end CPA export. When omitted, Ctrl+P is blocked and the print
+   *  stylesheet renders a Terms-of-Use notice instead of the page. */
+  allowPrint?: boolean;
 };
 
-export async function AppHeader({ email, bellaCompanyId }: AppHeaderProps) {
+export async function AppHeader({
+  email,
+  bellaCompanyId,
+  allowPrint = false,
+}: AppHeaderProps) {
   // Pull profile for avatar + display name + GDPR state.
   const supabase = await createClient();
   const {
@@ -67,6 +77,15 @@ export async function AppHeader({ email, bellaCompanyId }: AppHeaderProps) {
       <BellaFAB companyId={bellaCompanyId} />
       <FeedbackButton submitAction={submitFeedback} />
       {needsConsent ? <GdprBanner acceptAction={recordGdprConsent} /> : null}
+      {/* Capture-deterrent stack. Applies on every authenticated page;
+          unauthenticated visitors don't render AppHeader so this is
+          scoped to logged-in users by construction. */}
+      {user ? (
+        <>
+          <NoCapture allowPrint={allowPrint} />
+          <Watermark email={user.email} />
+        </>
+      ) : null}
     </>
   );
 }

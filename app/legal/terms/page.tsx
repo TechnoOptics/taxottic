@@ -39,12 +39,28 @@ export default function TermsPage() {
             outcomes.
           </p>
           <p>
+            <strong>Use of content.</strong> Taxottic content (the
+            interface, screens, dashboards, generated reports, deduction
+            scorecards, and any visual or textual asset rendered to you)
+            is licensed to you for your own use only. You agree not to
+            (a) screenshot, screen-record, or otherwise capture
+            Taxottic surfaces for redistribution, (b) download, save, or
+            extract assets except via the official year-end export
+            provided under Forecast {">"} Year-end summary, or (c)
+            republish, repost, or share captured content publicly or
+            with third parties beyond the CPA or preparer you engage.
+            Taxottic watermarks all authenticated screens with your
+            account email so leaks are traceable; circumventing or
+            removing watermarks is a separate breach. Capture-attempt
+            heuristics may log when these protections are tripped.
+          </p>
+          <p>
             <strong>Termination.</strong> We may suspend accounts that
             violate these terms or applicable law. You may delete your
             account at any time.
           </p>
           <p className="text-xs text-ink-muted">
-            Last updated 2026-04-28. Questions:{" "}
+            Last updated 2026-04-30. Questions:{" "}
             <a
               href="mailto:contact@taxottic.com"
               className="underline hover:text-forest-900"

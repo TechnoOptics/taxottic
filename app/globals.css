@@ -82,6 +82,54 @@
 }
 
 /* ============================================================================
+   No-capture deterrent stack. Applied to <body> by the NoCapture
+   client component on authenticated pages. None of this stops a
+   determined screen-recorder; what it does is make right-click,
+   image-drag, text-selection-and-copy, and Ctrl+P paths fail with
+   a friction visible enough that casual offenders move on.
+   The print blackout is gated behind .no-capture-print so legitimate
+   printable pages (e.g., the year-end CPA export) can opt out.
+============================================================================ */
+body.no-capture {
+  -webkit-tap-highlight-color: transparent;
+}
+body.no-capture-select,
+body.no-capture-select * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Always allow selection inside form fields, regardless of the
+   no-capture-select class on body. Without this, users couldn't paste
+   into our text inputs. */
+body.no-capture-select input,
+body.no-capture-select textarea,
+body.no-capture-select [contenteditable="true"],
+body.no-capture-select [contenteditable="true"] * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+body.no-capture img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  /* Block iOS long-press save / share menu on images */
+  -webkit-touch-callout: none;
+}
+@media print {
+  body.no-capture-print > *:not(.no-capture-print-notice) {
+    display: none !important;
+  }
+  body.no-capture-print::before {
+    content: "Printing this page is not permitted by Taxottic's Terms of Use. Use the official year-end export under Forecast > Year-end summary instead.";
+    display: block;
+    padding: 4em 2em;
+    font-family: var(--font-display);
+    font-size: 18pt;
+    color: #0f2d24;
+    text-align: center;
+  }
+}
+
+/* ============================================================================
    Elegance: page-title flourishes
    These are reusable accents the H1 sections can opt into for a more
    "fine jewelry" feel. Used as Tailwind's @apply equivalents in markup.
