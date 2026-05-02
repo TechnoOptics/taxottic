@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { ProGate } from "@/components/ProGate";
+import { PlaidConnectButton } from "@/components/PlaidConnectButton";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 
@@ -152,14 +153,11 @@ export default async function BanksPage({
               </p>
             </div>
             {isManager ? (
-              <button
-                type="button"
-                disabled
-                className="btn-primary text-sm opacity-60 cursor-not-allowed"
-                title="Plaid integration arrives in the next phase."
-              >
-                Connect bank (soon)
-              </button>
+              <PlaidConnectButton
+                companyPublicId={publicId}
+                companyId={company.id}
+                className="btn-primary text-sm"
+              />
             ) : (
               <p className="text-xs text-ink-muted max-w-[14rem]">
                 Only the company manager can connect a bank.

@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { syncPlaidConnection } from "@/lib/plaid/sync";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+/**
+ * Manual "Sync now" trigger. The same syncPlaidConnection runs from
+ * the webhook handler when Plaid notifies us of new transactions; this
+ * endpoint exists so the UI can offer a refresh button without having
+ * to wait for Plaid's next webhook.
+ *
+ * Body: { connectionId: string }
+ */
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const connectionId = body?.connectionId as string | undefined;
+  if (!connectionId) {
+    return NextResponse.json(
+      { error: "connectionId required" },
+      { status: 400 },
+    );
+  }
+
+  // Confirm the connection belongs to a company the user can read.
+  const { data: conn } = await supabase
+    .from("bank_connections")
+    .select("id, company_id")
+    .eq("id", connectionId)
+    .maybeSingle();
+  if (!conn) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const admin = createServiceClient();
+  try {
+    const result = await syncPlaidConnection(admin, connectionId);
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err) {
+    await admin
+      .from("bank_connections")
+      .update({
+        status: "error",
+        last_error: err instanceof Error ? err.message : String(err),
+      })
+      .eq("id", connectionId);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "sync_failed" },
+      { status: 502 },
+    );
+  }
+}
