@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLAN_LIMITS, type Plan } from "./limits";
+import { FEATURE_GATES, type FeatureGates, PLAN_LIMITS, type Plan } from "./limits";
 
 /**
  * Resolves the active plan for a user. Defaults to 'free' if the row is missing
@@ -142,6 +142,20 @@ export async function checkInviteLimit(
   const used = await countCompanyMembers(supabase, companyId);
   if (used >= limit) return { ok: false, reason: "over_limit", plan, limit, used };
   return { ok: true, remaining: limit - used, plan };
+}
+
+/**
+ * Resolve the current user's feature-gate map. The active plan is
+ * read once, then mapped through FEATURE_GATES so callers always
+ * agree on what's available without each writing its own
+ * "if plan === 'free'" branch.
+ */
+export async function getActiveFeatureGates(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ plan: Plan; gates: FeatureGates }> {
+  const plan = await getActivePlan(supabase, userId);
+  return { plan, gates: FEATURE_GATES[plan] };
 }
 
 function monthStartIso(): string {

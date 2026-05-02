@@ -12,10 +12,52 @@
 
 export type Plan = "free" | "pro" | "team";
 
+/**
+ * Feature gates. true = the feature is available on this plan.
+ * Free is intentionally minimal: forecasting + manual income/expense
+ * entry only. Anything that adds real cost (Bella's API calls, Plaid
+ * bank sync, multi-user chat / preparer locator) is Pro-only.
+ */
+export type FeatureGates = {
+  bella: boolean;            // Ask Bella AI assistant
+  bankConnect: boolean;      // Plaid live bank sync
+  csvImport: boolean;        // CSV transaction import
+  teamChat: boolean;         // Team chat tab
+  inviteEmployees: boolean;  // Add team members
+  taxPreparer: boolean;      // Find / engage a tax preparer
+};
+
+export const FEATURE_GATES: Record<Plan, FeatureGates> = {
+  free: {
+    bella: false,
+    bankConnect: false,
+    csvImport: false,
+    teamChat: false,
+    inviteEmployees: false,
+    taxPreparer: false,
+  },
+  pro: {
+    bella: true,
+    bankConnect: true,
+    csvImport: true,
+    teamChat: true,
+    inviteEmployees: true,
+    taxPreparer: true,
+  },
+  team: {
+    bella: true,
+    bankConnect: true,
+    csvImport: true,
+    teamChat: true,
+    inviteEmployees: true,
+    taxPreparer: true,
+  },
+};
+
 export const PLAN_LIMITS = {
   free: {
-    bellaMessagesPerMonth: 10,
-    csvImportsPerMonth: 1,
+    bellaMessagesPerMonth: 0,    // Bella is now Pro-only
+    csvImportsPerMonth: 0,       // CSV import is Pro-only
     companies: 1,
     invitesPerCompany: 0,        // free users are solo
   },

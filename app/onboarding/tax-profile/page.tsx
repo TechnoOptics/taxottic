@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
+import { W2Fieldset } from "@/components/W2Fieldset";
 import { US_STATES } from "@/data/us-states";
 import {
   STANDARD_DEDUCTION_2025,

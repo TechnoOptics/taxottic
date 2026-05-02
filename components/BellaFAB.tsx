@@ -1,10 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BellaChat } from "./BellaChat";
 
 type Props = {
   companyId?: string;
+  /** When false (free plan), the panel renders an upgrade card
+   *  instead of the live chat. We still render the FAB so users can
+   *  discover the feature. */
+  enabled?: boolean;
 };
 
 /**
@@ -12,7 +17,7 @@ type Props = {
  * right corner. Click to summon the panel; click again (or tap X) to
  * collapse. Animated gold conic gradient ring for the premium feel.
  */
-export function BellaFAB({ companyId }: Props) {
+export function BellaFAB({ companyId, enabled = true }: Props) {
   const [open, setOpen] = useState(false);
 
   // Collapse with Escape, like a modal.
@@ -68,7 +73,31 @@ export function BellaFAB({ companyId }: Props) {
               </button>
             </div>
             <div className="flex-1 min-h-0 p-4 overflow-y-auto">
-              <BellaChat companyPublicId={companyId} compact />
+              {enabled ? (
+                <BellaChat companyPublicId={companyId} compact />
+              ) : (
+                <div className="grid gap-3 max-w-sm mx-auto pt-4 text-center">
+                  <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+                    Pro feature
+                  </div>
+                  <h3 className="display text-xl text-forest-900">
+                    Ask Bella any tax question.
+                  </h3>
+                  <p className="text-sm text-ink-soft leading-relaxed">
+                    Bella reads your forecast, knows the IRC sections
+                    and IRS publications, and answers in plain English
+                    without billable hours. Pro unlocks unlimited
+                    questions; free is read-only access to the rest of
+                    the app.
+                  </p>
+                  <Link
+                    href="/billing?reason=bella"
+                    className="btn-primary text-sm mt-1"
+                  >
+                    See Pro plans
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,16 +1,45 @@
 import { requireUser } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { US_STATES } from "@/data/us-states";
+import { NewCompanyWizard } from "./NewCompanyWizard";
 import { createCompany } from "./actions";
 
 const ENTITY_TYPES = [
-  { value: "sole_prop", label: "Sole Proprietor" },
-  { value: "single_llc", label: "Single-Member LLC" },
-  { value: "multi_llc", label: "Multi-Member LLC" },
-  { value: "s_corp", label: "S-Corp" },
-  { value: "c_corp", label: "C-Corp" },
-  { value: "partnership", label: "Partnership" },
-  { value: "self_employed_1099", label: "1099 / Self-Employed" },
+  {
+    value: "sole_prop",
+    label: "Sole Proprietor",
+    sub: "Just me, no separate entity. Schedule C. Most common for freelancers.",
+  },
+  {
+    value: "single_llc",
+    label: "Single-Member LLC",
+    sub: "An LLC with one owner. Tax-default is the same as sole prop unless I've elected S-corp.",
+  },
+  {
+    value: "multi_llc",
+    label: "Multi-Member LLC",
+    sub: "Multiple owners on an LLC; files Form 1065 partnership return by default.",
+  },
+  {
+    value: "s_corp",
+    label: "S-Corp",
+    sub: "Pass-through entity with payroll on owner-employees. I take a reasonable W-2 wage.",
+  },
+  {
+    value: "c_corp",
+    label: "C-Corp",
+    sub: "Separate taxable entity at a flat 21% federal rate. Less common for small biz.",
+  },
+  {
+    value: "partnership",
+    label: "Partnership",
+    sub: "General or limited partnership. Files Form 1065.",
+  },
+  {
+    value: "self_employed_1099",
+    label: "1099 / Self-Employed",
+    sub: "Independent contractor without a formal entity yet.",
+  },
 ];
 
 export default async function NewCompanyPage() {
@@ -18,65 +47,11 @@ export default async function NewCompanyPage() {
   return (
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
-      <section className="max-w-xl mx-auto px-6 py-12">
-        <div className="card p-8">
-          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-            New company
-          </div>
-          <h1 className="display mt-3 text-3xl text-forest-900">
-            Tell us about the business.
-          </h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            You will be the manager. You can invite employees afterward.
-          </p>
-
-          <form action={createCompany} className="mt-7 grid gap-5">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-forest-800">
-                Company name
-              </span>
-              <input
-                name="name"
-                required
-                className="input"
-                placeholder="e.g. Acme Photography LLC"
-              />
-            </label>
-
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-forest-800">
-                Entity type
-              </span>
-              <select name="entity_type" required className="input" defaultValue="">
-                <option value="" disabled>
-                  Select entity type
-                </option>
-                {ENTITY_TYPES.map((e) => (
-                  <option key={e.value} value={e.value}>
-                    {e.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-forest-800">State</span>
-              <select name="state_code" required className="input" defaultValue="">
-                <option value="" disabled>
-                  Select state
-                </option>
-                {US_STATES.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button className="btn-primary mt-2">Create company</button>
-          </form>
-        </div>
-      </section>
+      <NewCompanyWizard
+        entityTypes={ENTITY_TYPES}
+        states={US_STATES}
+        action={createCompany}
+      />
     </main>
   );
 }

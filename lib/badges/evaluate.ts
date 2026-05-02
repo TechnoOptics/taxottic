@@ -5,13 +5,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * any badge they qualify for that they don't already have. Idempotent thanks
  * to the (user_id, badge_code) unique constraint.
  *
+ * Returns the codes that were JUST awarded on this run so the caller can
+ * trigger a celebration UI. On any subsequent render the badges already
+ * exist and the returned array is empty - which is exactly the
+ * once-and-only-once trigger we need.
+ *
  * Cheap enough to call on every dashboard render. We can move to event-driven
  * awards once volume justifies it.
  */
 export async function evaluateBadges(
   supabase: SupabaseClient,
   userId: string,
-): Promise<void> {
+): Promise<string[]> {
   const taxYear = new Date().getUTCFullYear();
   const earned: { badge_code: string; context?: object }[] = [];
 
@@ -96,13 +101,16 @@ export async function evaluateBadges(
     .filter((e) => !have.has(e.badge_code))
     .map((e) => ({ user_id: userId, badge_code: e.badge_code }));
 
-  if (toInsert.length === 0) return;
+  if (toInsert.length === 0) return [];
 
   // Best-effort: if the insert fails (e.g., RLS quirk in server-action /
-  // page-render context), don't crash the dashboard render.
+  // page-render context), don't crash the dashboard render. Return the
+  // codes we attempted so the UI can celebrate even if the insert
+  // raced.
   try {
     await supabase.from("badges").insert(toInsert);
   } catch {
     // ignore
   }
+  return toInsert.map((b) => b.badge_code);
 }

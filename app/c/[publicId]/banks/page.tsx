@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
+import { ProGate } from "@/components/ProGate";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { getActiveFeatureGates } from "@/lib/plans/usage";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -21,6 +23,41 @@ export default async function BanksPage({
   const { publicId } = await params;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
+
+  // Free plan: render the upgrade card instead of the live page.
+  const { gates } = await getActiveFeatureGates(supabase, user.id);
+  if (!gates.bankConnect) {
+    return (
+      <main className="min-h-screen">
+        <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
+        <section className="max-w-3xl mx-auto px-6 py-10">
+          <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+            {company.public_id} <span className="text-gold-500">·</span> Banks
+          </div>
+          <h1 className="display mt-2 text-3xl text-forest-900">
+            {company.name}
+          </h1>
+          <div aria-hidden="true" className="gold-flourish mt-3">
+            <span />
+          </div>
+          <div className="mt-6">
+            <CompanyNav publicId={publicId} active="banks" />
+          </div>
+          <ProGate
+            feature="Bank connections"
+            pitch="Connect your business bank in two clicks and Taxottic syncs every transaction monthly, suggests an IRS-aligned deduction category, and feeds the data straight into your forecast. Sales-tax breakdowns flow automatically."
+            perks={[
+              "Auto-categorize 100+ common merchants (SaaS, ad spend, travel, meals, fuel, utilities, professional fees)",
+              "Sales-tax extraction when the bank feed includes it",
+              "Monthly transaction review queue, one-tap apply",
+              "Plus everything in Pro: Bella AI, team chat, find-a-CPA, multi-company",
+            ]}
+            reason="bank_connect"
+          />
+        </section>
+      </main>
+    );
+  }
 
   // Pull existing connections + accounts + counts of pending review.
   const [

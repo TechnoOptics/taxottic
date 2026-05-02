@@ -5,10 +5,13 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
+import { MedalCelebration } from "@/components/MedalCelebration";
+import { WelcomeTour } from "@/components/WelcomeTour";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents } from "@/lib/tax/forecast";
 import { buildGreeting } from "@/lib/dashboard/greeting";
 import { checkCompanyLimit } from "@/lib/plans/usage";
+import { completeWelcomeTour } from "@/app/actions/tour";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -37,7 +40,11 @@ export default async function DashboardPage() {
   // Both are idempotent and use admin client so the inserts work regardless
   // of cookie auth quirks. Reads filter explicitly by user_id so they remain
   // scoped correctly even with admin privileges.
-  await Promise.all([
+  // evaluateBadges returns the codes that were JUST awarded (empty
+  // on subsequent renders thanks to the unique constraint), so we
+  // can pop a celebration overlay one-shot without any client
+  // session-storage trickery.
+  const [newlyEarnedCodes] = await Promise.all([
     evaluateBadges(admin, user.id),
     ensureQuarterlyReminders(admin, user.id, taxYear),
   ]);
@@ -57,13 +64,18 @@ export default async function DashboardPage() {
   // Personalized greeting (full name from profile, falls back to email handle).
   const { data: profile } = await admin
     .from("profiles")
-    .select("full_name")
+    .select("full_name, tour_completed_at")
     .eq("id", user.id)
     .maybeSingle();
   const greeting = buildGreeting({
     fullName: profile?.full_name,
     email: user.email,
   });
+  const showWelcomeTour = !profile?.tour_completed_at;
+  const tourDisplayName =
+    profile?.full_name?.split(/\s+/)[0]?.trim() ||
+    user.email?.split("@")[0]?.split(/[._-]/)[0] ||
+    null;
 
   if (companies.length === 0) {
     const { data: pending } = await supabase
@@ -501,6 +513,17 @@ export default async function DashboardPage() {
           />
         </section>
       </section>
+
+      {/* First-run welcome tour. Shows once per profile; the action
+          flips tour_completed_at so it never returns. */}
+      <WelcomeTour
+        show={showWelcomeTour}
+        completeAction={completeWelcomeTour}
+        displayName={tourDisplayName}
+      />
+
+      {/* Celebrate any badges that were just awarded on this render. */}
+      <MedalCelebration newlyEarnedCodes={newlyEarnedCodes} />
     </main>
   );
 }
