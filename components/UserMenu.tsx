@@ -7,9 +7,14 @@ type Props = {
   email: string | null;
   fullName?: string | null;
   avatarUrl?: string | null;
+  // When true, swap the customer-app navigation list for an
+  // admin-only short list (sign out + jump back to taxottic.com).
+  // Used on hq.taxottic.com so super-admins don't see broken links
+  // to /dashboard, /goals, etc. that don't exist on the admin host.
+  adminMode?: boolean;
 };
 
-export function UserMenu({ email, fullName, avatarUrl }: Props) {
+export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -78,27 +83,55 @@ export function UserMenu({ email, fullName, avatarUrl }: Props) {
             ) : null}
           </div>
           <ul className="py-1.5">
-            <MenuLink href="/dashboard" onClick={() => setOpen(false)}>
-              Dashboard
-            </MenuLink>
-            <MenuLink
-              href="/onboarding/tax-profile?next=/dashboard"
-              onClick={() => setOpen(false)}
-            >
-              Tax profile
-            </MenuLink>
-            <MenuLink href="/goals" onClick={() => setOpen(false)}>
-              Goals
-            </MenuLink>
-            <MenuLink href="/reminders" onClick={() => setOpen(false)}>
-              Reminders
-            </MenuLink>
-            <MenuLink href="/billing" onClick={() => setOpen(false)}>
-              Billing &amp; plan
-            </MenuLink>
-            <MenuLink href="/settings/security" onClick={() => setOpen(false)}>
-              Security &amp; passkeys
-            </MenuLink>
+            {adminMode ? (
+              <>
+                <MenuLink href="/" onClick={() => setOpen(false)}>
+                  Admin home
+                </MenuLink>
+                <MenuLink href="/firms" onClick={() => setOpen(false)}>
+                  Tax-prep firms
+                </MenuLink>
+                <MenuLink href="/feedback" onClick={() => setOpen(false)}>
+                  Feedback
+                </MenuLink>
+                <li>
+                  <a
+                    href="https://taxottic.com/dashboard"
+                    className="block rounded-lg px-3 py-2 text-sm text-forest-800 hover:bg-cream"
+                    onClick={() => setOpen(false)}
+                  >
+                    Customer app &rarr;
+                  </a>
+                </li>
+              </>
+            ) : (
+              <>
+                <MenuLink href="/dashboard" onClick={() => setOpen(false)}>
+                  Dashboard
+                </MenuLink>
+                <MenuLink
+                  href="/onboarding/tax-profile?next=/dashboard"
+                  onClick={() => setOpen(false)}
+                >
+                  Tax profile
+                </MenuLink>
+                <MenuLink href="/goals" onClick={() => setOpen(false)}>
+                  Goals
+                </MenuLink>
+                <MenuLink href="/reminders" onClick={() => setOpen(false)}>
+                  Reminders
+                </MenuLink>
+                <MenuLink href="/billing" onClick={() => setOpen(false)}>
+                  Billing &amp; plan
+                </MenuLink>
+                <MenuLink
+                  href="/settings/security"
+                  onClick={() => setOpen(false)}
+                >
+                  Security &amp; passkeys
+                </MenuLink>
+              </>
+            )}
           </ul>
           <div className="border-t border-forest-100 pt-1.5">
             <form action="/auth/signout" method="post">

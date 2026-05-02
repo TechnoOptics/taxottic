@@ -12,6 +12,11 @@ import { getActiveFeatureGates } from "@/lib/plans/usage";
 type AppHeaderProps = {
   email?: string;
   bellaCompanyId?: string;
+  // Where the wordmark links to. Defaults to /dashboard for the
+  // customer app; admin pages on hq.taxottic.com pass "/" so the
+  // wordmark goes to the admin home (which middleware rewrites to
+  // /admin internally).
+  homeHref?: string;
   // Reserved for future use; kept on the prop signature so existing
   // callers don't break. The capture deterrent stack was pulled out
   // after a demo regression - consider re-introducing only when we
@@ -22,6 +27,7 @@ type AppHeaderProps = {
 export async function AppHeader({
   email,
   bellaCompanyId,
+  homeHref = "/dashboard",
   allowPrint: _allowPrint = false,
 }: AppHeaderProps) {
   // Pull profile for avatar + display name + GDPR state.
@@ -62,11 +68,12 @@ export async function AppHeader({
             paddingBottom: "0.625rem",
           }}
         >
-          <Wordmark href="/dashboard" size="sm" tone="cream" />
+          <Wordmark href={homeHref} size="sm" tone="cream" />
           <UserMenu
             email={email ?? null}
             fullName={fullName}
             avatarUrl={avatarUrl}
+            adminMode={homeHref === "/"}
           />
         </div>
       </header>
@@ -83,14 +90,15 @@ export async function AppHeader({
       {/* Auto-shrinks the header on scroll on mobile (CSS-only, no
           JS animation - we just toggle a body class). */}
       <HeaderScrollHider />
-      {/* Bella: Pro-only on the customer side. We still render the
-          FAB for signed-in users so they discover the feature, but
-          free-plan users hit a paywall card when they open the panel
-          instead of running up Anthropic costs. */}
-      {user ? (
+      {/* Bella + feedback are customer-app surfaces. Hide them on admin
+          pages (hq.taxottic.com) so the super-admin view stays focused
+          and we don't spend Anthropic tokens from the ops console. */}
+      {user && homeHref !== "/" ? (
         <BellaFAB companyId={bellaCompanyId} enabled={bellaEnabled} />
       ) : null}
-      <FeedbackButton submitAction={submitFeedback} />
+      {homeHref !== "/" ? (
+        <FeedbackButton submitAction={submitFeedback} />
+      ) : null}
       {needsConsent ? <GdprBanner acceptAction={recordGdprConsent} /> : null}
     </>
   );

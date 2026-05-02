@@ -117,7 +117,7 @@ export default async function AdminPage() {
 
   return (
     <main className="min-h-screen">
-      <AppHeader email={user.email ?? undefined} />
+      <AppHeader email={user.email ?? undefined} homeHref="/" />
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
@@ -129,10 +129,10 @@ export default async function AdminPage() {
             </h1>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Link href="/admin/firms" className="btn-ghost">
+            <Link href="/firms" className="btn-ghost">
               Tax-prep firms
             </Link>
-            <Link href="/admin/feedback" className="btn-ghost">
+            <Link href="/feedback" className="btn-ghost">
               Feedback{" "}
               {(pendingFeedback ?? 0) > 0 ? (
                 <span className="ml-1 inline-flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] min-w-5 h-5 px-1">
@@ -140,9 +140,9 @@ export default async function AdminPage() {
                 </span>
               ) : null}
             </Link>
-            <Link href="/dashboard" className="btn-ghost">
+            <a href="https://taxottic.com/dashboard" className="btn-ghost">
               App view
-            </Link>
+            </a>
           </div>
         </div>
 
@@ -229,7 +229,7 @@ function FilingGroup({
           return (
             <Link
               key={u.id}
-              href={`/admin/user/${u.id}`}
+              href={`/user/${u.id}`}
               className="card card-hover p-4 flex flex-col gap-2"
             >
               <div className="flex items-start justify-between gap-3">

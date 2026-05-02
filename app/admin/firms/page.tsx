@@ -36,7 +36,7 @@ export default async function AdminFirmsPage() {
 
   return (
     <main className="min-h-screen">
-      <AppHeader />
+      <AppHeader homeHref="/" />
       <section className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
@@ -50,7 +50,7 @@ export default async function AdminFirmsPage() {
               <span />
             </div>
           </div>
-          <Link href="/admin" className="text-sm text-forest-700 hover:text-forest-900">
+          <Link href="/" className="text-sm text-forest-700 hover:text-forest-900">
             ← All admin
           </Link>
         </div>
