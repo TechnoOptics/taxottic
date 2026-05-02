@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 480" role="img" aria-label="Taxottic">
+  <!-- Transparent background; the wordmark is meant to drop onto any
+       light surface (cream, white, or off-white). -->
+
+  <!-- Wordmark "taxottic" in lowercase serif, forest. -->
+  <text x="800" y="280"
+        text-anchor="middle"
+        font-family="Fraunces, 'Hoefler Text', 'Garamond', 'Times New Roman', serif"
+        font-weight="500"
+        font-size="220"
+        letter-spacing="-2"
+        fill="#0f2d24">taxottic</text>
+
+  <!-- Tagline -->
+  <text x="800" y="380"
+        text-anchor="middle"
+        font-family="Inter, 'Helvetica Neue', sans-serif"
+        font-weight="500"
+        font-size="36"
+        letter-spacing="14"
+        fill="#a78540">TAX FORECASTING</text>
+</svg>

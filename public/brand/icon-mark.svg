@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Taxottic">
+  <!-- Forest panel with quiet-luxury rounded corners. -->
+  <rect width="512" height="512" rx="96" fill="#0f2d24"/>
+
+  <!-- Single lowercase "t" in the same serif family used for the
+       wordmark. Looks identical to the first letter of the
+       wordmark mark, which keeps the brand consistent across
+       contexts (favicon, app icon, social avatar). -->
+  <text x="256" y="368"
+        text-anchor="middle"
+        font-family="Fraunces, 'Hoefler Text', 'Garamond', 'Times New Roman', serif"
+        font-weight="500"
+        font-size="380"
+        letter-spacing="-2"
+        fill="#fbf7e9">t</text>
+
+  <!-- Gold flourish bar, same motif used under headings in the app. -->
+  <g fill="#c4a25d">
+    <circle cx="216" cy="412" r="3.5"/>
+    <rect x="225" y="410" width="62" height="4" rx="2"/>
+    <circle cx="296" cy="412" r="3.5"/>
+  </g>
+</svg>

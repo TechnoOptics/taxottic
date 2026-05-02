@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Taxottic">
+  <!-- Cream panel, soft rounded corners, matches the .card surface
+       used throughout the app. -->
+  <rect width="1024" height="1024" rx="160" fill="#fbf7e9"/>
+
+  <!-- Gold ornamental rule above the wordmark - same flourish that
+       appears under section headings in the app. -->
+  <g fill="#c4a25d">
+    <circle cx="430" cy="400" r="6"/>
+    <rect x="446" y="397" width="132" height="6" rx="3"/>
+    <circle cx="594" cy="400" r="6"/>
+  </g>
+
+  <!-- Wordmark "taxottic". Rendered with Fraunces if the host has it,
+       otherwise transitional-serif fallback. The rasterizer below
+       embeds Fraunces so the exported PNG is exact. -->
+  <text x="512" y="612"
+        text-anchor="middle"
+        font-family="Fraunces, 'Hoefler Text', 'Garamond', 'Times New Roman', serif"
+        font-weight="500"
+        font-style="normal"
+        font-size="180"
+        letter-spacing="-2"
+        fill="#0f2d24">taxottic</text>
+
+  <!-- Tagline (small, gold, restrained) -->
+  <text x="512" y="700"
+        text-anchor="middle"
+        font-family="Inter, 'Helvetica Neue', sans-serif"
+        font-weight="500"
+        font-size="34"
+        letter-spacing="14"
+        fill="#a78540">TAX FORECASTING</text>
+</svg>

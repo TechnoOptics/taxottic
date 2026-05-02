@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Taxottic">
+  <!-- Cream-on-forest variant for placement on dark surfaces. -->
+  <rect width="512" height="512" rx="96" fill="#fbf7e9"/>
+
+  <text x="256" y="368"
+        text-anchor="middle"
+        font-family="Fraunces, 'Hoefler Text', 'Garamond', 'Times New Roman', serif"
+        font-weight="500"
+        font-size="380"
+        letter-spacing="-2"
+        fill="#0f2d24">t</text>
+
+  <g fill="#a78540">
+    <circle cx="216" cy="412" r="3.5"/>
+    <rect x="225" y="410" width="62" height="4" rx="2"/>
+    <circle cx="296" cy="412" r="3.5"/>
+  </g>
+</svg>
