@@ -63,8 +63,11 @@ export function FeedbackButton({ submitAction }: Props) {
         aria-label="Send feedback"
         className="fixed z-30 right-4 sm:right-6 size-11 sm:size-12 rounded-full grid place-items-center bg-forest-800 hover:bg-forest-700 text-cream shadow-lg shadow-forest-900/25 transition-colors"
         style={{
+          // Stack above the BellaFAB. Bella is at bottom 1rem with a
+          // 14/16 size (~64px). We need at least bella-height + bella-bottom + a
+          // breathing gap so the buttons don't collide.
           bottom:
-            "calc(5rem + env(safe-area-inset-bottom, 0px))",
+            "calc(6rem + env(safe-area-inset-bottom, 0px))",
         }}
         title="Send feedback"
       >

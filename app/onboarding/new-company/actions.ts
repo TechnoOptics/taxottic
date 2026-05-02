@@ -11,9 +11,11 @@ export async function createCompany(formData: FormData) {
 
   const limit = await checkCompanyLimit(supabase, user.id);
   if (!limit.ok) {
-    throw new Error(
-      "Free plan supports 1 company. Upgrade to Pro at /billing for unlimited companies.",
-    );
+    // Free plan caps at 1 company. Previously we threw which surfaced
+    // as a generic error digest in the client (the "ERROR 933579909"
+    // people saw). Redirect to /billing so the user lands somewhere
+    // useful with the actual upgrade path.
+    redirect("/billing?reason=company_limit");
   }
 
   const name = String(formData.get("name") ?? "").trim();

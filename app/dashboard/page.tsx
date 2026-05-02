@@ -8,6 +8,7 @@ import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents } from "@/lib/tax/forecast";
 import { buildGreeting } from "@/lib/dashboard/greeting";
+import { checkCompanyLimit } from "@/lib/plans/usage";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -42,6 +43,16 @@ export default async function DashboardPage() {
   ]);
 
   const companies = await getMyCompanies();
+
+  // Plan-aware "+ New company" gating. Free is capped at 1 company;
+  // when at the cap we show the link greyed out with an upgrade
+  // tooltip so the user learns about Pro instead of bouncing off a
+  // crash on submission.
+  const companyLimit = await checkCompanyLimit(supabase, user.id);
+  const canCreateCompany = companyLimit.ok;
+  const newCompanyTooltip = canCreateCompany
+    ? undefined
+    : "Free plan supports 1 company. Upgrade to Pro for unlimited.";
 
   // Personalized greeting (full name from profile, falls back to email handle).
   const { data: profile } = await admin
@@ -339,12 +350,23 @@ export default async function DashboardPage() {
         <section className="mt-8">
           <div className="flex items-end justify-between">
             <h2 className="display text-xl text-forest-900">Companies</h2>
-            <Link
-              href="/onboarding/new-company"
-              className="text-sm text-forest-700 hover:text-forest-900"
-            >
-              + New company
-            </Link>
+            {canCreateCompany ? (
+              <Link
+                href="/onboarding/new-company"
+                className="text-sm text-forest-700 hover:text-forest-900"
+              >
+                + New company
+              </Link>
+            ) : (
+              <Link
+                href="/billing?reason=company_limit"
+                className="text-sm text-ink-muted hover:text-forest-900 inline-flex items-center gap-1.5"
+                title={newCompanyTooltip}
+              >
+                <span aria-hidden="true">🔒</span>
+                + New company (Pro)
+              </Link>
+            )}
           </div>
           <ul className="mt-3 grid gap-3">
             {companies.map((m) => {

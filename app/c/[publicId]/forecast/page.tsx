@@ -179,16 +179,22 @@ export default async function ForecastPage({ params }: { params: Params }) {
     ) + ytdOfMonthly(recurringBizExpenseMonthly, currentMonth);
 
   // ---------- Year-end projected totals ----------
+  // A "one-off" is by user definition a single event - we count it
+  // once, full stop. We DO NOT pace-project one-offs (a $500 expense
+  // logged in March was previously becoming $500 × 12/3 = $2000
+  // year-end, which surprised everyone). Recurring rows still get
+  // their deterministic per-cadence expansion via expandRowToMonthly.
+  // The oneOffPaceFactor is now only used by the auto-mileage
+  // pro-rate below where we genuinely need to extrapolate from
+  // limited odometer data.
   const projIncome =
-    oneOffIncomes.reduce((a, r) => a + r.amount_cents, 0) * oneOffPaceFactor +
+    oneOffIncomes.reduce((a, r) => a + r.amount_cents, 0) +
     totalOfMonthly(recurringIncomeMonthly);
   const projMeals =
-    sumOneOff(expenses, (r) => r.category_code === "meals") *
-      oneOffPaceFactor +
+    sumOneOff(expenses, (r) => r.category_code === "meals") +
     totalOfMonthly(recurringMealsMonthly);
   const projAboveTheLine =
-    sumOneOff(expenses, (r) => ABOVE_THE_LINE_CODES.has(r.category_code)) *
-      oneOffPaceFactor +
+    sumOneOff(expenses, (r) => ABOVE_THE_LINE_CODES.has(r.category_code)) +
     totalOfMonthly(recurringAboveTheLineMonthly);
   const projBizExpenses =
     sumOneOff(
@@ -196,9 +202,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
       (r) =>
         r.category_code !== "meals" &&
         !ABOVE_THE_LINE_CODES.has(r.category_code),
-    ) *
-      oneOffPaceFactor +
-    totalOfMonthly(recurringBizExpenseMonthly);
+    ) + totalOfMonthly(recurringBizExpenseMonthly);
 
   // Auto-deductions from business profile. Mileage pace-projects from
   // YTD miles using one-off-style logic; for the YTD view we don't

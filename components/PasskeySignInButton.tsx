@@ -44,15 +44,23 @@ export function PasskeySignInButton({ emailHint }: Props) {
     } catch (err) {
       if (err instanceof Error && err.name === "NotAllowedError") return;
       const message = err instanceof Error ? err.message : "Unknown error";
-      // Common when the user has not yet registered a passkey on this device
-      // or the email hint matches no passkeys at all.
+      // Common when the user has not yet registered a passkey on this
+      // device, or the device-stored credential isn't a resident-key
+      // (older registrations made before we required residentKey =
+      // "required"), or the email hint doesn't match any passkey.
+      const lower = message.toLowerCase();
       if (
-        message.toLowerCase().includes("no credentials") ||
-        message.toLowerCase().includes("not found") ||
-        message.toLowerCase().includes("no passkey")
+        lower.includes("no credentials") ||
+        lower.includes("not found") ||
+        lower.includes("no passkey") ||
+        lower.includes("no data") ||
+        lower.includes("no available") ||
+        lower.includes("operation either timed out")
       ) {
         setError(
-          "No passkey saved on this device yet. Sign in another way, then add a passkey under Settings → Security so it works next time.",
+          emailHint
+            ? "No passkey for that email on this device. If you registered before today, sign in with your magic link first then re-add the passkey under Settings → Security - we now save resident-key passkeys that work without typing your email."
+            : "No passkey saved on this device yet, or your existing passkey isn't discoverable. Type your email above first and try again, or sign in with the magic link below and re-add a passkey under Settings → Security.",
         );
       } else {
         setError(message);

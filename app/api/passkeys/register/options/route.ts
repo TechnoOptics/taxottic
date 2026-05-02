@@ -38,7 +38,14 @@ export async function POST() {
       transports: (c.transports ?? []) as AuthenticatorTransport[],
     })),
     authenticatorSelection: {
-      residentKey: "preferred",
+      // residentKey: "required" makes the credential discoverable so a
+      // user can sign in WITHOUT typing their email first. Earlier
+      // setting was "preferred" which let some authenticators (older
+      // Windows Hello, certain Android builds) skip the resident-key
+      // path - those passkeys then look "missing" on the next sign-in
+      // because they aren't discoverable. Required forces real
+      // passkey UX and matches how Google/Apple Passwords expect them.
+      residentKey: "required",
       userVerification: "preferred",
     },
   });

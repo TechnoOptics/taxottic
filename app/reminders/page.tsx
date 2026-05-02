@@ -3,6 +3,11 @@ import { AppHeader } from "@/components/AppHeader";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { dismissReminder, markReminderRead } from "./actions";
 
+// Force dynamic so dismiss + mark-read actions show their effect on
+// the very next render. Without this Next.js can serve a cached
+// version and the dismissed item appears to linger.
+export const dynamic = "force-dynamic";
+
 export default async function RemindersPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
 
