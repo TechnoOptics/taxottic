@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { FindFirmDialog } from "@/components/FindFirmDialog";
 
@@ -42,6 +43,7 @@ type SearchFirmRow = {
 
 type Props = {
   companyId: string;
+  companyPublicId: string;
   companyName: string;
   isManager: boolean;
   defaultTaxYear: number;
@@ -72,6 +74,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export function PreparerPanel({
   companyId,
+  companyPublicId,
   companyName,
   isManager,
   defaultTaxYear,
@@ -114,19 +117,29 @@ export function PreparerPanel({
               's books only after you both confirm the engagement.
             </p>
           </div>
-          {isManager ? (
-            <button
-              onClick={() => setShowFind(true)}
-              className="btn-primary text-sm"
-              type="button"
-            >
-              + Find a tax preparer
-            </button>
-          ) : (
-            <p className="text-xs text-ink-muted max-w-[14rem]">
-              Only the company manager can engage a preparer.
-            </p>
-          )}
+          <div className="flex flex-col items-end gap-2">
+            {isManager ? (
+              <button
+                onClick={() => setShowFind(true)}
+                className="btn-primary text-sm"
+                type="button"
+              >
+                + Find a tax preparer
+              </button>
+            ) : (
+              <p className="text-xs text-ink-muted max-w-[14rem]">
+                Only the company manager can engage a preparer.
+              </p>
+            )}
+            {active.length > 0 ? (
+              <Link
+                href={`/c/${companyPublicId}/preparer/access`}
+                className="text-xs text-forest-700 hover:text-forest-900 underline"
+              >
+                What can my preparer see? →
+              </Link>
+            ) : null}
+          </div>
         </div>
       </section>
 
