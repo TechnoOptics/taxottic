@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { ProGate } from "@/components/ProGate";
 import { PlaidConnectButton } from "@/components/PlaidConnectButton";
+import { PlaidSyncButton } from "@/components/PlaidSyncButton";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 
@@ -205,45 +206,107 @@ export default async function BanksPage({
                   (a) => a.connection_id === c.id,
                 );
                 return (
-                  <li key={c.id} className="card p-5">
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {c.institution_logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={c.institution_logo_url}
-                            alt=""
-                            className="size-10 rounded-lg border border-forest-100 bg-white object-contain p-1"
-                          />
-                        ) : (
-                          <span className="size-10 rounded-lg bg-cream/70 border border-forest-100 grid place-items-center display text-base text-forest-900">
-                            {(c.institution_name ?? "?")
-                              .charAt(0)
-                              .toUpperCase()}
-                          </span>
-                        )}
-                        <div className="min-w-0">
-                          <div className="display text-base text-forest-900 truncate">
-                            {c.institution_name ?? "Unknown bank"}
-                          </div>
-                          <div className="text-xs text-ink-muted mt-0.5">
-                            {STATUS_LABEL[c.status] ?? c.status}
-                            {c.last_synced_at
-                              ? ` · last sync ${new Date(c.last_synced_at).toLocaleDateString()}`
-                              : ""}
+                  <li key={c.id} className="card p-0 overflow-hidden">
+                    {/* Native <details>/<summary> = no client JS, no
+                        flicker, native chevron rotation via the marker. */}
+                    <details className="group">
+                      <summary className="list-none cursor-pointer p-5 flex items-center justify-between gap-3 flex-wrap select-none hover:bg-cream/40">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {c.institution_logo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={c.institution_logo_url}
+                              alt=""
+                              className="size-10 rounded-lg border border-forest-100 bg-white object-contain p-1"
+                            />
+                          ) : (
+                            <span className="size-10 rounded-lg bg-cream/70 border border-forest-100 grid place-items-center display text-base text-forest-900">
+                              {(c.institution_name ?? "?")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <div className="display text-base text-forest-900 truncate">
+                              {c.institution_name ?? "Unknown bank"}
+                            </div>
+                            <div className="text-xs text-ink-muted mt-0.5">
+                              {STATUS_LABEL[c.status] ?? c.status}
+                              {c.last_synced_at
+                                ? ` · last sync ${new Date(c.last_synced_at).toLocaleDateString()}`
+                                : ""}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="text-xs text-ink-muted">
-                        {acctsForConn.length} account
-                        {acctsForConn.length === 1 ? "" : "s"}
-                      </div>
-                    </div>
-                    {c.last_error ? (
-                      <p className="mt-2 text-xs text-red-700">
-                        {c.last_error}
-                      </p>
-                    ) : null}
+                        <div className="flex items-center gap-3 text-xs text-ink-muted">
+                          <PlaidSyncButton connectionId={c.id} />
+                          <span>
+                            {acctsForConn.length} account
+                            {acctsForConn.length === 1 ? "" : "s"}
+                          </span>
+                          {/* Chevron rotates 180deg when <details> is open. */}
+                          <svg
+                            className="size-4 text-forest-700 transition-transform group-open:rotate-180"
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M6 8l4 4 4-4"
+                            />
+                          </svg>
+                        </div>
+                      </summary>
+                      {acctsForConn.length > 0 ? (
+                        <ul className="border-t border-forest-100 divide-y divide-forest-50">
+                          {acctsForConn.map((a) => (
+                            <li
+                              key={a.id}
+                              className="px-5 py-3 flex items-center justify-between gap-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-sm text-forest-900 truncate">
+                                  {a.official_name ?? a.name ?? "Account"}
+                                  {a.mask ? (
+                                    <span className="ml-2 text-xs text-ink-muted">
+                                      ····{a.mask}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="text-[11px] text-ink-muted mt-0.5">
+                                  {a.account_subtype
+                                    ? a.account_subtype.replace(/_/g, " ")
+                                    : "account"}
+                                  {a.is_excluded ? " · excluded" : ""}
+                                </div>
+                              </div>
+                              <div className="text-sm text-forest-900 tabular-nums">
+                                {a.current_balance_cents != null
+                                  ? new Intl.NumberFormat("en-US", {
+                                      style: "currency",
+                                      currency: "USD",
+                                    }).format(a.current_balance_cents / 100)
+                                  : "-"}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="px-5 pb-4 text-xs text-ink-muted">
+                          No accounts found yet. Run a sync to pull
+                          accounts and balances.
+                        </p>
+                      )}
+                      {c.last_error ? (
+                        <p className="px-5 pb-4 text-xs text-red-700">
+                          {c.last_error}
+                        </p>
+                      ) : null}
+                    </details>
                   </li>
                 );
               })}

@@ -120,14 +120,37 @@ export function PlaidConnectButton({
       ? sessionStorage.getItem("plaid_oauth_return_url") ?? undefined
       : undefined;
 
+  // Plaid Link sets `body { overflow: hidden }` while the modal is
+  // open and is supposed to clean it up on close, but on first-render
+  // racing it sometimes leaves the lock behind, breaking page scroll.
+  // Restore explicitly on every close path (success, exit, unmount).
+  function restoreScroll() {
+    if (typeof document === "undefined") return;
+    document.body.style.removeProperty("overflow");
+    document.documentElement.style.removeProperty("overflow");
+  }
+
   const { open, ready } = usePlaidLink({
     token: linkToken ?? "",
-    onSuccess,
+    onSuccess: (publicToken, metadata) => {
+      restoreScroll();
+      onSuccess(publicToken, metadata);
+    },
     onExit: () => {
+      restoreScroll();
       setBusy(false);
     },
     receivedRedirectUri,
   });
+
+  // Belt + suspenders: if the user navigates away mid-flow or hot
+  // reload kills the component before Plaid's own teardown runs, the
+  // unmount cleanup unlocks scroll.
+  useEffect(() => {
+    return () => {
+      restoreScroll();
+    };
+  }, []);
 
   useEffect(() => {
     if (linkToken && ready && (resumeOAuth || busy)) {

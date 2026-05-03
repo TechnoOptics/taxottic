@@ -1,6 +1,7 @@
 import type { PlaidApi, Transaction, RemovedTransaction } from "plaid";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlaidClient } from "./client";
+import { categorizeExpense, categorizeIncome } from "./categorize";
 
 /**
  * Pull every change since the connection's stored cursor and apply
@@ -24,6 +25,9 @@ export async function syncPlaidConnection(
   modified: number;
   removed: number;
   accounts: number;
+  applied: number;
+  applied_income: number;
+  applied_expense: number;
 }> {
   const plaid = getPlaidClient();
   if (!plaid) throw new Error("Plaid client not configured");
@@ -107,6 +111,12 @@ export async function syncPlaidConnection(
     hasMore = data.has_more;
   }
 
+  // Apply unprocessed posted transactions into monthly_income /
+  // monthly_expenses so the forecast updates immediately. The user can
+  // still recategorize from the review queue later.
+  const { applied: appliedCount, applied_income, applied_expense } =
+    await applyPendingTransactions(admin, connectionId);
+
   await admin
     .from("bank_connections")
     .update({
@@ -117,7 +127,154 @@ export async function syncPlaidConnection(
     })
     .eq("id", connectionId);
 
-  return { added, modified, removed, accounts: accountsTouched };
+  return {
+    added,
+    modified,
+    removed,
+    accounts: accountsTouched,
+    applied: appliedCount,
+    applied_income,
+    applied_expense,
+  };
+}
+
+/**
+ * Walk every posted, not-yet-applied transaction belonging to this
+ * connection and create a matching monthly_income or monthly_expense
+ * row, then mark the source transaction as applied. Idempotent: rows
+ * with applied_to_expense_id or applied_to_income_id already set are
+ * skipped, so this is safe to re-run on every sync.
+ *
+ * Skips:
+ *   - pending transactions (only post-settled tx flow into forecast)
+ *   - internal transfers (TRANSFER_IN / TRANSFER_OUT)
+ *   - tax refunds (not income)
+ *
+ * The user can dismiss or recategorize from the review queue without
+ * breaking idempotency because the applied_to_* FK is the lock.
+ */
+async function applyPendingTransactions(
+  admin: SupabaseClient,
+  connectionId: string,
+): Promise<{ applied: number; applied_income: number; applied_expense: number }> {
+  // We need company_id + user_id (the connection creator) to insert
+  // into monthly_*. Pull from bank_connections.
+  const { data: conn } = await admin
+    .from("bank_connections")
+    .select("company_id, created_by")
+    .eq("id", connectionId)
+    .maybeSingle();
+  if (!conn || !conn.created_by) {
+    return { applied: 0, applied_income: 0, applied_expense: 0 };
+  }
+  const companyId = conn.company_id as string;
+  const userId = conn.created_by as string;
+
+  const { data: accountRows } = await admin
+    .from("bank_accounts")
+    .select("id")
+    .eq("connection_id", connectionId)
+    .eq("is_excluded", false);
+  const accountIds = (accountRows ?? []).map((a) => a.id as string);
+  if (!accountIds.length) {
+    return { applied: 0, applied_income: 0, applied_expense: 0 };
+  }
+
+  // Pull all unprocessed posted tx for this connection's accounts.
+  // Cap the page at 1000 to keep the function snappy; subsequent
+  // syncs catch up.
+  const { data: txs } = await admin
+    .from("account_transactions")
+    .select(
+      "id, posted_date, amount_cents, personal_finance_category, raw_payload, is_pending",
+    )
+    .in("account_id", accountIds)
+    .eq("user_action", "pending")
+    .is("applied_to_expense_id", null)
+    .is("applied_to_income_id", null)
+    .eq("is_pending", false)
+    .order("posted_date", { ascending: true })
+    .limit(1000);
+
+  if (!txs || !txs.length) {
+    return { applied: 0, applied_income: 0, applied_expense: 0 };
+  }
+
+  let income = 0;
+  let expense = 0;
+  for (const tx of txs) {
+    const date = new Date(tx.posted_date as string);
+    const taxYear = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1;
+    const cents = tx.amount_cents as number;
+    const primary = (tx.personal_finance_category as string | null) ?? null;
+    const detailed =
+      ((tx.raw_payload as Record<string, unknown> | null)
+        ?.personal_finance_category as { detailed?: string } | undefined)
+        ?.detailed ?? null;
+
+    // Plaid sign convention: positive = outflow (expense), negative
+    // = inflow (income / refund / credit).
+    if (cents > 0) {
+      const code = categorizeExpense(primary);
+      if (!code) continue;
+      const { data: row } = await admin
+        .from("monthly_expenses")
+        .insert({
+          company_id: companyId,
+          user_id: userId,
+          tax_year: taxYear,
+          month,
+          amount_cents: cents,
+          category_code: code,
+          notes: "Auto-imported from bank feed",
+        })
+        .select("id")
+        .maybeSingle();
+      if (row) {
+        await admin
+          .from("account_transactions")
+          .update({
+            user_action: "applied",
+            applied_to_expense_id: row.id,
+            applied_at: new Date().toISOString(),
+            applied_by: userId,
+          })
+          .eq("id", tx.id);
+        expense++;
+      }
+    } else if (cents < 0) {
+      const source = categorizeIncome(primary, detailed);
+      if (!source) continue;
+      const { data: row } = await admin
+        .from("monthly_income")
+        .insert({
+          company_id: companyId,
+          user_id: userId,
+          tax_year: taxYear,
+          month,
+          amount_cents: Math.abs(cents),
+          source,
+          notes: "Auto-imported from bank feed",
+        })
+        .select("id")
+        .maybeSingle();
+      if (row) {
+        await admin
+          .from("account_transactions")
+          .update({
+            user_action: "applied",
+            applied_to_income_id: row.id,
+            applied_at: new Date().toISOString(),
+            applied_by: userId,
+          })
+          .eq("id", tx.id);
+        income++;
+      }
+    }
+  }
+
+  return { applied: income + expense, applied_income: income, applied_expense: expense };
 }
 
 async function upsertTx(
