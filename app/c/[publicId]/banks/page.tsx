@@ -4,6 +4,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { ProGate } from "@/components/ProGate";
 import { PlaidConnectButton } from "@/components/PlaidConnectButton";
 import { PlaidSyncButton } from "@/components/PlaidSyncButton";
+import { PlaidAutoSync } from "@/components/PlaidAutoSync";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 
@@ -193,6 +194,18 @@ export default async function BanksPage({
             />
           </div>
         </section>
+
+        {/* Background sync on mount: any connection more than 15 min
+            stale gets a fresh /transactions/sync + auto-apply pass,
+            then the page refreshes. Cron picks up off-page updates. */}
+        {conns.length > 0 ? (
+          <PlaidAutoSync
+            connections={conns.map((c) => ({
+              id: c.id,
+              lastSyncedAt: c.last_synced_at,
+            }))}
+          />
+        ) : null}
 
         {/* Existing connections */}
         {conns.length > 0 ? (

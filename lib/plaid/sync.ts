@@ -47,6 +47,23 @@ export async function syncPlaidConnection(
     .maybeSingle();
   let cursor = (conn?.cursor as string | null) ?? "";
 
+  // Make sure Plaid is pushing webhook updates for this Item to our
+  // current endpoint. Idempotent: passing the same URL is a no-op,
+  // and Items linked before PLAID_WEBHOOK_URL was configured get
+  // their webhook backfilled on the next sync. Failures here are
+  // non-fatal because polling cron picks up the slack.
+  const desiredWebhook = process.env.PLAID_WEBHOOK_URL;
+  if (desiredWebhook) {
+    try {
+      await plaid.itemWebhookUpdate({
+        access_token: accessToken,
+        webhook: desiredWebhook,
+      });
+    } catch {
+      /* ignore - cron will sync regardless */
+    }
+  }
+
   // Refresh accounts first (balances, names) so transaction inserts
   // can resolve account_id.
   const { data: accountsResp } = await plaid.accountsGet({
