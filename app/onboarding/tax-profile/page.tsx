@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { W2Fieldset } from "@/components/W2Fieldset";
+import { PriorYearUploader } from "@/components/PriorYearUploader";
 import { US_STATES } from "@/data/us-states";
 import {
   STANDARD_DEDUCTION_2025,
@@ -40,6 +41,24 @@ export default async function TaxProfilePage({
   const startingFilingStatus =
     (existing?.filing_status as FilingStatus | undefined) ?? "single";
 
+  // Have they already uploaded any prior-year docs? If so, hide the
+  // upload card by default - it's a one-and-done flow per year.
+  const { data: priorDocs } = await supabase
+    .from("prior_year_documents")
+    .select("id, doc_type, applied_at")
+    .eq("user_id", user.id)
+    .eq("tax_year", taxYear - 1);
+  const priorDocsExist = !!priorDocs && priorDocs.length > 0;
+  const priorDocsApplied = priorDocs?.some((d) => d.applied_at) ?? false;
+
+  // Pick a company to bind business-scoped docs to.
+  const { data: primaryCompany } = await supabase
+    .from("companies")
+    .select("id")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -54,6 +73,70 @@ export default async function TaxProfilePage({
           For tax year {taxYear}. You can update these any time. Stored
           privately on your account; only you and super-admins can read them.
         </p>
+
+        {/* Prior-year shortcut. If the user has last year's W-2,
+            1099s, and Schedule C, dropping them in here lets us
+            extract the totals via Bella's vision and pre-populate
+            both the tax profile AND a 12-month income/expense
+            baseline so the forecast starts from a realistic number
+            instead of zero. The form below stays available for
+            anyone who'd rather type it in. */}
+        <details
+          open={!priorDocsApplied}
+          className="mt-8 card p-6 sm:p-7 group bg-cream/40 border-gold-200/60"
+        >
+          <summary className="cursor-pointer list-none flex items-start justify-between gap-3 select-none">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+                Pre-fill from last year (recommended)
+              </div>
+              <h2 className="display mt-1 text-xl text-forest-900">
+                Drop in {taxYear - 1}'s tax docs and we'll do the rest.
+              </h2>
+              <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+                Bella reads your W-2, every 1099, and your Schedule C,
+                pulls the totals, and uses them to seed your {taxYear}{" "}
+                forecast. Five minutes of upload usually beats an hour
+                of typing. Files aren't stored, only the extracted
+                numbers.
+              </p>
+              {priorDocsExist && !priorDocsApplied ? (
+                <p className="mt-2 text-xs text-gold-700">
+                  You have {priorDocs!.length} document
+                  {priorDocs!.length === 1 ? "" : "s"} uploaded but not
+                  yet applied. Click Apply below to push them into your
+                  forecast.
+                </p>
+              ) : null}
+              {priorDocsApplied ? (
+                <p className="mt-2 text-xs text-emerald-800">
+                  Prior year is applied. Open this card to add more
+                  docs.
+                </p>
+              ) : null}
+            </div>
+            <svg
+              className="size-5 text-forest-700 transition-transform group-open:rotate-180 shrink-0"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 8l4 4 4-4"
+              />
+            </svg>
+          </summary>
+          <div className="mt-5">
+            <PriorYearUploader
+              companyId={primaryCompany?.id ?? null}
+              defaultTaxYear={taxYear - 1}
+            />
+          </div>
+        </details>
 
         <form
           action={async (fd) => {
