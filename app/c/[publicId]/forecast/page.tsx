@@ -804,14 +804,18 @@ function MonthlyTable({
 }) {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return (
-    <div className="mt-5 overflow-x-auto no-scrollbar -mx-2 px-2">
-      <table className="w-full text-sm border-collapse min-w-[460px]">
+    // Tighter cell padding + no min-width so the table fits inside any
+    // viewport down to ~280px (foldables) without sideways scrolling. The
+    // text-xs sm:text-sm step keeps the body legible on phones; numbers
+    // stay tabular for vertical alignment.
+    <div className="mt-5">
+      <table className="w-full text-xs sm:text-sm border-collapse table-fixed">
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-wide text-ink-muted">
-            <th className="py-1.5 pr-3 font-medium">Month</th>
-            <th className="py-1.5 pr-3 font-medium text-right">Income</th>
-            <th className="py-1.5 pr-3 font-medium text-right">Expenses</th>
-            <th className="py-1.5 font-medium text-right">Net</th>
+            <th className="py-1.5 pr-1 sm:pr-2 font-medium w-10 sm:w-14">Month</th>
+            <th className="py-1.5 px-1 sm:px-2 font-medium text-right">Income</th>
+            <th className="py-1.5 px-1 sm:px-2 font-medium text-right">Expenses</th>
+            <th className="py-1.5 pl-1 sm:pl-2 font-medium text-right">Net</th>
           </tr>
         </thead>
         <tbody>
@@ -828,16 +832,16 @@ function MonthlyTable({
                   (empty ? "text-ink-muted" : "text-forest-900")
                 }
               >
-                <td className="py-1.5 pr-3 font-medium">{m}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">
+                <td className="py-1.5 pr-1 sm:pr-2 font-medium">{m}</td>
+                <td className="py-1.5 px-1 sm:px-2 text-right tabular-nums break-all">
                   {empty ? "—" : formatCents(inc)}
                 </td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">
+                <td className="py-1.5 px-1 sm:px-2 text-right tabular-nums break-all">
                   {empty ? "—" : formatCents(exp)}
                 </td>
                 <td
                   className={
-                    "py-1.5 text-right tabular-nums " +
+                    "py-1.5 pl-1 sm:pl-2 text-right tabular-nums break-all " +
                     (net < 0 && !empty ? "text-red-700" : "")
                   }
                 >

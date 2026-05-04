@@ -39,7 +39,9 @@ export function Wordmark({
     <Link
       href={href}
       aria-label="Taxottic"
-      className="inline-flex items-center select-none"
+      // min-w-0 lets the wordmark shrink when its flex parent (e.g. the
+      // AppHeader) is squeezed on very narrow viewports (<300px foldables).
+      className="inline-flex items-center select-none min-w-0"
     >
       <Image
         src={src}
@@ -47,7 +49,9 @@ export function Wordmark({
         width={width}
         height={height}
         priority
-        className="shrink-0"
+        // h-auto + max-w-full keeps aspect ratio while letting the rendered
+        // width shrink below `width` when the container is narrower.
+        style={{ height: "auto", maxWidth: "100%" }}
       />
     </Link>
   );

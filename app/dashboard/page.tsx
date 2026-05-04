@@ -429,7 +429,7 @@ export default async function DashboardPage() {
                         {isManager ? "Manager" : "Member"}
                       </div>
                       <div className="mt-3 max-w-sm" title={tooltip}>
-                        <div className="flex items-baseline justify-between gap-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                           <span className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
                             Tax-ready · {score}%
                           </span>

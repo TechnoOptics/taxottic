@@ -31,18 +31,15 @@ const TABS = [
 ] as const;
 
 /**
- * Sub-navigation tabs under each company page. The strip can scroll
- * horizontally on narrow screens, but we hide the scrollbar chrome
- * (no-scrollbar) so a Windows / Linux grey scroll-thumb doesn't cheapen
- * the page header it sits beneath.
+ * Sub-navigation tabs under each company page. Tabs wrap onto multiple
+ * rows on narrow screens (foldables, phones in portrait) so users never
+ * have to swipe sideways to find a tab. On tablets and up the row stays
+ * single-line because all tabs fit comfortably.
  */
 export function CompanyNav({ publicId, active }: CompanyNavProps) {
   return (
-    <nav
-      className="-mx-6 px-6 overflow-x-auto no-scrollbar relative"
-      aria-label="Company sections"
-    >
-      <ul className="flex gap-1 min-w-max">
+    <nav className="relative" aria-label="Company sections">
+      <ul className="flex flex-wrap gap-x-1 gap-y-0.5">
         {TABS.map((t) => {
           const isActive = t.key === active;
           return (
@@ -51,7 +48,7 @@ export function CompanyNav({ publicId, active }: CompanyNavProps) {
                 href={`/c/${publicId}/${t.path}`}
                 aria-current={isActive ? "page" : undefined}
                 className={[
-                  "relative inline-flex h-11 items-center px-3 sm:px-4",
+                  "relative inline-flex h-11 items-center px-2.5 sm:px-4",
                   "text-sm tracking-wide -mb-px transition-colors",
                   isActive
                     ? "text-forest-900 font-medium"
