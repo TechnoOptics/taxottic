@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { marked } from "marked";
@@ -189,4 +189,5 @@ execFileSync(
   { stdio: "inherit" },
 );
 
+try { unlinkSync(tmpHtml); } catch {}
 console.log("Wrote", absOutputPdf);
