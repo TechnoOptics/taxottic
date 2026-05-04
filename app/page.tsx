@@ -56,6 +56,7 @@ export default async function Home({
 
       <Hero audience={audience} />
       <Capabilities audience={audience} />
+      <ProductTour />
       <ProofBand />
       <FomoBand audience={audience} />
       <FinalCta audience={audience} />
@@ -269,6 +270,427 @@ function Capabilities({ audience }: { audience: Audience }) {
         ))}
       </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Product tour — Techno Optics LLC running through the app
+// Three alternating rows. Each "mockup" is hand-built HTML in the same
+// design language as the real app (cards, gold kickers, forest text,
+// Fraunces serif on display) so it reads as a screenshot of the product
+// rather than a generic illustration.
+// ---------------------------------------------------------------------------
+
+function ProductTour() {
+  return (
+    <section className="bg-white">
+      <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+          See it run on Techno Optics
+        </div>
+        <h2 className="display mt-3 text-3xl sm:text-5xl text-forest-900 max-w-3xl">
+          A real software company.{" "}
+          <span className="gold-shine">Real automation.</span>
+        </h2>
+        <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
+          Techno Optics LLC connected one bank account on a Tuesday. By
+          Friday their Q4 forecast, every deductible expense, and a
+          ready-to-file Schedule C were waiting in their dashboard — all
+          synced in the background, with no spreadsheet opened.
+        </p>
+
+        <div className="mt-14 grid gap-16">
+          <Row reverse={false}>
+            <BankFeedMockup />
+            <Caption
+              kicker="Hour 1 — Bank sync"
+              title="The bank does the work, hourly."
+              body="Plaid syncs every active account every hour. New transactions land already tagged with the most likely deduction category. One tap to apply, dismiss, or split. No data entry."
+              tags={["Plaid", "200+ rule-based suggestions", "Auto-applied"]}
+            />
+          </Row>
+
+          <Row reverse={true}>
+            <Caption
+              kicker="Hour 2 — Live forecast"
+              title="The forecast updates the moment a transaction lands."
+              body="Federal + state brackets, applied to live YTD income and the deductions Techno Optics just claimed. The number in the corner of every screen changes the second the math changes — no nightly recompute, no manual refresh."
+              tags={["Federal + state", "Quarterly safe-harbor", "Updated automatically"]}
+            />
+            <ForecastMockup />
+          </Row>
+
+          <Row reverse={false}>
+            <ScheduleCMockup />
+            <Caption
+              kicker="December — Year-end"
+              title="One click. The whole Schedule C."
+              body="Every applied transaction lands on its proper Schedule C line. Bella tags the meals 50% rule. Vehicle expenses split between standard mileage and actual. Everything cited to the IRS publication. Hand it to your CPA — or keep it."
+              tags={["Schedule C", "IRS-cited", "PDF + CSV"]}
+            />
+          </Row>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Row({
+  reverse = false,
+  children,
+}: {
+  reverse?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={
+        "grid gap-8 lg:gap-12 lg:grid-cols-2 items-center " +
+        (reverse ? "lg:[&>*:first-child]:order-2" : "")
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+function Caption({
+  kicker,
+  title,
+  body,
+  tags,
+}: {
+  kicker: string;
+  title: string;
+  body: string;
+  tags: string[];
+}) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-[0.22em] text-gold-700">
+        {kicker}
+      </div>
+      <h3 className="display mt-3 text-2xl sm:text-3xl text-forest-900 leading-snug">
+        {title}
+      </h3>
+      <p className="mt-4 text-base text-ink-soft leading-relaxed">{body}</p>
+      <ul className="mt-5 flex flex-wrap gap-2">
+        {tags.map((t) => (
+          <li
+            key={t}
+            className="text-[11px] uppercase tracking-[0.18em] text-forest-700 px-2.5 py-1 rounded-full bg-forest-50 border border-forest-100"
+          >
+            {t}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Wrapper that gives every mockup the same "lifted screenshot" frame so
+// the product tour reads as a series of real captures rather than ad-hoc
+// boxes.
+function MockupFrame({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <div
+        className="absolute -inset-4 -z-10 rounded-[28px] opacity-50 blur-2xl"
+        aria-hidden="true"
+        style={{
+          background:
+            "radial-gradient(60% 60% at 50% 40%, rgba(213,187,126,0.25), transparent 70%)",
+        }}
+      />
+      <div className="rounded-2xl border border-forest-100 bg-[var(--color-cream)] shadow-[0_24px_60px_-30px_rgba(15,45,36,0.35)] overflow-hidden">
+        {/* Faux app chrome: forest header strip with the company badge */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5"
+          style={{
+            background:
+              "linear-gradient(180deg, #1a4031 0%, #0f2d24 100%)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <CompanyMonogram />
+            <span className="text-[11px] tracking-[0.2em] uppercase text-cream/80">
+              Techno Optics LLC · {label}
+            </span>
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-gold-300">
+            Live
+          </span>
+        </div>
+        <div className="p-5 sm:p-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function CompanyMonogram() {
+  // 24x24 "TO" tile in the brand gradient, used as the Techno Optics
+  // identity throughout the mockups.
+  return (
+    <div
+      className="size-6 rounded-md flex items-center justify-center text-[10px] font-semibold"
+      style={{
+        background:
+          "linear-gradient(135deg, #1a4031 0%, #0f2d24 100%)",
+        color: "#d5bb7e",
+        boxShadow: "inset 0 0 0 1px rgba(213,187,126,0.25)",
+      }}
+    >
+      TO
+    </div>
+  );
+}
+
+function BankFeedMockup() {
+  const txs = [
+    {
+      merchant: "Adobe Creative Cloud",
+      date: "Nov 12",
+      amount: "$89.99",
+      category: "Software / subscriptions",
+      auto: true,
+    },
+    {
+      merchant: "AWS · S3 + CloudFront",
+      date: "Nov 11",
+      amount: "$342.50",
+      category: "Software / subscriptions",
+      auto: true,
+    },
+    {
+      merchant: "Delta Airlines · BOS → SFO",
+      date: "Nov 09",
+      amount: "$612.40",
+      category: "Travel",
+      auto: true,
+    },
+    {
+      merchant: "Marriott Boston Seaport",
+      date: "Nov 09",
+      amount: "$384.00",
+      category: "Travel",
+      auto: true,
+    },
+    {
+      merchant: "Sweetgreen · with client",
+      date: "Nov 08",
+      amount: "$24.50",
+      category: "Meals (50%)",
+      auto: true,
+    },
+  ];
+  return (
+    <MockupFrame label="Bank feed">
+      <div className="flex items-center justify-between text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Synced 14 minutes ago · Chase Business
+        </span>
+        <span>5 new this week</span>
+      </div>
+      <ul className="mt-4 grid gap-2">
+        {txs.map((t, i) => (
+          <li
+            key={i}
+            className="flex items-center justify-between gap-3 rounded-lg bg-white border border-forest-100 px-3 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-forest-900 truncate">
+                {t.merchant}
+              </div>
+              <div className="text-[11px] text-ink-muted mt-0.5 flex items-center gap-2">
+                <span>{t.date}</span>
+                <span className="text-gold-500">·</span>
+                <span className="inline-flex items-center gap-1 text-forest-700">
+                  <span className="text-gold-600">↳</span>
+                  Bella suggested:{" "}
+                  <span className="text-forest-900 font-medium">
+                    {t.category}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="text-sm tabular-nums text-forest-900 shrink-0">
+              {t.amount}
+            </div>
+            <span className="text-[10px] uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 shrink-0">
+              applied
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 text-[11px] text-ink-muted">
+        Bella sat behind every suggestion. Each line links back to the IRS
+        publication that explains why it qualifies.
+      </div>
+    </MockupFrame>
+  );
+}
+
+function ForecastMockup() {
+  return (
+    <MockupFrame label="Forecast · Tax year 2026">
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="rounded-lg bg-white border border-forest-100 p-4">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+            Federal owed
+          </div>
+          <div className="display mt-2 text-3xl text-forest-900 tabular-nums">
+            $14,820
+          </div>
+          <div className="mt-1 text-[11px] text-ink-muted">
+            ↓ $620 from last sync · Q4 estimated
+          </div>
+        </div>
+        <div className="rounded-lg bg-white border border-forest-100 p-4">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+            State owed (MA)
+          </div>
+          <div className="display mt-2 text-3xl text-forest-900 tabular-nums">
+            $3,210
+          </div>
+          <div className="mt-1 text-[11px] text-ink-muted">
+            ↓ $135 · synced 2 minutes ago
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-lg bg-white border border-forest-100 p-4">
+        <div className="flex items-baseline justify-between">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+            YTD deductions claimed
+          </div>
+          <div className="text-[11px] text-ink-muted">
+            7 of 8 starter categories
+          </div>
+        </div>
+        <div className="display mt-2 text-2xl text-forest-900 tabular-nums">
+          $42,807
+        </div>
+        <ul className="mt-4 grid gap-2">
+          {[
+            { label: "Software / subscriptions", amount: "$12,840", w: 100 },
+            { label: "Travel", amount: "$8,420", w: 66 },
+            { label: "Home office (8829)", amount: "$3,840", w: 30 },
+            { label: "Meals (50% applied)", amount: "$1,205", w: 9 },
+          ].map((r) => (
+            <li
+              key={r.label}
+              className="flex items-center gap-3 text-[12px]"
+            >
+              <span className="flex-1 truncate text-forest-900">
+                {r.label}
+              </span>
+              <span
+                className="flex-none rounded-full bg-forest-50 overflow-hidden"
+                style={{ width: "96px", height: "6px" }}
+              >
+                <span
+                  className="block h-full bg-gold-400"
+                  style={{ width: `${r.w}%` }}
+                />
+              </span>
+              <span className="w-16 text-right tabular-nums text-forest-700">
+                {r.amount}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 text-[11px] text-ink-muted">+ 3 more categories</div>
+      </div>
+
+      <div className="mt-4 text-[11px] text-ink-muted flex items-center gap-2">
+        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        Recalculated automatically — last change 2 minutes ago when AWS
+        landed.
+      </div>
+    </MockupFrame>
+  );
+}
+
+function ScheduleCMockup() {
+  const lines: { line: string; label: string; amount: string }[] = [
+    { line: "Line 8", label: "Advertising", amount: "$2,400" },
+    { line: "Line 18", label: "Office expense + software", amount: "$11,640" },
+    { line: "Line 22", label: "Supplies", amount: "$890" },
+    { line: "Line 24a", label: "Travel", amount: "$8,420" },
+    { line: "Line 24b", label: "Meals (50% applied)", amount: "$1,205" },
+    { line: "Line 25", label: "Utilities (incl. internet)", amount: "$1,860" },
+    { line: "Line 27a", label: "Bank fees + continuing ed", amount: "$420" },
+    { line: "Line 30", label: "Home office (Form 8829)", amount: "$3,840" },
+  ];
+  return (
+    <MockupFrame label="Year-end · Schedule C export">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+            Tax year 2026 · Auto-assembled
+          </div>
+          <div className="display text-xl text-forest-900 mt-1">
+            Schedule C · Profit or Loss from Business
+          </div>
+        </div>
+        <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-1">
+          Ready
+        </span>
+      </div>
+
+      <table className="mt-4 w-full text-sm">
+        <thead>
+          <tr className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+            <th className="text-left font-normal pb-2">Line</th>
+            <th className="text-left font-normal pb-2">Category</th>
+            <th className="text-right font-normal pb-2">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l) => (
+            <tr key={l.line} className="border-t border-forest-100">
+              <td className="py-2 text-forest-700 text-xs tabular-nums w-20">
+                {l.line}
+              </td>
+              <td className="py-2 text-forest-900">{l.label}</td>
+              <td className="py-2 text-right text-forest-900 tabular-nums">
+                {l.amount}
+              </td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-forest-200">
+            <td colSpan={2} className="py-3 text-forest-900 font-medium">
+              Total deductions
+            </td>
+            <td className="py-3 text-right tabular-nums text-forest-900 font-medium">
+              $30,675
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-[11px] text-ink-muted">
+          Built from 287 categorized bank transactions. Every line cites
+          its IRS publication.
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-forest-700 px-2.5 py-1 rounded-full bg-forest-50 border border-forest-100">
+            PDF
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.18em] text-forest-700 px-2.5 py-1 rounded-full bg-forest-50 border border-forest-100">
+            CSV
+          </span>
+        </div>
+      </div>
+    </MockupFrame>
   );
 }
 
