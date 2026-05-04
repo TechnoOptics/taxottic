@@ -96,15 +96,13 @@ function Hero({ audience }: { audience: Audience }) {
         <h1 className="display mt-8 text-4xl sm:text-6xl lg:text-7xl text-cream max-w-4xl leading-[1.05]">
           {personal ? (
             <>
-              See what you{" "}
-              <span className="gold-shine">actually owe.</span>
-              <br />
-              Keep what you&apos;ve actually earned.
+              A calmer way to{" "}
+              <span className="gold-shine">handle your taxes.</span>
             </>
           ) : (
             <>
-              Every client. Every month-end.{" "}
-              <span className="gold-shine">One calm dashboard.</span>
+              A calmer view of{" "}
+              <span className="gold-shine">every client&apos;s books.</span>
             </>
           )}
         </h1>
@@ -112,31 +110,26 @@ function Hero({ audience }: { audience: Audience }) {
         <p className="mt-6 text-lg sm:text-xl text-cream/80 max-w-2xl leading-relaxed">
           {personal ? (
             <>
-              Taxottic forecasts your taxes in real time, cross-checks every
-              bank transaction against{" "}
-              <span className="text-cream font-medium">
-                1,025 IRS-aligned deductions
-              </span>{" "}
-              with their IRC sections cited, and reminds you to set the money
-              aside before it&apos;s gone. Built for freelancers, contractors,
-              and small businesses.
+              Taxottic quietly tracks the deductions your business has already
+              earned, keeps a running forecast in step with your bank, and
+              gives you a gentle nudge to set money aside before you need it.
+              Built for freelancers, contractors, and small businesses.
             </>
           ) : (
             <>
-              Multi-client management with transparency into every engagement.
-              Branded firm portal, automated outreach, bulk operations,{" "}
-              <span className="text-cream font-medium">
-                1,025 IRS-cited deductions
-              </span>{" "}
-              auto-applied to every client&apos;s books - without your
-              associates juggling fifty spreadsheet tabs.
+              A shared workspace where your clients keep their books in order
+              on their own time, and your team picks up where they left off.
+              Branded as your firm, never as ours.
             </>
           )}
         </p>
 
         <div className="mt-10 flex flex-wrap gap-3">
-          <Link href="/login" className="btn-primary">
-            {personal ? "Start free - no card needed" : "Book a 15-min walkthrough"}
+          <Link
+            href={personal ? "/login" : "/book?for=firm"}
+            className="btn-primary"
+          >
+            {personal ? "Take a look around" : "Have a quick chat"}
           </Link>
           <Link
             href="/login"
@@ -148,8 +141,8 @@ function Hero({ audience }: { audience: Audience }) {
 
         <p className="mt-6 text-xs uppercase tracking-[0.2em] text-gold-300">
           {personal
-            ? "Forecast in 60 seconds · Plaid-synced in 90 · Cancel any time"
-            : "White-glove migration · Branded portal · Per-seat or per-client"}
+            ? "No credit card. No commitment. Visit and leave at your own pace."
+            : "White-glove migration. Branded portal. Per-seat or per-client."}
         </p>
       </div>
     </section>
@@ -205,54 +198,54 @@ type Capability = {
 const PERSONAL: Capability[] = [
   {
     kicker: "Live Forecast",
-    title: "Know what April will cost you, by July.",
-    body: "Every income line, every expense, every quarterly safe harbor - folded into a federal + state forecast that updates the moment your bank syncs.",
-    pull: "Stop guessing. Stop overpaying.",
+    title: "A running picture of what you owe.",
+    body: "Every income line, every expense, every quarterly safe harbor folds into a federal + state forecast that updates in step with your bank. Helpful, never alarming.",
+    pull: "A friendly number you can trust.",
   },
   {
     kicker: "1,025 IRS-Cited Deductions",
-    title: "Every bank transaction, cross-checked against the full IRS catalog.",
-    body: "Plaid syncs hourly. Each transaction is matched against 1,025 deduction items from IRS Pub 334 / 463 / 535 / 587 / 946 - IRC section cited, source URL one tap away. Auto-applied when confidence is high; queued when it isn't.",
-    pull: "Hands off. Audit-ready.",
+    title: "Every deduction you've earned, neatly organised.",
+    body: "Each transaction is matched against 1,025 deduction items from IRS Pub 334, 463, 535, 587, and 946. IRC section cited, source URL one tap away. We do the lookup; you decide.",
+    pull: "Quietly thorough. Always cited.",
   },
   {
-    kicker: "Bella · AI Tax Guide",
-    title: "The tax answer you wanted, in plain English.",
-    body: "Powered by Claude. Ask 'is this trip deductible?' and get the answer plus the IRS publication number plus the memo line phrasing that survives an audit.",
-    pull: "Cited. Calm. Always there.",
+    kicker: "Bella · A Gentle Tax Guide",
+    title: "Plain-English answers when tax questions come up.",
+    body: "Powered by Claude. Ask 'is this trip deductible?' and you'll get a careful answer plus the IRS publication, plus a memo-line phrasing your future self will thank you for.",
+    pull: "Patient. Cited. Always there.",
   },
   {
-    kicker: "Never Owe a Penalty",
-    title: "Quarterly set-asides on autopilot.",
-    body: "Calculated from your live forecast. Reminders fire two weeks early. Goal trackers show how close you are to the safe harbor - before the IRS notices.",
-    pull: "April becomes a non-event.",
+    kicker: "Quarterly Reminders",
+    title: "Gentle nudges, in good time.",
+    body: "Quarterly set-asides calculated from your live forecast, with reminders that fire two weeks early. A small habit that makes April feel ordinary.",
+    pull: "A small habit that pays off.",
   },
 ];
 
 const ENTERPRISE: Capability[] = [
   {
     kicker: "Multi-Client Console",
-    title: "Stop running fifty spreadsheets in fifty tabs.",
-    body: "Multi-company, multi-engagement. See who's filed, who's behind, who's drifting toward an extension - all at hq.taxottic.com in one calm view.",
-    pull: "The whole book of business at a glance.",
+    title: "Every client, in one calm place.",
+    body: "Multi-company, multi-engagement. See who's filed, who's still gathering, and who could use a hand - all at hq.taxottic.com without juggling tabs.",
+    pull: "Less context-switching. More advising.",
   },
   {
     kicker: "Engagement Workflow",
-    title: "From signature to safe-harbor in one thread.",
-    body: "Send engagement requests. Auto-followups when clients haven't accepted. Transparency view shows what each client is doing - without an email.",
-    pull: "Stop chasing. Start advising.",
+    title: "Engagements that move themselves forward.",
+    body: "Send engagement requests, and gentle follow-ups go out on their own when clients haven't responded. A transparency view tells your team where each relationship stands without anyone writing an email.",
+    pull: "We handle the chase, your team does the work.",
   },
   {
     kicker: "Branded Firm Portal",
-    title: "White-glove without the white labor.",
-    body: "Your logo. Your colors. Your firm's voice on every reminder. Branded subscriptions billed under your name. Clients never see another logo than yours.",
-    pull: "It's your firm - not Taxottic's.",
+    title: "Your firm's voice, end to end.",
+    body: "Your logo. Your colours. Your firm's voice on every reminder. Branded subscriptions billed under your name. Clients only ever see you.",
+    pull: "It feels like your firm, because it is.",
   },
   {
     kicker: "Bulk Operations",
-    title: "Move fifty clients in the time it takes for one.",
-    body: "Bulk Schedule C export. Firm-wide deduction analytics. Multi-client reminders. Outreach automation. Leverage that turns associates into advisors.",
-    pull: "Hours saved per close, every month.",
+    title: "Move quickly when you want to.",
+    body: "Bulk Schedule C export. Firm-wide deduction analytics. Multi-client reminders. Outreach that runs on its own. There when the same thing needs doing fifty times.",
+    pull: "Hours back to your team, every month.",
   },
 ];
 
@@ -305,17 +298,17 @@ function ProductTour() {
     <section className="bg-white">
       <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          See it run on Techno Optics
+          See it on Techno Optics
         </div>
         <h2 className="display mt-3 text-3xl sm:text-5xl text-forest-900 max-w-3xl">
-          A real software company.{" "}
-          <span className="gold-shine">Real automation.</span>
+          A real software company,{" "}
+          <span className="gold-shine">the calm way.</span>
         </h2>
         <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
           Techno Optics LLC connected one bank account on a Tuesday. By
-          Friday their Q4 forecast, every deductible expense, and a
-          ready-to-file Schedule C were waiting in their dashboard - all
-          synced in the background, with no spreadsheet opened.
+          Friday, their Q4 forecast, deductible expenses, and a ready-to-file
+          Schedule C were quietly waiting in the dashboard. No spreadsheet
+          opened, no inbox checked twice.
         </p>
 
         <div className="mt-14 grid gap-16">
@@ -323,8 +316,8 @@ function ProductTour() {
             <BankFeedMockup />
             <Caption
               kicker="Hour 1 - Bank sync"
-              title="The bank does the work, hourly."
-              body="Plaid syncs every active account every hour. New transactions land already tagged against the full 1,025-item IRS deduction catalog - IRC section cited, source URL one tap away. One tap to apply, dismiss, or split. No data entry."
+              title="The bank does the heavy lifting."
+              body="Plaid keeps every active account in step every hour. New transactions land tagged against the full 1,025-item IRS deduction catalog, IRC section cited, source URL one tap away. One tap to apply, dismiss, or split when you have the moment."
               tags={["Plaid", "1,025 IRS-cited deductions", "Auto-applied"]}
             />
           </Row>
@@ -332,8 +325,8 @@ function ProductTour() {
           <Row reverse={true}>
             <Caption
               kicker="Hour 2 - Live forecast"
-              title="The forecast updates the moment a transaction lands."
-              body="Federal + state brackets, applied to live YTD income and the deductions Techno Optics just claimed. The number in the corner of every screen changes the second the math changes - no nightly recompute, no manual refresh."
+              title="The forecast keeps pace, quietly."
+              body="Federal and state brackets, applied to live YTD income and the deductions Techno Optics has claimed. The number in the corner of every screen moves with the math; no nightly recompute, no refreshing required."
               tags={["Federal + state", "Quarterly safe-harbor", "Updated automatically"]}
             />
             <ForecastMockup />
@@ -343,8 +336,8 @@ function ProductTour() {
             <ScheduleCMockup />
             <Caption
               kicker="December - Year-end"
-              title="One click. The whole Schedule C."
-              body="Every applied transaction lands on its proper Schedule C line. Bella tags the meals 50% rule. Vehicle expenses split between standard mileage and actual. Everything cited to the IRS publication. Hand it to your CPA - or keep it."
+              title="One click brings the whole Schedule C together."
+              body="Every applied transaction lands on its proper Schedule C line. Bella applies the meals 50% rule. Vehicle expenses split between standard mileage and actual. Everything cited to the IRS publication, ready to hand to your CPA when you're ready."
               tags={["Schedule C", "IRS-cited", "PDF + CSV"]}
             />
           </Row>
@@ -739,7 +732,7 @@ function ProofBand() {
           Under the hood
         </div>
         <h2 className="display mt-3 text-3xl sm:text-4xl text-cream max-w-3xl">
-          Real plumbing - not a pretty form.
+          What is quietly running underneath.
         </h2>
         <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-6">
           {stats.map((s) => (
@@ -767,28 +760,27 @@ function FomoBand({ audience }: { audience: Audience }) {
   return (
     <section className="max-w-5xl mx-auto px-6 py-20 sm:py-28">
       <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-        Why people switch
+        What we believe
       </div>
       <p className="display mt-4 text-3xl sm:text-5xl text-forest-900 leading-tight">
         {personal ? (
           <>
-            The average freelancer overpays by{" "}
-            <span className="gold-shine">$4,800 a year</span> because they
-            forget what they spent in March.
+            Most of the deductions you have already earned are sitting{" "}
+            <span className="gold-shine">in your bank statements.</span> We
+            help you find them, gently, before tax day.
           </>
         ) : (
           <>
-            Firms running on Taxottic close{" "}
-            <span className="gold-shine">most monthly books</span> before the
-            5th - while their competitors are still chasing receipts on the
-            12th.
+            Your firm&apos;s most thoughtful hours{" "}
+            <span className="gold-shine">belong to your clients,</span> not to
+            data entry. Taxottic gives those hours back to your team.
           </>
         )}
       </p>
       <p className="mt-6 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
         {personal
-          ? "Your bank statements remember every transaction. Taxottic makes them count toward the deductions you've already earned."
-          : "Your associates are the most expensive people in your office. Stop spending them on data entry and start spending them on advisory work."}
+          ? "We are not here to scare anyone about April. The tools are calm by design, the cadence is yours, and every number we surface is one you can verify against the IRS in a click."
+          : "Built by people who care about the work and the relationships behind it. We will never get between you and your clients. The tooling is yours; we just keep it tidy."}
       </p>
     </section>
   );
@@ -806,25 +798,28 @@ function FinalCta({ audience }: { audience: Audience }) {
         <div className="max-w-2xl">
           <h2 className="display text-2xl sm:text-3xl text-forest-900">
             {personal
-              ? "Start with the next bank transaction you'd otherwise forget."
-              : "Move your first client onto Taxottic in under an hour."}
+              ? "Take a look. Sign up only if it feels right."
+              : "Tell us about your firm. We will tailor the rest."}
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             {personal
-              ? "Connect a bank in 90 seconds. See your live federal + state forecast on the next page. No card. No commitment."
-              : "Branded portal stood up in a day. Clients migrate via a magic link - no support tickets, no spreadsheet exports."}
+              ? "Connect a bank in about 90 seconds and see your live federal + state forecast on the next page. No card. No commitment. Leave any time."
+              : "A short form, no sign-in required. We will reach out with a 15-minute walkthrough and a migration plan tailored to your client list."}
           </p>
         </div>
         <div className="flex flex-wrap gap-3 shrink-0">
-          <Link href="/login" className="btn-primary">
-            {personal ? "Get started free" : "Book walkthrough"}
+          <Link
+            href={personal ? "/login" : "/book?for=firm"}
+            className="btn-primary"
+          >
+            {personal ? "Take a look" : "Open the form"}
           </Link>
           <Link
             href={`/?audience=${personal ? "enterprise" : "personal"}`}
             className="btn-ghost"
             scroll={false}
           >
-            {personal ? "I'm a firm" : "I'm an individual"}
+            {personal ? "I run a firm" : "I am an individual"}
           </Link>
         </div>
       </div>
