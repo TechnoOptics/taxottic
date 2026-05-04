@@ -10,8 +10,10 @@ import { WelcomeTour } from "@/components/WelcomeTour";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents } from "@/lib/tax/forecast";
 import { buildGreeting } from "@/lib/dashboard/greeting";
+import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 import { checkCompanyLimit } from "@/lib/plans/usage";
 import { completeWelcomeTour } from "@/app/actions/tour";
+import { GoalDismissButton } from "@/components/GoalDismissButton";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -131,12 +133,15 @@ export default async function DashboardPage() {
   }
 
   // Pull dashboard data: upcoming + overdue reminders + active goals + badges
+  // + per-company tax-readiness scores so the company cards can render a
+  // small progress bar without a second round-trip.
   const nowIso = new Date().toISOString();
   const [
     { data: upcomingReminders },
     { data: overdueReminders },
     { data: activeGoals },
     { data: badges },
+    readinessByCompany,
   ] = await Promise.all([
     supabase
       .from("reminders")
@@ -163,6 +168,12 @@ export default async function DashboardPage() {
       .select("badge_code, awarded_at")
       .eq("user_id", user.id)
       .order("awarded_at", { ascending: false }),
+    Promise.all(
+      companies.map(async (m) => {
+        const r = await computeReadiness(admin, m.company_id, taxYear);
+        return [m.company_id, r] as const;
+      }),
+    ).then((entries) => new Map<string, Readiness>(entries)),
   ]);
 
   // Recap: figure out what most needs attention this visit.
@@ -383,18 +394,32 @@ export default async function DashboardPage() {
           <ul className="mt-3 grid gap-3">
             {companies.map((m) => {
               const isManager = m.role === "manager";
+              const r = readinessByCompany.get(m.company_id);
+              const score = r?.score ?? 0;
+              // Compact breakdown shown next to the bar; the full per-metric
+              // story sits in the title attr for hover.
+              const breakdown = r?.hasBankFeed
+                ? `${r.triagedTx}/${r.totalTx} tx · ${r.categoriesUsed}/${r.targetCategories} cats`
+                : r
+                  ? `${r.categoriesUsed}/${r.targetCategories} categories`
+                  : "—";
+              const tooltip = r?.hasBankFeed
+                ? `${r.triagedTx} of ${r.totalTx} bank transactions triaged in the last 90 days, and ${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year.`
+                : r
+                  ? `${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year. Connect a bank to add expensing-engagement to this score.`
+                  : "Tax readiness — start logging expenses to see this fill in.";
               return (
                 <li
                   key={m.company_id}
-                  className="card card-hover p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  className="card card-hover p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
-                  <div className="flex items-center gap-4 min-w-0">
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
                     <CompanyLogo
                       src={m.company.logo_url}
                       name={m.company.name}
                       size={48}
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="display text-xl text-forest-900 truncate">
                         {m.company.name}
                       </div>
@@ -403,28 +428,32 @@ export default async function DashboardPage() {
                         <span className="text-gold-500"> · </span>
                         {isManager ? "Manager" : "Member"}
                       </div>
+                      <div className="mt-3 max-w-sm" title={tooltip}>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                            Tax-ready · {score}%
+                          </span>
+                          <span className="text-[11px] text-ink-muted">
+                            {breakdown}
+                          </span>
+                        </div>
+                        <div
+                          className="mt-1 h-1.5 rounded-full bg-forest-50 overflow-hidden"
+                          role="progressbar"
+                          aria-valuenow={score}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`Tax readiness for ${m.company.name}`}
+                        >
+                          <div
+                            className="h-full bg-gold-400 transition-[width] duration-500"
+                            style={{ width: `${score}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Manager-only fast action: jump straight to the
-                        team / invite UI without having to first open the
-                        company and find the tab. */}
-                    {isManager ? (
-                      <Link
-                        href={`/c/${m.company.public_id}/manage`}
-                        className="btn-ghost text-sm"
-                        aria-label={`Invite an employee to ${m.company.name}`}
-                      >
-                        + Invite employee
-                      </Link>
-                    ) : null}
-                    <Link
-                      href={`/c/${m.company.public_id}/chat`}
-                      className="btn-ghost text-sm"
-                      aria-label={`Open team chat for ${m.company.name}`}
-                    >
-                      Team chat
-                    </Link>
+                  <div className="flex items-center gap-2">
                     <Link
                       href={`/c/${m.company.public_id}/forecast`}
                       className="btn-primary text-sm"
@@ -460,8 +489,11 @@ export default async function DashboardPage() {
                       )
                     : 0;
                 return (
-                  <li key={g.id} className="card p-4">
-                    <div className="display text-base text-forest-900 truncate">
+                  <li key={g.id} className="card p-4 relative">
+                    <div className="absolute top-2 right-2">
+                      <GoalDismissButton goalId={g.id} goalTitle={g.title} />
+                    </div>
+                    <div className="display text-base text-forest-900 truncate pr-6">
                       {g.title}
                     </div>
                     <div className="text-xs text-ink-muted mt-1">
