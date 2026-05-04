@@ -8,60 +8,47 @@ type WordmarkProps = {
 };
 
 const sizeMap = {
-  sm: { text: "text-xl", icon: 28 },
-  md: { text: "text-2xl", icon: 34 },
-  lg: { text: "text-3xl", icon: 42 },
+  sm: 28,
+  md: 34,
+  lg: 42,
 };
 
-// Aspect ratio of /brand/wordmark-white.png (2117 × 256).
-const WORDMARK_ASPECT = 2117 / 256;
+// Aspect ratios of the two pre-rendered lockups (full icon + "TAXOTTIC"
+// text together as one image — no live text).
+//   /brand/wordmark-white.png  → 2117 × 256  → 8.27
+//   /brand/full-logo.png       → 4762 × 695  → 6.85
+// The two source files are designed differently by the brand team, so we
+// keep their natural proportions rather than forcing one to match the
+// other.
+const ASPECT = {
+  white: 2117 / 256,
+  forest: 4762 / 695,
+};
 
 export function Wordmark({
   href = "/",
   size = "md",
   tone = "forest",
 }: WordmarkProps) {
-  const { text, icon } = sizeMap[size];
-
-  // On dark surfaces (the AppHeader) we use the full white wordmark image
-  // so the icon and "Taxottic" text share the same baseline + spacing as
-  // the brand-supplied lockup. On cream surfaces we keep the icon-plus-
-  // live-text composition because there's no forest version of the full
-  // lockup yet, and live text scales crisper at small sizes.
-  if (tone === "cream") {
-    const width = Math.round(icon * WORDMARK_ASPECT);
-    return (
-      <Link
-        href={href}
-        aria-label="Taxottic"
-        className="inline-flex items-center select-none"
-      >
-        <Image
-          src="/brand/wordmark-white.png"
-          alt="Taxottic"
-          width={width}
-          height={icon}
-          priority
-          className="shrink-0"
-        />
-      </Link>
-    );
-  }
+  const height = sizeMap[size];
+  const src =
+    tone === "cream" ? "/brand/wordmark-white.png" : "/brand/full-logo.png";
+  const width = Math.round(height * ASPECT[tone === "cream" ? "white" : "forest"]);
 
   return (
     <Link
       href={href}
-      className={`wordmark ${text} text-forest-800 inline-flex items-center gap-2 select-none`}
+      aria-label="Taxottic"
+      className="inline-flex items-center select-none"
     >
       <Image
-        src="/brand/wordmark-icon-512.png"
-        alt=""
-        width={icon}
-        height={icon}
+        src={src}
+        alt="Taxottic"
+        width={width}
+        height={height}
         priority
         className="shrink-0"
       />
-      <span>Taxottic</span>
     </Link>
   );
 }
