@@ -17,9 +17,9 @@ const docTitle = firstH1 ? firstH1[1] : path.basename(inputMd, path.extname(inpu
 const mdWithoutFirstH1 = firstH1 ? md.replace(firstH1[0], "").replace(/^\s+/, "") : md;
 const body = marked.parse(mdWithoutFirstH1);
 
-const wordmarkPath = path.resolve("public/brand/wordmark-horizontal-1600.png");
-const wordmarkB64 = readFileSync(wordmarkPath).toString("base64");
-const wordmarkDataUrl = `data:image/png;base64,${wordmarkB64}`;
+const logoPath = path.resolve("public/brand/full-logo.png");
+const logoB64 = readFileSync(logoPath).toString("base64");
+const logoDataUrl = `data:image/png;base64,${logoB64}`;
 
 const escapeHtml = (s) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -41,7 +41,7 @@ body {
   border-bottom: 2px solid #0f2d24;
 }
 .brand-header img {
-  width: 180pt;
+  width: 220pt;
   height: auto;
   display: block;
 }
@@ -154,7 +154,7 @@ const html = `<!DOCTYPE html>
 <style>${css}</style>
 </head>
 <body>
-<div class="brand-header"><img src="${wordmarkDataUrl}" alt="Taxottic"></div>
+<div class="brand-header"><img src="${logoDataUrl}" alt="Taxottic"></div>
 <h1 class="doc-title">${escapeHtml(docTitle)}</h1>
 ${body}
 </body>
