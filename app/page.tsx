@@ -211,7 +211,7 @@ const PERSONAL: Capability[] = [
   {
     kicker: "Bella · A Gentle Tax Guide",
     title: "Plain-English answers when tax questions come up.",
-    body: "Powered by Claude. Ask 'is this trip deductible?' and you'll get a careful answer plus the IRS publication, plus a memo-line phrasing your future self will thank you for.",
+    body: "Ask 'is this trip deductible?' and you'll get a careful answer plus the IRS publication, plus a memo-line phrasing your future self will thank you for.",
     pull: "Patient. Cited. Always there.",
   },
   {
@@ -286,7 +286,7 @@ function Capabilities({ audience }: { audience: Audience }) {
 }
 
 // ---------------------------------------------------------------------------
-// Product tour - Techno Optics LLC running through the app
+// Product tour - Company X running through the app
 // Three alternating rows. Each "mockup" is hand-built HTML in the same
 // design language as the real app (cards, gold kickers, forest text,
 // Fraunces serif on display) so it reads as a screenshot of the product
@@ -298,15 +298,15 @@ function ProductTour() {
     <section className="bg-white">
       <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          See it on Techno Optics
+          See it on Company X
         </div>
         <h2 className="display mt-3 text-3xl sm:text-5xl text-forest-900 max-w-3xl">
           A real software company,{" "}
           <span className="gold-shine">the calm way.</span>
         </h2>
         <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
-          Techno Optics LLC connected one bank account on a Tuesday. By
-          Friday, their Q4 forecast, deductible expenses, and a ready-to-file
+          Company X connected one bank account on a Tuesday. By Friday,
+          their Q4 forecast, deductible expenses, and a ready-to-file
           Schedule C were quietly waiting in the dashboard. No spreadsheet
           opened, no inbox checked twice.
         </p>
@@ -317,8 +317,8 @@ function ProductTour() {
             <Caption
               kicker="Hour 1 - Bank sync"
               title="The bank does the heavy lifting."
-              body="Plaid keeps every active account in step every hour. New transactions land tagged against the full 1,025-item IRS deduction catalog, IRC section cited, source URL one tap away. One tap to apply, dismiss, or split when you have the moment."
-              tags={["Plaid", "1,025 IRS-cited deductions", "Auto-applied"]}
+              body="Your bank feed keeps every active account in step every hour. New transactions land tagged against the full 1,025-item IRS deduction catalog, IRC section cited, source URL one tap away. One tap to apply, dismiss, or split when you have the moment."
+              tags={["Hourly bank sync", "1,025 IRS-cited deductions", "Auto-applied"]}
             />
           </Row>
 
@@ -326,7 +326,7 @@ function ProductTour() {
             <Caption
               kicker="Hour 2 - Live forecast"
               title="The forecast keeps pace, quietly."
-              body="Federal and state brackets, applied to live YTD income and the deductions Techno Optics has claimed. The number in the corner of every screen moves with the math; no nightly recompute, no refreshing required."
+              body="Federal and state brackets, applied to live YTD income and the deductions Company X has claimed. The number in the corner of every screen moves with the math; no nightly recompute, no refreshing required."
               tags={["Federal + state", "Quarterly safe-harbor", "Updated automatically"]}
             />
             <ForecastMockup />
@@ -432,7 +432,7 @@ function MockupFrame({
           <div className="flex items-center gap-2">
             <CompanyMonogram />
             <span className="text-[11px] tracking-[0.2em] uppercase text-cream/80">
-              Techno Optics LLC · {label}
+              Company X · {label}
             </span>
           </div>
           <span className="text-[10px] uppercase tracking-[0.2em] text-gold-300">
@@ -446,7 +446,7 @@ function MockupFrame({
 }
 
 function CompanyMonogram() {
-  // 24x24 "TO" tile in the brand gradient, used as the Techno Optics
+  // 24x24 "CX" tile in the brand gradient, used as the Company X
   // identity throughout the mockups.
   return (
     <div
@@ -458,7 +458,7 @@ function CompanyMonogram() {
         boxShadow: "inset 0 0 0 1px rgba(213,187,126,0.25)",
       }}
     >
-      TO
+      CX
     </div>
   );
 }
@@ -715,7 +715,7 @@ function ScheduleCMockup() {
 function ProofBand() {
   const stats = [
     { kpi: "1,025", label: "IRS-cited deductions, auto-matched against every bank transaction" },
-    { kpi: "1 hr", label: "Plaid sync cadence - fully automatic" },
+    { kpi: "1 hr", label: "Bank sync cadence - fully automatic" },
     { kpi: "Q1-Q4", label: "Quarterly safe-harbor reminders, two weeks early" },
     { kpi: "Face ID", label: "Passkey biometric sign-in on every device" },
   ];
