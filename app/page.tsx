@@ -839,9 +839,13 @@ function Footer() {
           Taxottic provides tax forecasting and educational guidance. It is
           not a substitute for advice from a licensed CPA or tax attorney.
         </p>
-        <div className="flex gap-4 text-xs text-ink-muted">
-          <Link href="/legal/terms" className="hover:text-forest-700">Terms</Link>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-muted">
+          <Link href="/legal" className="hover:text-forest-700">Legal</Link>
           <Link href="/legal/privacy" className="hover:text-forest-700">Privacy</Link>
+          <Link href="/legal/terms" className="hover:text-forest-700">Terms</Link>
+          <Link href="/legal/security" className="hover:text-forest-700">Security</Link>
+          <Link href="/legal/subprocessors" className="hover:text-forest-700">Subprocessors</Link>
+          <Link href="/book?for=firm" className="hover:text-forest-700">For firms</Link>
           <Link href="/login" className="hover:text-forest-700">Sign in</Link>
         </div>
       </div>
