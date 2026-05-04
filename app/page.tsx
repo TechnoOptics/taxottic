@@ -519,24 +519,24 @@ function BankFeedMockup() {
       </div>
       <ul className="mt-4 grid gap-2">
         {txs.map((t, i) => (
+          // flex-wrap on the row so the APPLIED badge can drop to a new
+          // line on narrow viewports instead of pushing the row past the
+          // mockup edge. Sub-line inside also wraps so "Bella suggested:
+          // Software / subscriptions" never forces overflow.
           <li
             key={i}
-            className="flex items-center justify-between gap-3 rounded-lg bg-white border border-forest-100 px-3 py-2.5"
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-white border border-forest-100 px-3 py-2.5"
           >
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-full sm:basis-auto">
               <div className="text-sm text-forest-900 truncate">
                 {t.merchant}
               </div>
-              <div className="text-[11px] text-ink-muted mt-0.5 flex items-center gap-2">
+              <div className="text-[11px] text-ink-muted mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                 <span>{t.date}</span>
                 <span className="text-gold-500">·</span>
-                <span className="inline-flex items-center gap-1 text-forest-700">
-                  <span className="text-gold-600">↳</span>
-                  Bella suggested:{" "}
-                  <span className="text-forest-900 font-medium">
-                    {t.category}
-                  </span>
-                </span>
+                <span className="text-gold-600">↳</span>
+                <span className="text-forest-700">Bella suggested:</span>
+                <span className="text-forest-900 font-medium">{t.category}</span>
               </div>
             </div>
             <div className="text-sm tabular-nums text-forest-900 shrink-0">
@@ -585,7 +585,7 @@ function ForecastMockup() {
       </div>
 
       <div className="mt-5 rounded-lg bg-white border border-forest-100 p-4">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
           <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
             YTD deductions claimed
           </div>
@@ -603,23 +603,25 @@ function ForecastMockup() {
             { label: "Home office (8829)", amount: "$3,840", w: 30 },
             { label: "Meals (50% applied)", amount: "$1,205", w: 9 },
           ].map((r) => (
+            // The LI itself needs min-w-0 so the parent grid actually
+            // shrinks it below intrinsic content width on narrow phones
+            // (grid items default to min-width: auto = content min, which
+            // prevents shrinking even when the parent is constrained).
+            // Bar drops from view below sm so we have room for label + amount.
             <li
               key={r.label}
-              className="flex items-center gap-3 text-[12px]"
+              className="min-w-0 flex items-center gap-2 sm:gap-3 text-[12px]"
             >
-              <span className="flex-1 truncate text-forest-900">
+              <span className="min-w-0 flex-1 truncate text-forest-900">
                 {r.label}
               </span>
-              <span
-                className="flex-none rounded-full bg-forest-50 overflow-hidden"
-                style={{ width: "96px", height: "6px" }}
-              >
+              <span className="hidden sm:inline-block flex-none rounded-full bg-forest-50 overflow-hidden w-24 h-1.5">
                 <span
                   className="block h-full bg-gold-400"
                   style={{ width: `${r.w}%` }}
                 />
               </span>
-              <span className="w-16 text-right tabular-nums text-forest-700">
+              <span className="shrink-0 w-14 sm:w-16 text-right tabular-nums text-forest-700">
                 {r.amount}
               </span>
             </li>

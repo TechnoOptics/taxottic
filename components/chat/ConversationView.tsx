@@ -459,7 +459,7 @@ export function ConversationView({
                     className="flex items-center gap-2 rounded-lg border border-forest-100 bg-cream/40 px-2.5 py-1.5 text-xs"
                   >
                     <AttachmentIcon mime={p.mime_type} />
-                    <span className="flex-1 truncate text-forest-900">
+                    <span className="min-w-0 flex-1 truncate text-forest-900">
                       {p.file_name}
                     </span>
                     <span className="text-ink-muted shrink-0">
