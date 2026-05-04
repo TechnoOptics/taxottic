@@ -6,6 +6,7 @@ type CompanyNavProps = {
     | "forecast"
     | "income"
     | "expenses"
+    | "deductions"
     | "banks"
     | "sales-tax"
     | "import"
@@ -19,6 +20,7 @@ const TABS = [
   { key: "forecast", label: "Forecast", path: "forecast" },
   { key: "income", label: "Income", path: "income" },
   { key: "expenses", label: "Expenses", path: "expenses" },
+  { key: "deductions", label: "Deductions", path: "deductions" },
   { key: "banks", label: "Banks", path: "banks" },
   { key: "sales-tax", label: "Sales tax", path: "sales-tax" },
   { key: "import", label: "Import", path: "import" },
