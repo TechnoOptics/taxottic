@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { asOfDate, reportHeader, repoFileExists, readRepoFile } from "./_utils.mjs";
+import { asOfDate, reportHeader, repoFileExists } from "./_utils.mjs";
 
 const out = process.argv[2];
 if (!out) {
