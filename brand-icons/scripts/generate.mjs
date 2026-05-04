@@ -44,8 +44,22 @@ const GRADIENT_SVG = (size) => `
   <rect width="${size}" height="${size}" fill="url(#g)"/>
 </svg>`;
 
-async function iconTransparent(size) {
+// Trim the source image down to its non-transparent bounding box before
+// any resizing. Brand assets sometimes ship with the icon offset inside a
+// large transparent canvas (e.g. the gold-bars-only version sits in the
+// bottom-right of a 1024x1024 frame); without trim the icon would render
+// cropped or off-centre on the favicon / app tile. threshold:25 ignores
+// faint stray pixels that occasionally hide near the corners.
+async function trimmedIconBuffer() {
   return sharp(ICON_SRC)
+    .trim({ threshold: 25 })
+    .png()
+    .toBuffer();
+}
+
+async function iconTransparent(size) {
+  const trimmed = await trimmedIconBuffer();
+  return sharp(trimmed)
     .resize(size, size, {
       fit: "contain",
       background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -55,14 +69,15 @@ async function iconTransparent(size) {
 }
 
 async function iconOnTile(size, tileBuf) {
-  // Padded inset so the white mark doesn't crowd the edge of the tile.
-  // Apple icon-grid practice gives the glyph ~80% of the canvas at small
-  // sizes, more breathing room at large sizes. We use a flat 14% inset on
-  // every side, which reads well from 16 px favicons up to the 1024
-  // marketing icon.
+  // Padded inset so the icon doesn't crowd the edge of the tile. Apple
+  // icon-grid practice gives the glyph ~80% of the canvas at small sizes,
+  // more breathing room at large sizes. We use a flat 14% inset on every
+  // side, which reads well from 16 px favicons up to the 1024 marketing
+  // icon. The source is trimmed first so it always centers inside the inset.
   const inset = Math.round(size * 0.14);
   const inner = size - inset * 2;
-  const glyph = await sharp(ICON_SRC)
+  const trimmed = await trimmedIconBuffer();
+  const glyph = await sharp(trimmed)
     .resize(inner, inner, {
       fit: "contain",
       background: { r: 0, g: 0, b: 0, alpha: 0 },
