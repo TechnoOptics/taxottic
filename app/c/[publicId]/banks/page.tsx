@@ -7,6 +7,7 @@ import { PlaidSyncButton } from "@/components/PlaidSyncButton";
 import { PlaidAutoSync } from "@/components/PlaidAutoSync";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
+import { findMasterForExpense } from "@/lib/deductions/matcher";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -62,12 +63,15 @@ export default async function BanksPage({
     );
   }
 
-  // Pull existing connections + accounts + counts of pending review.
+  // Pull existing connections + accounts + counts of pending review +
+  // the most recent applied transactions (to display the master deduction
+  // match Bella suggested for each row).
   const [
     { data: connections },
     { data: accounts },
     { count: pendingTxCount },
     { count: appliedTxCount },
+    { data: recentTx },
   ] = await Promise.all([
     supabase
       .from("bank_connections")
@@ -90,6 +94,13 @@ export default async function BanksPage({
       .from("account_transactions")
       .select("id", { count: "exact", head: true })
       .eq("user_action", "applied"),
+    supabase
+      .from("account_transactions")
+      .select(
+        "id, posted_date, amount_cents, merchant_name, description, personal_finance_category, user_action",
+      )
+      .order("posted_date", { ascending: false })
+      .limit(20),
   ]);
 
   type ConnRow = {
@@ -114,6 +125,17 @@ export default async function BanksPage({
     is_excluded: boolean;
   };
   const accts = (accounts ?? []) as AcctRow[];
+
+  type TxRow = {
+    id: string;
+    posted_date: string;
+    amount_cents: number;
+    merchant_name: string | null;
+    description: string | null;
+    personal_finance_category: string | null;
+    user_action: string;
+  };
+  const txs = (recentTx ?? []) as TxRow[];
 
   return (
     <main className="min-h-screen">
@@ -320,6 +342,118 @@ export default async function BanksPage({
                         </p>
                       ) : null}
                     </details>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
+        {/* Recent transactions with Bella's master-deduction match.
+            On each row we look up the best-fit IRS deduction for the
+            merchant + Plaid category and surface its name + IRS source
+            link so users see WHICH specific deduction is being claimed,
+            not just the broad Schedule C bucket. */}
+        {txs.length > 0 ? (
+          <section className="mt-8">
+            <div className="flex items-end justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="display text-xl text-forest-900">
+                  Recent transactions
+                </h2>
+                <p className="text-xs text-ink-muted mt-1">
+                  Bella suggests an IRS-aligned deduction for each. Click a
+                  source link to verify before tax day.
+                </p>
+              </div>
+              <Link
+                href={`/c/${publicId}/deductions`}
+                className="text-xs text-forest-700 hover:text-forest-900 underline underline-offset-2"
+              >
+                Browse all deductions →
+              </Link>
+            </div>
+            <ul className="mt-3 grid gap-2">
+              {txs.map((t) => {
+                const merchant = t.merchant_name ?? t.description ?? "Transaction";
+                const isExpense = t.amount_cents > 0;
+                const master = isExpense
+                  ? findMasterForExpense(merchant, t.personal_finance_category)
+                  : null;
+                const amount = new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                }).format(Math.abs(t.amount_cents) / 100);
+                const date = new Date(t.posted_date).toLocaleDateString(
+                  "en-US",
+                  { month: "short", day: "numeric" },
+                );
+                return (
+                  <li
+                    key={t.id}
+                    className="card p-3 sm:p-4 flex items-start gap-3 sm:gap-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm sm:text-base text-forest-900 font-medium truncate">
+                          {merchant}
+                        </span>
+                        <span className="text-[11px] text-ink-muted">{date}</span>
+                      </div>
+                      {master ? (
+                        <div className="mt-1 text-[11px] text-forest-700 leading-relaxed">
+                          <span className="text-gold-600 mr-1">↳</span>
+                          Bella suggested:{" "}
+                          <span className="text-forest-900 font-medium">
+                            {master.name}
+                          </span>{" "}
+                          <span className="text-ink-muted">
+                            ({master.category})
+                          </span>{" "}
+                          <a
+                            href={master.source}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:text-forest-900"
+                          >
+                            IRS source ↗
+                          </a>
+                        </div>
+                      ) : isExpense ? (
+                        <div className="mt-1 text-[11px] text-ink-muted">
+                          No master-deduction match — categorized to the
+                          generic Schedule C bucket.
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-[11px] text-ink-muted">
+                          Inflow / refund · not categorized as a deduction.
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span
+                        className={
+                          "text-sm tabular-nums " +
+                          (isExpense
+                            ? "text-forest-900"
+                            : "text-emerald-700")
+                        }
+                      >
+                        {isExpense ? amount : `+${amount}`}
+                      </span>
+                      <span
+                        className={
+                          "text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5 border " +
+                          (t.user_action === "applied"
+                            ? "text-emerald-700 bg-emerald-50 border-emerald-100"
+                            : t.user_action === "dismissed"
+                              ? "text-ink-muted bg-forest-50 border-forest-100"
+                              : "text-gold-700 bg-gold-50 border-gold-100")
+                        }
+                      >
+                        {t.user_action}
+                      </span>
+                    </div>
                   </li>
                 );
               })}
