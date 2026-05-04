@@ -15,13 +15,13 @@ const sizeMap = {
 
 // Aspect ratios of the two pre-rendered lockups (full icon + "TAXOTTIC"
 // text together as one image - no live text).
-//   /brand/wordmark-white.png  → 2117 × 256  → 8.27
+//   /brand/wordmark-white.png  → 2266 × 256  → 8.85
 //   /brand/full-logo.png       → 4762 × 695  → 6.85
 // The two source files are designed differently by the brand team, so we
 // keep their natural proportions rather than forcing one to match the
 // other.
 const ASPECT = {
-  white: 2117 / 256,
+  white: 2266 / 256,
   forest: 4762 / 695,
 };
 

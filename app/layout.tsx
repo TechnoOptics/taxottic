@@ -30,10 +30,10 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
-  icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
-  },
+  // Icons intentionally omitted: Next.js picks up app/favicon.ico,
+  // app/icon.png, and app/apple-icon.png via the file convention. An
+  // explicit override here would shadow those generated assets and pin
+  // the browser tab to a stale SVG, so leave it to the convention.
 };
 
 export const viewport: Viewport = {

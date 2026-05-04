@@ -5,7 +5,7 @@ to every format the web app and an iOS App Store submission need. Built
 from two source files (the **White Version** of the brand mark):
 
 - `source/Icon.png`       — 1024 × 1024 white icon glyph
-- `source/Main Logo.png`  — 14571 × 1762 horizontal white wordmark (icon + "Taxottic")
+- `source/Main Logo.png`  — 15599 × 1762 horizontal white wordmark (icon + "Taxottic")
 
 ## Folder layout
 
@@ -28,7 +28,7 @@ brand-icons/
 │           ├── favicon-32.png         32 × 32   flat forest (browser tab)
 │           ├── favicon-512.png        512 × 512 flat forest (mirror)
 │           ├── apple-touch-icon.png   180 × 180 GRADIENT tile (mirror)
-│           └── wordmark-white.png     2117 × 256 horizontal lockup, transparent
+│           └── wordmark-white.png     2266 × 256 horizontal lockup, transparent
 └── ios/
     └── AppIcon.appiconset/            drag straight into Assets.xcassets
         ├── Contents.json
@@ -134,11 +134,12 @@ Every variant in `web/` and `ios/` is rebuilt deterministically.
 ## Pre-existing notes worth flagging
 
 - `public/icon.svg` in the live repo is still the old "T on dark green"
-  placeholder. It's referenced by `app/layout.tsx` and the PWA manifest.
-  Browsers that prefer SVG will use it before falling back to the PNGs.
-  Either delete the SVG entry from `manifest.webmanifest` and
-  `app/layout.tsx`, or replace the SVG with a re-traced version of the
-  new mark.
+  placeholder. The `app/layout.tsx` icons override that pointed at it
+  has been removed (the file convention now serves `app/favicon.ico` +
+  `app/icon.png` to the browser tab), but `manifest.webmanifest` still
+  lists `/icon.svg` as a PWA install icon. Either drop that SVG entry
+  from the manifest or re-trace the SVG against the new mark before the
+  next PWA install pass.
 - The PWA manifest already lists `/icon-192.png` and `/icon-512.png`,
   which is why this bundle generates them — drop them in `public/` and
   the PWA install will stop 404-ing.
