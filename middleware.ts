@@ -6,7 +6,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Exclude .well-known so vendor verification files (Microsoft identity
+  // association, Apple app-site-association, etc.) can be fetched without
+  // hitting the auth redirect.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|\\.well-known/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
