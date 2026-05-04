@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getPlaidClient } from "@/lib/plaid/client";
 import { syncPlaidConnection } from "@/lib/plaid/sync";
+import { encryptBankToken } from "@/lib/crypto/bankTokens";
 
 export const runtime = "nodejs";
 
@@ -102,12 +103,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Encrypt the access_token before persisting. The plaintext column
+  // stays around (now nullable) until the cutover migration drops it;
+  // we explicitly null it on every write so a half-rolled-back deploy
+  // can't accidentally read stale plaintext.
+  let accessTokenEnc: string;
+  try {
+    accessTokenEnc = encryptBankToken(accessToken);
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error
+            ? `bank_token_encryption_failed: ${err.message}`
+            : "bank_token_encryption_failed",
+      },
+      { status: 500 },
+    );
+  }
+
   await admin
     .from("bank_connection_secrets")
     .upsert(
       {
         connection_id: connection.id,
-        access_token: accessToken,
+        access_token: null,
+        access_token_enc: accessTokenEnc,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "connection_id" },

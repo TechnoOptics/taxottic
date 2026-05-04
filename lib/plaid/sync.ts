@@ -2,6 +2,7 @@ import type { PlaidApi, Transaction, RemovedTransaction } from "plaid";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlaidClient } from "./client";
 import { categorizeExpense, categorizeIncome } from "./categorize";
+import { decryptBankToken } from "@/lib/crypto/bankTokens";
 
 /**
  * Pull every change since the connection's stored cursor and apply
@@ -34,11 +35,24 @@ export async function syncPlaidConnection(
 
   const { data: secret } = await admin
     .from("bank_connection_secrets")
-    .select("access_token")
+    .select("access_token, access_token_enc")
     .eq("connection_id", connectionId)
     .maybeSingle();
   if (!secret) throw new Error("No access token for connection");
-  const accessToken = secret.access_token as string;
+  // Prefer the encrypted column; fall back to legacy plaintext for any
+  // pre-encryption rows that haven't been backfilled yet. Once the
+  // backfill runs and the cutover migration drops `access_token`,
+  // this branch becomes a single decrypt call.
+  const enc = secret.access_token_enc as string | null;
+  const legacy = secret.access_token as string | null;
+  let accessToken: string;
+  if (enc) {
+    accessToken = decryptBankToken(enc);
+  } else if (legacy) {
+    accessToken = legacy;
+  } else {
+    throw new Error("No access token for connection");
+  }
 
   const { data: conn } = await admin
     .from("bank_connections")

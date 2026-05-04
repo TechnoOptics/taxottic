@@ -15,8 +15,25 @@ vars and trigger a redeploy in one shot.
 
 The integration code is already shipped behind these env vars:
 `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, optionally
-`PLAID_WEBHOOK_URL` and `PLAID_REDIRECT_URI`. The "Connect a bank"
-button on `/c/[publicId]/banks` lights up the moment they're set.
+`PLAID_WEBHOOK_URL` and `PLAID_REDIRECT_URI`, plus
+`BANK_TOKEN_ENC_KEY` for at-rest encryption of the per-Item access
+tokens (required - the exchange route refuses to write a connection
+without it). The "Connect a bank" button on `/c/[publicId]/banks`
+lights up the moment they're all set.
+
+### Generating BANK_TOKEN_ENC_KEY
+
+Run this once and save the output somewhere durable (1Password,
+Bitwarden, etc.). Losing the key means every existing connection
+becomes unusable - the access tokens can't be decrypted. Rotation
+is a separate runbook entry.
+
+```
+openssl rand -base64 32
+```
+
+Paste the resulting 44-character base64 string when you send the
+Plaid keys.
 
 ### Click track
 
@@ -51,10 +68,15 @@ button on `/c/[publicId]/banks` lights up the moment they're set.
 ```
 PLAID_CLIENT_ID=<value from step 4>
 PLAID_SECRET=<sandbox value from step 4>
+BANK_TOKEN_ENC_KEY=<output of openssl rand -base64 32>
 ```
 
-I'll add `PLAID_ENV=sandbox`, `PLAID_WEBHOOK_URL`, and
-`PLAID_REDIRECT_URI` myself, then redeploy.
+I'll add `PLAID_ENV=sandbox`, `PLAID_WEBHOOK_URL`,
+`PLAID_REDIRECT_URI`, and `PLAID_WEBHOOK_SKIP_VERIFY=1` for the
+sandbox window myself, then redeploy. (We turn webhook verification
+back on the moment we move to production - sandbox webhooks are
+signed too, so the skip flag is just a convenience for the
+short-lived test window.)
 
 ### After deploy: smoke test
 
@@ -232,6 +254,168 @@ sharing"). They almost never reject for non-sensitive scopes.
 
 Nothing. Verification doesn't change any keys. Once Google approves,
 the warning just disappears for all users - no redeploy required.
+
+---
+
+## 4. Plaid production access (when ready for real users)
+
+Sandbox uses fake institutions only. Real bank linking requires
+Plaid to approve our application, which is a manual review of the
+privacy + security posture. Plaid's review queue is typically 5-10
+business days but can stretch to 3-4 weeks during volume spikes.
+Submit this once you're satisfied with the sandbox flow.
+
+The code-side prerequisites are already shipped:
+
+- Access tokens are AES-256-GCM encrypted at rest
+  (`lib/crypto/bankTokens.ts`, key in `BANK_TOKEN_ENC_KEY`).
+- Webhooks verify the Plaid-Verification JWT against
+  `/webhook_verification_key/get` JWKS, check the body SHA-256, and
+  reject anything older than 5 minutes
+  (`lib/plaid/webhookVerify.ts`).
+- `/legal/privacy`, `/legal/terms`, `/legal/dpa`, and
+  `/legal/security` are live.
+
+### Click track
+
+1. https://dashboard.plaid.com/team/compliance — confirm the
+   compliance form is filled out (company name "Techno Optics LLC",
+   registered address, support email `support@taxottic.com`,
+   privacy + ToS URLs as below). Sandbox doesn't enforce this; the
+   production reviewer reads every field.
+
+2. https://dashboard.plaid.com/overview/production → **Request
+   production access**.
+
+3. Application form. Paste these answers verbatim into the matching
+   fields (Plaid renames fields between revisions, but the prompts
+   are stable):
+
+   **Company name:**
+   ```
+   Techno Optics LLC
+   ```
+
+   **Product name:**
+   ```
+   Taxottic
+   ```
+
+   **Website:**
+   ```
+   https://taxottic.com
+   ```
+
+   **Use case category:** Personal finance / budgeting
+
+   **Plaid products requested:** Transactions only (Auth, Identity,
+   Assets, etc. should all be unchecked - we do not need any of
+   them and asking for unused products slows the review).
+
+   **Country coverage:** United States only.
+
+   **Use-case description:**
+   ```
+   Taxottic forecasts U.S. federal and state tax liability for
+   freelancers, 1099 contractors, and small-business owners. We
+   read transaction history from the user's linked bank or card
+   accounts (Plaid Transactions product) and match each posted
+   transaction against a 1,025-item IRS deduction catalog (Pubs
+   334, 463, 535, 587, 946) to surface deductible expenses and
+   keep a running quarterly safe-harbor estimate.
+
+   We never initiate transfers, never read auth/balance for
+   payment, and never share or sell transaction data. The only
+   network egress that touches Plaid data is (1) our database
+   write path, (2) an internal LLM call that classifies a single
+   transaction at a time without retaining the prompt, and (3)
+   the user's own dashboard.
+   ```
+
+   **How is end-user data stored?**
+   ```
+   Postgres (Supabase managed, AWS us-east-1) with row-level
+   security restricting reads to the company that linked the
+   account. Plaid access_tokens are AES-256-GCM encrypted at rest
+   in bank_connection_secrets.access_token_enc; the encryption
+   key lives only in our server runtime env (Vercel). Database
+   backups inherit AWS RDS at-rest encryption. Transactions are
+   stored in account_transactions with the same RLS guard.
+   ```
+
+   **How is end-user data transmitted?**
+   ```
+   TLS 1.2+ on every hop. Plaid Link runs in the user's browser
+   over HTTPS; the public_token returns to our HTTPS API route;
+   the public_token -> access_token exchange and every
+   transactions/sync call go server-to-server over HTTPS to
+   production.plaid.com.
+   ```
+
+   **Webhook URL:**
+   ```
+   https://taxottic.com/api/banks/plaid/webhook
+   ```
+
+   **OAuth redirect URI:**
+   ```
+   https://taxottic.com/api/banks/plaid/oauth-return
+   ```
+
+   **Privacy policy URL:** `https://taxottic.com/legal/privacy`
+
+   **Terms of service URL:** `https://taxottic.com/legal/terms`
+
+   **DPA URL:** `https://taxottic.com/legal/dpa`
+
+   **Security overview URL:** `https://taxottic.com/legal/security`
+
+   **Estimated monthly Items at launch:** start with 100 to keep
+   the price tier honest; you can always raise it later from the
+   dashboard.
+
+4. **Demo video.** Plaid asks for a screen recording showing a
+   real end-to-end link flow. Use the sandbox account
+   (`user_good` / `pass_good` against any institution) and
+   record:
+   - 0:00-0:10 - `https://taxottic.com/login`, sign in.
+   - 0:10-0:20 - Navigate to `/c/<id>/banks`, click **Connect a
+     bank**.
+   - 0:20-0:50 - Plaid Link opens, pick Chase, type sandbox
+     creds, click through the consent screens.
+   - 0:50-1:00 - Land back on the banks page; show the
+     connection appearing with imported transactions.
+
+   Upload as **YouTube Unlisted** and paste the link in the
+   form. Total length 60-90 seconds is plenty.
+
+5. Click **Submit for review**.
+
+### After submission
+
+Plaid emails the team contact when they need anything. The two
+most common follow-ups:
+
+- **"Confirm tokens are encrypted at rest"** - point them at
+  `bank_connection_secrets.access_token_enc` and the
+  AES-256-GCM helper in `lib/crypto/bankTokens.ts`.
+- **"Confirm webhook signature verification"** - point them at
+  `lib/plaid/webhookVerify.ts`. Plaid sometimes asks for a sample
+  log line showing a 401 on a tampered request; toggle
+  `PLAID_WEBHOOK_SKIP_VERIFY=0` (the default in production) and
+  curl the endpoint with a dummy body.
+
+### What to paste me when approved
+
+```
+PLAID_SECRET=<production value from Team Settings -> Keys>
+```
+
+Everything else (`PLAID_CLIENT_ID` is the same across envs,
+`PLAID_ENV` flips to `production`, webhook + redirect URLs are
+already on the right hostnames) I switch on Vercel and redeploy.
+First production link should work immediately - no code changes
+needed.
 
 ---
 

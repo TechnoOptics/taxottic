@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { syncPlaidConnection } from "@/lib/plaid/sync";
+import { verifyPlaidWebhook } from "@/lib/plaid/webhookVerify";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -16,31 +17,32 @@ export const maxDuration = 60;
  * in Vercel and in the Plaid dashboard webhook config (sandbox uses
  * the same URL; Plaid pushes from a documented IP range).
  *
- * Signature verification: Plaid signs each request with a JWT in the
- * Plaid-Verification header. We verify it before doing any DB work.
- * In sandbox, Plaid still signs but the JWKS rotation is fast, so we
- * accept unsigned in dev only when PLAID_WEBHOOK_SKIP_VERIFY=1.
+ * Signature verification: Plaid signs each request with an ES256 JWT
+ * in the Plaid-Verification header. lib/plaid/webhookVerify checks
+ * the signature against Plaid's published JWKS, the body SHA-256
+ * against the JWT claim, and rejects JWTs older than 5 minutes. We
+ * skip verification only when PLAID_WEBHOOK_SKIP_VERIFY=1, which is
+ * intended for local development against the sandbox.
  */
 export async function POST(req: NextRequest) {
   const admin = createServiceClient();
   const raw = await req.text();
   const skipVerify = process.env.PLAID_WEBHOOK_SKIP_VERIFY === "1";
 
-  // TODO(prod): verify Plaid-Verification JWT against
-  // /webhook_verification_key/get JWKS. For now we trust the body
-  // when the env flag is set or in non-production contexts. The
-  // webhook only triggers a server-side sync (no user action), so
-  // the worst-case spam is wasted Plaid API quota.
-  if (!skipVerify && process.env.NODE_ENV === "production") {
-    const verification = req.headers.get("plaid-verification");
-    if (!verification) {
+  if (!skipVerify) {
+    const result = await verifyPlaidWebhook(
+      req.headers.get("plaid-verification"),
+      raw,
+    );
+    if (!result.ok) {
+      // 401 so Plaid retries (in case of a transient JWKS fetch
+      // failure on our side). Plaid backs off automatically if we
+      // keep returning 401 to a genuinely-bad request.
       return NextResponse.json(
-        { error: "missing_verification" },
+        { error: "verification_failed", reason: result.reason },
         { status: 401 },
       );
     }
-    // Implement JWKS verification here before relying on this for
-    // anything destructive.
   }
 
   let payload: {
