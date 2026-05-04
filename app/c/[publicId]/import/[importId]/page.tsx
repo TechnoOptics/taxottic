@@ -137,7 +137,7 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                       {t.description}
                     </div>
                     <div className="text-xs text-ink-muted">
-                      {t.posted_at ?? "—"}
+                      {t.posted_at ?? "-"}
                     </div>
                   </div>
                   <div className="text-forest-900 tabular-nums font-medium">
@@ -188,7 +188,7 @@ function TxRow({ tx, importId, cats }: TxRowProps) {
         <div className="min-w-0 flex-1">
           <div className="text-forest-900 truncate">{tx.description}</div>
           <div className="text-xs text-ink-muted mt-0.5">
-            {tx.posted_at ?? "—"}
+            {tx.posted_at ?? "-"}
             {tx.raw_category ? ` - ${tx.raw_category}` : ""}
           </div>
         </div>

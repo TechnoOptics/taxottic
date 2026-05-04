@@ -105,7 +105,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
             value={
               sub?.current_period_end
                 ? new Date(sub.current_period_end).toLocaleDateString()
-                : "—"
+                : "-"
             }
           />
           {profile.is_blocked ? (
@@ -115,12 +115,12 @@ export default async function AdminUserPage({ params }: { params: Params }) {
                 value={
                   profile.blocked_at
                     ? new Date(profile.blocked_at).toLocaleString()
-                    : "—"
+                    : "-"
                 }
               />
               <KV
                 label="Reason"
-                value={profile.blocked_reason ?? "—"}
+                value={profile.blocked_reason ?? "-"}
               />
             </>
           ) : null}
@@ -150,7 +150,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
                     <div className="text-xs text-ink-muted">
                       {c?.public_id} - {m.role}
                       {m.title ? ` - ${m.title}` : ""} -{" "}
-                      {c?.entity_type ?? "—"}
+                      {c?.entity_type ?? "-"}
                     </div>
                   </div>
                   <span className="text-[10px] text-ink-muted uppercase tracking-wide">

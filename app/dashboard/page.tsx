@@ -402,12 +402,12 @@ export default async function DashboardPage() {
                 ? `${r.triagedTx}/${r.totalTx} tx · ${r.categoriesUsed}/${r.targetCategories} cats`
                 : r
                   ? `${r.categoriesUsed}/${r.targetCategories} categories`
-                  : "—";
+                  : "-";
               const tooltip = r?.hasBankFeed
                 ? `${r.triagedTx} of ${r.totalTx} bank transactions triaged in the last 90 days, and ${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year.`
                 : r
                   ? `${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year. Connect a bank to add expensing-engagement to this score.`
-                  : "Tax readiness — start logging expenses to see this fill in.";
+                  : "Tax readiness - start logging expenses to see this fill in.";
               return (
                 <li
                   key={m.company_id}

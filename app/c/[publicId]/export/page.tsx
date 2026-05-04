@@ -162,13 +162,13 @@ export default async function ExportPage({
         {/* Business details */}
         <section className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
           <Field label="Business" value={businessDisplayName} />
-          <Field label="EIN" value={bp?.ein ?? "—"} />
+          <Field label="EIN" value={bp?.ein ?? "-"} />
           <Field
             label="Address"
             value={
               [bp?.address_line1, bp?.address_line2]
                 .filter(Boolean)
-                .join(" ") || "—"
+                .join(" ") || "-"
             }
           />
           <Field
@@ -176,16 +176,16 @@ export default async function ExportPage({
             value={
               [bp?.city, company.state_code, bp?.zip]
                 .filter(Boolean)
-                .join(", ") || "—"
+                .join(", ") || "-"
             }
           />
-          <Field label="Phone" value={bp?.phone ?? "—"} />
-          <Field label="Email" value={bp?.business_email ?? "—"} />
+          <Field label="Phone" value={bp?.phone ?? "-"} />
+          <Field label="Email" value={bp?.business_email ?? "-"} />
           <Field
             label="Entity type"
             value={prettyEntity(company.entity_type ?? "sole_prop")}
           />
-          <Field label="Primary industry" value={bp?.primary_industry ?? "—"} />
+          <Field label="Primary industry" value={bp?.primary_industry ?? "-"} />
           <Field
             label="Has W-2 employees"
             value={bp?.has_employees ? "Yes" : "No"}
@@ -308,13 +308,13 @@ export default async function ExportPage({
                         {meta?.label ?? code}
                       </td>
                       <td className="py-1.5 pr-3 align-top text-ink-soft">
-                        {meta?.schedule_c_line ?? "—"}
+                        {meta?.schedule_c_line ?? "-"}
                       </td>
                       <td className="py-1.5 pr-3 align-top text-ink-soft">
-                        {meta?.irc_section ?? "—"}
+                        {meta?.irc_section ?? "-"}
                       </td>
                       <td className="py-1.5 pr-3 align-top text-ink-soft">
-                        {meta?.irs_pub ?? "—"}
+                        {meta?.irs_pub ?? "-"}
                       </td>
                       <td className="py-1.5 text-right tabular-nums">
                         {formatCents(b.total)}

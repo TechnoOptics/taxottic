@@ -40,7 +40,7 @@ const PLAID_TO_MASTER_CATEGORY: Record<string, string | null> = {
 // Order matters: the first matching pattern wins, so put more specific
 // brands above broader generic words.
 const MERCHANT_PATTERNS: { token: RegExp; nameContains: string }[] = [
-  // Software / SaaS — most common business spend, so the table starts here.
+  // Software / SaaS - most common business spend, so the table starts here.
   { token: /\badobe\b/i, nameContains: "Adobe" },
   { token: /\b(aws|amazon web services)\b/i, nameContains: "AWS" },
   { token: /\b(google\s*cloud|gcp)\b/i, nameContains: "Google" },
@@ -60,7 +60,7 @@ const MERCHANT_PATTERNS: { token: RegExp; nameContains: string }[] = [
   { token: /\blinkedin\b.*ads/i, nameContains: "LinkedIn" },
   { token: /\bx\.com\b.*ads|twitter.*ads/i, nameContains: "X" },
 
-  // Travel — flights / hotels / rideshare
+  // Travel - flights / hotels / rideshare
   { token: /\b(delta|united|american airlines|southwest|jetblue|alaska)\b/i, nameContains: "flight" },
   { token: /\b(marriott|hilton|hyatt|ihg|airbnb|vrbo)\b/i, nameContains: "lodging" },
   { token: /\b(uber|lyft)\b/i, nameContains: "rideshare" },

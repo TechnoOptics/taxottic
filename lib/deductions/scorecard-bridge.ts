@@ -15,7 +15,7 @@ type Bridge = {
   exclude?: RegExp;
 };
 
-// Hand-mapped — the scorecard codes are coarse Schedule C lines while
+// Hand-mapped - the scorecard codes are coarse Schedule C lines while
 // the master categories are organized by activity / industry, so a 1:1
 // is mostly true with a couple of split rows (travel + meals share one
 // master category; office + supplies overlap; etc.).

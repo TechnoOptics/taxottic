@@ -4,12 +4,12 @@ Master IRS deduction reference data + applicability rules.
 
 ## Files
 
-- **types.ts** — `MasterDeduction` shape, `CompanyEntityType` union.
-- **master.ts** — `MASTER_DEDUCTIONS` array. **Generated**, do not hand-edit.
-- **applicability.ts** — `appliesToCompany`, `groupByCategory`,
+- **types.ts** - `MasterDeduction` shape, `CompanyEntityType` union.
+- **master.ts** - `MASTER_DEDUCTIONS` array. **Generated**, do not hand-edit.
+- **applicability.ts** - `appliesToCompany`, `groupByCategory`,
   `searchDeductions`. Maps the free-text "Business type applicability" string
   in the source workbook to a yes/no for a given company entity + industry.
-- **eligibility.ts** — separate eligibility scoring used by the forecast
+- **eligibility.ts** - separate eligibility scoring used by the forecast
   page (predates this module; not regenerated).
 
 ## Regenerating master.ts
@@ -28,7 +28,7 @@ To regenerate when the source workbook is updated:
 TMP=$(mktemp -d)
 ( cd "$TMP" && npm install --no-save xlsx >/dev/null )
 
-# run the inline script — adjust source path as needed
+# run the inline script - adjust source path as needed
 SRC="C:/Users/abelm/Downloads/master_business_deduction_checklist_by_entity.xlsx"
 DST="lib/deductions/master.ts"
 
@@ -64,9 +64,9 @@ Then `npx tsc --noEmit` to confirm no type drift.
 
 ## Where the data shows up
 
-- **Deductions explorer** — `app/c/[publicId]/deductions/page.tsx` uses
+- **Deductions explorer** - `app/c/[publicId]/deductions/page.tsx` uses
   `MASTER_DEDUCTIONS` + `appliesToCompany` to render the per-company
   collapsible browse view. Filtered by `company.entity_type`.
-- (Future) **Bank-transaction triage** — when an `account_transactions` row
+- (Future) **Bank-transaction triage** - when an `account_transactions` row
   is suggested a deduction, we can join the suggestion's `category_code`
   back to the master list to surface the IRS source URL + notes inline.

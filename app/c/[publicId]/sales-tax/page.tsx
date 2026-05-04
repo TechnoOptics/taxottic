@@ -243,7 +243,7 @@ export default async function SalesTaxPage({
                 >
                   Income
                 </Link>{" "}
-                and back-fill the breakdown — fields are now there.
+                and back-fill the breakdown - fields are now there.
               </p>
             ) : null}
           </section>

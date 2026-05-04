@@ -67,7 +67,7 @@ export function DeductionExplorer({ deductions, totalCount }: Props) {
         <div className="mt-10 card p-8 text-center">
           <div className="display text-lg text-forest-900">No matches</div>
           <p className="mt-2 text-sm text-ink-soft">
-            Try a broader term — &ldquo;software,&rdquo; &ldquo;travel,&rdquo;
+            Try a broader term - &ldquo;software,&rdquo; &ldquo;travel,&rdquo;
             &ldquo;home office,&rdquo; or a specific merchant name.
           </p>
         </div>

@@ -4,7 +4,7 @@
 // The source file uses descriptive sentences (e.g. "All entity types in
 // food, hospitality, or retail") rather than enums, so this is intentionally
 // pattern-matched. Anything we can't confidently exclude defaults to
-// "applies" — a deduction that doesn't really fit is much less harmful
+// "applies" - a deduction that doesn't really fit is much less harmful
 // than one we wrongly hide.
 
 import type { CompanyEntityType, MasterDeduction } from "./types";
@@ -103,11 +103,11 @@ export function appliesToCompany(
       const tags = ctx.industryTags ?? [];
       const hay = tags.join(" ").toLowerCase();
       if (gate.needs.test(hay)) return true;
-      // No matching tag and no hint to the contrary — treat as not applicable.
+      // No matching tag and no hint to the contrary - treat as not applicable.
       return false;
     }
   }
-  // "All with employees or contractors" — only show if the company has
+  // "All with employees or contractors" - only show if the company has
   // employees. Without employee data we still surface it; payroll
   // categories are useful aspirational reading.
   if (HAS_EMPLOYEES_RE.test(a)) return true;

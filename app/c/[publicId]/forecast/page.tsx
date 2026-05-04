@@ -468,7 +468,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
               Projected column answers "if you keep up at this pace plus
               your recurring rates, here's the year-end picture." */}
           {/* Stack the YTD/Projected columns vertically on phones (foldables
-              especially — at 280px width the side-by-side numbers are
+              especially - at 280px width the side-by-side numbers are
               unreadable). Side-by-side returns at sm: (640px+). */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <CompareColumn
@@ -834,10 +834,10 @@ function MonthlyTable({
               >
                 <td className="py-1.5 pr-1 sm:pr-2 font-medium">{m}</td>
                 <td className="py-1.5 px-1 sm:px-2 text-right tabular-nums break-all">
-                  {empty ? "—" : formatCents(inc)}
+                  {empty ? "-" : formatCents(inc)}
                 </td>
                 <td className="py-1.5 px-1 sm:px-2 text-right tabular-nums break-all">
-                  {empty ? "—" : formatCents(exp)}
+                  {empty ? "-" : formatCents(exp)}
                 </td>
                 <td
                   className={
@@ -845,7 +845,7 @@ function MonthlyTable({
                     (net < 0 && !empty ? "text-red-700" : "")
                   }
                 >
-                  {empty ? "—" : formatCents(net)}
+                  {empty ? "-" : formatCents(net)}
                 </td>
               </tr>
             );

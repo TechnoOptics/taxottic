@@ -221,7 +221,7 @@ function ScorecardTile({
           </div>
         ) : (
           <div className="border-t border-forest-100/60 px-3.5 py-3 text-[11px] text-ink-muted bg-white/40">
-            No specific examples mapped yet — see the{" "}
+            No specific examples mapped yet - see the{" "}
             <Link
               href={`/c/${publicId}/deductions`}
               className="underline hover:text-forest-900"

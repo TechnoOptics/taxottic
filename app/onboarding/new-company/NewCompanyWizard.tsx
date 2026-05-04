@@ -362,7 +362,7 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
         {label}
       </span>
       <span className="text-forest-900 font-medium text-right">
-        {value || "—"}
+        {value || "-"}
       </span>
     </li>
   );

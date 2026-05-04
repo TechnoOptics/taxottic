@@ -2,7 +2,7 @@
 // the IRS-sourced master_business_deduction_checklist_by_entity.xlsx).
 
 export type MasterDeduction = {
-  /** Stable IRS-style code, e.g. "M001" — primary key. */
+  /** Stable IRS-style code, e.g. "M001" - primary key. */
   code: string;
   /** Top-level category, e.g. "Marketing, advertising, sales, and branding". */
   category: string;

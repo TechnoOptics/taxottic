@@ -421,7 +421,7 @@ export default async function BanksPage({
                         </div>
                       ) : isExpense ? (
                         <div className="mt-1 text-[11px] text-ink-muted">
-                          No master-deduction match — categorized to the
+                          No master-deduction match - categorized to the
                           generic Schedule C bucket.
                         </div>
                       ) : (

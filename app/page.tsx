@@ -22,7 +22,7 @@ export default async function Home({
 
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
-      {/* Forest header band — visually merges into the Hero gradient below
+      {/* Forest header band - visually merges into the Hero gradient below
           so the page opens with one continuous premium-green field. Same
           gradient + gold underline as the authenticated AppHeader, so the
           marketing site feels like the same product the user signs into. */}
@@ -43,7 +43,7 @@ export default async function Home({
             Sign in
           </Link>
         </div>
-        {/* Thin gold sweep — same signature line as the AppHeader. */}
+        {/* Thin gold sweep - same signature line as the AppHeader. */}
         <div
           aria-hidden="true"
           className="absolute left-0 right-0 bottom-0 h-px"
@@ -128,7 +128,7 @@ function Hero({ audience }: { audience: Audience }) {
               <span className="text-cream font-medium">
                 1,025 IRS-cited deductions
               </span>{" "}
-              auto-applied to every client&apos;s books — without your
+              auto-applied to every client&apos;s books - without your
               associates juggling fifty spreadsheet tabs.
             </>
           )}
@@ -136,7 +136,7 @@ function Hero({ audience }: { audience: Audience }) {
 
         <div className="mt-10 flex flex-wrap gap-3">
           <Link href="/login" className="btn-primary">
-            {personal ? "Start free — no card needed" : "Book a 15-min walkthrough"}
+            {personal ? "Start free - no card needed" : "Book a 15-min walkthrough"}
           </Link>
           <Link
             href="/login"
@@ -206,13 +206,13 @@ const PERSONAL: Capability[] = [
   {
     kicker: "Live Forecast",
     title: "Know what April will cost you, by July.",
-    body: "Every income line, every expense, every quarterly safe harbor — folded into a federal + state forecast that updates the moment your bank syncs.",
+    body: "Every income line, every expense, every quarterly safe harbor - folded into a federal + state forecast that updates the moment your bank syncs.",
     pull: "Stop guessing. Stop overpaying.",
   },
   {
     kicker: "1,025 IRS-Cited Deductions",
     title: "Every bank transaction, cross-checked against the full IRS catalog.",
-    body: "Plaid syncs hourly. Each transaction is matched against 1,025 deduction items from IRS Pub 334 / 463 / 535 / 587 / 946 — IRC section cited, source URL one tap away. Auto-applied when confidence is high; queued when it isn't.",
+    body: "Plaid syncs hourly. Each transaction is matched against 1,025 deduction items from IRS Pub 334 / 463 / 535 / 587 / 946 - IRC section cited, source URL one tap away. Auto-applied when confidence is high; queued when it isn't.",
     pull: "Hands off. Audit-ready.",
   },
   {
@@ -224,7 +224,7 @@ const PERSONAL: Capability[] = [
   {
     kicker: "Never Owe a Penalty",
     title: "Quarterly set-asides on autopilot.",
-    body: "Calculated from your live forecast. Reminders fire two weeks early. Goal trackers show how close you are to the safe harbor — before the IRS notices.",
+    body: "Calculated from your live forecast. Reminders fire two weeks early. Goal trackers show how close you are to the safe harbor - before the IRS notices.",
     pull: "April becomes a non-event.",
   },
 ];
@@ -233,20 +233,20 @@ const ENTERPRISE: Capability[] = [
   {
     kicker: "Multi-Client Console",
     title: "Stop running fifty spreadsheets in fifty tabs.",
-    body: "Multi-company, multi-engagement. See who's filed, who's behind, who's drifting toward an extension — all at hq.taxottic.com in one calm view.",
+    body: "Multi-company, multi-engagement. See who's filed, who's behind, who's drifting toward an extension - all at hq.taxottic.com in one calm view.",
     pull: "The whole book of business at a glance.",
   },
   {
     kicker: "Engagement Workflow",
     title: "From signature to safe-harbor in one thread.",
-    body: "Send engagement requests. Auto-followups when clients haven't accepted. Transparency view shows what each client is doing — without an email.",
+    body: "Send engagement requests. Auto-followups when clients haven't accepted. Transparency view shows what each client is doing - without an email.",
     pull: "Stop chasing. Start advising.",
   },
   {
     kicker: "Branded Firm Portal",
     title: "White-glove without the white labor.",
     body: "Your logo. Your colors. Your firm's voice on every reminder. Branded subscriptions billed under your name. Clients never see another logo than yours.",
-    pull: "It's your firm — not Taxottic's.",
+    pull: "It's your firm - not Taxottic's.",
   },
   {
     kicker: "Bulk Operations",
@@ -293,7 +293,7 @@ function Capabilities({ audience }: { audience: Audience }) {
 }
 
 // ---------------------------------------------------------------------------
-// Product tour — Techno Optics LLC running through the app
+// Product tour - Techno Optics LLC running through the app
 // Three alternating rows. Each "mockup" is hand-built HTML in the same
 // design language as the real app (cards, gold kickers, forest text,
 // Fraunces serif on display) so it reads as a screenshot of the product
@@ -314,7 +314,7 @@ function ProductTour() {
         <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
           Techno Optics LLC connected one bank account on a Tuesday. By
           Friday their Q4 forecast, every deductible expense, and a
-          ready-to-file Schedule C were waiting in their dashboard — all
+          ready-to-file Schedule C were waiting in their dashboard - all
           synced in the background, with no spreadsheet opened.
         </p>
 
@@ -322,18 +322,18 @@ function ProductTour() {
           <Row reverse={false}>
             <BankFeedMockup />
             <Caption
-              kicker="Hour 1 — Bank sync"
+              kicker="Hour 1 - Bank sync"
               title="The bank does the work, hourly."
-              body="Plaid syncs every active account every hour. New transactions land already tagged against the full 1,025-item IRS deduction catalog — IRC section cited, source URL one tap away. One tap to apply, dismiss, or split. No data entry."
+              body="Plaid syncs every active account every hour. New transactions land already tagged against the full 1,025-item IRS deduction catalog - IRC section cited, source URL one tap away. One tap to apply, dismiss, or split. No data entry."
               tags={["Plaid", "1,025 IRS-cited deductions", "Auto-applied"]}
             />
           </Row>
 
           <Row reverse={true}>
             <Caption
-              kicker="Hour 2 — Live forecast"
+              kicker="Hour 2 - Live forecast"
               title="The forecast updates the moment a transaction lands."
-              body="Federal + state brackets, applied to live YTD income and the deductions Techno Optics just claimed. The number in the corner of every screen changes the second the math changes — no nightly recompute, no manual refresh."
+              body="Federal + state brackets, applied to live YTD income and the deductions Techno Optics just claimed. The number in the corner of every screen changes the second the math changes - no nightly recompute, no manual refresh."
               tags={["Federal + state", "Quarterly safe-harbor", "Updated automatically"]}
             />
             <ForecastMockup />
@@ -342,9 +342,9 @@ function ProductTour() {
           <Row reverse={false}>
             <ScheduleCMockup />
             <Caption
-              kicker="December — Year-end"
+              kicker="December - Year-end"
               title="One click. The whole Schedule C."
-              body="Every applied transaction lands on its proper Schedule C line. Bella tags the meals 50% rule. Vehicle expenses split between standard mileage and actual. Everything cited to the IRS publication. Hand it to your CPA — or keep it."
+              body="Every applied transaction lands on its proper Schedule C line. Bella tags the meals 50% rule. Vehicle expenses split between standard mileage and actual. Everything cited to the IRS publication. Hand it to your CPA - or keep it."
               tags={["Schedule C", "IRS-cited", "PDF + CSV"]}
             />
           </Row>
@@ -632,7 +632,7 @@ function ForecastMockup() {
 
       <div className="mt-4 text-[11px] text-ink-muted flex items-center gap-2">
         <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Recalculated automatically — last change 2 minutes ago when AWS
+        Recalculated automatically - last change 2 minutes ago when AWS
         landed.
       </div>
     </MockupFrame>
@@ -716,13 +716,13 @@ function ScheduleCMockup() {
 }
 
 // ---------------------------------------------------------------------------
-// Proof band — concrete capability list, dark surface
+// Proof band - concrete capability list, dark surface
 // ---------------------------------------------------------------------------
 
 function ProofBand() {
   const stats = [
     { kpi: "1,025", label: "IRS-cited deductions, auto-matched against every bank transaction" },
-    { kpi: "1 hr", label: "Plaid sync cadence — fully automatic" },
+    { kpi: "1 hr", label: "Plaid sync cadence - fully automatic" },
     { kpi: "Q1-Q4", label: "Quarterly safe-harbor reminders, two weeks early" },
     { kpi: "Face ID", label: "Passkey biometric sign-in on every device" },
   ];
@@ -739,7 +739,7 @@ function ProofBand() {
           Under the hood
         </div>
         <h2 className="display mt-3 text-3xl sm:text-4xl text-cream max-w-3xl">
-          Real plumbing — not a pretty form.
+          Real plumbing - not a pretty form.
         </h2>
         <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-6">
           {stats.map((s) => (
@@ -759,7 +759,7 @@ function ProofBand() {
 }
 
 // ---------------------------------------------------------------------------
-// FOMO band — pointed line + supporting texture
+// FOMO band - pointed line + supporting texture
 // ---------------------------------------------------------------------------
 
 function FomoBand({ audience }: { audience: Audience }) {
@@ -780,7 +780,7 @@ function FomoBand({ audience }: { audience: Audience }) {
           <>
             Firms running on Taxottic close{" "}
             <span className="gold-shine">most monthly books</span> before the
-            5th — while their competitors are still chasing receipts on the
+            5th - while their competitors are still chasing receipts on the
             12th.
           </>
         )}
@@ -812,7 +812,7 @@ function FinalCta({ audience }: { audience: Audience }) {
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             {personal
               ? "Connect a bank in 90 seconds. See your live federal + state forecast on the next page. No card. No commitment."
-              : "Branded portal stood up in a day. Clients migrate via a magic link — no support tickets, no spreadsheet exports."}
+              : "Branded portal stood up in a day. Clients migrate via a magic link - no support tickets, no spreadsheet exports."}
           </p>
         </div>
         <div className="flex flex-wrap gap-3 shrink-0">

@@ -169,7 +169,7 @@ export function W2Uploader({ who, onApply }: Props) {
               label="SS wages (Box 3)"
               cents={result.social_security_wages_cents}
             />
-            <Field label="State" raw={result.state_code ?? "—"} />
+            <Field label="State" raw={result.state_code ?? "-"} />
           </ul>
           {result.notes ? (
             <p className="text-[11px] text-ink-muted italic">
@@ -210,7 +210,7 @@ function Field({
   const display =
     raw ??
     (cents == null
-      ? "—"
+      ? "-"
       : new Intl.NumberFormat("en-US", {
           style: "currency",
           currency: "USD",

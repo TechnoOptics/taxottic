@@ -260,10 +260,10 @@ function FilingGroup({
                         : "neutral"
                   }
                 >
-                  {sub?.status ?? "—"}
+                  {sub?.status ?? "-"}
                 </Pill>
                 <Pill tone={u.gdpr_consented_at ? "ok" : "warn"}>
-                  GDPR {u.gdpr_consented_at ? "✓" : "—"}
+                  GDPR {u.gdpr_consented_at ? "✓" : "-"}
                 </Pill>
                 {entity ? (
                   <Pill tone="neutral">{ENTITY_LABEL[entity] ?? entity}</Pill>
