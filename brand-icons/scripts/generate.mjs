@@ -26,6 +26,24 @@ const WORDMARK_SRC = join(root, "source", "Main Logo.png");
 // every favicon / iOS icon a brand-coloured square that renders everywhere.
 const FOREST = { r: 0x0f, g: 0x2d, b: 0x24, alpha: 1 };
 
+// Brand gradient — same 180° forest gradient the AppHeader uses (top: a
+// touch lighter so it has dimension; bottom: deep). Used for "app tile"
+// surfaces (iOS app icon, iOS home-screen touch icon, PWA install icon)
+// where the icon reads as a real app rather than a tab favicon. Flat
+// browser-tab favicons stay flat forest because the gradient turns muddy
+// below ~64 px.
+const GRADIENT_SVG = (size) => `
+<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#1a4031"/>
+      <stop offset="60%"  stop-color="#0f2d24"/>
+      <stop offset="100%" stop-color="#0a201a"/>
+    </linearGradient>
+  </defs>
+  <rect width="${size}" height="${size}" fill="url(#g)"/>
+</svg>`;
+
 async function iconTransparent(size) {
   return sharp(ICON_SRC)
     .resize(size, size, {
@@ -36,8 +54,8 @@ async function iconTransparent(size) {
     .toBuffer();
 }
 
-async function iconForestTile(size) {
-  // Padded inset so the white mark doesn't crowd the edge of the green tile.
+async function iconOnTile(size, tileBuf) {
+  // Padded inset so the white mark doesn't crowd the edge of the tile.
   // Apple icon-grid practice gives the glyph ~80% of the canvas at small
   // sizes, more breathing room at large sizes. We use a flat 14% inset on
   // every side, which reads well from 16 px favicons up to the 1024
@@ -50,18 +68,31 @@ async function iconForestTile(size) {
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .toBuffer();
-  return sharp({
-    create: {
-      width: size,
-      height: size,
-      channels: 4,
-      background: FOREST,
-    },
-  })
+  return sharp(tileBuf)
     .composite([{ input: glyph, top: inset, left: inset }])
-    .flatten({ background: FOREST })
     .png({ compressionLevel: 9 })
     .toBuffer();
+}
+
+async function flatTileBuffer(size) {
+  return sharp({
+    create: { width: size, height: size, channels: 4, background: FOREST },
+  })
+    .flatten({ background: FOREST })
+    .png()
+    .toBuffer();
+}
+
+async function gradientTileBuffer(size) {
+  return sharp(Buffer.from(GRADIENT_SVG(size))).png().toBuffer();
+}
+
+async function iconForestTile(size) {
+  return iconOnTile(size, await flatTileBuffer(size));
+}
+
+async function iconGradientTile(size) {
+  return iconOnTile(size, await gradientTileBuffer(size));
 }
 
 async function wordmarkWhite(height) {
@@ -125,18 +156,21 @@ async function main() {
   const webPublic = join(root, "web", "public");
   const webBrand = join(webPublic, "brand");
 
+  // Web favicons (browser tab) — flat forest tile. Gradient turns muddy
+  // and noisy at 16-32 px so we keep these as a clean solid colour.
   const ico = await buildIco([16, 32, 48]);
   await writeAsset(join(webApp, "favicon.ico"), ico);
   await writeAsset(join(webApp, "icon.png"), await iconForestTile(512));
-  await writeAsset(join(webApp, "apple-icon.png"), await iconForestTile(180));
-
   await writeAsset(join(webBrand, "favicon-32.png"), await iconForestTile(32));
   await writeAsset(join(webBrand, "favicon-512.png"), await iconForestTile(512));
-  await writeAsset(join(webBrand, "apple-touch-icon.png"), await iconForestTile(180));
 
-  // PWA manifest references these — currently missing from the live repo.
-  await writeAsset(join(webPublic, "icon-192.png"), await iconForestTile(192));
-  await writeAsset(join(webPublic, "icon-512.png"), await iconForestTile(512));
+  // App-tile surfaces (iOS home-screen touch icon, PWA install icon) —
+  // brand gradient so the installed app reads as an actual app, not a
+  // flat tab favicon.
+  await writeAsset(join(webApp, "apple-icon.png"), await iconGradientTile(180));
+  await writeAsset(join(webBrand, "apple-touch-icon.png"), await iconGradientTile(180));
+  await writeAsset(join(webPublic, "icon-192.png"), await iconGradientTile(192));
+  await writeAsset(join(webPublic, "icon-512.png"), await iconGradientTile(512));
 
   // Header wordmark: 256 px tall covers every Wordmark size ("sm" 28 →
   // "lg" 42) at retina density and still compresses small.
@@ -161,8 +195,11 @@ async function main() {
     ["icon-83.5@2x.png", 167],
     ["icon-1024.png", 1024], // App Store marketing — must be opaque
   ];
+  // Every iOS appiconset entry uses the brand gradient — these are the
+  // tiles iOS shows on the Home Screen / Settings / Spotlight, where
+  // there's enough surface area for the gradient to read.
   for (const [name, size] of ios) {
-    await writeAsset(join(appicon, name), await iconForestTile(size));
+    await writeAsset(join(appicon, name), await iconGradientTile(size));
   }
 
   const contents = {

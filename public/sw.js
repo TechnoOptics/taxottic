@@ -8,7 +8,7 @@
  * PWASetup) shows a "New version - Refresh" toast and posts SKIP_WAITING
  * when the user taps it.
  */
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

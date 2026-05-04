@@ -18,34 +18,43 @@ brand-icons/
 │   └── generate.mjs                   regenerates web/ + ios/ from source
 ├── web/                               drop into the Next.js repo
 │   ├── app/
-│   │   ├── favicon.ico                multi-size ICO (16/32/48), forest tile
-│   │   ├── icon.png                   512 × 512 forest tile
-│   │   └── apple-icon.png             180 × 180 forest tile
+│   │   ├── favicon.ico                multi-size ICO (16/32/48), flat forest tile
+│   │   ├── icon.png                   512 × 512 flat forest tile (browser tab)
+│   │   └── apple-icon.png             180 × 180 GRADIENT tile (iOS home-screen)
 │   └── public/
-│       ├── icon-192.png               192 × 192 (PWA manifest, opaque)
-│       ├── icon-512.png               512 × 512 (PWA manifest, opaque)
+│       ├── icon-192.png               192 × 192 GRADIENT tile (PWA install)
+│       ├── icon-512.png               512 × 512 GRADIENT tile (PWA install)
 │       └── brand/
-│           ├── favicon-32.png         32 × 32  (mirror copy)
-│           ├── favicon-512.png        512 × 512 (mirror copy)
-│           ├── apple-touch-icon.png   180 × 180 (mirror copy)
+│           ├── favicon-32.png         32 × 32   flat forest (browser tab)
+│           ├── favicon-512.png        512 × 512 flat forest (mirror)
+│           ├── apple-touch-icon.png   180 × 180 GRADIENT tile (mirror)
 │           └── wordmark-white.png     2117 × 256 horizontal lockup, transparent
 └── ios/
     └── AppIcon.appiconset/            drag straight into Assets.xcassets
         ├── Contents.json
-        ├── icon-20.png … icon-83.5@2x.png   all required iPhone + iPad sizes
-        └── icon-1024.png              App Store marketing (no alpha)
+        ├── icon-20.png … icon-83.5@2x.png   all required iPhone + iPad sizes (gradient)
+        └── icon-1024.png              App Store marketing (gradient, no alpha)
 ```
 
-## Why the icons are flattened on forest green
+## Two tile treatments — flat vs. gradient
 
-The source icon is **white** on transparent. On a light browser tab a raw
-white-on-transparent favicon is invisible. Every favicon, PWA icon, and
-iOS app icon in this bundle is composited onto the brand forest tile
-(`#0f2d24`, the AppHeader gradient floor + manifest theme color) with a
-14% inset around the glyph. That gives a brand-coloured square that
-renders cleanly on every tab background, every iOS home screen, and
-satisfies App Store Connect's no-alpha requirement on the 1024
-marketing icon.
+The source icon is **white** on transparent, so a raw transparent tile
+would disappear on light browser tabs. Every icon variant is composited
+onto a forest-green tile with a 14% inset around the glyph, but the
+**tile itself differs by surface type**:
+
+- **Flat forest** (`#0f2d24`, single colour) — used for browser-tab
+  favicons (`favicon.ico`, `favicon-32`, `favicon-512`, `app/icon.png`).
+  Below ~64 px a gradient turns into noisy banding, so flat reads cleaner.
+- **Brand gradient** (180°: `#1a4031 → #0f2d24 → #0a201a`, the same
+  gradient used by the AppHeader) — used for **app-tile** surfaces:
+  iOS AppIcon set, iOS home-screen `apple-touch-icon`, and PWA install
+  icons (`icon-192.png`, `icon-512.png`). At ≥152 px the gradient reads
+  as dimensional and makes the installed app look like a real app rather
+  than a flat tab favicon.
+
+Both treatments are opaque, which satisfies App Store Connect's no-alpha
+requirement on the 1024 marketing icon.
 
 The header wordmark (`wordmark-white.png`) stays transparent because it
 sits on the dark forest header — compositing happens in CSS.
