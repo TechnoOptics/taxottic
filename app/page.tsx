@@ -110,9 +110,28 @@ function Hero({ audience }: { audience: Audience }) {
         </h1>
 
         <p className="mt-6 text-lg sm:text-xl text-cream/80 max-w-2xl leading-relaxed">
-          {personal
-            ? "Taxottic forecasts your taxes in real time, surfaces every deduction your bank statements already prove, and reminds you to set the money aside before it's gone. Built for freelancers, contractors, and small businesses."
-            : "Multi-client management with transparency into every engagement. Branded firm portal, automated outreach, bulk operations — without your associates juggling fifty spreadsheet tabs."}
+          {personal ? (
+            <>
+              Taxottic forecasts your taxes in real time, cross-checks every
+              bank transaction against{" "}
+              <span className="text-cream font-medium">
+                1,025 IRS-aligned deductions
+              </span>{" "}
+              with their IRC sections cited, and reminds you to set the money
+              aside before it&apos;s gone. Built for freelancers, contractors,
+              and small businesses.
+            </>
+          ) : (
+            <>
+              Multi-client management with transparency into every engagement.
+              Branded firm portal, automated outreach, bulk operations,{" "}
+              <span className="text-cream font-medium">
+                1,025 IRS-cited deductions
+              </span>{" "}
+              auto-applied to every client&apos;s books — without your
+              associates juggling fifty spreadsheet tabs.
+            </>
+          )}
         </p>
 
         <div className="mt-10 flex flex-wrap gap-3">
@@ -191,10 +210,10 @@ const PERSONAL: Capability[] = [
     pull: "Stop guessing. Stop overpaying.",
   },
   {
-    kicker: "Auto-Triage",
-    title: "Your bank already knows your deductions.",
-    body: "Plaid keeps your accounts in sync hourly. Each transaction lands with a deduction category pre-suggested. One tap to categorize, dismiss, or split.",
-    pull: "From pending to filed in seconds.",
+    kicker: "1,025 IRS-Cited Deductions",
+    title: "Every bank transaction, cross-checked against the full IRS catalog.",
+    body: "Plaid syncs hourly. Each transaction is matched against 1,025 deduction items from IRS Pub 334 / 463 / 535 / 587 / 946 — IRC section cited, source URL one tap away. Auto-applied when confidence is high; queued when it isn't.",
+    pull: "Hands off. Audit-ready.",
   },
   {
     kicker: "Bella · AI Tax Guide",
@@ -305,8 +324,8 @@ function ProductTour() {
             <Caption
               kicker="Hour 1 — Bank sync"
               title="The bank does the work, hourly."
-              body="Plaid syncs every active account every hour. New transactions land already tagged with the most likely deduction category. One tap to apply, dismiss, or split. No data entry."
-              tags={["Plaid", "200+ rule-based suggestions", "Auto-applied"]}
+              body="Plaid syncs every active account every hour. New transactions land already tagged against the full 1,025-item IRS deduction catalog — IRC section cited, source URL one tap away. One tap to apply, dismiss, or split. No data entry."
+              tags={["Plaid", "1,025 IRS-cited deductions", "Auto-applied"]}
             />
           </Row>
 
@@ -700,8 +719,8 @@ function ScheduleCMockup() {
 
 function ProofBand() {
   const stats = [
-    { kpi: "24", label: "Schedule C deduction categories cited" },
-    { kpi: "1 hr", label: "Plaid sync cadence (auto)" },
+    { kpi: "1,025", label: "IRS-cited deductions, auto-matched against every bank transaction" },
+    { kpi: "1 hr", label: "Plaid sync cadence — fully automatic" },
     { kpi: "Q1-Q4", label: "Quarterly safe-harbor reminders, two weeks early" },
     { kpi: "Face ID", label: "Passkey biometric sign-in on every device" },
   ];

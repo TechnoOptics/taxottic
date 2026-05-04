@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { formatCents } from "@/lib/tax/forecast";
 import type { Scorecard } from "@/lib/deductions/eligibility";
+import { getMasterItemsForScorecardCode } from "@/lib/deductions/scorecard-bridge";
+import type { MasterDeduction } from "@/lib/deductions/types";
 
 type Props = {
   publicId: string;
   scorecard: Scorecard;
 };
+
+// Cap the number of items rendered per tile so a category with 60+
+// rows (Marketing, Office, Software) doesn't dominate the page. The
+// rest are one click away in the explorer.
+const ITEMS_PREVIEW = 8;
 
 export function DeductionScorecard({ publicId, scorecard }: Props) {
   const captured = scorecard.items.filter((i) => i.captured);
@@ -65,22 +72,12 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
           </h3>
           <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {captured.map((it) => (
-              <li
+              <ScorecardTile
                 key={it.code}
-                className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3.5 py-3 text-sm"
-              >
-                <Checkmark />
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-forest-900 leading-tight">
-                    {it.label}
-                  </div>
-                  <div className="text-xs text-ink-muted mt-0.5">
-                    {formatCents(it.capturedCents)} this year
-                    {it.scheduleC ? ` - ${it.scheduleC}` : ""}
-                  </div>
-                  <IrsCitation item={it} />
-                </div>
-              </li>
+                publicId={publicId}
+                item={it}
+                tone="captured"
+              />
             ))}
           </ul>
         </div>
@@ -94,22 +91,12 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
           </h3>
           <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {remaining.map((it) => (
-              <li
+              <ScorecardTile
                 key={it.code}
-                className="flex items-start gap-3 rounded-xl border border-forest-100 bg-white/70 px-3.5 py-3 text-sm"
-              >
-                <EmptyCircle />
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-forest-900 leading-tight">
-                    {it.label}
-                  </div>
-                  <div className="text-xs text-ink-muted mt-0.5 leading-relaxed">
-                    {it.reason}
-                    {it.scheduleC ? ` (${it.scheduleC})` : ""}
-                  </div>
-                  <IrsCitation item={it} />
-                </div>
-              </li>
+                publicId={publicId}
+                item={it}
+                tone="remaining"
+              />
             ))}
           </ul>
           <div className="mt-4 flex items-center gap-3 flex-wrap">
@@ -130,6 +117,122 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
         a CPA for high-impact items.
       </p>
     </section>
+  );
+}
+
+// Each tile is a native <details>/<summary> pair so tap-to-expand works
+// without any client JS. The summary is the original tile content; the
+// expanded body lists up to ITEMS_PREVIEW master deductions in this
+// scorecard category so the user sees concrete examples of what to
+// expense, plus a deep-link to the full explorer.
+function ScorecardTile({
+  publicId,
+  item,
+  tone,
+}: {
+  publicId: string;
+  item: import("@/lib/deductions/eligibility").ScorecardItem;
+  tone: "captured" | "remaining";
+}) {
+  const masterItems = getMasterItemsForScorecardCode(item.code);
+  const preview = masterItems.slice(0, ITEMS_PREVIEW);
+  const overflow = masterItems.length - preview.length;
+
+  const containerClass =
+    tone === "captured"
+      ? "rounded-xl border border-emerald-200 bg-emerald-50/60"
+      : "rounded-xl border border-forest-100 bg-white/70";
+
+  const explorerHref = `/c/${publicId}/deductions?focus=${encodeURIComponent(
+    item.label,
+  )}`;
+
+  return (
+    <li className={`${containerClass} text-sm overflow-hidden`}>
+      <details className="group">
+        <summary className="list-none cursor-pointer flex items-start gap-3 px-3.5 py-3 select-none hover:bg-cream/40 transition-colors">
+          {tone === "captured" ? <Checkmark /> : <EmptyCircle />}
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-forest-900 leading-tight">
+              {item.label}
+            </div>
+            <div className="text-xs text-ink-muted mt-0.5 leading-relaxed">
+              {tone === "captured" ? (
+                <>
+                  {formatCents(item.capturedCents)} this year
+                  {item.scheduleC ? ` · ${item.scheduleC}` : ""}
+                </>
+              ) : (
+                <>
+                  {item.reason}
+                  {item.scheduleC ? ` (${item.scheduleC})` : ""}
+                </>
+              )}
+            </div>
+            <IrsCitation item={item} />
+          </div>
+          <span
+            aria-hidden="true"
+            className="shrink-0 mt-0.5 size-6 rounded-full bg-forest-50 inline-flex items-center justify-center text-forest-700 transition-transform duration-200 group-open:rotate-180 text-[11px]"
+          >
+            ▾
+          </span>
+        </summary>
+        {masterItems.length > 0 ? (
+          <div className="border-t border-forest-100/60 px-3.5 py-3 bg-white/40">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700 mb-2">
+              Examples of what to expense
+            </div>
+            <ul className="grid gap-1">
+              {preview.map((d) => (
+                <li
+                  key={d.code}
+                  className="flex items-baseline justify-between gap-3 text-xs"
+                >
+                  <span className="text-forest-900 truncate">{d.name}</span>
+                  {d.source ? (
+                    <a
+                      href={d.source}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 text-[10px] text-forest-700 hover:text-forest-900 underline underline-offset-2"
+                    >
+                      IRS ↗
+                    </a>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex items-center justify-between gap-3 text-[11px]">
+              {overflow > 0 ? (
+                <span className="text-ink-muted">+ {overflow} more</span>
+              ) : (
+                <span className="text-ink-muted">
+                  All {masterItems.length} shown
+                </span>
+              )}
+              <Link
+                href={explorerHref}
+                className="text-forest-700 hover:text-forest-900 underline underline-offset-2"
+              >
+                Browse all deductions →
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-forest-100/60 px-3.5 py-3 text-[11px] text-ink-muted bg-white/40">
+            No specific examples mapped yet — see the{" "}
+            <Link
+              href={`/c/${publicId}/deductions`}
+              className="underline hover:text-forest-900"
+            >
+              full deductions catalog
+            </Link>
+            .
+          </div>
+        )}
+      </details>
+    </li>
   );
 }
 

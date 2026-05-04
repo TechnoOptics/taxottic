@@ -467,7 +467,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
               you closed the books today, here's where you stand"; the
               Projected column answers "if you keep up at this pace plus
               your recurring rates, here's the year-end picture." */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4">
+          {/* Stack the YTD/Projected columns vertically on phones (foldables
+              especially — at 280px width the side-by-side numbers are
+              unreadable). Side-by-side returns at sm: (640px+). */}
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <CompareColumn
               kicker="So far this year"
               tone="muted"
@@ -751,15 +754,21 @@ function CompareColumn({
                 : "border-t border-forest-100 pt-2 mt-1"
               : "";
           return (
+            // flex-wrap + min-w-0 lets the value drop to its own line below
+            // the label when the column is too narrow to fit both on one
+            // line (matters on foldables / sub-360px viewports). The label
+            // anchors top-left; the value anchors right when on the same
+            // line, otherwise flows from the left under the label.
             <div
               key={r.label}
               className={
-                "flex items-baseline justify-between gap-2 " + dividerClass
+                "flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 " +
+                dividerClass
               }
             >
               <span
                 className={
-                  "text-xs " +
+                  "text-xs min-w-0 " +
                   (tone === "bright" ? "text-cream/75" : "text-ink-soft") +
                   (r.emphasised ? " font-medium" : "")
                 }
@@ -768,7 +777,7 @@ function CompareColumn({
               </span>
               <span
                 className={
-                  "display tabular-nums " +
+                  "display tabular-nums break-words min-w-0 " +
                   (r.emphasised
                     ? tone === "bright"
                       ? "text-lg sm:text-xl text-gold-300"
