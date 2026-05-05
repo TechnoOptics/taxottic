@@ -17,9 +17,21 @@ import {
   type PDFPageProxy,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-// Disable the worker thread; pdfjs falls back to running the parser on
-// the main thread which is what we want server-side.
-GlobalWorkerOptions.workerSrc = "";
+// pdfjs 5.x always wants a worker. On Node it spins up a "fake worker"
+// that just runs the worker code on the main thread, but the loader
+// still complains if `workerSrc` is empty. We resolve the worker path
+// lazily on first use because top-level resolve() crashes Next's build-
+// time page-data collector under Turbopack.
+let workerInitialized = false;
+async function ensureWorkerSrc() {
+  if (workerInitialized) return;
+  const { createRequire } = await import("node:module");
+  const req = createRequire(import.meta.url);
+  GlobalWorkerOptions.workerSrc = req.resolve(
+    "pdfjs-dist/legacy/build/pdf.worker.mjs",
+  );
+  workerInitialized = true;
+}
 
 /** Thrown when the user-supplied password is wrong (or missing). */
 export class PdfPasswordError extends Error {
@@ -55,6 +67,8 @@ export async function decryptAndRenderPdf(
   password: string,
   scale = 2.0,
 ): Promise<RenderedPage[]> {
+  await ensureWorkerSrc();
+
   let doc: PDFDocumentProxy;
   try {
     // pdfjs's TS types under-declare the legacy build's options; we hand
