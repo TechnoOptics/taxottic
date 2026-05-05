@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audits:monthly": "node scripts/audits/run-monthly.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
