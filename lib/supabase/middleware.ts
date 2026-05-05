@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   "/auth/signout",
   "/invite",
   "/legal",
+  "/book",
+  "/firms",
   "/manifest.webmanifest",
   "/icon.svg",
   "/favicon.ico",
