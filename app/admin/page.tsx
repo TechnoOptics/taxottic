@@ -129,6 +129,9 @@ export default async function AdminPage() {
             </h1>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Link href="/security" className="btn-ghost">
+              Security pulse
+            </Link>
             <Link href="/firms" className="btn-ghost">
               Tax-prep firms
             </Link>

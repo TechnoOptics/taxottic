@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { checkRateLimit, clientKey } from "@/lib/security/rate-limit";
 
 const VALID_KINDS = new Set([
   "right_click",
@@ -21,6 +22,12 @@ const VALID_KINDS = new Set([
  * the user-facing deterrent UI continues to work.
  */
 export async function POST(req: NextRequest) {
+  // Cap the audit-log volume any single client can generate to 60/minute.
+  // Way more than legitimate UI events; well below "your one user is
+  // filling our table by themselves".
+  if (!checkRateLimit(`capture-attempt:${clientKey(req)}`, { capacity: 60, refillPerMinute: 60 })) {
+    return NextResponse.json({ ok: false }, { status: 429 });
+  }
   try {
     const body = (await req.json()) as {
       kind?: string;
