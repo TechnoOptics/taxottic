@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   // applied yet.
   const { data: docs } = await supabase
     .from("prior_year_documents")
-    .select("id, doc_type, extracted_data, tax_year")
+    .select("id, doc_type, extracted_data, tax_year, for_person")
     .eq("user_id", user.id)
     .eq("tax_year", priorYear)
     .is("applied_at", null);
@@ -80,18 +80,34 @@ export async function POST(req: NextRequest) {
   let appliedDocs = 0;
   let monthlyRowsCreated = 0;
   let stateCode: string | null = null;
-  let w2WagesTotal = 0;
-  let w2WithheldTotal = 0;
-  let w2SsWagesTotal = 0;
+  // W-2 totals split by attribution. A married couple often has one
+  // W-2 each; we sum into the owning bucket so the tax profile fields
+  // for owner vs spouse pre-fill correctly.
+  let ownerW2Wages = 0;
+  let ownerW2Withheld = 0;
+  let ownerW2SsWages = 0;
+  let spouseW2Wages = 0;
+  let spouseW2Withheld = 0;
+  let spouseW2SsWages = 0;
 
   for (const doc of docs) {
     const fields = (doc.extracted_data as Record<string, number | string | null>) ?? {};
     const docType = doc.doc_type as string;
+    const forPerson = (doc.for_person as string) === "spouse" ? "spouse" : "self";
 
     if (docType === "w2") {
-      w2WagesTotal += num(fields.wages_cents);
-      w2WithheldTotal += num(fields.federal_withheld_cents);
-      w2SsWagesTotal += num(fields.social_security_wages_cents);
+      const wages = num(fields.wages_cents);
+      const withheld = num(fields.federal_withheld_cents);
+      const ssWages = num(fields.social_security_wages_cents);
+      if (forPerson === "spouse") {
+        spouseW2Wages += wages;
+        spouseW2Withheld += withheld;
+        spouseW2SsWages += ssWages;
+      } else {
+        ownerW2Wages += wages;
+        ownerW2Withheld += withheld;
+        ownerW2SsWages += ssWages;
+      }
       if (typeof fields.state_code === "string" && fields.state_code) {
         stateCode = fields.state_code as string;
       }
@@ -199,20 +215,29 @@ export async function POST(req: NextRequest) {
   // Apply W-2 totals to the current year's tax_profile so the user's
   // forecast knows about their day-job wages. If they no longer hold
   // that job they can edit; assuming carry-over is the right default.
-  if (w2WagesTotal > 0) {
+  // Split owner vs spouse so a couple's two W-2s land on the right
+  // columns.
+  if (ownerW2Wages > 0 || spouseW2Wages > 0) {
+    const update: Record<string, number | string> = {
+      user_id: user.id,
+      tax_year: currentYear,
+    };
+    if (ownerW2Wages > 0) {
+      update.owner_w2_wages_cents = ownerW2Wages;
+      update.owner_w2_withheld_cents = ownerW2Withheld;
+      update.owner_w2_ss_wages_cents = ownerW2SsWages;
+    }
+    if (spouseW2Wages > 0) {
+      update.spouse_w2_wages_cents = spouseW2Wages;
+      update.spouse_w2_withheld_cents = spouseW2Withheld;
+      update.spouse_w2_ss_wages_cents = spouseW2SsWages;
+    }
+    if (stateCode) {
+      update.state_code = stateCode;
+    }
     await admin
       .from("tax_profiles")
-      .upsert(
-        {
-          user_id: user.id,
-          tax_year: currentYear,
-          owner_w2_wages_cents: w2WagesTotal,
-          owner_w2_withheld_cents: w2WithheldTotal,
-          owner_w2_ss_wages_cents: w2SsWagesTotal,
-          ...(stateCode ? { state_code: stateCode } : {}),
-        },
-        { onConflict: "user_id,tax_year" },
-      );
+      .upsert(update, { onConflict: "user_id,tax_year" });
   }
 
   // Mark every doc applied so we don't re-spread on re-runs.
@@ -226,7 +251,9 @@ export async function POST(req: NextRequest) {
     ok: true,
     applied: appliedDocs,
     monthly_rows_created: monthlyRowsCreated,
-    w2_wages_carried_cents: w2WagesTotal,
+    w2_wages_carried_cents: ownerW2Wages + spouseW2Wages,
+    owner_w2_wages_cents: ownerW2Wages,
+    spouse_w2_wages_cents: spouseW2Wages,
   });
 }
 

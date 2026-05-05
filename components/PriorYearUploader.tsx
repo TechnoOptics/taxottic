@@ -19,9 +19,12 @@ type Props = {
   doneRedirect?: string;
 };
 
+type ForPerson = "self" | "spouse";
+
 type ExtractedFile = {
   fileName: string;
   status: "uploading" | "extracted" | "error";
+  forPerson: ForPerson;
   // Server response on success
   serverId?: string;
   docType?: PriorDocType;
@@ -63,17 +66,23 @@ export function PriorYearUploader({
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<string | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
+  // Default for the next batch of uploads. Each uploaded file is also
+  // re-taggable individually after extraction lands.
+  const [defaultPerson, setDefaultPerson] = useState<ForPerson>("self");
   // Password popup state. We park each locked PDF in a queue so a
   // multi-file drop with several locked PDFs prompts in turn.
-  const [passwordQueue, setPasswordQueue] = useState<File[]>([]);
+  const [passwordQueue, setPasswordQueue] = useState<
+    Array<{ file: File; forPerson: ForPerson }>
+  >([]);
   const [wrongAttempt, setWrongAttempt] = useState(false);
 
   const uploadOne = useCallback(
-    async (file: File, password?: string) => {
+    async (file: File, forPerson: ForPerson, password?: string) => {
       const fd = new FormData();
       fd.append("file", file);
       if (companyId) fd.append("companyId", companyId);
       fd.append("taxYear", String(taxYear));
+      fd.append("forPerson", forPerson);
       if (password) fd.append("password", password);
       const res = await fetch("/api/prior-year/extract", {
         method: "POST",
@@ -92,7 +101,7 @@ export function PriorYearUploader({
           row.fileName === file.name && row.status === "uploading"
             ? ok
               ? {
-                  fileName: file.name,
+                  ...row,
                   status: "extracted" as const,
                   serverId: data.id as string,
                   docType: data.doc_type as PriorDocType,
@@ -103,7 +112,7 @@ export function PriorYearUploader({
                   notes: data.notes as string | null,
                 }
               : {
-                  fileName: file.name,
+                  ...row,
                   status: "error" as const,
                   error: (data?.error as string) ?? "Upload failed",
                 }
@@ -117,24 +126,26 @@ export function PriorYearUploader({
   const onFiles = useCallback(
     async (incoming: FileList | File[]) => {
       const list = Array.from(incoming);
-      // Pre-create rows so the UI shows progress per file.
-      setFiles((prev) => [
-        ...prev,
-        ...list.map((f) => ({
-          fileName: f.name,
-          status: "uploading" as const,
-        })),
-      ]);
+      // Pre-create rows so the UI shows progress per file. Each row
+      // remembers the person attribution chosen at drop time; the row
+      // can be re-tagged after extraction lands.
+      const rowsToAdd = list.map((f) => ({
+        fileName: f.name,
+        status: "uploading" as const,
+        forPerson: defaultPerson,
+      }));
+      setFiles((prev) => [...prev, ...rowsToAdd]);
       // Sequentially upload (Anthropic rate limits + we want a tight
       // user experience showing each result land).
       for (let i = 0; i < list.length; i++) {
         const file = list[i];
+        const forPerson = defaultPerson;
         try {
-          const { res, data } = await uploadOne(file);
+          const { res, data } = await uploadOne(file, forPerson);
           if (res.status === 422 && data?.error === "pdf_password_required") {
             // Park the file in the password queue; it'll resolve when
             // the user types the password and submits the popup.
-            setPasswordQueue((q) => [...q, file]);
+            setPasswordQueue((q) => [...q, { file, forPerson }]);
             continue;
           }
           applyResponse(file, res.ok, data);
@@ -145,6 +156,7 @@ export function PriorYearUploader({
                 ? {
                     fileName: file.name,
                     status: "error" as const,
+                    forPerson: row.forPerson,
                     error: err instanceof Error ? err.message : "Network error",
                   }
                 : row,
@@ -153,29 +165,49 @@ export function PriorYearUploader({
         }
       }
     },
-    [uploadOne, applyResponse],
+    [uploadOne, applyResponse, defaultPerson],
   );
 
   async function submitWithPassword(password: string) {
-    const file = passwordQueue[0];
-    if (!file) return;
-    const { res, data } = await uploadOne(file, password);
+    const head = passwordQueue[0];
+    if (!head) return;
+    const { res, data } = await uploadOne(head.file, head.forPerson, password);
     if (res.status === 422 && data?.error === "pdf_password_required") {
       setWrongAttempt(true);
       return;
     }
-    applyResponse(file, res.ok, data);
+    applyResponse(head.file, res.ok, data);
     setPasswordQueue((q) => q.slice(1));
     setWrongAttempt(false);
   }
 
   function cancelPasswordPrompt() {
-    const file = passwordQueue[0];
-    if (file) {
-      applyResponse(file, false, { error: "Password not provided" });
+    const head = passwordQueue[0];
+    if (head) {
+      applyResponse(head.file, false, { error: "Password not provided" });
     }
     setPasswordQueue((q) => q.slice(1));
     setWrongAttempt(false);
+  }
+
+  // Re-tag a single uploaded row. Updates both the local list (UI) and
+  // patches the server row so the apply step picks up the new owner.
+  async function changeRowPerson(row: ExtractedFile, next: ForPerson) {
+    if (!row.serverId || row.forPerson === next) return;
+    setFiles((prev) =>
+      prev.map((r) => (r.fileName === row.fileName ? { ...r, forPerson: next } : r)),
+    );
+    try {
+      await fetch(`/api/prior-year/${row.serverId}/owner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forPerson: next }),
+      });
+    } catch {
+      // Best-effort; the local UI already reflects the new tag and
+      // the apply step reads the latest server value, so a transient
+      // network blip just delays propagation by one apply click.
+    }
   }
 
   const onDrop = useCallback(
@@ -244,8 +276,21 @@ export function PriorYearUploader({
             ))}
           </select>
         </label>
+        <label className="text-sm text-forest-800">
+          For:&nbsp;
+          <select
+            value={defaultPerson}
+            onChange={(e) => setDefaultPerson(e.target.value as ForPerson)}
+            className="input h-9 w-28"
+            aria-label="Whose document is being uploaded"
+          >
+            <option value="self">You</option>
+            <option value="spouse">Spouse</option>
+          </select>
+        </label>
         <span className="text-xs text-ink-muted">
-          Drop W-2s, 1099s, Schedule C, or your full Form 1040.
+          Drop W-2s, 1099s, Schedule C, or your full Form 1040. You can re-tag
+          each file after upload.
         </span>
       </div>
 
@@ -321,9 +366,28 @@ export function PriorYearUploader({
                     </>
                   )}
                 </div>
-                {f.status === "extracted" && f.confidence != null ? (
-                  <ConfidencePill value={f.confidence} />
-                ) : null}
+                <div className="flex items-center gap-2">
+                  {f.status === "extracted" ? (
+                    <select
+                      value={f.forPerson}
+                      onChange={(e) =>
+                        changeRowPerson(f, e.target.value as ForPerson)
+                      }
+                      aria-label="Whose document"
+                      className="input h-8 text-xs w-24"
+                    >
+                      <option value="self">You</option>
+                      <option value="spouse">Spouse</option>
+                    </select>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      For: {f.forPerson === "spouse" ? "Spouse" : "You"}
+                    </span>
+                  )}
+                  {f.status === "extracted" && f.confidence != null ? (
+                    <ConfidencePill value={f.confidence} />
+                  ) : null}
+                </div>
               </div>
             </li>
           ))}
@@ -332,7 +396,7 @@ export function PriorYearUploader({
 
       {passwordQueue.length > 0 ? (
         <PdfPasswordPrompt
-          fileName={passwordQueue[0].name}
+          fileName={passwordQueue[0].file.name}
           wrongAttempt={wrongAttempt}
           onSubmit={submitWithPassword}
           onCancel={cancelPasswordPrompt}
