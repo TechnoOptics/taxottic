@@ -59,6 +59,20 @@ export async function POST(req: NextRequest) {
       ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/banks/plaid/oauth-return`
       : undefined);
 
+  // Cap historical pull to year-to-date. Taxottic forecasts the
+  // current tax year only - last year's transactions don't move
+  // this year's forecast and are already in the user's filed
+  // return. days_requested also bounds what /transactions/sync
+  // returns on the initial cursor, so this is the single lever
+  // for the "first sync = YTD" requirement. Floor at 1 to keep
+  // Plaid happy on a Jan-1 sign-up.
+  const now = new Date();
+  const startOfYearUtc = Date.UTC(now.getUTCFullYear(), 0, 1);
+  const daysSinceJan1 = Math.max(
+    1,
+    Math.floor((now.getTime() - startOfYearUtc) / 86_400_000),
+  );
+
   try {
     const { data } = await plaid.linkTokenCreate({
       user: { client_user_id: user.id },
@@ -68,6 +82,7 @@ export async function POST(req: NextRequest) {
       language: "en",
       redirect_uri: redirectUri,
       webhook: process.env.PLAID_WEBHOOK_URL || undefined,
+      transactions: { days_requested: daysSinceJan1 },
     });
     return NextResponse.json({
       link_token: data.link_token,
