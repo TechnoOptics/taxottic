@@ -74,6 +74,9 @@ export async function POST(req: NextRequest) {
       : null;
 
   const password = (formData.get("password") as string | null)?.toString() ?? "";
+  const forPersonRaw = (formData.get("forPerson") as string | null) ?? "self";
+  const forPerson: "self" | "spouse" =
+    forPersonRaw === "spouse" ? "spouse" : "self";
 
   const buf = Buffer.from(await file.arrayBuffer());
   const base64 = buf.toString("base64");
@@ -134,6 +137,7 @@ export async function POST(req: NextRequest) {
       tax_year: taxYear,
       doc_type: result.doc_type,
       filename: file.name?.slice(0, 200) ?? null,
+      for_person: forPerson,
       extracted_data: {
         ...result.fields,
         payer_or_employer: result.payer_or_employer,
