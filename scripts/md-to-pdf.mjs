@@ -15,7 +15,22 @@ const md = readFileSync(inputMd, "utf8");
 const firstH1 = md.match(/^#\s+(.+?)\s*$/m);
 const docTitle = firstH1 ? firstH1[1] : path.basename(inputMd, path.extname(inputMd));
 const mdWithoutFirstH1 = firstH1 ? md.replace(firstH1[0], "").replace(/^\s+/, "") : md;
-const body = marked.parse(mdWithoutFirstH1);
+
+const inputDir = path.dirname(path.resolve(inputMd));
+
+// Inline-base64 every local image reference. Markdown ![]()  becomes a
+// data: URL so the PDF renders standalone without depending on
+// filesystem layout at conversion time.
+const bodyHtml = marked.parse(mdWithoutFirstH1);
+const body = bodyHtml.replace(/<img\s+([^>]*?)src="([^"]+)"([^>]*)>/g, (m, pre, src, post) => {
+  if (/^(?:data:|https?:|file:)/i.test(src)) return m;
+  const absolute = path.isAbsolute(src) ? src : path.resolve(inputDir, src);
+  if (!existsSync(absolute)) return m;
+  const ext = path.extname(absolute).slice(1).toLowerCase();
+  const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "svg" ? "image/svg+xml" : "image/png";
+  const data = readFileSync(absolute).toString("base64");
+  return `<img ${pre}src="data:${mime};base64,${data}"${post}>`;
+});
 
 const logoPath = path.resolve("public/brand/full-logo.png");
 const logoB64 = readFileSync(logoPath).toString("base64");
