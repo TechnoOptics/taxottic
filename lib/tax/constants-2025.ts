@@ -210,3 +210,51 @@ export function stateRate(stateCode: string | null | undefined): number {
   if (!stateCode) return 0;
   return STATE_FLAT_RATES_2025[stateCode.toUpperCase()] ?? 0;
 }
+
+// Net Investment Income Tax (NIIT) - 3.8% surtax on the lesser of
+// (a) net investment income or (b) modified AGI above the threshold.
+// IRC §1411. Applies to dividends, interest, capital gains, and
+// passive-activity rental income.
+export const NIIT_2025 = {
+  rate: 0.038,
+  threshold: {
+    single: cents(200_000),
+    married_filing_jointly: cents(250_000),
+    married_filing_separately: cents(125_000),
+    head_of_household: cents(200_000),
+    qualifying_widow: cents(250_000),
+  } as Record<FilingStatus, number>,
+};
+
+// Federal estimated-tax due dates for tax-year 2025. Q4 lands on
+// Jan 15 of the FOLLOWING calendar year. The IRS shifts a date to the
+// next business day if it falls on a weekend or federal holiday;
+// shifting is a UI concern (we annotate the underlying calendar date
+// here and let the formatting layer adjust if needed).
+export const QUARTERLY_DUE_DATES_2025: ReadonlyArray<{
+  quarter: 1 | 2 | 3 | 4;
+  /** Month index 1-12. */
+  month: number;
+  /** Day of month. */
+  day: number;
+  /** True for Q4 — falls in the year after the tax year. */
+  inFollowingYear: boolean;
+}> = [
+  { quarter: 1, month: 4, day: 15, inFollowingYear: false },
+  { quarter: 2, month: 6, day: 15, inFollowingYear: false },
+  { quarter: 3, month: 9, day: 15, inFollowingYear: false },
+  { quarter: 4, month: 1, day: 15, inFollowingYear: true },
+];
+
+// Safe-harbor for avoiding the underpayment-penalty: pay at least
+// the LESSER of (a) 90% of this year's total tax or (b) 100% of
+// last year's tax (110% if prior-year AGI > $150K). We don't have
+// reliable last-year numbers for new users, so we lean on (a) — the
+// 90%-of-current-year rule — and surface a hint when withholding +
+// estimates fall short.
+export const UNDERPAYMENT_SAFE_HARBOR_2025 = {
+  currentYearShare: 0.9,
+  priorYearShare: 1.0,
+  priorYearShareHighIncome: 1.1,
+  priorYearAgiThreshold: cents(150_000),
+};
