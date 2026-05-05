@@ -66,3 +66,5 @@ dev.log
 
 # Local-only Claude Code state
 .claude/
+
+.vercel
