@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DOC_TYPE_LABELS,
   type PriorDocType,
 } from "@/lib/ocr/extract-tax-doc";
+import { PdfPasswordPrompt } from "./PdfPasswordPrompt";
 
 type Props = {
   // Optional company to bind business-scoped docs to (Schedule C,
@@ -62,6 +63,56 @@ export function PriorYearUploader({
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<string | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
+  // Password popup state. We park each locked PDF in a queue so a
+  // multi-file drop with several locked PDFs prompts in turn.
+  const [passwordQueue, setPasswordQueue] = useState<File[]>([]);
+  const [wrongAttempt, setWrongAttempt] = useState(false);
+
+  const uploadOne = useCallback(
+    async (file: File, password?: string) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      if (companyId) fd.append("companyId", companyId);
+      fd.append("taxYear", String(taxYear));
+      if (password) fd.append("password", password);
+      const res = await fetch("/api/prior-year/extract", {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      return { res, data } as const;
+    },
+    [companyId, taxYear],
+  );
+
+  const applyResponse = useCallback(
+    (file: File, ok: boolean, data: Record<string, unknown>) => {
+      setFiles((prev) =>
+        prev.map((row) =>
+          row.fileName === file.name && row.status === "uploading"
+            ? ok
+              ? {
+                  fileName: file.name,
+                  status: "extracted" as const,
+                  serverId: data.id as string,
+                  docType: data.doc_type as PriorDocType,
+                  taxYear: data.tax_year as number | null,
+                  fields: data.fields as Record<string, number | string | null>,
+                  payerOrEmployer: data.payer_or_employer as string | null,
+                  confidence: data.confidence as number,
+                  notes: data.notes as string | null,
+                }
+              : {
+                  fileName: file.name,
+                  status: "error" as const,
+                  error: (data?.error as string) ?? "Upload failed",
+                }
+            : row,
+        ),
+      );
+    },
+    [],
+  );
 
   const onFiles = useCallback(
     async (incoming: FileList | File[]) => {
@@ -78,39 +129,15 @@ export function PriorYearUploader({
       // user experience showing each result land).
       for (let i = 0; i < list.length; i++) {
         const file = list[i];
-        const fd = new FormData();
-        fd.append("file", file);
-        if (companyId) fd.append("companyId", companyId);
-        fd.append("taxYear", String(taxYear));
         try {
-          const res = await fetch("/api/prior-year/extract", {
-            method: "POST",
-            body: fd,
-          });
-          const data = await res.json();
-          setFiles((prev) =>
-            prev.map((row) =>
-              row.fileName === file.name && row.status === "uploading"
-                ? res.ok
-                  ? {
-                      fileName: file.name,
-                      status: "extracted" as const,
-                      serverId: data.id,
-                      docType: data.doc_type,
-                      taxYear: data.tax_year,
-                      fields: data.fields,
-                      payerOrEmployer: data.payer_or_employer,
-                      confidence: data.confidence,
-                      notes: data.notes,
-                    }
-                  : {
-                      fileName: file.name,
-                      status: "error" as const,
-                      error: data?.error ?? "Upload failed",
-                    }
-                : row,
-            ),
-          );
+          const { res, data } = await uploadOne(file);
+          if (res.status === 422 && data?.error === "pdf_password_required") {
+            // Park the file in the password queue; it'll resolve when
+            // the user types the password and submits the popup.
+            setPasswordQueue((q) => [...q, file]);
+            continue;
+          }
+          applyResponse(file, res.ok, data);
         } catch (err) {
           setFiles((prev) =>
             prev.map((row) =>
@@ -118,8 +145,7 @@ export function PriorYearUploader({
                 ? {
                     fileName: file.name,
                     status: "error" as const,
-                    error:
-                      err instanceof Error ? err.message : "Network error",
+                    error: err instanceof Error ? err.message : "Network error",
                   }
                 : row,
             ),
@@ -127,8 +153,30 @@ export function PriorYearUploader({
         }
       }
     },
-    [companyId, taxYear],
+    [uploadOne, applyResponse],
   );
+
+  async function submitWithPassword(password: string) {
+    const file = passwordQueue[0];
+    if (!file) return;
+    const { res, data } = await uploadOne(file, password);
+    if (res.status === 422 && data?.error === "pdf_password_required") {
+      setWrongAttempt(true);
+      return;
+    }
+    applyResponse(file, res.ok, data);
+    setPasswordQueue((q) => q.slice(1));
+    setWrongAttempt(false);
+  }
+
+  function cancelPasswordPrompt() {
+    const file = passwordQueue[0];
+    if (file) {
+      applyResponse(file, false, { error: "Password not provided" });
+    }
+    setPasswordQueue((q) => q.slice(1));
+    setWrongAttempt(false);
+  }
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -280,6 +328,15 @@ export function PriorYearUploader({
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {passwordQueue.length > 0 ? (
+        <PdfPasswordPrompt
+          fileName={passwordQueue[0].name}
+          wrongAttempt={wrongAttempt}
+          onSubmit={submitWithPassword}
+          onCancel={cancelPasswordPrompt}
+        />
       ) : null}
 
       {extracted.length > 0 ? (

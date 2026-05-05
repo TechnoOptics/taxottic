@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { extractW2FromImage } from "@/lib/ocr/extract-w2";
+import {
+  extractW2FromImage,
+  extractW2FromImagePages,
+  PdfPasswordRequiredError,
+} from "@/lib/ocr/extract-w2";
+import { decryptAndRenderPdf, PdfPasswordError } from "@/lib/pdf/decrypt";
 
 export const runtime = "nodejs";
 // 50 MB upload cap.
@@ -15,6 +20,13 @@ export const maxDuration = 60;
  * Auth: requires a signed-in user. Anyone signed in can use this -
  * no plan gate, since prefilling the tax profile saves us support
  * tickets and the per-call cost is small (~$0.01).
+ *
+ * Password-protected PDFs: if the upload is a locked PDF and no
+ * password is supplied (or Anthropic rejects it), return 422 with
+ * `{ error: "pdf_password_required" }` so the UI can pop a password
+ * prompt and retry. On retry, the form includes a `password` field;
+ * we decrypt locally with pdfjs, render pages to PNGs, and send the
+ * images to Claude instead of the sealed PDF.
  */
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -54,11 +66,42 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const password = (formData.get("password") as string | null)?.toString() ?? "";
+
   // Read as base64 in memory - we never write the file to disk or
   // storage. For PDFs > 4 MB Anthropic's API gets unhappy; we
   // clamp earlier on file.size.
   const buf = Buffer.from(await file.arrayBuffer());
   const base64 = buf.toString("base64");
+
+  // If the user already supplied a password, jump straight to the
+  // decrypt-and-render path so we never hand a locked PDF to
+  // Anthropic (which would just bounce it again).
+  if (password && file.type === "application/pdf") {
+    try {
+      const pages = await decryptAndRenderPdf(new Uint8Array(buf), password);
+      const result = await extractW2FromImagePages({ pages });
+      return NextResponse.json(result);
+    } catch (err) {
+      if (err instanceof PdfPasswordError) {
+        return NextResponse.json(
+          {
+            error: "pdf_password_required",
+            reason: err.missing ? "missing" : "incorrect",
+          },
+          { status: 422 },
+        );
+      }
+      const message = err instanceof Error ? err.message : "Unknown error";
+      if (message.includes("ANTHROPIC_API_KEY")) {
+        return NextResponse.json(
+          { error: "Bella isn't configured on the server yet. Use manual entry for now." },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
 
   try {
     const result = await extractW2FromImage({
@@ -71,6 +114,12 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (err) {
+    if (err instanceof PdfPasswordRequiredError) {
+      return NextResponse.json(
+        { error: "pdf_password_required", reason: "missing" },
+        { status: 422 },
+      );
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     // Don't leak the Anthropic error verbatim if it's about API keys
     // - keep the message helpful for the user.

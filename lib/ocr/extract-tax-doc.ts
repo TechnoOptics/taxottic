@@ -14,6 +14,13 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { PdfPasswordRequiredError } from "./extract-w2";
+
+function isPasswordProtectedError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const m = err.message.toLowerCase();
+  return m.includes("password protected") || m.includes("password-protected");
+}
 
 export type PriorDocType =
   | "w2"
@@ -179,6 +186,94 @@ export async function extractTaxDoc(args: {
         },
       };
 
+  let response;
+  try {
+    response = await client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 1500,
+      system: SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [
+            fileBlock,
+            {
+              type: "text",
+              text: `Identify the doc type and extract the fields. Schema:\n${SCHEMA}`,
+            },
+          ],
+        },
+      ],
+    });
+  } catch (err) {
+    if (isPasswordProtectedError(err)) throw new PdfPasswordRequiredError();
+    throw err;
+  }
+
+  const textBlock = response.content.find((c) => c.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Model returned no text content.");
+  }
+  const stripped = textBlock.text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "");
+
+  let parsed: Partial<PriorDocExtraction>;
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    throw new Error(
+      "Model didn't return valid JSON. Try a higher-resolution scan or enter manually.",
+    );
+  }
+
+  const docType: PriorDocType = isPriorDocType(parsed.doc_type)
+    ? parsed.doc_type
+    : "unknown";
+
+  return {
+    doc_type: docType,
+    tax_year: numOrNull(parsed.tax_year),
+    payer_or_employer: trimOrNull(parsed.payer_or_employer, 200),
+    recipient_name: trimOrNull(parsed.recipient_name, 200),
+    fields:
+      parsed.fields && typeof parsed.fields === "object"
+        ? sanitizeFields(parsed.fields as Record<string, unknown>)
+        : {},
+    state_code:
+      typeof parsed.state_code === "string"
+        ? parsed.state_code.toUpperCase().slice(0, 2) || null
+        : null,
+    confidence: clamp01(parsed.confidence ?? 0),
+    notes: trimOrNull(parsed.notes, 500),
+  };
+}
+
+/**
+ * Variant that takes already-rendered page images (PNGs from the PDF
+ * decryption step). Used after the user unlocks a password-protected
+ * PDF via the popup; we render the pages server-side and ship them
+ * to Claude as image content blocks instead of as a sealed PDF.
+ */
+export async function extractTaxDocFromImagePages(args: {
+  pages: Array<{ base64: string }>;
+}): Promise<PriorDocExtraction> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured on the server.");
+  }
+  const client = new Anthropic({ apiKey });
+
+  const imageBlocks = args.pages.map((p) => ({
+    type: "image" as const,
+    source: {
+      type: "base64" as const,
+      media_type: "image/png" as const,
+      data: p.base64,
+    },
+  }));
+
   const response = await client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 1500,
@@ -187,10 +282,10 @@ export async function extractTaxDoc(args: {
       {
         role: "user",
         content: [
-          fileBlock,
+          ...imageBlocks,
           {
             type: "text",
-            text: `Identify the doc type and extract the fields. Schema:\n${SCHEMA}`,
+            text: `Identify the doc type and extract the fields from the page(s) above. If multiple pages are provided, find the page with the actual tax form and extract from there. Schema:\n${SCHEMA}`,
           },
         ],
       },
@@ -215,9 +310,7 @@ export async function extractTaxDoc(args: {
     );
   }
 
-  const docType: PriorDocType = isPriorDocType(parsed.doc_type)
-    ? parsed.doc_type
-    : "unknown";
+  const docType: PriorDocType = isPriorDocType(parsed.doc_type) ? parsed.doc_type : "unknown";
 
   return {
     doc_type: docType,

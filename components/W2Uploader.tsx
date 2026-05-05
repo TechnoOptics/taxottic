@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { PdfPasswordPrompt } from "./PdfPasswordPrompt";
 
 type W2Result = {
   wages_cents: number | null;
@@ -46,7 +47,19 @@ export function W2Uploader({ who, onApply }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<W2Result | null>(null);
+  // When the server returns 422 with pdf_password_required we stash the
+  // file, pop the password modal, and retry on submit.
+  const [pendingPasswordFile, setPendingPasswordFile] = useState<File | null>(null);
+  const [wrongAttempt, setWrongAttempt] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function uploadOnce(file: File, password?: string) {
+    const fd = new FormData();
+    fd.set("file", file);
+    if (password) fd.set("password", password);
+    const res = await fetch("/api/w2/extract", { method: "POST", body: fd });
+    return res;
+  }
 
   async function handleFile(file: File) {
     setError(null);
@@ -57,12 +70,15 @@ export function W2Uploader({ who, onApply }: Props) {
     }
     setPending(true);
     try {
-      const fd = new FormData();
-      fd.set("file", file);
-      const res = await fetch("/api/w2/extract", {
-        method: "POST",
-        body: fd,
-      });
+      const res = await uploadOnce(file);
+      if (res.status === 422) {
+        const body = await res.json().catch(() => ({}));
+        if (body?.error === "pdf_password_required") {
+          setPendingPasswordFile(file);
+          setWrongAttempt(false);
+          return;
+        }
+      }
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.error ?? `Upload failed (${res.status})`);
@@ -71,6 +87,35 @@ export function W2Uploader({ who, onApply }: Props) {
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Extraction failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitWithPassword(password: string) {
+    if (!pendingPasswordFile) return;
+    const file = pendingPasswordFile;
+    setError(null);
+    setPending(true);
+    try {
+      const res = await uploadOnce(file, password);
+      if (res.status === 422) {
+        const body = await res.json().catch(() => ({}));
+        if (body?.error === "pdf_password_required") {
+          setWrongAttempt(true);
+          return;
+        }
+      }
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error ?? `Upload failed (${res.status})`);
+      }
+      const data = (await res.json()) as W2Result;
+      setResult(data);
+      setPendingPasswordFile(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Extraction failed");
+      setPendingPasswordFile(null);
     } finally {
       setPending(false);
     }
@@ -127,6 +172,18 @@ export function W2Uploader({ who, onApply }: Props) {
 
       {error ? (
         <p className="mt-3 text-sm text-red-700">{error}</p>
+      ) : null}
+
+      {pendingPasswordFile ? (
+        <PdfPasswordPrompt
+          fileName={pendingPasswordFile.name}
+          wrongAttempt={wrongAttempt}
+          onSubmit={submitWithPassword}
+          onCancel={() => {
+            setPendingPasswordFile(null);
+            setWrongAttempt(false);
+          }}
+        />
       ) : null}
 
       {result ? (

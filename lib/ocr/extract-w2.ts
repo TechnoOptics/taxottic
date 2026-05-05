@@ -16,6 +16,24 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
+/**
+ * Thrown when Anthropic refuses a PDF for being password-locked.
+ * The route handler maps this to an HTTP 422 with a structured body so
+ * the UI can pop a password prompt and retry with the unlocked images.
+ */
+export class PdfPasswordRequiredError extends Error {
+  constructor() {
+    super("This PDF is password protected.");
+    this.name = "PdfPasswordRequiredError";
+  }
+}
+
+function isPasswordProtectedError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const m = err.message.toLowerCase();
+  return m.includes("password protected") || m.includes("password-protected");
+}
+
 export type W2Extraction = {
   // Box 1
   wages_cents: number | null;
@@ -122,23 +140,29 @@ export async function extractW2FromImage(args: {
         },
       };
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 1024,
-    system: SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: [
-          fileBlock,
-          {
-            type: "text",
-            text: `Extract the W-2 fields. Schema:\n${SCHEMA}`,
-          },
-        ],
-      },
-    ],
-  });
+  let response;
+  try {
+    response = await client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 1024,
+      system: SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [
+            fileBlock,
+            {
+              type: "text",
+              text: `Extract the W-2 fields. Schema:\n${SCHEMA}`,
+            },
+          ],
+        },
+      ],
+    });
+  } catch (err) {
+    if (isPasswordProtectedError(err)) throw new PdfPasswordRequiredError();
+    throw err;
+  }
 
   const textBlock = response.content.find((c) => c.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -170,6 +194,92 @@ export async function extractW2FromImage(args: {
     social_security_tax_withheld_cents: numOrNull(
       parsed.social_security_tax_withheld_cents,
     ),
+    medicare_wages_cents: numOrNull(parsed.medicare_wages_cents),
+    medicare_tax_withheld_cents: numOrNull(parsed.medicare_tax_withheld_cents),
+    state_wages_cents: numOrNull(parsed.state_wages_cents),
+    state_income_tax_cents: numOrNull(parsed.state_income_tax_cents),
+    state_code:
+      typeof parsed.state_code === "string"
+        ? parsed.state_code.toUpperCase().slice(0, 2) || null
+        : null,
+    employer_name:
+      typeof parsed.employer_name === "string" && parsed.employer_name.trim()
+        ? parsed.employer_name.trim().slice(0, 200)
+        : null,
+    tax_year: numOrNull(parsed.tax_year),
+    confidence: clamp01(parsed.confidence ?? 0),
+    notes:
+      typeof parsed.notes === "string" && parsed.notes.trim()
+        ? parsed.notes.trim().slice(0, 500)
+        : null,
+  };
+}
+
+/**
+ * Variant that takes already-rendered page images (PNGs from the PDF
+ * decryption step) instead of a single PDF blob. Used when the user
+ * unlocks a password-protected PDF via the popup; we render the pages
+ * server-side and then send them to Claude as image content blocks.
+ */
+export async function extractW2FromImagePages(args: {
+  pages: Array<{ base64: string }>;
+}): Promise<W2Extraction> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured on the server.");
+  }
+  const client = new Anthropic({ apiKey });
+
+  const imageBlocks = args.pages.map((p) => ({
+    type: "image" as const,
+    source: {
+      type: "base64" as const,
+      media_type: "image/png" as const,
+      data: p.base64,
+    },
+  }));
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-5",
+    max_tokens: 1024,
+    system: SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content: [
+          ...imageBlocks,
+          {
+            type: "text",
+            text: `Extract the W-2 fields from the page(s) above. If multiple pages are provided, prefer the page that has the actual W-2 form. Schema:\n${SCHEMA}`,
+          },
+        ],
+      },
+    ],
+  });
+
+  const textBlock = response.content.find((c) => c.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Model returned no text content.");
+  }
+  const raw = textBlock.text.trim();
+  const stripped = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "");
+
+  let parsed: Partial<W2Extraction>;
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    throw new Error(
+      "Model didn't return valid JSON. Try uploading a higher-resolution image or use the manual entry form instead.",
+    );
+  }
+
+  return {
+    wages_cents: numOrNull(parsed.wages_cents),
+    federal_income_tax_withheld_cents: numOrNull(parsed.federal_income_tax_withheld_cents),
+    social_security_wages_cents: numOrNull(parsed.social_security_wages_cents),
+    social_security_tax_withheld_cents: numOrNull(parsed.social_security_tax_withheld_cents),
     medicare_wages_cents: numOrNull(parsed.medicare_wages_cents),
     medicare_tax_withheld_cents: numOrNull(parsed.medicare_tax_withheld_cents),
     state_wages_cents: numOrNull(parsed.state_wages_cents),
