@@ -64,6 +64,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Marketing-friendly URLs we hand to firms in the proposal. Both
+  // land on the existing public booking form with the firm audience
+  // pre-selected. Permanent (308) so the cleaner URL is what crawlers
+  // remember.
+  async redirects() {
+    return [
+      { source: "/firms", destination: "/book?for=firm", permanent: true },
+      { source: "/firms/order", destination: "/book?for=firm", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;
