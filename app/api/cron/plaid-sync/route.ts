@@ -6,10 +6,14 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Hourly cron: sync every active Plaid connection so transactions
- * land in the forecast even if the user never touches the banks page
- * and even if Plaid's webhook gets dropped (which happens on
- * occasion - retries are best-effort).
+ * Daily cron: walk every active Plaid connection and ask the
+ * sync function to refresh it. The function itself enforces a
+ * monthly cost throttle (see lib/plaid/sync.ts), so most days
+ * each connection short-circuits without an API call. The reason
+ * we still run daily — instead of monthly — is failure recovery:
+ * if the first-of-month run fails (Plaid outage, transient 5xx),
+ * the next day's run will retry because last_synced_at is only
+ * updated on a successful sync.
  *
  * Auth: header `x-vercel-cron` is set by Vercel for scheduled
  * invocations. We additionally accept Authorization: Bearer

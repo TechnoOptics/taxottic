@@ -15,12 +15,21 @@ import { decryptBankToken } from "@/lib/crypto/bankTokens";
  * safe. Account upserts happen first because transactions FK to
  * account rows.
  *
- * Returns counts for telemetry. Caller is responsible for updating
- * `last_synced_at` and `status`.
+ * Cost throttle: by default we sync at most once per calendar month
+ * per connection. This is a tax-forecasting product, not a real-time
+ * balance app, so monthly granularity is enough for the user's needs
+ * and keeps Plaid TRANSACTIONS:SYNC spend predictable. Pass
+ * `{ force: true }` for user-initiated refreshes (the manual "Sync
+ * now" button) and the very first sync after a new connection — both
+ * legitimate cases where the throttle would otherwise be wrong.
+ *
+ * Returns counts for telemetry plus a `skipped` flag set when the
+ * monthly throttle short-circuited the run.
  */
 export async function syncPlaidConnection(
   admin: SupabaseClient,
   connectionId: string,
+  options: { force?: boolean } = {},
 ): Promise<{
   added: number;
   modified: number;
@@ -29,9 +38,35 @@ export async function syncPlaidConnection(
   applied: number;
   applied_income: number;
   applied_expense: number;
+  skipped?: boolean;
 }> {
   const plaid = getPlaidClient();
   if (!plaid) throw new Error("Plaid client not configured");
+
+  // Monthly throttle. Skip the Plaid round-trip entirely if we already
+  // synced this connection within the current calendar month, unless
+  // the caller explicitly forces a refresh. The check happens before
+  // any Plaid API call so a skipped run is genuinely free.
+  if (!options.force) {
+    const { data: existing } = await admin
+      .from("bank_connections")
+      .select("last_synced_at")
+      .eq("id", connectionId)
+      .maybeSingle();
+    const lastSyncedAt = existing?.last_synced_at as string | null;
+    if (lastSyncedAt && isSameCalendarMonthUtc(lastSyncedAt, new Date())) {
+      return {
+        added: 0,
+        modified: 0,
+        removed: 0,
+        accounts: 0,
+        applied: 0,
+        applied_income: 0,
+        applied_expense: 0,
+        skipped: true,
+      };
+    }
+  }
 
   const { data: secret } = await admin
     .from("bank_connection_secrets")
@@ -348,6 +383,15 @@ async function upsertTx(
     });
   if (!error) n = count ?? rows.length;
   return n;
+}
+
+function isSameCalendarMonthUtc(iso: string, now: Date): boolean {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return false;
+  return (
+    d.getUTCFullYear() === now.getUTCFullYear() &&
+    d.getUTCMonth() === now.getUTCMonth()
+  );
 }
 
 async function removeTx(
