@@ -5,6 +5,8 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
+import { YearEndSuggestionsCard } from "@/components/YearEndSuggestionsCard";
+import { buildYearEndSuggestions } from "@/lib/tax/year-end-suggestions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import {
   ABOVE_THE_LINE_CODES,
@@ -399,6 +401,40 @@ export default async function ForecastPage({ params }: { params: Params }) {
   }
   const scorecard = buildScorecard({ eligible, capturedByCode, categoryMeta });
 
+  // Year-end suggestions: built off the projected forecast + a few buckets
+  // of YTD context (which above-the-line items has the user already logged?
+  // What's their vehicle / home-office posture?).
+  const ytdRetirementContributionsCents =
+    sumOneOff(expenses, (r) => r.category_code === "retirement_self") +
+    ytdOfMonthly(
+      monthlyForExpenses((r) => r.category_code === "retirement_self"),
+      currentMonth,
+    );
+  const ytdSelfEmployedHealthCents =
+    sumOneOff(expenses, (r) => r.category_code === "self_employed_health") +
+    ytdOfMonthly(
+      monthlyForExpenses((r) => r.category_code === "self_employed_health"),
+      currentMonth,
+    );
+  const suggestions = buildYearEndSuggestions({
+    result,
+    filingStatus: taxProfile.filing_status as FilingStatus,
+    entityType: (company.entity_type ?? "sole_prop") as EntityType,
+    publicId,
+    ytdRetirementContributionsCents,
+    ytdSelfEmployedHealthCents,
+    hasVehicle: businessProfile?.has_vehicle ?? null,
+    vehicleBusinessMiles: businessProfile?.vehicle_business_miles ?? null,
+    vehicleMethod:
+      (businessProfile?.vehicle_method as "standard" | "actual" | null) ??
+      null,
+    hasHomeOffice: businessProfile?.has_home_office ?? null,
+    homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
+    itemize: taxProfile.itemize,
+    ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
+    currentMonth,
+  });
+
   return (
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
@@ -621,6 +657,68 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+
+        {/* Year-end suggestions: personalized moves the user can still make. */}
+        <YearEndSuggestionsCard suggestions={suggestions} />
+
+        {/* Quarterly estimated payment schedule */}
+        {result.quarterlyEstimates.some((q) => q.amountCents > 0) ? (
+          <div className="mt-6 card p-6 sm:p-7">
+            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+              Quarterly estimates
+            </div>
+            <h2 className="display mt-1 text-xl text-forest-900">
+              Pay-as-you-go schedule
+            </h2>
+            <p className="mt-1 text-sm text-ink-soft leading-relaxed max-w-xl">
+              The IRS expects taxes throughout the year, not just on April 15.
+              W-2 withholding counts as if it were paid evenly across all
+              four quarters; the table below shows what to send for each one.
+            </p>
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {result.quarterlyEstimates.map((q) => (
+                <div
+                  key={q.quarter}
+                  className={
+                    "rounded-xl border p-4 " +
+                    (q.isPast
+                      ? "bg-cream/50 border-forest-100 text-forest-900"
+                      : "bg-white border-gold-300/60 text-forest-900")
+                  }
+                >
+                  <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em]">
+                    <span className={q.isPast ? "text-ink-muted" : "text-gold-700"}>
+                      Q{q.quarter}
+                    </span>
+                    {q.isPast ? (
+                      <span className="text-ink-muted">Past</span>
+                    ) : null}
+                  </div>
+                  <div className="display text-lg sm:text-xl mt-1 tabular-nums">
+                    {formatCents(q.amountCents)}
+                  </div>
+                  <div className="text-[11px] text-ink-muted mt-1">
+                    Due {formatQuarterlyDate(q.dueDate)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-ink-muted leading-relaxed">
+              Pay online at{" "}
+              <a
+                href="https://www.irs.gov/payments"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-forest-700"
+              >
+                IRS Direct Pay
+              </a>
+              . Past-quarter amounts are what you should have paid by then —
+              if you missed them, sending the catch-up before the next due
+              date trims any underpayment penalty.
+            </p>
           </div>
         ) : null}
 
@@ -973,6 +1071,16 @@ function uniqueMonths(months: number[]): number {
 
 function pct(rate: number): string {
   return (rate * 100).toFixed(1) + "%";
+}
+
+function formatQuarterlyDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function prettyEntity(t: EntityType): string {
