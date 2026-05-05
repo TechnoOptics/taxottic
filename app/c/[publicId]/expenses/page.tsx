@@ -4,6 +4,7 @@ import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 import { addExpense, deleteExpense } from "./actions";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
+import { ReceiptUploader } from "@/components/ReceiptUploader";
 
 const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
@@ -65,6 +66,28 @@ export default async function ExpensesPage({ params }: { params: Params }) {
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="expenses" />
+        </div>
+
+        <div className="card mt-6 p-6">
+          <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                Receipts
+              </div>
+              <h2 className="display mt-1 text-xl text-forest-900">
+                Snap a receipt, save in seconds
+              </h2>
+            </div>
+          </div>
+          <div className="mt-3">
+            <ReceiptUploader
+              companyId={company.id}
+              taxYear={taxYear}
+              currentMonth={currentMonth}
+              categories={(categories as CategoryRow[] | null) ?? []}
+              action={addExpense}
+            />
+          </div>
         </div>
 
         <div className="card mt-6 p-6">
