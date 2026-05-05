@@ -12,29 +12,25 @@
 import { createCanvas } from "@napi-rs/canvas";
 import {
   getDocument,
-  GlobalWorkerOptions,
   type PDFDocumentProxy,
   type PDFPageProxy,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-// pdfjs 5.x always wants a worker. On Node it spins up a "fake worker"
-// that just runs the worker code on the main thread, but the loader
-// still complains if `workerSrc` is empty. We resolve the worker path
-// lazily on first use because top-level resolve() crashes Next's build-
-// time page-data collector under Turbopack.
-let workerInitialized = false;
-async function ensureWorkerSrc() {
-  if (workerInitialized) return;
-  const { createRequire } = await import("node:module");
-  const { pathToFileURL } = await import("node:url");
-  const req = createRequire(import.meta.url);
-  // pdfjs validates workerSrc by passing it to `new URL(...)` — on
-  // Windows a bare filesystem path with backslashes doesn't parse,
-  // and even on Linux pdfjs prefers an explicit file:// URL. Convert
-  // the resolved path to a URL string before assigning.
-  const resolvedPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
-  GlobalWorkerOptions.workerSrc = pathToFileURL(resolvedPath).href;
-  workerInitialized = true;
+// Import the worker module for its side effects only. pdfjs detects
+// that the worker code is loaded into the same process and runs in
+// "fake worker" mode without needing GlobalWorkerOptions.workerSrc
+// or a real Worker thread. This is the idiomatic Node-side pattern;
+// the explicit workerSrc path approach we tried first kept tripping
+// over pdfjs's internal worker-handle plumbing on Vercel's runtime.
+//
+// Wrapped in a lazy ensureWorker() so Next's build-time page-data
+// collector doesn't try to evaluate the worker module statically.
+let workerLoaded = false;
+async function ensureWorker() {
+  if (workerLoaded) return;
+  // @ts-expect-error pdfjs-dist doesn't ship .d.ts for the worker module.
+  await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  workerLoaded = true;
 }
 
 /** Thrown when the user-supplied password is wrong (or missing). */
@@ -71,7 +67,7 @@ export async function decryptAndRenderPdf(
   password: string,
   scale = 2.0,
 ): Promise<RenderedPage[]> {
-  await ensureWorkerSrc();
+  await ensureWorker();
 
   let doc: PDFDocumentProxy;
   try {
