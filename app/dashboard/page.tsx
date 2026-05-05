@@ -63,12 +63,22 @@ export default async function DashboardPage() {
     ? undefined
     : "Free plan supports 1 company. Upgrade to Pro for unlimited.";
 
-  // Personalized greeting (full name from profile, falls back to email handle).
+  // Personalized greeting + filer-type fork. New signups land on the
+  // dashboard before they've picked W-2 vs business; route them to
+  // /onboarding/filer-type. W-2 users get sent to the personal-mode
+  // forecast since the company-centric dashboard wouldn't show them
+  // anything useful.
   const { data: profile } = await admin
     .from("profiles")
-    .select("full_name, tour_completed_at")
+    .select("full_name, tour_completed_at, tax_filer_type")
     .eq("id", user.id)
     .maybeSingle();
+  if (profile && !profile.tax_filer_type) {
+    redirect("/onboarding/filer-type");
+  }
+  if (profile?.tax_filer_type === "w2") {
+    redirect("/personal/forecast");
+  }
   const greeting = buildGreeting({
     fullName: profile?.full_name,
     email: user.email,

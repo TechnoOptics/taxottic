@@ -1,0 +1,257 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { AppHeader } from "@/components/AppHeader";
+import { requireUserWithAdmin } from "@/lib/auth";
+import {
+  forecast,
+  formatCents,
+  type ForecastInput,
+  type ForecastResult,
+} from "@/lib/tax/forecast";
+import type { FilingStatus } from "@/lib/tax/constants-2025";
+
+/**
+ * Personal-mode forecast for W-2 / wage-earner users.
+ *
+ * The same forecast engine drives this — we just feed it zero
+ * Schedule C income and the user's W-2 wages + spouse W-2 (already
+ * supported, including household-level Additional Medicare and NIIT).
+ *
+ * No company is required. If the user has business income they
+ * eventually create a company; that flips them to 'business' filer
+ * type and kicks them over to /c/[publicId]/forecast.
+ */
+export default async function PersonalForecastPage() {
+  const { admin, user } = await requireUserWithAdmin();
+  const taxYear = new Date().getUTCFullYear();
+
+  const { data: taxProfile } = await admin
+    .from("tax_profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("tax_year", taxYear)
+    .maybeSingle();
+  if (!taxProfile) {
+    redirect(`/onboarding/tax-profile?next=/personal/forecast`);
+  }
+
+  const input: ForecastInput = {
+    taxYear,
+    filingStatus: taxProfile.filing_status as FilingStatus,
+    stateCode: taxProfile.state_code,
+    age: taxProfile.age,
+    isBlind: taxProfile.is_blind,
+    itemize: taxProfile.itemize,
+    dependents: taxProfile.dependents,
+    dependentsUnder17: taxProfile.dependents_under_17 ?? 0,
+    spouseIncomeCents: taxProfile.spouse_income_cents ?? 0,
+    estimatedPaymentsCents: taxProfile.estimated_payments_cents ?? 0,
+    ownerW2WagesCents: taxProfile.owner_w2_wages_cents ?? 0,
+    ownerW2WithheldCents: taxProfile.owner_w2_withheld_cents ?? 0,
+    ownerW2SsWagesCents: taxProfile.owner_w2_ss_wages_cents ?? 0,
+    spouseW2WagesCents: taxProfile.spouse_w2_wages_cents ?? 0,
+    spouseW2WithheldCents: taxProfile.spouse_w2_withheld_cents ?? 0,
+    spouseW2SsWagesCents: taxProfile.spouse_w2_ss_wages_cents ?? 0,
+    entityType: "self_employed_1099",
+    ytdIncomeCents: 0,
+    ytdBusinessExpensesCents: 0,
+    ytdMealsCents: 0,
+    ytdAboveTheLineCents: 0,
+    ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
+    autoMileageCents: 0,
+    autoHomeOfficeCents: 0,
+    monthsEntered: 12,
+    ytdInvestmentIncomeCents: 0,
+  };
+
+  const result: ForecastResult = forecast(input);
+
+  return (
+    <main className="min-h-screen">
+      <AppHeader email={user.email ?? undefined} />
+      <section className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+          Personal · Tax year {taxYear}
+        </div>
+        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
+          Your year-end picture
+        </h1>
+        <p className="mt-2 text-sm text-ink-soft max-w-xl leading-relaxed">
+          Based on your filing status, household W-2 wages, and itemized
+          totals. We project to year-end and apply 2025 federal rules. Update
+          your tax profile any time to refine.
+        </p>
+
+        <div className="card mt-7 p-6 sm:p-9">
+          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+            Year-end estimate
+          </div>
+          <h2 className="display mt-2 text-2xl sm:text-3xl text-forest-900 leading-tight">
+            You&apos;re projecting{" "}
+            <span className="gold-shine">{formatCents(result.totalTaxCents)}</span>{" "}
+            in total federal + state tax for the year.
+          </h2>
+
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Stat
+              label="Already paid (withholding + estimates)"
+              value={formatCents(result.alreadyPaidCents)}
+            />
+            <Stat
+              label={result.stillOwedCents > 0 ? "Still owed" : "Refund expected"}
+              value={formatCents(Math.max(result.stillOwedCents, 0))}
+              accent
+            />
+            <Stat
+              label="Marginal rate"
+              value={(result.marginalRate * 100).toFixed(1) + "%"}
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card title="Federal income tax">
+            <BigNumber>{formatCents(result.federalIncomeTaxCents)}</BigNumber>
+            <KV label="Taxable income" value={formatCents(result.taxableIncomeCents)} />
+            {result.childAndDependentCreditsCents > 0 ? (
+              <KV
+                label="Family credits"
+                value={`- ${formatCents(result.childAndDependentCreditsCents)}`}
+              />
+            ) : null}
+            <KV label="Effective rate" value={(result.effectiveRate * 100).toFixed(1) + "%"} />
+          </Card>
+          <Card title="State">
+            <BigNumber>{formatCents(result.stateTaxCents)}</BigNumber>
+            <KV label="State" value={taxProfile.state_code ?? "Not set"} />
+            <KV label="Method" value="Flat-rate estimate" />
+          </Card>
+          <Card title="Other surtaxes">
+            <BigNumber>
+              {formatCents(result.additionalMedicareCents + result.niitCents)}
+            </BigNumber>
+            <KV
+              label="Additional Medicare 0.9%"
+              value={formatCents(result.additionalMedicareCents)}
+            />
+            <KV label="NIIT 3.8%" value={formatCents(result.niitCents)} />
+          </Card>
+        </div>
+
+        {result.hints.length > 0 ? (
+          <div className="card mt-6 p-6 border-gold-300/60">
+            <h2 className="display text-base text-forest-900">Notes from Bella</h2>
+            <ul className="mt-3 grid gap-2">
+              {result.hints.map((h, i) => (
+                <li key={i} className="text-sm text-ink-soft leading-relaxed flex gap-2">
+                  <span className="text-gold-700">•</span>
+                  <span>{h}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link
+            href="/onboarding/tax-profile?next=/personal/forecast"
+            className="card card-hover p-5 flex items-start gap-3"
+          >
+            <div>
+              <div className="display text-base text-forest-900">
+                Update household profile
+              </div>
+              <p className="mt-1 text-xs text-ink-muted leading-relaxed">
+                W-2 wages, withholding, dependents, itemized totals.
+              </p>
+            </div>
+            <span className="ml-auto text-ink-muted">→</span>
+          </Link>
+          <Link
+            href="/onboarding/new-company?next=/dashboard"
+            className="card card-hover p-5 flex items-start gap-3 border-gold-300/60"
+          >
+            <div>
+              <div className="display text-base text-forest-900">
+                Started a side hustle?
+              </div>
+              <p className="mt-1 text-xs text-ink-muted leading-relaxed">
+                Add a business and unlock Schedule C forecasting, quarterly
+                estimates, and Plaid bank sync.
+              </p>
+            </div>
+            <span className="ml-auto text-ink-muted">→</span>
+          </Link>
+        </div>
+
+        <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
+          Personal forecast uses 2025 federal brackets, household-level
+          Additional Medicare (Form 8959), Net Investment Income Tax (Form
+          8960), and a curated state rate. Educational guidance only — talk
+          with a CPA for binding decisions.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={
+        accent
+          ? "rounded-xl bg-forest-800 text-cream p-4"
+          : "rounded-xl bg-white border border-forest-100 p-4"
+      }
+    >
+      <div
+        className={
+          accent
+            ? "text-[10px] uppercase tracking-[0.2em] text-gold-300"
+            : "text-[10px] uppercase tracking-[0.2em] text-gold-700"
+        }
+      >
+        {label}
+      </div>
+      <div
+        className={
+          accent
+            ? "display text-2xl mt-1 text-cream"
+            : "display text-2xl mt-1 text-forest-900"
+        }
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="card p-6">
+      <h2 className="text-xs uppercase tracking-[0.2em] text-gold-700">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function BigNumber({ children }: { children: React.ReactNode }) {
+  return <div className="display text-3xl text-forest-900 mt-2">{children}</div>;
+}
+
+function KV({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-sm py-1.5 border-b last:border-b-0 border-forest-50">
+      <span className="text-ink-muted">{label}</span>
+      <span className="text-forest-900 font-medium">{value}</span>
+    </div>
+  );
+}
