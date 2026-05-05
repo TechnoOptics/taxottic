@@ -138,7 +138,10 @@ export async function POST(req: NextRequest) {
   // the UI can show a reconnect prompt instead of pretending it's
   // healthy.
   try {
-    const result = await syncPlaidConnection(admin, connection.id);
+    // force:true — initial sync after a brand-new connection has to
+    // run regardless of the monthly throttle, otherwise the user
+    // would see "no transactions" until next month's window.
+    const result = await syncPlaidConnection(admin, connection.id, { force: true });
     return NextResponse.json({
       ok: true,
       connectionId: connection.id,
