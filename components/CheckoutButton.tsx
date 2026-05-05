@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 
+/**
+ * Single button for any Stripe checkout (subscription tier OR credit
+ * top-up pack). The endpoint figures out which mode based on the key.
+ */
 export function CheckoutButton({
   priceKey,
+  label,
+  variant = "primary",
 }: {
-  priceKey: "pro_monthly" | "pro_yearly";
+  priceKey: string;
+  label: string;
+  variant?: "primary" | "ghost";
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,15 +42,15 @@ export function CheckoutButton({
     <div>
       <button
         type="button"
-        className="btn-primary w-full"
+        className={
+          (variant === "primary" ? "btn-primary" : "btn-ghost") + " w-full"
+        }
         onClick={go}
         disabled={pending}
       >
-        {pending ? "..." : "Upgrade to Pro"}
+        {pending ? "…" : label}
       </button>
-      {error ? (
-        <p className="mt-2 text-xs text-red-700">{error}</p>
-      ) : null}
+      {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}
     </div>
   );
 }

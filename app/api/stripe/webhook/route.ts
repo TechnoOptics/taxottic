@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe/server";
+import { ensureMonthlyGrant, recordTopUp } from "@/lib/plans/credits";
+import { CREDIT_PACKS, type CreditPackKey, type Plan } from "@/lib/plans/limits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,12 +63,16 @@ export async function POST(req: NextRequest) {
         | "incomplete_expired"
         | "unpaid"
         | "paused";
-      const plan: "free" | "pro" =
-        status === "active" || status === "trialing" ? "pro" : "free";
 
-      // Newer Stripe API exposes current_period_end on subscription items
-      // rather than the subscription itself. Read the first item's end.
+      // Resolve which tier this subscription unlocks by mapping the
+      // Stripe price ID back through the env-var price map. Falls
+      // back to the legacy Pro→Solo mapping if env vars aren't set.
       const firstItem = sub.items?.data?.[0];
+      const priceId = firstItem?.price?.id ?? null;
+      const tier = resolveTierFromPriceId(priceId);
+      const plan: Plan =
+        status === "active" || status === "trialing" ? tier : "free";
+
       const periodEndUnix = firstItem?.current_period_end;
       const periodEnd = periodEndUnix
         ? new Date(periodEndUnix * 1000).toISOString()
@@ -86,24 +92,98 @@ export async function POST(req: NextRequest) {
           cancel_at_period_end: sub.cancel_at_period_end,
         })
         .eq("user_id", row.user_id);
+
+      // Grant the new tier's monthly credits (idempotent within 27d).
+      // On a tier change the old grant ages out at the next billing
+      // cycle; we don't double-grant here.
+      if (plan !== "free") {
+        await ensureMonthlyGrant(admin, row.user_id, plan);
+      }
       break;
     }
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      // Subscription will arrive via subscription.created shortly after; we
-      // pre-link the customer if missing.
+      // Pre-link the customer if missing — the subscription event will
+      // arrive shortly with the same customer id.
       if (typeof session.customer === "string" && session.customer_email) {
         await admin
           .from("subscriptions")
           .update({ stripe_customer_id: session.customer })
           .eq("stripe_customer_id", session.customer);
       }
+
+      // Top-up purchases: mode === "payment" and our metadata sets
+      // `topup_pack`. Subscription checkouts have mode === "subscription"
+      // and skip this branch.
+      if (
+        session.mode === "payment" &&
+        session.metadata?.topup_pack &&
+        session.metadata?.user_id &&
+        session.payment_status === "paid"
+      ) {
+        const pack = session.metadata.topup_pack as CreditPackKey;
+        if (pack in CREDIT_PACKS) {
+          await recordTopUp(
+            admin,
+            session.metadata.user_id,
+            pack,
+            session.id, // checkout-session id is unique → idempotency key
+          );
+        }
+      }
+      break;
+    }
+    case "invoice.paid": {
+      // Recurring subscription invoices land here on each renewal.
+      // Re-grant the monthly credits so the user gets a fresh
+      // allowance at every billing period.
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId =
+        typeof invoice.customer === "string"
+          ? invoice.customer
+          : invoice.customer?.id ?? null;
+      if (!customerId) break;
+      const { data: row } = await admin
+        .from("subscriptions")
+        .select("user_id, plan")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle();
+      if (row?.user_id && row.plan && row.plan !== "free") {
+        await ensureMonthlyGrant(admin, row.user_id, row.plan as Plan);
+      }
       break;
     }
     default:
-      // ignore other events
       break;
   }
 
   return NextResponse.json({ received: true });
+}
+
+/**
+ * Look up which plan code a Stripe price ID belongs to. We carry the
+ * map server-side so the webhook never has to trust client metadata.
+ */
+function resolveTierFromPriceId(priceId: string | null): Plan {
+  if (!priceId) return "solo";
+  const env = process.env;
+  const map: Record<string, Plan> = {
+    [env.STRIPE_PRICE_FILER_MONTHLY ?? ""]: "filer",
+    [env.STRIPE_PRICE_FILER_YEARLY ?? ""]: "filer",
+    [env.STRIPE_PRICE_SOLO_MONTHLY ?? ""]: "solo",
+    [env.STRIPE_PRICE_SOLO_YEARLY ?? ""]: "solo",
+    [env.STRIPE_PRICE_STUDIO_MONTHLY ?? ""]: "studio",
+    [env.STRIPE_PRICE_STUDIO_YEARLY ?? ""]: "studio",
+    [env.STRIPE_PRICE_SCALE_MONTHLY ?? ""]: "scale",
+    [env.STRIPE_PRICE_SCALE_YEARLY ?? ""]: "scale",
+    [env.STRIPE_PRICE_PRACTICE_MONTHLY ?? ""]: "practice",
+    [env.STRIPE_PRICE_PRACTICE_YEARLY ?? ""]: "practice",
+    // Legacy Pro prices map to Solo so existing customers don't
+    // suddenly downgrade to free.
+    [env.STRIPE_PRICE_PRO_MONTHLY ?? ""]: "solo",
+    [env.STRIPE_PRICE_PRO_YEARLY ?? ""]: "solo",
+  };
+  // Drop empty-string keys so an unconfigured env var doesn't match.
+  delete map[""];
+  return map[priceId] ?? "solo";
 }

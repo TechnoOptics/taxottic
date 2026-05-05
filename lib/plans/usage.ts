@@ -1,18 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { FEATURE_GATES, type FeatureGates, PLAN_LIMITS, type Plan } from "./limits";
+import {
+  FEATURE_GATES,
+  type FeatureGates,
+  PLAN_LIMITS,
+  type Plan,
+} from "./limits";
 
 /**
- * Resolves the active plan for a user. Defaults to 'free' if the row is missing
- * or the subscription isn't currently active/trialing.
+ * Resolve the active plan for a user. Defaults to 'free' if the row is
+ * missing or the subscription isn't currently active/trialing.
  *
- * Super-admins (forever-allowlist) get 'pro' implicitly.
+ * Super-admins (forever-allowlist) get 'practice' implicitly so they
+ * can exercise every feature without paying.
+ *
+ * Backwards compat: rows whose `plan` column predates the 5-tier
+ * rewrite ('pro', 'team') are normalized to the closest current tier.
  */
 export async function getActivePlan(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<Plan> {
   const { data: superAdmin } = await supabase.rpc("is_super_admin");
-  if (superAdmin) return "pro";
+  if (superAdmin) return "practice";
 
   const { data } = await supabase
     .from("subscriptions")
@@ -21,12 +30,31 @@ export async function getActivePlan(
     .maybeSingle();
   if (!data) return "free";
   if (data.status !== "active" && data.status !== "trialing") return "free";
-  return (data.plan as Plan) ?? "free";
+  return normalizePlan(data.plan);
 }
 
 /**
- * Counts Bella user-role messages this calendar month for a user.
+ * Map legacy plan codes to current tiers. 'pro' → 'solo' (the closest
+ * single-company-priced tier), 'team' → 'studio'. Anything unknown
+ * falls back to 'free'.
  */
+export function normalizePlan(raw: unknown): Plan {
+  switch (raw) {
+    case "filer":
+    case "solo":
+    case "studio":
+    case "scale":
+    case "practice":
+      return raw;
+    case "pro":
+      return "solo";
+    case "team":
+      return "studio";
+    default:
+      return "free";
+  }
+}
+
 export async function countBellaMessagesThisMonth(
   supabase: SupabaseClient,
   userId: string,
@@ -44,10 +72,6 @@ export async function countBellaMessagesThisMonth(
   return count ?? 0;
 }
 
-/**
- * Counts CSV imports created this month, scoped by company. Aggregates across
- * all companies the user is in.
- */
 export async function countCsvImportsThisMonth(
   supabase: SupabaseClient,
   userId: string,
@@ -61,9 +85,6 @@ export async function countCsvImportsThisMonth(
   return count ?? 0;
 }
 
-/**
- * Companies the user is a member of (any role).
- */
 export async function countCompanies(
   supabase: SupabaseClient,
   userId: string,
@@ -75,9 +96,6 @@ export async function countCompanies(
   return count ?? 0;
 }
 
-/**
- * Pending + accepted member rows for a given company (excluding manager).
- */
 export async function countCompanyMembers(
   supabase: SupabaseClient,
   companyId: string,
@@ -92,19 +110,13 @@ export async function countCompanyMembers(
 
 export type LimitCheck =
   | { ok: true; remaining: number; plan: Plan }
-  | { ok: false; reason: "over_limit"; plan: Plan; limit: number; used: number };
-
-export async function checkBellaLimit(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<LimitCheck> {
-  const plan = await getActivePlan(supabase, userId);
-  const limit = PLAN_LIMITS[plan].bellaMessagesPerMonth;
-  if (!Number.isFinite(limit)) return { ok: true, remaining: Infinity, plan };
-  const used = await countBellaMessagesThisMonth(supabase, userId);
-  if (used >= limit) return { ok: false, reason: "over_limit", plan, limit, used };
-  return { ok: true, remaining: limit - used, plan };
-}
+  | {
+      ok: false;
+      reason: "over_limit";
+      plan: Plan;
+      limit: number;
+      used: number;
+    };
 
 export async function checkCsvImportLimit(
   supabase: SupabaseClient,
@@ -114,7 +126,8 @@ export async function checkCsvImportLimit(
   const limit = PLAN_LIMITS[plan].csvImportsPerMonth;
   if (!Number.isFinite(limit)) return { ok: true, remaining: Infinity, plan };
   const used = await countCsvImportsThisMonth(supabase, userId);
-  if (used >= limit) return { ok: false, reason: "over_limit", plan, limit, used };
+  if (used >= limit)
+    return { ok: false, reason: "over_limit", plan, limit, used };
   return { ok: true, remaining: limit - used, plan };
 }
 
@@ -126,7 +139,8 @@ export async function checkCompanyLimit(
   const limit = PLAN_LIMITS[plan].companies;
   if (!Number.isFinite(limit)) return { ok: true, remaining: Infinity, plan };
   const used = await countCompanies(supabase, userId);
-  if (used >= limit) return { ok: false, reason: "over_limit", plan, limit, used };
+  if (used >= limit)
+    return { ok: false, reason: "over_limit", plan, limit, used };
   return { ok: true, remaining: limit - used, plan };
 }
 
@@ -138,17 +152,18 @@ export async function checkInviteLimit(
   const plan = await getActivePlan(supabase, userId);
   const limit = PLAN_LIMITS[plan].invitesPerCompany;
   if (!Number.isFinite(limit)) return { ok: true, remaining: Infinity, plan };
-  if (limit === 0) return { ok: false, reason: "over_limit", plan, limit: 0, used: 0 };
+  if (limit === 0)
+    return { ok: false, reason: "over_limit", plan, limit: 0, used: 0 };
   const used = await countCompanyMembers(supabase, companyId);
-  if (used >= limit) return { ok: false, reason: "over_limit", plan, limit, used };
+  if (used >= limit)
+    return { ok: false, reason: "over_limit", plan, limit, used };
   return { ok: true, remaining: limit - used, plan };
 }
 
 /**
- * Resolve the current user's feature-gate map. The active plan is
- * read once, then mapped through FEATURE_GATES so callers always
- * agree on what's available without each writing its own
- * "if plan === 'free'" branch.
+ * Resolve the current user's feature-gate map. Active plan is read
+ * once, then mapped through FEATURE_GATES so callers don't each write
+ * their own "if plan === ..." branch.
  */
 export async function getActiveFeatureGates(
   supabase: SupabaseClient,
@@ -160,5 +175,7 @@ export async function getActiveFeatureGates(
 
 function monthStartIso(): string {
   const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1),
+  ).toISOString();
 }
