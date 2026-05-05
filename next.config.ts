@@ -49,10 +49,33 @@ const securityHeaders = [
     ].join(", "),
   },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
-  // No CSP by default - we have inline styles and dynamic third-party
-  // origins (Plaid, Anthropic) that need a careful per-route policy. Add
-  // CSP when we have time to enumerate every legitimate source without
-  // breaking the bank-link flow or the in-app SVG icons.
+  // CSP: deliberately permissive on style-src and the inline tags Next.js
+  // emits during hydration, but locked to known origins for script and
+  // connect targets. The list:
+  //   - Plaid Link (cdn.plaid.com + cdn.plaid.cloud) for the bank-link UI.
+  //   - Stripe (js.stripe.com + api.stripe.com) for checkout + portal.
+  //   - Vercel insights (vitals.vercel-insights.com).
+  //   - Supabase (*.supabase.co) for the auth + REST + realtime channels.
+  // 'unsafe-inline' on style-src is required by the Tailwind/CSS-in-JS
+  // pipeline; tightening would mean adding a nonce to every inline style,
+  // which the Tailwind runtime does not currently support.
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.plaid.com https://cdn.plaid.cloud https://js.stripe.com https://*.vercel-insights.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
+      "font-src 'self' data:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.stripe.com https://*.plaid.com https://cdn.plaid.com https://cdn.plaid.cloud https://*.vercel-insights.com",
+      "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://*.plaid.com",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+      "upgrade-insecure-requests",
+    ].join("; "),
+  },
 ];
 
 const nextConfig: NextConfig = {

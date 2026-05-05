@@ -7,6 +7,7 @@ import {
   EXPECTED_ORIGIN,
   RP_ID,
 } from "@/lib/webauthn/config";
+import { checkRateLimit, clientKey } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -14,8 +15,16 @@ export const runtime = "nodejs";
  * Verifies a WebAuthn assertion and, on success, mints a Supabase magic link
  * that the client can navigate to in order to establish the session. The link
  * does the standard /auth/callback exchange, so cookies land normally.
+ *
+ * Rate-limited per source IP: 10 attempts per minute. WebAuthn assertions are
+ * cryptographically expensive to forge, but a flood is still a denial-of-service
+ * vector against the SimpleWebAuthn verifier and the Supabase magic-link mint.
  */
 export async function POST(req: NextRequest) {
+  if (!checkRateLimit(`passkey-verify:${clientKey(req)}`, { capacity: 10, refillPerMinute: 10 })) {
+    return NextResponse.json({ error: "too_many_requests" }, { status: 429 });
+  }
+
   const cookieStore = await cookies();
   const cookieRaw = cookieStore.get(CHALLENGE_COOKIE)?.value;
   if (!cookieRaw) {
