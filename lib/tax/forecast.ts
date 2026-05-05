@@ -38,9 +38,12 @@ import {
   CHILD_TAX_CREDIT_2025,
   FEDERAL_BRACKETS_2025,
   MILEAGE_RATE_2025_PER_MILE_CENTS,
+  NIIT_2025,
   QBI_2025,
+  QUARTERLY_DUE_DATES_2025,
   SE_TAX_2025,
   STANDARD_DEDUCTION_2025,
+  UNDERPAYMENT_SAFE_HARBOR_2025,
   stateRate,
   type FilingStatus,
 } from "./constants-2025";
@@ -110,6 +113,25 @@ export type ForecastInput = {
   autoHomeOfficeCents: number;     // simplified or actual, annualized externally
 
   monthsEntered: number;
+
+  // Investment income (year-to-date): interest, dividends, capital
+  // gains, passive rental. Drives the Net Investment Income Tax (3.8%
+  // surtax) when modified AGI is above the threshold. Optional —
+  // callers without investment data pass 0 and NIIT computes to 0.
+  ytdInvestmentIncomeCents?: number;
+};
+
+export type QuarterlyEstimate = {
+  quarter: 1 | 2 | 3 | 4;
+  /** Calendar date (ISO string yyyy-mm-dd) the IRS estimate is due. */
+  dueDate: string;
+  /** Cents the user should send for this quarter. Already accounts for
+   *  W-2 withholding spread evenly across the year and any estimates
+   *  the user has already paid. Negative or zero means "no payment
+   *  needed this quarter." */
+  amountCents: number;
+  /** True if the due date has already passed at the time of forecast. */
+  isPast: boolean;
 };
 
 export type ForecastResult = {
@@ -118,6 +140,14 @@ export type ForecastResult = {
   projectedNetBusinessIncomeCents: number;
 
   selfEmploymentTaxCents: number;
+  // Additional 0.9% Medicare surcharge on COMBINED wages + SE earnings
+  // above the filing-status threshold. Surfaced separately so the UI
+  // can show why it appeared.
+  additionalMedicareCents: number;
+  // Net Investment Income Tax (3.8% on the lesser of investment income
+  // or modified AGI over threshold). Zero unless investment income was
+  // supplied to the forecast.
+  niitCents: number;
   qbiDeductionCents: number;
   // Total non-refundable family credits applied to federal income tax
   // (CTC + ODC, after phase-out). Reported separately so the UI can
@@ -134,6 +164,14 @@ export type ForecastResult = {
   monthlySaveTargetCents: number;
   effectiveRate: number;
   marginalRate: number;
+
+  // Quarterly estimated-tax payment plan. Length 4. Past quarters
+  // surface what the user *should have* paid by that date so they
+  // can self-assess whether they're behind on safe-harbor.
+  quarterlyEstimates: QuarterlyEstimate[];
+  /** True if alreadyPaid is below 90% of total tax; user owes a
+   *  catch-up to dodge the underpayment penalty. */
+  underpaymentRisk: boolean;
 
   // Year-to-date "as of today" snapshot (no projection): handy for the
   // "what you've actually earned vs. what you'll owe at this pace" UI.
@@ -209,31 +247,41 @@ export function forecast(input: ForecastInput): ForecastResult {
     const totalTax = cTax + stTax;
     const w2WithheldTotal =
       input.ownerW2WithheldCents + input.spouseW2WithheldCents;
-    const remaining = Math.max(
-      0,
-      totalTax - input.estimatedPaymentsCents - w2WithheldTotal,
-    );
+    const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
+    const remaining = Math.max(0, totalTax - alreadyPaid);
     const monthsRemaining = remainingMonthsToFilingDeadline(input.taxYear);
     const monthlySaveTarget = Math.round(remaining / monthsRemaining);
     hints.push(
       "C-Corp: a flat 21% federal rate is applied to net business income at the entity level. Personal taxes on dividends or wages are separate.",
     );
+    const quarterlyEstimates = buildQuarterlyEstimates({
+      taxYear: input.taxYear,
+      totalTaxCents: totalTax,
+      w2WithheldCents: w2WithheldTotal,
+      estimatedPaymentsCents: input.estimatedPaymentsCents,
+    });
+    const underpaymentRisk =
+      alreadyPaid < Math.round(totalTax * UNDERPAYMENT_SAFE_HARBOR_2025.currentYearShare);
     return {
       projectedIncomeCents: projectedIncome,
       projectedExpensesCents: projectedExpenses,
       projectedNetBusinessIncomeCents: netBiz,
       selfEmploymentTaxCents: 0,
+      additionalMedicareCents: 0,
+      niitCents: 0,
       qbiDeductionCents: 0,
       childAndDependentCreditsCents: 0,
       taxableIncomeCents: netBiz,
       federalIncomeTaxCents: cTax,
       stateTaxCents: stTax,
       totalTaxCents: totalTax,
-      alreadyPaidCents: input.estimatedPaymentsCents + w2WithheldTotal,
+      alreadyPaidCents: alreadyPaid,
       stillOwedCents: remaining,
       monthlySaveTargetCents: monthlySaveTarget,
       effectiveRate: projectedIncome > 0 ? totalTax / projectedIncome : 0,
       marginalRate: C_CORP_RATE,
+      quarterlyEstimates,
+      underpaymentRisk,
       ytdIncomeCents: input.ytdIncomeCents,
       ytdDeductibleExpensesCents: ytdDeductibleExpenses,
       ytdNetBusinessIncomeCents: ytdNetBiz,
@@ -251,12 +299,14 @@ export function forecast(input: ForecastInput): ForecastResult {
   // portion of SE tax. Spouse W-2 SS wages do NOT count - the wage base
   // is per-person.
   let seTax = 0;
+  let seEarningsForAddtlMedicare = 0;
   if (SE_ENTITY_TYPES.has(input.entityType)) {
-    seTax = computeSelfEmploymentTax({
+    const result = computeSelfEmploymentTax({
       netBizCents: netBiz,
-      filingStatus: input.filingStatus,
       ownerW2SsWagesCents: input.ownerW2SsWagesCents,
     });
+    seTax = result.totalSeTax;
+    seEarningsForAddtlMedicare = result.seEarnings;
     assumptions.push(
       "Self-employment tax: 12.4% Social Security up to the $176,100 wage base + 2.9% Medicare uncapped, on 92.35% of net earnings (IRC §1401).",
     );
@@ -269,6 +319,29 @@ export function forecast(input: ForecastInput): ForecastResult {
   if (input.entityType === "s_corp") {
     hints.push(
       "S-Corp owner-employees pay payroll tax on reasonable W-2 wages instead of SE tax. Track W-2 wages separately.",
+    );
+  }
+
+  // Additional Medicare 0.9% surtax. IRC §3101(b)(2) / §1401(b)(2).
+  // Applies to COMBINED Medicare-base wages + SE earnings above the
+  // filing-status threshold. The employer withholds 0.9% on wages over
+  // $200K from a single employer; whatever the employer didn't catch
+  // (e.g. household has two W-2s, or wage + SE combo crosses) shows up
+  // here so the user sees the right "still owed" number.
+  const combinedMedicareIncome =
+    input.ownerW2WagesCents + input.spouseW2WagesCents + seEarningsForAddtlMedicare;
+  const addtlMedicareThreshold =
+    SE_TAX_2025.additionalMedicareThreshold[input.filingStatus] ?? 0;
+  const additionalMedicare =
+    combinedMedicareIncome > addtlMedicareThreshold
+      ? Math.round(
+          (combinedMedicareIncome - addtlMedicareThreshold) *
+            SE_TAX_2025.additionalMedicareRate,
+        )
+      : 0;
+  if (additionalMedicare > 0) {
+    assumptions.push(
+      "Additional Medicare 0.9% surtax applied to wages + SE earnings above the filing-status threshold (Form 8959).",
     );
   }
 
@@ -367,7 +440,28 @@ export function forecast(input: ForecastInput): ForecastResult {
     );
   }
 
-  const totalTax = fedTax + seTax + stTax;
+  // Net Investment Income Tax (NIIT). IRC §1411 — 3.8% on the lesser
+  // of net investment income or modified AGI over the threshold.
+  // Investment income: interest, dividends, capital gains, passive
+  // rental. Caller passes ytdInvestmentIncomeCents; we project it the
+  // same way as ordinary income.
+  const projectedInvestmentIncome = round(
+    Math.max(0, input.ytdInvestmentIncomeCents ?? 0) * projectionFactor,
+  );
+  let niit = 0;
+  if (projectedInvestmentIncome > 0) {
+    const niitThreshold = NIIT_2025.threshold[input.filingStatus] ?? 0;
+    const agiOverThreshold = Math.max(0, agi - niitThreshold);
+    const niitBase = Math.min(projectedInvestmentIncome, agiOverThreshold);
+    niit = Math.round(niitBase * NIIT_2025.rate);
+    if (niit > 0) {
+      assumptions.push(
+        "Net Investment Income Tax (NIIT) 3.8% applied to the lesser of investment income or AGI over threshold (Form 8960).",
+      );
+    }
+  }
+
+  const totalTax = fedTax + seTax + additionalMedicare + niit + stTax;
   const w2WithheldTotal =
     input.ownerW2WithheldCents + input.spouseW2WithheldCents;
   const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
@@ -378,6 +472,30 @@ export function forecast(input: ForecastInput): ForecastResult {
 
   const marginal = marginalFederalRate(taxableIncome, input.filingStatus);
   const effective = projectedIncome > 0 ? totalTax / projectedIncome : 0;
+
+  // Underpayment-penalty safe harbor: pay at least 90% of this year's
+  // tax to avoid the penalty. We surface the risk via a hint; the
+  // quarterly schedule below already nudges the user toward the right
+  // catch-up amount.
+  const safeHarborTarget = Math.round(
+    totalTax * UNDERPAYMENT_SAFE_HARBOR_2025.currentYearShare,
+  );
+  const underpaymentRisk = alreadyPaid < safeHarborTarget;
+  if (underpaymentRisk && totalTax > 0) {
+    const shortfall = safeHarborTarget - alreadyPaid;
+    hints.push(
+      `Withholding plus estimates so far are below the 90%-of-current-year safe harbor by ~${formatCents(
+        shortfall,
+      )}. Consider sending an estimate before the next quarterly due date to avoid an underpayment penalty.`,
+    );
+  }
+
+  const quarterlyEstimates = buildQuarterlyEstimates({
+    taxYear: input.taxYear,
+    totalTaxCents: totalTax,
+    w2WithheldCents: w2WithheldTotal,
+    estimatedPaymentsCents: input.estimatedPaymentsCents,
+  });
 
   if (months < 3) {
     hints.push(
@@ -390,6 +508,8 @@ export function forecast(input: ForecastInput): ForecastResult {
     projectedExpensesCents: projectedExpenses,
     projectedNetBusinessIncomeCents: netBiz,
     selfEmploymentTaxCents: seTax,
+    additionalMedicareCents: additionalMedicare,
+    niitCents: niit,
     qbiDeductionCents: qbi,
     childAndDependentCreditsCents: credits,
     taxableIncomeCents: taxableIncome,
@@ -401,6 +521,8 @@ export function forecast(input: ForecastInput): ForecastResult {
     monthlySaveTargetCents: monthlySaveTarget,
     effectiveRate: effective,
     marginalRate: marginal,
+    quarterlyEstimates,
+    underpaymentRisk,
     ytdIncomeCents: input.ytdIncomeCents,
     ytdDeductibleExpensesCents: ytdDeductibleExpenses,
     ytdNetBusinessIncomeCents: ytdNetBiz,
@@ -489,13 +611,12 @@ function marginalFederalRate(
 
 function computeSelfEmploymentTax(args: {
   netBizCents: number;
-  filingStatus: FilingStatus;
   ownerW2SsWagesCents: number;
-}): number {
+}): { totalSeTax: number; seEarnings: number } {
   const seEarnings = Math.round(
     args.netBizCents * SE_TAX_2025.netEarningsFactor,
   );
-  if (seEarnings <= 0) return 0;
+  if (seEarnings <= 0) return { totalSeTax: 0, seEarnings: 0 };
 
   // SS portion is capped at the wage base, but the wage base is shared
   // with W-2 SS wages already earned in the year. Whatever's left of the
@@ -510,16 +631,55 @@ function computeSelfEmploymentTax(args: {
 
   const medicareTax = Math.round(seEarnings * SE_TAX_2025.medicareRate);
 
-  let additional = 0;
-  const threshold =
-    SE_TAX_2025.additionalMedicareThreshold[args.filingStatus] ?? 0;
-  if (seEarnings > threshold) {
-    additional = Math.round(
-      (seEarnings - threshold) * SE_TAX_2025.additionalMedicareRate,
-    );
-  }
+  // The 0.9% additional Medicare surtax used to live here, but it
+  // applies to COMBINED W-2 wages + SE earnings above the threshold —
+  // not SE earnings in isolation. It's now computed at the household
+  // level in forecast() and added to total tax separately.
+  return { totalSeTax: ssTax + medicareTax, seEarnings };
+}
 
-  return ssTax + medicareTax + additional;
+/**
+ * Split annual liability into Q1-Q4 estimated payments. Each quarter
+ * is responsible for a quarter of the annual total minus the slice
+ * of W-2 withholding the IRS treats as paid evenly through the year.
+ * Estimated payments the user has already made are subtracted from
+ * the earliest still-due quarter so the schedule reflects "how much
+ * more you should send."
+ */
+function buildQuarterlyEstimates(args: {
+  taxYear: number;
+  totalTaxCents: number;
+  w2WithheldCents: number;
+  estimatedPaymentsCents: number;
+}): QuarterlyEstimate[] {
+  const today = new Date();
+  // Quarter target: total annual tax / 4 minus the quarter's share of
+  // W-2 withholding (treated as paid throughout the year).
+  const perQuarterGross = Math.round(args.totalTaxCents / 4);
+  const perQuarterWithholdingCredit = Math.round(args.w2WithheldCents / 4);
+  const baseQuarterCents = Math.max(
+    0,
+    perQuarterGross - perQuarterWithholdingCredit,
+  );
+
+  // Spread previously-made estimated payments against the earliest
+  // quarters so the user sees future quarters as the catch-up.
+  let estimatesRemaining = Math.max(0, args.estimatedPaymentsCents);
+  return QUARTERLY_DUE_DATES_2025.map((d) => {
+    const dueYear = d.inFollowingYear ? args.taxYear + 1 : args.taxYear;
+    const dueDate = new Date(Date.UTC(dueYear, d.month - 1, d.day));
+    const isPast = dueDate.getTime() < today.getTime();
+    let amount = baseQuarterCents;
+    const credit = Math.min(estimatesRemaining, amount);
+    amount -= credit;
+    estimatesRemaining -= credit;
+    return {
+      quarter: d.quarter,
+      dueDate: dueDate.toISOString().slice(0, 10),
+      amountCents: Math.max(0, amount),
+      isPast,
+    };
+  });
 }
 
 /**
