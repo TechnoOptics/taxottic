@@ -26,10 +26,14 @@ let workerInitialized = false;
 async function ensureWorkerSrc() {
   if (workerInitialized) return;
   const { createRequire } = await import("node:module");
+  const { pathToFileURL } = await import("node:url");
   const req = createRequire(import.meta.url);
-  GlobalWorkerOptions.workerSrc = req.resolve(
-    "pdfjs-dist/legacy/build/pdf.worker.mjs",
-  );
+  // pdfjs validates workerSrc by passing it to `new URL(...)` — on
+  // Windows a bare filesystem path with backslashes doesn't parse,
+  // and even on Linux pdfjs prefers an explicit file:// URL. Convert
+  // the resolved path to a URL string before assigning.
+  const resolvedPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  GlobalWorkerOptions.workerSrc = pathToFileURL(resolvedPath).href;
   workerInitialized = true;
 }
 
