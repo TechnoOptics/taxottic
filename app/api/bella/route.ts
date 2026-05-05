@@ -2,7 +2,20 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/bella/system-prompt";
-import { checkBellaLimit } from "@/lib/plans/usage";
+import { getActivePlan } from "@/lib/plans/usage";
+import { consume } from "@/lib/plans/credits";
+import {
+  BELLA_MODEL_BY_PLAN,
+  bellaCreditCost,
+  type BellaModel,
+} from "@/lib/plans/limits";
+
+/** Anthropic model IDs per Bella tier. */
+const MODEL_ID: Record<BellaModel, string> = {
+  haiku: "claude-haiku-4-5-20251001",
+  sonnet: "claude-sonnet-4-5",
+  opus: "claude-opus-4-7",
+};
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,17 +54,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Plan gating: free users get a small monthly question allowance.
-  const limit = await checkBellaLimit(supabase, user.id);
-  if (!limit.ok) {
+  // Tier-gated model selection. Each plan maps to one Bella model
+  // (Filer→Haiku, Solo/Studio→Sonnet, Scale/Practice→Opus). Credits
+  // pay for *more questions at the model your tier unlocks* — they
+  // can't buy access to a higher model.
+  const plan = await getActivePlan(supabase, user.id);
+  const model = BELLA_MODEL_BY_PLAN[plan];
+  if (!model) {
     return NextResponse.json(
       {
         error:
-          "You have used all of your Bella questions for the month. Upgrade to Pro for unlimited.",
-        code: "paywall",
-        plan: limit.plan,
-        limit: limit.limit,
-        used: limit.used,
+          "Bella is included with every paid plan. Upgrade to Filer to ask your first question.",
+        code: "subscription_required",
+        plan,
+        upgrade_url: "/billing",
+      },
+      { status: 402 },
+    );
+  }
+  const admin = createServiceClient();
+  const cost = bellaCreditCost(model);
+  const charge = await consume(admin, user.id, `bella_${model}` as const, null);
+  if (!charge.ok) {
+    return NextResponse.json(
+      {
+        error: `You're ${cost - charge.balance} credits short for this question. Top up or upgrade for more.`,
+        code: "insufficient_credits",
+        balance: charge.balance,
+        needed: cost,
         upgrade_url: "/billing",
       },
       { status: 402 },
@@ -129,9 +159,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Writes use service-role to avoid the SSR auth-cookie quirk in API routes.
-  const admin = createServiceClient();
-
+  // Writes use service-role to avoid the SSR auth-cookie quirk in API
+  // routes. (admin was already initialized above for credit consumption.)
   if (!conversationId) {
     const { data: convo, error } = await admin
       .from("bella_conversations")
@@ -260,7 +289,7 @@ export async function POST(req: NextRequest) {
   let assistantText = "";
   try {
     const result = await client.messages.create({
-      model: "claude-sonnet-4-5",
+      model: MODEL_ID[model],
       max_tokens: 1024,
       system: systemPrompt,
       messages: messagesForApi.length

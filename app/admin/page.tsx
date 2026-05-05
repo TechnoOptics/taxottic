@@ -251,7 +251,11 @@ function FilingGroup({
                 ) : null}
               </div>
               <div className="flex flex-wrap gap-1.5 text-[10px] uppercase tracking-wide">
-                <Pill tone={sub?.plan === "pro" ? "gold" : "neutral"}>
+                <Pill
+                  tone={
+                    sub?.plan && sub.plan !== "free" ? "gold" : "neutral"
+                  }
+                >
                   {sub?.plan ? sub.plan : "free"}
                 </Pill>
                 <Pill

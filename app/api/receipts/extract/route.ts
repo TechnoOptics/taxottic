@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   extractReceipt,
   extractReceiptFromImagePages,
 } from "@/lib/ocr/extract-receipt";
 import { decryptAndRenderPdf, PdfPasswordError } from "@/lib/pdf/decrypt";
+import { consume } from "@/lib/plans/credits";
+import { getActivePlan } from "@/lib/plans/usage";
+import { CREDIT_COST } from "@/lib/plans/limits";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -60,6 +63,32 @@ export async function POST(req: NextRequest) {
 
   const password =
     (formData.get("password") as string | null)?.toString() ?? "";
+
+  // Credit gate: receipt OCR costs CREDIT_COST.receipt_ocr credits.
+  // Consume up-front so a user with 0 credits doesn't get a free OCR
+  // when their balance happens to be racing to zero. If extraction
+  // fails after the consume, that's accepted attrition — the balance
+  // stays debited so abuse via repeated bad uploads doesn't drain the
+  // model on us.
+  const admin = createServiceClient();
+  const plan = await getActivePlan(supabase, user.id);
+  if (plan === "free") {
+    return NextResponse.json(
+      { error: "subscription_required", smallestTier: "filer" },
+      { status: 402 },
+    );
+  }
+  const charge = await consume(admin, user.id, "receipt_ocr", null);
+  if (!charge.ok) {
+    return NextResponse.json(
+      {
+        error: "insufficient_credits",
+        balance: charge.balance,
+        needed: CREDIT_COST.receipt_ocr,
+      },
+      { status: 402 },
+    );
+  }
 
   const buf = Buffer.from(await file.arrayBuffer());
   const base64 = buf.toString("base64");
