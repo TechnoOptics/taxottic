@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { extractTaxDoc } from "@/lib/ocr/extract-tax-doc";
+import {
+  extractTaxDoc,
+  extractTaxDocFromImagePages,
+} from "@/lib/ocr/extract-tax-doc";
+import { PdfPasswordRequiredError } from "@/lib/ocr/extract-w2";
+import { decryptAndRenderPdf, PdfPasswordError } from "@/lib/pdf/decrypt";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -68,20 +73,44 @@ export async function POST(req: NextRequest) {
       ? parseInt(taxYearRaw, 10)
       : null;
 
+  const password = (formData.get("password") as string | null)?.toString() ?? "";
+
   const buf = Buffer.from(await file.arrayBuffer());
   const base64 = buf.toString("base64");
 
   let result;
   try {
-    result = await extractTaxDoc({
-      base64,
-      mimeType: file.type as
-        | "image/png"
-        | "image/jpeg"
-        | "image/webp"
-        | "application/pdf",
-    });
+    if (password && file.type === "application/pdf") {
+      // The user already supplied a password from the popup - decrypt
+      // server-side and ship the rendered pages instead of the locked PDF.
+      const pages = await decryptAndRenderPdf(new Uint8Array(buf), password);
+      result = await extractTaxDocFromImagePages({ pages });
+    } else {
+      result = await extractTaxDoc({
+        base64,
+        mimeType: file.type as
+          | "image/png"
+          | "image/jpeg"
+          | "image/webp"
+          | "application/pdf",
+      });
+    }
   } catch (err) {
+    if (err instanceof PdfPasswordRequiredError) {
+      return NextResponse.json(
+        { error: "pdf_password_required", reason: "missing" },
+        { status: 422 },
+      );
+    }
+    if (err instanceof PdfPasswordError) {
+      return NextResponse.json(
+        {
+          error: "pdf_password_required",
+          reason: err.missing ? "missing" : "incorrect",
+        },
+        { status: 422 },
+      );
+    }
     const message = err instanceof Error ? err.message : "Extraction failed";
     if (message.includes("ANTHROPIC_API_KEY")) {
       return NextResponse.json(

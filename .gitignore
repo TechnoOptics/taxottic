@@ -63,3 +63,6 @@ next-env.d.ts
 
 # Dev runtime
 dev.log
+
+# Local-only Claude Code state
+.claude/

@@ -79,6 +79,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // @napi-rs/canvas ships a prebuilt native binding (.node) that Turbopack
+  // can't bundle into an ESM chunk; pdfjs-dist's legacy build also breaks
+  // when Turbopack tries to inline it. Mark both as runtime externals so
+  // they're required normally on the server.
+  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
   async headers() {
     return [
       {
