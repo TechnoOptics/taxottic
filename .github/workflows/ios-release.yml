@@ -56,6 +56,24 @@ jobs:
 
       - run: npm ci
 
+      # Apple now rejects App Store uploads built with anything older
+      # than the iOS 26 SDK (Xcode 26+). The macos-15 runner ships
+      # multiple Xcode versions in /Applications; pick the latest
+      # 26.x. Falls back to 26.0 if the symlink isn't present.
+      - name: Select Xcode 26
+        run: |
+          for v in 26.1 26.0 26; do
+            if [ -d "/Applications/Xcode_${v}.app" ]; then
+              sudo xcode-select -s "/Applications/Xcode_${v}.app"
+              echo "Using Xcode $v"
+              xcodebuild -version
+              exit 0
+            fi
+          done
+          echo "Xcode 26 not found; available:"
+          ls /Applications | grep Xcode
+          exit 1
+
       # Capacitor sync copies the latest web assets (none in our case
       # — server.url is live) and refreshes plugin native code.
       - run: npx cap sync ios
@@ -100,7 +118,6 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
             DEVELOPMENT_TEAM=${{ secrets.IOS_TEAM_ID }} \
             CODE_SIGN_STYLE=Automatic \
-            PRODUCT_BUNDLE_IDENTIFIER=com.taxottic.app \
             archive 2>&1 | tee $RUNNER_TEMP/archive.log | xcpretty || {
               echo "::group::Raw xcodebuild output (last 200 lines)"
               tail -200 $RUNNER_TEMP/archive.log
