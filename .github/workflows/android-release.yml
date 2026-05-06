@@ -1,0 +1,99 @@
+name: Android — Play Internal Track
+
+# Builds a signed Android App Bundle (.aab) and uploads it to the
+# Internal Testing track on Google Play. Promote to Closed/Open
+# Testing or Production from the Play Console UI once you've
+# smoke-tested.
+#
+# REQUIRED REPO SECRETS:
+#
+#   ANDROID_KEYSTORE         Base64'd .jks keystore file
+#   ANDROID_KEYSTORE_PWD     Keystore password
+#   ANDROID_KEY_ALIAS        Key alias (e.g. "taxottic-upload")
+#   ANDROID_KEY_PWD          Key password (often same as KEYSTORE_PWD)
+#   PLAY_SERVICE_ACCOUNT     Full JSON of the Play Console service-account
+#                            with "Release manager" role on the app.
+#                            Generate at console.cloud.google.com IAM,
+#                            then invite into Play Console → Users.
+#
+# Generate the keystore once:
+#   keytool -genkey -v -keystore taxottic.jks -keyalg RSA -keysize 4096 \
+#     -validity 25000 -alias taxottic-upload
+#   base64 -i taxottic.jks | pbcopy
+#
+# Apply for "Play App Signing" on first upload (Play console asks)
+# so Google holds the actual release key and our keystore is just an
+# upload key — recoverable if lost.
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Play track (internal | alpha | beta | production)"
+        required: false
+        default: "internal"
+
+jobs:
+  android-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+
+      - run: npx cap sync android
+
+      - name: Restore keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/taxottic.jks
+          echo "STORE_FILE=$RUNNER_TEMP/taxottic.jks" >> $GITHUB_ENV
+
+      - name: Bump versionCode
+        working-directory: android
+        run: |
+          # github.run_number is monotonic per workflow — perfect
+          # versionCode source. android.defaultConfig.versionCode in
+          # build.gradle gets replaced with this value.
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/" app/build.gradle
+
+      - name: Build signed AAB
+        working-directory: android
+        env:
+          STORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PWD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PWD: ${{ secrets.ANDROID_KEY_PWD }}
+        run: |
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=$STORE_FILE \
+            -Pandroid.injected.signing.store.password=$STORE_PWD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PWD
+
+      - name: Upload to Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT }}
+          packageName: com.taxottic.app
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ inputs.track || 'internal' }}
+          status: completed
+          changesNotSentForReview: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
