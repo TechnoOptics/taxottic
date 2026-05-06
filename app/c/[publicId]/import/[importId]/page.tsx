@@ -6,6 +6,7 @@ import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 import {
   applyTransactions,
+  bellaAutoApply,
   deleteImport,
   ignoreTx,
   setTxCategory,
@@ -109,10 +110,34 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
           />
         ) : null}
 
+        <form
+          action={bellaAutoApply}
+          className="mt-6 card p-5 flex items-center justify-between gap-4 flex-wrap border-gold-300/60"
+        >
+          <input type="hidden" name="import_id" value={importId} />
+          <input type="hidden" name="company_id" value={company.id} />
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+              One-click sort
+            </div>
+            <div className="display text-base text-forest-900 mt-1">
+              Let Bella categorize this whole import
+            </div>
+            <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+              Bella reads each row, decides expense vs income vs transfer,
+              picks a deduction category, and auto-applies anything she&apos;s
+              confident about. Lower-confidence rows still surface a
+              suggestion you can confirm. Costs 10 credits per run; super
+              admins free.
+            </p>
+          </div>
+          <button className="btn-primary">Auto-categorize</button>
+        </form>
+
         {pendingApply.length > 0 ? (
           <form
             action={applyTransactions}
-            className="mt-6 card p-5 flex items-center justify-between gap-4 flex-wrap"
+            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap"
           >
             <input type="hidden" name="import_id" value={importId} />
             <input type="hidden" name="company_id" value={company.id} />
@@ -126,8 +151,8 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                 month.
               </div>
             </div>
-            <button className="btn-primary">
-              Apply {pendingApply.length}
+            <button className="btn-ghost">
+              Apply manually selected ({pendingApply.length})
             </button>
           </form>
         ) : null}
