@@ -7,6 +7,7 @@ import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { TrialBanner } from "@/components/TrialBanner";
 import { getTrialState } from "@/lib/plans/usage";
+import { runTrialGuard } from "@/lib/security/trial-guard";
 import { MedalCelebration } from "@/components/MedalCelebration";
 import { WelcomeTour } from "@/components/WelcomeTour";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
@@ -297,6 +298,25 @@ export default async function DashboardPage() {
     }
   }
 
+  // Platform router: super-admins who have flipped active_platform
+  // should land in the right shell. Done here (not at /) so a
+  // hard-coded /dashboard link from email/etc still routes correctly.
+  const { data: pickedPlatform } = await admin
+    .from("profiles")
+    .select("active_platform")
+    .eq("id", user.id)
+    .maybeSingle();
+  const ap = pickedPlatform?.active_platform as string | null;
+  if (ap === "hq") redirect("/admin");
+  if (ap === "enterprise") redirect("/admin/firms");
+
+  // Trial-fraud guard runs lazily on the FIRST dashboard load — if
+  // this device already used a trial under another account, the
+  // current user's subscription is flipped to free before we read
+  // the trial state below. Subsequent loads short-circuit on
+  // profile.trial_validated_at so the cost is bounded to one query
+  // per user lifetime.
+  await runTrialGuard({ admin, userId: user.id });
   const trial = await getTrialState(supabase, user.id);
 
   return (

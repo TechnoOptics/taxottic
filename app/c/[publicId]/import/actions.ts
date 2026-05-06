@@ -12,6 +12,14 @@ import {
 import { checkCsvImportLimit, isSuperAdmin } from "@/lib/plans/usage";
 import { consume } from "@/lib/plans/credits";
 import { evaluateBadges } from "@/lib/badges/evaluate";
+import {
+  loadRules,
+  matchRule,
+  recordRuleHits,
+  upsertRule,
+  type RuleKind,
+  type RulePatternType,
+} from "@/lib/csv/categorization-rules";
 
 /**
  * Heuristic: looks like a credit-card payment from another account, not
@@ -460,15 +468,48 @@ async function runBellaCategorize(args: {
     return;
   }
 
-  // Charge credits before the model call. Super admins bypass.
+  // Bella memory: load the user's saved categorization rules. Any
+  // candidate whose description matches a rule is categorized for
+  // free — no Anthropic call, no credits charged for that row. The
+  // remaining candidates are sent to the model.
+  const savedRules = await loadRules(admin, user.id, companyId);
+  type RuleHit = {
+    txId: string;
+    kind: "expense" | "income" | "ignore" | "transfer";
+    code: string | null;
+    ruleId: string;
+  };
+  const ruleHits: RuleHit[] = [];
+  const remainingCandidates: typeof candidates = [];
+  for (const t of candidates) {
+    const m = matchRule(t.description ?? "", savedRules);
+    if (m) {
+      ruleHits.push({
+        txId: t.id,
+        kind: m.kind,
+        code: m.code,
+        ruleId: m.rule.id,
+      });
+    } else {
+      remainingCandidates.push(t);
+    }
+  }
+  // Bump usage counters in the background; failure is non-fatal.
+  if (ruleHits.length > 0) {
+    await recordRuleHits(admin, ruleHits.map((r) => r.ruleId)).catch(() => {});
+  }
+
+  // Charge credits ONLY if there are still rows that need the model.
+  // Super admins bypass.
   const superAdmin = await isSuperAdmin(supabase);
-  if (!superAdmin) {
+  if (!superAdmin && remainingCandidates.length > 0) {
     const charge = await consume(admin, user.id, "bulk_categorize", importId);
     if (!charge.ok) {
       args.onInsufficientCredits(
         `Bella needs ${charge.needed} credits to categorize this import; you have ${charge.balance}. Top up at /billing.`,
       );
-      return;
+      // Even on insufficient credits, apply the rule-hit rows below so
+      // saved-rule users always get value.
     }
   }
 
@@ -494,7 +535,8 @@ async function runBellaCategorize(args: {
     "other",
   ];
 
-  const inputs: CategorizeInput[] = candidates.map((t) => ({
+  // Build the model-input list from rows the rules didn't claim.
+  const inputs: CategorizeInput[] = remainingCandidates.map((t) => ({
     id: t.id,
     description: t.description ?? "",
     amount_cents: t.amount_cents,
@@ -515,6 +557,22 @@ async function runBellaCategorize(args: {
       accountType,
     });
     decisions.push(...part);
+  }
+  // Inject rule hits as synthetic high-confidence decisions so the
+  // downstream apply-loop treats them identically. Map our rule
+  // "ignore" kind to the categorizer's "transfer" kind — both flow
+  // through the apply loop's ignoreTxIds branch and get marked as
+  // ignored in bank_transactions.
+  for (const hit of ruleHits) {
+    const kind =
+      hit.kind === "ignore" ? "transfer" : (hit.kind as "expense" | "income" | "transfer");
+    decisions.push({
+      id: hit.txId,
+      kind,
+      code: hit.code,
+      confidence: 1,
+      reason: "saved categorization rule",
+    });
   }
 
   const decByTxId = new Map(decisions.map((d) => [d.id, d]));
@@ -775,6 +833,78 @@ export async function deleteImport(formData: FormData) {
   revalidatePath(`/c/${company?.public_id}/income`);
   revalidatePath(`/c/${company?.public_id}/forecast`);
   redirect(`/c/${company?.public_id}/import`);
+}
+
+/**
+ * Teach Bella a categorization rule from the import-review page.
+ *
+ * Form fields:
+ *   pattern         : the merchant string the user wants Bella to remember
+ *   pattern_type    : exact | contains | starts_with
+ *   kind            : expense | income | ignore | transfer
+ *   category_code   : optional — required for expense/income
+ *   company_id      : the company the rule belongs to (or empty for global)
+ *   notes           : optional human-readable note
+ *
+ * The rule fires on the next import (and on the current import if the
+ * user re-runs Auto-categorize). Idempotent on
+ * (user, pattern_type, pattern) — re-teaching updates the kind/code.
+ */
+export async function teachBella(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const pattern = String(formData.get("pattern") ?? "").trim();
+  const patternType = String(formData.get("pattern_type") ?? "contains") as RulePatternType;
+  const kind = String(formData.get("kind") ?? "expense") as RuleKind;
+  const categoryCodeRaw = String(formData.get("category_code") ?? "").trim();
+  const categoryCode = categoryCodeRaw || null;
+  const companyIdRaw = String(formData.get("company_id") ?? "").trim();
+  const companyId = companyIdRaw || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!pattern) throw new Error("Pattern is required");
+  if (!["exact", "contains", "starts_with"].includes(patternType)) {
+    throw new Error("Invalid pattern_type");
+  }
+  if (!["expense", "income", "ignore", "transfer"].includes(kind)) {
+    throw new Error("Invalid kind");
+  }
+  // For expense/income, a category code is required so Bella knows
+  // where to put future hits. Ignore/transfer don't need one.
+  if ((kind === "expense" || kind === "income") && !categoryCode) {
+    throw new Error("Category is required for expense/income rules");
+  }
+
+  // Verify the user is in this company (if company-scoped).
+  if (companyId) {
+    const { data: m } = await admin
+      .from("company_members")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    if (!m) throw new Error("Not a member of this company");
+  }
+
+  await upsertRule(admin, {
+    userId: user.id,
+    companyId,
+    patternType,
+    pattern,
+    kind,
+    categoryCode,
+    notes,
+  });
+
+  if (companyId) {
+    const { data: company } = await admin
+      .from("companies")
+      .select("public_id")
+      .eq("id", companyId)
+      .single();
+    if (company) {
+      revalidatePath(`/c/${company.public_id}/import`);
+    }
+  }
 }
 
 function parseDate(raw: string): string | null {

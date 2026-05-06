@@ -10,6 +10,7 @@ import {
   deleteImport,
   ignoreTx,
   setTxCategory,
+  teachBella,
 } from "../actions";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
@@ -172,6 +173,7 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                   key={t.id}
                   tx={t}
                   importId={importId}
+                  companyId={company.id}
                   cats={cats}
                 />
               ))
@@ -237,6 +239,7 @@ type TxRowProps = {
     ignored: boolean;
   };
   importId: string;
+  companyId: string;
   cats: { code: string; label: string }[];
 };
 
@@ -259,11 +262,18 @@ function prettyAccountType(t: string | null | undefined): string {
   }
 }
 
-function TxRow({ tx, importId, cats }: TxRowProps) {
+function TxRow({ tx, importId, companyId, cats }: TxRowProps) {
   const isApplied = !!tx.applied_expense_id;
   const selected =
     tx.applied_category_code ?? tx.suggested_category_code ?? "";
   const label = cats.find((c) => c.code === selected)?.label;
+  // The first 1-3 words of the description make a clean default for
+  // the rule pattern — vendor names typically lead the line.
+  const defaultPattern = (tx.description ?? "")
+    .split(/\s+/)
+    .slice(0, 3)
+    .join(" ")
+    .slice(0, 80);
   return (
     <li className="rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm">
       <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap">
@@ -313,6 +323,69 @@ function TxRow({ tx, importId, cats }: TxRowProps) {
           </>
         )}
       </div>
+
+      {/* Teach Bella — collapsed by default, opens an inline form so
+          the user can save a rule that fires on every future import. */}
+      <details className="mt-2">
+        <summary className="text-[11px] text-forest-700 hover:text-forest-900 cursor-pointer select-none inline-flex items-center gap-1">
+          <span aria-hidden="true">✦</span> Teach Bella this vendor
+        </summary>
+        <form
+          action={teachBella}
+          className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs"
+        >
+          <input type="hidden" name="company_id" value={companyId} />
+          <label className="grid gap-1">
+            <span className="text-ink-muted">Match (case-insensitive)</span>
+            <input
+              name="pattern"
+              type="text"
+              defaultValue={defaultPattern}
+              className="input"
+              required
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-ink-muted">Match type</span>
+            <select name="pattern_type" defaultValue="contains" className="input">
+              <option value="contains">Contains</option>
+              <option value="starts_with">Starts with</option>
+              <option value="exact">Exact</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-ink-muted">Treat as</span>
+            <select name="kind" defaultValue="expense" className="input">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+              <option value="ignore">Ignore (not deductible)</option>
+              <option value="transfer">Transfer (between accounts)</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-ink-muted">Category</span>
+            <select
+              name="category_code"
+              defaultValue={selected}
+              className="input"
+            >
+              <option value="">— pick one —</option>
+              {cats.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="sm:col-span-2 flex items-center gap-3">
+            <button className="btn-ghost text-xs">Save rule</button>
+            <span className="text-[11px] text-ink-muted">
+              Applies to future imports for this company. Re-teaching the same
+              pattern updates the existing rule.
+            </span>
+          </div>
+        </form>
+      </details>
     </li>
   );
 }
