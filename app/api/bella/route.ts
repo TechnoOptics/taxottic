@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/bella/system-prompt";
-import { getActivePlan } from "@/lib/plans/usage";
+import { getActivePlan, isSuperAdmin } from "@/lib/plans/usage";
 import { consume } from "@/lib/plans/credits";
 import {
   BELLA_MODEL_BY_PLAN,
@@ -74,7 +74,13 @@ export async function POST(req: NextRequest) {
   }
   const admin = createServiceClient();
   const cost = bellaCreditCost(model);
-  const charge = await consume(admin, user.id, `bella_${model}` as const, null);
+  // Super admins (forever-allowlist) skip credit consumption — they
+  // have unlimited usage by policy. We still record the action via
+  // bella_messages for audit, just not as a paid debit.
+  const superAdmin = await isSuperAdmin(supabase);
+  const charge = superAdmin
+    ? ({ ok: true, balanceAfter: Number.POSITIVE_INFINITY, cost: 0 } as const)
+    : await consume(admin, user.id, `bella_${model}` as const, null);
   if (!charge.ok) {
     return NextResponse.json(
       {

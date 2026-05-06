@@ -326,6 +326,86 @@ export async function ignoreTx(formData: FormData) {
   revalidatePath(`/c/[publicId]/import/${importId}`);
 }
 
+/**
+ * Delete a previously-uploaded import. Allowed for the company's
+ * managers and for super admins. Cascades through:
+ *   1. Reverse anything we already applied — every monthly_expense
+ *      and monthly_income created by this import gets deleted so the
+ *      forecast doesn't keep reporting them.
+ *   2. The bank_imports row itself, which CASCADEs to its
+ *      bank_transactions.
+ */
+export async function deleteImport(formData: FormData) {
+  const { supabase, admin, user } = await requireUserWithAdmin();
+  const importId = String(formData.get("import_id") ?? "");
+  const companyId = String(formData.get("company_id") ?? "");
+  if (!importId || !companyId) throw new Error("Missing import_id or company_id");
+
+  // Permission: company manager or super admin.
+  const { data: superAdminRpc } = await supabase.rpc("is_super_admin");
+  const isSuper = !!superAdminRpc;
+  if (!isSuper) {
+    const { data: membership } = await admin
+      .from("company_members")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    if (!membership || membership.role !== "manager") {
+      throw new Error("Only managers can delete an import.");
+    }
+  }
+
+  // Verify the import belongs to the claimed company so a tampered
+  // company_id doesn't lead to deleting someone else's import.
+  const { data: imp } = await admin
+    .from("bank_imports")
+    .select("id, company_id")
+    .eq("id", importId)
+    .maybeSingle();
+  if (!imp || imp.company_id !== companyId) {
+    throw new Error("Import not found");
+  }
+
+  // Find every monthly_expense / monthly_income that was created from
+  // this import's transactions, then delete them. The
+  // bank_transactions FKs are SET NULL on delete, so dropping the
+  // expenses/income rows leaves the tx pointers dangling — but we
+  // delete the bank_imports row right after (which CASCADEs to the
+  // transactions), so the dangling state never persists.
+  const { data: applied } = await admin
+    .from("bank_transactions")
+    .select("applied_expense_id, applied_income_id")
+    .eq("import_id", importId);
+
+  const expenseIds = (applied ?? [])
+    .map((t) => t.applied_expense_id)
+    .filter((id): id is string => !!id);
+  const incomeIds = (applied ?? [])
+    .map((t) => t.applied_income_id)
+    .filter((id): id is string => !!id);
+
+  if (expenseIds.length > 0) {
+    await admin.from("monthly_expenses").delete().in("id", expenseIds);
+  }
+  if (incomeIds.length > 0) {
+    await admin.from("monthly_income").delete().in("id", incomeIds);
+  }
+
+  await admin.from("bank_imports").delete().eq("id", importId);
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  revalidatePath(`/c/${company?.public_id}/import`);
+  revalidatePath(`/c/${company?.public_id}/expenses`);
+  revalidatePath(`/c/${company?.public_id}/income`);
+  revalidatePath(`/c/${company?.public_id}/forecast`);
+  redirect(`/c/${company?.public_id}/import`);
+}
+
 function parseDate(raw: string): string | null {
   if (!raw) return null;
   const t = Date.parse(raw);

@@ -81,6 +81,22 @@ function isTrialExpired(trialEnd: string | null): boolean {
 }
 
 /**
+ * True if the current user is in the forever-allowlist super_admins
+ * table. Used by paid endpoints to skip credit consumption — a super
+ * admin should never be told they're out of credits.
+ *
+ * Uses the public.is_super_admin() RPC, which itself runs under
+ * security definer and joins auth.users by email to super_admins.
+ */
+export async function isSuperAdmin(
+  supabase: SupabaseClient,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_super_admin");
+  if (error) return false;
+  return !!data;
+}
+
+/**
  * Map legacy plan codes to current tiers. 'pro' → 'solo' (the closest
  * single-company-priced tier), 'team' → 'studio'. Anything unknown
  * falls back to 'free'.

@@ -4,13 +4,23 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
-import { applyTransactions, ignoreTx, setTxCategory } from "../actions";
+import {
+  applyTransactions,
+  deleteImport,
+  ignoreTx,
+  setTxCategory,
+} from "../actions";
+import { isSuperAdmin } from "@/lib/plans/usage";
+import { DeleteImportButton } from "@/components/DeleteImportButton";
 
 type Params = Promise<{ publicId: string; importId: string }>;
 
 export default async function ImportReviewPage({ params }: { params: Params }) {
   const { publicId, importId } = await params;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, isManager } =
+    await loadCompanyByPublicId(publicId);
+  const superAdmin = await isSuperAdmin(supabase);
+  const canDelete = isManager || superAdmin;
 
   const { data: imp } = await supabase
     .from("bank_imports")
@@ -90,6 +100,14 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="import" />
         </div>
+
+        {canDelete ? (
+          <DeleteImportButton
+            importId={importId}
+            companyId={company.id}
+            action={deleteImport}
+          />
+        ) : null}
 
         {pendingApply.length > 0 ? (
           <form

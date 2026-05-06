@@ -6,7 +6,7 @@ import {
 } from "@/lib/ocr/extract-receipt";
 import { decryptAndRenderPdf, PdfPasswordError } from "@/lib/pdf/decrypt";
 import { consume } from "@/lib/plans/credits";
-import { getActivePlan } from "@/lib/plans/usage";
+import { getActivePlan, isSuperAdmin } from "@/lib/plans/usage";
 import { CREDIT_COST } from "@/lib/plans/limits";
 
 export const runtime = "nodejs";
@@ -71,23 +71,26 @@ export async function POST(req: NextRequest) {
   // stays debited so abuse via repeated bad uploads doesn't drain the
   // model on us.
   const admin = createServiceClient();
-  const plan = await getActivePlan(supabase, user.id);
-  if (plan === "free") {
-    return NextResponse.json(
-      { error: "subscription_required", smallestTier: "filer" },
-      { status: 402 },
-    );
-  }
-  const charge = await consume(admin, user.id, "receipt_ocr", null);
-  if (!charge.ok) {
-    return NextResponse.json(
-      {
-        error: "insufficient_credits",
-        balance: charge.balance,
-        needed: CREDIT_COST.receipt_ocr,
-      },
-      { status: 402 },
-    );
+  const superAdmin = await isSuperAdmin(supabase);
+  if (!superAdmin) {
+    const plan = await getActivePlan(supabase, user.id);
+    if (plan === "free") {
+      return NextResponse.json(
+        { error: "subscription_required", smallestTier: "filer" },
+        { status: 402 },
+      );
+    }
+    const charge = await consume(admin, user.id, "receipt_ocr", null);
+    if (!charge.ok) {
+      return NextResponse.json(
+        {
+          error: "insufficient_credits",
+          balance: charge.balance,
+          needed: CREDIT_COST.receipt_ocr,
+        },
+        { status: 402 },
+      );
+    }
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
