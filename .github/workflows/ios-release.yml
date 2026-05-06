@@ -100,6 +100,8 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
             DEVELOPMENT_TEAM=${{ secrets.IOS_TEAM_ID }} \
             CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PRODUCT_BUNDLE_IDENTIFIER=com.taxottic.app \
             archive 2>&1 | tee $RUNNER_TEMP/archive.log | xcpretty || {
               echo "::group::Raw xcodebuild output (last 200 lines)"
               tail -200 $RUNNER_TEMP/archive.log
