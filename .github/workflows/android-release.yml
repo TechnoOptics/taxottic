@@ -76,6 +76,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PWD: ${{ secrets.ANDROID_KEY_PWD }}
         run: |
+          # gradlew was committed from a Windows machine where the
+          # filesystem has no Unix execute bit. We've since fixed
+          # the bit in git via update-index --chmod=+x, but this is
+          # cheap defense-in-depth in case it ever drifts again.
+          chmod +x ./gradlew
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file=$STORE_FILE \
             -Pandroid.injected.signing.store.password=$STORE_PWD \
