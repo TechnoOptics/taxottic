@@ -84,6 +84,10 @@ jobs:
       - name: Archive (automatic signing)
         working-directory: ios/App
         run: |
+          # Tee to a log file so we can dump raw output on failure —
+          # xcpretty's default error filter sometimes hides the
+          # actual reason an archive fails.
+          set -o pipefail
           xcodebuild \
             -project App.xcodeproj \
             -scheme App \
@@ -96,7 +100,12 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
             DEVELOPMENT_TEAM=${{ secrets.IOS_TEAM_ID }} \
             CODE_SIGN_STYLE=Automatic \
-            archive | xcpretty
+            archive 2>&1 | tee $RUNNER_TEMP/archive.log | xcpretty || {
+              echo "::group::Raw xcodebuild output (last 200 lines)"
+              tail -200 $RUNNER_TEMP/archive.log
+              echo "::endgroup::"
+              exit 1
+            }
 
       - name: Write export options
         run: |
