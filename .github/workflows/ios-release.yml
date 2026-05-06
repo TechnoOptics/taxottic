@@ -1,0 +1,143 @@
+name: iOS — TestFlight
+
+# Builds the iOS archive on a macOS runner, signs with the App Store
+# distribution certificate, and uploads to App Store Connect (which
+# auto-routes to TestFlight). Trigger manually until we're confident
+# in the flow; once stable, swap to push-to-tag.
+#
+# REQUIRED REPO SECRETS (set under Settings → Secrets → Actions):
+#
+#   ASC_KEY_ID            App Store Connect API Key ID (e.g. ABC123XYZ)
+#   ASC_ISSUER_ID         App Store Connect Issuer ID (UUID from key page)
+#   ASC_PRIVATE_KEY       Contents of AuthKey_<KEY_ID>.p8 (paste raw text)
+#   IOS_DIST_CERT_P12     Base64'd .p12 of "Apple Distribution: Taxottic LLC"
+#   IOS_DIST_CERT_PWD     Password protecting the .p12
+#   IOS_PROV_PROFILE      Base64'd .mobileprovision file (App Store profile)
+#
+# To produce these:
+#   1. App Store Connect → Users and Access → Keys → "+" → Admin role
+#      → Download the .p8 (one-time). Save the Key ID + Issuer ID.
+#   2. Apple Developer → Certificates → "+" → Apple Distribution → CSR
+#      from Keychain → download .cer, install, export as .p12 with a
+#      password. base64 it: `base64 -i Cert.p12 | pbcopy`
+#   3. Apple Developer → Profiles → "+" → App Store → bundle id
+#      com.taxottic.app → download .mobileprovision. base64 same way.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build-notes:
+        description: "TestFlight build notes (shown to internal testers)"
+        required: false
+        default: "Automated build from main"
+
+jobs:
+  ios-archive:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Capacitor sync copies the latest web assets (none in our case
+      # — server.url is live) and refreshes plugin native code.
+      - run: npx cap sync ios
+
+      # ---- Code signing ----
+      - name: Import Apple Distribution certificate
+        env:
+          P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12 }}
+          P12_PWD: ${{ secrets.IOS_DIST_CERT_PWD }}
+        run: |
+          KEYCHAIN=build.keychain
+          security create-keychain -p "" $KEYCHAIN
+          security default-keychain -s $KEYCHAIN
+          security unlock-keychain -p "" $KEYCHAIN
+          security set-keychain-settings -lut 21600 $KEYCHAIN
+          echo "$P12_BASE64" | base64 -d > /tmp/cert.p12
+          security import /tmp/cert.p12 -k $KEYCHAIN -P "$P12_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" $KEYCHAIN
+
+      - name: Install provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.IOS_PROV_PROFILE }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE_BASE64" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/Taxottic_AppStore.mobileprovision
+
+      # ---- Archive + export ----
+      - name: Bump build number
+        working-directory: ios/App
+        run: |
+          # Use the GitHub run number as the CFBundleVersion so each
+          # build gets a unique, monotonically increasing value.
+          /usr/libexec/PlistBuddy -c "Set CFBundleVersion ${{ github.run_number }}" App/Info.plist
+
+      - name: Archive
+        working-directory: ios/App
+        run: |
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath $RUNNER_TEMP/App.xcarchive \
+            archive | xcpretty
+
+      - name: Write export options
+        run: |
+          cat > /tmp/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$IOS_TEAM_ID</string>
+            <key>uploadBitcode</key><false/>
+            <key>uploadSymbols</key><true/>
+            <key>signingStyle</key><string>manual</string>
+          </dict>
+          </plist>
+          EOF
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+
+      - name: Export IPA
+        run: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath $RUNNER_TEMP/App.xcarchive \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/export | xcpretty
+
+      # ---- Upload to App Store Connect ----
+      - name: Save ASC API key to disk
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$ASC_PRIVATE_KEY" > ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app \
+            -f $RUNNER_TEMP/export/App.ipa \
+            -t ios \
+            --apiKey $ASC_KEY_ID \
+            --apiIssuer $ASC_ISSUER_ID
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: ${{ runner.temp }}/export/App.ipa
+          retention-days: 14

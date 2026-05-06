@@ -66,3 +66,15 @@ dev.log
 
 # Local-only Claude Code state
 .claude/
+
+# Mobile build output
+ios/App/Pods/
+ios/App/build/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/app/release/
+*.ipa
+*.aab
+*.apk
