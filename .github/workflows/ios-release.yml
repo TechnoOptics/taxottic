@@ -1,27 +1,34 @@
 name: iOS — TestFlight
 
-# Builds the iOS archive on a macOS runner, signs with the App Store
-# distribution certificate, and uploads to App Store Connect (which
-# auto-routes to TestFlight). Trigger manually until we're confident
-# in the flow; once stable, swap to push-to-tag.
+# Builds the iOS archive on a macOS runner using AUTOMATIC signing
+# with an App Store Connect API key, then uploads to TestFlight.
+#
+# Automatic signing means we do NOT need to:
+#   - Generate a Certificate Signing Request from a Mac's Keychain
+#   - Export a .p12 (which physically requires macOS)
+#   - Manually create / download a .mobileprovision
+#
+# Xcode handles all of that on the fly each build, talking to App
+# Store Connect with the API key. The user only needs the four
+# secrets below — all obtainable from any browser.
 #
 # REQUIRED REPO SECRETS (set under Settings → Secrets → Actions):
 #
-#   ASC_KEY_ID            App Store Connect API Key ID (e.g. ABC123XYZ)
-#   ASC_ISSUER_ID         App Store Connect Issuer ID (UUID from key page)
-#   ASC_PRIVATE_KEY       Contents of AuthKey_<KEY_ID>.p8 (paste raw text)
-#   IOS_DIST_CERT_P12     Base64'd .p12 of "Apple Distribution: Taxottic LLC"
-#   IOS_DIST_CERT_PWD     Password protecting the .p12
-#   IOS_PROV_PROFILE      Base64'd .mobileprovision file (App Store profile)
+#   IOS_TEAM_ID       10-char Apple team ID
+#                       Where: developer.apple.com → Membership → Team ID
+#                       (top of the Membership Details panel)
+#   ASC_KEY_ID        App Store Connect API Key ID (e.g. ABC123XYZ)
+#                       Where: appstoreconnect.apple.com →
+#                       Users and Access → Keys → "+"
+#                       Choose "Admin" role. Download the .p8 once.
+#                       The Key ID appears in the Keys list.
+#   ASC_ISSUER_ID     App Store Connect Issuer ID (UUID)
+#                       Where: top of the same Keys page,
+#                       right above the Keys table.
+#   ASC_PRIVATE_KEY   Contents of AuthKey_<KEY_ID>.p8 (paste raw text
+#                       including the -----BEGIN PRIVATE KEY----- header)
 #
-# To produce these:
-#   1. App Store Connect → Users and Access → Keys → "+" → Admin role
-#      → Download the .p8 (one-time). Save the Key ID + Issuer ID.
-#   2. Apple Developer → Certificates → "+" → Apple Distribution → CSR
-#      from Keychain → download .cer, install, export as .p12 with a
-#      password. base64 it: `base64 -i Cert.p12 | pbcopy`
-#   3. Apple Developer → Profiles → "+" → App Store → bundle id
-#      com.taxottic.app → download .mobileprovision. base64 same way.
+# Setup time: ~5 minutes through the web UI. No Mac required.
 
 on:
   workflow_dispatch:
@@ -35,6 +42,10 @@ jobs:
   ios-archive:
     runs-on: macos-15
     timeout-minutes: 60
+    env:
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      DEVELOPMENT_TEAM: ${{ secrets.IOS_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,37 +60,28 @@ jobs:
       # — server.url is live) and refreshes plugin native code.
       - run: npx cap sync ios
 
-      # ---- Code signing ----
-      - name: Import Apple Distribution certificate
+      # Save ASC API key to the standard private_keys location;
+      # xcodebuild + altool both look here automatically.
+      - name: Save ASC API key
         env:
-          P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12 }}
-          P12_PWD: ${{ secrets.IOS_DIST_CERT_PWD }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
-          KEYCHAIN=build.keychain
-          security create-keychain -p "" $KEYCHAIN
-          security default-keychain -s $KEYCHAIN
-          security unlock-keychain -p "" $KEYCHAIN
-          security set-keychain-settings -lut 21600 $KEYCHAIN
-          echo "$P12_BASE64" | base64 -d > /tmp/cert.p12
-          security import /tmp/cert.p12 -k $KEYCHAIN -P "$P12_PWD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" $KEYCHAIN
+          mkdir -p ~/private_keys
+          KEY_FILE=~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+          printf "%s" "$ASC_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
 
-      - name: Install provisioning profile
-        env:
-          PROFILE_BASE64: ${{ secrets.IOS_PROV_PROFILE }}
-        run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "$PROFILE_BASE64" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/Taxottic_AppStore.mobileprovision
-
-      # ---- Archive + export ----
       - name: Bump build number
         working-directory: ios/App
         run: |
-          # Use the GitHub run number as the CFBundleVersion so each
-          # build gets a unique, monotonically increasing value.
+          # Use github.run_number so each build is monotonic + unique.
           /usr/libexec/PlistBuddy -c "Set CFBundleVersion ${{ github.run_number }}" App/Info.plist
 
-      - name: Archive
+      # Pin the bundle id + team id in the Xcode project so the
+      # automatic-signing flow knows which provisioning profile to
+      # generate. xcodebuild's -allowProvisioningUpdates flag lets it
+      # create / fetch profiles via the ASC API key on the fly.
+      - name: Archive (automatic signing)
         working-directory: ios/App
         run: |
           xcodebuild \
@@ -88,6 +90,12 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath $RUNNER_TEMP/App.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
+            DEVELOPMENT_TEAM=${{ secrets.IOS_TEAM_ID }} \
+            CODE_SIGN_STYLE=Automatic \
             archive | xcpretty
 
       - name: Write export options
@@ -99,15 +107,13 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key><string>app-store-connect</string>
-            <key>teamID</key><string>$IOS_TEAM_ID</string>
+            <key>teamID</key><string>${{ secrets.IOS_TEAM_ID }}</string>
+            <key>signingStyle</key><string>automatic</string>
             <key>uploadBitcode</key><false/>
             <key>uploadSymbols</key><true/>
-            <key>signingStyle</key><string>manual</string>
           </dict>
           </plist>
           EOF
-        env:
-          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
 
       - name: Export IPA
         run: |
@@ -115,26 +121,19 @@ jobs:
             -exportArchive \
             -archivePath $RUNNER_TEMP/App.xcarchive \
             -exportOptionsPlist /tmp/ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/export | xcpretty
-
-      # ---- Upload to App Store Connect ----
-      - name: Save ASC API key to disk
-        env:
-          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/private_keys
-          echo "$ASC_PRIVATE_KEY" > ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+            -exportPath $RUNNER_TEMP/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} | xcpretty
 
       - name: Upload to TestFlight
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           xcrun altool --upload-app \
             -f $RUNNER_TEMP/export/App.ipa \
             -t ios \
-            --apiKey $ASC_KEY_ID \
-            --apiIssuer $ASC_ISSUER_ID
+            --apiKey ${{ secrets.ASC_KEY_ID }} \
+            --apiIssuer ${{ secrets.ASC_ISSUER_ID }}
 
       - uses: actions/upload-artifact@v4
         with:
