@@ -483,6 +483,36 @@ export default async function DashboardPage() {
           </ul>
         </section>
 
+        {/* Tax-savings playbook tile — links into the company's goal page. */}
+        {companies.length > 0 ? (
+          <section className="mt-8">
+            <Link
+              href={`/c/${companies[0].company.public_id}/savings-goals`}
+              className="block card card-hover p-6 sm:p-7 border-gold-300/60"
+            >
+              <div className="flex items-start gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                    Tax-savings playbook
+                  </div>
+                  <h2 className="display mt-1 text-xl text-forest-900">
+                    Goals to absorb your tax bill
+                  </h2>
+                  <p className="mt-1 text-sm text-ink-soft leading-relaxed max-w-2xl">
+                    Personalized retirement, health, education, and energy
+                    moves with step-by-step instructions — built from your
+                    actual filing status, income, and state. None are new
+                    business expenses.
+                  </p>
+                </div>
+                <span className="text-forest-700 font-medium">
+                  View playbook &rarr;
+                </span>
+              </div>
+            </Link>
+          </section>
+        ) : null}
+
         {/* Active goals */}
         {activeGoals && activeGoals.length > 0 ? (
           <section className="mt-8">

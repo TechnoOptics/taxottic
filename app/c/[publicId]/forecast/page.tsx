@@ -663,6 +663,33 @@ export default async function ForecastPage({ params }: { params: Params }) {
         {/* Year-end suggestions: personalized moves the user can still make. */}
         <YearEndSuggestionsCard suggestions={suggestions} />
 
+        {/* Tax-savings playbook teaser → links to /savings-goals */}
+        <Link
+          href={`/c/${publicId}/savings-goals`}
+          className="block mt-6 card card-hover p-6 sm:p-7 border-gold-300/60"
+        >
+          <div className="flex items-start gap-3 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                Goals · Detailed how-to
+              </div>
+              <h2 className="display mt-1 text-xl text-forest-900">
+                Open the tax-savings playbook
+              </h2>
+              <p className="mt-1 text-sm text-ink-soft leading-relaxed max-w-2xl">
+                A personalized list of goals — 401(k) maxing, HSA, SEP-IRA,
+                Solo 401(k), Backdoor Roth, 529 plans, charitable bunching, EV
+                credits, energy upgrades — each with step-by-step instructions
+                on exactly how to execute. None of these are new business
+                expenses; they&apos;re strategies that absorb your tax bill.
+              </p>
+            </div>
+            <span className="text-forest-700 font-medium">
+              View playbook &rarr;
+            </span>
+          </div>
+        </Link>
+
         {/* Quarterly estimated payment schedule */}
         {result.quarterlyEstimates.some((q) => q.amountCents > 0) ? (
           <div className="mt-6 card p-6 sm:p-7">
