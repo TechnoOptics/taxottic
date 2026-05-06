@@ -12,7 +12,9 @@ export default async function ImportPage({ params }: { params: Params }) {
 
   const { data: imports } = await supabase
     .from("bank_imports")
-    .select("id, filename, status, row_count, applied_count, created_at")
+    .select(
+      "id, filename, status, row_count, applied_count, account_type, created_at",
+    )
     .eq("company_id", company.id)
     .order("created_at", { ascending: false });
 
@@ -34,7 +36,7 @@ export default async function ImportPage({ params }: { params: Params }) {
           <p className="mt-2 text-sm text-ink-soft">
             Export a transaction CSV from your bank or card and drop it here.
             We will sniff the columns, auto-categorize what we can, and let
-            you review the rest before applying as expenses.
+            you review the rest before applying.
           </p>
           <form
             action={uploadCsv}
@@ -42,6 +44,36 @@ export default async function ImportPage({ params }: { params: Params }) {
             className="mt-5 grid gap-3"
           >
             <input type="hidden" name="company_id" value={company.id} />
+
+            <label className="grid gap-2">
+              <span className="text-sm font-medium text-forest-800">
+                What kind of account is this?
+              </span>
+              <select
+                name="account_type"
+                required
+                defaultValue="business_checking"
+                className="input"
+              >
+                <option value="business_checking">
+                  Business checking
+                </option>
+                <option value="business_savings">Business savings</option>
+                <option value="checking">Personal checking</option>
+                <option value="savings">Personal savings</option>
+                <option value="credit">
+                  Credit card (every row counted as an expense)
+                </option>
+                <option value="other">Other</option>
+              </select>
+              <span className="text-[11px] text-ink-muted">
+                Picking <strong>Credit card</strong> tells us to treat every
+                imported row as a business expense — issuers don&apos;t agree
+                on charge-vs-payment signs, so we use absolute value and skip
+                obvious card payments.
+              </span>
+            </label>
+
             <label className="grid gap-2">
               <span className="text-sm font-medium text-forest-800">
                 CSV file
@@ -74,6 +106,7 @@ export default async function ImportPage({ params }: { params: Params }) {
                       {imp.filename}
                     </div>
                     <div className="text-xs text-ink-muted mt-0.5">
+                      {prettyAccountType(imp.account_type)} ·{" "}
                       {imp.row_count} rows - {imp.applied_count} applied -{" "}
                       <span className="uppercase tracking-wide">
                         {imp.status}
@@ -99,4 +132,23 @@ export default async function ImportPage({ params }: { params: Params }) {
       </section>
     </main>
   );
+}
+
+function prettyAccountType(t: string | null | undefined): string {
+  switch (t) {
+    case "business_checking":
+      return "Business checking";
+    case "business_savings":
+      return "Business savings";
+    case "checking":
+      return "Checking";
+    case "savings":
+      return "Savings";
+    case "credit":
+      return "Credit card";
+    case "other":
+      return "Other";
+    default:
+      return "Checking";
+  }
 }

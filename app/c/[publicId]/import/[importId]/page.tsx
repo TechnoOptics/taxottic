@@ -14,11 +14,14 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
 
   const { data: imp } = await supabase
     .from("bank_imports")
-    .select("id, filename, status, row_count, applied_count, created_at")
+    .select(
+      "id, filename, status, row_count, applied_count, account_type, created_at",
+    )
     .eq("id", importId)
     .eq("company_id", company.id)
     .single();
   if (!imp) notFound();
+  const isCredit = imp.account_type === "credit";
 
   const [{ data: txs }, { data: categories }] = await Promise.all([
     supabase
@@ -39,8 +42,16 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
   const cats =
     (categories as { code: string; label: string }[] | null) ?? [];
 
-  const debits = (txs ?? []).filter((t) => t.amount_cents < 0 && !t.ignored);
-  const credits = (txs ?? []).filter((t) => t.amount_cents > 0 && !t.ignored);
+  // For credit-card imports every non-ignored, non-zero row is an
+  // expense. For other accounts we keep the conventional debit (out)
+  // / credit (in) split.
+  const allActive = (txs ?? []).filter((t) => !t.ignored);
+  const debits = isCredit
+    ? allActive.filter((t) => t.amount_cents !== 0)
+    : allActive.filter((t) => t.amount_cents < 0);
+  const credits = isCredit
+    ? []
+    : allActive.filter((t) => t.amount_cents > 0);
   const ignoredRows = (txs ?? []).filter((t) => t.ignored);
   const pendingApply = debits.filter(
     (t) => t.applied_category_code && !t.applied_expense_id,
@@ -61,11 +72,20 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
           {imp.filename}
         </h1>
         <div className="text-xs text-ink-muted mt-1 tracking-wide">
+          {prettyAccountType(imp.account_type)} ·{" "}
           {imp.row_count} rows uploaded -{" "}
           {imp.applied_count > 0
             ? `${imp.applied_count} applied`
             : "not yet applied"}
         </div>
+        {isCredit ? (
+          <p className="mt-2 text-xs text-ink-muted max-w-2xl leading-relaxed">
+            Credit-card import: every charge counts as an expense regardless
+            of CSV sign. We auto-skip rows that look like card payments
+            (autopay, payment received, etc.) so they aren&apos;t
+            double-counted.
+          </p>
+        ) : null}
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="import" />
@@ -176,6 +196,25 @@ type TxRowProps = {
   importId: string;
   cats: { code: string; label: string }[];
 };
+
+function prettyAccountType(t: string | null | undefined): string {
+  switch (t) {
+    case "business_checking":
+      return "Business checking";
+    case "business_savings":
+      return "Business savings";
+    case "checking":
+      return "Checking";
+    case "savings":
+      return "Savings";
+    case "credit":
+      return "Credit card";
+    case "other":
+      return "Other";
+    default:
+      return "Checking";
+  }
+}
 
 function TxRow({ tx, importId, cats }: TxRowProps) {
   const isApplied = !!tx.applied_expense_id;
