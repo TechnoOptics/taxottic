@@ -7,6 +7,26 @@ import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import { checkCsvImportLimit } from "@/lib/plans/usage";
 
+/**
+ * Heuristic: looks like a credit-card payment from another account, not
+ * a real charge. Used to skip rows on a credit import that would
+ * otherwise inflate expenses.
+ */
+function looksLikeCardPayment(description: string | null): boolean {
+  if (!description) return false;
+  const d = description.toLowerCase();
+  return (
+    d.includes("autopay") ||
+    d.includes("auto pay") ||
+    d.includes("payment received") ||
+    d.includes("payment - thank you") ||
+    d.includes("payment thank you") ||
+    /\bpymt\b/.test(d) ||
+    (d.includes("payment") && d.includes("from")) ||
+    d.includes("ach payment")
+  );
+}
+
 async function userBelongsToCompany(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
   userId: string,
@@ -21,10 +41,23 @@ async function userBelongsToCompany(
   return !!data;
 }
 
+const VALID_ACCOUNT_TYPES = new Set([
+  "checking",
+  "savings",
+  "business_checking",
+  "business_savings",
+  "credit",
+  "other",
+]);
+
 export async function uploadCsv(formData: FormData) {
   const { supabase, admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const file = formData.get("file");
+  const rawAccountType = String(formData.get("account_type") ?? "checking");
+  const accountType = VALID_ACCOUNT_TYPES.has(rawAccountType)
+    ? rawAccountType
+    : "checking";
   if (!companyId || !(file instanceof File)) {
     throw new Error("Invalid upload");
   }
@@ -61,6 +94,7 @@ export async function uploadCsv(formData: FormData) {
       filename: file.name,
       row_count: dataRows.length,
       status: "reviewing",
+      account_type: accountType,
     })
     .select("id")
     .single();
@@ -109,6 +143,18 @@ export async function applyTransactions(formData: FormData) {
     throw new Error("Not a member of this company");
   }
 
+  // Pull the import's account_type — credit-card imports take the
+  // absolute value of every charge as an expense regardless of sign,
+  // since issuers don't agree on charge-vs-payment sign conventions.
+  const { data: imp } = await admin
+    .from("bank_imports")
+    .select("account_type")
+    .eq("id", importId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  const accountType = (imp?.account_type as string | null) ?? "checking";
+  const isCredit = accountType === "credit";
+
   const { data: txs } = await admin
     .from("bank_transactions")
     .select(
@@ -146,16 +192,40 @@ export async function applyTransactions(formData: FormData) {
   const txUpdates: { id: string }[] = [];
 
   for (const tx of applicable) {
-    if (!tx.posted_at) continue; // skip transactions with no date
+    if (!tx.posted_at) continue;
     const posted = new Date(tx.posted_at + "T00:00:00Z");
     const txYear = posted.getUTCFullYear();
     const txMonth = posted.getUTCMonth() + 1;
-    // Skip rows that are not in the current tax year or are future-dated.
     if (txYear !== taxYear) continue;
     if (txMonth > currentMonth) continue;
 
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
+
+    // Credit-card imports: every row becomes an expense regardless of
+    // the sign on the original CSV. Card-payment-back rows (where the
+    // user paid down the card from another account) are skipped via a
+    // description-pattern heuristic — they're transfers, not biz
+    // expenses, and double-counting them inflates the deduction.
+    if (isCredit) {
+      if (looksLikeCardPayment(tx.description)) continue;
+      expenseInserts.push({
+        company_id: companyId,
+        user_id: user.id,
+        tax_year: taxYear,
+        month: txMonth,
+        amount_cents: absCents,
+        category_code: tx.applied_category_code!,
+        notes: tx.description,
+      });
+      txUpdates.push({ id: tx.id });
+      continue;
+    }
+
+    // Non-credit (checking/savings/other): keep the existing sign
+    // convention — only negative amounts are expenses. Positive
+    // amounts are income or transfers; the user can categorize those
+    // manually for now.
     if (tx.amount_cents < 0) {
       expenseInserts.push({
         company_id: companyId,
