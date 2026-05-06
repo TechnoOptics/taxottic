@@ -398,6 +398,9 @@ export const CREDIT_COST = {
   receipt_ocr: 2,
   document_ocr: 5,
   yearend_pdf: 3,
+  // One Sonnet call categorizing an imported batch (up to ~200 rows
+  // per call; the action chunks larger imports into multiple charges).
+  bulk_categorize: 10,
 } as const;
 
 export type CreditAction = keyof typeof CREDIT_COST;

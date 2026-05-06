@@ -5,7 +5,13 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
-import { checkCsvImportLimit } from "@/lib/plans/usage";
+import {
+  categorizeBatch,
+  type CategorizeInput,
+} from "@/lib/csv/bella-categorize";
+import { checkCsvImportLimit, isSuperAdmin } from "@/lib/plans/usage";
+import { consume } from "@/lib/plans/credits";
+import { evaluateBadges } from "@/lib/badges/evaluate";
 
 /**
  * Heuristic: looks like a credit-card payment from another account, not
@@ -324,6 +330,315 @@ export async function ignoreTx(formData: FormData) {
     .update({ ignored: true, applied_category_code: null })
     .eq("id", id);
   revalidatePath(`/c/[publicId]/import/${importId}`);
+}
+
+/**
+ * Auto-categorize an entire import in one shot using Bella.
+ *
+ * Flow:
+ *   1. Charge bulk_categorize credits (super admins skip).
+ *   2. Pull every non-ignored, non-applied transaction from this
+ *      import.
+ *   3. Send the batch to Sonnet 4.5 with the company's allowed
+ *      expense codes + income sources. Receives a per-row decision
+ *      with a confidence score.
+ *   4. For each row:
+ *        confidence ≥ 0.85 + valid code → auto-apply
+ *          - "expense" → insert monthly_expenses, link applied_expense_id
+ *          - "income"  → insert monthly_income, link applied_income_id
+ *          - "transfer" → mark ignored (transfers don't belong on the
+ *            forecast)
+ *        confidence  0.7-0.85 → set suggested_category_code only
+ *        confidence < 0.7      → leave for human review
+ *   5. Update bank_imports applied_count + status.
+ *   6. Run evaluateBadges so any new medals (e.g. "first 100
+ *      categorized expenses") get awarded immediately.
+ *   7. Revalidate forecast / income / expense pages so the dashboard
+ *      reflects the new entries on the next paint.
+ *
+ * For credit-card imports, the same card-payment heuristic from
+ * applyTransactions applies — those rows get auto-ignored before
+ * Bella sees them. We don't pay tokens to classify obvious transfers.
+ */
+export async function bellaAutoApply(formData: FormData) {
+  const { supabase, admin, user } = await requireUserWithAdmin();
+  const importId = String(formData.get("import_id") ?? "");
+  const companyId = String(formData.get("company_id") ?? "");
+  if (!importId || !companyId) {
+    throw new Error("Missing import_id or company_id");
+  }
+  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+    throw new Error("Not a member of this company");
+  }
+
+  const { data: imp } = await admin
+    .from("bank_imports")
+    .select("id, account_type, company_id")
+    .eq("id", importId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!imp) throw new Error("Import not found");
+  const accountType = (imp.account_type as string | null) ?? "checking";
+  const isCredit = accountType === "credit";
+
+  const { data: txs } = await admin
+    .from("bank_transactions")
+    .select(
+      "id, description, amount_cents, posted_at, raw_category, applied_expense_id, applied_income_id, ignored",
+    )
+    .eq("import_id", importId)
+    .eq("company_id", companyId);
+
+  // Already-applied rows skip — we don't want to double-charge.
+  // Also drop credit-card payment rows up-front to avoid wasting
+  // tokens classifying them.
+  const candidates = (txs ?? []).filter(
+    (t) =>
+      !t.ignored &&
+      !t.applied_expense_id &&
+      !t.applied_income_id &&
+      !(isCredit && looksLikeCardPayment(t.description)),
+  );
+
+  if (candidates.length === 0) {
+    revalidatePath(`/c/[publicId]/import/${importId}`);
+    return;
+  }
+
+  // Charge credits before the model call. Super admins bypass.
+  const superAdmin = await isSuperAdmin(supabase);
+  if (!superAdmin) {
+    const charge = await consume(admin, user.id, "bulk_categorize", importId);
+    if (!charge.ok) {
+      throw new Error(
+        `Bella needs ${charge.needed} credits to categorize this import; you have ${charge.balance}. Top up at /billing.`,
+      );
+    }
+  }
+
+  // Pull the company's allowed deduction-category codes (business +
+  // both scopes) so Bella can only choose categories the user can
+  // actually file under.
+  const { data: catRows } = await admin
+    .from("deduction_categories")
+    .select("code")
+    .in("scope", ["business", "both"]);
+  const allowedExpenseCodes = (catRows ?? []).map((c) => c.code as string);
+
+  // monthly_income.source enum values, hard-coded since they live in
+  // the postgres type rather than a table.
+  const allowedIncomeSources = [
+    "sales",
+    "services",
+    "wages_w2",
+    "interest",
+    "dividends",
+    "rental",
+    "royalty",
+    "other",
+  ];
+
+  const inputs: CategorizeInput[] = candidates.map((t) => ({
+    id: t.id,
+    description: t.description ?? "",
+    amount_cents: t.amount_cents,
+    posted_at: t.posted_at,
+    raw_category: t.raw_category,
+  }));
+
+  // Chunk to ~150 rows per Anthropic call so we stay under context
+  // limits even with chatty descriptions. Each chunk is independent.
+  const CHUNK = 150;
+  const decisions: Awaited<ReturnType<typeof categorizeBatch>> = [];
+  for (let i = 0; i < inputs.length; i += CHUNK) {
+    const slice = inputs.slice(i, i + CHUNK);
+    const part = await categorizeBatch({
+      transactions: slice,
+      allowedExpenseCodes,
+      allowedIncomeSources,
+      accountType,
+    });
+    decisions.push(...part);
+  }
+
+  const decByTxId = new Map(decisions.map((d) => [d.id, d]));
+  const now = new Date();
+  const taxYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
+
+  type ExpInsert = {
+    company_id: string;
+    user_id: string;
+    tax_year: number;
+    month: number;
+    amount_cents: number;
+    category_code: string;
+    notes: string;
+  };
+  type IncInsert = {
+    company_id: string;
+    user_id: string;
+    tax_year: number;
+    month: number;
+    amount_cents: number;
+    source: string;
+    notes: string;
+  };
+
+  const expenseInserts: ExpInsert[] = [];
+  const expenseTxIds: string[] = [];
+  const incomeInserts: IncInsert[] = [];
+  const incomeTxIds: string[] = [];
+  const ignoreTxIds: string[] = [];
+  const suggestionUpdates: Array<{
+    id: string;
+    code: string | null;
+  }> = [];
+
+  for (const tx of candidates) {
+    const d = decByTxId.get(tx.id);
+    if (!d) continue;
+
+    // Always suggest the code so the user sees Bella's pick on review,
+    // even when we don't auto-apply.
+    if (d.code) suggestionUpdates.push({ id: tx.id, code: d.code });
+
+    // Transfer → mark ignored regardless of confidence; transfers are
+    // never a forecast input.
+    if (d.kind === "transfer") {
+      ignoreTxIds.push(tx.id);
+      continue;
+    }
+
+    // Below the auto-apply threshold → leave it for the user.
+    if (d.confidence < 0.85) continue;
+
+    if (!tx.posted_at) continue;
+    const posted = new Date(tx.posted_at + "T00:00:00Z");
+    const txYear = posted.getUTCFullYear();
+    const txMonth = posted.getUTCMonth() + 1;
+    if (txYear !== taxYear) continue;
+    if (txMonth > currentMonth) continue;
+
+    const absCents = Math.abs(tx.amount_cents);
+    if (absCents === 0) continue;
+
+    if (d.kind === "expense" && d.code) {
+      expenseInserts.push({
+        company_id: companyId,
+        user_id: user.id,
+        tax_year: taxYear,
+        month: txMonth,
+        amount_cents: absCents,
+        category_code: d.code,
+        notes: tx.description ?? "",
+      });
+      expenseTxIds.push(tx.id);
+    } else if (d.kind === "income" && d.code && !isCredit) {
+      // Income on a credit account is always a payment-back; don't
+      // create a phantom revenue line.
+      incomeInserts.push({
+        company_id: companyId,
+        user_id: user.id,
+        tax_year: taxYear,
+        month: txMonth,
+        amount_cents: absCents,
+        source: d.code,
+        notes: tx.description ?? "",
+      });
+      incomeTxIds.push(tx.id);
+    }
+  }
+
+  // Apply expense rows.
+  if (expenseInserts.length > 0) {
+    const { data: created } = await admin
+      .from("monthly_expenses")
+      .insert(expenseInserts)
+      .select("id");
+    if (created) {
+      for (let i = 0; i < created.length; i++) {
+        const txId = expenseTxIds[i];
+        const exId = created[i]?.id;
+        if (txId && exId) {
+          await admin
+            .from("bank_transactions")
+            .update({
+              applied_expense_id: exId,
+              applied_category_code: expenseInserts[i].category_code,
+            })
+            .eq("id", txId);
+        }
+      }
+    }
+  }
+
+  // Apply income rows.
+  if (incomeInserts.length > 0) {
+    const { data: created } = await admin
+      .from("monthly_income")
+      .insert(incomeInserts)
+      .select("id");
+    if (created) {
+      for (let i = 0; i < created.length; i++) {
+        const txId = incomeTxIds[i];
+        const inId = created[i]?.id;
+        if (txId && inId) {
+          await admin
+            .from("bank_transactions")
+            .update({ applied_income_id: inId })
+            .eq("id", txId);
+        }
+      }
+    }
+  }
+
+  // Bulk-update suggestions for the rows that ended up below
+  // auto-apply but still got a category from Bella.
+  for (const s of suggestionUpdates) {
+    if (s.code) {
+      await admin
+        .from("bank_transactions")
+        .update({ suggested_category_code: s.code })
+        .eq("id", s.id);
+    }
+  }
+
+  // Mark transfers as ignored.
+  if (ignoreTxIds.length > 0) {
+    await admin
+      .from("bank_transactions")
+      .update({ ignored: true, applied_category_code: null })
+      .in("id", ignoreTxIds);
+  }
+
+  // Refresh applied_count + status on the import.
+  const totalApplied = expenseInserts.length + incomeInserts.length;
+  await admin
+    .from("bank_imports")
+    .update({
+      applied_count: totalApplied,
+      status: totalApplied > 0 ? "applied" : "reviewing",
+    })
+    .eq("id", importId);
+
+  // Re-evaluate badges so any newly-earned medals show up on the
+  // user's next dashboard hit. Uses the cookie-auth supabase client
+  // so RLS still applies.
+  await evaluateBadges(supabase, user.id);
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  if (company) {
+    revalidatePath(`/c/${company.public_id}/import/${importId}`);
+    revalidatePath(`/c/${company.public_id}/expenses`);
+    revalidatePath(`/c/${company.public_id}/income`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+    revalidatePath(`/dashboard`);
+  }
 }
 
 /**
