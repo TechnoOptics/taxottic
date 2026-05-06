@@ -5,6 +5,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
+import { TrialBanner } from "@/components/TrialBanner";
+import { getTrialState } from "@/lib/plans/usage";
 import { MedalCelebration } from "@/components/MedalCelebration";
 import { WelcomeTour } from "@/components/WelcomeTour";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
@@ -295,6 +297,8 @@ export default async function DashboardPage() {
     }
   }
 
+  const trial = await getTrialState(supabase, user.id);
+
   return (
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -308,6 +312,8 @@ export default async function DashboardPage() {
         <p className="mt-2 text-sm sm:text-base text-ink-soft">
           {greeting.pleasantry}
         </p>
+
+        <TrialBanner trial={trial} />
 
         {/* Recap: what needs attention right now */}
         {recap.length > 0 ? (

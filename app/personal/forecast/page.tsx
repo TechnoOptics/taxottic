@@ -2,6 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
+import { TrialBanner } from "@/components/TrialBanner";
+import { getTrialState } from "@/lib/plans/usage";
+import { createClient } from "@/lib/supabase/server";
 import {
   forecast,
   formatCents,
@@ -23,7 +26,9 @@ import type { FilingStatus } from "@/lib/tax/constants-2025";
  */
 export default async function PersonalForecastPage() {
   const { admin, user } = await requireUserWithAdmin();
+  const supabase = await createClient();
   const taxYear = new Date().getUTCFullYear();
+  const trial = await getTrialState(supabase, user.id);
 
   const { data: taxProfile } = await admin
     .from("tax_profiles")
@@ -81,6 +86,8 @@ export default async function PersonalForecastPage() {
           totals. We project to year-end and apply 2025 federal rules. Update
           your tax profile any time to refine.
         </p>
+
+        <TrialBanner trial={trial} />
 
         <div className="card mt-7 p-6 sm:p-9">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">

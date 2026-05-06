@@ -13,6 +13,11 @@ import {
  * Super-admins (forever-allowlist) get 'practice' implicitly so they
  * can exercise every feature without paying.
  *
+ * Trial expiry: when status='trialing' and trial_end has passed, the
+ * row is left intact (so we keep the audit trail of "this user had a
+ * trial") but the function returns 'free'. The next checkout will
+ * mark them paid.
+ *
  * Backwards compat: rows whose `plan` column predates the 5-tier
  * rewrite ('pro', 'team') are normalized to the closest current tier.
  */
@@ -25,12 +30,54 @@ export async function getActivePlan(
 
   const { data } = await supabase
     .from("subscriptions")
-    .select("plan, status")
+    .select("plan, status, trial_end")
     .eq("user_id", userId)
     .maybeSingle();
   if (!data) return "free";
   if (data.status !== "active" && data.status !== "trialing") return "free";
+  if (data.status === "trialing" && isTrialExpired(data.trial_end)) {
+    return "free";
+  }
   return normalizePlan(data.plan);
+}
+
+/**
+ * Trial state for the dashboard banner. Returns days remaining
+ * (rounded up) and whether the trial is still active.
+ */
+export type TrialState =
+  | { kind: "active"; daysRemaining: number; trialEnd: string }
+  | { kind: "expired"; trialEnd: string }
+  | { kind: "none" };
+
+export async function getTrialState(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<TrialState> {
+  const { data } = await supabase
+    .from("subscriptions")
+    .select("status, trial_end, stripe_subscription_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  // Only show trial UI when the row was seeded by signup (no Stripe
+  // sub yet). Once they convert, we don't want the trial banner to
+  // linger.
+  if (!data || data.stripe_subscription_id) return { kind: "none" };
+  if (data.status !== "trialing" || !data.trial_end) return { kind: "none" };
+  const expired = isTrialExpired(data.trial_end);
+  if (expired) return { kind: "expired", trialEnd: data.trial_end };
+  const days = Math.max(
+    1,
+    Math.ceil(
+      (new Date(data.trial_end).getTime() - Date.now()) / 86_400_000,
+    ),
+  );
+  return { kind: "active", daysRemaining: days, trialEnd: data.trial_end };
+}
+
+function isTrialExpired(trialEnd: string | null): boolean {
+  if (!trialEnd) return false;
+  return new Date(trialEnd).getTime() < Date.now();
 }
 
 /**
