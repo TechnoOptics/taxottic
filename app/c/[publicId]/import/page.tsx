@@ -35,8 +35,10 @@ export default async function ImportPage({ params }: { params: Params }) {
           <h2 className="display text-xl text-forest-900">Upload a CSV</h2>
           <p className="mt-2 text-sm text-ink-soft">
             Export a transaction CSV from your bank or card and drop it here.
-            We will sniff the columns, auto-categorize what we can, and let
-            you review the rest before applying.
+            We&apos;ll auto-categorize every row with Bella as soon as you
+            upload — high-confidence rows apply themselves; the rest land on
+            the review page for a one-click confirm. Costs 10 credits per
+            import (super admins free).
           </p>
           <form
             action={uploadCsv}

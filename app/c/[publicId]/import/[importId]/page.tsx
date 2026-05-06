@@ -118,20 +118,20 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
           <input type="hidden" name="company_id" value={company.id} />
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
-              One-click sort
+              Bella sorted this for you
             </div>
             <div className="display text-base text-forest-900 mt-1">
-              Let Bella categorize this whole import
+              Re-run categorization
             </div>
             <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
-              Bella reads each row, decides expense vs income vs transfer,
-              picks a deduction category, and auto-applies anything she&apos;s
-              confident about. Lower-confidence rows still surface a
-              suggestion you can confirm. Costs 10 credits per run; super
-              admins free.
+              Bella already read this import on upload — high-confidence
+              rows are applied; lower-confidence rows are below with her
+              suggested category. Click to re-run if you added new rows or
+              changed the account type. Costs 10 credits; super admins
+              free.
             </p>
           </div>
-          <button className="btn-primary">Auto-categorize</button>
+          <button className="btn-ghost">Re-run Bella</button>
         </form>
 
         {pendingApply.length > 0 ? (

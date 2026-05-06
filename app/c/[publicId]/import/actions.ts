@@ -130,6 +130,26 @@ export async function uploadCsv(formData: FormData) {
     if (error) throw new Error(error.message);
   }
 
+  // Auto-run Bella over the freshly-imported batch. Failures here
+  // (insufficient credits, model timeout, anything else) are
+  // swallowed — the import succeeded and the user can still
+  // categorize manually on the review page.
+  try {
+    await runBellaCategorize({
+      supabase,
+      admin,
+      userId: user.id,
+      importId: importRow.id,
+      companyId,
+      onInsufficientCredits: () => {
+        // no-op: the user lands on the review page with rows
+        // un-applied and can buy credits or categorize manually
+      },
+    });
+  } catch (err) {
+    console.error("auto-categorize on upload failed:", err);
+  }
+
   const { data: company } = await admin
     .from("companies")
     .select("public_id")
@@ -370,6 +390,41 @@ export async function bellaAutoApply(formData: FormData) {
   if (!(await userBelongsToCompany(admin, user.id, companyId))) {
     throw new Error("Not a member of this company");
   }
+  await runBellaCategorize({
+    supabase,
+    admin,
+    userId: user.id,
+    importId,
+    companyId,
+    onInsufficientCredits: (msg) => {
+      throw new Error(msg);
+    },
+  });
+}
+
+/**
+ * Internal: the actual categorize-and-apply flow. Callable from the
+ * server action above (after permission check) and from uploadCsv
+ * (right after a fresh CSV's rows are persisted, so a single upload
+ * step finishes with everything categorized).
+ *
+ * onInsufficientCredits lets the caller decide what happens when the
+ * user is out of credits — the manual button throws so the user sees
+ * the error toast; the auto-flow swallows it and lets the user
+ * categorize manually on the review page.
+ */
+async function runBellaCategorize(args: {
+  supabase: import("@supabase/supabase-js").SupabaseClient;
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>;
+  userId: string;
+  importId: string;
+  companyId: string;
+  onInsufficientCredits: (message: string) => void;
+}): Promise<void> {
+  const { supabase, admin, userId, importId, companyId } = args;
+  // Local shim so the rest of the function — copied from the
+  // original action body — keeps using `user.id` without churn.
+  const user = { id: userId };
 
   const { data: imp } = await admin
     .from("bank_imports")
@@ -410,9 +465,10 @@ export async function bellaAutoApply(formData: FormData) {
   if (!superAdmin) {
     const charge = await consume(admin, user.id, "bulk_categorize", importId);
     if (!charge.ok) {
-      throw new Error(
+      args.onInsufficientCredits(
         `Bella needs ${charge.needed} credits to categorize this import; you have ${charge.balance}. Top up at /billing.`,
       );
+      return;
     }
   }
 
