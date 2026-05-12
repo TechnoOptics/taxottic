@@ -6,13 +6,22 @@ import { saveFilerType } from "./actions";
 /**
  * The fork. Asked once at signup before any other onboarding step.
  *
- * Wage employee → personal-only mode (no company creation, no
- * Schedule C; the dashboard surfaces a personal forecast tile).
- * Business / freelance → existing company-creation flow.
+ * This used to be a forced single-choice radio (W-2 vs business),
+ * which hid the very common combined case (day-job W-2 + side hustle
+ * 1099). Switched to two checkboxes so users with both can pick both;
+ * the action maps the four selection states to the three filer-type
+ * values in the DB:
+ *
+ *   W-2 only           → 'w2'           → /personal/forecast
+ *   Business only      → 'business'     → /onboarding/new-company
+ *   Both               → 'both'         → /onboarding/new-company
+ *                                          (company first, then both
+ *                                          forecasts share the dashboard)
+ *   Neither            → form rejects
  *
  * If the user already picked, this page redirects out — it's
- * intentionally a one-shot. They can always create a company later
- * which auto-flips them to 'business' anyway.
+ * intentionally a one-shot. They can revisit /settings to change
+ * later (forthcoming).
  */
 export default async function FilerTypePage({
   searchParams,
@@ -43,21 +52,28 @@ export default async function FilerTypePage({
             How do you make most of your income?
           </h1>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-            We use this to fit Taxottic to your tax situation. You can switch
-            later — picking now just gets the right tools in front of you.
+            Pick all that apply. We&apos;ll fit Taxottic to your tax
+            situation. If you have W-2 wages AND run a business, check
+            both — the forecast will combine them and show whether
+            you&apos;ll owe or get a refund.
           </p>
 
           <form action={saveFilerType} className="mt-7 grid gap-3">
             <Choice
               value="w2"
               title="W-2 employee"
-              body="My income comes from a salary or hourly wage. My employer handles withholding. I file a personal 1040 and want help with W-4 tuning, retirement contributions, and year-end planning."
+              body="My income includes a salary or hourly wage. My employer handles withholding. I file a personal 1040 and want help with W-4 tuning, retirement contributions, and year-end planning."
             />
             <Choice
               value="business"
               title="Business owner / freelancer / 1099"
               body="I run a business — sole prop, LLC, S-Corp, partnership — or earn 1099 income. I track Schedule C income and expenses and want help with quarterly estimates, deductions, and entity-level tax."
             />
+            <p className="mt-1 text-xs text-ink-muted">
+              Pick one, or both. We&apos;ll combine the math when you
+              do both — your W-2 withholding can offset SE tax owed
+              from the side, which often turns "owe" into "refund."
+            </p>
             <button
               type="submit"
               className="btn-primary mt-3 self-start"
@@ -85,11 +101,10 @@ function Choice({
   return (
     <label className="flex gap-3 p-4 rounded-xl border border-forest-100 bg-white cursor-pointer hover:border-gold-300">
       <input
-        type="radio"
+        type="checkbox"
         name="filer_type"
         value={value}
         className="mt-1 size-4 accent-forest-700"
-        required
       />
       <div className="min-w-0">
         <div className="display text-base text-forest-900">{title}</div>

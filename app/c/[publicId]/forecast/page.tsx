@@ -488,15 +488,25 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-2xl">
             Right now you have logged{" "}
             <strong className="text-forest-900">
-              {formatCents(result.ytdIncomeCents)}
+              {/* "Logged" means actual YTD, not the projected forecast.
+                 Previously we used `result.ytdIncomeCents` which is the
+                 projected forecast's view of YTD - that pulls one-offs +
+                 recurring at full-year cadence, so the inline copy
+                 disagreed with the YTD card right below by hundreds of
+                 dollars. Use the dedicated ytdResult (which is fed the
+                 truly-realised one-offs + month-by-month recurring) to
+                 keep the headline and the YTD card in lockstep. */}
+              {formatCents(ytdResult.ytdIncomeCents)}
             </strong>{" "}
             of income and{" "}
             <strong className="text-forest-900">
-              {formatCents(result.ytdDeductibleExpensesCents)}
+              {formatCents(ytdResult.ytdDeductibleExpensesCents)}
             </strong>{" "}
             of deductible expenses across {input.monthsEntered} month
             {input.monthsEntered === 1 ? "" : "s"}. We project that to year-
-            end and apply 2025 tax rules.
+            end and apply 2025 federal brackets (the 2026 brackets aren&apos;t
+            published yet — we&apos;ll roll forward once the IRS finalises
+            them).
           </p>
 
           {/* YTD vs Projected side-by-side. The YTD column answers "if
@@ -563,17 +573,30 @@ export default async function ForecastPage({ params }: { params: Params }) {
             />
           </div>
 
-          {/* Save target */}
+          {/* Save target. Same bidirectional treatment as the personal
+              forecast: if W-2 withholding + estimates exceeded total
+              tax, surface the refund instead of "$0 still owed". A
+              business owner who's also a W-2 employee will frequently
+              land here when withholding from the day job covers the
+              SE tax for a side business. */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Stat
               label="Already paid"
               value={formatCents(result.alreadyPaidCents)}
             />
-            <Stat
-              label="Still owed"
-              value={formatCents(result.stillOwedCents)}
-              accent
-            />
+            {result.refundCents > 0 ? (
+              <Stat
+                label="Refund expected"
+                value={formatCents(result.refundCents)}
+                accent
+              />
+            ) : (
+              <Stat
+                label="Still owed"
+                value={formatCents(result.stillOwedCents)}
+                accent
+              />
+            )}
             <Stat
               label="Save per month to land at zero"
               value={formatCents(result.monthlySaveTargetCents)}

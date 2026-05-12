@@ -104,11 +104,27 @@ export default async function PersonalForecastPage() {
               label="Already paid (withholding + estimates)"
               value={formatCents(result.alreadyPaidCents)}
             />
-            <Stat
-              label={result.stillOwedCents > 0 ? "Still owed" : "Refund expected"}
-              value={formatCents(Math.max(result.stillOwedCents, 0))}
-              accent
-            />
+            {/* Bidirectional balance: show the side that's actually
+                non-zero. refundCents > 0 means the user has overpaid
+                (withholding + estimates exceed total tax) and gets
+                money back; stillOwedCents > 0 means they owe a
+                top-up. Previously the page hard-coded
+                `Math.max(stillOwedCents, 0)` which always rendered $0
+                next to a "Refund expected" label — the actual refund
+                amount was never computed. */}
+            {result.refundCents > 0 ? (
+              <Stat
+                label="Refund expected"
+                value={formatCents(result.refundCents)}
+                accent
+              />
+            ) : (
+              <Stat
+                label="Still owed"
+                value={formatCents(result.stillOwedCents)}
+                accent
+              />
+            )}
             <Stat
               label="Marginal rate"
               value={(result.marginalRate * 100).toFixed(1) + "%"}

@@ -222,64 +222,50 @@ export default async function TaxProfilePage({
             />
           </Section>
 
-          {/* Owner W-2 wages: many self-employed people moonlight a day job. */}
-          <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-forest-100 pt-5">
-            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
-              Your W-2 (if you also work a day job)
-            </legend>
-            <p className="sm:col-span-3 text-xs text-ink-muted -mt-1 leading-relaxed">
-              Many side-business owners also have a W-2. We need this so the
-              forecast doesn't double-count income or miss withholding you've
-              already paid. Leave at $0 if you don't have one.
-            </p>
-            <DollarField
-              name="owner_w2_wages"
-              label="Annual W-2 wages"
-              defaultCents={existing?.owner_w2_wages_cents ?? 0}
-            />
-            <DollarField
-              name="owner_w2_withheld"
-              label="Federal tax withheld"
-              defaultCents={existing?.owner_w2_withheld_cents ?? 0}
-            />
-            <DollarField
-              name="owner_w2_ss_wages"
-              label="Social Security wages"
-              defaultCents={existing?.owner_w2_ss_wages_cents ?? 0}
-              hint="Box 3 of your W-2"
-            />
-          </fieldset>
+          {/* Owner W-2 wages: many self-employed people moonlight a day job.
+              W2Fieldset wraps the W-2 OCR uploader, so dropping a PDF / photo
+              auto-fills the three boxes below it. The previous version of
+              this page rendered raw DollarFields and silently dropped the
+              uploader, forcing users to retype data the OCR had already
+              extracted. */}
+          <W2Fieldset
+            who="owner"
+            legend="Your W-2 (if you also work a day job)"
+            description="Many side-business owners also have a W-2. We need this so the forecast doesn't double-count income or miss withholding you've already paid. Drop in your W-2 PDF or photo and we'll fill the boxes; leave at $0 if you don't have one."
+            fieldNames={{
+              wages: "owner_w2_wages",
+              withheld: "owner_w2_withheld",
+              ssWages: "owner_w2_ss_wages",
+            }}
+            initial={{
+              wagesCents: existing?.owner_w2_wages_cents ?? 0,
+              withheldCents: existing?.owner_w2_withheld_cents ?? 0,
+              ssWagesCents: existing?.owner_w2_ss_wages_cents ?? 0,
+            }}
+            ssHint="Box 3 of your W-2"
+          />
 
           {/* Spouse: only meaningful if MFJ; we still capture it because some
               people file MFS and want to model the joint household. */}
-          <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-forest-100 pt-5">
-            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
-              Spouse W-2 (if applicable)
-            </legend>
-            <p className="sm:col-span-3 text-xs text-ink-muted -mt-1 leading-relaxed">
-              Only meaningful when you file jointly. Leave at $0 otherwise.
-            </p>
-            <DollarField
-              name="spouse_w2_wages"
-              label="Annual W-2 wages"
-              defaultCents={
+          <W2Fieldset
+            who="spouse"
+            legend="Spouse W-2 (if applicable)"
+            description="Only meaningful when you file jointly. Drop in their W-2 to auto-fill, or leave at $0 if it doesn't apply."
+            fieldNames={{
+              wages: "spouse_w2_wages",
+              withheld: "spouse_w2_withheld",
+              ssWages: "spouse_w2_ss_wages",
+            }}
+            initial={{
+              wagesCents:
                 existing?.spouse_w2_wages_cents ??
                 existing?.spouse_income_cents ??
-                0
-              }
-            />
-            <DollarField
-              name="spouse_w2_withheld"
-              label="Federal tax withheld"
-              defaultCents={existing?.spouse_w2_withheld_cents ?? 0}
-            />
-            <DollarField
-              name="spouse_w2_ss_wages"
-              label="Social Security wages"
-              defaultCents={existing?.spouse_w2_ss_wages_cents ?? 0}
-              hint="Box 3 of their W-2"
-            />
-          </fieldset>
+                0,
+              withheldCents: existing?.spouse_w2_withheld_cents ?? 0,
+              ssWagesCents: existing?.spouse_w2_ss_wages_cents ?? 0,
+            }}
+            ssHint="Box 3 of their W-2"
+          />
 
           <Section
             title="Estimated payments already made"

@@ -159,7 +159,21 @@ export type ForecastResult = {
 
   totalTaxCents: number;
   alreadyPaidCents: number;
+  /**
+   * Net balance owed: max(0, totalTax - alreadyPaid). Always >= 0.
+   * If the user has overpaid (withholding + estimates exceed total
+   * tax), this stays at 0 and `refundCents` is populated instead.
+   */
   stillOwedCents: number;
+  /**
+   * Net refund expected: max(0, alreadyPaid - totalTax). Always >= 0.
+   * If the user owes (totalTax > alreadyPaid), this stays at 0 and
+   * `stillOwedCents` is populated instead. Exactly one of the two is
+   * non-zero on any given forecast (or both zero when perfectly
+   * balanced). Bidirectional output so the UI can show "you'll get
+   * back $X" or "you'll owe $X" without re-deriving the sign.
+   */
+  refundCents: number;
 
   monthlySaveTargetCents: number;
   effectiveRate: number;
@@ -248,7 +262,12 @@ export function forecast(input: ForecastInput): ForecastResult {
     const w2WithheldTotal =
       input.ownerW2WithheldCents + input.spouseW2WithheldCents;
     const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
-    const remaining = Math.max(0, totalTax - alreadyPaid);
+    // Bidirectional balance: positive = still owe, negative = refund.
+    // Surface both sides separately so the UI doesn't have to recover
+    // the sign from a clamped value.
+    const balance = totalTax - alreadyPaid;
+    const remaining = Math.max(0, balance);
+    const refund = Math.max(0, -balance);
     const monthsRemaining = remainingMonthsToFilingDeadline(input.taxYear);
     const monthlySaveTarget = Math.round(remaining / monthsRemaining);
     hints.push(
@@ -277,6 +296,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       totalTaxCents: totalTax,
       alreadyPaidCents: alreadyPaid,
       stillOwedCents: remaining,
+      refundCents: refund,
       monthlySaveTargetCents: monthlySaveTarget,
       effectiveRate: projectedIncome > 0 ? totalTax / projectedIncome : 0,
       marginalRate: C_CORP_RATE,
@@ -465,7 +485,14 @@ export function forecast(input: ForecastInput): ForecastResult {
   const w2WithheldTotal =
     input.ownerW2WithheldCents + input.spouseW2WithheldCents;
   const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
-  const remaining = Math.max(0, totalTax - alreadyPaid);
+  // Bidirectional balance: positive = still owe, negative = refund.
+  // The combined-filer (W-2 + Schedule C) case is exactly where this
+  // matters most — the user's W-2 withholding can easily exceed total
+  // tax once SE deductions and credits are applied, and they should
+  // see the refund amount, not a flat $0 next to a "Refund" label.
+  const balance = totalTax - alreadyPaid;
+  const remaining = Math.max(0, balance);
+  const refund = Math.max(0, -balance);
 
   const monthsRemaining = remainingMonthsToFilingDeadline(input.taxYear);
   const monthlySaveTarget = Math.round(remaining / monthsRemaining);
@@ -518,6 +545,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     totalTaxCents: totalTax,
     alreadyPaidCents: alreadyPaid,
     stillOwedCents: remaining,
+    refundCents: refund,
     monthlySaveTargetCents: monthlySaveTarget,
     effectiveRate: effective,
     marginalRate: marginal,
