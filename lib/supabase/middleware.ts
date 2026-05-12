@@ -144,5 +144,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Defense in depth against cross-tenant cache leaks: any response we
+  // serve to an authenticated user must not be stored in the browser
+  // bfcache or any intermediary cache. Without this, hitting Back after a
+  // logout/login cycle restores the previous user's rendered HTML even
+  // though cookies have rotated, and CDNs (or service workers) could
+  // serve one user's RSC payload to another. Public anonymous traffic is
+  // left untouched so static and marketing routes stay cacheable.
+  if (user) {
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store, must-revalidate",
+    );
+  }
+
   return response;
 }
