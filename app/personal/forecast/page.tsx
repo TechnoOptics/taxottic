@@ -15,6 +15,7 @@ import type { FilingStatus } from "@/lib/tax/constants-2025";
 import {
   AmtTile,
   CapitalGainsTile,
+  EitcTile,
   ForeignExclusionTile,
   RetirementRecommendationTile,
   RetirementSavingsTile,
@@ -184,6 +185,7 @@ export default async function PersonalForecastPage() {
             nudge (if applicable); someone with the full suite sees
             five tiles. */}
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <EitcTile result={result} />
           <RetirementSavingsTile result={result} />
           <RetirementRecommendationTile result={result} />
           <W4NudgeTile result={result} />

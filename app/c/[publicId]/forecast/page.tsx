@@ -9,6 +9,7 @@ import { YearEndSuggestionsCard } from "@/components/YearEndSuggestionsCard";
 import {
   AmtTile,
   CapitalGainsTile,
+  EitcTile,
   ForeignExclusionTile,
   RetirementRecommendationTile,
   RetirementSavingsTile,
@@ -655,6 +656,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             the savings-tracker tile so the user sees what they've
             already saved alongside what they could still save. */}
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <EitcTile result={result} />
           <RetirementSavingsTile result={result} />
           <RetirementRecommendationTile result={result} />
           <W4NudgeTile result={result} />

@@ -187,6 +187,52 @@ export function StudentLoanInterestTile({ result }: Props) {
 }
 
 /**
+ * Earned Income Tax Credit tile - the credit is refundable, so this
+ * is often the most consequential single line for an eligible filer.
+ * Renders the dollar amount when the engine computed a nonzero credit,
+ * or a friendly explanation when the user looks close to eligibility
+ * but didn't quite make it (e.g., investment income over the
+ * disqualifier, or MFS without § 32(d)).
+ */
+export function EitcTile({ result }: Props) {
+  if (result.eitcCents > 0) {
+    return (
+      <div className="card p-6 sm:p-7 border-emerald-200/60 bg-emerald-50/40">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-emerald-800 font-medium">
+          Earned Income Tax Credit
+        </div>
+        <h3 className="display mt-1.5 text-2xl text-forest-900">
+          {formatCents(result.eitcCents)} refundable
+        </h3>
+        <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+          The EITC (IRC § 32) is a refundable credit for working
+          filers - it reduces your tax owed dollar-for-dollar, and if
+          the credit exceeds your tax, the IRS sends you the
+          difference as a cash refund. This forecast assumes your
+          dependents meet the qualifying-child tests; confirm against
+          IRS Pub 596 Table 1.
+        </p>
+      </div>
+    );
+  }
+  // No credit but a worth-explaining reason - surface the engine's
+  // copy so a near-miss user understands what would unlock it.
+  if (result.eitcReasonZero) {
+    return (
+      <div className="card p-5 border-forest-100 bg-cream/40">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+          EITC eligibility note
+        </div>
+        <p className="mt-2 text-xs text-ink-soft leading-relaxed">
+          {result.eitcReasonZero}
+        </p>
+      </div>
+    );
+  }
+  return null;
+}
+
+/**
  * W-4 nudge tile - actionable copy for W-2 filers who are either
  * substantially over- or under-withholding. SE-only filers get
  * direction="ok" from the engine and the tile renders nothing.

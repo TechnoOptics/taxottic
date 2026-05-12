@@ -39,6 +39,7 @@ import {
   type FilingStatus,
 } from "./constants-2025";
 import { getTaxYearConstants, type TaxYearConstants } from "./constants";
+import { computeEitcCents } from "./credits/eitc";
 
 export type EntityType =
   | "sole_prop"
@@ -276,6 +277,21 @@ export type ForecastResult = {
      */
     summary: string;
   };
+  /**
+   * Earned Income Tax Credit (refundable, § 32). Computed by the
+   * engine when the filer has earned income; zero when they don't
+   * qualify (investment-income disqualifier, MFS, AGI above completed
+   * phaseout, etc.). Refundable means a filer with zero income tax
+   * owed still gets the EITC as cash back.
+   */
+  eitcCents: number;
+  /**
+   * Human-readable reason the EITC is zero (when it is and the filer's
+   * profile suggests it's a near-miss worth explaining). Empty string
+   * when the credit is nonzero or when the user clearly wouldn't
+   * qualify regardless.
+   */
+  eitcReasonZero: string;
 
   totalTaxCents: number;
   alreadyPaidCents: number;
@@ -551,6 +567,10 @@ export function forecast(input: ForecastInput): ForecastResult {
         summary:
           "C-Corp owners receive retirement-plan contributions through payroll (Solo 401(k) tied to W-2 wages, not Schedule C income). The personal-side recommendation runs on the owner's 1040, not on this entity forecast.",
       },
+      // EITC is an individual credit; doesn't apply to the C-Corp's
+      // entity-level return. The owner's separate 1040 would compute it.
+      eitcCents: 0,
+      eitcReasonZero: "",
     };
   }
 
@@ -1075,7 +1095,35 @@ export function forecast(input: ForecastInput): ForecastResult {
     }
   }
 
-  const totalTax = fedTax + seTax + additionalMedicare + niit + stTax;
+  // EITC (refundable, § 32). Computed AFTER all other tax math so we
+  // can use AGI and the engine-derived earned income (W-2 wages +
+  // spouse W-2 wages + net SE earnings via the Medicare-wages
+  // combined number, which mirrors how the IRS defines "earned
+  // income" for EITC purposes - close enough for a forecast). Use
+  // projected investment income for the § 32(i) disqualifier test.
+  const earnedIncomeForEitc = combinedMedicareIncome;
+  const eitcResult = computeEitcCents({
+    earnedIncomeCents: earnedIncomeForEitc,
+    agiCents: agi,
+    investmentIncomeCents: projectedInvestmentIncome,
+    qualifyingChildren: input.dependentsUnder17,
+    filingStatus: input.filingStatus,
+    taxYear: input.taxYear,
+  });
+  const eitcCents = eitcResult.creditCents;
+  const eitcReasonZero = eitcResult.reasonZero ?? "";
+  if (eitcCents > 0) {
+    assumptions.push(
+      `Earned Income Tax Credit (§ 32) applied: $${(eitcCents / 100).toLocaleString()} (refundable - if you owe less than that in tax, the IRS sends the rest back as a refund).`,
+    );
+  }
+
+  // totalTax is allowed to go negative here when a refundable credit
+  // exceeds the user's regular + payroll tax. That negative net
+  // amount flows through the balance/refund math below as additional
+  // refund-side cash.
+  const totalTax =
+    fedTax + seTax + additionalMedicare + niit + stTax - eitcCents;
   const w2WithheldTotal =
     input.ownerW2WithheldCents + input.spouseW2WithheldCents;
   const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
@@ -1162,39 +1210,11 @@ export function forecast(input: ForecastInput): ForecastResult {
     );
   }
 
-  // #10 EITC basic eligibility check. The Earned Income Tax Credit is
-  // available to low-/moderate-income filers, sized by number of
-  // qualifying children. We surface a heads-up when AGI is below a
-  // rough eligibility band for the user's kid count.
-  // 2026 maximum AGI for EITC (Rev. Proc. 2025-32 § 4.06):
-  //   0 kids: ~$19,104 single / $26,214 MFJ
-  //   1 kid:  ~$50,434 single / $57,544 MFJ
-  //   2 kids: ~$57,310 single / $64,420 MFJ
-  //   3+ kids: ~$61,555 single / $68,665 MFJ
-  // We use the lowest filing-status threshold as a "definitely look at
-  // EITC" trigger; users above it but still moderate-income should
-  // confirm with a CPA.
-  const kidCount = Math.min(3, Math.max(0, input.dependentsUnder17));
-  const eitcMaxAgi = isJoint
-    ? kidCount === 0
-      ? 26_214 * 100
-      : kidCount === 1
-        ? 57_544 * 100
-        : kidCount === 2
-          ? 64_420 * 100
-          : 68_665 * 100
-    : kidCount === 0
-      ? 19_104 * 100
-      : kidCount === 1
-        ? 50_434 * 100
-        : kidCount === 2
-          ? 57_310 * 100
-          : 61_555 * 100;
-  if (agi > 0 && agi <= eitcMaxAgi) {
-    hints.push(
-      `Your AGI ($${(agi / 100).toLocaleString()}) is within the Earned Income Tax Credit eligibility range for your filing status and dependent count. EITC is refundable and can be substantial ($632 to $8,231 for 2026 depending on kids). We don't compute it in this forecast - check IRS Pub 596 or use the IRS EITC Assistant at irs.gov/credits-deductions/individuals/earned-income-tax-credit-assistant.`,
-    );
-  }
+  // (The old "EITC eligibility heads-up" hint that lived here was
+  // removed once the engine started computing the real credit through
+  // lib/tax/credits/eitc.ts - the EitcTile renders either the actual
+  // refundable amount or the engine's per-user "why zero" reason, both
+  // of which are more informative than a generic eligibility hint.)
 
   // #13 Saver's Credit (§ 25B). Non-refundable credit of 10/20/50% of
   // up to $2,000 retirement contribution, available when AGI is below
@@ -1420,6 +1440,8 @@ export function forecast(input: ForecastInput): ForecastResult {
       taxSavingsCents: retirementSavingsRecCents,
       summary: retirementSummary,
     },
+    eitcCents,
+    eitcReasonZero,
   };
 }
 
