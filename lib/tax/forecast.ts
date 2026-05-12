@@ -241,6 +241,41 @@ export type ForecastResult = {
     perPaycheckDeltaCents: number;
     annualDeltaCents: number;
   };
+  /**
+   * Personalized retirement-contribution suggestion (item #6 in the
+   * "what next" follow-up). Looks at the user's current contributions
+   * across Solo 401(k) / SEP-IRA / Traditional IRA / HSA, computes
+   * remaining headroom against the 2026 statutory caps (with age >= 50
+   * catch-ups), and recommends filling the bucket with the most
+   * remaining capacity that still has marginal-rate impact (i.e. the
+   * deductible amount won't exceed taxable income).
+   *
+   * bucket: which account to fund.
+   * addCents: how much more to contribute, in cents.
+   * taxSavingsCents: dollar value of the deduction (capped by the
+   *   amount of taxable income remaining; you can't deduct yourself
+   *   below zero on this forecast).
+   *
+   * Reports bucket="none" when nothing useful is available (e.g., the
+   * user has already maxed out everything we model, has no earned
+   * income, or is already at zero taxable income).
+   */
+  retirementRecommendation: {
+    bucket:
+      | "solo_401k"
+      | "sep_ira"
+      | "traditional_ira"
+      | "hsa"
+      | "none";
+    addCents: number;
+    taxSavingsCents: number;
+    /**
+     * One-line copy ready to render as the tile body. Engine builds
+     * this so the UI doesn't have to redo the conditional logic and
+     * we stay consistent across the personal + company forecasts.
+     */
+    summary: string;
+  };
 
   totalTaxCents: number;
   alreadyPaidCents: number;
@@ -508,6 +543,13 @@ export function forecast(input: ForecastInput): ForecastResult {
         direction: "ok",
         perPaycheckDeltaCents: 0,
         annualDeltaCents: 0,
+      },
+      retirementRecommendation: {
+        bucket: "none",
+        addCents: 0,
+        taxSavingsCents: 0,
+        summary:
+          "C-Corp owners receive retirement-plan contributions through payroll (Solo 401(k) tied to W-2 wages, not Schedule C income). The personal-side recommendation runs on the owner's 1040, not on this entity forecast.",
       },
     };
   }
@@ -1189,6 +1231,119 @@ export function forecast(input: ForecastInput): ForecastResult {
     structuredRetirementCents * marginal,
   );
 
+  // ---------- Personalized retirement recommendation ----------
+  //
+  // Look at each bucket the user could still fund and recommend the
+  // single highest-impact one. "Impact" = additional deduction × marginal
+  // rate, capped at remaining taxable income (you can't deduct yourself
+  // below zero, and an additional contribution that would do so saves
+  // only what's left of the tax bill).
+  //
+  // 2026 statutory limits used here:
+  //   Solo 401(k) combined:   $70,000  ($77,500 if 50+)
+  //   SEP-IRA:                $70,000 or 25% of net SE earnings, lesser
+  //   Trad+Roth IRA combined: $7,500   ($8,500 if 50+)
+  //   HSA self-only:          $4,400   ($5,400 if 55+)
+  //   HSA family:             $8,750   ($9,750 if 55+)
+  // We don't know HDHP status, so we conservatively skip the HSA
+  // recommendation here - users who already contribute to HSA see it
+  // counted in the savings number, but we don't push more.
+  const age = input.age ?? 0;
+  const ageBonus50 = age >= 50;
+  const solo401kCap = (ageBonus50 ? 77_500 : 70_000) * 100;
+  const iraCap = (ageBonus50 ? 8_500 : 7_500) * 100;
+  const sepCapStatutory = 70_000 * 100;
+  const isSeEntity = SE_ENTITY_TYPES.has(input.entityType);
+  // SEP cap is min(statutory, 25% of net SE earnings). Net SE earnings
+  // here is the projected business income net of half SE tax.
+  const sepCapByEarnings = isSeEntity
+    ? Math.max(0, Math.round((netBiz - halfSeTaxDeduction) * 0.25))
+    : 0;
+  const sepCap = Math.min(sepCapStatutory, sepCapByEarnings);
+  // Remaining headroom per bucket (subtract what they already
+  // contributed).
+  const solo401kRemaining = isSeEntity
+    ? Math.max(
+        0,
+        solo401kCap - Math.max(0, input.retirementSolo401kCents ?? 0),
+      )
+    : 0;
+  const sepRemaining = isSeEntity
+    ? Math.max(
+        0,
+        sepCap - Math.max(0, input.retirementSepIraCents ?? 0),
+      )
+    : 0;
+  // Traditional + Roth share the IRA limit; the recommendation is
+  // specifically for Traditional (deductible). Subtract BOTH from
+  // the cap so we don't over-recommend if Roth already used it.
+  const iraAlreadyUsed =
+    Math.max(0, input.retirementTraditionalIraCents ?? 0) +
+    Math.max(0, input.retirementRothIraCents ?? 0);
+  const traditionalIraRemaining = Math.max(0, iraCap - iraAlreadyUsed);
+
+  // The deductible-headroom cap: you can't deduct more than your
+  // taxable income (you'd "waste" the rest of the contribution from a
+  // tax-savings perspective, though the dollars still grow tax-deferred
+  // - we just want the *forecast* number to be honest about marginal
+  // benefit).
+  const deductibleHeadroom = Math.max(0, taxableIncome);
+
+  type Candidate = {
+    bucket:
+      | "solo_401k"
+      | "sep_ira"
+      | "traditional_ira";
+    addCents: number;
+  };
+  const candidates: Candidate[] = [
+    { bucket: "solo_401k", addCents: solo401kRemaining },
+    { bucket: "sep_ira", addCents: sepRemaining },
+    { bucket: "traditional_ira", addCents: traditionalIraRemaining },
+  ].filter((c) => c.addCents > 0);
+
+  let retirementBucket:
+    | "solo_401k"
+    | "sep_ira"
+    | "traditional_ira"
+    | "hsa"
+    | "none" = "none";
+  let retirementAddCents = 0;
+  let retirementSavingsRecCents = 0;
+  let retirementSummary =
+    "You're already at the contribution caps we can model, or your taxable income wouldn't benefit from more deductions this year. Nice job.";
+
+  if (candidates.length > 0 && deductibleHeadroom > 0 && marginal > 0) {
+    // Pick the largest single-bucket recommendation that's still useful
+    // (i.e. capped by deductibleHeadroom). Larger headroom = bigger
+    // marginal-rate-value pickup.
+    candidates.sort((a, b) => b.addCents - a.addCents);
+    const top = candidates[0];
+    const usable = Math.min(top.addCents, deductibleHeadroom);
+    if (usable > 0) {
+      retirementBucket = top.bucket;
+      retirementAddCents = usable;
+      retirementSavingsRecCents = Math.round(usable * marginal);
+      const bucketLabel =
+        top.bucket === "solo_401k"
+          ? "Solo 401(k)"
+          : top.bucket === "sep_ira"
+            ? "SEP-IRA"
+            : "Traditional IRA";
+      retirementSummary = `Contribute another $${(usable / 100).toLocaleString()} to your ${bucketLabel} and save about $${(retirementSavingsRecCents / 100).toLocaleString()} in federal tax this year (your ${Math.round(marginal * 100)}% marginal rate × the deduction).`;
+    }
+  } else if (!isSeEntity && traditionalIraRemaining > 0 && marginal > 0) {
+    // W-2-only filers: surface the Traditional IRA option even though
+    // Solo 401(k) / SEP don't apply.
+    const usable = Math.min(traditionalIraRemaining, deductibleHeadroom);
+    if (usable > 0) {
+      retirementBucket = "traditional_ira";
+      retirementAddCents = usable;
+      retirementSavingsRecCents = Math.round(usable * marginal);
+      retirementSummary = `Contribute another $${(usable / 100).toLocaleString()} to a Traditional IRA and save about $${(retirementSavingsRecCents / 100).toLocaleString()} in federal tax this year (your ${Math.round(marginal * 100)}% marginal rate × the deduction). Deductibility may phase out if you or your spouse is covered by an employer retirement plan and your AGI is high - confirm before contributing the full amount.`;
+    }
+  }
+
   // ---------- W-4 withholding-adjustment recommendation (item #15) ----------
   //
   // For W-2 filers, the most useful actionable output is "what should
@@ -1258,6 +1413,12 @@ export function forecast(input: ForecastInput): ForecastResult {
       direction: w4Direction,
       perPaycheckDeltaCents: w4PerPaycheckDeltaCents,
       annualDeltaCents: w4AnnualDeltaCents,
+    },
+    retirementRecommendation: {
+      bucket: retirementBucket,
+      addCents: retirementAddCents,
+      taxSavingsCents: retirementSavingsRecCents,
+      summary: retirementSummary,
     },
   };
 }

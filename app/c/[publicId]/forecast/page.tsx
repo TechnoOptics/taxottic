@@ -6,6 +6,15 @@ import { CompanyLogo } from "@/components/CompanyLogo";
 import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
 import { YearEndSuggestionsCard } from "@/components/YearEndSuggestionsCard";
+import {
+  AmtTile,
+  CapitalGainsTile,
+  ForeignExclusionTile,
+  RetirementRecommendationTile,
+  RetirementSavingsTile,
+  StudentLoanInterestTile,
+  W4NudgeTile,
+} from "@/components/forecast/BenefitTiles";
 import { buildYearEndSuggestions } from "@/lib/tax/year-end-suggestions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import {
@@ -636,6 +645,25 @@ export default async function ForecastPage({ params }: { params: Params }) {
               value={formatCents(result.monthlySaveTargetCents)}
             />
           </div>
+        </div>
+
+        {/* Benefits / recommendations strip. Each tile renders nothing
+            when the relevant value is zero, so a clean-slate filer
+            sees just the W-4 nudge (if applicable); a fully-loaded
+            tax profile sees the full set. The retirement
+            recommendation is the most actionable - we put it next to
+            the savings-tracker tile so the user sees what they've
+            already saved alongside what they could still save. */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <RetirementSavingsTile result={result} />
+          <RetirementRecommendationTile result={result} />
+          <W4NudgeTile result={result} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <AmtTile result={result} />
+          <CapitalGainsTile result={result} />
+          <ForeignExclusionTile result={result} />
+          <StudentLoanInterestTile result={result} />
         </div>
 
         {/* Breakdown */}

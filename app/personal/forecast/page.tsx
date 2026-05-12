@@ -12,6 +12,15 @@ import {
   type ForecastResult,
 } from "@/lib/tax/forecast";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
+import {
+  AmtTile,
+  CapitalGainsTile,
+  ForeignExclusionTile,
+  RetirementRecommendationTile,
+  RetirementSavingsTile,
+  StudentLoanInterestTile,
+  W4NudgeTile,
+} from "@/components/forecast/BenefitTiles";
 
 /**
  * Personal-mode forecast for W-2 / wage-earner users.
@@ -166,6 +175,24 @@ export default async function PersonalForecastPage() {
               value={(result.marginalRate * 100).toFixed(1) + "%"}
             />
           </div>
+        </div>
+
+        {/* Benefits / recommendations strip. Each tile renders nothing
+            when the relevant value is zero, so the strip naturally
+            adapts to what the user has reported - someone with no
+            retirement contributions and no LTCG sees just the W-4
+            nudge (if applicable); someone with the full suite sees
+            five tiles. */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <RetirementSavingsTile result={result} />
+          <RetirementRecommendationTile result={result} />
+          <W4NudgeTile result={result} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <AmtTile result={result} />
+          <CapitalGainsTile result={result} />
+          <ForeignExclusionTile result={result} />
+          <StudentLoanInterestTile result={result} />
         </div>
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
