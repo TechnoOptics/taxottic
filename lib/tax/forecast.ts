@@ -42,6 +42,7 @@ import { getTaxYearConstants, type TaxYearConstants } from "./constants";
 import { computeEitcCents } from "./credits/eitc";
 import { computeSaversCreditCents } from "./credits/savers";
 import { computeEducationCreditCents } from "./credits/education";
+import { computeStateTaxFromBrackets } from "./state-brackets";
 
 export type EntityType =
   | "sole_prop"
@@ -1162,12 +1163,49 @@ export function forecast(input: ForecastInput): ForecastResult {
     fedTax = fedTaxAfterCredits;
   }
 
-  const stRate = stateRate(input.stateCode);
-  const stTax = Math.round(taxableIncome * stRate);
-  if (stRate === 0 && input.stateCode) {
-    assumptions.push(
-      `State estimate uses ${input.stateCode}'s curated flat rate. Real bracket math for all states is on the roadmap.`,
-    );
+  // State tax: try real brackets first for the high-tax states we've
+  // encoded (CA, NY, NJ, MA, MN, OR, HI, DC, MD, CT - each with proper
+  // filing-status columns and high-income surcharges). Fall back to
+  // the curated flat-rate table for everywhere else. Surface either
+  // way via the assumptions strip so the user can verify what
+  // method/year was used.
+  let stTax = 0;
+  if (input.stateCode) {
+    const brackets = computeStateTaxFromBrackets({
+      taxableIncomeCents: taxableIncome,
+      filingStatus: input.filingStatus,
+      stateCode: input.stateCode,
+      taxYear: input.taxYear,
+    });
+    if (brackets) {
+      stTax = brackets.taxCents;
+      assumptions.push(brackets.note);
+      // NYC-specific addendum: city tax adds ~3.07%-3.876%.
+      if (input.stateCode.toUpperCase() === "NY") {
+        hints.push(
+          "If you live in New York City, the city adds its own income tax (~3.078% to 3.876% in 2025) on top of the state. We don't yet capture city residency; manually add it if you're a NYC resident.",
+        );
+      }
+      // Maryland-specific addendum: county tax adds ~2-3.2%.
+      if (input.stateCode.toUpperCase() === "MD") {
+        hints.push(
+          "Maryland counties add their own income tax (~2.0% to 3.2% depending on county) on top of the state brackets. We don't yet capture county residency; estimate ~2.5% on your taxable income if you're not sure.",
+        );
+      }
+    } else {
+      // Fall back to the curated flat rate.
+      const stRate = stateRate(input.stateCode);
+      stTax = Math.round(taxableIncome * stRate);
+      if (stRate > 0) {
+        assumptions.push(
+          `State estimate for ${input.stateCode} uses a curated ${(stRate * 100).toFixed(2)}% flat rate. Real bracket math is encoded for CA, NY, NJ, MA, MN, OR, HI, DC, MD, CT; other graduated states fall back to this approximation - confirm against your state's published brackets.`,
+        );
+      } else if (input.stateCode) {
+        assumptions.push(
+          `No state income tax for ${input.stateCode}.`,
+        );
+      }
+    }
   }
 
   // Net Investment Income Tax (NIIT). IRC §1411 — 3.8% on the lesser
