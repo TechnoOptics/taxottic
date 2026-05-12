@@ -22,10 +22,26 @@ export default async function RemindersPage() {
     .is("dismissed_at", null)
     .order("due_at", { ascending: true });
 
-  const upcoming = (items ?? []).filter(
+  // Defensive dedupe on the read side. Migration
+  // 20260511000002_reminders_dedupe cleaned up existing duplicates and
+  // added a unique index that prevents new ones, but the index hadn't
+  // been deployed when QA caught 8x duplicates on this page. Keep this
+  // filter as belt-and-suspenders: even with the constraint in place,
+  // an undeployed staging environment or a future schema-change window
+  // could regress.
+  const seenKey = new Set<string>();
+  const itemsDedup = (items ?? []).filter((r) => {
+    const dayKey = new Date(r.due_at).toISOString().slice(0, 10);
+    const key = `${r.kind}:${dayKey}`;
+    if (seenKey.has(key)) return false;
+    seenKey.add(key);
+    return true;
+  });
+
+  const upcoming = itemsDedup.filter(
     (r) => new Date(r.due_at).getTime() >= Date.now(),
   );
-  const overdue = (items ?? []).filter(
+  const overdue = itemsDedup.filter(
     (r) => new Date(r.due_at).getTime() < Date.now(),
   );
 

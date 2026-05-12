@@ -3,7 +3,17 @@ import { quarterlyDueDates } from "./quarterly";
 
 /**
  * Idempotent seed: inserts any missing quarterly + filing reminders for a user
- * and tax year. Skips ones already present (by user_id + kind + due_at year).
+ * and tax year.
+ *
+ * Earlier this function did a SELECT-then-INSERT, which is racy under
+ * the dashboard's Promise.all hot path: two concurrent renders could
+ * both observe "no rows" and both insert, producing duplicate
+ * reminders. The fix is a single UPSERT with onConflict on the
+ * (user_id, kind, due-date) unique index added in migration
+ * 20260511000002. PostgREST's `ignoreDuplicates: true` translates to
+ * ON CONFLICT DO NOTHING, so concurrent inserts collide cleanly and
+ * idempotency is now enforced at the DB level rather than via a
+ * read-then-write window.
  */
 export async function ensureQuarterlyReminders(
   supabase: SupabaseClient,
@@ -11,39 +21,30 @@ export async function ensureQuarterlyReminders(
   taxYear: number,
 ) {
   const reminders = quarterlyDueDates(taxYear);
+  if (reminders.length === 0) return;
 
-  const { data: existing } = await supabase
-    .from("reminders")
-    .select("kind, due_at")
-    .eq("user_id", userId)
-    .gte("due_at", `${taxYear}-01-01T00:00:00Z`)
-    .lte("due_at", `${taxYear + 1}-12-31T23:59:59Z`);
+  const rows = reminders.map((r) => ({
+    user_id: userId,
+    kind: r.kind,
+    title: r.label,
+    body: bodyFor(r.kind),
+    due_at: r.due.toISOString(),
+  }));
 
-  const have = new Set(
-    (existing ?? []).map(
-      (r) => `${r.kind}:${new Date(r.due_at).toISOString().slice(0, 10)}`,
-    ),
-  );
-
-  const toInsert = reminders
-    .filter(
-      (r) => !have.has(`${r.kind}:${r.due.toISOString().slice(0, 10)}`),
-    )
-    .map((r) => ({
-      user_id: userId,
-      kind: r.kind,
-      title: r.label,
-      body: bodyFor(r.kind),
-      due_at: r.due.toISOString(),
-    }));
-
-  if (toInsert.length === 0) return;
-
-  // Best-effort: failure here shouldn't prevent dashboard from rendering.
+  // UPSERT with ignoreDuplicates -> ON CONFLICT DO NOTHING. The
+  // matching unique index is reminders_user_kind_dueday_uq, defined
+  // on (user_id, kind, (due_at at time zone 'UTC')::date). We pass
+  // the column list onConflict accepts even though it actually
+  // resolves the index by column-set match.
   try {
-    await supabase.from("reminders").insert(toInsert);
+    await supabase
+      .from("reminders")
+      .upsert(rows, {
+        onConflict: "user_id,kind,due_at",
+        ignoreDuplicates: true,
+      });
   } catch {
-    // ignore
+    // Non-fatal: dashboard still renders; cron retries.
   }
 }
 

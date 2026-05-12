@@ -94,12 +94,22 @@ export default function LoginPage() {
             >
               Continue with Google
             </button>
-            <button
-              onClick={() => oauth("azure")}
-              className="btn-ghost w-full"
-            >
-              Continue with Microsoft
-            </button>
+            {/* Microsoft (Azure) is gated on NEXT_PUBLIC_ENABLE_AZURE_LOGIN
+                until the provider is fully wired in the Supabase project.
+                Previously clicking it landed on
+                ?error=invalid_request&error_code=bad_oauth_state because the
+                Azure provider returned a malformed state - better to hide the
+                button entirely than offer a broken handshake. Flip the env
+                var to "true" in Vercel once Azure OAuth is configured and the
+                redirect URI is registered in Supabase. */}
+            {process.env.NEXT_PUBLIC_ENABLE_AZURE_LOGIN === "true" ? (
+              <button
+                onClick={() => oauth("azure")}
+                className="btn-ghost w-full"
+              >
+                Continue with Microsoft
+              </button>
+            ) : null}
             {/* Apple SSO requires an Apple Developer membership and is not
                 yet enabled on this Supabase project. Hidden until configured. */}
           </div>
@@ -118,15 +128,48 @@ export default function LoginPage() {
             <div className="h-px flex-1 bg-forest-200/60" />
           </div>
 
-          <form onSubmit={sendMagicLink} className="grid gap-3">
+          <form
+            onSubmit={sendMagicLink}
+            className="grid gap-3"
+            noValidate
+          >
             <input
               type="email"
               required
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input"
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (status === "error") {
+                  setStatus("idle");
+                  setError(null);
+                }
+              }}
+              aria-invalid={status === "error" ? true : undefined}
+              aria-describedby={
+                status === "error" ? "magic-link-error" : undefined
+              }
+              className={
+                "input " +
+                (status === "error"
+                  ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                  : "")
+              }
             />
+            {/* Error rendered immediately after the field so the visual
+                association is obvious - red border on the input plus a
+                role="alert" message that screen readers announce. Earlier
+                we rendered the error as a generic paragraph far below the
+                button, which usability testing flagged as missable. */}
+            {status === "error" && error ? (
+              <p
+                id="magic-link-error"
+                role="alert"
+                className="text-xs text-red-700 -mt-1"
+              >
+                {error}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={status === "sending"}
@@ -141,7 +184,14 @@ export default function LoginPage() {
               Check your inbox for the sign-in link.
             </p>
           )}
-          {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+          {/* OAuth-callback errors still surface here (separate from the
+              inline magic-link error above) since they're not tied to a
+              single field. */}
+          {status !== "error" && error ? (
+            <p className="mt-4 text-sm text-red-700" role="alert">
+              {error}
+            </p>
+          ) : null}
         </div>
 
         <p className="mt-6 text-[11px] leading-relaxed text-ink-muted text-center max-w-sm mx-auto">

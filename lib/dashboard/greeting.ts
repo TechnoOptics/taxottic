@@ -79,11 +79,16 @@ export function buildGreeting(args: {
   const pleasantry =
     PLEASANTRIES[Math.floor(Math.random() * PLEASANTRIES.length)];
 
+  // First name comes from the profile's full_name only. We deliberately
+  // do NOT derive a "name" from the email local-part anymore - generic
+  // role addresses (contact@, info@, hello@, support@, billing@) were
+  // turning into greetings like "Good morning, Contact." which read as
+  // a bug to anyone signed in on a shared inbox. When we have no real
+  // name, drop the suffix instead of guessing.
   const name = args.fullName?.split(/\s+/)[0]?.trim();
-  const fallback = args.email?.split("@")[0]?.split(/[._-]/)[0];
-  const displayName = (name || fallback || "").replace(/\b\w/g, (c) =>
-    c.toUpperCase(),
-  );
+  const displayName = name
+    ? name.replace(/\b\w/g, (c) => c.toUpperCase())
+    : "";
 
   return {
     head: displayName ? `${head}, ${displayName}.` : `${head}.`,

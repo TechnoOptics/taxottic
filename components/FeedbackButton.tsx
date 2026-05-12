@@ -61,7 +61,15 @@ export function FeedbackButton({ submitAction }: Props) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Send feedback"
-        className="fixed z-30 right-4 sm:right-6 size-11 sm:size-12 rounded-full grid place-items-center bg-forest-800 hover:bg-forest-700 text-cream shadow-lg shadow-forest-900/25 transition-colors"
+        // z-50 so the button always sits above BellaFAB (z-40) and any
+        // open Bella chat panel (also z-40), regardless of which one
+        // mounted first. Earlier this was z-30 and a QA pass found the
+        // click silently absorbed when Bella's open panel happened to
+        // overlap on sm+ screens (panel bottom = 6rem = FAB bottom).
+        // pointer-events-auto is belt-and-suspenders: a parent with
+        // pointer-events:none anywhere in the tree would otherwise
+        // disable this button without leaving a clue.
+        className="fixed z-50 pointer-events-auto right-4 sm:right-6 size-11 sm:size-12 rounded-full grid place-items-center bg-forest-800 hover:bg-forest-700 text-cream shadow-lg shadow-forest-900/25 transition-colors"
         style={{
           // Stack above the BellaFAB. Bella is at bottom 1rem with a
           // 14/16 size (~64px). We need at least bella-height + bella-bottom + a
@@ -91,7 +99,11 @@ export function FeedbackButton({ submitAction }: Props) {
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 grid place-items-end sm:place-items-center px-3 pb-3 sm:p-6"
+          // z-[60] so the modal sits above the trigger FAB (z-50)
+          // unambiguously; without this they were both z-50 and stacking
+          // order depended on DOM order, which is fragile under
+          // hot-reload and React 19's reconciliation order changes.
+          className="fixed inset-0 z-[60] grid place-items-end sm:place-items-center px-3 pb-3 sm:p-6"
           onClick={() => setOpen(false)}
         >
           <div className="absolute inset-0 bg-forest-900/40 backdrop-blur-sm" />

@@ -41,26 +41,42 @@ export default async function DashboardPage() {
     );
   }
 
-  // Lazy-evaluate badges + ensure reminders exist on every dashboard hit.
-  // Both are idempotent and use admin client so the inserts work regardless
-  // of cookie auth quirks. Reads filter explicitly by user_id so they remain
-  // scoped correctly even with admin privileges.
+  // Fan out the independent top-of-dashboard queries in one round-trip.
+  // Previously each of these awaited serially: evaluateBadges →
+  // ensureQuarterlyReminders → getMyCompanies → checkCompanyLimit →
+  // profile lookup. That stacked 5 Supabase roundtrips (~50-200ms each)
+  // before the first paint, which compounded with Vercel cold starts to
+  // make dashboard clicks feel sluggish. Promise.all collapses them
+  // into one parallel batch since none of them depend on each other's
+  // result. The redirect checks happen after — once everything has
+  // landed.
   // evaluateBadges returns the codes that were JUST awarded (empty
   // on subsequent renders thanks to the unique constraint), so we
   // can pop a celebration overlay one-shot without any client
   // session-storage trickery.
-  const [newlyEarnedCodes] = await Promise.all([
+  const [
+    newlyEarnedCodes,
+    ,
+    companies,
+    companyLimit,
+    profileResult,
+  ] = await Promise.all([
     evaluateBadges(admin, user.id),
     ensureQuarterlyReminders(admin, user.id, taxYear),
+    getMyCompanies(),
+    checkCompanyLimit(supabase, user.id),
+    admin
+      .from("profiles")
+      .select("full_name, tour_completed_at, tax_filer_type")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
-
-  const companies = await getMyCompanies();
+  const profile = profileResult.data;
 
   // Plan-aware "+ New company" gating. Free is capped at 1 company;
   // when at the cap we show the link greyed out with an upgrade
   // tooltip so the user learns about Pro instead of bouncing off a
   // crash on submission.
-  const companyLimit = await checkCompanyLimit(supabase, user.id);
   const canCreateCompany = companyLimit.ok;
   const newCompanyTooltip = canCreateCompany
     ? undefined
@@ -71,11 +87,6 @@ export default async function DashboardPage() {
   // /onboarding/filer-type. W-2 users get sent to the personal-mode
   // forecast since the company-centric dashboard wouldn't show them
   // anything useful.
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("full_name, tour_completed_at, tax_filer_type")
-    .eq("id", user.id)
-    .maybeSingle();
   if (profile && !profile.tax_filer_type) {
     redirect("/onboarding/filer-type");
   }
@@ -433,16 +444,28 @@ export default async function DashboardPage() {
               const r = readinessByCompany.get(m.company_id);
               const score = r?.score ?? 0;
               // Compact breakdown shown next to the bar; the full per-metric
-              // story sits in the title attr for hover.
+              // story sits in the title attr for hover. When `categoriesUsed`
+              // exceeds the starter target, "11/8 cats" reads as a bug, so
+              // collapse to "11 cats ✓" once the user has hit or surpassed
+              // the goal. The target is a *starter* checklist, not a cap -
+              // we celebrate exceeding it, we don't make the math look
+              // broken.
+              const catsLabel = r
+                ? r.categoriesUsed >= r.targetCategories
+                  ? `${r.categoriesUsed} cats ✓`
+                  : `${r.categoriesUsed}/${r.targetCategories} cats`
+                : "";
               const breakdown = r?.hasBankFeed
-                ? `${r.triagedTx}/${r.totalTx} tx · ${r.categoriesUsed}/${r.targetCategories} cats`
+                ? `${r.triagedTx}/${r.totalTx} tx · ${catsLabel}`
                 : r
-                  ? `${r.categoriesUsed}/${r.targetCategories} categories`
+                  ? r.categoriesUsed >= r.targetCategories
+                    ? `${r.categoriesUsed} categories ✓`
+                    : `${r.categoriesUsed}/${r.targetCategories} categories`
                   : "-";
               const tooltip = r?.hasBankFeed
-                ? `${r.triagedTx} of ${r.totalTx} bank transactions triaged in the last 90 days, and ${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year.`
+                ? `${r.triagedTx} of ${r.totalTx} bank transactions triaged in the last 90 days, and ${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year${r.categoriesUsed > r.targetCategories ? " (target met)" : ""}.`
                 : r
-                  ? `${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year. Connect a bank to add expensing-engagement to this score.`
+                  ? `${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year${r.categoriesUsed > r.targetCategories ? " (target met)" : ""}. Connect a bank to add expensing-engagement to this score.`
                   : "Tax readiness - start logging expenses to see this fill in.";
               return (
                 <li
