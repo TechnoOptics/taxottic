@@ -312,6 +312,41 @@ export function UserMenu({
             ) : null}
 
             <div className="border-t border-forest-100 pt-1.5">
+              {/* Switch accounts — clears the current session AND tells the
+                  login page to force Google/Microsoft's account picker (via
+                  ?force_picker=1, which the login page translates into
+                  prompt=select_account on the OAuth call). Without this,
+                  a user who's signed into multiple Google accounts in
+                  Chrome gets silently re-authenticated as whichever one
+                  the provider considers "default", which is exactly the
+                  "it auto-signs me into an account I don't want" complaint. */}
+              <form action="/auth/signout" method="post">
+                <input
+                  type="hidden"
+                  name="next"
+                  value="/login?force_picker=1"
+                />
+                <button
+                  type="submit"
+                  className="w-full text-left rounded-lg px-3 py-2 text-sm text-forest-800 hover:bg-cream flex items-center gap-2"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 7 L16 7 M12 3 L16 7 L12 11" />
+                    <path d="M16 13 L4 13 M8 9 L4 13 L8 17" />
+                  </svg>
+                  Switch accounts
+                </button>
+              </form>
               <form action="/auth/signout" method="post">
                 <button
                   type="submit"

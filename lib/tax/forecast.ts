@@ -1463,10 +1463,13 @@ export function forecast(input: ForecastInput): ForecastResult {
       | "traditional_ira";
     addCents: number;
   };
+  // `as const` on each bucket string is what keeps the literal type after
+  // .filter(); without it TS widens to `string` and the array no longer
+  // assigns to Candidate[].
   const candidates: Candidate[] = [
-    { bucket: "solo_401k", addCents: solo401kRemaining },
-    { bucket: "sep_ira", addCents: sepRemaining },
-    { bucket: "traditional_ira", addCents: traditionalIraRemaining },
+    { bucket: "solo_401k" as const, addCents: solo401kRemaining },
+    { bucket: "sep_ira" as const, addCents: sepRemaining },
+    { bucket: "traditional_ira" as const, addCents: traditionalIraRemaining },
   ].filter((c) => c.addCents > 0);
 
   let retirementBucket:

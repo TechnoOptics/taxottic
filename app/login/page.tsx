@@ -13,6 +13,12 @@ export default function LoginPage() {
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
+  // True when the user arrived from "Switch accounts" in the profile menu
+  // (via /auth/signout?next=/login?force_picker=1). When set we (a) show a
+  // "Choose an account" header so the user knows the picker will appear,
+  // and (b) pass prompt=select_account to Google/Microsoft so they don't
+  // silently auto-resume the last session.
+  const [forcePicker, setForcePicker] = useState(false);
   const supabase = createClient();
 
   // Surface server-side OAuth errors that came back as ?error=... on the
@@ -31,6 +37,9 @@ export default function LoginPage() {
         access_denied: "You cancelled the sign-in.",
       };
       setError(friendly[oauthErr] ?? oauthErr);
+    }
+    if (url.searchParams.get("force_picker") === "1") {
+      setForcePicker(true);
     }
   }, []);
 
@@ -66,11 +75,19 @@ export default function LoginPage() {
     setError(null);
     const url = new URL(window.location.href);
     const next = url.searchParams.get("next") ?? "/dashboard";
+    // When the login page was opened from "Switch accounts", we forward
+    // prompt=select_account so Google/Microsoft show their account picker
+    // even if the browser still has a live session for that provider.
+    // Both Google and Microsoft honor this OAuth 2.0 prompt value.
+    const queryParams: Record<string, string> | undefined = forcePicker
+      ? { prompt: "select_account" }
+      : undefined;
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         scopes: provider === "azure" ? "email openid profile" : undefined,
+        queryParams,
       },
     });
     if (error) setError(error.message);
@@ -81,9 +98,21 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Wordmark size="lg" />
-          <p className="mt-3 text-sm text-ink-soft">
-            Sign in to forecast your taxes.
-          </p>
+          {forcePicker ? (
+            <>
+              <p className="mt-3 text-sm font-medium text-forest-900">
+                Choose a different account
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Your previous session was signed out. Pick the account you want
+                to use.
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-sm text-ink-soft">
+              Sign in to forecast your taxes.
+            </p>
+          )}
         </div>
 
         <div className="card p-7">

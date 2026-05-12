@@ -7,6 +7,32 @@ async function handle(request: Request) {
   const cookieStore = await cookies();
   const { origin } = new URL(request.url);
 
+  // Where to land after the cookies are cleared. Defaults to /login, but
+  // the "Switch accounts" item in the profile menu posts next=/login?force_picker=1
+  // so the login page knows to ask the OAuth provider for a fresh account
+  // chooser instead of silently auto-resuming the last session.
+  // - GET: read from the query string (rare; mostly direct-URL hits).
+  // - POST: read from form data (the normal case from <form action="/auth/signout">).
+  // We only honor relative paths starting with "/" to defeat open-redirect.
+  let nextPath = "/login";
+  try {
+    if (request.method === "POST") {
+      const fd = await request.clone().formData();
+      const raw = fd.get("next");
+      if (typeof raw === "string" && raw.startsWith("/")) {
+        nextPath = raw;
+      }
+    } else {
+      const raw = new URL(request.url).searchParams.get("next");
+      if (raw && raw.startsWith("/")) {
+        nextPath = raw;
+      }
+    }
+  } catch {
+    // Fall through to the /login default; a malformed form body shouldn't
+    // strand the user without a sign-out.
+  }
+
   // Build the redirect response up front so the Supabase client can write
   // its cookie clears DIRECTLY onto the response that goes back to the
   // browser. The default factory in lib/supabase/server.ts writes cookies
@@ -18,7 +44,9 @@ async function handle(request: Request) {
   // sb-*-auth-token cookies survived the redirect, so the next sign-in
   // overlaid a new session on top of the old cookie state and RLS still
   // saw auth.uid() = old user.
-  const response = NextResponse.redirect(`${origin}/login`, { status: 303 });
+  const response = NextResponse.redirect(`${origin}${nextPath}`, {
+    status: 303,
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
