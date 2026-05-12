@@ -233,6 +233,52 @@ export function EitcTile({ result }: Props) {
 }
 
 /**
+ * Saver's Credit tile (§ 25B). Non-refundable, but still meaningful
+ * for filers whose retirement contributions and AGI both land it in
+ * an eligible bracket - up to a $1,000 / $2,000 reduction in fed tax.
+ * Renders an active credit when the engine computed one, or a
+ * "why zero" note when there's an actionable reason.
+ */
+export function SaversCreditTile({ result }: Props) {
+  if (result.saversCreditCents > 0) {
+    return (
+      <div className="card p-5 bg-cream/40 border-forest-100">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+          Saver&apos;s Credit
+        </div>
+        <div className="display mt-1 text-xl text-forest-900">
+          {formatCents(result.saversCreditCents)}
+        </div>
+        <p className="mt-2 text-xs text-ink-soft leading-relaxed">
+          You&apos;re in the{" "}
+          <strong className="text-forest-900">
+            {Math.round(result.saversCreditRate * 100)}% bracket
+          </strong>{" "}
+          for the Saver&apos;s Credit (IRC § 25B). Non-refundable —
+          reduces your fed tax dollar-for-dollar but the unused
+          portion isn&apos;t refundable. Claim on Form 8880. Requires
+          you to be 18+, not a full-time student, and not claimed as
+          a dependent.
+        </p>
+      </div>
+    );
+  }
+  if (result.saversCreditReasonZero) {
+    return (
+      <div className="card p-5 bg-cream/40 border-forest-100">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+          Saver&apos;s Credit note
+        </div>
+        <p className="mt-2 text-xs text-ink-soft leading-relaxed">
+          {result.saversCreditReasonZero}
+        </p>
+      </div>
+    );
+  }
+  return null;
+}
+
+/**
  * W-4 nudge tile - actionable copy for W-2 filers who are either
  * substantially over- or under-withholding. SE-only filers get
  * direction="ok" from the engine and the tile renders nothing.

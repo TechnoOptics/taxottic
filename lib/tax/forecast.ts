@@ -40,6 +40,7 @@ import {
 } from "./constants-2025";
 import { getTaxYearConstants, type TaxYearConstants } from "./constants";
 import { computeEitcCents } from "./credits/eitc";
+import { computeSaversCreditCents } from "./credits/savers";
 
 export type EntityType =
   | "sole_prop"
@@ -292,6 +293,16 @@ export type ForecastResult = {
    * qualify regardless.
    */
   eitcReasonZero: string;
+  /**
+   * Saver's Credit (§ 25B). Non-refundable; reduces fed tax dollar-for-
+   * dollar but won't drop it below zero. 10/20/50% of up to $2,000
+   * single / $4,000 MFJ of retirement contributions, per AGI bracket.
+   */
+  saversCreditCents: number;
+  /** 0, 0.1, 0.2, or 0.5 - the bracket that applied. */
+  saversCreditRate: number;
+  /** "Why zero" copy mirroring the EITC pattern. */
+  saversCreditReasonZero: string;
 
   totalTaxCents: number;
   alreadyPaidCents: number;
@@ -571,6 +582,9 @@ export function forecast(input: ForecastInput): ForecastResult {
       // entity-level return. The owner's separate 1040 would compute it.
       eitcCents: 0,
       eitcReasonZero: "",
+      saversCreditCents: 0,
+      saversCreditRate: 0,
+      saversCreditReasonZero: "",
     };
   }
 
@@ -1023,6 +1037,31 @@ export function forecast(input: ForecastInput): ForecastResult {
     );
   }
 
+  // Saver's Credit (§ 25B). Non-refundable; bracket-driven 10/20/50%
+  // of up to $2,000 ($4,000 MFJ) of retirement contributions. Computed
+  // here because we need final agi + contribution total. Roth IRA
+  // contributions count toward the Saver's Credit even though they
+  // aren't deductible, so the contribution base for this calculation
+  // includes both deductible AND Roth amounts.
+  const saversContributionBase =
+    Math.max(0, structuredRetirementCents) +
+    Math.max(0, rothContributionCents);
+  const saversResult = computeSaversCreditCents({
+    retirementContributionsCents: saversContributionBase,
+    agiCents: agi,
+    filingStatus: input.filingStatus,
+    age: input.age,
+    taxYear: input.taxYear,
+  });
+  const saversCreditCents = saversResult.creditCents;
+  const saversCreditRate = saversResult.rate;
+  const saversCreditReasonZero = saversResult.reasonZero ?? "";
+  if (saversCreditCents > 0) {
+    assumptions.push(
+      `Saver's Credit (§ 25B) applied at ${Math.round(saversResult.rate * 100)}% of qualifying retirement contributions: $${(saversCreditCents / 100).toLocaleString()}. Non-refundable - reduces tax to zero but no refund of the unused portion.`,
+    );
+  }
+
   // Residential energy + EV credits (item #12). Non-refundable; can
   // reduce tax to zero but not below. Sum them with the family credits
   // and clamp to fedTaxBeforeCredits.
@@ -1043,7 +1082,10 @@ export function forecast(input: ForecastInput): ForecastResult {
   }
 
   const totalNonRefundableCredits =
-    credits + residentialEnergyCreditCents + evCreditCents;
+    credits +
+    saversCreditCents +
+    residentialEnergyCreditCents +
+    evCreditCents;
   const fedTaxAfterCredits = Math.max(
     0,
     fedTaxBeforeAmt - totalNonRefundableCredits,
@@ -1216,28 +1258,12 @@ export function forecast(input: ForecastInput): ForecastResult {
   // refundable amount or the engine's per-user "why zero" reason, both
   // of which are more informative than a generic eligibility hint.)
 
-  // #13 Saver's Credit (§ 25B). Non-refundable credit of 10/20/50% of
-  // up to $2,000 retirement contribution, available when AGI is below
-  // the filing-status threshold. Trigger when retirement contributed
-  // AND AGI is below the rough upper limit.
-  // 2026 Saver's Credit AGI limits (approximated):
-  //   MFJ: $79,000 (50% bracket up to $48,000)
-  //   HoH: $59,250
-  //   Single/MFS: $39,500
-  const saversCreditMaxAgi = isJoint
-    ? 79_000 * 100
-    : input.filingStatus === "head_of_household"
-      ? 59_250 * 100
-      : 39_500 * 100;
-  if (
-    structuredRetirementCents + rothContributionCents > 0 &&
-    agi > 0 &&
-    agi <= saversCreditMaxAgi
-  ) {
-    hints.push(
-      `Saver's Credit (§ 25B) is likely available: your AGI ($${(agi / 100).toLocaleString()}) is below the Saver's-Credit phase-out for your filing status and you contributed to retirement this year. The credit is 10/20/50% of up to $2,000 of contributions ($4,000 if MFJ). Non-refundable; claim on Form 8880.`,
-    );
-  }
+  // (The old "Saver's Credit is likely available" eligibility hint
+  // that used to live here was removed once the engine started
+  // computing the real credit through lib/tax/credits/savers.ts. The
+  // SaversCreditTile renders the actual dollar amount when the credit
+  // applies, or a per-user "why zero" note when there's a clear reason
+  // it didn't.)
 
   // ---------- Retirement tax-savings calc (item #1) ----------
   //
@@ -1442,6 +1468,9 @@ export function forecast(input: ForecastInput): ForecastResult {
     },
     eitcCents,
     eitcReasonZero,
+    saversCreditCents,
+    saversCreditRate,
+    saversCreditReasonZero,
   };
 }
 

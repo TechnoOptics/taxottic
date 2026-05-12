@@ -19,6 +19,7 @@ import {
   ForeignExclusionTile,
   RetirementRecommendationTile,
   RetirementSavingsTile,
+  SaversCreditTile,
   StudentLoanInterestTile,
   W4NudgeTile,
 } from "@/components/forecast/BenefitTiles";
@@ -191,6 +192,7 @@ export default async function PersonalForecastPage() {
           <W4NudgeTile result={result} />
         </div>
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <SaversCreditTile result={result} />
           <AmtTile result={result} />
           <CapitalGainsTile result={result} />
           <ForeignExclusionTile result={result} />
