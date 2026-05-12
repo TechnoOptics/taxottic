@@ -65,6 +65,37 @@ Additional sanity in the engine:
   ```
   Then in `lib/tax/constants.ts`, flip `isMileageRateProvisional` for the 2026 bundle to `false`. Both changes are one-line.
 
+## Coverage audit — items #1-#15 from the gap report
+
+Following the gap audit conversation, the engine now applies or surfaces each of the 15 items. Status as of the latest commit:
+
+| # | Item | Status | Surface |
+|---|---|---|---|
+| 1 | Retirement contributions (Solo 401(k), SEP-IRA, Trad IRA, HSA) | ✅ deduction wired | Above-the-line; `retirementTaxSavingsCents` reported |
+| 2 | Self-employed health insurance | ✅ deduction wired | Above-the-line |
+| 3 | AMT computation | ✅ engine path wired | `amtAddOnCents` reported; takes larger of regular vs AMT |
+| 4 | Capital gains / qualified dividends separate brackets | ✅ separate LTCG tax computed | `capitalGainsTaxCents` reported |
+| 5 | Itemized sub-types (SALT cap warning) | ✅ SALT-cap hint; sub-totals collected | Hint when SALT > $10k |
+| 6 | Student loan interest ($2,500 cap, phase-out) | ✅ fully wired with AGI phase-out | Above-the-line; reported in result |
+| 6b | AOTC / Lifetime Learning Credit | ⚠️ hint only | Triggered by `qualifiedEducationExpensesCents > 0` |
+| 7 | § 179 expensing | ✅ treated as same-year expense, capped at $2.56M | Reduces `netBiz` |
+| 8 | Augusta Rule (§ 280A 14-day) | ⚠️ hint only | Triggered by SE + home office |
+| 9 | Premium Tax Credit reconciliation | ⚠️ hint only | Triggered by `ptcAdvancePaymentsCents > 0` |
+| 10 | EITC eligibility | ⚠️ hint only (not computed) | Triggered when AGI under EITC limit for dependent count |
+| 11 | Foreign earned income exclusion (§ 911) | ✅ exclusion applied | $132,900 for 2026 |
+| 12 | Energy + EV credits | ✅ non-refundable, applied against tax | Reduces fed tax |
+| 13 | Saver's Credit (§ 25B) | ⚠️ hint only (not computed) | Triggered when retirement contributed + AGI under threshold |
+| 14 | § 199A QBI phase-in partial deduction | ✅ linear phase-out approximation | Above threshold, linear to zero across the statutory $50k/$100k range; hint for non-SSTB |
+| 15 | W-4 withholding-adjustment recommendation | ✅ derived from final balance | Surfaced as `w4Recommendation` + a hint with per-paycheck advice |
+
+### Schema additions (migration 20260512000001_tax_profile_benefit_fields.sql)
+
+`tax_profiles` now carries structured columns for retirement contributions, SE health insurance, LTCG / qualified dividends, foreign earned income, student loan interest, qualified education expenses, itemized sub-types (SALT / mortgage / charity / medical), § 179 election, residential energy credit, EV credit, and PTC advance payments. Defaults to 0 / null so existing rows still work.
+
+### Pending UI work (separate follow-up PR)
+
+The tax-profile onboarding form (`app/onboarding/tax-profile/page.tsx`) doesn't yet collect inputs for the new fields. The engine treats missing values as 0, so existing users won't break — but they also won't see the new benefits applied until they fill in the new fields via the form (or directly in the DB). The form additions are deliberately split into their own PR so the UX can be tuned without slowing the engine work.
+
 ## OBBBA changes still NOT wired (feature-level decisions)
 
 Tracked here so they don't fall through the cracks. Each is a UI/UX surface rather than a forecast-math change.

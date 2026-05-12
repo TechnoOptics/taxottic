@@ -262,6 +262,40 @@ export default async function ForecastPage({ params }: { params: Params }) {
     spouseW2SsWagesCents: taxProfile.spouse_w2_ss_wages_cents ?? 0,
     entityType: (company.entity_type ?? "sole_prop") as EntityType,
     ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
+    // Structured benefit fields - same enrichment as /personal/forecast.
+    retirementSolo401kCents:
+      taxProfile.solo_401k_contribution_cents ?? 0,
+    retirementSepIraCents: taxProfile.sep_ira_contribution_cents ?? 0,
+    retirementTraditionalIraCents:
+      taxProfile.traditional_ira_contribution_cents ?? 0,
+    retirementRothIraCents:
+      taxProfile.roth_ira_contribution_cents ?? 0,
+    retirementHsaCents: taxProfile.hsa_contribution_cents ?? 0,
+    selfEmployedHealthInsuranceCents:
+      taxProfile.se_health_insurance_cents ?? 0,
+    longTermCapitalGainsCents:
+      taxProfile.long_term_capital_gains_cents ?? 0,
+    qualifiedDividendsCents:
+      taxProfile.qualified_dividends_cents ?? 0,
+    foreignEarnedIncomeCents:
+      taxProfile.foreign_earned_income_cents ?? 0,
+    studentLoanInterestCents:
+      taxProfile.student_loan_interest_cents ?? 0,
+    qualifiedEducationExpensesCents:
+      taxProfile.qualified_education_expenses_cents ?? 0,
+    itemizedSaltCents: taxProfile.itemized_salt_cents ?? undefined,
+    itemizedMortgageInterestCents:
+      taxProfile.itemized_mortgage_interest_cents ?? undefined,
+    itemizedCharityCents:
+      taxProfile.itemized_charity_cents ?? undefined,
+    itemizedMedicalCents:
+      taxProfile.itemized_medical_cents ?? undefined,
+    section179ExpenseCents: taxProfile.section_179_expense_cents ?? 0,
+    residentialEnergyCreditCents:
+      taxProfile.residential_energy_credit_cents ?? 0,
+    evCreditCents: taxProfile.ev_credit_cents ?? 0,
+    ptcAdvancePaymentsCents:
+      taxProfile.ptc_advance_payments_cents ?? 0,
   };
 
   // YTD scenario: "if you closed your books today, what's the bill?"

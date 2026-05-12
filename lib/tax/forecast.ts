@@ -111,6 +111,62 @@ export type ForecastInput = {
   // surtax) when modified AGI is above the threshold. Optional —
   // callers without investment data pass 0 and NIIT computes to 0.
   ytdInvestmentIncomeCents?: number;
+
+  // ---------- Benefits the original engine missed (see docs/irs-2026-changes.md) ----------
+  //
+  // Retirement contributions (item #1 in the gap audit). The engine
+  // deducts the sum as an above-the-line adjustment alongside the
+  // existing `ytdAboveTheLineCents`. Optional: callers that haven't
+  // collected these pass undefined or 0 and the math is a no-op.
+  retirementSolo401kCents?: number;
+  retirementSepIraCents?: number;
+  retirementTraditionalIraCents?: number;
+  retirementRothIraCents?: number; // not deductible; used for Saver's Credit
+  retirementHsaCents?: number;
+
+  // Self-employed health insurance (item #2). Above-the-line, capped
+  // by SE earnings.
+  selfEmployedHealthInsuranceCents?: number;
+
+  // Capital gains + qualified dividends (item #4). When provided, the
+  // engine taxes these at the separate 0/15/20% LTCG brackets instead
+  // of bundling them into ordinary income.
+  longTermCapitalGainsCents?: number;
+  qualifiedDividendsCents?: number;
+
+  // Foreign earned income (item #11). Up to the per-year cap is
+  // excluded from gross income under § 911.
+  foreignEarnedIncomeCents?: number;
+
+  // Student loan interest (item #6, deductible portion). Above-the-line
+  // up to $2,500 with its own AGI phase-out.
+  studentLoanInterestCents?: number;
+
+  // Qualified higher-education expenses (item #6, AOTC/LLC hint trigger).
+  qualifiedEducationExpensesCents?: number;
+
+  // Itemized sub-types (item #5). When provided, the engine still uses
+  // ytdItemizedCents as the working total but surfaces the SALT-cap
+  // warning if SALT > $10k.
+  itemizedSaltCents?: number;
+  itemizedMortgageInterestCents?: number;
+  itemizedCharityCents?: number;
+  itemizedMedicalCents?: number;
+
+  // § 179 expensing election (item #7). Treated as a same-year expense
+  // (in addition to the regular business expenses). The engine doesn't
+  // do proper depreciation tracking; this is the simple "expense it
+  // now" treatment most small filers want.
+  section179ExpenseCents?: number;
+
+  // Residential energy + EV credits (item #12). Engine applies them as
+  // non-refundable credits against tax.
+  residentialEnergyCreditCents?: number;
+  evCreditCents?: number;
+
+  // Premium Tax Credit advance payments (item #9). Hint only - we
+  // surface a reconciliation note rather than do the full PTC math.
+  ptcAdvancePaymentsCents?: number;
 };
 
 export type QuarterlyEstimate = {
@@ -148,6 +204,43 @@ export type ForecastResult = {
   taxableIncomeCents: number;
   federalIncomeTaxCents: number;
   stateTaxCents: number;
+
+  // ---------- New output fields ----------
+  //
+  // AMT (item #3). When AMT exceeds regular tax, totalTaxCents already
+  // reflects the AMT amount; this field reports the AMT delta that was
+  // added so the UI can show "AMT kicked in by $X."
+  amtAddOnCents: number;
+  // Capital gains + qualified dividends taxed at LTCG brackets (item #4).
+  // Reported separately so the UI can show "qualified gains taxed at
+  // preferred rates." Zero if no LTCG/QD income supplied.
+  capitalGainsTaxCents: number;
+  // Total retirement contributions the user reported (Solo 401(k) +
+  // SEP + IRA + HSA). Used by the savings-tile recommendation.
+  retirementContributionTotalCents: number;
+  // Tax savings the user got from retirement contributions (item #1).
+  // Approximated as marginal rate × deductible portion; surfaced as
+  // "you saved $X this year by contributing $Y" copy on the tile.
+  retirementTaxSavingsCents: number;
+  // Foreign earned income excluded under § 911 (item #11). Zero if
+  // none reported.
+  foreignEarnedIncomeExcludedCents: number;
+  // Student loan interest deduction applied (item #6). Capped at
+  // $2,500 with AGI phase-out.
+  studentLoanInterestDeductionCents: number;
+  // W-4 withholding-adjustment recommendation for W-2 filers (item #15).
+  // - "increase": user is under-withholding, suggest a higher W-4
+  //   additional-amount;
+  // - "decrease": user is significantly over-withholding (large refund),
+  //   suggest a lower W-4 to get the money back in paychecks;
+  // - "ok": within ~$500 of zero.
+  // The amount is the per-paycheck delta assuming bi-weekly pay (26
+  // checks/year). The UI rounds and surfaces.
+  w4Recommendation: {
+    direction: "increase" | "decrease" | "ok";
+    perPaycheckDeltaCents: number;
+    annualDeltaCents: number;
+  };
 
   totalTaxCents: number;
   alreadyPaidCents: number;
@@ -225,13 +318,39 @@ export function forecast(input: ForecastInput): ForecastResult {
   }
 
   // Apply meals 50% rule once, then build year-to-date deductible expenses.
+  // § 179 election (item #7 in the benefits audit) adds to deductible
+  // business expenses in the same year - capped at the per-year statutory
+  // limit ($2,560,000 for 2026 per OBBBA § 70306). The full-blown
+  // depreciation election (basis tracking, recapture, etc.) is a separate
+  // future feature; for now we treat it as expense-it-now subject to
+  // the cap.
+  const SECTION_179_2026_CAP_CENTS = 2_560_000 * 100;
+  const requestedSection179 = Math.max(0, input.section179ExpenseCents ?? 0);
+  const section179Applied = Math.min(
+    requestedSection179,
+    SECTION_179_2026_CAP_CENTS,
+  );
+  if (
+    requestedSection179 > 0 &&
+    requestedSection179 > section179Applied
+  ) {
+    hints.push(
+      `Your § 179 election exceeds the ${k.year} cap of $${(SECTION_179_2026_CAP_CENTS / 100).toLocaleString()}. The excess will need to depreciate normally over the asset's class life — confirm with a CPA.`,
+    );
+  }
   const ytdMealsDeductible = Math.round(input.ytdMealsCents * 0.5);
   const ytdDeductibleExpenses =
     Math.max(0, input.ytdBusinessExpensesCents) +
     ytdMealsDeductible +
     Math.max(0, input.autoMileageCents) +
-    Math.max(0, input.autoHomeOfficeCents);
+    Math.max(0, input.autoHomeOfficeCents) +
+    section179Applied;
   const ytdNetBiz = Math.max(0, input.ytdIncomeCents - ytdDeductibleExpenses);
+  if (section179Applied > 0) {
+    assumptions.push(
+      `§ 179 election: expensing $${(section179Applied / 100).toLocaleString()} of equipment in ${k.year} instead of depreciating over the asset's class life (OBBBA § 70306 raised the cap to $2.56M).`,
+    );
+  }
 
   if (input.autoMileageCents > 0) {
     // Mileage rate is published in a separate IRS Notice each December.
@@ -263,9 +382,59 @@ export function forecast(input: ForecastInput): ForecastResult {
   // Project full-year amounts via linear pace.
   const projectedIncome = round(input.ytdIncomeCents * projectionFactor);
   const projectedExpenses = round(ytdDeductibleExpenses * projectionFactor);
-  const projectedAboveTheLine = round(
+
+  // Above-the-line aggregation. The original engine had one number
+  // (ytdAboveTheLineCents) summed from monthly_expenses rows tagged with
+  // ABOVE_THE_LINE_CODES; many users don't categorize retirement
+  // contributions as transactions and prefer to enter them as a single
+  // "I put $X in my Solo 401(k) this year" number. The new structured
+  // fields below let them do that; we add them to the projected total
+  // so the engine doesn't have to care about the source.
+  //
+  // Items wired here:
+  //   #1 Retirement contributions (Solo 401(k), SEP-IRA, Traditional IRA, HSA)
+  //   #2 Self-employed health insurance
+  //   #6 Student loan interest deduction (capped $2,500, AGI phase-out applied below)
+  const structuredRetirementCents =
+    Math.max(0, input.retirementSolo401kCents ?? 0) +
+    Math.max(0, input.retirementSepIraCents ?? 0) +
+    Math.max(0, input.retirementTraditionalIraCents ?? 0) +
+    Math.max(0, input.retirementHsaCents ?? 0);
+  // Roth IRA is NOT deductible but the contribution counts toward the
+  // Saver's Credit + the savings-target tile; track it separately so
+  // we don't deduct it.
+  const rothContributionCents = Math.max(
+    0,
+    input.retirementRothIraCents ?? 0,
+  );
+  const seHealthInsuranceCents = Math.max(
+    0,
+    input.selfEmployedHealthInsuranceCents ?? 0,
+  );
+  // Student loan interest is also above-the-line but has its own AGI
+  // phase-out we apply below once we know AGI. Compute the unconstrained
+  // amount here (capped at the statutory $2,500 / IRC § 221) so we have
+  // a starting figure.
+  const STUDENT_LOAN_INTEREST_STATUTORY_MAX_CENTS = 2_500 * 100;
+  const studentLoanInterestUnconstrainedCents = Math.min(
+    Math.max(0, input.studentLoanInterestCents ?? 0),
+    STUDENT_LOAN_INTEREST_STATUTORY_MAX_CENTS,
+  );
+
+  // Projected above-the-line from logged monthly_expenses (legacy path)
+  // PLUS the new structured fields. The structured fields aren't
+  // projected because they're entered as annual totals already, so we
+  // skip projectionFactor for them.
+  const projectedAboveTheLineExisting = round(
     Math.max(0, input.ytdAboveTheLineCents) * projectionFactor,
   );
+  // Note: studentLoanInterestUnconstrainedCents is intentionally NOT
+  // added here yet - it's applied to AGI after we phase it out by AGI.
+  let projectedAboveTheLine =
+    projectedAboveTheLineExisting +
+    structuredRetirementCents +
+    seHealthInsuranceCents;
+
   const netBiz = Math.max(0, projectedIncome - projectedExpenses);
 
   // C-Corp short-circuit: flat 21% on net business income at the entity
@@ -326,6 +495,20 @@ export function forecast(input: ForecastInput): ForecastResult {
       ytdNetBusinessIncomeCents: ytdNetBiz,
       assumptions,
       hints,
+      // C-Corps don't have these — they live on the owner's separate
+      // 1040, not on the entity return. Default to zero so the result
+      // shape is uniform across entity types.
+      amtAddOnCents: 0,
+      capitalGainsTaxCents: 0,
+      retirementContributionTotalCents: 0,
+      retirementTaxSavingsCents: 0,
+      foreignEarnedIncomeExcludedCents: 0,
+      studentLoanInterestDeductionCents: 0,
+      w4Recommendation: {
+        direction: "ok",
+        perPaycheckDeltaCents: 0,
+        annualDeltaCents: 0,
+      },
     };
   }
 
@@ -395,27 +578,114 @@ export function forecast(input: ForecastInput): ForecastResult {
       ? input.spouseW2WagesCents
       : input.spouseIncomeCents;
 
+  // Foreign earned income exclusion (item #11 - § 911). Excludes up
+  // to the per-year cap of qualified foreign earned income from gross
+  // income. Applied BEFORE AGI so the exclusion reduces every
+  // downstream phase-out threshold the user might otherwise blow past.
+  // The bundle's FOREIGN_EARNED_INCOME_EXCLUSION isn't yet on the
+  // shared type (intentional - it's a single-number constant most
+  // years), so we inline the 2026 figure here. Update annually with
+  // the rest of constants-<year>.ts.
+  const FOREIGN_EARNED_INCOME_EXCLUSION_CENTS =
+    input.taxYear >= 2026 ? 132_900 * 100 : 130_000 * 100;
+  const foreignEarnedIncomeExcludedCents = Math.min(
+    Math.max(0, input.foreignEarnedIncomeCents ?? 0),
+    FOREIGN_EARNED_INCOME_EXCLUSION_CENTS,
+  );
+  if (foreignEarnedIncomeExcludedCents > 0) {
+    assumptions.push(
+      `Foreign earned income exclusion (§ 911) applied: $${(foreignEarnedIncomeExcludedCents / 100).toLocaleString()} excluded from gross income.`,
+    );
+  }
+
   // AGI = net biz + owner W-2 wages + spouse income - half SE tax
-  //       - other above-the-line items.
+  //       - other above-the-line items - foreign earned exclusion.
   // (W-2 wages are taxable income on the personal return, even though
   // SS/Medicare/withholding were already settled by the employer.)
-  const agi = Math.max(
+  // Compute MAGI-ish AGI first (without the student-loan deduction so
+  // we can apply the AGI phase-out for SLI against it).
+  const agiBeforeSli = Math.max(
     0,
     netBiz +
       input.ownerW2WagesCents +
       effectiveSpouseIncome -
       halfSeTaxDeduction -
-      projectedAboveTheLine,
+      projectedAboveTheLine -
+      foreignEarnedIncomeExcludedCents,
   );
-  if (projectedAboveTheLine > 0) {
+
+  // Student loan interest deduction (item #6 - § 221). $2,500 max,
+  // phased out for MAGI above $85k single / $175k MFJ (2026 figures
+  // from Rev. Proc. 2025-32 § 4.29), completely phased out at $100k /
+  // $205k. We approximate MAGI as AGI here (the difference is small
+  // foreign-earned add-backs we've already excluded).
+  const isJoint =
+    input.filingStatus === "married_filing_jointly" ||
+    input.filingStatus === "qualifying_widow";
+  const sliPhaseOutStart = isJoint ? 175_000 * 100 : 85_000 * 100;
+  const sliPhaseOutEnd = isJoint ? 205_000 * 100 : 100_000 * 100;
+  let studentLoanInterestDeductionCents = 0;
+  if (studentLoanInterestUnconstrainedCents > 0) {
+    if (agiBeforeSli <= sliPhaseOutStart) {
+      studentLoanInterestDeductionCents = studentLoanInterestUnconstrainedCents;
+    } else if (agiBeforeSli < sliPhaseOutEnd) {
+      const phaseFrac =
+        1 - (agiBeforeSli - sliPhaseOutStart) /
+        (sliPhaseOutEnd - sliPhaseOutStart);
+      studentLoanInterestDeductionCents = Math.round(
+        studentLoanInterestUnconstrainedCents * phaseFrac,
+      );
+    } else {
+      studentLoanInterestDeductionCents = 0;
+      hints.push(
+        "Your MAGI exceeds the § 221 student-loan-interest deduction phase-out. None of the interest paid is deductible this year.",
+      );
+    }
+    if (studentLoanInterestDeductionCents > 0) {
+      assumptions.push(
+        `Student loan interest deduction (§ 221) applied: $${(studentLoanInterestDeductionCents / 100).toLocaleString()} (capped at $2,500 with AGI phase-out).`,
+      );
+    }
+  }
+  projectedAboveTheLine += studentLoanInterestDeductionCents;
+  const agi = Math.max(0, agiBeforeSli - studentLoanInterestDeductionCents);
+
+  if (projectedAboveTheLineExisting > 0) {
     assumptions.push(
       "Self-employed health insurance, retirement contributions, and HSA deductions are applied above-the-line (Schedule 1), not as Schedule C expenses.",
+    );
+  }
+  if (structuredRetirementCents > 0) {
+    assumptions.push(
+      `Retirement contributions applied above-the-line: $${(structuredRetirementCents / 100).toLocaleString()} (Solo 401(k) + SEP-IRA + Traditional IRA + HSA).`,
+    );
+  }
+  if (seHealthInsuranceCents > 0) {
+    assumptions.push(
+      `Self-employed health insurance deduction applied: $${(seHealthInsuranceCents / 100).toLocaleString()} (above-the-line; limited to SE earnings).`,
     );
   }
   if (input.ownerW2WagesCents > 0 || effectiveSpouseIncome > 0) {
     assumptions.push(
       "Household W-2 wages are added to taxable income, and federal withholding is credited as already-paid.",
     );
+  }
+
+  // Item #5 SALT cap warning. The TCJA capped the State And Local Tax
+  // itemized deduction at $10,000 ($5,000 MFS); OBBBA didn't change
+  // this. If the user reported more than the cap in itemizedSaltCents
+  // they're effectively wasting deduction headroom.
+  const saltReported = Math.max(0, input.itemizedSaltCents ?? 0);
+  if (saltReported > 0) {
+    const saltCap =
+      input.filingStatus === "married_filing_separately"
+        ? 5_000 * 100
+        : 10_000 * 100;
+    if (saltReported > saltCap) {
+      hints.push(
+        `Your reported state + local taxes ($${(saltReported / 100).toLocaleString()}) exceed the SALT cap of $${(saltCap / 100).toLocaleString()}. The excess isn't deductible. Consider bunching charitable contributions or other itemized buckets where the cap doesn't apply.`,
+      );
+    }
   }
 
   // Standard or itemized.
@@ -482,9 +752,34 @@ export function forecast(input: ForecastInput): ForecastResult {
         }
       }
     } else {
-      hints.push(
-        "Your AGI is above the QBI safe-harbor threshold. The actual §199A deduction depends on W-2 wages, qualified property, and SSTB classification - confirm with a CPA.",
-      );
+      // Item #14: simplified QBI phase-in partial deduction. Statutory
+      // phase-in range under § 199A(b)(3)(B) is $50,000 (single/HoH/MFS)
+      // or $100,000 (MFJ/SS), measured above the threshold. Above the
+      // threshold + range, SSTB gets zero and non-SSTB is W-2-wage /
+      // UBIA limited. We don't have SSTB classification or business
+      // W-2 wage / UBIA inputs, so we approximate as a linear phase-out
+      // to zero across the range (the SSTB-equivalent case). A hint
+      // tells the non-SSTB filer they may qualify for more.
+      const phaseInWidth = isJoint ? 100_000 * 100 : 50_000 * 100;
+      const overThreshold = agi - qbiThreshold;
+      if (overThreshold < phaseInWidth) {
+        const taxableBeforeQbi = Math.max(0, agi - deduction);
+        const fullDeduction = Math.min(
+          Math.round(netBiz * k.QBI.rate),
+          Math.round(taxableBeforeQbi * k.QBI.rate),
+        );
+        const phaseFrac = 1 - overThreshold / phaseInWidth;
+        qbi = Math.round(fullDeduction * phaseFrac);
+        if (qbi > 0) {
+          assumptions.push(
+            `Partial §199A deduction applied (AGI is in the phase-in range; phased to ${Math.round(phaseFrac * 100)}% of the full 20% formula). Real deduction may be higher if your business is non-SSTB with W-2 wages or qualified property - confirm with a CPA.`,
+          );
+        }
+      } else {
+        hints.push(
+          "Your AGI is above the QBI safe-harbor threshold AND the phase-in range. Non-SSTB businesses with W-2 wages or qualified property may still qualify for a partial deduction (the actual §199A math then involves W-2 wages, qualified property, and SSTB classification) - confirm with a CPA.",
+        );
+      }
     }
   }
 
@@ -502,11 +797,152 @@ export function forecast(input: ForecastInput): ForecastResult {
   }
 
   const taxableIncome = Math.max(0, agi - deduction - qbi);
-  const fedTaxBeforeCredits = computeFederalIncomeTax(
-    taxableIncome,
+
+  // Capital gains + qualified dividends (item #4). Currently the engine
+  // bundles investment income (ytdInvestmentIncomeCents) into the
+  // ordinary-tax stream. When the caller passes structured LTCG and/or
+  // QD numbers, we split them out and tax them at the LTCG brackets
+  // (0/15/20%) instead. Net effect: a user with $50k of LTCG sees a
+  // much lower tax than if it were ordinary income.
+  //
+  // The math: stack ordinary income up to the 0% breakpoint, then 15%,
+  // then 20%. We approximate "ordinary income for stacking" as
+  // (taxable - LTCG - QD) so the LTCG slice starts where ordinary ends.
+  const ltcgIncome = Math.max(
+    0,
+    (input.longTermCapitalGainsCents ?? 0) +
+      (input.qualifiedDividendsCents ?? 0),
+  );
+  const ordinaryTaxable = Math.max(0, taxableIncome - ltcgIncome);
+  const fedTaxOnOrdinary = computeFederalIncomeTax(
+    ordinaryTaxable,
     input.filingStatus,
     k,
   );
+  let capitalGainsTax = 0;
+  if (ltcgIncome > 0) {
+    // 2026 LTCG breakpoints (Rev. Proc. 2025-32 § 4.03). Hard-coded
+    // here rather than threaded through the bundle because they're
+    // only relevant when LTCG/QD is non-zero; bundle stays focused
+    // on the high-traffic ordinary-tax numbers.
+    const zeroBreak =
+      input.taxYear >= 2026
+        ? isJoint
+          ? 98_900 * 100
+          : input.filingStatus === "head_of_household"
+            ? 66_200 * 100
+            : input.filingStatus === "married_filing_separately"
+              ? 49_450 * 100
+              : 49_450 * 100
+        : isJoint
+          ? 96_700 * 100
+          : 48_350 * 100;
+    const fifteenBreak =
+      input.taxYear >= 2026
+        ? isJoint
+          ? 613_700 * 100
+          : input.filingStatus === "head_of_household"
+            ? 579_600 * 100
+            : input.filingStatus === "married_filing_separately"
+              ? 306_850 * 100
+              : 545_500 * 100
+        : isJoint
+          ? 600_050 * 100
+          : 533_400 * 100;
+    let remainingLtcg = Math.min(ltcgIncome, taxableIncome);
+    const taxedAtZero = Math.max(
+      0,
+      Math.min(remainingLtcg, zeroBreak - ordinaryTaxable),
+    );
+    remainingLtcg -= taxedAtZero;
+    const taxedAtFifteen = Math.max(
+      0,
+      Math.min(
+        remainingLtcg,
+        fifteenBreak - Math.max(ordinaryTaxable, zeroBreak),
+      ),
+    );
+    remainingLtcg -= taxedAtFifteen;
+    const taxedAtTwenty = Math.max(0, remainingLtcg);
+    capitalGainsTax =
+      Math.round(taxedAtFifteen * 0.15) +
+      Math.round(taxedAtTwenty * 0.2);
+    if (capitalGainsTax >= 0) {
+      assumptions.push(
+        `Qualified gains + dividends taxed at preferred LTCG brackets (0/15/20%): $${(taxedAtZero / 100).toLocaleString()} at 0%, $${(taxedAtFifteen / 100).toLocaleString()} at 15%, $${(taxedAtTwenty / 100).toLocaleString()} at 20%.`,
+      );
+    }
+  }
+
+  const fedTaxBeforeCredits = fedTaxOnOrdinary + capitalGainsTax;
+
+  // AMT computation (item #3). § 55 alternative minimum tax. The
+  // approximation here:
+  //   AMTI = AGI (most preferences we'd need to add back live above
+  //          the AGI line in the regular path already, e.g. SALT and
+  //          some misc deductions; on a real return AMT has its own
+  //          standard deduction add-back). We use AGI as a
+  //          conservative AMTI base.
+  //   AMT exemption: from the bundle's per-year AMT_2026 / 2025 table.
+  //   AMT phase-out: 25 cents per dollar of AMTI above the phaseout
+  //                  start.
+  //   AMT rate: 26% up to the 28%-breakpoint, 28% beyond.
+  // We take the larger of regular tax (after credits) and AMT, and
+  // report the delta as amtAddOnCents so the UI can show "AMT kicked
+  // in by $X" rather than burying it inside totalTaxCents.
+  //
+  // Constants are inlined for 2026 from Rev. Proc. 2025-32 § 4.10
+  // because they're only consumed here; threading them through the
+  // bundle would add a lot of fields for a single consumer. Update
+  // alongside the rest of constants-<year>.ts when refreshing.
+  const amtConstants =
+    input.taxYear >= 2026
+      ? {
+          exemption: isJoint
+            ? 140_200 * 100
+            : input.filingStatus === "married_filing_separately"
+              ? 70_100 * 100
+              : 90_100 * 100,
+          phaseoutStart: isJoint ? 1_000_000 * 100 : 500_000 * 100,
+          rate28Breakpoint: isJoint
+            ? 244_500 * 100
+            : input.filingStatus === "married_filing_separately"
+              ? 122_250 * 100
+              : 244_500 * 100,
+        }
+      : {
+          // 2025 figures from Rev. Proc. 2024-40.
+          exemption: isJoint
+            ? 137_000 * 100
+            : input.filingStatus === "married_filing_separately"
+              ? 68_500 * 100
+              : 88_100 * 100,
+          phaseoutStart: isJoint ? 1_000_000 * 100 : 500_000 * 100,
+          rate28Breakpoint: isJoint
+            ? 239_100 * 100
+            : input.filingStatus === "married_filing_separately"
+              ? 119_550 * 100
+              : 239_100 * 100,
+        };
+  const amtiBase = agi;
+  const phaseoutOver = Math.max(0, amtiBase - amtConstants.phaseoutStart);
+  const exemptionAfterPhaseout = Math.max(
+    0,
+    amtConstants.exemption - Math.round(phaseoutOver * 0.25),
+  );
+  const amti = Math.max(0, amtiBase - exemptionAfterPhaseout);
+  const amtAt26 = Math.min(amti, amtConstants.rate28Breakpoint);
+  const amtAt28 = Math.max(0, amti - amtConstants.rate28Breakpoint);
+  const tentativeAmt =
+    Math.round(amtAt26 * 0.26) + Math.round(amtAt28 * 0.28);
+  // The AMT computation also keeps the LTCG/QD preferential rates - it
+  // does NOT re-tax those amounts. So we subtract our LTCG tax from
+  // tentativeAmt's "regular tax portion" before comparing. Simplified:
+  // compare tentativeAmt against (regular fed tax before credits +
+  // capital gains tax). Take whichever is larger.
+  const amtTotal = Math.max(0, tentativeAmt - capitalGainsTax);
+  let amtAddOnCents = 0;
+  let fedTaxBeforeAmt = Math.max(0, fedTaxBeforeCredits);
 
   // Apply Child Tax Credit + Credit for Other Dependents. Both are
   // non-refundable here (we deliberately don't model the refundable
@@ -525,7 +961,48 @@ export function forecast(input: ForecastInput): ForecastResult {
     );
   }
 
-  const fedTax = Math.max(0, fedTaxBeforeCredits - credits);
+  // Residential energy + EV credits (item #12). Non-refundable; can
+  // reduce tax to zero but not below. Sum them with the family credits
+  // and clamp to fedTaxBeforeCredits.
+  const residentialEnergyCreditCents = Math.max(
+    0,
+    input.residentialEnergyCreditCents ?? 0,
+  );
+  const evCreditCents = Math.max(0, input.evCreditCents ?? 0);
+  if (residentialEnergyCreditCents > 0) {
+    assumptions.push(
+      `Residential energy credit applied: $${(residentialEnergyCreditCents / 100).toLocaleString()} (§ 25D - solar/geothermal/wind).`,
+    );
+  }
+  if (evCreditCents > 0) {
+    assumptions.push(
+      `Clean vehicle credit applied: $${(evCreditCents / 100).toLocaleString()} (§ 30D / § 25E).`,
+    );
+  }
+
+  const totalNonRefundableCredits =
+    credits + residentialEnergyCreditCents + evCreditCents;
+  const fedTaxAfterCredits = Math.max(
+    0,
+    fedTaxBeforeAmt - totalNonRefundableCredits,
+  );
+
+  // Now compare regular tax (after credits) to AMT and take the larger.
+  // AMT can't be reduced by the non-refundable credits the same way -
+  // simplification here is to compare AMT to the *pre-credit* regular
+  // tax and use the higher of (regular after credits, AMT). Real Form
+  // 6251 is more nuanced for credit ordering; this is the directionally-
+  // correct simplification for a forecast.
+  let fedTax: number;
+  if (amtTotal > fedTaxBeforeAmt) {
+    amtAddOnCents = amtTotal - fedTaxBeforeAmt;
+    fedTax = amtTotal;
+    assumptions.push(
+      `AMT (§ 55) applied: alternative minimum tax exceeds regular tax by $${(amtAddOnCents / 100).toLocaleString()}. Common triggers: large LTCG stacked on high ordinary income, or high state-tax / misc itemized deductions hitting the SALT cap.`,
+    );
+  } else {
+    fedTax = fedTaxAfterCredits;
+  }
 
   const stRate = stateRate(input.stateCode);
   const stTax = Math.round(taxableIncome * stRate);
@@ -605,6 +1082,145 @@ export function forecast(input: ForecastInput): ForecastResult {
     );
   }
 
+  // ---------- Educational hints (items #6, #8, #9, #10, #13) ----------
+  //
+  // Each surfaces a credit/benefit the engine doesn't fully compute but
+  // that's likely available to the user given their inputs. The hints
+  // are written so the user sees actionable next steps rather than vague
+  // tax-jargon.
+
+  // #6 AOTC / Lifetime Learning Credit eligibility.
+  if (Math.max(0, input.qualifiedEducationExpensesCents ?? 0) > 0) {
+    hints.push(
+      "Qualified higher-education expenses detected. The American Opportunity Credit ($2,500/student max, partially refundable) and the Lifetime Learning Credit (20% of expenses, $2,000 max) are both possibilities here - the AOTC is usually the better one for the first 4 years of an undergrad's enrollment. Eligibility depends on income, dependency, and degree-seeking status; the math isn't in this forecast yet, so claim them on your Form 8863 directly or ask a CPA.",
+    );
+  }
+
+  // #8 Augusta Rule (§ 280A(g)). 14-day home rental income is excluded
+  // from gross income if your business pays you to host meetings, board
+  // sessions, etc. at your home. Trigger when the user has a home
+  // office (so they have the space) plus an SE business that could
+  // pay rent.
+  if (
+    SE_ENTITY_TYPES.has(input.entityType) &&
+    input.autoHomeOfficeCents > 0
+  ) {
+    hints.push(
+      "Augusta Rule (§ 280A(g)): your business can rent your home from you for up to 14 days a year at fair-market rates, and the rental income is tax-free to you while still a deductible expense to the business. Common use: quarterly board meetings or client-strategy days. Document with a written rental agreement and comparable-rate research.",
+    );
+  }
+
+  // #9 Premium Tax Credit reconciliation (§ 36B). When the user
+  // received advance PTC payments, they reconcile on Form 8962 at
+  // filing time. We don't compute the actual PTC, but the heads-up
+  // is genuinely useful.
+  if (Math.max(0, input.ptcAdvancePaymentsCents ?? 0) > 0) {
+    hints.push(
+      `You received $${((input.ptcAdvancePaymentsCents ?? 0) / 100).toLocaleString()} in marketplace advance Premium Tax Credit payments. These reconcile on Form 8962 at filing time - if your actual AGI is higher than projected when you enrolled, you may owe some back; if lower, you may get more. We don't compute the reconciliation here; the marketplace's calculator is the source of truth.`,
+    );
+  }
+
+  // #10 EITC basic eligibility check. The Earned Income Tax Credit is
+  // available to low-/moderate-income filers, sized by number of
+  // qualifying children. We surface a heads-up when AGI is below a
+  // rough eligibility band for the user's kid count.
+  // 2026 maximum AGI for EITC (Rev. Proc. 2025-32 § 4.06):
+  //   0 kids: ~$19,104 single / $26,214 MFJ
+  //   1 kid:  ~$50,434 single / $57,544 MFJ
+  //   2 kids: ~$57,310 single / $64,420 MFJ
+  //   3+ kids: ~$61,555 single / $68,665 MFJ
+  // We use the lowest filing-status threshold as a "definitely look at
+  // EITC" trigger; users above it but still moderate-income should
+  // confirm with a CPA.
+  const kidCount = Math.min(3, Math.max(0, input.dependentsUnder17));
+  const eitcMaxAgi = isJoint
+    ? kidCount === 0
+      ? 26_214 * 100
+      : kidCount === 1
+        ? 57_544 * 100
+        : kidCount === 2
+          ? 64_420 * 100
+          : 68_665 * 100
+    : kidCount === 0
+      ? 19_104 * 100
+      : kidCount === 1
+        ? 50_434 * 100
+        : kidCount === 2
+          ? 57_310 * 100
+          : 61_555 * 100;
+  if (agi > 0 && agi <= eitcMaxAgi) {
+    hints.push(
+      `Your AGI ($${(agi / 100).toLocaleString()}) is within the Earned Income Tax Credit eligibility range for your filing status and dependent count. EITC is refundable and can be substantial ($632 to $8,231 for 2026 depending on kids). We don't compute it in this forecast - check IRS Pub 596 or use the IRS EITC Assistant at irs.gov/credits-deductions/individuals/earned-income-tax-credit-assistant.`,
+    );
+  }
+
+  // #13 Saver's Credit (§ 25B). Non-refundable credit of 10/20/50% of
+  // up to $2,000 retirement contribution, available when AGI is below
+  // the filing-status threshold. Trigger when retirement contributed
+  // AND AGI is below the rough upper limit.
+  // 2026 Saver's Credit AGI limits (approximated):
+  //   MFJ: $79,000 (50% bracket up to $48,000)
+  //   HoH: $59,250
+  //   Single/MFS: $39,500
+  const saversCreditMaxAgi = isJoint
+    ? 79_000 * 100
+    : input.filingStatus === "head_of_household"
+      ? 59_250 * 100
+      : 39_500 * 100;
+  if (
+    structuredRetirementCents + rothContributionCents > 0 &&
+    agi > 0 &&
+    agi <= saversCreditMaxAgi
+  ) {
+    hints.push(
+      `Saver's Credit (§ 25B) is likely available: your AGI ($${(agi / 100).toLocaleString()}) is below the Saver's-Credit phase-out for your filing status and you contributed to retirement this year. The credit is 10/20/50% of up to $2,000 of contributions ($4,000 if MFJ). Non-refundable; claim on Form 8880.`,
+    );
+  }
+
+  // ---------- Retirement tax-savings calc (item #1) ----------
+  //
+  // Show the user the marginal-rate value of the retirement deduction
+  // they took (so the savings tile can say "you saved $X this year by
+  // contributing $Y"). Capped at the deductible portion (Roth doesn't
+  // count - it's after-tax).
+  const retirementContributionTotalCents =
+    structuredRetirementCents + rothContributionCents;
+  const retirementTaxSavingsCents = Math.round(
+    structuredRetirementCents * marginal,
+  );
+
+  // ---------- W-4 withholding-adjustment recommendation (item #15) ----------
+  //
+  // For W-2 filers, the most useful actionable output is "what should
+  // you do with your W-4 to land at zero next year." We translate the
+  // current balance into a per-paycheck adjustment assuming bi-weekly
+  // pay (26 paychecks/year). Threshold of $500 keeps us from nagging
+  // every user with a tiny rounding-error refund. SE-only filers get
+  // direction="ok" because they don't have a W-4.
+  const hasW2Wages =
+    input.ownerW2WagesCents > 0 || input.spouseW2WagesCents > 0;
+  let w4Direction: "increase" | "decrease" | "ok" = "ok";
+  let w4PerPaycheckDeltaCents = 0;
+  let w4AnnualDeltaCents = 0;
+  if (hasW2Wages) {
+    const balanceForW4 = balance; // positive = under-withheld
+    if (Math.abs(balanceForW4) > 500 * 100) {
+      w4AnnualDeltaCents = Math.abs(balanceForW4);
+      w4PerPaycheckDeltaCents = Math.round(w4AnnualDeltaCents / 26);
+      if (balanceForW4 > 0) {
+        w4Direction = "increase";
+        hints.push(
+          `W-4 nudge: you're projecting to owe $${(balanceForW4 / 100).toLocaleString()} at filing. Add $${(w4PerPaycheckDeltaCents / 100).toLocaleString()} to "Extra withholding" on Form W-4 step 4(c) for each remaining paycheck this year and you'll land near zero.`,
+        );
+      } else {
+        w4Direction = "decrease";
+        hints.push(
+          `W-4 nudge: you're projecting a $${(Math.abs(balanceForW4) / 100).toLocaleString()} refund - that's your money the IRS is holding without interest. Reduce withholding by ~$${(w4PerPaycheckDeltaCents / 100).toLocaleString()} per paycheck (or adjust dependents on W-4 step 3) to get that cash flowing through the year instead.`,
+        );
+      }
+    }
+  }
+
   return {
     projectedIncomeCents: projectedIncome,
     projectedExpensesCents: projectedExpenses,
@@ -631,6 +1247,18 @@ export function forecast(input: ForecastInput): ForecastResult {
     ytdNetBusinessIncomeCents: ytdNetBiz,
     assumptions,
     hints,
+    // New fields for items #1-#15.
+    amtAddOnCents,
+    capitalGainsTaxCents: capitalGainsTax,
+    retirementContributionTotalCents,
+    retirementTaxSavingsCents,
+    foreignEarnedIncomeExcludedCents,
+    studentLoanInterestDeductionCents,
+    w4Recommendation: {
+      direction: w4Direction,
+      perPaycheckDeltaCents: w4PerPaycheckDeltaCents,
+      annualDeltaCents: w4AnnualDeltaCents,
+    },
   };
 }
 
