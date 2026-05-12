@@ -698,17 +698,37 @@ export function forecast(input: ForecastInput): ForecastResult {
     );
   }
 
-  // AGI = net biz + owner W-2 wages + spouse income - half SE tax
-  //       - other above-the-line items - foreign earned exclusion.
-  // (W-2 wages are taxable income on the personal return, even though
-  // SS/Medicare/withholding were already settled by the employer.)
-  // Compute MAGI-ish AGI first (without the student-loan deduction so
-  // we can apply the AGI phase-out for SLI against it).
+  // AGI = net biz + owner W-2 wages + spouse income + LTCG + qualified
+  //       dividends - half SE tax - other above-the-line items -
+  //       foreign earned exclusion.
+  //
+  // Long-term capital gains and qualified dividends are part of gross
+  // income → AGI; they just get taxed at the preferential LTCG
+  // brackets instead of ordinary rates later in the engine. Earlier
+  // versions of this function omitted them from AGI which made every
+  // downstream AGI-driven check (NIIT threshold, credit phase-outs,
+  // EITC investment-income disqualifier, AMT exemption phase-out)
+  // see too LOW an AGI for filers with investment income.
+  //
+  // (W-2 wages are also taxable income on the personal return, even
+  // though SS/Medicare/withholding were already settled by the
+  // employer.) Compute MAGI-ish AGI first (without the student-loan
+  // deduction so we can apply the AGI phase-out for SLI against it).
+  const longTermCapitalGainsCents = Math.max(
+    0,
+    input.longTermCapitalGainsCents ?? 0,
+  );
+  const qualifiedDividendsCents = Math.max(
+    0,
+    input.qualifiedDividendsCents ?? 0,
+  );
   const agiBeforeSli = Math.max(
     0,
     netBiz +
       input.ownerW2WagesCents +
-      effectiveSpouseIncome -
+      effectiveSpouseIncome +
+      longTermCapitalGainsCents +
+      qualifiedDividendsCents -
       halfSeTaxDeduction -
       projectedAboveTheLine -
       foreignEarnedIncomeExcludedCents,
@@ -908,11 +928,11 @@ export function forecast(input: ForecastInput): ForecastResult {
   // The math: stack ordinary income up to the 0% breakpoint, then 15%,
   // then 20%. We approximate "ordinary income for stacking" as
   // (taxable - LTCG - QD) so the LTCG slice starts where ordinary ends.
-  const ltcgIncome = Math.max(
-    0,
-    (input.longTermCapitalGainsCents ?? 0) +
-      (input.qualifiedDividendsCents ?? 0),
-  );
+  // Use the same local LTCG / QD values that were added to AGI above,
+  // so the LTCG slice math is consistent with what's in AGI. (If we
+  // re-read input here we'd risk a sign/zero mismatch if either value
+  // ever gets normalized differently between the two code paths.)
+  const ltcgIncome = longTermCapitalGainsCents + qualifiedDividendsCents;
   const ordinaryTaxable = Math.max(0, taxableIncome - ltcgIncome);
   const fedTaxOnOrdinary = computeFederalIncomeTax(
     ordinaryTaxable,
