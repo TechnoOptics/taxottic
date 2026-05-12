@@ -6,6 +6,7 @@ import {
 } from "@/lib/ocr/extract-tax-doc";
 import { PdfPasswordRequiredError } from "@/lib/ocr/extract-w2";
 import { decryptAndRenderPdf, PdfPasswordError } from "@/lib/pdf/decrypt";
+import { requireFeatureGate } from "@/lib/plans/gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -34,6 +35,18 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
+
+  // Prior-year docs feed the personal forecast (W-2 wages, withholdings,
+  // deduction patterns from past returns). Forecast is Filer-and-above,
+  // so the OCR that prepares it has to be too. Without this gate a free
+  // user could batch-OCR an unlimited stack of PDFs at our Anthropic
+  // expense.
+  const gateFail = await requireFeatureGate(
+    supabase,
+    user.id,
+    "personalForecast",
+  );
+  if (gateFail) return gateFail;
 
   let formData: FormData;
   try {

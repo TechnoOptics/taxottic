@@ -6,6 +6,7 @@ import {
   PdfPasswordRequiredError,
 } from "@/lib/ocr/extract-w2";
 import { decryptAndRenderPdf, PdfPasswordError } from "@/lib/pdf/decrypt";
+import { requireFeatureGate } from "@/lib/plans/gate";
 
 export const runtime = "nodejs";
 // 50 MB upload cap.
@@ -17,9 +18,10 @@ export const maxDuration = 60;
  * the file - the caller (the tax-profile form) takes the structured
  * result and pre-fills its inputs; the user reviews and saves.
  *
- * Auth: requires a signed-in user. Anyone signed in can use this -
- * no plan gate, since prefilling the tax profile saves us support
- * tickets and the per-call cost is small (~$0.01).
+ * Auth: requires a signed-in user with at least the Filer plan, since
+ * each call hits Anthropic and the W-2 forecasting feature itself is
+ * Filer-and-above. The previous "no gate, cost is small" policy let
+ * a free user batch-upload an arbitrary number of W-2s.
  *
  * Password-protected PDFs: if the upload is a locked PDF and no
  * password is supplied (or Anthropic rejects it), return 422 with
@@ -36,6 +38,16 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
+
+  // W-2 OCR is part of the personal forecasting feature, which the
+  // Filer plan unlocks. Gate before touching Anthropic so a free user
+  // can't burn API credits via the upload form.
+  const gateFail = await requireFeatureGate(
+    supabase,
+    user.id,
+    "personalForecast",
+  );
+  if (gateFail) return gateFail;
 
   let formData: FormData;
   try {

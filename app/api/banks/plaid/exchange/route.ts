@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getPlaidClient } from "@/lib/plaid/client";
 import { syncPlaidConnection } from "@/lib/plaid/sync";
 import { encryptBankToken } from "@/lib/crypto/bankTokens";
+import { requireFeatureGate } from "@/lib/plans/gate";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,12 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
+
+  // Plaid bills per active item (token-exchange creates one). Gate the
+  // exchange step too, so even a user who somehow obtained a public
+  // token can't trade it for an access token without a paid plan.
+  const gateFail = await requireFeatureGate(supabase, user.id, "bankConnect");
+  if (gateFail) return gateFail;
 
   const body = await req.json().catch(() => ({}));
   const publicToken = body?.publicToken as string | undefined;

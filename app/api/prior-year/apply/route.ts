@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { requireFeatureGate } from "@/lib/plans/gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -37,6 +38,17 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
+
+  // Same gate as /extract: applying prior-year totals to the forecast
+  // is a Filer-and-above feature. We don't want a free user kicking
+  // off the whole baseline-spread flow even though it's already been
+  // gated at extract time, in case they obtained docs another way.
+  const gateFail = await requireFeatureGate(
+    supabase,
+    user.id,
+    "personalForecast",
+  );
+  if (gateFail) return gateFail;
 
   const body = await req.json().catch(() => ({}));
   const priorYear = body?.taxYear as number | undefined;

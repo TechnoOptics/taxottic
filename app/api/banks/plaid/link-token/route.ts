@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Products, CountryCode } from "plaid";
 import { createClient } from "@/lib/supabase/server";
 import { getPlaidClient } from "@/lib/plaid/client";
+import { requireFeatureGate } from "@/lib/plans/gate";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,13 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
+
+  // Plaid charges per linked item / per sync. Mintng a link_token is
+  // the entry point for a paid integration, so gate by plan before we
+  // touch the Plaid SDK. Without this a free-tier curl request would
+  // happily mint tokens and rack up Plaid spend.
+  const gateFail = await requireFeatureGate(supabase, user.id, "bankConnect");
+  if (gateFail) return gateFail;
 
   const body = await req.json().catch(() => ({}));
   const companyId =

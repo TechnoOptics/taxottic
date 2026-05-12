@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { searchCpas } from "@/lib/places/cpa-search";
+import { requireFeatureGate } from "@/lib/plans/gate";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,17 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
+
+  // Google Places "Find a CPA" calls are billable. The "find a tax
+  // preparer" feature is part of the Filer plan; gate the API to match
+  // so a free user can't burn Places API credits via the UI hidden but
+  // endpoint still reachable.
+  const gateFail = await requireFeatureGate(
+    supabase,
+    user.id,
+    "taxPreparer",
+  );
+  if (gateFail) return gateFail;
 
   const body = await req.json().catch(() => ({}));
   const lat = typeof body?.lat === "number" ? body.lat : null;
