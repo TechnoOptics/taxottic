@@ -51,6 +51,13 @@ alter table public.tax_profiles
   add column if not exists student_loan_interest_cents bigint not null default 0,
   -- Qualified education expenses for AOTC / Lifetime Learning Credit (item 6)
   add column if not exists qualified_education_expenses_cents bigint not null default 0,
+  -- AOTC eligibility flag: true if the student is in first 4 years of
+  -- undergrad, enrolled at least half-time, has no felony drug
+  -- conviction, and hasn't already claimed AOTC for 4 prior years. If
+  -- any of those don't apply, we fall back to the Lifetime Learning
+  -- Credit. The form collects a single "I qualify for AOTC" checkbox;
+  -- the user is responsible for confirming the eligibility criteria.
+  add column if not exists claim_aotc boolean not null default false,
   -- Itemized deduction sub-types (item 5 - we still let the engine use
   -- itemized_total_cents as the working total, but if the user fills
   -- the components we can surface the SALT cap warning and help them
