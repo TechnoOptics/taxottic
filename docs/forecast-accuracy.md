@@ -117,9 +117,13 @@ Once a year, pay a CPA familiar with the relevant code sections to review the en
 
 Effort: $$ but high signal-to-noise.
 
-### Layer 7 — CI gate (planned)
+### Layer 7 — CI gate (SHIPPED)
 
-Wire `npm test` into the Vercel build / a GitHub Actions check so a PR that breaks any tax test can't merge. Currently tests are local-only.
+`.github/workflows/ci.yml` runs `npm test` + `npm run typecheck` on every PR targeting `main` and every push to `main`. A PR that breaks any of the 125 tax tests — or any TypeScript type — cannot merge. ESLint runs in the same workflow but is currently non-blocking until the existing ~55-error backlog is cleaned; the report still surfaces on every PR so we don't accumulate new violations on top of it.
+
+Follow-up to flip lint into a hard gate:
+- Clean up the 55 existing errors (mostly unescaped JSX apostrophes + a few `prefer-const`).
+- Change `continue-on-error: true` to `false` (or remove the line) under the ESLint step in `ci.yml`.
 
 ### Layer 8 — Annual regression (planned)
 
