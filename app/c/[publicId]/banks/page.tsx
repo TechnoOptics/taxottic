@@ -5,11 +5,17 @@ import { ProGate } from "@/components/ProGate";
 import { PlaidConnectButton } from "@/components/PlaidConnectButton";
 import { PlaidSyncButton } from "@/components/PlaidSyncButton";
 import { PlaidAutoSync } from "@/components/PlaidAutoSync";
+import { StripeConnectButton } from "@/components/StripeConnectButton";
+import { StripeSyncButton } from "@/components/StripeSyncButton";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
 
 type Params = Promise<{ publicId: string }>;
+type SearchParams = Promise<{
+  stripe_connected?: string | string[];
+  stripe_error?: string | string[];
+}>;
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -21,10 +27,21 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function BanksPage({
   params,
+  searchParams,
 }: {
   params: Params;
+  searchParams?: SearchParams;
 }) {
   const { publicId } = await params;
+  const sp = (await searchParams) ?? {};
+  const stripeConnectedRaw = sp.stripe_connected;
+  const stripeErrorRaw = sp.stripe_error;
+  const stripeConnectedFlag = Array.isArray(stripeConnectedRaw)
+    ? stripeConnectedRaw[0]
+    : stripeConnectedRaw;
+  const stripeErrorMsg = Array.isArray(stripeErrorRaw)
+    ? stripeErrorRaw[0]
+    : stripeErrorRaw;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
 
@@ -177,17 +194,45 @@ export default async function BanksPage({
               </p>
             </div>
             {isManager ? (
-              <PlaidConnectButton
-                companyPublicId={publicId}
-                companyId={company.id}
-                className="btn-primary text-sm"
-              />
+              <div className="flex flex-col gap-2 items-end">
+                <PlaidConnectButton
+                  companyPublicId={publicId}
+                  companyId={company.id}
+                  className="btn-primary text-sm"
+                />
+                <StripeConnectButton
+                  companyId={company.id}
+                  className="btn-ghost text-xs whitespace-nowrap"
+                />
+              </div>
             ) : (
               <p className="text-xs text-ink-muted max-w-[14rem]">
                 Only the company manager can connect a bank.
               </p>
             )}
           </div>
+
+          {/* Stripe OAuth round-trip success/error toast. The
+              oauth-return route lands here with one of these
+              query params; we surface a short banner so the user
+              knows it took. */}
+          {stripeConnectedFlag ? (
+            <div
+              role="status"
+              className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            >
+              Stripe connected. Your balance transactions are syncing — the
+              first batch lands in the review queue below within a minute.
+            </div>
+          ) : null}
+          {stripeErrorMsg ? (
+            <div
+              role="alert"
+              className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+            >
+              Stripe connection failed: {stripeErrorMsg}
+            </div>
+          ) : null}
 
           <div className="mt-5 grid sm:grid-cols-3 gap-3">
             <Stat
@@ -274,7 +319,19 @@ export default async function BanksPage({
                           </div>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-ink-muted">
-                          <PlaidSyncButton connectionId={c.id} />
+                          {/* Provider-specific sync button. Stripe
+                              connections call /api/banks/stripe/sync
+                              (balance_transactions cursor), Plaid
+                              connections call /api/banks/plaid/sync
+                              (transactions/sync). Other providers
+                              fall back to the Plaid button since the
+                              codebase doesn't have separate sync
+                              routes for them yet. */}
+                          {c.provider === "stripe" ? (
+                            <StripeSyncButton connectionId={c.id} />
+                          ) : (
+                            <PlaidSyncButton connectionId={c.id} />
+                          )}
                           <span>
                             {acctsForConn.length} account
                             {acctsForConn.length === 1 ? "" : "s"}
