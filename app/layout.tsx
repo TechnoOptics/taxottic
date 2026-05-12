@@ -17,11 +17,43 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  // metadataBase resolves relative URLs (og:image, twitter:image, the
+  // canonical alternates below) against the production origin. Without
+  // it, Next.js builds with a placeholder host and Slack / iMessage
+  // previews break in production. The fallback to localhost is for
+  // preview deploys / dev so unit-test snapshots don't drift.
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com",
+  ),
   title: "Taxottic - Forecast taxes, maximize deductions",
   description:
     "Tax forecasting and deduction guidance for individuals and small businesses.",
   manifest: "/manifest.webmanifest",
   applicationName: "Taxottic",
+  // Default canonical at the root. Page-level metadata (e.g. /pricing,
+  // /legal/dmca) can override with their own alternates.canonical. The
+  // home page also renders ?audience=enterprise as a soft toggle — we
+  // canonicalize back to `/` so search engines don't index the toggled
+  // variant as a separate URL (May 2026 audit P2).
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Taxottic — Forecast taxes, maximize deductions",
+    description:
+      "A calmer way to handle your taxes. Bank-synced forecasts, IRS-cited deductions, gentle quarterly reminders.",
+    url: "/",
+    siteName: "Taxottic",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Taxottic — Forecast taxes, maximize deductions",
+    description:
+      "A calmer way to handle your taxes. Bank-synced forecasts, IRS-cited deductions, gentle quarterly reminders.",
+  },
+  // Explicit robots meta so crawlers don't have to guess. Public
+  // marketing surface is intentionally indexable. Auth-gated pages set
+  // their own noindex via the per-page generateMetadata where relevant.
+  robots: { index: true, follow: true },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -34,6 +66,9 @@ export const metadata: Metadata = {
   // app/icon.png, and app/apple-icon.png via the file convention. An
   // explicit override here would shadow those generated assets and pin
   // the browser tab to a stale SVG, so leave it to the convention.
+  // Likewise we don't set `openGraph.images` here — Next.js picks up
+  // app/opengraph-image.tsx automatically and overriding it would
+  // shadow the per-route or root opengraph-image.
 };
 
 export const viewport: Viewport = {

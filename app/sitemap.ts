@@ -17,6 +17,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://taxottic.com";
   const now = new Date();
 
+  // The two audience toggles aren't separate URLs as far as Google is
+  // concerned — the home page canonical resolves them both back to
+  // `/` (May 2026 audit P2). Keep `/` as the single sitemap entry for
+  // the marketing root so we don't accidentally signal a separate
+  // indexable URL per ?audience=value.
   const marketing: MetadataRoute.Sitemap = [
     {
       url: `${baseUrl}/`,
@@ -25,19 +30,37 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1.0,
     },
     {
-      url: `${baseUrl}/?audience=personal`,
+      url: `${baseUrl}/pricing`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/?audience=enterprise`,
+      url: `${baseUrl}/example`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/help`,
       lastModified: now,
       changeFrequency: "weekly",
-      priority: 0.9,
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/changelog`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.6,
     },
     {
       url: `${baseUrl}/book`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/book?for=firm`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.7,
@@ -52,7 +75,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   // Legal hub + sub-pages. These are linked from the footer and exist
   // as real documents (DPA, privacy, terms, etc.) so they deserve
-  // their own sitemap entries.
+  // their own sitemap entries. /legal/dmca and /legal/accessibility
+  // were added in the May 2026 audit fix-up.
   const legal: MetadataRoute.Sitemap = [
     "/legal",
     "/legal/privacy",
@@ -62,6 +86,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/legal/cookies",
     "/legal/acceptable-use",
     "/legal/dpa",
+    "/legal/dmca",
+    "/legal/accessibility",
   ].map((path) => ({
     url: `${baseUrl}${path}`,
     lastModified: now,

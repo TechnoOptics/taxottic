@@ -125,15 +125,26 @@ function Hero({ audience }: { audience: Audience }) {
         </p>
 
         <div className="mt-10 flex flex-wrap gap-3">
+          {/* "Take a look around" used to point at /login, which the
+              May 2026 audit (P2) flagged as a soft-claim: the copy
+              promises a tour, the link asks for a sign-up. /example is
+              now a real read-only sample dashboard so the CTA matches
+              its words. Firm-side keeps booking as the right CTA. */}
           <Link
-            href={personal ? "/login" : "/book?for=firm"}
+            href={personal ? "/example" : "/book?for=firm"}
             className="btn-primary"
           >
             {personal ? "Take a look around" : "Have a quick chat"}
           </Link>
           <Link
-            href="/login"
+            href={personal ? "/pricing" : "/pricing#practice"}
             className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] border border-gold-300/30 text-cream hover:bg-white/5 transition-colors text-sm"
+          >
+            See pricing
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] text-cream/80 hover:text-cream transition-colors text-sm"
           >
             Sign in
           </Link>
@@ -834,19 +845,95 @@ function FinalCta({ audience }: { audience: Audience }) {
 function Footer() {
   return (
     <footer className="border-t border-forest-100">
-      <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <p className="text-xs text-ink-muted max-w-md leading-relaxed">
-          Taxottic provides tax forecasting and educational guidance. It is
-          not a substitute for advice from a licensed CPA or tax attorney.
-        </p>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-muted">
-          <Link href="/legal" className="hover:text-forest-700">Legal</Link>
-          <Link href="/legal/privacy" className="hover:text-forest-700">Privacy</Link>
-          <Link href="/legal/terms" className="hover:text-forest-700">Terms</Link>
-          <Link href="/legal/security" className="hover:text-forest-700">Security</Link>
-          <Link href="/legal/subprocessors" className="hover:text-forest-700">Subprocessors</Link>
-          <Link href="/book?for=firm" className="hover:text-forest-700">For firms</Link>
-          <Link href="/login" className="hover:text-forest-700">Sign in</Link>
+      <div className="max-w-6xl mx-auto px-6 py-10 grid gap-8 sm:grid-cols-2">
+        <div>
+          <p className="text-xs text-ink-muted max-w-md leading-relaxed">
+            Taxottic provides tax forecasting and educational guidance. It
+            is not a substitute for advice from a licensed CPA or tax
+            attorney.
+          </p>
+          <p className="mt-4 text-xs text-ink-muted">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-forest-100 bg-cream px-2.5 py-1">
+              <span
+                aria-hidden="true"
+                className="size-1.5 rounded-full bg-gold-500"
+              />
+              <span className="text-forest-800 font-medium">
+                Made by{" "}
+                <a
+                  href="https://technooptics.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:text-forest-900"
+                >
+                  Techno Optics LLC
+                </a>
+              </span>
+            </span>
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-ink-muted sm:justify-self-end sm:text-right">
+          {/* Two columns: "Product" (live, conversion-critical pages)
+              and "Legal" (compliance surface). Surfaces every page the
+              May 2026 audit said should be discoverable from the home
+              page — pricing, help, changelog, example, plus the legal
+              hub items. */}
+          <div className="grid gap-2 sm:order-1">
+            <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+              Product
+            </span>
+            <Link href="/pricing" className="hover:text-forest-700">
+              Pricing
+            </Link>
+            <Link href="/example" className="hover:text-forest-700">
+              Example
+            </Link>
+            <Link href="/help" className="hover:text-forest-700">
+              Help
+            </Link>
+            <Link href="/changelog" className="hover:text-forest-700">
+              Changelog
+            </Link>
+            <Link href="/book?for=firm" className="hover:text-forest-700">
+              For firms
+            </Link>
+            <Link href="/login" className="hover:text-forest-700">
+              Sign in
+            </Link>
+          </div>
+          <div className="grid gap-2 sm:order-2">
+            <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+              Legal
+            </span>
+            <Link href="/legal" className="hover:text-forest-700">
+              Legal hub
+            </Link>
+            <Link href="/legal/privacy" className="hover:text-forest-700">
+              Privacy
+            </Link>
+            <Link href="/legal/terms" className="hover:text-forest-700">
+              Terms
+            </Link>
+            <Link href="/legal/security" className="hover:text-forest-700">
+              Security
+            </Link>
+            <Link
+              href="/legal/subprocessors"
+              className="hover:text-forest-700"
+            >
+              Subprocessors
+            </Link>
+            <Link
+              href="/legal/accessibility"
+              className="hover:text-forest-700"
+            >
+              Accessibility
+            </Link>
+            <Link href="/legal/dmca" className="hover:text-forest-700">
+              DMCA
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
