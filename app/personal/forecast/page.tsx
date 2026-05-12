@@ -15,6 +15,7 @@ import type { FilingStatus } from "@/lib/tax/constants-2025";
 import {
   AmtTile,
   CapitalGainsTile,
+  EducationCreditTile,
   EitcTile,
   ForeignExclusionTile,
   RetirementRecommendationTile,
@@ -101,6 +102,7 @@ export default async function PersonalForecastPage() {
       taxProfile.student_loan_interest_cents ?? 0,
     qualifiedEducationExpensesCents:
       taxProfile.qualified_education_expenses_cents ?? 0,
+    claimAotc: taxProfile.claim_aotc ?? false,
     itemizedSaltCents: taxProfile.itemized_salt_cents ?? undefined,
     itemizedMortgageInterestCents:
       taxProfile.itemized_mortgage_interest_cents ?? undefined,
@@ -187,6 +189,7 @@ export default async function PersonalForecastPage() {
             five tiles. */}
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
           <EitcTile result={result} />
+          <EducationCreditTile result={result} />
           <RetirementSavingsTile result={result} />
           <RetirementRecommendationTile result={result} />
           <W4NudgeTile result={result} />

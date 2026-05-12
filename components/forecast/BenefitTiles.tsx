@@ -233,6 +233,72 @@ export function EitcTile({ result }: Props) {
 }
 
 /**
+ * Education credit tile (§ 25A) - shows AOTC OR Lifetime Learning
+ * Credit depending on what the engine selected (which depends on the
+ * user's claim_aotc flag). The AOTC version highlights the
+ * refundable portion separately since it's the rare partially-
+ * refundable credit and that's the most exciting line for users with
+ * limited income tax liability.
+ */
+export function EducationCreditTile({ result }: Props) {
+  const total =
+    result.educationCreditRefundableCents +
+    result.educationCreditNonRefundableCents;
+  if (total > 0 && result.educationCreditKind !== "none") {
+    const isAotc = result.educationCreditKind === "aotc";
+    return (
+      <div className="card p-6 sm:p-7 border-emerald-200/60 bg-emerald-50/40">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-emerald-800 font-medium">
+          {isAotc
+            ? "American Opportunity Credit"
+            : "Lifetime Learning Credit"}
+        </div>
+        <h3 className="display mt-1.5 text-2xl text-forest-900">
+          {formatCents(total)}
+        </h3>
+        {isAotc ? (
+          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+            §&nbsp;25A(b). Up to{" "}
+            <strong className="text-forest-900">
+              {formatCents(result.educationCreditRefundableCents)}
+            </strong>{" "}
+            of this is refundable (40% of the credit, up to $1,000 per
+            student); the rest reduces your fed tax dollar-for-dollar.
+            Eligibility self-attested via the &quot;claim AOTC&quot;
+            checkbox - you confirm the student is in their first 4
+            years of undergrad, enrolled at least half-time, has no
+            felony drug conviction, and hasn&apos;t claimed AOTC for 4
+            prior years. Claim on Form 8863.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+            §&nbsp;25A(c). 20% of qualified expenses up to $10,000.
+            Non-refundable — reduces tax dollar-for-dollar but the
+            unused portion isn&apos;t refundable. Broader eligibility
+            than AOTC: any post-secondary education, no four-year
+            limit, no half-time enrollment requirement. Claim on Form
+            8863.
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (result.educationCreditReasonZero) {
+    return (
+      <div className="card p-5 bg-cream/40 border-forest-100">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+          Education credit note
+        </div>
+        <p className="mt-2 text-xs text-ink-soft leading-relaxed">
+          {result.educationCreditReasonZero}
+        </p>
+      </div>
+    );
+  }
+  return null;
+}
+
+/**
  * Saver's Credit tile (§ 25B). Non-refundable, but still meaningful
  * for filers whose retirement contributions and AGI both land it in
  * an eligible bracket - up to a $1,000 / $2,000 reduction in fed tax.

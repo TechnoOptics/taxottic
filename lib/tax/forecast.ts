@@ -41,6 +41,7 @@ import {
 import { getTaxYearConstants, type TaxYearConstants } from "./constants";
 import { computeEitcCents } from "./credits/eitc";
 import { computeSaversCreditCents } from "./credits/savers";
+import { computeEducationCreditCents } from "./credits/education";
 
 export type EntityType =
   | "sole_prop"
@@ -144,8 +145,13 @@ export type ForecastInput = {
   // up to $2,500 with its own AGI phase-out.
   studentLoanInterestCents?: number;
 
-  // Qualified higher-education expenses (item #6, AOTC/LLC hint trigger).
+  // Qualified higher-education expenses (item #6 - AOTC/LLC input).
   qualifiedEducationExpensesCents?: number;
+  // True when the user has confirmed AOTC eligibility (first-4-years
+  // undergrad + half-time + no-felony-drug + AOTC not previously
+  // claimed 4 prior years). When true the engine computes AOTC; when
+  // false the engine falls back to Lifetime Learning Credit.
+  claimAotc?: boolean;
 
   // Itemized sub-types (item #5). When provided, the engine still uses
   // ytdItemizedCents as the working total but surfaces the SALT-cap
@@ -303,6 +309,17 @@ export type ForecastResult = {
   saversCreditRate: number;
   /** "Why zero" copy mirroring the EITC pattern. */
   saversCreditReasonZero: string;
+  /**
+   * Education credit (§ 25A). Either AOTC (partially refundable) or
+   * Lifetime Learning Credit (non-refundable) depending on the
+   * user's claimAotc flag and eligibility. Split into refundable +
+   * non-refundable portions so the engine can apply each correctly.
+   */
+  educationCreditRefundableCents: number;
+  educationCreditNonRefundableCents: number;
+  /** "aotc" | "llc" | "none". */
+  educationCreditKind: "aotc" | "llc" | "none";
+  educationCreditReasonZero: string;
 
   totalTaxCents: number;
   alreadyPaidCents: number;
@@ -585,6 +602,12 @@ export function forecast(input: ForecastInput): ForecastResult {
       saversCreditCents: 0,
       saversCreditRate: 0,
       saversCreditReasonZero: "",
+      // Education credits are individual; not applicable at the C-Corp
+      // entity level. The owner's separate 1040 would claim them.
+      educationCreditRefundableCents: 0,
+      educationCreditNonRefundableCents: 0,
+      educationCreditKind: "none",
+      educationCreditReasonZero: "",
     };
   }
 
@@ -1062,6 +1085,36 @@ export function forecast(input: ForecastInput): ForecastResult {
     );
   }
 
+  // Education credit (§ 25A). The user's claimAotc flag picks AOTC
+  // (partially refundable, $2,500 max, first-4-years undergrad) vs
+  // Lifetime Learning Credit (non-refundable, $2,000 max, any
+  // post-secondary). Both phase out over the same MAGI range.
+  // Disqualified for MFS.
+  const eduCredit = computeEducationCreditCents({
+    qualifiedExpensesCents: Math.max(
+      0,
+      input.qualifiedEducationExpensesCents ?? 0,
+    ),
+    modifiedAgiCents: agi,
+    filingStatus: input.filingStatus,
+    claimAotc: input.claimAotc ?? false,
+  });
+  const educationCreditRefundableCents = eduCredit.refundableCents;
+  const educationCreditNonRefundableCents = eduCredit.nonRefundableCents;
+  const educationCreditKind = eduCredit.kind;
+  const educationCreditReasonZero = eduCredit.reasonZero ?? "";
+  if (educationCreditRefundableCents + educationCreditNonRefundableCents > 0) {
+    if (educationCreditKind === "aotc") {
+      assumptions.push(
+        `American Opportunity Credit (§ 25A(b)) applied: $${((educationCreditRefundableCents + educationCreditNonRefundableCents) / 100).toLocaleString()} (40% refundable, 60% non-refundable). Eligibility self-attested via the AOTC checkbox.`,
+      );
+    } else if (educationCreditKind === "llc") {
+      assumptions.push(
+        `Lifetime Learning Credit (§ 25A(c)) applied: $${(educationCreditNonRefundableCents / 100).toLocaleString()}. Non-refundable - reduces tax dollar-for-dollar.`,
+      );
+    }
+  }
+
   // Residential energy + EV credits (item #12). Non-refundable; can
   // reduce tax to zero but not below. Sum them with the family credits
   // and clamp to fedTaxBeforeCredits.
@@ -1084,6 +1137,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   const totalNonRefundableCredits =
     credits +
     saversCreditCents +
+    educationCreditNonRefundableCents +
     residentialEnergyCreditCents +
     evCreditCents;
   const fedTaxAfterCredits = Math.max(
@@ -1163,9 +1217,19 @@ export function forecast(input: ForecastInput): ForecastResult {
   // totalTax is allowed to go negative here when a refundable credit
   // exceeds the user's regular + payroll tax. That negative net
   // amount flows through the balance/refund math below as additional
-  // refund-side cash.
+  // refund-side cash. Refundable credits applied here:
+  //   - EITC (§ 32): fully refundable.
+  //   - 40% portion of AOTC (§ 25A(b)): refundable up to $1,000 per
+  //     student. We treat the value the engine computed as already
+  //     capped at that statutory ceiling.
   const totalTax =
-    fedTax + seTax + additionalMedicare + niit + stTax - eitcCents;
+    fedTax +
+    seTax +
+    additionalMedicare +
+    niit +
+    stTax -
+    eitcCents -
+    educationCreditRefundableCents;
   const w2WithheldTotal =
     input.ownerW2WithheldCents + input.spouseW2WithheldCents;
   const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
@@ -1221,12 +1285,11 @@ export function forecast(input: ForecastInput): ForecastResult {
   // are written so the user sees actionable next steps rather than vague
   // tax-jargon.
 
-  // #6 AOTC / Lifetime Learning Credit eligibility.
-  if (Math.max(0, input.qualifiedEducationExpensesCents ?? 0) > 0) {
-    hints.push(
-      "Qualified higher-education expenses detected. The American Opportunity Credit ($2,500/student max, partially refundable) and the Lifetime Learning Credit (20% of expenses, $2,000 max) are both possibilities here - the AOTC is usually the better one for the first 4 years of an undergrad's enrollment. Eligibility depends on income, dependency, and degree-seeking status; the math isn't in this forecast yet, so claim them on your Form 8863 directly or ask a CPA.",
-    );
-  }
+  // (The old "qualified-education-expenses detected, look into AOTC/LLC"
+  // eligibility hint was removed once the engine started computing the
+  // real credit through lib/tax/credits/education.ts. The
+  // EducationCreditTile now renders the actual dollar amount, the
+  // credit type (AOTC vs LLC), and the refundable-portion breakout.)
 
   // #8 Augusta Rule (§ 280A(g)). 14-day home rental income is excluded
   // from gross income if your business pays you to host meetings, board
@@ -1471,6 +1534,10 @@ export function forecast(input: ForecastInput): ForecastResult {
     saversCreditCents,
     saversCreditRate,
     saversCreditReasonZero,
+    educationCreditRefundableCents,
+    educationCreditNonRefundableCents,
+    educationCreditKind,
+    educationCreditReasonZero,
   };
 }
 
