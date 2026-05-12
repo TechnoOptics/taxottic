@@ -19,6 +19,12 @@ export default function LoginPage() {
   // and (b) pass prompt=select_account to Google/Microsoft so they don't
   // silently auto-resume the last session.
   const [forcePicker, setForcePicker] = useState(false);
+  // True when this login page is being served at hq.taxottic.com. The
+  // May 2026 audit flagged P3: both the consumer and HQ login pages
+  // showed the same "Sign in to forecast your taxes." subtitle, which
+  // doesn't tell a super-admin landing on hq that they're in the
+  // operator cockpit. Detected client-side from the host header.
+  const [isHq, setIsHq] = useState(false);
   const supabase = createClient();
 
   // Surface server-side OAuth errors that came back as ?error=... on the
@@ -40,6 +46,9 @@ export default function LoginPage() {
     }
     if (url.searchParams.get("force_picker") === "1") {
       setForcePicker(true);
+    }
+    if (url.host.toLowerCase() === "hq.taxottic.com") {
+      setIsHq(true);
     }
   }, []);
 
@@ -106,6 +115,15 @@ export default function LoginPage() {
               <p className="mt-1 text-xs text-ink-muted">
                 Your previous session was signed out. Pick the account you want
                 to use.
+              </p>
+            </>
+          ) : isHq ? (
+            <>
+              <p className="mt-3 text-sm font-medium text-forest-900">
+                Sign in to the Taxottic cockpit.
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Super-admin operations for Techno Optics.
               </p>
             </>
           ) : (

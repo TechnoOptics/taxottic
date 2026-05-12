@@ -85,7 +85,20 @@ export function buildGreeting(args: {
   // turning into greetings like "Good morning, Contact." which read as
   // a bug to anyone signed in on a shared inbox. When we have no real
   // name, drop the suffix instead of guessing.
-  const name = args.fullName?.split(/\s+/)[0]?.trim();
+  //
+  // Defensive: if the user pasted a company name into the name field
+  // during onboarding (the May 2026 audit saw "Good evening, Advottic"
+  // because of this), the trailing entity suffix gives it away. We drop
+  // the name in that case rather than greeting someone by their LLC.
+  // Caller can fix the underlying profile.full_name in onboarding; this
+  // is the safety net.
+  const COMPANY_SUFFIX_RE =
+    /\b(llc|l\.l\.c\.|inc|inc\.|corp|corporation|co|co\.|ltd|ltd\.|llp|plc|gmbh|s\.a\.|s\.a\.s\.|s\.r\.l\.|ag|ab)\b/i;
+  const fullClean = args.fullName?.trim() ?? "";
+  const looksLikeCompany = COMPANY_SUFFIX_RE.test(fullClean);
+  const name = looksLikeCompany
+    ? undefined
+    : fullClean.split(/\s+/)[0]?.trim();
   const displayName = name
     ? name.replace(/\b\w/g, (c) => c.toUpperCase())
     : "";
