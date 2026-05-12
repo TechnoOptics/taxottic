@@ -504,9 +504,9 @@ export default async function ForecastPage({ params }: { params: Params }) {
             </strong>{" "}
             of deductible expenses across {input.monthsEntered} month
             {input.monthsEntered === 1 ? "" : "s"}. We project that to year-
-            end and apply 2025 federal brackets (the 2026 brackets aren&apos;t
-            published yet — we&apos;ll roll forward once the IRS finalises
-            them).
+            end and apply the IRS-published brackets for tax year{" "}
+            {taxYear} (Rev. Proc. 2025-32, including the One Big Beautiful
+            Bill amendments).
           </p>
 
           {/* YTD vs Projected side-by-side. The YTD column answers "if
@@ -854,9 +854,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
           Taxottic provides tax forecasting and educational guidance. Numbers
-          shown are estimates based on the 2025 federal brackets and a curated
-          state rate; they are not a tax return. Talk with a licensed CPA for
-          decisions that matter.
+          shown are estimates based on the IRS-published federal brackets for
+          tax year {taxYear} (Rev. Proc. 2025-32, reflecting the One Big
+          Beautiful Bill amendments) and a curated state rate; they are not a
+          tax return. Talk with a licensed CPA for decisions that matter.
         </p>
       </section>
     </main>

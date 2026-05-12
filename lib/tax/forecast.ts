@@ -34,19 +34,11 @@
  */
 
 import {
-  ADDITIONAL_STD_DEDUCTION_2025,
-  CHILD_TAX_CREDIT_2025,
-  FEDERAL_BRACKETS_2025,
-  MILEAGE_RATE_2025_PER_MILE_CENTS,
-  NIIT_2025,
-  QBI_2025,
   QUARTERLY_DUE_DATES_2025,
-  SE_TAX_2025,
-  STANDARD_DEDUCTION_2025,
-  UNDERPAYMENT_SAFE_HARBOR_2025,
   stateRate,
   type FilingStatus,
 } from "./constants-2025";
+import { getTaxYearConstants, type TaxYearConstants } from "./constants";
 
 export type EntityType =
   | "sole_prop"
@@ -218,6 +210,20 @@ export function forecast(input: ForecastInput): ForecastResult {
   const months = Math.max(1, Math.min(12, input.monthsEntered));
   const projectionFactor = 12 / months;
 
+  // Resolve the per-tax-year constants bundle ONCE at the top of the
+  // function and pass it into helpers via closure. Previously the
+  // engine hard-imported the _2025 constants which baked last year's
+  // brackets into every forecast regardless of input.taxYear; now a
+  // 2026 forecast picks up the 2026 brackets / standard deduction /
+  // QBI thresholds, and a future-year request falls back to the most
+  // recent published bundle with `isFallback` set so the UI can warn.
+  const k: TaxYearConstants = getTaxYearConstants(input.taxYear);
+  if (k.isFallback) {
+    hints.push(
+      `We don't yet have IRS-published tax tables for ${input.taxYear}; this forecast uses ${k.year} brackets as a placeholder. The numbers will refresh once the IRS publishes ${input.taxYear} inflation adjustments (usually late October of the prior year).`,
+    );
+  }
+
   // Apply meals 50% rule once, then build year-to-date deductible expenses.
   const ytdMealsDeductible = Math.round(input.ytdMealsCents * 0.5);
   const ytdDeductibleExpenses =
@@ -228,8 +234,14 @@ export function forecast(input: ForecastInput): ForecastResult {
   const ytdNetBiz = Math.max(0, input.ytdIncomeCents - ytdDeductibleExpenses);
 
   if (input.autoMileageCents > 0) {
+    // Mileage rate is published in a separate IRS Notice each December.
+    // The 2026 notice hadn't landed when this file was last refreshed,
+    // so the constants bundle still uses the 2025 rate; phrase the
+    // assumption to call out the year and the per-mile cents value
+    // from whichever bundle resolved.
+    const ratePerMile = (k.MILEAGE_RATE_PER_MILE_CENTS / 100).toFixed(2);
     assumptions.push(
-      "Vehicle: standard mileage applied at the IRS 2025 rate of $0.70 per business mile.",
+      `Vehicle: standard mileage applied at the IRS ${k.year} rate of $${ratePerMile} per business mile.`,
     );
   }
   if (input.autoHomeOfficeCents > 0) {
@@ -280,7 +292,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       estimatedPaymentsCents: input.estimatedPaymentsCents,
     });
     const underpaymentRisk =
-      alreadyPaid < Math.round(totalTax * UNDERPAYMENT_SAFE_HARBOR_2025.currentYearShare);
+      alreadyPaid < Math.round(totalTax * k.UNDERPAYMENT_SAFE_HARBOR.currentYearShare);
     return {
       projectedIncomeCents: projectedIncome,
       projectedExpensesCents: projectedExpenses,
@@ -324,6 +336,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     const result = computeSelfEmploymentTax({
       netBizCents: netBiz,
       ownerW2SsWagesCents: input.ownerW2SsWagesCents,
+      k,
     });
     seTax = result.totalSeTax;
     seEarningsForAddtlMedicare = result.seEarnings;
@@ -351,12 +364,12 @@ export function forecast(input: ForecastInput): ForecastResult {
   const combinedMedicareIncome =
     input.ownerW2WagesCents + input.spouseW2WagesCents + seEarningsForAddtlMedicare;
   const addtlMedicareThreshold =
-    SE_TAX_2025.additionalMedicareThreshold[input.filingStatus] ?? 0;
+    k.SE_TAX.additionalMedicareThreshold[input.filingStatus] ?? 0;
   const additionalMedicare =
     combinedMedicareIncome > addtlMedicareThreshold
       ? Math.round(
           (combinedMedicareIncome - addtlMedicareThreshold) *
-            SE_TAX_2025.additionalMedicareRate,
+            k.SE_TAX.additionalMedicareRate,
         )
       : 0;
   if (additionalMedicare > 0) {
@@ -399,7 +412,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   }
 
   // Standard or itemized.
-  const stdDeduction = computeStandardDeduction(input);
+  const stdDeduction = computeStandardDeduction(input, k);
   const deduction = input.itemize
     ? Math.max(stdDeduction, input.ytdItemizedCents)
     : stdDeduction;
@@ -412,14 +425,14 @@ export function forecast(input: ForecastInput): ForecastResult {
   // QBI: 20% of net biz, only when AGI is below the §199A threshold and the
   // entity is a pass-through. Above threshold, surface a CPA hint and skip.
   let qbi = 0;
-  const qbiThreshold = QBI_2025.thresholdBelow[input.filingStatus];
+  const qbiThreshold = k.QBI.thresholdBelow[input.filingStatus];
   if (SE_ENTITY_TYPES.has(input.entityType) && netBiz > 0) {
     if (agi <= qbiThreshold) {
       // QBI is limited to lesser of (20% of QBI, 20% of taxable income before QBI).
       const taxableBeforeQbi = Math.max(0, agi - deduction);
       qbi = Math.min(
-        Math.round(netBiz * QBI_2025.rate),
-        Math.round(taxableBeforeQbi * QBI_2025.rate),
+        Math.round(netBiz * k.QBI.rate),
+        Math.round(taxableBeforeQbi * k.QBI.rate),
       );
     } else {
       hints.push(
@@ -432,6 +445,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   const fedTaxBeforeCredits = computeFederalIncomeTax(
     taxableIncome,
     input.filingStatus,
+    k,
   );
 
   // Apply Child Tax Credit + Credit for Other Dependents. Both are
@@ -443,6 +457,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     dependentsUnder17: input.dependentsUnder17,
     filingStatus: input.filingStatus,
     agiCents: agi,
+    taxYear: input.taxYear,
   });
   if (credits > 0) {
     assumptions.push(
@@ -470,10 +485,10 @@ export function forecast(input: ForecastInput): ForecastResult {
   );
   let niit = 0;
   if (projectedInvestmentIncome > 0) {
-    const niitThreshold = NIIT_2025.threshold[input.filingStatus] ?? 0;
+    const niitThreshold = k.NIIT.threshold[input.filingStatus] ?? 0;
     const agiOverThreshold = Math.max(0, agi - niitThreshold);
     const niitBase = Math.min(projectedInvestmentIncome, agiOverThreshold);
-    niit = Math.round(niitBase * NIIT_2025.rate);
+    niit = Math.round(niitBase * k.NIIT.rate);
     if (niit > 0) {
       assumptions.push(
         "Net Investment Income Tax (NIIT) 3.8% applied to the lesser of investment income or AGI over threshold (Form 8960).",
@@ -497,7 +512,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   const monthsRemaining = remainingMonthsToFilingDeadline(input.taxYear);
   const monthlySaveTarget = Math.round(remaining / monthsRemaining);
 
-  const marginal = marginalFederalRate(taxableIncome, input.filingStatus);
+  const marginal = marginalFederalRate(taxableIncome, input.filingStatus, k);
   const effective = projectedIncome > 0 ? totalTax / projectedIncome : 0;
 
   // Underpayment-penalty safe harbor: pay at least 90% of this year's
@@ -505,7 +520,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   // quarterly schedule below already nudges the user toward the right
   // catch-up amount.
   const safeHarborTarget = Math.round(
-    totalTax * UNDERPAYMENT_SAFE_HARBOR_2025.currentYearShare,
+    totalTax * k.UNDERPAYMENT_SAFE_HARBOR.currentYearShare,
   );
   const underpaymentRisk = alreadyPaid < safeHarborTarget;
   if (underpaymentRisk && totalTax > 0) {
@@ -570,12 +585,21 @@ export function forecast(input: ForecastInput): ForecastResult {
 export function computeMileageDeductionCents(args: {
   ytdMiles: number;
   monthsEntered: number;
+  /**
+   * Tax year so the helper picks the right IRS mileage rate. Optional
+   * for backward-compat with callers from before the tax-year-aware
+   * refactor; defaults to the current UTC year, which is what every
+   * existing call site implicitly assumed.
+   */
+  taxYear?: number;
 }): number {
   if (!args.ytdMiles || args.ytdMiles <= 0) return 0;
   const projectionFactor =
     args.monthsEntered > 0 ? 12 / Math.min(12, args.monthsEntered) : 1;
   const projectedMiles = args.ytdMiles * projectionFactor;
-  return Math.round(projectedMiles * MILEAGE_RATE_2025_PER_MILE_CENTS);
+  const taxYear = args.taxYear ?? new Date().getUTCFullYear();
+  const k = getTaxYearConstants(taxYear);
+  return Math.round(projectedMiles * k.MILEAGE_RATE_PER_MILE_CENTS);
 }
 
 /**
@@ -593,15 +617,18 @@ export function computeHomeOfficeSimplifiedCents(args: {
   return eligibleSqft * 500; // $5.00 per sqft = 500 cents
 }
 
-function computeStandardDeduction(input: ForecastInput): number {
-  let base = STANDARD_DEDUCTION_2025[input.filingStatus];
+function computeStandardDeduction(
+  input: ForecastInput,
+  k: TaxYearConstants,
+): number {
+  let base = k.STANDARD_DEDUCTION[input.filingStatus];
   const isMarried =
     input.filingStatus === "married_filing_jointly" ||
     input.filingStatus === "married_filing_separately" ||
     input.filingStatus === "qualifying_widow";
   const additional = isMarried
-    ? ADDITIONAL_STD_DEDUCTION_2025.married
-    : ADDITIONAL_STD_DEDUCTION_2025.single;
+    ? k.ADDITIONAL_STD_DEDUCTION.married
+    : k.ADDITIONAL_STD_DEDUCTION.single;
   if (input.age !== null && input.age >= 65) base += additional;
   if (input.isBlind) base += additional;
   return base;
@@ -610,8 +637,9 @@ function computeStandardDeduction(input: ForecastInput): number {
 function computeFederalIncomeTax(
   taxableIncomeCents: number,
   filingStatus: FilingStatus,
+  k: TaxYearConstants,
 ): number {
-  const brackets = FEDERAL_BRACKETS_2025[filingStatus];
+  const brackets = k.FEDERAL_BRACKETS[filingStatus];
   let remaining = taxableIncomeCents;
   let lowerBound = 0;
   let tax = 0;
@@ -629,8 +657,9 @@ function computeFederalIncomeTax(
 function marginalFederalRate(
   taxableIncomeCents: number,
   filingStatus: FilingStatus,
+  k: TaxYearConstants,
 ): number {
-  const brackets = FEDERAL_BRACKETS_2025[filingStatus];
+  const brackets = k.FEDERAL_BRACKETS[filingStatus];
   for (const b of brackets) {
     if (b.upTo === null || taxableIncomeCents < b.upTo) return b.rate;
   }
@@ -640,24 +669,25 @@ function marginalFederalRate(
 function computeSelfEmploymentTax(args: {
   netBizCents: number;
   ownerW2SsWagesCents: number;
+  k: TaxYearConstants;
 }): { totalSeTax: number; seEarnings: number } {
   const seEarnings = Math.round(
-    args.netBizCents * SE_TAX_2025.netEarningsFactor,
+    args.netBizCents * args.k.SE_TAX.netEarningsFactor,
   );
   if (seEarnings <= 0) return { totalSeTax: 0, seEarnings: 0 };
 
   // SS portion is capped at the wage base, but the wage base is shared
   // with W-2 SS wages already earned in the year. Whatever's left of the
   // base is what SE earnings can be taxed against.
-  const ssCap = SE_TAX_2025.socialSecurityWageBase;
+  const ssCap = args.k.SE_TAX.socialSecurityWageBase;
   const ssRemaining = Math.max(
     0,
     ssCap - Math.max(0, args.ownerW2SsWagesCents),
   );
   const ssBase = Math.min(seEarnings, ssRemaining);
-  const ssTax = Math.round(ssBase * SE_TAX_2025.socialSecurityRate);
+  const ssTax = Math.round(ssBase * args.k.SE_TAX.socialSecurityRate);
 
-  const medicareTax = Math.round(seEarnings * SE_TAX_2025.medicareRate);
+  const medicareTax = Math.round(seEarnings * args.k.SE_TAX.medicareRate);
 
   // The 0.9% additional Medicare surtax used to live here, but it
   // applies to COMBINED W-2 wages + SE earnings above the threshold —
@@ -721,6 +751,14 @@ export function computeFamilyCredits(args: {
   dependentsUnder17: number;
   filingStatus: FilingStatus;
   agiCents: number;
+  /**
+   * Tax year so the helper picks the right CTC maximum. The OBBBA
+   * raised the CTC from $2,000 to $2,200 for 2025+ tax years; without
+   * threading the year through, callers would silently keep computing
+   * the pre-OBBBA $2,000 cap. Optional for callers that haven't
+   * migrated; defaults to the current UTC year.
+   */
+  taxYear?: number;
 }): number {
   const totalDependents = Math.max(0, args.dependents);
   const ctcChildren = Math.min(
@@ -729,20 +767,23 @@ export function computeFamilyCredits(args: {
   );
   const odcChildren = Math.max(0, totalDependents - ctcChildren);
 
+  const taxYear = args.taxYear ?? new Date().getUTCFullYear();
+  const k = getTaxYearConstants(taxYear);
+
   const baseCredit =
-    ctcChildren * CHILD_TAX_CREDIT_2025.ctcPerChildCents +
-    odcChildren * CHILD_TAX_CREDIT_2025.odcPerOtherCents;
+    ctcChildren * k.CHILD_TAX_CREDIT.ctcPerChildCents +
+    odcChildren * k.CHILD_TAX_CREDIT.odcPerOtherCents;
   if (baseCredit <= 0) return 0;
 
   const phaseOutStart =
-    CHILD_TAX_CREDIT_2025.phaseOutStart[args.filingStatus] ?? 0;
+    k.CHILD_TAX_CREDIT.phaseOutStart[args.filingStatus] ?? 0;
   if (args.agiCents <= phaseOutStart) return baseCredit;
 
   // Reduction: $50 per $1,000 (or fraction) over threshold. Math in
   // cents: each $1,000 = 100,000 cents.
   const overCents = args.agiCents - phaseOutStart;
   const stepsOver = Math.ceil(overCents / 100_000);
-  const reduction = stepsOver * CHILD_TAX_CREDIT_2025.phaseOutReductionPer1000;
+  const reduction = stepsOver * k.CHILD_TAX_CREDIT.phaseOutReductionPer1000;
   return Math.max(0, baseCredit - reduction);
 }
 

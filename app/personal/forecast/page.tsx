@@ -208,10 +208,11 @@ export default async function PersonalForecastPage() {
         </div>
 
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
-          Personal forecast uses 2025 federal brackets, household-level
-          Additional Medicare (Form 8959), Net Investment Income Tax (Form
-          8960), and a curated state rate. Educational guidance only — talk
-          with a CPA for binding decisions.
+          Personal forecast uses IRS-published federal brackets for tax year{" "}
+          {taxYear} (Rev. Proc. 2025-32, reflecting the One Big Beautiful Bill
+          amendments), household-level Additional Medicare (Form 8959), Net
+          Investment Income Tax (Form 8960), and a curated state rate.
+          Educational guidance only — talk with a CPA for binding decisions.
         </p>
       </section>
     </main>
