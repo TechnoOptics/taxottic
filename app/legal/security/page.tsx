@@ -187,6 +187,59 @@ export default function SecurityPage() {
               </Link>{" "}
               for the full list of vendors that process customer data
               on our behalf, plus their roles, regions, and certifications.
+              Enterprise buyers typically read this page alongside the
+              subprocessors list — we keep them in sync.
+            </p>
+          </Section>
+
+          <Section title="Single sign-on across Techno Optics products">
+            <p>
+              Techno Optics ships several products under the same roof
+              (Taxottic, Advottic, others). A buyer who has signed into
+              Advottic on advottic.com and then navigates to
+              taxottic.com may notice the same name shown in the
+              greeting. This is{" "}
+              <strong>
+                identity-provider re-use, not a shared session
+              </strong>
+              :
+            </p>
+            <ul className="list-disc pl-5 grid gap-2">
+              <li>
+                Each product has its <strong>own Supabase project</strong>{" "}
+                with its own auth users, database, and storage. There is
+                no shared customer record across products by default.
+              </li>
+              <li>
+                Each product&apos;s session cookie is scoped to that
+                product&apos;s host only (no parent-domain cookie). A
+                Taxottic session does not authenticate the browser to
+                Advottic, and vice versa.
+              </li>
+              <li>
+                What is shared is the upstream identity provider — if
+                you signed into Advottic with a Google account, Google
+                will silently re-issue that same Google identity to
+                Taxottic&apos;s Supabase OAuth flow, because that is how
+                third-party SSO works. The result is one Google account
+                granting access to two independent product accounts.
+              </li>
+              <li>
+                If you want to sign in to a different account on a
+                second product, use{" "}
+                <em>Profile menu → Switch accounts</em>. We force the
+                Google / Microsoft account picker on that path so you
+                explicitly pick which identity to use.
+              </li>
+            </ul>
+            <p>
+              We documented this explicitly following the May 2026
+              third-party audit. Any deliberate cross-product session-
+              sharing would be announced here first and added to the{" "}
+              <Link href="/legal/subprocessors" className="underline hover:text-forest-900">
+                subprocessors
+              </Link>{" "}
+              page.
             </p>
           </Section>
         </div>

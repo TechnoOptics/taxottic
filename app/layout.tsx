@@ -43,7 +43,12 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
+  // No maximumScale / no userScalable=false. Capping pinch-zoom violates
+  // WCAG 2.2 SC 1.4.4 (Resize Text) and breaks low-vision users who
+  // rely on browser-native zoom. The May 2026 audit flagged the prior
+  // `maximumScale: 5` as P1; the safe Next.js default (no cap) is what
+  // ships now. If a specific screen genuinely needs a zoom cap (e.g.,
+  // a canvas-based editor), set it on that screen — not globally.
   viewportFit: "cover",
 };
 

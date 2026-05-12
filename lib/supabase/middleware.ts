@@ -11,6 +11,14 @@ const PUBLIC_PATHS = [
   "/legal",
   "/book",
   "/firms",
+  // Conversion-critical marketing pages. Previously these redirected
+  // through /login (the May 2026 audit's P1-6 + P2 cluster) — keeping
+  // them public lets prospects evaluate Taxottic without creating an
+  // account, which is what a 2026 B2B/SMB buyer expects.
+  "/pricing",
+  "/help",
+  "/changelog",
+  "/example",
   "/manifest.webmanifest",
   "/icon.svg",
   "/favicon.ico",
@@ -157,6 +165,20 @@ export async function updateSession(request: NextRequest) {
       "private, no-store, must-revalidate",
     );
   }
+
+  // Strip any wildcard CORS the platform layer might have injected. The
+  // May 2026 audit flagged `Access-Control-Allow-Origin: *` showing up
+  // on both the consumer and HQ origins. That's appropriate for fully
+  // public CDN assets, but on app responses it widens the blast radius
+  // of any future endpoint that accidentally returns sensitive data on
+  // the wrong route. We don't intend to allow cross-origin reads from
+  // Taxottic at all, so we delete the header instead of narrowing it -
+  // same-origin policy will then govern by default. If a specific API
+  // route ever does need CORS (e.g., a public webhook receiver), it
+  // should opt in by setting an explicit, narrow `Access-Control-Allow-
+  // Origin` on its own response.
+  response.headers.delete("Access-Control-Allow-Origin");
+  response.headers.delete("Access-Control-Allow-Credentials");
 
   return response;
 }
