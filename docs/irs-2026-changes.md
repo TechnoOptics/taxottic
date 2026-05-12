@@ -42,20 +42,32 @@ Additional sanity in the engine:
 
 ---
 
-## OBBBA changes NOT yet wired into the forecast engine
+## OBBBA changes wired in this PR
 
-Tracked here so they don't fall through the cracks. Each is a feature-level decision (do we surface this in the UI? auto-categorize differently? gate by something?) rather than a one-line constant update.
+### § 199A QBI — $400 minimum deduction + $1,000 minimum QBI floor — ✅ WIRED
+**Effect**: Effective TY 2026, taxpayers with at least $1,000 of QBI get a minimum $400 deduction (even if the 20% formula would yield less); below $1,000 QBI, no deduction at all.
+**Wired**: `lib/tax/forecast.ts` reads `k.QBI.obbbaMinimumQbiToQualifyCents` and `k.QBI.obbbaMinimumDeductionCents`. When the bundle carries both (2026+ only), the engine:
+  - zeros out the QBI deduction if `netBiz < $1,000` (with an assumption-text explanation if the formula would otherwise have allowed one);
+  - floors the deduction at `$400` (capped by taxable income) when the standard 20% formula yields less. Surfaces an assumption noting the OBBBA boost.
+2025 forecasts are unaffected because the bundle leaves the fields undefined and the block is a no-op.
 
-### § 6041(a) — 1099 reporting threshold raised from $600 → $2,000
+### § 6041(a) — 1099 reporting threshold raised from $600 → $2,000 — ✅ WIRED (as hint)
 **Effect**: Sole props and small businesses no longer need to send 1099-NEC / 1099-MISC for vendor payments under $2,000 (for payments made after Dec 31 2025). Inflation-adjusted from 2027 forward.
-**Where to surface**: deductions guidance ("you owe the vendor a 1099 if you've paid them more than $2,000 this year"); reminders for Q1 of the following year.
-**Implementation**: probably a constant + a check on aggregated vendor totals from `account_transactions`/`monthly_expenses`. Low complexity, high value for compliance UX.
+**Wired**: every forecast for a self-employed entity in TY 2026+ now emits a `hints[]` entry naming the year and the new threshold. The hint appears in the forecast page's "things to know" surface alongside other educational notes.
+**Still to build (feature, not constants)**: a "vendor 1099 dashboard" that aggregates per-vendor totals from `account_transactions` + `monthly_expenses` and pre-fills draft 1099s in Q1. That's its own product surface and isn't blocked on tax-year refresh.
 
-### § 199A QBI — $400 minimum deduction + $1,000 minimum QBI floor
-**Effect**: Effective TY 2026, taxpayers with at least $1,000 of QBI get a minimum $400 deduction (even if the 20% formula would yield less); below $1,000 QBI, no deduction.
-**Where to surface**: forecast engine's QBI block.
-**Implementation**: two-line change in `lib/tax/forecast.ts` to apply `max(0.20 * QBI, $400)` floor when QBI ≥ $1,000.
-Constants are already in `lib/tax/constants-2026.ts` as `QBI_2026.obbbaMinimumDeductionCents` and `obbbaMinimumQbiToQualifyCents`.
+### Standard mileage rate — ⚠️ PROVISIONAL FALLBACK + EXPLICIT UI LABEL
+**Effect**: The 2026 standard business mileage rate is published in a separate IRS Notice (typically late December 2025 / early January 2026). The Notice hadn't landed when this update shipped, so `MILEAGE_RATE_2026_PER_MILE_CENTS` falls back to the 2025 value of $0.70/mile.
+**Wired**: `TaxYearConstants.isMileageRateProvisional` is set to `true` for 2026. When a forecast applies a mileage deduction, the assumption text now reads "applied at $0.70 per business mile (the 2026 IRS Notice hasn't been published yet; we're carrying forward last year's rate as a placeholder and will refresh once the Notice posts)" instead of pretending we have a confirmed 2026 rate.
+**Maintenance**: once the 2026 Notice publishes, edit `lib/tax/constants-2026.ts`:
+  ```ts
+  export const MILEAGE_RATE_2026_PER_MILE_CENTS = <new-cents-value>;
+  ```
+  Then in `lib/tax/constants.ts`, flip `isMileageRateProvisional` for the 2026 bundle to `false`. Both changes are one-line.
+
+## OBBBA changes still NOT wired (feature-level decisions)
+
+Tracked here so they don't fall through the cracks. Each is a UI/UX surface rather than a forecast-math change.
 
 ### § 179D — Energy Efficient Commercial Buildings Deduction sunsets
 **Effect**: Deduction terminates for property whose construction begins after June 30, 2026 (§ 70507).

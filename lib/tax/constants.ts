@@ -68,8 +68,33 @@ export type TaxYearConstants = {
   QBI: {
     rate: number;
     thresholdBelow: Record<FilingStatus, number>;
+    /**
+     * OBBBA § 70105 added a minimum deduction of $400 for TY 2026+
+     * provided the taxpayer has at least the qualifying QBI floor
+     * (typically $1,000). Optional so 2025 and earlier years - which
+     * don't have this rule - leave both undefined and the engine
+     * skips the minimum-deduction logic.
+     */
+    obbbaMinimumDeductionCents?: number;
+    obbbaMinimumQbiToQualifyCents?: number;
   };
   MILEAGE_RATE_PER_MILE_CENTS: number;
+  /**
+   * True when the per-year IRS Notice that sets the mileage rate
+   * hasn't been published yet and the bundle is using the prior
+   * year's rate as a placeholder. The forecast engine surfaces this
+   * in its assumptions output so users know the cents-per-mile they
+   * see is provisional.
+   */
+  isMileageRateProvisional: boolean;
+  /**
+   * Aggregate-payment threshold above which a business must file
+   * 1099-NEC / 1099-MISC for a vendor (IRC § 6041). OBBBA § 70433
+   * raised this from $600 to $2,000 effective for payments made
+   * after Dec 31 2025. The forecast surfaces a heads-up hint to
+   * self-employed filers in the relevant tax year.
+   */
+  INFO_REPORTING_THRESHOLD_CENTS: number;
   CHILD_TAX_CREDIT: {
     ctcPerChildCents: number;
     odcPerOtherCents: number;
@@ -101,6 +126,11 @@ const BUNDLE_2025: TaxYearConstants = {
   SE_TAX: SE_TAX_2025,
   QBI: QBI_2025,
   MILEAGE_RATE_PER_MILE_CENTS: MILEAGE_RATE_2025_PER_MILE_CENTS,
+  // The 2025 IRS Notice was published (Notice 2025-3) before the
+  // tax year opened, so the rate isn't provisional.
+  isMileageRateProvisional: false,
+  // The pre-OBBBA $600 threshold is unchanged for 2025 payments.
+  INFO_REPORTING_THRESHOLD_CENTS: 600 * 100,
   CHILD_TAX_CREDIT: CHILD_TAX_CREDIT_2025,
   NIIT: NIIT_2025,
   UNDERPAYMENT_SAFE_HARBOR: UNDERPAYMENT_SAFE_HARBOR_2025,
@@ -115,11 +145,27 @@ const BUNDLE_2026: TaxYearConstants = {
   // 2026 SE_TAX uses the 2026 SSA wage base ($184,500); the other
   // fields are statutory and identical to 2025.
   SE_TAX: SE_TAX_2026,
-  // Drop the OBBBA-specific extras (minimum-deduction / minimum-QBI)
-  // from the bundle's QBI; the forecast engine reads only `rate` and
-  // `thresholdBelow`, so the bundle stays stable across years.
-  QBI: { rate: QBI_2026.rate, thresholdBelow: QBI_2026.thresholdBelow },
+  // OBBBA § 70105 added a minimum deduction and a minimum-QBI floor
+  // for TY 2026+. Carrying both through the bundle so the engine can
+  // apply the rule without importing the year-specific module.
+  QBI: {
+    rate: QBI_2026.rate,
+    thresholdBelow: QBI_2026.thresholdBelow,
+    obbbaMinimumDeductionCents: QBI_2026.obbbaMinimumDeductionCents,
+    obbbaMinimumQbiToQualifyCents: QBI_2026.obbbaMinimumQbiToQualifyCents,
+  },
   MILEAGE_RATE_PER_MILE_CENTS: MILEAGE_RATE_2026_PER_MILE_CENTS,
+  // The 2026 IRS Notice setting the standard mileage rate hadn't
+  // been released when this bundle was built; the rate above falls
+  // back to the 2025 value. The forecast engine surfaces a
+  // "provisional rate" assumption when this flag is true; flip to
+  // false (and update MILEAGE_RATE_2026_PER_MILE_CENTS) once the
+  // 2026 Notice publishes (typically late December 2025 / early
+  // January 2026).
+  isMileageRateProvisional: true,
+  // OBBBA § 70433: raised § 6041 reporting threshold from $600 to
+  // $2,000 for payments made after Dec 31 2025.
+  INFO_REPORTING_THRESHOLD_CENTS: 2000 * 100,
   // Bundle only ships the fields the forecast engine consumes today;
   // the full 2026 CTC export carries `refundablePerChildCents` for
   // future wiring.

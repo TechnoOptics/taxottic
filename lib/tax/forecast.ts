@@ -235,14 +235,21 @@ export function forecast(input: ForecastInput): ForecastResult {
 
   if (input.autoMileageCents > 0) {
     // Mileage rate is published in a separate IRS Notice each December.
-    // The 2026 notice hadn't landed when this file was last refreshed,
-    // so the constants bundle still uses the 2025 rate; phrase the
-    // assumption to call out the year and the per-mile cents value
-    // from whichever bundle resolved.
+    // When the next year's Notice hasn't dropped yet, the per-year
+    // bundle carries `isMileageRateProvisional=true` and falls back to
+    // the prior year's rate. Phrase the assumption to be honest about
+    // that so a user comparing to their own bookkeeping software
+    // doesn't think we miscoded - we're a placeholder that will refresh.
     const ratePerMile = (k.MILEAGE_RATE_PER_MILE_CENTS / 100).toFixed(2);
-    assumptions.push(
-      `Vehicle: standard mileage applied at the IRS ${k.year} rate of $${ratePerMile} per business mile.`,
-    );
+    if (k.isMileageRateProvisional) {
+      assumptions.push(
+        `Vehicle: standard mileage applied at $${ratePerMile} per business mile (the ${k.year} IRS Notice hasn't been published yet; we're carrying forward last year's rate as a placeholder and will refresh once the Notice posts).`,
+      );
+    } else {
+      assumptions.push(
+        `Vehicle: standard mileage applied at the IRS ${k.year} rate of $${ratePerMile} per business mile.`,
+      );
+    }
   }
   if (input.autoHomeOfficeCents > 0) {
     assumptions.push(
@@ -424,6 +431,16 @@ export function forecast(input: ForecastInput): ForecastResult {
 
   // QBI: 20% of net biz, only when AGI is below the §199A threshold and the
   // entity is a pass-through. Above threshold, surface a CPA hint and skip.
+  //
+  // TY 2026+ (OBBBA § 70105 amendments to § 199A(i)) layers in two extra
+  // rules on top of the original formula:
+  //   - The taxpayer needs at least `obbbaMinimumQbiToQualifyCents` of QBI
+  //     to claim any deduction at all (statutory $1,000 floor; inflation-
+  //     adjusted from 2027).
+  //   - Above that floor, the deduction is max(formula, $400).
+  // Both rules apply only when the bundle carries the OBBBA fields, which
+  // is gated by tax year via constants.ts - 2025 leaves the fields
+  // undefined and this block is a no-op for back-year forecasts.
   let qbi = 0;
   const qbiThreshold = k.QBI.thresholdBelow[input.filingStatus];
   if (SE_ENTITY_TYPES.has(input.entityType) && netBiz > 0) {
@@ -434,11 +451,54 @@ export function forecast(input: ForecastInput): ForecastResult {
         Math.round(netBiz * k.QBI.rate),
         Math.round(taxableBeforeQbi * k.QBI.rate),
       );
+
+      // OBBBA minimum-deduction floor (TY 2026+).
+      const minQbiToQualify = k.QBI.obbbaMinimumQbiToQualifyCents;
+      const minDeduction = k.QBI.obbbaMinimumDeductionCents;
+      if (minQbiToQualify != null && minDeduction != null) {
+        if (netBiz < minQbiToQualify) {
+          // OBBBA gates the deduction entirely below the QBI floor.
+          if (qbi > 0) {
+            assumptions.push(
+              `QBI under $${(minQbiToQualify / 100).toLocaleString()} - OBBBA § 70105 disqualifies the §199A deduction for ${k.year}.`,
+            );
+          }
+          qbi = 0;
+        } else if (qbi < minDeduction) {
+          // OBBBA floors the deduction at $400 once QBI clears the gate.
+          // Cap by taxable income so we don't deduct more than the user
+          // can actually use (prevents creating a "refund from QBI" in
+          // edge cases where taxable income is small but QBI is sizable).
+          const floored = Math.min(
+            minDeduction,
+            Math.max(0, agi - deduction),
+          );
+          if (floored > qbi) {
+            assumptions.push(
+              `§199A minimum deduction applied: $${(floored / 100).toLocaleString()} (OBBBA § 70105 boost - your formula yielded less).`,
+            );
+            qbi = floored;
+          }
+        }
+      }
     } else {
       hints.push(
         "Your AGI is above the QBI safe-harbor threshold. The actual §199A deduction depends on W-2 wages, qualified property, and SSTB classification - confirm with a CPA.",
       );
     }
+  }
+
+  // OBBBA § 70433 1099-reporting threshold hint. Self-employed filers in
+  // a tax year that has the new $2,000 threshold should know they no
+  // longer need to send 1099s to vendors paid under that amount. Pure
+  // compliance UX; doesn't affect any tax math.
+  if (
+    SE_ENTITY_TYPES.has(input.entityType) &&
+    k.INFO_REPORTING_THRESHOLD_CENTS > 60_000 // distinguishes new $2,000 from legacy $600
+  ) {
+    hints.push(
+      `Heads-up: for ${k.year}, you only need to send 1099-NEC/1099-MISC to vendors you've paid more than $${(k.INFO_REPORTING_THRESHOLD_CENTS / 100).toLocaleString()} (up from $600 - OBBBA § 70433). Anything below that no longer requires a 1099.`,
+    );
   }
 
   const taxableIncome = Math.max(0, agi - deduction - qbi);
