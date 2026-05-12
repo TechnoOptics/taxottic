@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth";
+import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { US_STATES } from "@/data/us-states";
 import { NewCompanyWizard } from "./NewCompanyWizard";
@@ -43,7 +43,28 @@ const ENTITY_TYPES = [
 ];
 
 export default async function NewCompanyPage() {
-  const { user } = await requireUser();
+  const { admin, user } = await requireUserWithAdmin();
+
+  // Look up whether the user already has a profile name + how many
+  // companies they already own. The wizard branches on these to
+  // decide whether to show the "your details" stage on the first
+  // company (so we ask the name once) but skip it on subsequent ones
+  // (so a power user creating their third company isn't re-asked).
+  const [{ data: profile }, { count: ownedCompanyCount }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle(),
+    admin
+      .from("companies")
+      .select("id", { count: "exact", head: true })
+      .eq("created_by", user.id),
+  ]);
+
+  const askForName =
+    !profile?.full_name?.trim() && (ownedCompanyCount ?? 0) === 0;
+
   return (
     <main className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -51,6 +72,8 @@ export default async function NewCompanyPage() {
         entityTypes={ENTITY_TYPES}
         states={US_STATES}
         action={createCompany}
+        askForName={askForName}
+        ownerEmail={user.email ?? ""}
       />
     </main>
   );
