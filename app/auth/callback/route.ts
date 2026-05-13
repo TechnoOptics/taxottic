@@ -24,9 +24,25 @@ import { createClient } from "@/lib/supabase/server";
  * shows what the provider said.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams, origin, pathname, search, host } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
+
+  // TRACE diagnostic (PR #49): leave a unmissable trace on every hit
+  // to /auth/callback. Real OAuth flows land users on /login?next=/
+  // with no `_oauth_diag` or `error` — meaning neither our success
+  // nor failure path is being taken — yet auth.flow_state has an
+  // auth_code_issued_at row, so Supabase HAS run its callback. This
+  // narrows "did the browser ever reach /auth/callback?" to a yes/no
+  // we can read straight off the URL.
+  console.error("[auth/callback] HIT", {
+    host,
+    pathname,
+    search,
+    hasCode: !!code,
+    hasState: !!searchParams.get("state"),
+    hasError: !!searchParams.get("error"),
+  });
 
   // Upstream OAuth error (Google/Microsoft/Apple rejected before
   // issuing a code). Forward both the error code and the
@@ -37,11 +53,18 @@ export async function GET(request: NextRequest) {
     const out = new URL(`${origin}/login`);
     out.searchParams.set("error", upstreamError);
     if (desc) out.searchParams.set("error_description", desc);
+    out.searchParams.set("_oauth_diag", "callback_upstream_error");
     return NextResponse.redirect(out);
   }
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=no_code`);
+    const out = new URL(`${origin}/login`);
+    out.searchParams.set("error", "no_code");
+    out.searchParams.set(
+      "_oauth_diag",
+      `callback_no_code;path=${pathname};search=${search}`,
+    );
+    return NextResponse.redirect(out);
   }
 
   // Diagnostic snapshot: which `sb-*` cookies actually arrived on the
