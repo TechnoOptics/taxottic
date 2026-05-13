@@ -65,11 +65,17 @@ export type CompanyMembership = {
 
 export async function getMyCompanies(): Promise<CompanyMembership[]> {
   const supabase = (await createClient());
+  // Filter out soft-deleted companies. Anything in the recycle bin
+  // (deleted_at is not null) is visible only via /settings/recycle-bin
+  // and the data-export endpoint — every other surface treats it as
+  // gone. The PostgREST `companies.deleted_at.is.null` filter on the
+  // joined row keeps the query in one round-trip.
   const { data } = await supabase
     .from("company_members")
     .select(
-      "company_id, role, joined_at, company:companies(id, public_id, name, logo_url)",
+      "company_id, role, joined_at, company:companies!inner(id, public_id, name, logo_url, deleted_at)",
     )
+    .is("company.deleted_at", null)
     .order("joined_at", { ascending: true });
   return (data ?? []) as unknown as CompanyMembership[];
 }

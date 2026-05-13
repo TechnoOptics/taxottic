@@ -12,10 +12,17 @@ export type CompanyRow = {
 
 export async function loadCompanyByPublicId(publicId: string) {
   const { supabase, user } = await requireUser();
+  // .is("deleted_at", null) — companies in the recycle bin look like
+  // a 404 to every /c/[publicId]/* page so users can't accidentally
+  // edit data on a company they meant to delete. The recycle bin UI
+  // is the only place they should see soft-deleted companies; from
+  // there they can either Restore (which clears deleted_at) or
+  // Permanently delete.
   const { data: company } = await supabase
     .from("companies")
     .select("id, public_id, name, entity_type, state_code, logo_url")
     .eq("public_id", publicId)
+    .is("deleted_at", null)
     .single<CompanyRow>();
   if (!company) notFound();
 

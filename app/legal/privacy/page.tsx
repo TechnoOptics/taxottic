@@ -214,6 +214,37 @@ export default function PrivacyPage() {
               7 years from the relevant tax year. You may delete them
               earlier from the app.
             </p>
+            <p>
+              <strong>Companies and bank connections — 30-day recycle
+              bin.</strong> When you close a company or disconnect a
+              bank, the item is moved to a per-user recycle bin at{" "}
+              <Link
+                href="/settings/recycle-bin"
+                className="underline hover:text-forest-900"
+              >
+                /settings/recycle-bin
+              </Link>
+              . During the 30-day grace window you can restore it in one
+              click or permanently delete it now. After 30 days, the
+              item is hard-deleted automatically — the company (with all
+              its income, expenses, and transactions) or the bank
+              connection (with its accounts and historical transactions)
+              is removed from the database. Encrypted backups age out
+              of retention on the schedule above. We do not keep a
+              separate &ldquo;deleted customer&rdquo; archive.
+            </p>
+            <p>
+              You can always export everything we have on you first,
+              before deleting, at{" "}
+              <Link
+                href="/settings/data"
+                className="underline hover:text-forest-900"
+              >
+                /settings/data
+              </Link>
+              . The download is a single JSON file including items
+              currently in the recycle bin.
+            </p>
           </Section>
 
           <Section title="Children">

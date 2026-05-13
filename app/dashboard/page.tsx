@@ -17,6 +17,7 @@ import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 import { checkCompanyLimit } from "@/lib/plans/usage";
 import { completeWelcomeTour } from "@/app/actions/tour";
 import { GoalDismissButton } from "@/components/GoalDismissButton";
+import { purgeExpiredRecycleBin } from "@/app/actions/recycle-bin";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -386,6 +387,19 @@ export default async function DashboardPage() {
   // profile.trial_validated_at so the cost is bounded to one query
   // per user lifetime.
   await runTrialGuard({ admin, userId: user.id });
+
+  // Lazy recycle-bin sweep: every dashboard render takes a peek at
+  // expired soft-deletes and hard-deletes anything past 30 days. The
+  // SQL function enforces the cutoff regardless of caller, so this is
+  // a safe no-op when there's nothing to purge. Cron is the proper
+  // backstop for users who don't sign in often, but having this on
+  // every active user's dashboard means the recycle bin stays
+  // accurate for everyone who's actually using the product.
+  try {
+    await purgeExpiredRecycleBin();
+  } catch {
+    // Non-fatal: dashboard still renders; the cron picks up the slack.
+  }
   const trial = await getTrialState(supabase, user.id);
 
   return (
