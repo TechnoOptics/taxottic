@@ -64,9 +64,20 @@ export async function GET(request: NextRequest) {
   const verifierPresent = sbCookieNames.includes(verifierCookieName);
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (!error) {
-    return NextResponse.redirect(`${origin}${next}`);
+    // Success-path diagnostic: confirm we reached this branch AND
+    // that we have a session/user. Appended as a query param on the
+    // post-redirect URL so the user can see (and we can read) what
+    // happened. Removed after RCA — see PR #47.
+    const successUrl = new URL(`${origin}${next}`);
+    successUrl.searchParams.set(
+      "_oauth_diag",
+      `success;next=${next};user=${data?.user?.id ?? "none"};session=${
+        data?.session ? "yes" : "no"
+      };sb_cookies=${sbCookieNames.join(",") || "(none)"}`,
+    );
+    return NextResponse.redirect(successUrl);
   }
 
   // Log the real Supabase error server-side so we have it in the
