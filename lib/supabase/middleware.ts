@@ -24,6 +24,15 @@ const PUBLIC_PATHS = [
   "/favicon.ico",
   "/sw.js",
   "/account/suspended",
+  // SEO routes: robots.txt + sitemap.xml MUST stay public on every
+  // host. Without these in the allowlist, the middleware redirected
+  // anonymous /robots.txt and /sitemap.xml requests to /login —
+  // which broke Google's crawler ("Redirecting..." was the only body
+  // crawlers saw). The host-aware logic for the bodies themselves
+  // lives in app/robots.ts and app/sitemap.ts; this list is only
+  // about whether the request gets through middleware at all.
+  "/robots.txt",
+  "/sitemap.xml",
 ];
 
 const HQ_HOST = "hq.taxottic.com";
