@@ -57,6 +57,11 @@ const ADMIN_PASSTHROUGH_EXACT = new Set([
   "/manifest.webmanifest",
   "/sw.js",
   "/robots.txt",
+  // /sitemap.xml needs the same passthrough as /robots.txt so the
+  // rewrite to /admin/sitemap.xml (which doesn't exist) doesn't
+  // cascade into a /login redirect. The body itself is host-aware
+  // in app/sitemap.ts and returns an empty list on admin hosts.
+  "/sitemap.xml",
 ]);
 
 export async function updateSession(request: NextRequest) {
