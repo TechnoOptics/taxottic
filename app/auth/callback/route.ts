@@ -44,6 +44,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=no_code`);
   }
 
+  // Diagnostic snapshot: which `sb-*` cookies actually arrived on the
+  // callback request? In production we've been seeing
+  // "PKCE code verifier not found in storage" with no good local repro;
+  // surfacing the cookie names the server actually receives is the
+  // shortest path to "the cookie is/isn't being sent back from the
+  // OAuth dance." Cookie *values* are never exposed (those are the
+  // session itself); only names + presence-of-verifier.
+  const sbCookieNames = request.cookies
+    .getAll()
+    .map((c) => c.name)
+    .filter((n) => n.startsWith("sb-"));
+  const verifierExpected = (
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
+  )
+    .replace(/^https?:\/\//, "")
+    .split(".")[0];
+  const verifierCookieName = `sb-${verifierExpected}-auth-token-code-verifier`;
+  const verifierPresent = sbCookieNames.includes(verifierCookieName);
+
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (!error) {
@@ -58,10 +77,18 @@ export async function GET(request: NextRequest) {
     message: error.message,
     name: error.name,
     status: (error as { status?: number }).status,
+    sbCookies: sbCookieNames,
+    verifierExpected: verifierCookieName,
+    verifierPresent,
   });
 
   const out = new URL(`${origin}/login`);
   out.searchParams.set("error", "exchange_failed");
-  out.searchParams.set("error_description", error.message);
+  out.searchParams.set(
+    "error_description",
+    `${error.message} [diag: verifier=${
+      verifierPresent ? "present" : "MISSING"
+    } sb_cookies=${sbCookieNames.join(",") || "(none)"}]`,
+  );
   return NextResponse.redirect(out);
 }
