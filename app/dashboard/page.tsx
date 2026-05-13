@@ -105,10 +105,35 @@ export default async function DashboardPage() {
     null;
 
   if (companies.length === 0) {
-    const { data: pending } = await supabase
-      .from("invitations")
-      .select("id, company_id, role, company:companies(name, public_id)")
-      .is("accepted_at", null);
+    // Check three things to render the right empty state:
+    //   - super-admin status (so we don't push contact@taxottic.com
+    //     into a personal onboarding loop when they're really there
+    //     to do operator work)
+    //   - pending invitations (so an accountant invited to a firm
+    //     sees them right away)
+    //   - companies in the user's recycle bin (so a user who said
+    //     "I already have one" can see they just put it in the bin)
+    const [{ data: pending }, { data: isSuperAdminFlag }, { data: bin }] =
+      await Promise.all([
+        supabase
+          .from("invitations")
+          .select("id, company_id, role, company:companies(name, public_id)")
+          .is("accepted_at", null),
+        supabase.rpc("is_super_admin"),
+        admin
+          .from("companies")
+          .select("id, public_id, name, deleted_at")
+          .eq("created_by", user.id)
+          .not("deleted_at", "is", null)
+          .order("deleted_at", { ascending: false }),
+      ]);
+    const isSuperAdmin = Boolean(isSuperAdminFlag);
+    const recycledCompanies = (bin ?? []) as Array<{
+      id: string;
+      public_id: string;
+      name: string;
+      deleted_at: string;
+    }>;
 
     return (
       <main className="min-h-screen">
@@ -116,14 +141,50 @@ export default async function DashboardPage() {
         <section className="max-w-2xl mx-auto px-6 py-16">
           <div className="card p-10 text-center">
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-              Welcome
+              {isSuperAdmin ? "Operator view" : "Welcome"}
             </div>
             <h1 className="display mt-3 text-4xl text-forest-900">
-              Let&apos;s set up your first company.
+              {isSuperAdmin
+                ? "You're signed in as a super-admin."
+                : "Let's set up your first company."}
             </h1>
             <p className="mt-3 text-sm text-ink-soft">
-              You&apos;re signed in as {user.email}.
+              {isSuperAdmin
+                ? `Hi ${user.email}. This is the consumer dashboard. Super-admin work lives in HQ / Enterprise — pick a portal from the profile menu.`
+                : `You're signed in as ${user.email}.`}
             </p>
+
+            {/* Recycle-bin notice: if the user closed a company recently
+                this is what they see instead of being told to "create
+                their first" (when they think they already have one). */}
+            {recycledCompanies.length > 0 ? (
+              <div className="mt-8 text-left rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <h2 className="text-sm font-medium text-forest-900">
+                  You have {recycledCompanies.length}{" "}
+                  {recycledCompanies.length === 1 ? "company" : "companies"} in
+                  your recycle bin
+                </h2>
+                <p className="text-xs text-ink-muted mt-1 leading-relaxed">
+                  {recycledCompanies.length === 1
+                    ? `"${recycledCompanies[0].name}"`
+                    : recycledCompanies
+                        .slice(0, 3)
+                        .map((c) => `"${c.name}"`)
+                        .join(", ")}
+                  {recycledCompanies.length > 3
+                    ? ` + ${recycledCompanies.length - 3} more`
+                    : ""}
+                  . Restore in one click before the 30-day grace window
+                  ends.
+                </p>
+                <Link
+                  href="/settings/recycle-bin"
+                  className="inline-block mt-3 text-sm text-forest-800 underline hover:text-forest-900"
+                >
+                  Open recycle bin &rarr;
+                </Link>
+              </div>
+            ) : null}
 
             {pending && pending.length > 0 ? (
               <div className="mt-8 text-left">
@@ -146,10 +207,32 @@ export default async function DashboardPage() {
               </div>
             ) : null}
 
-            <div className="mt-8">
-              <Link href="/onboarding/new-company" className="btn-primary">
-                Create a new company
-              </Link>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              {isSuperAdmin ? (
+                <>
+                  {/* Push super-admins toward the right destination
+                      instead of nudging them into personal onboarding.
+                      The Switch portal menu in the profile dropdown
+                      offers the same thing; this is a more obvious
+                      second route. */}
+                  <Link href="/admin" className="btn-primary">
+                    HQ overview
+                  </Link>
+                  <Link href="/admin/firms" className="btn-ghost">
+                    Enterprise / firms
+                  </Link>
+                  <Link
+                    href="/onboarding/new-company"
+                    className="text-sm text-ink-soft hover:text-forest-900 underline"
+                  >
+                    Or set up a personal company anyway
+                  </Link>
+                </>
+              ) : (
+                <Link href="/onboarding/new-company" className="btn-primary">
+                  Create a new company
+                </Link>
+              )}
             </div>
           </div>
         </section>
