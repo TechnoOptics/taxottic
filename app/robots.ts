@@ -1,32 +1,77 @@
 import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
 
 /**
- * /robots.txt for taxottic.com.
+ * Host-aware robots.txt.
  *
- * The public marketing surface (`/`, `/legal/*`, `/book`) is intentionally
- * crawlable so we show up in tax-prep-software search results. Everything
- * else is either authentication, billing, or per-account application UI
- * and has no SEO value - we block crawlers from those paths explicitly so
- * Google doesn't waste crawl budget on login redirects or 401'd app pages.
+ * The three Taxottic surfaces have very different crawl postures:
  *
- * The hq.taxottic.com admin surface is rendered through middleware and
- * goes through the same /admin/* prefix internally, so disallowing
- * /admin keeps the ops console out of search results.
+ *  - `taxottic.com` (consumer marketing): aggressively crawlable.
+ *    The marketing surface (`/`, `/pricing`, `/help`, `/changelog`,
+ *    `/example`, `/legal/*`, `/book`) is intentionally indexable so
+ *    we show up for "1099 tax software", "self-employed quarterly
+ *    estimator", "Schedule C deductions", etc. App routes
+ *    (`/dashboard`, `/c/*`, `/settings`, etc.) are explicitly
+ *    disallowed: they redirect to /login when anonymous, so
+ *    indexing them just bloats the index with empty login bounces
+ *    and wastes crawl budget.
+ *
+ *  - `hq.taxottic.com` (super-admin cockpit): fully disallowed.
+ *    Operator surface; nothing here should ever appear in a search
+ *    result. We use a blanket `Disallow: /`. No sitemap.
+ *
+ *  - `enterprise.taxottic.com` (firm-operator console): fully
+ *    disallowed. Same rationale as HQ — the firms console is for
+ *    paying firm operators, not search visibility. No sitemap.
+ *
+ * Reading the request host via `headers()` is what makes this
+ * dynamic. Without that, Next.js would emit ONE robots.txt at build
+ * time and the same content would be served from all three hosts —
+ * which would either expose the admin paths under taxottic.com's
+ * sitemap, or hide marketing under a blanket disallow. Neither is
+ * acceptable. The cost is making `/robots.txt` a dynamic route, which
+ * is fine: it's tiny, cached at the edge, and almost never the
+ * critical path.
  */
-export default function robots(): MetadataRoute.Robots {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://taxottic.com";
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const host = (await headers()).get("host")?.toLowerCase() ?? "";
+  const isAdminHost =
+    host === "hq.taxottic.com" || host === "enterprise.taxottic.com";
+
+  // Anchor sitemap + canonical at the production origin regardless of
+  // which host receives the robots.txt request. The consumer origin
+  // is the only host that has a real public sitemap.
+  const consumerOrigin =
+    process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com";
+
+  if (isAdminHost) {
+    return {
+      rules: [{ userAgent: "*", disallow: "/" }],
+      // Deliberately no `sitemap` or `host` field — admin hosts don't
+      // advertise a sitemap to anyone.
+    };
+  }
+
   return {
     rules: [
       {
         userAgent: "*",
         allow: [
           "/",
-          "/legal/",
+          // Marketing + conversion-critical paths added in the May 2026
+          // audit fixes. Each is a real, indexable page with its own
+          // canonical, OG, and structured data.
+          "/pricing",
+          "/help",
+          "/changelog",
+          "/example",
           "/book",
           "/firms",
+          "/legal",
         ],
         disallow: [
+          // App routes — anonymous users hit /login redirects here,
+          // and the actual content is per-account. Zero SEO value.
           "/api/",
           "/auth/",
           "/login",
@@ -42,10 +87,15 @@ export default function robots(): MetadataRoute.Robots {
           "/bella",
           "/reminders",
           "/account/",
+          "/firm",
+          // Soft-toggle query variants — canonical resolves them back
+          // to `/`, but the path-form disallow keeps crawlers from
+          // chasing arbitrary `?audience=...` URLs in pagination.
+          "/*?audience=",
         ],
       },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
-    host: baseUrl,
+    sitemap: `${consumerOrigin}/sitemap.xml`,
+    host: consumerOrigin,
   };
 }

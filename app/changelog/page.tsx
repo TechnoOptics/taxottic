@@ -2,14 +2,14 @@ import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 
 export const metadata = {
-  title: "Changelog - Taxottic",
+  title: "Changelog — what's new in Taxottic",
   description:
-    "What shipped, when. Public changelog for the Taxottic platform.",
-  alternates: { canonical: "https://taxottic.com/changelog" },
+    "Public release notes for Taxottic. Every shipped feature, fix, and security improvement, with dates. Updated as we ship.",
+  alternates: { canonical: "/changelog" },
   openGraph: {
     title: "Taxottic Changelog",
-    description: "What shipped, when. Public, no sign-in required.",
-    url: "https://taxottic.com/changelog",
+    description: "Public release notes for Taxottic. Every shipped feature, fix, and security improvement, with dates.",
+    url: "/changelog",
     type: "website",
   },
   robots: { index: true, follow: true },

@@ -1,18 +1,32 @@
 import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
 
 /**
- * /sitemap.xml for taxottic.com.
+ * /sitemap.xml — host-aware.
  *
- * Lists only the public-facing marketing + legal pages. App routes
- * behind auth (dashboard, settings, /c/[publicId]/*) and admin routes
- * are intentionally omitted - they redirect to /login when unauthed
- * and have no public-search value.
+ *   - taxottic.com: full marketing + legal sitemap.
+ *   - hq.taxottic.com / enterprise.taxottic.com: empty sitemap.
+ *     The admin subdomains are noindex'd at robots.txt + meta level,
+ *     so we don't advertise a sitemap there either. Returning an
+ *     empty list is the cleanest way to satisfy the route handler
+ *     without leaking admin URLs.
+ *
+ * App routes behind auth (dashboard, settings, /c/[publicId]/*) are
+ * intentionally omitted from the consumer sitemap — they redirect to
+ * /login when unauthed and have no public-search value.
  *
  * lastModified uses build time as a conservative default; we don't
  * have per-page edit timestamps for the marketing content, and a
  * weekly-stable date is appropriate for these mostly-static pages.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const host = (await headers()).get("host")?.toLowerCase() ?? "";
+  const isAdminHost =
+    host === "hq.taxottic.com" || host === "enterprise.taxottic.com";
+  if (isAdminHost) {
+    // Empty sitemap on admin hosts — no URLs to advertise.
+    return [];
+  }
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://taxottic.com";
   const now = new Date();

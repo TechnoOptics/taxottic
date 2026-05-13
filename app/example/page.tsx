@@ -2,15 +2,15 @@ import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 
 export const metadata = {
-  title: "Example dashboard - Taxottic",
+  title: "Example dashboard — see Taxottic before you sign up",
   description:
-    "A read-only sample dashboard. See what Taxottic looks like for a real-feeling fictional small business — no signup required.",
-  alternates: { canonical: "https://taxottic.com/example" },
+    "A read-only sample dashboard for Maple Lane Design Co. (fictional sole proprietor). See bank-synced forecasts, IRS-cited deductions, and Schedule C — no signup needed.",
+  alternates: { canonical: "/example" },
   openGraph: {
     title: "Taxottic — Example dashboard",
     description:
       "A read-only sample dashboard for a fictional sole proprietor. No signup needed.",
-    url: "https://taxottic.com/example",
+    url: "/example",
     type: "website",
   },
   robots: { index: true, follow: true },

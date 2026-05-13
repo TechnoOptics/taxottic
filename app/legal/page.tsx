@@ -1,6 +1,38 @@
 import Link from "next/link";
+import { JsonLd } from "@/components/seo/JsonLd";
 
-export const metadata = { title: "Legal - Taxottic" };
+export const metadata = {
+  title: "Legal — privacy, security, terms, DPA, DMCA, accessibility",
+  description:
+    "Plain-English policies for Taxottic. Privacy, security overview, terms of service, DPA, subprocessors, cookies, DMCA, accessibility, acceptable use.",
+  alternates: { canonical: "/legal" },
+  openGraph: {
+    title: "Taxottic Legal",
+    description:
+      "Plain-English privacy, security, terms, DPA, subprocessors, DMCA, and accessibility policies.",
+    url: "/legal",
+    type: "website",
+  },
+};
+
+const LEGAL_BREADCRUMB_LD = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://taxottic.com/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Legal",
+      item: "https://taxottic.com/legal",
+    },
+  ],
+};
 
 const PAGES = [
   { href: "/legal/privacy", title: "Privacy Policy", body: "What we collect, why, where it lives, and how to ask for it back." },
@@ -17,6 +49,7 @@ const PAGES = [
 export default function LegalIndex() {
   return (
     <main className="min-h-screen">
+      <JsonLd data={LEGAL_BREADCRUMB_LD} />
       <section className="max-w-3xl mx-auto px-6 py-12">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Legal

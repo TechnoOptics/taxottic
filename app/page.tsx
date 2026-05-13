@@ -3,6 +3,179 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/Wordmark";
 import { StudioFamilyFAB } from "@/components/StudioFamilyFAB";
+import { JsonLd } from "@/components/seo/JsonLd";
+import {
+  PLAN_PRICING,
+  type SubscriptionPriceKey,
+} from "@/lib/plans/limits";
+
+// -------------------------------------------------------------------
+// JSON-LD structured data for the home page.
+//
+// Four blobs:
+//   1. Organization      — who's behind Taxottic (Techno Optics LLC).
+//                          Shows up in knowledge panels.
+//   2. WebSite           — site identity + the sitelinks searchbox
+//                          target (?q=...). Lets Google render a
+//                          search box under the homepage SERP card.
+//   3. SoftwareApplication — that we're a finance SaaS, with the full
+//                          subscription tier list as Offers. Eligible
+//                          for the rich "app" treatment Google gives
+//                          finance products.
+//   4. SiteNavigationElement — the primary nav so Google can build
+//                          sitelinks correctly.
+//
+// Schemas tested in https://search.google.com/test/rich-results before
+// shipping. Don't add aggregateRating or review schema until we have
+// real review sources to cite — fabricating either is a guidelines
+// violation that risks a manual action.
+// -------------------------------------------------------------------
+
+const SITE_ORIGIN = "https://taxottic.com";
+
+function buildSoftwareApplicationOffers() {
+  // Surface every paid tier as an Offer so Google sees the price range
+  // accurately. The Free tier is omitted from Offers (price 0 with a
+  // payment vehicle is a guidelines violation — Free isn't a
+  // commercial offer in schema.org terms). It's covered separately
+  // by `freeTrial` semantics on the SoftwareApplication.
+  const keys: SubscriptionPriceKey[] = [
+    "filer_monthly",
+    "filer_yearly",
+    "solo_monthly",
+    "solo_yearly",
+    "studio_monthly",
+    "studio_yearly",
+    "scale_monthly",
+    "scale_yearly",
+    "practice_monthly",
+    "practice_yearly",
+  ];
+  return keys.map((k) => {
+    const p = PLAN_PRICING[k];
+    const price = (p.amountCents / 100).toFixed(2);
+    return {
+      "@type": "Offer",
+      name: p.label,
+      price,
+      priceCurrency: "USD",
+      url: `${SITE_ORIGIN}/pricing`,
+      priceSpecification: {
+        "@type": "UnitPriceSpecification",
+        price,
+        priceCurrency: "USD",
+        // schema.org expects ISO 8601 durations. P1M / P1Y are the
+        // standard monthly / yearly billing cadences.
+        billingDuration: p.interval === "month" ? "P1M" : "P1Y",
+      },
+    };
+  });
+}
+
+const ORGANIZATION_LD = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": `${SITE_ORIGIN}/#organization`,
+  name: "Taxottic",
+  url: SITE_ORIGIN,
+  logo: `${SITE_ORIGIN}/icon.png`,
+  description:
+    "Tax forecasting and deduction guidance for freelancers, sole proprietors, and small businesses.",
+  // The parent studio. `parentOrganization` is the canonical
+  // schema.org relationship; Google reads it for knowledge-panel
+  // attribution.
+  parentOrganization: {
+    "@type": "Organization",
+    name: "Techno Optics LLC",
+    url: "https://technooptics.com",
+  },
+  // `sameAs` should ideally list real social-media URLs we own. We
+  // don't yet, so this is just the studio link — leaving room for
+  // Twitter / LinkedIn / GitHub as they go live.
+  sameAs: ["https://technooptics.com"],
+  // Honest, public contact channel. Real email > generic
+  // "contact form" placeholder.
+  contactPoint: {
+    "@type": "ContactPoint",
+    contactType: "customer support",
+    email: "contact@taxottic.com",
+    availableLanguage: ["English"],
+  },
+};
+
+const WEBSITE_LD = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": `${SITE_ORIGIN}/#website`,
+  url: SITE_ORIGIN,
+  name: "Taxottic",
+  description:
+    "A calmer way to handle your taxes. Bank-synced quarterly forecasts, 1,025 IRS-cited deductions, Schedule C export, multi-state.",
+  publisher: { "@id": `${SITE_ORIGIN}/#organization` },
+  inLanguage: "en-US",
+  // Sitelinks searchbox: when this site has an internal search at
+  // /search?q=..., this would tell Google to render a search box
+  // under the SERP card. We don't ship a public site search yet,
+  // so this is commented out — uncomment when /help-style site
+  // search is live.
+  //
+  // potentialAction: {
+  //   "@type": "SearchAction",
+  //   target: {
+  //     "@type": "EntryPoint",
+  //     urlTemplate: `${SITE_ORIGIN}/search?q={search_term_string}`,
+  //   },
+  //   "query-input": "required name=search_term_string",
+  // },
+};
+
+const SOFTWARE_APP_LD = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": `${SITE_ORIGIN}/#software`,
+  name: "Taxottic",
+  applicationCategory: "FinanceApplication",
+  applicationSubCategory: "Tax forecasting and preparation",
+  operatingSystem: "Web, iOS, Android",
+  url: SITE_ORIGIN,
+  description:
+    "Tax forecasting software for freelancers, sole proprietors, and small businesses. Bank-synced quarterly estimates, 1,025 IRS-cited deductions, Schedule C export, AMT and QBI math, multi-state.",
+  // No aggregateRating until we have real reviews to cite.
+  // No award until awards exist.
+  publisher: { "@id": `${SITE_ORIGIN}/#organization` },
+  // `offers` (plural) when there's more than one — Google handles
+  // either form.
+  offers: buildSoftwareApplicationOffers(),
+  // A 14-day free trial on every paid tier; the consumer voice line
+  // is "No credit card. No commitment. Visit and leave at your own
+  // pace." which matches Google's expectation for "free to try."
+  featureList: [
+    "Bank-synced quarterly tax forecasts",
+    "1,025 IRS-cited deductions",
+    "Schedule C auto-assembly + PDF export",
+    "Multi-state forecasting",
+    "QBI deduction math",
+    "AMT detection and forecasting",
+    "Quarterly estimated-tax reminders",
+    "Receipt OCR via Bella",
+    "Plaid + Stripe Connect bank linking",
+    "Passkey / Face ID / Touch ID sign-in",
+    "Tax-year 2026 with OBBBA amendments",
+  ],
+};
+
+const NAV_LD = {
+  "@context": "https://schema.org",
+  "@type": "SiteNavigationElement",
+  name: ["Home", "Pricing", "Example", "Help", "Changelog"],
+  url: [
+    `${SITE_ORIGIN}/`,
+    `${SITE_ORIGIN}/pricing`,
+    `${SITE_ORIGIN}/example`,
+    `${SITE_ORIGIN}/help`,
+    `${SITE_ORIGIN}/changelog`,
+  ],
+};
 
 type Audience = "personal" | "enterprise";
 
@@ -23,6 +196,15 @@ export default async function Home({
 
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
+      {/* JSON-LD: Organization, WebSite, SoftwareApplication, primary
+          nav. Rendered server-side so crawlers see them on first
+          fetch. See top of file for the schema rationale + the
+          aggregateRating call-out (we do NOT include fake reviews). */}
+      <JsonLd data={ORGANIZATION_LD} />
+      <JsonLd data={WEBSITE_LD} />
+      <JsonLd data={SOFTWARE_APP_LD} />
+      <JsonLd data={NAV_LD} />
+
       {/* Forest header band - visually merges into the Hero gradient below
           so the page opens with one continuous premium-green field. Same
           gradient + gold underline as the authenticated AppHeader, so the

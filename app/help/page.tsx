@@ -1,19 +1,172 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
+import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
-  title: "Help & FAQ - Taxottic",
+  title: "Help & FAQ — Taxottic quickstart and common questions",
   description:
-    "Quickstart guides, common questions, and how to get human support.",
-  alternates: { canonical: "https://taxottic.com/help" },
+    "Set up Taxottic in 5 minutes. FAQ on bank connections (Plaid), forecasts, deductions, billing, accounts, and security. Talk to a human at contact@taxottic.com.",
+  alternates: { canonical: "/help" },
   openGraph: {
     title: "Taxottic Help & FAQ",
     description:
       "Quickstart, common questions, and human support — no sign-in required.",
-    url: "https://taxottic.com/help",
+    url: "/help",
     type: "website",
   },
-  robots: { index: true, follow: true },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+    },
+  },
+};
+
+// FAQPage JSON-LD. EVERY question + answer below MUST mirror a
+// visible Q&A on the page exactly — Google rejects FAQ schema where
+// the structured data diverges from what users see. When you add a
+// new FAQ to the JSX below, add the matching entry here and vice
+// versa.
+const HELP_FAQ_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "Is there really no credit card to try?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Correct — the Free tier doesn't take a card. Paid tiers offer a 14-day trial that you can cancel before you're charged.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "W-2 employee — do I need a company?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "No. Pick \"Personal forecast\" on the filer-type screen and we'll skip the company-setup flow entirely. You'll land on the personal forecast at /personal/forecast.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I see what the product looks like before signing up?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes — read-only sample data lives at /example. No signup needed.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Where do my bank credentials go?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Into Plaid's secure UI; they never reach Taxottic servers. We get a token and the transaction stream. See /legal/security for the full picture.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How do I disconnect a bank?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Open the company, then Banks » Disconnect. We'll revoke the Plaid token and stop syncing.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "My bank isn't in the Plaid list — what now?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Use CSV import. Drag any standard transaction export onto the upload zone and we'll categorize it. CSV imports are available from the Solo tier and up.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How accurate is the forecast?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "The engine is verified against 125 unit tests that hit IRS-published worked examples, real bracket math for ten states, and property-based invariants (refund/owed reconciliation, CTC caps, QBI ≤ 20% of taxable income, etc.). Taxottic is not a substitute for advice from a licensed CPA or tax attorney.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Why does my dashboard show 13% tax-ready on day one?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "The tax-ready meter measures how many starter deduction categories you've claimed and how much of your bank feed you've triaged. A brand-new company hasn't done either yet — log one expense or connect a bank and the number starts climbing.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Where do the deduction amounts come from?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Every deduction we surface cites the IRC section and IRS publication. The catalog is 1,025 items today, pulled from Pub 334, 463, 535, 587, and 946. If a deduction Bella suggests doesn't feel right, the source URL is one tap away.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Where is the pricing?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "/pricing shows every tier including yearly discounts.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What happens to my data if I cancel?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "We keep your data accessible for 30 days after cancellation so you can re-subscribe without losing context. After that, company data is deleted on a rolling 90-day window. Export everything from Billing » Export before cancelling if you want a permanent copy.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How do credits and credit roll-over work?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Each tier ships with a monthly grant of AI credits (used by Bella, receipt OCR, document OCR, and bulk categorize). Unused monthly credits roll over up to 2x the grant; past that they evaporate on the next refresh. Top-up packs you buy never expire.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How do I switch between two of my accounts?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Profile menu » Switch accounts. We force the Google / Microsoft account picker so you explicitly pick which identity to use.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Where is the changelog?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "/changelog — public, updated as we ship.",
+      },
+    },
+  ],
+};
+
+const HELP_BREADCRUMB_LD = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://taxottic.com/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Help",
+      item: "https://taxottic.com/help",
+    },
+  ],
 };
 
 // Public /help page. The May 2026 audit P2 cluster flagged "no public
@@ -28,6 +181,9 @@ export const metadata = {
 export default function HelpPage() {
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
+      <JsonLd data={HELP_FAQ_LD} />
+      <JsonLd data={HELP_BREADCRUMB_LD} />
+
       <header
         className="relative"
         style={{
