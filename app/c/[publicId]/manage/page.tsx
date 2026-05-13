@@ -8,6 +8,7 @@ import {
   removeMember,
   revokeInvite,
 } from "./actions";
+import { closeCompany } from "@/app/actions/recycle-bin";
 import { CopyInviteLink } from "@/components/CopyInviteLink";
 
 type Params = Promise<{ publicId: string }>;
@@ -251,6 +252,53 @@ export default async function ManageCompanyPage({
             </div>
           ) : null}
         </section>
+
+        {/* Close company — manager-only "danger zone" at the bottom
+            of the manage page. Soft-delete; the company moves to
+            /settings/recycle-bin for 30 days. The user can Restore in
+            one click during that window, or Permanently delete from
+            the recycle bin (which cascades to every dependent row).
+            We surface this on /manage rather than /profile or /settings
+            because /manage is where a user goes when they're already
+            thinking "what's the state of this company". */}
+        {isManager ? (
+          <section className="mt-6 card p-7 border-red-200/60 bg-red-50/30">
+            <div className="text-[10px] uppercase tracking-[0.32em] text-red-700 font-medium">
+              Close this company
+            </div>
+            <h2 className="display mt-1 text-xl text-forest-900">
+              Move {company.name} to the recycle bin.
+            </h2>
+            <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-prose">
+              The company disappears from your dashboard and from every
+              firm/portfolio view right away. Bank connections stay
+              attached during the grace window in case you change your
+              mind. After 30 days, the company and everything inside it
+              — bank connections, transactions, monthly entries, business
+              profile — is permanently deleted and cannot be recovered.
+            </p>
+            <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-prose">
+              Want a copy of the data first?{" "}
+              <a
+                href="/settings/data"
+                className="underline hover:text-forest-900"
+              >
+                Download my data
+              </a>{" "}
+              gives you a JSON export including everything you&apos;ve
+              entered for this company.
+            </p>
+            <form action={closeCompany} className="mt-4">
+              <input type="hidden" name="company_id" value={company.id} />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center h-10 px-4 rounded-[0.625rem] border border-red-300 bg-white text-sm text-red-700 hover:bg-red-50 transition-colors"
+              >
+                Move to recycle bin
+              </button>
+            </form>
+          </section>
+        ) : null}
 
         {/* Existing team roster, now BELOW the add-employee section */}
         <section className="mt-6 card p-7">

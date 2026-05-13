@@ -280,6 +280,18 @@ export function UserMenu({
                   >
                     Security &amp; passkeys
                   </MenuLink>
+                  <MenuLink
+                    href="/settings/data"
+                    onClick={() => setOpen(false)}
+                  >
+                    Your data
+                  </MenuLink>
+                  <MenuLink
+                    href="/settings/recycle-bin"
+                    onClick={() => setOpen(false)}
+                  >
+                    Recycle bin
+                  </MenuLink>
                 </>
               )}
             </ul>

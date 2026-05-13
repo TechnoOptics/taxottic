@@ -10,6 +10,7 @@ import { StripeSyncButton } from "@/components/StripeSyncButton";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
+import { disconnectBank } from "@/app/actions/recycle-bin";
 
 type Params = Promise<{ publicId: string }>;
 type SearchParams = Promise<{
@@ -96,6 +97,10 @@ export default async function BanksPage({
         "id, provider, institution_name, institution_logo_url, status, last_synced_at, last_error",
       )
       .eq("company_id", company.id)
+      // Hide disconnected connections (in the recycle bin). They're
+      // visible in /settings/recycle-bin where the user can Restore
+      // or Permanently delete them.
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     supabase
       .from("bank_accounts")
@@ -353,6 +358,43 @@ export default async function BanksPage({
                           </svg>
                         </div>
                       </summary>
+                      {/* Disconnect — manager-only. Routes through
+                          /app/actions/recycle-bin.ts: soft-deletes the
+                          connection, revokes the Plaid access token,
+                          and the row goes to /settings/recycle-bin
+                          for 30 days before final purge. Confirmation
+                          happens via native confirm() in the form's
+                          onSubmit, which Next.js progressively enhances
+                          for the JS-disabled fallback. */}
+                      {isManager ? (
+                        <div className="px-5 py-3 border-t border-forest-100 bg-cream/30 flex items-center justify-between gap-3 flex-wrap">
+                          <p className="text-[11px] text-ink-muted leading-relaxed max-w-md">
+                            Disconnect revokes Plaid&apos;s access token
+                            immediately. The bank moves to your{" "}
+                            <a
+                              href="/settings/recycle-bin"
+                              className="underline hover:text-forest-800"
+                            >
+                              recycle bin
+                            </a>{" "}
+                            for 30 days; restore in one click, or
+                            permanently delete from there.
+                          </p>
+                          <form action={disconnectBank}>
+                            <input
+                              type="hidden"
+                              name="connection_id"
+                              value={c.id}
+                            />
+                            <button
+                              type="submit"
+                              className="text-xs text-red-700 hover:text-red-900 underline underline-offset-2"
+                            >
+                              Disconnect bank
+                            </button>
+                          </form>
+                        </div>
+                      ) : null}
                       {acctsForConn.length > 0 ? (
                         <ul className="border-t border-forest-100 divide-y divide-forest-50">
                           {acctsForConn.map((a) => (
