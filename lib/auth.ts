@@ -1,5 +1,33 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+
+// Hosts that serve the super-admin shell. The middleware rewrites `/`
+// to `/admin` on these. requireSuperAdmin uses this list to decide
+// whether a "not super-admin, go home" redirect should be CROSS-ORIGIN
+// (back to taxottic.com/dashboard) instead of relative — relative would
+// get rewritten to /admin/dashboard on these hosts and 404 with the
+// "personal day" page.
+const ADMIN_HOSTS = new Set(["hq.taxottic.com", "enterprise.taxottic.com"]);
+
+function consumerOrigin(): string {
+  // Same resolution as app/settings/actions.ts so a follow-on
+  // NEXT_PUBLIC_SITE_ORIGIN change flows everywhere. Defaults to
+  // production so server-side redirects always have a place to send
+  // users even if the env var is unset.
+  return (
+    process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com"
+  ).replace(/\/$/, "");
+}
+
+async function currentHost(): Promise<string> {
+  // Read the request host from Next.js's request-scoped headers().
+  // Works inside Server Components, Server Actions, and Route Handlers.
+  // We lower-case for the host comparison to match the middleware's
+  // `host === HQ_HOST` style.
+  const h = await headers();
+  return (h.get("host") ?? "").toLowerCase();
+}
 
 export async function requireUser() {
   const supabase = await createClient();
@@ -43,7 +71,22 @@ export async function requireUserWithAdmin() {
 export async function requireSuperAdmin() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase.rpc("is_super_admin");
-  if (error || !data) redirect("/dashboard");
+  if (error || !data) {
+    // If we're already on an admin host (hq.taxottic.com or
+    // enterprise.taxottic.com), a bare `/dashboard` redirect would be
+    // rewritten by middleware to `/admin/dashboard` — which doesn't
+    // exist and renders the 404 "personal day" page. The May 2026
+    // launch of the three-portal split caught this: super-admins who
+    // landed here saw a 404 instead of being bounced back to the
+    // consumer dashboard. Fix is to use an absolute URL so the
+    // browser does a real cross-origin navigation and the destination
+    // host's middleware handles the routing fresh.
+    const host = await currentHost();
+    if (ADMIN_HOSTS.has(host)) {
+      redirect(`${consumerOrigin()}/dashboard`);
+    }
+    redirect("/dashboard");
+  }
   return { supabase, user };
 }
 

@@ -352,10 +352,14 @@ export default async function DashboardPage() {
   // should land in the right shell. Done here (not at /) so a
   // hard-coded /dashboard link from email/etc still routes correctly.
   //
-  // Each non-user platform lives on its OWN subdomain now (May 2026
-  // three-portal split), so we redirect to absolute URLs. In local
-  // dev (NEXT_PUBLIC_SITE_ORIGIN unset) we degrade to path redirects
-  // so localhost still works.
+  // Each non-user platform CAN live on its own subdomain (May 2026
+  // three-portal split). When the subdomain is live (env flag), we
+  // redirect cross-origin. When it's not, we fall back to the legacy
+  // `/admin/**` path on the consumer host so users don't hit
+  // DNS_PROBE_FINISHED_NXDOMAIN. Same env-var contract as
+  // app/settings/actions.ts:
+  //   NEXT_PUBLIC_HQ_HOST_LIVE         (default true)
+  //   NEXT_PUBLIC_ENTERPRISE_HOST_LIVE (default false until DNS is wired)
   const { data: pickedPlatform } = await admin
     .from("profiles")
     .select("active_platform")
@@ -369,15 +373,20 @@ export default async function DashboardPage() {
     const host = siteOrigin.replace(/^https?:\/\//, "").split("/")[0];
     const isLocal = /^(localhost|127\.0\.0\.1)/i.test(host);
     const proto = siteOrigin.startsWith("http://") ? "http" : "https";
-    if (isLocal) {
-      redirect(ap === "hq" ? "/admin" : "/admin/firms");
-    } else {
+    const hqLive = process.env.NEXT_PUBLIC_HQ_HOST_LIVE !== "false";
+    const entLive = process.env.NEXT_PUBLIC_ENTERPRISE_HOST_LIVE === "true";
+    const useSubdomain =
+      !isLocal && (ap === "hq" ? hqLive : entLive);
+    if (useSubdomain) {
       redirect(
         ap === "hq"
           ? `${proto}://hq.${host}/`
           : `${proto}://enterprise.${host}/`,
       );
     }
+    // Fallback: render the admin shell on the consumer host. Same
+    // codebase, same /admin/** tree, just no cross-origin hop.
+    redirect(ap === "hq" ? "/admin" : "/admin/firms");
   }
 
   // Trial-fraud guard runs lazily on the FIRST dashboard load — if
