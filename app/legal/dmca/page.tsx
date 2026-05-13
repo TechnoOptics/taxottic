@@ -1,9 +1,17 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "DMCA Policy - Taxottic",
+  title: "DMCA Policy — Taxottic copyright notice & counter-notice",
   description:
-    "Taxottic's DMCA notice-and-takedown policy for copyright complaints.",
+    "How to submit a DMCA copyright notice or counter-notice for content on Taxottic. Designated agent, required fields, repeat-infringer policy.",
+  alternates: { canonical: "/legal/dmca" },
+  openGraph: {
+    title: "Taxottic DMCA Policy",
+    description:
+      "DMCA notice-and-takedown procedure, designated agent, counter-notice template.",
+    url: "/legal/dmca",
+    type: "article",
+  },
 };
 
 // DMCA-style takedown policy. Required for safe-harbour treatment under

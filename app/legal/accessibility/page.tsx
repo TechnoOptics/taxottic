@@ -1,9 +1,17 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Accessibility - Taxottic",
+  title: "Accessibility — Taxottic WCAG 2.2 AA commitment",
   description:
-    "Taxottic's accessibility commitment, the WCAG conformance target, and how to report a barrier.",
+    "Taxottic's accessibility commitment. WCAG 2.2 Level AA target, what's in place today, known gaps, and how to report a barrier (access@taxottic.com).",
+  alternates: { canonical: "/legal/accessibility" },
+  openGraph: {
+    title: "Taxottic Accessibility",
+    description:
+      "WCAG 2.2 AA commitment, keyboard-only navigation, passkey sign-in, and how to report a barrier.",
+    url: "/legal/accessibility",
+    type: "article",
+  },
 };
 
 // Accessibility commitment page expected by enterprise procurement and
