@@ -1,0 +1,21 @@
+-- Follow-up to 20260513000001_recycle_bin.sql.
+--
+-- The Supabase security advisor flagged the recycle_bin view as a
+-- SECURITY DEFINER view immediately after the previous migration
+-- applied. In Postgres 15+, views default to SECURITY DEFINER
+-- semantics unless `security_invoker = true` is set explicitly —
+-- which would bypass RLS on the underlying tables (companies +
+-- bank_connections + company_members) and let any authenticated
+-- user read the entire recycle bin instead of just their own rows.
+--
+-- security_invoker = true makes the view enforce permissions and
+-- RLS based on the CALLER's role. The view's own WHERE clauses
+-- already filter to the requesting user via company_members; this
+-- toggle adds belt-and-braces enforcement via the underlying
+-- tables' RLS policies as well.
+--
+-- This migration was applied directly to production on 2026-05-13
+-- alongside 20260513000001 via the Supabase MCP. This file records
+-- the change so future fresh installs apply it automatically.
+
+alter view public.recycle_bin set (security_invoker = true);
