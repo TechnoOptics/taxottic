@@ -151,6 +151,9 @@ export async function updateSession(request: NextRequest) {
 
   if (hasOauthCode) {
     const traceVal = `${pathname}?${request.nextUrl.searchParams.toString()}`;
+    // Visible to JS so we can read it from the browser console after the
+    // flow. Lax SameSite + 60s TTL — long enough to inspect, short enough
+    // to not pollute.
     response.cookies.set("_oauth_trace_path", traceVal.slice(0, 500), {
       maxAge: 60,
       path: "/",
