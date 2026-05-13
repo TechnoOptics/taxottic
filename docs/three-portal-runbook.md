@@ -119,19 +119,21 @@ on-our-domain path.
 
 ---
 
-## 6. Set `NEXT_PUBLIC_SITE_ORIGIN` (optional but recommended)
+## 6. Set the env vars in Vercel
 
 Where: Vercel → Settings → Environment Variables for the Taxottic project.
-
-If unset, the cross-subdomain redirects in
-`app/settings/actions.ts` default to `https://taxottic.com` as the
-root. That's correct for production, so setting this is technically
-optional. Set it explicitly anyway so a future change to a custom
-domain doesn't silently break the portal switcher.
 
 | Name | Production | Preview | Development |
 |---|---|---|---|
 | `NEXT_PUBLIC_SITE_ORIGIN` | `https://taxottic.com` | leave unset (Vercel preview URLs) | `http://localhost:3000` |
+| `NEXT_PUBLIC_HQ_HOST_LIVE` | `true` (or unset — default is true) | unset | unset |
+| `NEXT_PUBLIC_ENTERPRISE_HOST_LIVE` | **leave unset until you've finished steps 1–4 above**, then set to `true` | unset | unset |
+
+`NEXT_PUBLIC_SITE_ORIGIN`: anchors all cross-subdomain redirects. Default is correct for production, but setting it explicitly future-proofs against a custom-domain change.
+
+`NEXT_PUBLIC_HQ_HOST_LIVE` / `NEXT_PUBLIC_ENTERPRISE_HOST_LIVE`: feature flags for the portal switcher. They tell the server action `setActivePlatform` (in `app/settings/actions.ts`) and the dashboard auto-router (in `app/dashboard/page.tsx`) whether to redirect to the subdomain or fall back to the path-based admin shell on the consumer host.
+
+**Why the fallback matters**: if a super-admin clicks Enterprise in the profile menu and `enterprise.taxottic.com` isn't live yet, without the fallback they hit `DNS_PROBE_FINISHED_NXDOMAIN` and have no obvious recovery. With `NEXT_PUBLIC_ENTERPRISE_HOST_LIVE` unset (the default), the same click sends them to `https://taxottic.com/admin/firms` — same content, no DNS dependency. **Only flip the env var to `true` after steps 1–4 above are all green.**
 
 Local development with `localhost` automatically degrades to
 path-only redirects (no subdomain), so you don't need to set up a

@@ -48,22 +48,24 @@ type Props = {
 
 type AnchorRect = { top: number; right: number };
 
-// Each portal label includes its host so a super-admin can see at a
-// glance which subdomain they're switching to. The hint stays
-// human-readable for context. The portal-switcher form action
-// (setActivePlatform) handles the actual cross-subdomain redirect.
+// Portal labels for the switcher. We deliberately don't render the
+// destination hostname here anymore — the server action handling the
+// form (setActivePlatform) decides whether to send the user to the
+// subdomain or fall back to the path-based admin shell on the consumer
+// host, depending on NEXT_PUBLIC_*_HOST_LIVE env flags. The hint is
+// the human-readable purpose of each portal, not its URL.
 const PLATFORM_META: Record<Platform, { label: string; hint: string }> = {
   user: {
     label: "Consumer app",
-    hint: "taxottic.com — dashboard, forecast, Bella",
+    hint: "Dashboard, forecast, expenses, Bella",
   },
   enterprise: {
     label: "Enterprise",
-    hint: "enterprise.taxottic.com — firm operations, client list",
+    hint: "Firms operations + client list",
   },
   hq: {
     label: "HQ",
-    hint: "hq.taxottic.com — super-admin operations",
+    hint: "Super-admin operations",
   },
 };
 

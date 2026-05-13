@@ -42,19 +42,39 @@ function siblingSubdomainOrigin(prefix: string): string {
   return `${SITE_PROTOCOL}://${prefix}.${SITE_HOST}`;
 }
 
+// Subdomain-live flags. Each portal's subdomain needs real DNS, a
+// Vercel domain, and a Supabase OAuth redirect URL registered before
+// the switcher can safely point at it (see
+// docs/three-portal-runbook.md). Until those are wired, falling back
+// to the internal path on the consumer host keeps the portal switcher
+// functional instead of strand-ing users on DNS_PROBE_FINISHED_NXDOMAIN.
+//
+// Flip these to "true" in Vercel env after the subdomain is live:
+//   NEXT_PUBLIC_HQ_HOST_LIVE         → defaults true (hq has been live)
+//   NEXT_PUBLIC_ENTERPRISE_HOST_LIVE → defaults false (added May 2026)
+const HQ_HOST_LIVE = process.env.NEXT_PUBLIC_HQ_HOST_LIVE !== "false";
+const ENTERPRISE_HOST_LIVE =
+  process.env.NEXT_PUBLIC_ENTERPRISE_HOST_LIVE === "true";
+
 const PLATFORM_LANDING: Record<"user" | "enterprise" | "hq", string> = {
   user: `${SITE_ORIGIN}/dashboard`,
-  // Enterprise subdomain — root path; the destination host's
-  // middleware rewrites "/" to "/admin/firms" on enterprise.taxottic.com.
-  // In local dev the rewrite doesn't trigger, so we send to the
-  // internal /admin/firms directly.
-  enterprise: IS_LOCALHOST
-    ? `${SITE_ORIGIN}/admin/firms`
-    : `${siblingSubdomainOrigin("enterprise")}/`,
+  // Enterprise — once the subdomain is live, root path on
+  // enterprise.taxottic.com; the middleware rewrites "/" to
+  // "/admin/firms" on that host. Until then (default), fall back to
+  // /admin/firms on the consumer host so the click does SOMETHING
+  // instead of failing with DNS_PROBE_FINISHED_NXDOMAIN.
+  enterprise:
+    IS_LOCALHOST || !ENTERPRISE_HOST_LIVE
+      ? `${SITE_ORIGIN}/admin/firms`
+      : `${siblingSubdomainOrigin("enterprise")}/`,
   // HQ subdomain — root path; middleware rewrites "/" to "/admin".
-  hq: IS_LOCALHOST
-    ? `${SITE_ORIGIN}/admin`
-    : `${siblingSubdomainOrigin("hq")}/`,
+  // HQ has been live since the original three-portal architecture, but
+  // we still feature-gate via NEXT_PUBLIC_HQ_HOST_LIVE so a future
+  // rollback is one env-var flip away.
+  hq:
+    IS_LOCALHOST || !HQ_HOST_LIVE
+      ? `${SITE_ORIGIN}/admin`
+      : `${siblingSubdomainOrigin("hq")}/`,
 };
 
 /**
