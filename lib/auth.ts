@@ -107,7 +107,24 @@ export type CompanyMembership = {
 };
 
 export async function getMyCompanies(): Promise<CompanyMembership[]> {
-  const supabase = (await createClient());
+  const supabase = await createClient();
+  // CRITICAL: explicit `.eq("user_id", uid)` filter.
+  //
+  // Without this, super-admins (whose RLS policy on company_members
+  // says "you may read any row if you're a super-admin") would see
+  // EVERY membership across every tenant — i.e., the consumer
+  // dashboard would list other people's companies. That happened in
+  // production for contact@technooptics.com on 2026-05-13.
+  //
+  // RLS still backstops here for regular users (they can't read
+  // other tenants' rows even if we forgot this filter), but
+  // getMyCompanies() means "MY companies, not all companies I can
+  // technically see" — so the filter has to be explicit at the query
+  // layer too. Belt-and-braces.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
   // Filter out soft-deleted companies. Anything in the recycle bin
   // (deleted_at is not null) is visible only via /settings/recycle-bin
   // and the data-export endpoint — every other surface treats it as
@@ -118,6 +135,7 @@ export async function getMyCompanies(): Promise<CompanyMembership[]> {
     .select(
       "company_id, role, joined_at, company:companies!inner(id, public_id, name, logo_url, deleted_at)",
     )
+    .eq("user_id", user.id)
     .is("company.deleted_at", null)
     .order("joined_at", { ascending: true });
   return (data ?? []) as unknown as CompanyMembership[];
