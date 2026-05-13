@@ -146,10 +146,20 @@ export default function LoginPage() {
         : provider === "apple"
           ? "name email"
           : undefined;
+    // PR #52: stash `next` in a short-lived same-origin cookie instead
+    // of passing it through Supabase's `redirect_to`. Supabase's
+    // redirect-URL allowlist is strict about exact matches on the
+    // post-Google leg — passing `?next=/dashboard` caused fall-back to
+    // Site URL (taxottic.com), which bypassed our /auth/callback handler
+    // entirely and left users on /login?next=/. The cookie-based path
+    // means `redirect_to` is always the exact allowlisted URL.
+    if (typeof document !== "undefined") {
+      document.cookie = `_oauth_next=${encodeURIComponent(next)}; Path=/; Max-Age=600; SameSite=Lax; Secure`;
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${window.location.origin}/auth/callback`,
         scopes,
         queryParams,
       },

@@ -26,7 +26,26 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin, pathname, search, host } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  // PR #52: `next` now comes from a short-lived cookie set by the login
+  // page BEFORE signInWithOAuth is called. We used to read it from the
+  // query string (?next=...) but Supabase's redirect-URL allowlist
+  // rejects callback URLs that don't EXACTLY match the registered
+  // entry, and a `?next=/dashboard` suffix caused silent fall-back to
+  // Site URL — bypassing this handler entirely. Cookie path keeps
+  // redirect_to stable so Supabase always matches the allowlist.
+  const cookieNextRaw = request.cookies.get("_oauth_next")?.value;
+  // Cookie value was set via `encodeURIComponent(next)` on the client
+  // (see app/login/page.tsx). Decode here, but accept either form so
+  // a missing/double-decode doesn't break the post-login redirect.
+  let cookieNext: string | undefined;
+  if (cookieNextRaw) {
+    try {
+      cookieNext = decodeURIComponent(cookieNextRaw);
+    } catch {
+      cookieNext = cookieNextRaw;
+    }
+  }
+  const next = searchParams.get("next") ?? cookieNext ?? "/dashboard";
 
   // TRACE diagnostic (PR #49): leave a unmissable trace on every hit
   // to /auth/callback. Real OAuth flows land users on /login?next=/
