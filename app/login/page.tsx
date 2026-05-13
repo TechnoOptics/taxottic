@@ -27,12 +27,16 @@ export default function LoginPage() {
   // and (b) pass prompt=select_account to Google/Microsoft so they don't
   // silently auto-resume the last session.
   const [forcePicker, setForcePicker] = useState(false);
-  // True when this login page is being served at hq.taxottic.com. The
-  // May 2026 audit flagged P3: both the consumer and HQ login pages
-  // showed the same "Sign in to forecast your taxes." subtitle, which
-  // doesn't tell a super-admin landing on hq that they're in the
-  // operator cockpit. Detected client-side from the host header.
-  const [isHq, setIsHq] = useState(false);
+  // True when this login page is being served at hq.taxottic.com OR
+  // enterprise.taxottic.com — the two operator hosts. The May 2026
+  // audit flagged P3: both the consumer and HQ login pages showed
+  // the same "Sign in to forecast your taxes." subtitle, which
+  // doesn't tell a super-admin landing on an admin host that they're
+  // in the operator cockpit. Detected client-side from the host
+  // header. Originally named `isHq`; renamed to `isAdminHost` when
+  // enterprise.taxottic.com went live so the cockpit subhead fires
+  // for both admin subdomains.
+  const [isAdminHost, setIsAdminHost] = useState(false);
   const supabase = createClient();
 
   // Surface server-side OAuth errors that came back as ?error=... on the
@@ -84,8 +88,11 @@ export default function LoginPage() {
     if (url.searchParams.get("force_picker") === "1") {
       setForcePicker(true);
     }
-    if (url.host.toLowerCase() === "hq.taxottic.com") {
-      setIsHq(true);
+    // Both admin subdomains get the cockpit treatment. Consumer host
+    // (taxottic.com) stays as the cream consumer-facing experience.
+    const host = url.host.toLowerCase();
+    if (host === "hq.taxottic.com" || host === "enterprise.taxottic.com") {
+      setIsAdminHost(true);
     }
   }, []);
 
@@ -188,7 +195,7 @@ export default function LoginPage() {
                 to use.
               </p>
             </>
-          ) : isHq ? (
+          ) : isAdminHost ? (
             <>
               <p className="mt-3 text-sm font-medium text-forest-900">
                 Sign in to the Taxottic cockpit.
