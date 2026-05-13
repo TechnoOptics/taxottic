@@ -103,38 +103,17 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  // Exchange failed — build a fresh error response. Cookies set on the
-  // previous `response` object would not have been worth keeping
-  // (no valid session) but we surface the Supabase error message AND
-  // a bracketed diag so we can see which host actually received the
-  // request and whether the PKCE verifier cookie was even present.
-  const sbCookieNames = request.cookies
-    .getAll()
-    .map((c) => c.name)
-    .filter((n) => n.startsWith("sb-"));
-  const verifierExpected = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
-    .replace(/^https?:\/\//, "")
-    .split(".")[0];
-  const verifierCookieName = `sb-${verifierExpected}-auth-token-code-verifier`;
-  const verifierPresent = sbCookieNames.includes(verifierCookieName);
-  const reqHost = request.headers.get("host") ?? "(unknown)";
+  // Exchange failed — log the real Supabase error server-side so we
+  // have it in Vercel logs the next time a user reports "OAuth doesn't
+  // work", and surface the message in the URL so /login can render a
+  // helpful explanation.
   console.error("[auth/callback] exchangeCodeForSession failed", {
     message: error.message,
     name: error.name,
     status: (error as { status?: number }).status,
-    host: reqHost,
-    sbCookies: sbCookieNames,
-    verifierExpected: verifierCookieName,
-    verifierPresent,
   });
-
   const errOut = new URL(`${origin}/login`);
   errOut.searchParams.set("error", "exchange_failed");
-  errOut.searchParams.set(
-    "error_description",
-    `${error.message} [diag: host=${reqHost} verifier=${
-      verifierPresent ? "present" : "MISSING"
-    } sb_cookies=${sbCookieNames.join(",") || "(none)"}]`,
-  );
+  errOut.searchParams.set("error_description", error.message);
   return NextResponse.redirect(errOut);
 }
