@@ -151,15 +151,32 @@ export async function updateSession(request: NextRequest) {
 
   if (hasOauthCode) {
     const traceVal = `${pathname}?${request.nextUrl.searchParams.toString()}`;
-    // Visible to JS so we can read it from the browser console after the
-    // flow. Lax SameSite + 60s TTL — long enough to inspect, short enough
-    // to not pollute.
     response.cookies.set("_oauth_trace_path", traceVal.slice(0, 500), {
       maxAge: 60,
       path: "/",
       sameSite: "lax",
       httpOnly: false,
     });
+  }
+
+  // Stack-trace EVERY request (PR #51): append the current path to a
+  // rolling-window cookie so we can see the last ~5 paths middleware
+  // processed for this browser. If the real Google OAuth flow doesn't
+  // show /auth/callback in the trail, we know the browser never visited
+  // it. Cookie is short-lived and only contains paths (no query, no
+  // secrets).
+  try {
+    const prev = request.cookies.get("_mw_trail")?.value ?? "";
+    const trail = prev ? `${prev}|${pathname}` : pathname;
+    const lastFive = trail.split("|").slice(-5).join("|");
+    response.cookies.set("_mw_trail", lastFive.slice(0, 500), {
+      maxAge: 120,
+      path: "/",
+      sameSite: "lax",
+      httpOnly: false,
+    });
+  } catch {
+    // best-effort diagnostic; do not break the request
   }
 
   const supabase = createServerClient(
