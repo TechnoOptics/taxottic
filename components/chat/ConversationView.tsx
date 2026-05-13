@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 import { Monogram, displayName } from "./Monogram";
 import type {
   ChatAttachment,
@@ -256,6 +257,7 @@ export function ConversationView({
       setDraft("");
       setPending([]);
     } catch (err) {
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Send failed");
     } finally {
       setBusy(false);
@@ -613,6 +615,7 @@ function MemberList({
       await addAction(fd);
       setPickerOpen(false);
     } catch (err) {
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Failed to add member.");
     } finally {
       setAdding(false);

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 import { Monogram, displayName } from "./Monogram";
 import type {
   CompanyMember,
@@ -295,6 +296,9 @@ function NewGroupDialog({
       await action(fd);
       // The action redirects on success.
     } catch (err) {
+      // Don't flash the redirect-control-flow error as a red "Failed
+      // to create group." toast — the action just succeeded.
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Failed to create group.");
       setSubmitting(false);
     }
@@ -409,6 +413,7 @@ function NewDmDialog({
       fd.set("other_user_id", otherId);
       await action(fd);
     } catch (err) {
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Failed to start chat.");
       setSubmitting(false);
     }

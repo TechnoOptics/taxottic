@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 
 type Props = {
   companyId: string;
@@ -54,6 +55,11 @@ export function BusinessProfileForm({
       // revert to idle after a moment so the message is noticed but not sticky
       setTimeout(() => setStatus("idle"), 2400);
     } catch (err) {
+      // Re-throw Next.js control-flow errors (redirect / notFound) so
+      // the framework completes its navigation instead of us flashing
+      // them as a red "Save failed" toast. See
+      // lib/next/redirect-error.ts for the rationale.
+      rethrowIfRedirect(err);
       setStatus("error");
       setError(err instanceof Error ? err.message : "Save failed");
     }

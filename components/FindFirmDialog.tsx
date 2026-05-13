@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 
 type Firm = {
   id: string;
@@ -84,6 +85,7 @@ export function FindFirmDialog({
         await requestAction(fd);
         onClose();
       } catch (err) {
+        rethrowIfRedirect(err);
         setSubmitError(err instanceof Error ? err.message : "Request failed");
       }
     });

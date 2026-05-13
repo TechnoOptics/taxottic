@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 
 const KINDS = [
   { value: "idea", label: "Idea" },
@@ -71,6 +72,7 @@ export function FeedbackModal({ open, onClose, submitAction }: Props) {
           setDone(false);
         }, 1500);
       } catch (err) {
+        rethrowIfRedirect(err);
         setError(err instanceof Error ? err.message : "Could not send");
       }
     });

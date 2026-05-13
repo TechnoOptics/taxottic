@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 
 type EntityType = { value: string; label: string; sub: string };
 type State = { code: string; name: string };
@@ -109,6 +110,16 @@ export function NewCompanyWizard({
       }
       await action(fd);
     } catch (err) {
+      // The success path of createCompany() ends with a server-side
+      // redirect to /onboarding/tax-profile. Next.js signals that by
+      // throwing a NEXT_REDIRECT control-flow error — which this
+      // catch block sees and would otherwise display as a red error
+      // message before the navigation completes (the May 2026 demo
+      // bug: "brief error in red before personal tax profile"). The
+      // helper re-throws control-flow errors so React + the framework
+      // can finish the redirect, and only "real" errors land in
+      // setError below.
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setSubmitting(false);
     }
