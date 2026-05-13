@@ -5,7 +5,15 @@ import { createClient } from "@/lib/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { PasskeySignInButton } from "@/components/PasskeySignInButton";
 
-type Provider = "google" | "azure";
+// Identity providers we render on the login page. Each one needs its
+// OAuth credentials registered in the Supabase dashboard
+// (Authentication → Providers) before the click actually works — see
+// SETUP.md "SSO providers" for the per-provider setup steps. Until a
+// provider is enabled in Supabase, clicking its button surfaces a
+// friendly "this provider isn't set up yet" message instead of a raw
+// "provider not enabled" error, so we can ship the buttons before
+// every provider is wired without leaving prospects with a hostile UX.
+type Provider = "google" | "azure" | "apple";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -39,7 +47,8 @@ export default function LoginPage() {
         oauth_token_exchange:
           "We couldn't complete sign-in with your provider. Please try again.",
         oauth_missing_id_token: "Provider didn't return an ID token.",
-        oauth_not_configured: "This sign-in provider isn't set up yet.",
+        oauth_not_configured:
+          "That sign-in provider isn't set up yet. Try Google, passkey, or magic link instead.",
         access_denied: "You cancelled the sign-in.",
       };
       setError(friendly[oauthErr] ?? oauthErr);
@@ -88,18 +97,52 @@ export default function LoginPage() {
     // prompt=select_account so Google/Microsoft show their account picker
     // even if the browser still has a live session for that provider.
     // Both Google and Microsoft honor this OAuth 2.0 prompt value.
+    // (Apple silently ignores it; that's fine — Apple's flow always
+    // includes its own picker.)
     const queryParams: Record<string, string> | undefined = forcePicker
       ? { prompt: "select_account" }
       : undefined;
+    // Per-provider scopes. Azure: explicit OIDC scopes so we always
+    // get the user's email. Apple: "name email" since Apple only
+    // releases name on the first authorization for that Services ID.
+    const scopes =
+      provider === "azure"
+        ? "email openid profile"
+        : provider === "apple"
+          ? "name email"
+          : undefined;
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-        scopes: provider === "azure" ? "email openid profile" : undefined,
+        scopes,
         queryParams,
       },
     });
-    if (error) setError(error.message);
+    if (error) {
+      // Supabase returns "Unsupported provider" or "Provider not
+      // enabled" when the provider isn't configured in the dashboard.
+      // Map that to the same friendly message the OAuth-callback
+      // error path uses, instead of leaking the raw API message.
+      const lower = error.message.toLowerCase();
+      if (
+        lower.includes("provider is not enabled") ||
+        lower.includes("unsupported provider") ||
+        lower.includes("provider not enabled")
+      ) {
+        const label =
+          provider === "azure"
+            ? "Microsoft"
+            : provider === "apple"
+              ? "Apple"
+              : "Google";
+        setError(
+          `${label} sign-in isn't fully set up yet — try Google, a passkey, or a magic link below.`,
+        );
+        return;
+      }
+      setError(error.message);
+    }
   }
 
   return (
@@ -134,36 +177,48 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-7">
+          {/* Three OAuth providers always rendered. Per-provider
+              configuration lives in the Supabase dashboard (see
+              SETUP.md "SSO providers"). If a provider is enabled
+              there, clicking takes the user through the consent
+              flow. If it isn't enabled yet, the oauth() handler
+              catches the error and renders a friendly "Provider X
+              isn't set up yet — try Google or a passkey" message
+              inline. We deliberately don't hide unconfigured
+              providers behind env flags anymore: rendering them as
+              available-options-with-fallbacks is a clearer signal
+              of what we support, and surfaces the configuration
+              gap as a fix-this rather than a missing-feature. */}
           <div className="grid gap-2">
             <button
               onClick={() => oauth("google")}
               className="btn-ghost w-full"
+              aria-label="Continue with Google"
             >
-              Continue with Google
+              <SsoGlyph kind="google" />
+              <span>Continue with Google</span>
             </button>
-            {/* Microsoft (Azure) is gated on NEXT_PUBLIC_ENABLE_AZURE_LOGIN
-                until the provider is fully wired in the Supabase project.
-                Previously clicking it landed on
-                ?error=invalid_request&error_code=bad_oauth_state because the
-                Azure provider returned a malformed state - better to hide the
-                button entirely than offer a broken handshake. Flip the env
-                var to "true" in Vercel once Azure OAuth is configured and the
-                redirect URI is registered in Supabase. */}
-            {process.env.NEXT_PUBLIC_ENABLE_AZURE_LOGIN === "true" ? (
-              <button
-                onClick={() => oauth("azure")}
-                className="btn-ghost w-full"
-              >
-                Continue with Microsoft
-              </button>
-            ) : null}
-            {/* Apple SSO requires an Apple Developer membership and is not
-                yet enabled on this Supabase project. Hidden until configured. */}
+            <button
+              onClick={() => oauth("azure")}
+              className="btn-ghost w-full"
+              aria-label="Continue with Microsoft"
+            >
+              <SsoGlyph kind="microsoft" />
+              <span>Continue with Microsoft</span>
+            </button>
+            <button
+              onClick={() => oauth("apple")}
+              className="btn-ghost w-full"
+              aria-label="Continue with Apple"
+            >
+              <SsoGlyph kind="apple" />
+              <span>Continue with Apple</span>
+            </button>
           </div>
 
           <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
             <div className="h-px flex-1 bg-forest-200/60" />
-            <span>or passkey</span>
+            <span>or passkey · Face ID · Touch ID · Windows Hello · PIN</span>
             <div className="h-px flex-1 bg-forest-200/60" />
           </div>
 
@@ -247,5 +302,74 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+// Inline SVG glyphs for the three SSO providers. Kept here rather
+// than pulled from a library because (a) we use them on exactly one
+// page, (b) Google's brand guidelines specifically require their
+// "G" mark not be recolored, and (c) inline SVGs avoid a runtime
+// hit on the auth-critical first paint.
+function SsoGlyph({ kind }: { kind: "google" | "microsoft" | "apple" }) {
+  if (kind === "google") {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 18 18"
+        width="16"
+        height="16"
+        className="shrink-0"
+      >
+        {/* Google's official 4-color "G" mark, simplified path. */}
+        <path
+          fill="#4285F4"
+          d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
+        />
+        <path
+          fill="#34A853"
+          d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.32A9 9 0 0 0 9 18z"
+        />
+        <path
+          fill="#FBBC05"
+          d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3.01-2.32z"
+        />
+        <path
+          fill="#EA4335"
+          d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3.01 2.32C4.68 5.16 6.66 3.58 9 3.58z"
+        />
+      </svg>
+    );
+  }
+  if (kind === "microsoft") {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 22 22"
+        width="16"
+        height="16"
+        className="shrink-0"
+      >
+        {/* Microsoft's four-square mark. */}
+        <rect width="10" height="10" x="1" y="1" fill="#F25022" />
+        <rect width="10" height="10" x="11" y="1" fill="#7FBA00" />
+        <rect width="10" height="10" x="1" y="11" fill="#00A4EF" />
+        <rect width="10" height="10" x="11" y="11" fill="#FFB900" />
+      </svg>
+    );
+  }
+  // apple
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="currentColor"
+      className="shrink-0"
+    >
+      {/* Apple logo — single path. currentColor so it works on
+          both light (forest text) and dark (cream text) themes. */}
+      <path d="M17.05 12.04c-.03-3.04 2.49-4.5 2.6-4.57-1.42-2.07-3.62-2.36-4.4-2.39-1.87-.19-3.65 1.1-4.6 1.1-.95 0-2.42-1.07-3.97-1.04-2.04.03-3.94 1.19-4.99 3.02-2.13 3.69-.54 9.13 1.52 12.13 1.01 1.47 2.21 3.12 3.78 3.06 1.52-.06 2.09-.99 3.92-.99 1.83 0 2.36.99 3.97.96 1.65-.03 2.68-1.49 3.68-2.97 1.17-1.71 1.64-3.36 1.66-3.45-.04-.02-3.18-1.22-3.21-4.85zM14.06 3.51c.83-1 1.39-2.4 1.23-3.79-1.19.05-2.63.79-3.49 1.78-.77.88-1.45 2.29-1.27 3.66 1.33.1 2.69-.67 3.53-1.65z" />
+    </svg>
   );
 }
