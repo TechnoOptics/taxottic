@@ -219,10 +219,12 @@ body {
 }
 
 /* Atmospheric backdrop: warm gold veil top-right + forest accent
-   bottom-left only. The 32px grid pattern was reading as a generic
-   "Claude AI built app" tell; dropped. The two soft radial veils stay
-   so the page has dimensional warmth without printing a graph onto
-   the surface. */
+   bottom-left only. Sister-brand cohesion: this is the same fixed
+   ambient gradient that runs across Advottic. We picked the exact
+   stop sizes (1200x600 at 90% -10%, 900x500 at -10% 100%) and HSL
+   gold (hsla(42, 51%, 66%, .16) — the brand's gold-400/500 in
+   HSL form) so a buyer landing on either product feels the same
+   "warm depth, premium SaaS" lighting model. */
 body::before {
   content: "";
   position: fixed;
@@ -230,8 +232,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background-image:
-    radial-gradient(1200px 600px at 90% -10%, rgba(213, 187, 126, 0.18), transparent 60%),
-    radial-gradient(900px 500px at -10% 100%, rgba(15, 45, 36, 0.07), transparent 60%);
+    radial-gradient(1200px 600px at 90% -10%, hsla(42, 51%, 66%, 0.16), transparent 60%),
+    radial-gradient(900px 500px at -10% 100%, rgba(15, 45, 36, 0.06), transparent 60%);
   mask-image: linear-gradient(180deg, black 0%, black 30%, rgba(0, 0, 0, 0.5) 100%);
 }
 
@@ -269,16 +271,21 @@ main, header, footer, nav {
 
   /* Card: hairline border, paper background, gentle shadow plus a thin
      gold "lit from above" highlight along the top edge. Sits as a
-     pseudo-element so the radius stays clean. */
+     pseudo-element so the radius stays clean.
+     Sister-brand cohesion: the second shadow line (0 0 0 1px hsla
+     gold 0.35) mirrors Advottic's signature card ring. Same warm
+     "premium SaaS" feel across the family. The original gold inset
+     highlight stays for the catch-light along the top edge. */
   .card {
     position: relative;
     background: #ffffff;
     border: 1px solid rgba(15, 45, 36, 0.08);
     border-radius: 1rem;
     box-shadow:
+      0 0 0 1px hsla(42, 51%, 66%, 0.18),
       0 1px 2px rgba(15, 45, 36, 0.04),
-      0 4px 16px rgba(15, 45, 36, 0.05),
-      inset 0 1px 0 rgba(213, 187, 126, 0.12);
+      0 8px 24px -4px rgba(15, 45, 36, 0.18),
+      inset 0 1px 0 rgba(213, 187, 126, 0.14);
   }
   /* Soft champagne highlight catching the top of the card. */
   .card::before {
