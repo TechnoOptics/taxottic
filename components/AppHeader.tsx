@@ -1,5 +1,6 @@
 import { Wordmark } from "./Wordmark";
 import { BellaFAB } from "./BellaFAB";
+import { StudioFamilyFAB } from "./StudioFamilyFAB";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { HeaderScrollHider } from "./HeaderScrollHider";
@@ -123,6 +124,13 @@ export async function AppHeader({
       {user && homeHref !== "/" ? (
         <BellaFAB companyId={bellaCompanyId} enabled={bellaEnabled} />
       ) : null}
+      {/* Cross-product launcher in the bottom-LEFT (sibling to the
+          Bella FAB on the bottom-right). Lists Taxottic + Advottic +
+          Techno Optics studio so the family relationship is visible
+          on every authenticated page. Visible on admin pages too —
+          super-admins are the audience who most often cross between
+          sister products. */}
+      {user ? <StudioFamilyFAB /> : null}
       {needsConsent ? <GdprBanner acceptAction={recordGdprConsent} /> : null}
     </>
   );
