@@ -102,10 +102,34 @@ const nextConfig: NextConfig = {
   // land on the existing public booking form with the firm audience
   // pre-selected. Permanent (308) so the cleaner URL is what crawlers
   // remember.
+  //
+  // `missing.host` regex: skip these redirects on the admin
+  // subdomains (hq.taxottic.com, enterprise.taxottic.com). On those
+  // hosts the middleware rewrites /firms to /admin/firms (the
+  // firms-operator console). Without this guard, the marketing
+  // redirect fires first and hijacks the URL away from the console.
   async redirects() {
+    const skipAdminHosts = {
+      missing: [
+        {
+          type: "host" as const,
+          value: "(hq|enterprise)\\.taxottic\\.com",
+        },
+      ],
+    };
     return [
-      { source: "/firms", destination: "/book?for=firm", permanent: true },
-      { source: "/firms/order", destination: "/book?for=firm", permanent: true },
+      {
+        source: "/firms",
+        destination: "/book?for=firm",
+        permanent: true,
+        ...skipAdminHosts,
+      },
+      {
+        source: "/firms/order",
+        destination: "/book?for=firm",
+        permanent: true,
+        ...skipAdminHosts,
+      },
     ];
   },
 };
