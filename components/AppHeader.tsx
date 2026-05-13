@@ -4,6 +4,7 @@ import { StudioFamilyFAB } from "./StudioFamilyFAB";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { HeaderScrollHider } from "./HeaderScrollHider";
+import { DarkThemeMount } from "./DarkThemeMount";
 import { createClient } from "@/lib/supabase/server";
 import { recordGdprConsent } from "@/app/actions/consent";
 import { submitFeedback } from "@/app/actions/feedback";
@@ -74,8 +75,13 @@ export async function AppHeader({
 
   return (
     <>
+      {/* Sticky header (was `fixed` pre-May 2026). `sticky top-0` keeps
+          the header pinned to the viewport top once it scrolls into
+          view but lets it participate in normal layout — so we no
+          longer need the spacer div that used to push content down.
+          Pattern borrowed from Advottic for cross-product cohesion. */}
       <header
-        className="app-header app-header-shrinkable fixed top-0 left-0 right-0 z-20"
+        className="app-header app-header-shrinkable sticky top-0 left-0 right-0 z-20"
         style={{
           paddingLeft: "env(safe-area-inset-left, 0px)",
           paddingRight: "env(safe-area-inset-right, 0px)",
@@ -101,19 +107,14 @@ export async function AppHeader({
           />
         </div>
       </header>
-      {/* Spacer matches the header's full-size height so content
-          never slides under the bar at the top of the page. */}
-      <div
-        aria-hidden="true"
-        className="app-header-spacer"
-        style={{
-          height:
-            "calc(0.625rem + env(safe-area-inset-top, 0px) + 0.625rem + 2.25rem)",
-        }}
-      />
       {/* Auto-shrinks the header on scroll on mobile (CSS-only, no
           JS animation - we just toggle a body class). */}
       <HeaderScrollHider />
+      {/* Flip <html data-theme="dark"> for the duration of any
+          authenticated page render. Public marketing routes don't
+          mount <AppHeader> so they stay light by default. See
+          components/DarkThemeMount.tsx for the full story. */}
+      <DarkThemeMount />
       {/* Bella stays as a customer-app FAB. The "Send feedback" FAB
           used to live above it; that stacked-bubbles look read as
           cluttered, so the feedback entry point moved into the
