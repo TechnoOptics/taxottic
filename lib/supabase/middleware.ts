@@ -66,21 +66,33 @@ export async function updateSession(request: NextRequest) {
   const isAdminHost = isHq || isEnterprise;
   const { pathname } = request.nextUrl;
 
-  // Move admin off the customer domain. If a user (or stale bookmark)
-  // hits /admin/* on taxottic.com, send them to the right admin
-  // subdomain with the /admin prefix dropped — the rewrite below
-  // puts them back on the right page once they land. /admin/firms
-  // and its children go to enterprise.taxottic.com (the firm-operator
-  // console); everything else goes to hq.taxottic.com (the
-  // super-admin overview).
+  // Move admin off the customer domain — BUT only when the destination
+  // subdomain is actually live. The NEXT_PUBLIC_*_HOST_LIVE env flags
+  // (same contract as app/settings/actions.ts) tell us whether DNS +
+  // Vercel + Supabase OAuth are wired for that subdomain yet.
+  //
+  // If we redirect to a subdomain that isn't live, the user hits
+  // DNS_PROBE_FINISHED_NXDOMAIN with no recovery path. When the
+  // destination isn't live, fall through — the /admin/** route renders
+  // on the consumer host instead. Same code, same requireSuperAdmin
+  // guard, no DNS dependency.
+  //
+  // /admin/firms and its children → enterprise.taxottic.com (when live)
+  // everything else                 → hq.taxottic.com (when live)
   if (!isAdminHost && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
     const stripped = pathname.replace(/^\/admin/, "") || "/";
     const goEnterprise =
       stripped === "/firms" || stripped.startsWith("/firms/");
-    const targetHost = goEnterprise ? ENTERPRISE_HOST : HQ_HOST;
-    const target = new URL(stripped, `https://${targetHost}`);
-    target.search = request.nextUrl.search;
-    return NextResponse.redirect(target, 308);
+    const hqLive = process.env.NEXT_PUBLIC_HQ_HOST_LIVE !== "false";
+    const entLive = process.env.NEXT_PUBLIC_ENTERPRISE_HOST_LIVE === "true";
+    const destinationLive = goEnterprise ? entLive : hqLive;
+    if (destinationLive) {
+      const targetHost = goEnterprise ? ENTERPRISE_HOST : HQ_HOST;
+      const target = new URL(stripped, `https://${targetHost}`);
+      target.search = request.nextUrl.search;
+      return NextResponse.redirect(target, 308);
+    }
+    // Otherwise fall through and let the /admin/** page render here.
   }
 
   // On the admin subdomains, present the admin console at the root of
