@@ -105,16 +105,36 @@ export async function GET(request: NextRequest) {
 
   // Exchange failed — build a fresh error response. Cookies set on the
   // previous `response` object would not have been worth keeping
-  // (no valid session) but we surface the Supabase error message so
-  // /login can render something more useful than "auth failed".
+  // (no valid session) but we surface the Supabase error message AND
+  // a bracketed diag so we can see which host actually received the
+  // request and whether the PKCE verifier cookie was even present.
+  const sbCookieNames = request.cookies
+    .getAll()
+    .map((c) => c.name)
+    .filter((n) => n.startsWith("sb-"));
+  const verifierExpected = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
+    .replace(/^https?:\/\//, "")
+    .split(".")[0];
+  const verifierCookieName = `sb-${verifierExpected}-auth-token-code-verifier`;
+  const verifierPresent = sbCookieNames.includes(verifierCookieName);
+  const reqHost = request.headers.get("host") ?? "(unknown)";
   console.error("[auth/callback] exchangeCodeForSession failed", {
     message: error.message,
     name: error.name,
     status: (error as { status?: number }).status,
+    host: reqHost,
+    sbCookies: sbCookieNames,
+    verifierExpected: verifierCookieName,
+    verifierPresent,
   });
 
   const errOut = new URL(`${origin}/login`);
   errOut.searchParams.set("error", "exchange_failed");
-  errOut.searchParams.set("error_description", error.message);
+  errOut.searchParams.set(
+    "error_description",
+    `${error.message} [diag: host=${reqHost} verifier=${
+      verifierPresent ? "present" : "MISSING"
+    } sb_cookies=${sbCookieNames.join(",") || "(none)"}]`,
+  );
   return NextResponse.redirect(errOut);
 }
