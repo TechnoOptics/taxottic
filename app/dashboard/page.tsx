@@ -450,26 +450,46 @@ export default async function DashboardPage() {
     .maybeSingle();
   const ap = pickedPlatform?.active_platform as string | null;
   if (ap === "hq" || ap === "enterprise") {
-    const siteOrigin = (
-      process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com"
-    ).replace(/\/$/, "");
-    const host = siteOrigin.replace(/^https?:\/\//, "").split("/")[0];
-    const isLocal = /^(localhost|127\.0\.0\.1)/i.test(host);
-    const proto = siteOrigin.startsWith("http://") ? "http" : "https";
-    const hqLive = process.env.NEXT_PUBLIC_HQ_HOST_LIVE !== "false";
-    const entLive = process.env.NEXT_PUBLIC_ENTERPRISE_HOST_LIVE === "true";
-    const useSubdomain =
-      !isLocal && (ap === "hq" ? hqLive : entLive);
-    if (useSubdomain) {
-      redirect(
-        ap === "hq"
-          ? `${proto}://hq.${host}/`
-          : `${proto}://enterprise.${host}/`,
-      );
+    // Gate the platform-router redirect on super-admin status. Without
+    // this gate we ping-pong: /dashboard → hq.taxottic.com/ → /admin →
+    // requireSuperAdmin fails for a non-super-admin → redirect back to
+    // /dashboard → and around again until the browser gives up with
+    // ERR_TOO_MANY_REDIRECTS. Reported during the May 2026 three-
+    // portal launch when a freshly-signed-in user's profile carried
+    // `active_platform=hq` from earlier internal testing.
+    //
+    // Defense in depth: read super-admin status with the user-scoped
+    // client (NOT admin) so it goes through the same `is_super_admin`
+    // SECURITY DEFINER function the routes themselves use.
+    const { data: isSuperAdmin } = await supabase.rpc("is_super_admin");
+    if (isSuperAdmin) {
+      const siteOrigin = (
+        process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com"
+      ).replace(/\/$/, "");
+      const host = siteOrigin.replace(/^https?:\/\//, "").split("/")[0];
+      const isLocal = /^(localhost|127\.0\.0\.1)/i.test(host);
+      const proto = siteOrigin.startsWith("http://") ? "http" : "https";
+      const hqLive = process.env.NEXT_PUBLIC_HQ_HOST_LIVE !== "false";
+      const entLive = process.env.NEXT_PUBLIC_ENTERPRISE_HOST_LIVE === "true";
+      const useSubdomain = !isLocal && (ap === "hq" ? hqLive : entLive);
+      if (useSubdomain) {
+        redirect(
+          ap === "hq"
+            ? `${proto}://hq.${host}/`
+            : `${proto}://enterprise.${host}/`,
+        );
+      }
+      // Fallback: render the admin shell on the consumer host. Same
+      // codebase, same /admin/** tree, just no cross-origin hop.
+      redirect(ap === "hq" ? "/admin" : "/admin/firms");
     }
-    // Fallback: render the admin shell on the consumer host. Same
-    // codebase, same /admin/** tree, just no cross-origin hop.
-    redirect(ap === "hq" ? "/admin" : "/admin/firms");
+    // Non-super-admin with a stale active_platform: clear it so the
+    // platform router stops trying to send them somewhere they can't
+    // go, and fall through to the normal consumer dashboard.
+    await admin
+      .from("profiles")
+      .update({ active_platform: null })
+      .eq("id", user.id);
   }
 
   // Trial-fraud guard runs lazily on the FIRST dashboard load — if
