@@ -41,6 +41,13 @@ export default function LoginPage() {
     const url = new URL(window.location.href);
     const oauthErr = url.searchParams.get("error");
     if (oauthErr) {
+      // Server-side errors that came back as ?error=... on the
+      // /login redirect from /auth/callback (or the upstream
+      // provider). The description, when present, has the actual
+      // Supabase/provider message — we surface it as a second line
+      // so users (and we, on support) can see what concretely
+      // failed without round-tripping through logs.
+      const oauthDesc = url.searchParams.get("error_description") ?? "";
       const friendly: Record<string, string> = {
         oauth_state_missing: "Sign-in expired. Please try again.",
         oauth_state_mismatch: "Sign-in session was invalid. Please try again.",
@@ -50,8 +57,29 @@ export default function LoginPage() {
         oauth_not_configured:
           "That sign-in provider isn't set up yet. Try Google, passkey, or magic link instead.",
         access_denied: "You cancelled the sign-in.",
+        no_code:
+          "Sign-in came back without an authorization code. Usually means the OAuth handshake was interrupted; try again.",
+        exchange_failed:
+          "Sign-in came back from your provider OK, but we couldn't complete the session. This is often a cookie / PKCE issue — clear cookies for taxottic.com and try again.",
+        // Legacy code path. Kept so old in-flight redirects don't
+        // surface as raw "auth" text.
+        auth: "Sign-in failed at the final step. Try again or use a different method below.",
+        // Upstream provider error codes we may see on the URL
+        // before we even reach /auth/callback.
+        invalid_request: "Provider rejected the sign-in request.",
+        unauthorized_client: "Provider rejected the app's credentials.",
+        unsupported_response_type:
+          "Provider doesn't support this OAuth flow.",
+        server_error: "The sign-in provider is having a bad moment. Try again.",
+        temporarily_unavailable:
+          "The sign-in provider is temporarily down. Try again in a minute.",
       };
-      setError(friendly[oauthErr] ?? oauthErr);
+      const friendlyMain = friendly[oauthErr] ?? oauthErr;
+      setError(
+        oauthDesc
+          ? `${friendlyMain} (provider said: ${oauthDesc})`
+          : friendlyMain,
+      );
     }
     if (url.searchParams.get("force_picker") === "1") {
       setForcePicker(true);
