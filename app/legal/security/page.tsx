@@ -192,6 +192,47 @@ export default function SecurityPage() {
             </p>
           </Section>
 
+          <Section title="Portal isolation">
+            <p>
+              Taxottic ships on three real subdomains, each with its
+              own session cookie scoped to that host:
+            </p>
+            <ul className="list-disc pl-5 grid gap-2">
+              <li>
+                <strong>taxottic.com</strong> — the consumer app.
+                Customers, freelancers, and small-business owners sign
+                in here to see their personal dashboard, forecast, and
+                companies list.
+              </li>
+              <li>
+                <strong>enterprise.taxottic.com</strong> — the
+                firm-operator console. CPAs and tax-prep firms managing
+                client rosters land here. Same auth menu, separate
+                session cookie.
+              </li>
+              <li>
+                <strong>hq.taxottic.com</strong> — super-admin
+                operations for Techno Optics. User and company
+                inventory, plan roll-ups, daily probes. Reserved to
+                the addresses on the immutable{" "}
+                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                  public.super_admins
+                </code>{" "}
+                allowlist (today: <em>contact@taxottic.com</em> and{" "}
+                <em>contact@technooptics.com</em>).
+              </li>
+            </ul>
+            <p>
+              A session on one subdomain does NOT authenticate the
+              others. Super-admins switch between portals via the{" "}
+              <em>Switch portal</em> section of the profile menu,
+              which performs an explicit cross-origin redirect — each
+              destination still requires the appropriate role check
+              when it loads. There is no shared cookie at the parent
+              domain.
+            </p>
+          </Section>
+
           <Section title="Single sign-on across Techno Optics products">
             <p>
               Techno Optics ships several products under the same roof

@@ -1,31 +1,40 @@
-# HQ portal walkthrough checklist
+# Three-portal walkthrough checklist (HQ + Enterprise)
 
 Use this when you (or an auditor) need to validate that
-`hq.taxottic.com` is in a known-good state. The May 2026 third-party
-audit flagged P1-5: the audit couldn't complete a live HQ walkthrough
-in their browser session, so the HQ findings were inferred from header
-parity rather than observed. This file is the test plan that closes
-that gap.
+`hq.taxottic.com` AND `enterprise.taxottic.com` are in a known-good
+state. The May 2026 third-party audit flagged P1-5: the audit
+couldn't complete a live HQ walkthrough in their browser session, so
+the HQ findings were inferred from header parity rather than
+observed. This file is the test plan that closes that gap, updated
+for the three-subdomain split.
 
 Run end-to-end at least once per quarter, and any time the
 `/admin/**` routes get a non-trivial change.
 
 ---
 
-## How HQ is wired
+## How the three portals are wired
 
-- HQ lives at the real subdomain `hq.taxottic.com`, with its own
-  session cookie scoped to that host.
-- The middleware (`lib/supabase/middleware.ts`) recognises that host
-  and rewrites the root path to `/admin`. So `hq.taxottic.com/firms`
-  internally renders `/admin/firms`.
-- The route's own `requireSuperAdmin` (from `lib/auth.ts`) does the
+- **Consumer app** lives at `taxottic.com`. Anyone can sign up.
+- **Enterprise** lives at the real subdomain `enterprise.taxottic.com`,
+  with its own session cookie scoped to that host. Root URL renders
+  the firms console.
+- **HQ** lives at the real subdomain `hq.taxottic.com`, with its own
+  session cookie scoped to that host. Root URL renders the
+  super-admin overview.
+- The middleware (`lib/supabase/middleware.ts`) recognises both admin
+  hosts and rewrites paths into the shared `/admin/**` route tree.
+  On `hq.taxottic.com` the root rewrites to `/admin`; on
+  `enterprise.taxottic.com` the root rewrites to `/admin/firms`.
+- Each route's own `requireSuperAdmin` (from `lib/auth.ts`) does the
   role check — middleware only confirms a session exists.
 - Anyone whose email is in `public.super_admins` (seeded with
   `contact@taxottic.com` and `contact@technooptics.com`; SQL in
   `supabase/migrations/20260428000001_tenancy_schema.sql`) passes. Any
   other signed-in user is redirected to `/dashboard` on the customer
   origin.
+- All three subdomains require their OWN sign-in. There is no shared
+  parent-domain cookie.
 
 ---
 
@@ -147,17 +156,46 @@ If HQ exposes a "sign in as <user>" feature:
 If impersonation is NOT yet wired, add it as a follow-up before HQ is
 opened to operators beyond the founding super-admins.
 
-## Cross-origin checks
+## Enterprise subdomain (`enterprise.taxottic.com`)
+
+The enterprise portal is the firms console served at a separate
+subdomain so firm operators don't see the HQ super-admin overview
+on root.
+
+- [ ] `enterprise.taxottic.com` resolves (DNS CNAME → Vercel) and
+      serves a valid TLS cert.
+- [ ] Visiting the root unauthenticated lands on `/login` with the
+      HQ-style "Sign in to the Taxottic cockpit." subtitle (the
+      login page detects either admin host).
+- [ ] Sign in as super-admin. You should be rewritten into
+      `/admin/firms` (the firms console) automatically — the middleware
+      handles this without a visible redirect.
+- [ ] Profile menu → Switch portal lists three options:
+      Consumer app · Enterprise (Current) · HQ.
+- [ ] Clicking "HQ" issues a cross-origin redirect to
+      `hq.taxottic.com/`. The destination loads cleanly with its own
+      sign-in (or a re-use of the already-active super-admin session
+      via OAuth — verify the consent step doesn't surprise you).
+- [ ] Header probe (DevTools or `curl -I`) on
+      `enterprise.taxottic.com`:
+  - [ ] Same security headers as HQ (CSP, COOP, X-Frame-Options,
+        HSTS, Permissions-Policy)
+  - [ ] `Access-Control-Allow-Origin` ABSENT
+  - [ ] `X-Powered-By` ABSENT
+
+## Cross-origin checks (all three portals)
 
 - [ ] On a fresh browser, sign in to the consumer app at
       `taxottic.com`. Verify that navigating to `hq.taxottic.com`
-      requires its OWN sign-in (no shared session). The cookie scope
-      is host-only by design; this confirms it in production.
+      AND `enterprise.taxottic.com` each require their OWN sign-in
+      (no shared session). The cookie scope is host-only by design;
+      this confirms it in production.
 - [ ] On a second browser profile that's NOT in `super_admins`, sign
-      in to `taxottic.com`, then navigate to `hq.taxottic.com`. You
-      should hit `/login`, sign in, then be redirected to
-      `/dashboard` on the consumer origin. Confirm super-admin
-      protection works.
+      in to `taxottic.com`, then navigate to `hq.taxottic.com` and
+      `enterprise.taxottic.com`. You should hit `/login` on each,
+      sign in, then be redirected to `/dashboard` on the consumer
+      origin. Confirm super-admin protection works on BOTH admin
+      subdomains.
 
 ## Tear-down
 

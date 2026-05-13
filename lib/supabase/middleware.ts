@@ -27,21 +27,22 @@ const PUBLIC_PATHS = [
 ];
 
 const HQ_HOST = "hq.taxottic.com";
+const ENTERPRISE_HOST = "enterprise.taxottic.com";
 
-// Paths that bypass the hq->admin URL rewrite. Auth flows must keep
-// their canonical /auth/* URLs because the OAuth callback URL is
-// pre-registered with Supabase + the providers; rewriting it would
-// break the redirect contract. /api/* keeps its real path so server
-// routes can be reached identically from either host. /_next is the
-// Next.js asset pipeline.
-const HQ_PASSTHROUGH_PREFIXES = [
+// Paths that bypass the admin-host -> /admin URL rewrite. Auth flows
+// must keep their canonical /auth/* URLs because the OAuth callback
+// URL is pre-registered with Supabase + the providers; rewriting it
+// would break the redirect contract. /api/* keeps its real path so
+// server routes can be reached identically from any host. /_next is
+// the Next.js asset pipeline.
+const ADMIN_PASSTHROUGH_PREFIXES = [
   "/admin",
   "/auth",
   "/api",
   "/_next",
   "/login",
 ];
-const HQ_PASSTHROUGH_EXACT = new Set([
+const ADMIN_PASSTHROUGH_EXACT = new Set([
   "/favicon.ico",
   "/icon.svg",
   "/manifest.webmanifest",
@@ -51,36 +52,60 @@ const HQ_PASSTHROUGH_EXACT = new Set([
 
 export async function updateSession(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").toLowerCase();
+  // Three portals on three real subdomains:
+  //   - taxottic.com               → consumer app (default)
+  //   - hq.taxottic.com            → super-admin overview at /admin
+  //   - enterprise.taxottic.com    → firm-operator console at /admin/firms
+  // Both admin subdomains share the same /admin/** route tree (one
+  // codebase, scoped by the route's own requireSuperAdmin guard); the
+  // middleware just picks which sub-tree the root URL of each subdomain
+  // surfaces. May 2026: split Enterprise onto its own subdomain so
+  // firm operators land in their console without seeing the HQ home.
   const isHq = host === HQ_HOST;
+  const isEnterprise = host === ENTERPRISE_HOST;
+  const isAdminHost = isHq || isEnterprise;
   const { pathname } = request.nextUrl;
 
   // Move admin off the customer domain. If a user (or stale bookmark)
-  // hits /admin/* on taxottic.com, send them to hq.taxottic.com with
-  // the /admin prefix dropped - the rewrite below puts them back on
-  // the right page once they land.
-  if (!isHq && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
-    const target = new URL(
-      pathname.replace(/^\/admin/, "") || "/",
-      `https://${HQ_HOST}`,
-    );
+  // hits /admin/* on taxottic.com, send them to the right admin
+  // subdomain with the /admin prefix dropped — the rewrite below
+  // puts them back on the right page once they land. /admin/firms
+  // and its children go to enterprise.taxottic.com (the firm-operator
+  // console); everything else goes to hq.taxottic.com (the
+  // super-admin overview).
+  if (!isAdminHost && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
+    const stripped = pathname.replace(/^\/admin/, "") || "/";
+    const goEnterprise =
+      stripped === "/firms" || stripped.startsWith("/firms/");
+    const targetHost = goEnterprise ? ENTERPRISE_HOST : HQ_HOST;
+    const target = new URL(stripped, `https://${targetHost}`);
     target.search = request.nextUrl.search;
     return NextResponse.redirect(target, 308);
   }
 
-  // On hq.taxottic.com, present the admin console at the root of the
-  // domain (so URLs read hq.taxottic.com/firms instead of
-  // hq.taxottic.com/admin/firms). Internally we still route to the
-  // /admin/* tree because that's where the pages live.
+  // On the admin subdomains, present the admin console at the root of
+  // the domain (so URLs read hq.taxottic.com/users instead of
+  // hq.taxottic.com/admin/users, and enterprise.taxottic.com/firms
+  // instead of enterprise.taxottic.com/admin/firms). Internally we
+  // still route to the /admin/* tree because that's where the pages
+  // live.
+  //
+  // Per-host root: HQ defaults to /admin (the super-admin overview);
+  // Enterprise defaults to /admin/firms (the firms console — what a
+  // firm operator wants to see first).
   let rewriteTo: URL | null = null;
-  if (isHq) {
+  if (isAdminHost) {
     const passthrough =
-      HQ_PASSTHROUGH_PREFIXES.some(
+      ADMIN_PASSTHROUGH_PREFIXES.some(
         (p) => pathname === p || pathname.startsWith(`${p}/`),
-      ) || HQ_PASSTHROUGH_EXACT.has(pathname);
+      ) || ADMIN_PASSTHROUGH_EXACT.has(pathname);
     if (!passthrough) {
       rewriteTo = request.nextUrl.clone();
-      rewriteTo.pathname =
-        pathname === "/" ? "/admin" : `/admin${pathname}`;
+      if (pathname === "/") {
+        rewriteTo.pathname = isEnterprise ? "/admin/firms" : "/admin";
+      } else {
+        rewriteTo.pathname = `/admin${pathname}`;
+      }
     }
   }
 
@@ -148,7 +173,10 @@ export async function updateSession(request: NextRequest) {
 
   if (user && internalPath === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = isHq ? "/" : "/dashboard";
+    // Land at the host's natural home: consumer → /dashboard, HQ → /,
+    // Enterprise → /. Both admin hosts use "/" because the rewrite
+    // above turns it into the right /admin/** internal target.
+    url.pathname = isAdminHost ? "/" : "/dashboard";
     return NextResponse.redirect(url);
   }
 

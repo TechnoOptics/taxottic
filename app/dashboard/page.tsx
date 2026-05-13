@@ -350,14 +350,34 @@ export default async function DashboardPage() {
   // Platform router: super-admins who have flipped active_platform
   // should land in the right shell. Done here (not at /) so a
   // hard-coded /dashboard link from email/etc still routes correctly.
+  //
+  // Each non-user platform lives on its OWN subdomain now (May 2026
+  // three-portal split), so we redirect to absolute URLs. In local
+  // dev (NEXT_PUBLIC_SITE_ORIGIN unset) we degrade to path redirects
+  // so localhost still works.
   const { data: pickedPlatform } = await admin
     .from("profiles")
     .select("active_platform")
     .eq("id", user.id)
     .maybeSingle();
   const ap = pickedPlatform?.active_platform as string | null;
-  if (ap === "hq") redirect("/admin");
-  if (ap === "enterprise") redirect("/admin/firms");
+  if (ap === "hq" || ap === "enterprise") {
+    const siteOrigin = (
+      process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com"
+    ).replace(/\/$/, "");
+    const host = siteOrigin.replace(/^https?:\/\//, "").split("/")[0];
+    const isLocal = /^(localhost|127\.0\.0\.1)/i.test(host);
+    const proto = siteOrigin.startsWith("http://") ? "http" : "https";
+    if (isLocal) {
+      redirect(ap === "hq" ? "/admin" : "/admin/firms");
+    } else {
+      redirect(
+        ap === "hq"
+          ? `${proto}://hq.${host}/`
+          : `${proto}://enterprise.${host}/`,
+      );
+    }
+  }
 
   // Trial-fraud guard runs lazily on the FIRST dashboard load — if
   // this device already used a trial under another account, the

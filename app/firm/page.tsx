@@ -326,6 +326,24 @@ export default async function FirmPage() {
           on the signed-in user, not on each company, and surface as
           the single banner up top instead of repeating per row.
         </p>
+
+        {/* Super-admin cross-link: the full firm-operator console
+            lives at enterprise.taxottic.com. We don't render this
+            link for regular users since they don't have access to
+            that subdomain. */}
+        <p className="mt-3 text-[11px] text-ink-muted max-w-2xl leading-relaxed">
+          For the full firm-operator console — multi-firm roll-ups,
+          white-label client portal config, engagement workflows,
+          and billing — visit{" "}
+          <a
+            href="https://enterprise.taxottic.com"
+            className="underline hover:text-forest-800"
+          >
+            enterprise.taxottic.com
+          </a>
+          {" "}
+          (super-admin / firm-operator access required).
+        </p>
       </section>
     </main>
   );
