@@ -1,13 +1,24 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
+import { CsvDropZone } from "@/components/CsvDropZone";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
-import { uploadCsv } from "./actions";
+import { uploadCsvBatch } from "./actions";
 
 type Params = Promise<{ publicId: string }>;
+type SearchParams = Promise<{ error?: string | string[] }>;
 
-export default async function ImportPage({ params }: { params: Params }) {
+export default async function ImportPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams?: SearchParams;
+}) {
   const { publicId } = await params;
+  const sp = (await searchParams) ?? {};
+  const errRaw = sp.error;
+  const errorMessage = Array.isArray(errRaw) ? errRaw[0] : errRaw;
   const { supabase, user, company } = await loadCompanyByPublicId(publicId);
 
   const { data: imports } = await supabase
@@ -31,67 +42,28 @@ export default async function ImportPage({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="import" />
         </div>
 
-        <div className="card mt-6 p-6">
-          <h2 className="display text-xl text-forest-900">Upload a CSV</h2>
-          <p className="mt-2 text-sm text-ink-soft">
-            Export a transaction CSV from your bank or card and drop it here.
-            We&apos;ll auto-categorize every row with Bella as soon as you
-            upload — high-confidence rows apply themselves; the rest land on
-            the review page for a one-click confirm. Costs 10 credits per
-            import (super admins free).
-          </p>
-          <form
-            action={uploadCsv}
-            encType="multipart/form-data"
-            className="mt-5 grid gap-3"
+        {errorMessage ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
           >
-            <input type="hidden" name="company_id" value={company.id} />
+            {errorMessage}
+          </div>
+        ) : null}
 
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-forest-800">
-                What kind of account is this?
-              </span>
-              <select
-                name="account_type"
-                required
-                defaultValue="business_checking"
-                className="input"
-              >
-                <option value="business_checking">
-                  Business checking
-                </option>
-                <option value="business_savings">Business savings</option>
-                <option value="checking">Personal checking</option>
-                <option value="savings">Personal savings</option>
-                <option value="credit">
-                  Credit card (every row counted as an expense)
-                </option>
-                <option value="other">Other</option>
-              </select>
-              <span className="text-[11px] text-ink-muted">
-                Picking <strong>Credit card</strong> tells us to treat every
-                imported row as a business expense — issuers don&apos;t agree
-                on charge-vs-payment signs, so we use absolute value and skip
-                obvious card payments.
-              </span>
-            </label>
-
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-forest-800">
-                CSV file
-              </span>
-              <input
-                name="file"
-                type="file"
-                accept=".csv,text/csv"
-                required
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-forest-200 file:bg-white file:px-4 file:py-2 file:text-forest-800 hover:file:bg-cream"
-              />
-            </label>
-            <button className="btn-primary w-full sm:w-auto">
-              Upload and parse
-            </button>
-          </form>
+        <div className="card mt-6 p-6">
+          <h2 className="display text-xl text-forest-900">Upload CSVs</h2>
+          <p className="mt-2 text-sm text-ink-soft">
+            Export transaction CSVs from your bank or card and drop them
+            here — you can pick multiple files at once. We&apos;ll
+            auto-categorize every row with Bella as soon as each one
+            uploads; high-confidence rows apply themselves, the rest land
+            on the review page for a one-click confirm. Costs 10 credits
+            per import (super admins free).
+          </p>
+          <div className="mt-5">
+            <CsvDropZone companyId={company.id} action={uploadCsvBatch} />
+          </div>
         </div>
 
         <div className="card mt-6 p-6">

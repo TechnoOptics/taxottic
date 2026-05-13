@@ -24,6 +24,14 @@ export async function createCompany(formData: FormData) {
     .trim()
     .toUpperCase()
     .slice(0, 2);
+  // Optional full_name comes through when the wizard collected the
+  // user's display name on its first stage (the new "your details +
+  // your company" merged flow). Treat as nullable so the action still
+  // works for users creating their second / third company who already
+  // have a name on file.
+  const ownerName = String(formData.get("owner_full_name") ?? "")
+    .trim()
+    .slice(0, 120);
 
   if (!name) throw new Error("Name required");
 
@@ -34,6 +42,24 @@ export async function createCompany(formData: FormData) {
   // validated the JWT above; created_by/user_id come from the trusted user
   // object so bypassing RLS for these inserts is safe.
   const admin = createServiceClient();
+
+  // Backfill profiles.full_name from the wizard before creating the
+  // company. Only writes when (a) the wizard supplied a value AND
+  // (b) the user doesn't already have one set, so re-runs of this
+  // flow don't clobber a name the user edited in /settings.
+  if (ownerName) {
+    const { data: existingProfile } = await admin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!existingProfile?.full_name) {
+      await admin
+        .from("profiles")
+        .update({ full_name: ownerName })
+        .eq("id", user.id);
+    }
+  }
 
   const { data: company, error } = await admin
     .from("companies")

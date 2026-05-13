@@ -84,6 +84,12 @@ const nextConfig: NextConfig = {
   // when Turbopack tries to inline it. Mark both as runtime externals so
   // they're required normally on the server.
   serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
+  // Drop the `X-Powered-By: Next.js` header on every response. Surfacing
+  // the framework name to attackers gives them a head-start on
+  // CVE-matching against the running version. The May 2026 third-party
+  // audit flagged this as a P2 fingerprint-reduction item; this knob is
+  // the one-line fix.
+  poweredByHeader: false,
   async headers() {
     return [
       {

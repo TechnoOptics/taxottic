@@ -30,6 +30,15 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
               ? "Legend status. You are using your tax code."
               : "Every captured deduction lowers what you owe."}
           </h2>
+          {/* Captured totals here are PROJECTED year-end amounts — one-offs
+              counted once + recurring rows expanded to full year — so the
+              scorecard answers "if you keep this pace, what does year-end
+              look like?" rather than "what's logged today?" Flagged
+              explicitly so the numbers don't read as a contradiction with
+              the YTD figure at the top of the forecast. */}
+          <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+            Projected year-end totals
+          </p>
         </div>
         <ScoreBadge milestone={scorecard.milestone} pct={scorecard.scorePct} />
       </div>

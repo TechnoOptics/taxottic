@@ -6,6 +6,18 @@ import { CompanyLogo } from "@/components/CompanyLogo";
 import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
 import { YearEndSuggestionsCard } from "@/components/YearEndSuggestionsCard";
+import {
+  AmtTile,
+  CapitalGainsTile,
+  EducationCreditTile,
+  EitcTile,
+  ForeignExclusionTile,
+  RetirementRecommendationTile,
+  RetirementSavingsTile,
+  SaversCreditTile,
+  StudentLoanInterestTile,
+  W4NudgeTile,
+} from "@/components/forecast/BenefitTiles";
 import { buildYearEndSuggestions } from "@/lib/tax/year-end-suggestions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import {
@@ -262,6 +274,41 @@ export default async function ForecastPage({ params }: { params: Params }) {
     spouseW2SsWagesCents: taxProfile.spouse_w2_ss_wages_cents ?? 0,
     entityType: (company.entity_type ?? "sole_prop") as EntityType,
     ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
+    // Structured benefit fields - same enrichment as /personal/forecast.
+    retirementSolo401kCents:
+      taxProfile.solo_401k_contribution_cents ?? 0,
+    retirementSepIraCents: taxProfile.sep_ira_contribution_cents ?? 0,
+    retirementTraditionalIraCents:
+      taxProfile.traditional_ira_contribution_cents ?? 0,
+    retirementRothIraCents:
+      taxProfile.roth_ira_contribution_cents ?? 0,
+    retirementHsaCents: taxProfile.hsa_contribution_cents ?? 0,
+    selfEmployedHealthInsuranceCents:
+      taxProfile.se_health_insurance_cents ?? 0,
+    longTermCapitalGainsCents:
+      taxProfile.long_term_capital_gains_cents ?? 0,
+    qualifiedDividendsCents:
+      taxProfile.qualified_dividends_cents ?? 0,
+    foreignEarnedIncomeCents:
+      taxProfile.foreign_earned_income_cents ?? 0,
+    studentLoanInterestCents:
+      taxProfile.student_loan_interest_cents ?? 0,
+    qualifiedEducationExpensesCents:
+      taxProfile.qualified_education_expenses_cents ?? 0,
+    claimAotc: taxProfile.claim_aotc ?? false,
+    itemizedSaltCents: taxProfile.itemized_salt_cents ?? undefined,
+    itemizedMortgageInterestCents:
+      taxProfile.itemized_mortgage_interest_cents ?? undefined,
+    itemizedCharityCents:
+      taxProfile.itemized_charity_cents ?? undefined,
+    itemizedMedicalCents:
+      taxProfile.itemized_medical_cents ?? undefined,
+    section179ExpenseCents: taxProfile.section_179_expense_cents ?? 0,
+    residentialEnergyCreditCents:
+      taxProfile.residential_energy_credit_cents ?? 0,
+    evCreditCents: taxProfile.ev_credit_cents ?? 0,
+    ptcAdvancePaymentsCents:
+      taxProfile.ptc_advance_payments_cents ?? 0,
   };
 
   // YTD scenario: "if you closed your books today, what's the bill?"
@@ -488,15 +535,25 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-2xl">
             Right now you have logged{" "}
             <strong className="text-forest-900">
-              {formatCents(result.ytdIncomeCents)}
+              {/* "Logged" means actual YTD, not the projected forecast.
+                 Previously we used `result.ytdIncomeCents` which is the
+                 projected forecast's view of YTD - that pulls one-offs +
+                 recurring at full-year cadence, so the inline copy
+                 disagreed with the YTD card right below by hundreds of
+                 dollars. Use the dedicated ytdResult (which is fed the
+                 truly-realised one-offs + month-by-month recurring) to
+                 keep the headline and the YTD card in lockstep. */}
+              {formatCents(ytdResult.ytdIncomeCents)}
             </strong>{" "}
             of income and{" "}
             <strong className="text-forest-900">
-              {formatCents(result.ytdDeductibleExpensesCents)}
+              {formatCents(ytdResult.ytdDeductibleExpensesCents)}
             </strong>{" "}
             of deductible expenses across {input.monthsEntered} month
             {input.monthsEntered === 1 ? "" : "s"}. We project that to year-
-            end and apply 2025 tax rules.
+            end and apply the IRS-published brackets for tax year{" "}
+            {taxYear} (Rev. Proc. 2025-32, including the One Big Beautiful
+            Bill amendments).
           </p>
 
           {/* YTD vs Projected side-by-side. The YTD column answers "if
@@ -563,22 +620,57 @@ export default async function ForecastPage({ params }: { params: Params }) {
             />
           </div>
 
-          {/* Save target */}
+          {/* Save target. Same bidirectional treatment as the personal
+              forecast: if W-2 withholding + estimates exceeded total
+              tax, surface the refund instead of "$0 still owed". A
+              business owner who's also a W-2 employee will frequently
+              land here when withholding from the day job covers the
+              SE tax for a side business. */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Stat
               label="Already paid"
               value={formatCents(result.alreadyPaidCents)}
             />
-            <Stat
-              label="Still owed"
-              value={formatCents(result.stillOwedCents)}
-              accent
-            />
+            {result.refundCents > 0 ? (
+              <Stat
+                label="Refund expected"
+                value={formatCents(result.refundCents)}
+                accent
+              />
+            ) : (
+              <Stat
+                label="Still owed"
+                value={formatCents(result.stillOwedCents)}
+                accent
+              />
+            )}
             <Stat
               label="Save per month to land at zero"
               value={formatCents(result.monthlySaveTargetCents)}
             />
           </div>
+        </div>
+
+        {/* Benefits / recommendations strip. Each tile renders nothing
+            when the relevant value is zero, so a clean-slate filer
+            sees just the W-4 nudge (if applicable); a fully-loaded
+            tax profile sees the full set. The retirement
+            recommendation is the most actionable - we put it next to
+            the savings-tracker tile so the user sees what they've
+            already saved alongside what they could still save. */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <EitcTile result={result} />
+          <EducationCreditTile result={result} />
+          <RetirementSavingsTile result={result} />
+          <RetirementRecommendationTile result={result} />
+          <W4NudgeTile result={result} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <SaversCreditTile result={result} />
+          <AmtTile result={result} />
+          <CapitalGainsTile result={result} />
+          <ForeignExclusionTile result={result} />
+          <StudentLoanInterestTile result={result} />
         </div>
 
         {/* Breakdown */}
@@ -831,9 +923,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
           Taxottic provides tax forecasting and educational guidance. Numbers
-          shown are estimates based on the 2025 federal brackets and a curated
-          state rate; they are not a tax return. Talk with a licensed CPA for
-          decisions that matter.
+          shown are estimates based on the IRS-published federal brackets for
+          tax year {taxYear} (Rev. Proc. 2025-32, reflecting the One Big
+          Beautiful Bill amendments) and a curated state rate; they are not a
+          tax return. Talk with a licensed CPA for decisions that matter.
         </p>
       </section>
     </main>

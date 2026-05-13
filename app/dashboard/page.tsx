@@ -41,26 +41,42 @@ export default async function DashboardPage() {
     );
   }
 
-  // Lazy-evaluate badges + ensure reminders exist on every dashboard hit.
-  // Both are idempotent and use admin client so the inserts work regardless
-  // of cookie auth quirks. Reads filter explicitly by user_id so they remain
-  // scoped correctly even with admin privileges.
+  // Fan out the independent top-of-dashboard queries in one round-trip.
+  // Previously each of these awaited serially: evaluateBadges →
+  // ensureQuarterlyReminders → getMyCompanies → checkCompanyLimit →
+  // profile lookup. That stacked 5 Supabase roundtrips (~50-200ms each)
+  // before the first paint, which compounded with Vercel cold starts to
+  // make dashboard clicks feel sluggish. Promise.all collapses them
+  // into one parallel batch since none of them depend on each other's
+  // result. The redirect checks happen after — once everything has
+  // landed.
   // evaluateBadges returns the codes that were JUST awarded (empty
   // on subsequent renders thanks to the unique constraint), so we
   // can pop a celebration overlay one-shot without any client
   // session-storage trickery.
-  const [newlyEarnedCodes] = await Promise.all([
+  const [
+    newlyEarnedCodes,
+    ,
+    companies,
+    companyLimit,
+    profileResult,
+  ] = await Promise.all([
     evaluateBadges(admin, user.id),
     ensureQuarterlyReminders(admin, user.id, taxYear),
+    getMyCompanies(),
+    checkCompanyLimit(supabase, user.id),
+    admin
+      .from("profiles")
+      .select("full_name, tour_completed_at, tax_filer_type")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
-
-  const companies = await getMyCompanies();
+  const profile = profileResult.data;
 
   // Plan-aware "+ New company" gating. Free is capped at 1 company;
   // when at the cap we show the link greyed out with an upgrade
   // tooltip so the user learns about Pro instead of bouncing off a
   // crash on submission.
-  const companyLimit = await checkCompanyLimit(supabase, user.id);
   const canCreateCompany = companyLimit.ok;
   const newCompanyTooltip = canCreateCompany
     ? undefined
@@ -71,11 +87,6 @@ export default async function DashboardPage() {
   // /onboarding/filer-type. W-2 users get sent to the personal-mode
   // forecast since the company-centric dashboard wouldn't show them
   // anything useful.
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("full_name, tour_completed_at, tax_filer_type")
-    .eq("id", user.id)
-    .maybeSingle();
   if (profile && !profile.tax_filer_type) {
     redirect("/onboarding/filer-type");
   }
@@ -190,19 +201,27 @@ export default async function DashboardPage() {
   ]);
 
   // Recap: figure out what most needs attention this visit.
+  //
+  // First-visit suppression: when a user has just created their account
+  // (no expenses logged ever, joined a company in the last 7 days), the
+  // auto-seeded quarterly reminders show up as "overdue" because Q1 is
+  // already in the past on a May sign-up. The May 2026 audit flagged
+  // this as P1-7: showing a red-dot "overdue" on day one reads as a
+  // failure state when really nothing is wrong yet. We soften the
+  // first-visit version: same reminder, gentler copy and `info` tone
+  // (gold, not red). Once the user has actually started using the
+  // product, we return to the original urgent treatment.
   const recap: { title: string; body: string; href: string; tone: "warn" | "info" }[] = [];
 
-  if (overdueReminders && overdueReminders.length > 0) {
-    recap.push({
-      title: `${overdueReminders.length} overdue reminder${overdueReminders.length === 1 ? "" : "s"}`,
-      body:
-        "These tax-payment dates already passed. Knock them out so they stop nagging.",
-      href: "/reminders",
-      tone: "warn",
-    });
-  }
+  const earliestJoin = companies.length
+    ? Math.min(...companies.map((m) => new Date(m.joined_at).getTime()))
+    : Date.now();
+  const accountAgeDays = (Date.now() - earliestJoin) / 86_400_000;
+  const isFresh = accountAgeDays < 7;
 
-  // Did the user log any expense this month? If not, nudge.
+  // Did the user log any expense this month? Compute up front so the
+  // "fresh account" check below can also factor in whether they've
+  // actually started using the product at all.
   const monthStart = new Date(
     Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
   ).toISOString();
@@ -211,11 +230,41 @@ export default async function DashboardPage() {
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
     .gte("created_at", monthStart);
+  const { count: allTimeExpenseCount } = await admin
+    .from("monthly_expenses")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  const hasNeverLoggedExpense = (allTimeExpenseCount ?? 0) === 0;
+  const treatAsFirstVisit = isFresh && hasNeverLoggedExpense;
+
+  if (overdueReminders && overdueReminders.length > 0) {
+    if (treatAsFirstVisit) {
+      recap.push({
+        title: `${overdueReminders.length} earlier-quarter reminder${overdueReminders.length === 1 ? "" : "s"} on your calendar`,
+        body:
+          "Welcome — these are the standard quarterly tax dates that fell before today. Open the list to mark off ones you already handled.",
+        href: "/reminders",
+        tone: "info",
+      });
+    } else {
+      recap.push({
+        title: `${overdueReminders.length} overdue reminder${overdueReminders.length === 1 ? "" : "s"}`,
+        body:
+          "These tax-payment dates already passed. Knock them out so they stop nagging.",
+        href: "/reminders",
+        tone: "warn",
+      });
+    }
+  }
+
   if ((thisMonthExpenseCount ?? 0) === 0 && companies.length > 0) {
     recap.push({
-      title: "No expenses logged this month",
-      body:
-        "Log even one and your forecast tightens. The first company can do it now.",
+      title: treatAsFirstVisit
+        ? "Log your first expense — your forecast comes alive after this"
+        : "No expenses logged this month",
+      body: treatAsFirstVisit
+        ? "Even one expense (or one bank connection) gives the tax-ready meter and forecast something to chew on. You can paste a single transaction or import a CSV."
+        : "Log even one and your forecast tightens. The first company can do it now.",
       href: `/c/${companies[0].company.public_id}/expenses`,
       tone: "info",
     });
@@ -301,14 +350,34 @@ export default async function DashboardPage() {
   // Platform router: super-admins who have flipped active_platform
   // should land in the right shell. Done here (not at /) so a
   // hard-coded /dashboard link from email/etc still routes correctly.
+  //
+  // Each non-user platform lives on its OWN subdomain now (May 2026
+  // three-portal split), so we redirect to absolute URLs. In local
+  // dev (NEXT_PUBLIC_SITE_ORIGIN unset) we degrade to path redirects
+  // so localhost still works.
   const { data: pickedPlatform } = await admin
     .from("profiles")
     .select("active_platform")
     .eq("id", user.id)
     .maybeSingle();
   const ap = pickedPlatform?.active_platform as string | null;
-  if (ap === "hq") redirect("/admin");
-  if (ap === "enterprise") redirect("/admin/firms");
+  if (ap === "hq" || ap === "enterprise") {
+    const siteOrigin = (
+      process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com"
+    ).replace(/\/$/, "");
+    const host = siteOrigin.replace(/^https?:\/\//, "").split("/")[0];
+    const isLocal = /^(localhost|127\.0\.0\.1)/i.test(host);
+    const proto = siteOrigin.startsWith("http://") ? "http" : "https";
+    if (isLocal) {
+      redirect(ap === "hq" ? "/admin" : "/admin/firms");
+    } else {
+      redirect(
+        ap === "hq"
+          ? `${proto}://hq.${host}/`
+          : `${proto}://enterprise.${host}/`,
+      );
+    }
+  }
 
   // Trial-fraud guard runs lazily on the FIRST dashboard load — if
   // this device already used a trial under another account, the
@@ -381,22 +450,31 @@ export default async function DashboardPage() {
             </div>
             <ul className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
               {upcomingReminders.map((r) => {
+                const dueDate = new Date(r.due_at);
                 const days = Math.max(
                   0,
-                  Math.ceil(
-                    (new Date(r.due_at).getTime() - Date.now()) / 86_400_000,
-                  ),
+                  Math.ceil((dueDate.getTime() - Date.now()) / 86_400_000),
                 );
+                // Absolute date underneath the relative pill. CPAs (P3 from
+                // the May 2026 audit) need the actual day-of-month, not
+                // just "in 248 days". Formatted with Intl.DateTimeFormat
+                // so it localizes if/when we ship i18n.
+                const absLabel = new Intl.DateTimeFormat("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  timeZone: "UTC",
+                }).format(dueDate);
                 return (
-                  <li
-                    key={r.id}
-                    className="card p-4"
-                  >
+                  <li key={r.id} className="card p-4">
                     <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
                       In {days} day{days === 1 ? "" : "s"}
                     </div>
                     <div className="display text-base text-forest-900 mt-1">
                       {r.title}
+                    </div>
+                    <div className="text-[11px] text-ink-muted mt-1">
+                      {absLabel}
                     </div>
                   </li>
                 );
@@ -433,16 +511,28 @@ export default async function DashboardPage() {
               const r = readinessByCompany.get(m.company_id);
               const score = r?.score ?? 0;
               // Compact breakdown shown next to the bar; the full per-metric
-              // story sits in the title attr for hover.
+              // story sits in the title attr for hover. When `categoriesUsed`
+              // exceeds the starter target, "11/8 cats" reads as a bug, so
+              // collapse to "11 cats ✓" once the user has hit or surpassed
+              // the goal. The target is a *starter* checklist, not a cap -
+              // we celebrate exceeding it, we don't make the math look
+              // broken.
+              const catsLabel = r
+                ? r.categoriesUsed >= r.targetCategories
+                  ? `${r.categoriesUsed} cats ✓`
+                  : `${r.categoriesUsed}/${r.targetCategories} cats`
+                : "";
               const breakdown = r?.hasBankFeed
-                ? `${r.triagedTx}/${r.totalTx} tx · ${r.categoriesUsed}/${r.targetCategories} cats`
+                ? `${r.triagedTx}/${r.totalTx} tx · ${catsLabel}`
                 : r
-                  ? `${r.categoriesUsed}/${r.targetCategories} categories`
+                  ? r.categoriesUsed >= r.targetCategories
+                    ? `${r.categoriesUsed} categories ✓`
+                    : `${r.categoriesUsed}/${r.targetCategories} categories`
                   : "-";
               const tooltip = r?.hasBankFeed
-                ? `${r.triagedTx} of ${r.totalTx} bank transactions triaged in the last 90 days, and ${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year.`
+                ? `${r.triagedTx} of ${r.totalTx} bank transactions triaged in the last 90 days, and ${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year${r.categoriesUsed > r.targetCategories ? " (target met)" : ""}.`
                 : r
-                  ? `${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year. Connect a bank to add expensing-engagement to this score.`
+                  ? `${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year${r.categoriesUsed > r.targetCategories ? " (target met)" : ""}. Connect a bank to add expensing-engagement to this score.`
                   : "Tax readiness - start logging expenses to see this fill in.";
               return (
                 <li
@@ -459,10 +549,23 @@ export default async function DashboardPage() {
                       <div className="display text-xl text-forest-900 truncate">
                         {m.company.name}
                       </div>
-                      <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
-                        {m.company.public_id}
-                        <span className="text-gold-500"> · </span>
+                      {/* "Manager · added May 12, 2026" instead of the raw
+                          co_q5tejq7b7x slug. Raw public_id stays available
+                          on hover so support can still copy it in one
+                          step. May 2026 audit, P2 cluster. */}
+                      <div
+                        className="text-xs text-ink-muted mt-0.5 tracking-wide"
+                        title={m.company.public_id}
+                      >
                         {isManager ? "Manager" : "Member"}
+                        <span className="text-gold-500"> · </span>
+                        added{" "}
+                        {new Intl.DateTimeFormat("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          timeZone: "UTC",
+                        }).format(new Date(m.joined_at))}
                       </div>
                       <div className="mt-3 max-w-sm" title={tooltip}>
                         <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
@@ -490,6 +593,20 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* One-click bank connection on companies that don't
+                        have a Plaid item yet. The May 2026 audit's P2
+                        cluster called out that bank-connect was buried
+                        behind /forecast → /banks. This surface puts it
+                        right next to "Open" so a brand-new company can
+                        wire up its feed in a single hop. */}
+                    {r && !r.hasBankFeed ? (
+                      <Link
+                        href={`/c/${m.company.public_id}/banks`}
+                        className="btn-ghost text-sm"
+                      >
+                        Connect bank
+                      </Link>
+                    ) : null}
                     <Link
                       href={`/c/${m.company.public_id}/forecast`}
                       className="btn-primary text-sm"

@@ -2,11 +2,11 @@ import { Wordmark } from "./Wordmark";
 import { BellaFAB } from "./BellaFAB";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
-import { FeedbackButton } from "./FeedbackButton";
 import { HeaderScrollHider } from "./HeaderScrollHider";
 import { createClient } from "@/lib/supabase/server";
 import { recordGdprConsent } from "@/app/actions/consent";
 import { submitFeedback } from "@/app/actions/feedback";
+import { setActivePlatform } from "@/app/settings/actions";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 
 type AppHeaderProps = {
@@ -30,7 +30,10 @@ export async function AppHeader({
   homeHref = "/dashboard",
   allowPrint: _allowPrint = false,
 }: AppHeaderProps) {
-  // Pull profile for avatar + display name + GDPR state.
+  // Pull profile + super-admin state + active platform. Used to wire
+  // the user-menu dropdown's portal switcher (super-admins can jump
+  // between Consumer / Enterprise / HQ from the dropdown) and to mark
+  // the current platform with a "Current" pill.
   const supabase = await createClient();
   const {
     data: { user },
@@ -39,17 +42,33 @@ export async function AppHeader({
   let avatarUrl: string | null = null;
   let needsConsent = false;
   let bellaEnabled = false;
+  let isSuperAdmin = false;
+  let currentPlatform: "user" | "enterprise" | "hq" = "user";
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, avatar_url, gdpr_consented_at")
+      .select("full_name, avatar_url, gdpr_consented_at, active_platform")
       .eq("id", user.id)
       .maybeSingle();
     fullName = profile?.full_name ?? null;
     avatarUrl = profile?.avatar_url ?? null;
     needsConsent = !profile?.gdpr_consented_at;
+    const rawPlatform = (profile?.active_platform as string | null) ?? "user";
+    if (
+      rawPlatform === "user" ||
+      rawPlatform === "enterprise" ||
+      rawPlatform === "hq"
+    ) {
+      currentPlatform = rawPlatform;
+    }
     const { gates } = await getActiveFeatureGates(supabase, user.id);
     bellaEnabled = gates.bella;
+    // Resolve super-admin via the seeded helper so the menu only
+    // shows the portal switcher to users who can actually use it.
+    // Non-super-admins won't see the section at all - it's not
+    // disabled-and-hidden, it's structurally absent.
+    const { data: sa } = await supabase.rpc("is_super_admin");
+    isSuperAdmin = Boolean(sa);
   }
 
   return (
@@ -74,6 +93,10 @@ export async function AppHeader({
             fullName={fullName}
             avatarUrl={avatarUrl}
             adminMode={homeHref === "/"}
+            isSuperAdmin={isSuperAdmin}
+            currentPlatform={currentPlatform}
+            setPlatformAction={setActivePlatform}
+            submitFeedbackAction={submitFeedback}
           />
         </div>
       </header>
@@ -90,14 +113,15 @@ export async function AppHeader({
       {/* Auto-shrinks the header on scroll on mobile (CSS-only, no
           JS animation - we just toggle a body class). */}
       <HeaderScrollHider />
-      {/* Bella + feedback are customer-app surfaces. Hide them on admin
-          pages (hq.taxottic.com) so the super-admin view stays focused
-          and we don't spend Anthropic tokens from the ops console. */}
+      {/* Bella stays as a customer-app FAB. The "Send feedback" FAB
+          used to live above it; that stacked-bubbles look read as
+          cluttered, so the feedback entry point moved into the
+          UserMenu dropdown ("Send feedback" near "Sign out"). Bella
+          is hidden on admin pages (hq.taxottic.com) so the super-
+          admin view stays focused and we don't spend Anthropic
+          tokens from the ops console. */}
       {user && homeHref !== "/" ? (
         <BellaFAB companyId={bellaCompanyId} enabled={bellaEnabled} />
-      ) : null}
-      {homeHref !== "/" ? (
-        <FeedbackButton submitAction={submitFeedback} />
       ) : null}
       {needsConsent ? <GdprBanner acceptAction={recordGdprConsent} /> : null}
     </>

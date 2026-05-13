@@ -1,0 +1,88 @@
+name: CI — tests + typecheck + lint
+
+# Layer 7 of the tax-math verification stack (see docs/forecast-accuracy.md).
+#
+# Runs on every PR targeting main AND on every push to main. The goal is
+# simple: a change that breaks the tax math, breaks TypeScript, or breaks
+# lint can never reach production silently. Before this workflow existed
+# the 125 vitest tests were local-only — someone had to remember to run
+# `npm test` before pushing, and we caught one near-miss where a PR
+# wouldn't have passed the suite if we had run it.
+#
+# What's gated (job fails) and what's reported (job continues):
+# - vitest: HARD GATE. Catches regressions in `lib/tax/**` (IRS-published
+#   examples, integration fixtures, property invariants). The whole
+#   point of this workflow.
+# - tsc --noEmit: HARD GATE. Catches type errors the IDE missed (we hit
+#   one in the retirement-candidates literal-union widening this week).
+# - eslint: NON-BLOCKING for now. The codebase has ~55 pre-existing lint
+#   errors (mostly unescaped JSX apostrophes + a few prefer-const) that
+#   long predate this workflow. Gating on lint immediately would block
+#   every merge until that backlog is cleaned. Plan: clean up the lint
+#   errors in a focused PR, then flip `continue-on-error` off here so
+#   lint becomes a hard gate too. The non-blocking run still surfaces
+#   the report on every PR so we don't accumulate MORE errors.
+# - `next build`: not run here. Pulls Supabase env vars + secrets we
+#   don't want to seed into CI. Vercel's preview deploy already runs
+#   the build on every PR, so this CI doesn't need to duplicate it.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Cancel an in-flight run if the same PR is updated. Prevents queue
+# build-up when someone force-pushes corrections in quick succession.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: tests + typecheck + lint
+    runs-on: ubuntu-latest
+    # Local runs are ~600ms for tests + ~30s for tsc. Cold install on a
+    # GH runner is the long pole; 10 min is a safe ceiling.
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Matches package.json engines.node ">=20.10.0". 20.x gets the
+          # built-in fetch polyfill behavior we rely on in tests.
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        # `npm ci` is exact-version, faster than `npm install`, and fails
+        # if package.json and package-lock.json drift — exactly what we
+        # want on CI.
+        run: npm ci
+
+      - name: Run tax-math tests (vitest)
+        # All 125 tests live next to the code they verify (lib/tax/**).
+        # Layers 1-3 of the verification stack: IRS-published worked
+        # examples, integration fixtures, property-based invariants.
+        run: npm test
+
+      - name: TypeScript check
+        # `tsc --noEmit` runs the full project type-check without writing
+        # output. Catches the things the IDE missed — last week a literal
+        # union got widened by .filter() and tsc was the only signal.
+        run: npm run typecheck
+
+      - name: ESLint (report-only)
+        # Non-blocking until the existing ~55-error backlog is cleaned.
+        # `continue-on-error: true` lets the job pass with a yellow
+        # warning indicator if lint fails, so the report is still
+        # visible on every PR — we just don't block merges on it yet.
+        # Flip this to false once the backlog is cleared.
+        continue-on-error: true
+        run: npm run lint

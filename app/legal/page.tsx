@@ -10,6 +10,8 @@ const PAGES = [
   { href: "/legal/cookies", title: "Cookie Policy", body: "Just the cookies we need for sign-in, passkeys, and consent." },
   { href: "/legal/acceptable-use", title: "Acceptable Use Policy", body: "What we ask of you when you use the service." },
   { href: "/legal/dpa", title: "Data Processing Agreement", body: "Standard DPA for firm and business customers." },
+  { href: "/legal/dmca", title: "DMCA Policy", body: "How to send a copyright notice or counter-notice for content on Taxottic." },
+  { href: "/legal/accessibility", title: "Accessibility", body: "Our WCAG 2.2 AA commitment, what's in place today, and how to report a barrier." },
 ];
 
 export default function LegalIndex() {

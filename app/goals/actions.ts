@@ -20,6 +20,22 @@ export async function addGoal(formData: FormData) {
     throw new Error("Invalid goal");
   }
 
+  // If the goal is being attached to a company, the user must actually
+  // be a member of that company. Without this check a user could pollute
+  // another tenant's goal listing by passing an arbitrary company_id in
+  // the form payload — write-only mis-attribution, not a read leak, but
+  // it lets one user's goal show up under another company's UI.
+  // Mirrors the membership gate in app/c/[publicId]/savings-goals/actions.ts.
+  if (companyId) {
+    const { data: m } = await admin
+      .from("company_members")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    if (!m) throw new Error("Not a member of this company");
+  }
+
   const { error } = await admin.from("goals").insert({
     user_id: user.id,
     company_id: companyId,

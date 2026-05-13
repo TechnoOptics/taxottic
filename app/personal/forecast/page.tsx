@@ -12,6 +12,18 @@ import {
   type ForecastResult,
 } from "@/lib/tax/forecast";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
+import {
+  AmtTile,
+  CapitalGainsTile,
+  EducationCreditTile,
+  EitcTile,
+  ForeignExclusionTile,
+  RetirementRecommendationTile,
+  RetirementSavingsTile,
+  SaversCreditTile,
+  StudentLoanInterestTile,
+  W4NudgeTile,
+} from "@/components/forecast/BenefitTiles";
 
 /**
  * Personal-mode forecast for W-2 / wage-earner users.
@@ -67,6 +79,43 @@ export default async function PersonalForecastPage() {
     autoHomeOfficeCents: 0,
     monthsEntered: 12,
     ytdInvestmentIncomeCents: 0,
+    // Structured benefit fields (items #1-#15 in the audit). Pulled
+    // straight from tax_profiles; pass undefined / 0 when the column
+    // is null so the engine treats them as "not applicable."
+    retirementSolo401kCents:
+      taxProfile.solo_401k_contribution_cents ?? 0,
+    retirementSepIraCents: taxProfile.sep_ira_contribution_cents ?? 0,
+    retirementTraditionalIraCents:
+      taxProfile.traditional_ira_contribution_cents ?? 0,
+    retirementRothIraCents:
+      taxProfile.roth_ira_contribution_cents ?? 0,
+    retirementHsaCents: taxProfile.hsa_contribution_cents ?? 0,
+    selfEmployedHealthInsuranceCents:
+      taxProfile.se_health_insurance_cents ?? 0,
+    longTermCapitalGainsCents:
+      taxProfile.long_term_capital_gains_cents ?? 0,
+    qualifiedDividendsCents:
+      taxProfile.qualified_dividends_cents ?? 0,
+    foreignEarnedIncomeCents:
+      taxProfile.foreign_earned_income_cents ?? 0,
+    studentLoanInterestCents:
+      taxProfile.student_loan_interest_cents ?? 0,
+    qualifiedEducationExpensesCents:
+      taxProfile.qualified_education_expenses_cents ?? 0,
+    claimAotc: taxProfile.claim_aotc ?? false,
+    itemizedSaltCents: taxProfile.itemized_salt_cents ?? undefined,
+    itemizedMortgageInterestCents:
+      taxProfile.itemized_mortgage_interest_cents ?? undefined,
+    itemizedCharityCents:
+      taxProfile.itemized_charity_cents ?? undefined,
+    itemizedMedicalCents:
+      taxProfile.itemized_medical_cents ?? undefined,
+    section179ExpenseCents: taxProfile.section_179_expense_cents ?? 0,
+    residentialEnergyCreditCents:
+      taxProfile.residential_energy_credit_cents ?? 0,
+    evCreditCents: taxProfile.ev_credit_cents ?? 0,
+    ptcAdvancePaymentsCents:
+      taxProfile.ptc_advance_payments_cents ?? 0,
   };
 
   const result: ForecastResult = forecast(input);
@@ -104,16 +153,53 @@ export default async function PersonalForecastPage() {
               label="Already paid (withholding + estimates)"
               value={formatCents(result.alreadyPaidCents)}
             />
-            <Stat
-              label={result.stillOwedCents > 0 ? "Still owed" : "Refund expected"}
-              value={formatCents(Math.max(result.stillOwedCents, 0))}
-              accent
-            />
+            {/* Bidirectional balance: show the side that's actually
+                non-zero. refundCents > 0 means the user has overpaid
+                (withholding + estimates exceed total tax) and gets
+                money back; stillOwedCents > 0 means they owe a
+                top-up. Previously the page hard-coded
+                `Math.max(stillOwedCents, 0)` which always rendered $0
+                next to a "Refund expected" label — the actual refund
+                amount was never computed. */}
+            {result.refundCents > 0 ? (
+              <Stat
+                label="Refund expected"
+                value={formatCents(result.refundCents)}
+                accent
+              />
+            ) : (
+              <Stat
+                label="Still owed"
+                value={formatCents(result.stillOwedCents)}
+                accent
+              />
+            )}
             <Stat
               label="Marginal rate"
               value={(result.marginalRate * 100).toFixed(1) + "%"}
             />
           </div>
+        </div>
+
+        {/* Benefits / recommendations strip. Each tile renders nothing
+            when the relevant value is zero, so the strip naturally
+            adapts to what the user has reported - someone with no
+            retirement contributions and no LTCG sees just the W-4
+            nudge (if applicable); someone with the full suite sees
+            five tiles. */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <EitcTile result={result} />
+          <EducationCreditTile result={result} />
+          <RetirementSavingsTile result={result} />
+          <RetirementRecommendationTile result={result} />
+          <W4NudgeTile result={result} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <SaversCreditTile result={result} />
+          <AmtTile result={result} />
+          <CapitalGainsTile result={result} />
+          <ForeignExclusionTile result={result} />
+          <StudentLoanInterestTile result={result} />
         </div>
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -192,10 +278,11 @@ export default async function PersonalForecastPage() {
         </div>
 
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
-          Personal forecast uses 2025 federal brackets, household-level
-          Additional Medicare (Form 8959), Net Investment Income Tax (Form
-          8960), and a curated state rate. Educational guidance only — talk
-          with a CPA for binding decisions.
+          Personal forecast uses IRS-published federal brackets for tax year{" "}
+          {taxYear} (Rev. Proc. 2025-32, reflecting the One Big Beautiful Bill
+          amendments), household-level Additional Medicare (Form 8959), Net
+          Investment Income Tax (Form 8960), and a curated state rate.
+          Educational guidance only — talk with a CPA for binding decisions.
         </p>
       </section>
     </main>

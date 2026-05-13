@@ -9,6 +9,17 @@ type Props = {
   entityTypes: EntityType[];
   states: ReadonlyArray<State>;
   action: (formData: FormData) => Promise<void>;
+  /**
+   * Whether to ask for the user's full name on the hello stage. The
+   * parent server component sets this to true when (a) the profile
+   * has no full_name yet AND (b) this is the user's first company
+   * — i.e. the merged "your details + your company" first-time flow.
+   * For subsequent companies (or users who already filled out their
+   * name elsewhere) the stage shows the original hello copy unchanged.
+   */
+  askForName?: boolean;
+  /** Used as a fallback display when we don't yet have a name. */
+  ownerEmail?: string;
 };
 
 type Stage = 0 | 1 | 2 | 3 | 4;
@@ -19,7 +30,10 @@ type Stage = 0 | 1 | 2 | 3 | 4;
  * mobile and feels less like data entry.
  *
  * Stages:
- *   0. Hello / context
+ *   0. Hello + (optional) your name — merged "profile + first company"
+ *      affordance per the demo feedback. Asking the name here means
+ *      brand-new users don't have to discover a separate
+ *      profile-settings page just to set a display name.
  *   1. Company name (text)
  *   2. Entity type (radio cards)
  *   3. State (searchable list)
@@ -28,8 +42,15 @@ type Stage = 0 | 1 | 2 | 3 | 4;
  * State lives in this component; we only POST when the user confirms
  * on stage 4. No partial submissions, no orphan rows.
  */
-export function NewCompanyWizard({ entityTypes, states, action }: Props) {
+export function NewCompanyWizard({
+  entityTypes,
+  states,
+  action,
+  askForName = false,
+  ownerEmail = "",
+}: Props) {
   const [stage, setStage] = useState<Stage>(0);
+  const [fullName, setFullName] = useState("");
   const [name, setName] = useState("");
   const [entityType, setEntityType] = useState("");
   const [stateCode, setStateCode] = useState("");
@@ -47,6 +68,10 @@ export function NewCompanyWizard({ entityTypes, states, action }: Props) {
 
   function next() {
     setError(null);
+    if (stage === 0 && askForName && !fullName.trim()) {
+      setError("What should we call you?");
+      return;
+    }
     if (stage === 1 && !name.trim()) {
       setError("Pick a name for your company.");
       return;
@@ -75,6 +100,13 @@ export function NewCompanyWizard({ entityTypes, states, action }: Props) {
       fd.set("name", name.trim());
       fd.set("entity_type", entityType);
       fd.set("state_code", stateCode);
+      // Only post the owner name when the wizard actually asked for
+      // it on this run. The action no-ops the profiles update if the
+      // user already has a name on file, but skipping the field
+      // entirely is cleaner.
+      if (askForName && fullName.trim()) {
+        fd.set("owner_full_name", fullName.trim());
+      }
       await action(fd);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -125,16 +157,43 @@ export function NewCompanyWizard({ entityTypes, states, action }: Props) {
         {stage === 0 ? (
           <>
             <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-              New company
+              {askForName ? "Welcome" : "New company"}
             </div>
             <h1 className="display mt-2 text-3xl text-forest-900">
-              Let's set up your business.
+              {askForName
+                ? "Hi! Let's get you set up."
+                : "Let's set up your business."}
             </h1>
             <p className="mt-3 text-sm text-ink-soft leading-relaxed">
-              Three quick questions. You can edit any of these later
-              under the company's profile. You'll be the manager and
-              can invite teammates afterward.
+              {askForName
+                ? "We'll get you and your business onboarded together in under a minute. First, what should we call you?"
+                : "Three quick questions. You can edit any of these later under the company's profile. You'll be the manager and can invite teammates afterward."}
             </p>
+            {askForName ? (
+              <div className="mt-5 grid gap-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-gold-700">
+                  Your name
+                </label>
+                <input
+                  autoFocus
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && next()}
+                  placeholder={
+                    ownerEmail
+                      ? `e.g. ${initialFromEmail(ownerEmail)}`
+                      : "e.g. Alex Rivera"
+                  }
+                  className="input text-base py-2.5"
+                  maxLength={120}
+                />
+                <p className="text-[11px] text-ink-muted">
+                  Goes on your profile. You can change it later in
+                  /settings. We use it for greetings and on documents
+                  shared with your team.
+                </p>
+              </div>
+            ) : null}
           </>
         ) : null}
 
@@ -353,6 +412,19 @@ export function NewCompanyWizard({ entityTypes, states, action }: Props) {
       `}</style>
     </section>
   );
+}
+
+/** Pull a plausible name guess from the user's email local-part:
+ * "alex.rivera@example.com" -> "Alex Rivera". Only used as a
+ * placeholder hint on the name field; the user types their real name. */
+function initialFromEmail(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ")
+    .slice(0, 60);
 }
 
 function ReviewRow({ label, value }: { label: string; value: string }) {

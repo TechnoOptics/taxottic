@@ -29,11 +29,18 @@ export default async function TaxProfilePage({
 
   // supabase-js parses the select string at the type level via template
   // literals - it must be a literal, not a runtime-built one.
+  // Pulling `*` rather than enumerating every column. The form needs
+  // ~30 fields now between the original W-2 / itemized / dependents
+  // set and the 17 new structured benefit inputs (retirement, SE
+  // health, capital gains, foreign earned income, student loan /
+  // education, itemized sub-types, § 179, energy + EV credits, PTC
+  // advance, AOTC claim flag). Enumerating each here made the select
+  // string an untyped 600-character literal that broke supabase-js's
+  // type narrowing; `*` works correctly and is no slower because the
+  // table is narrow.
   const { data: existing } = await supabase
     .from("tax_profiles")
-    .select(
-      "filing_status, state_code, spouse_income_cents, dependents, dependents_under_17, age, is_blind, itemize, itemized_total_cents, estimated_payments_cents, owner_w2_wages_cents, owner_w2_withheld_cents, owner_w2_ss_wages_cents, spouse_w2_wages_cents, spouse_w2_withheld_cents, spouse_w2_ss_wages_cents",
-    )
+    .select("*")
     .eq("user_id", user.id)
     .eq("tax_year", taxYear)
     .maybeSingle();
@@ -222,64 +229,50 @@ export default async function TaxProfilePage({
             />
           </Section>
 
-          {/* Owner W-2 wages: many self-employed people moonlight a day job. */}
-          <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-forest-100 pt-5">
-            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
-              Your W-2 (if you also work a day job)
-            </legend>
-            <p className="sm:col-span-3 text-xs text-ink-muted -mt-1 leading-relaxed">
-              Many side-business owners also have a W-2. We need this so the
-              forecast doesn't double-count income or miss withholding you've
-              already paid. Leave at $0 if you don't have one.
-            </p>
-            <DollarField
-              name="owner_w2_wages"
-              label="Annual W-2 wages"
-              defaultCents={existing?.owner_w2_wages_cents ?? 0}
-            />
-            <DollarField
-              name="owner_w2_withheld"
-              label="Federal tax withheld"
-              defaultCents={existing?.owner_w2_withheld_cents ?? 0}
-            />
-            <DollarField
-              name="owner_w2_ss_wages"
-              label="Social Security wages"
-              defaultCents={existing?.owner_w2_ss_wages_cents ?? 0}
-              hint="Box 3 of your W-2"
-            />
-          </fieldset>
+          {/* Owner W-2 wages: many self-employed people moonlight a day job.
+              W2Fieldset wraps the W-2 OCR uploader, so dropping a PDF / photo
+              auto-fills the three boxes below it. The previous version of
+              this page rendered raw DollarFields and silently dropped the
+              uploader, forcing users to retype data the OCR had already
+              extracted. */}
+          <W2Fieldset
+            who="owner"
+            legend="Your W-2 (if you also work a day job)"
+            description="Many side-business owners also have a W-2. We need this so the forecast doesn't double-count income or miss withholding you've already paid. Drop in your W-2 PDF or photo and we'll fill the boxes; leave at $0 if you don't have one."
+            fieldNames={{
+              wages: "owner_w2_wages",
+              withheld: "owner_w2_withheld",
+              ssWages: "owner_w2_ss_wages",
+            }}
+            initial={{
+              wagesCents: existing?.owner_w2_wages_cents ?? 0,
+              withheldCents: existing?.owner_w2_withheld_cents ?? 0,
+              ssWagesCents: existing?.owner_w2_ss_wages_cents ?? 0,
+            }}
+            ssHint="Box 3 of your W-2"
+          />
 
           {/* Spouse: only meaningful if MFJ; we still capture it because some
               people file MFS and want to model the joint household. */}
-          <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-forest-100 pt-5">
-            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
-              Spouse W-2 (if applicable)
-            </legend>
-            <p className="sm:col-span-3 text-xs text-ink-muted -mt-1 leading-relaxed">
-              Only meaningful when you file jointly. Leave at $0 otherwise.
-            </p>
-            <DollarField
-              name="spouse_w2_wages"
-              label="Annual W-2 wages"
-              defaultCents={
+          <W2Fieldset
+            who="spouse"
+            legend="Spouse W-2 (if applicable)"
+            description="Only meaningful when you file jointly. Drop in their W-2 to auto-fill, or leave at $0 if it doesn't apply."
+            fieldNames={{
+              wages: "spouse_w2_wages",
+              withheld: "spouse_w2_withheld",
+              ssWages: "spouse_w2_ss_wages",
+            }}
+            initial={{
+              wagesCents:
                 existing?.spouse_w2_wages_cents ??
                 existing?.spouse_income_cents ??
-                0
-              }
-            />
-            <DollarField
-              name="spouse_w2_withheld"
-              label="Federal tax withheld"
-              defaultCents={existing?.spouse_w2_withheld_cents ?? 0}
-            />
-            <DollarField
-              name="spouse_w2_ss_wages"
-              label="Social Security wages"
-              defaultCents={existing?.spouse_w2_ss_wages_cents ?? 0}
-              hint="Box 3 of their W-2"
-            />
-          </fieldset>
+                0,
+              withheldCents: existing?.spouse_w2_withheld_cents ?? 0,
+              ssWagesCents: existing?.spouse_w2_ss_wages_cents ?? 0,
+            }}
+            ssHint="Box 3 of their W-2"
+          />
 
           <Section
             title="Estimated payments already made"
@@ -332,6 +325,40 @@ export default async function TaxProfilePage({
               defaultCents={existing?.itemized_total_cents ?? 0}
               hint="SALT + mortgage interest + charitable + qualifying medical"
             />
+            {/* Optional sub-type breakdown. The engine warns about the
+                SALT cap separately when the user fills in itemized_salt,
+                so collecting it is high-ROI even if they leave the others
+                blank. All four are optional - leaving them empty stores
+                NULL (meaning "not broken out") rather than $0. */}
+            <details className="rounded-lg border border-forest-100 bg-cream/40 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-forest-800">
+                Break it out (optional, helps us warn about SALT-cap waste)
+              </summary>
+              <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                <DollarField
+                  name="itemized_salt"
+                  label="State + local taxes (SALT)"
+                  defaultCents={existing?.itemized_salt_cents ?? 0}
+                  hint="Capped at $10,000 ($5,000 MFS) - we'll flag if you exceed it"
+                />
+                <DollarField
+                  name="itemized_mortgage_interest"
+                  label="Home mortgage interest"
+                  defaultCents={existing?.itemized_mortgage_interest_cents ?? 0}
+                />
+                <DollarField
+                  name="itemized_charity"
+                  label="Charitable contributions"
+                  defaultCents={existing?.itemized_charity_cents ?? 0}
+                />
+                <DollarField
+                  name="itemized_medical"
+                  label="Qualifying medical expenses"
+                  defaultCents={existing?.itemized_medical_cents ?? 0}
+                  hint="Only the portion that exceeds 7.5% of AGI is deductible"
+                />
+              </div>
+            </details>
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -343,6 +370,245 @@ export default async function TaxProfilePage({
                 I qualify as legally blind (additional standard deduction).
               </span>
             </label>
+          </fieldset>
+
+          {/* ============ Retirement contributions (item #1) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Retirement
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              The single biggest tax-saving lever. Every dollar you
+              contribute to a Solo 401(k) / SEP / Traditional IRA / HSA
+              comes off your taxable income up to the per-account
+              limit. Roth IRA contributions don&apos;t deduct but
+              count toward the Saver&apos;s Credit. Use what you have
+              actually contributed (or plan to contribute) for the
+              year - the forecast will refresh as you update.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <DollarField
+                name="solo_401k_contribution"
+                label="Solo 401(k) — total (employee + employer)"
+                defaultCents={
+                  existing?.solo_401k_contribution_cents ?? 0
+                }
+                hint="2026 combined limit: $70,000 ($77,500 if you're 50+)"
+              />
+              <DollarField
+                name="sep_ira_contribution"
+                label="SEP-IRA"
+                defaultCents={existing?.sep_ira_contribution_cents ?? 0}
+                hint="Up to 25% of net SE earnings, $70,000 max for 2026"
+              />
+              <DollarField
+                name="traditional_ira_contribution"
+                label="Traditional IRA"
+                defaultCents={
+                  existing?.traditional_ira_contribution_cents ?? 0
+                }
+                hint="2026 limit: $7,500 ($8,500 if 50+). Deductibility may phase out at higher AGI"
+              />
+              <DollarField
+                name="roth_ira_contribution"
+                label="Roth IRA"
+                defaultCents={
+                  existing?.roth_ira_contribution_cents ?? 0
+                }
+                hint="Same $7,500 limit; not deductible but counts toward the Saver's Credit"
+              />
+              <DollarField
+                name="hsa_contribution"
+                label="HSA"
+                defaultCents={existing?.hsa_contribution_cents ?? 0}
+                hint="2026: $4,400 self-only / $8,750 family. Requires HDHP coverage"
+              />
+            </div>
+          </fieldset>
+
+          {/* ============ Health insurance (item #2) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Health insurance
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Self-employed filers who buy their own health insurance
+              get an above-the-line deduction for the full premium
+              (limited to SE earnings). If you&apos;re W-2 only with an
+              employer plan, leave this at $0.
+            </p>
+            <DollarField
+              name="se_health_insurance"
+              label="Self-employed health insurance premiums (annual)"
+              defaultCents={existing?.se_health_insurance_cents ?? 0}
+            />
+          </fieldset>
+
+          {/* ============ Investments (item #4) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Investment income
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Long-term capital gains (assets held more than a year)
+              and qualified dividends are taxed at the preferential
+              0% / 15% / 20% rates rather than ordinary income rates.
+              We&apos;ll stack them correctly so you&apos;re not
+              taxed twice or at the wrong rate.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <DollarField
+                name="long_term_capital_gains"
+                label="Long-term capital gains (annual)"
+                defaultCents={
+                  existing?.long_term_capital_gains_cents ?? 0
+                }
+                hint="Net realized gains on assets held > 1 year"
+              />
+              <DollarField
+                name="qualified_dividends"
+                label="Qualified dividends (annual)"
+                defaultCents={existing?.qualified_dividends_cents ?? 0}
+              />
+            </div>
+          </fieldset>
+
+          {/* ============ Foreign earned income (item #11) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Foreign earned income
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              U.S. citizens working abroad can exclude up to $132,900
+              (2026) of foreign earned income from gross income via
+              § 911. Eligibility requires either the bona-fide
+              residence test or the physical-presence test (330 days
+              in a 12-month period). Leave at $0 if it doesn&apos;t
+              apply.
+            </p>
+            <DollarField
+              name="foreign_earned_income"
+              label="Foreign earned income (annual)"
+              defaultCents={existing?.foreign_earned_income_cents ?? 0}
+              hint="2026 exclusion cap: $132,900"
+            />
+          </fieldset>
+
+          {/* ============ Education (item #6) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Education
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Student loan interest is deductible above-the-line up to
+              $2,500/year (with an AGI phase-out). Tuition + qualified
+              fees can claim either the American Opportunity Credit
+              (first 4 years undergrad, $2,500 max, 40% refundable) or
+              the Lifetime Learning Credit (any education, $2,000 max,
+              non-refundable).
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <DollarField
+                name="student_loan_interest"
+                label="Student loan interest paid"
+                defaultCents={
+                  existing?.student_loan_interest_cents ?? 0
+                }
+                hint="Up to $2,500; phases out above $85k single / $175k MFJ"
+              />
+              <DollarField
+                name="qualified_education_expenses"
+                label="Qualified tuition + fees"
+                defaultCents={
+                  existing?.qualified_education_expenses_cents ?? 0
+                }
+                hint="Counts toward AOTC or Lifetime Learning Credit"
+              />
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer mt-1">
+              <input
+                type="checkbox"
+                name="claim_aotc"
+                defaultChecked={existing?.claim_aotc ?? false}
+                className="mt-1 size-4 accent-forest-800"
+              />
+              <span className="text-sm text-ink-soft">
+                Claim the American Opportunity Credit (the student is
+                in their first 4 years of undergrad, enrolled at least
+                half-time, has no felony drug conviction, and hasn&apos;t
+                claimed AOTC for 4 prior years). If unchecked,
+                we&apos;ll apply the Lifetime Learning Credit instead.
+              </span>
+            </label>
+          </fieldset>
+
+          {/* ============ Business credits (item #7) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Business equipment (§ 179)
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              If you bought equipment, vehicles, software, or other
+              qualifying business property and want to expense it all
+              in the year of purchase (rather than depreciating over
+              several years), enter the total cost here. OBBBA raised
+              the 2026 cap to $2,560,000.
+            </p>
+            <DollarField
+              name="section_179_expense"
+              label="§ 179 expensing election (annual)"
+              defaultCents={existing?.section_179_expense_cents ?? 0}
+              hint="2026 cap: $2,560,000; phase-out starts at $4,090,000 of purchases"
+            />
+          </fieldset>
+
+          {/* ============ Other credits (item #12) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Energy + clean-vehicle credits
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Solar panels, geothermal, residential batteries, EV /
+              fuel-cell vehicles. These are non-refundable credits
+              applied directly against tax owed.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <DollarField
+                name="residential_energy_credit"
+                label="Residential energy credit (§ 25D)"
+                defaultCents={
+                  existing?.residential_energy_credit_cents ?? 0
+                }
+                hint="30% of solar / geothermal / wind / battery installation"
+              />
+              <DollarField
+                name="ev_credit"
+                label="Clean vehicle credit (§ 30D / § 25E)"
+                defaultCents={existing?.ev_credit_cents ?? 0}
+                hint="Up to $7,500 new / $4,000 used; income + vehicle limits apply"
+              />
+            </div>
+          </fieldset>
+
+          {/* ============ Premium Tax Credit reconciliation (item #9) ============ */}
+          <fieldset className="grid gap-3 border-t border-forest-100 pt-5">
+            <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
+              Marketplace health insurance
+            </legend>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              If you bought health insurance through healthcare.gov or
+              a state marketplace and received advance Premium Tax
+              Credit payments, you reconcile them on Form 8962 at
+              filing time. We&apos;ll surface a heads-up so you
+              don&apos;t get surprised; the actual reconciliation math
+              uses your final AGI and is beyond the scope of the
+              forecast.
+            </p>
+            <DollarField
+              name="ptc_advance_payments"
+              label="Advance Premium Tax Credit payments received (annual)"
+              defaultCents={existing?.ptc_advance_payments_cents ?? 0}
+            />
           </fieldset>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">

@@ -50,6 +50,11 @@ export async function requireSuperAdmin() {
 export type CompanyMembership = {
   company_id: string;
   role: "manager" | "member";
+  // ISO timestamp the current user joined this company. Surfaced on
+  // the dashboard ("Manager · added May 12, 2026") instead of the raw
+  // public_id, per the May 2026 audit's P2 finding that the
+  // database-style ID added engineering smell without value.
+  joined_at: string;
   company: {
     id: string;
     public_id: string;
@@ -63,7 +68,7 @@ export async function getMyCompanies(): Promise<CompanyMembership[]> {
   const { data } = await supabase
     .from("company_members")
     .select(
-      "company_id, role, company:companies(id, public_id, name, logo_url)",
+      "company_id, role, joined_at, company:companies(id, public_id, name, logo_url)",
     )
     .order("joined_at", { ascending: true });
   return (data ?? []) as unknown as CompanyMembership[];

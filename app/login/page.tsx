@@ -13,6 +13,18 @@ export default function LoginPage() {
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
+  // True when the user arrived from "Switch accounts" in the profile menu
+  // (via /auth/signout?next=/login?force_picker=1). When set we (a) show a
+  // "Choose an account" header so the user knows the picker will appear,
+  // and (b) pass prompt=select_account to Google/Microsoft so they don't
+  // silently auto-resume the last session.
+  const [forcePicker, setForcePicker] = useState(false);
+  // True when this login page is being served at hq.taxottic.com. The
+  // May 2026 audit flagged P3: both the consumer and HQ login pages
+  // showed the same "Sign in to forecast your taxes." subtitle, which
+  // doesn't tell a super-admin landing on hq that they're in the
+  // operator cockpit. Detected client-side from the host header.
+  const [isHq, setIsHq] = useState(false);
   const supabase = createClient();
 
   // Surface server-side OAuth errors that came back as ?error=... on the
@@ -31,6 +43,12 @@ export default function LoginPage() {
         access_denied: "You cancelled the sign-in.",
       };
       setError(friendly[oauthErr] ?? oauthErr);
+    }
+    if (url.searchParams.get("force_picker") === "1") {
+      setForcePicker(true);
+    }
+    if (url.host.toLowerCase() === "hq.taxottic.com") {
+      setIsHq(true);
     }
   }, []);
 
@@ -66,11 +84,19 @@ export default function LoginPage() {
     setError(null);
     const url = new URL(window.location.href);
     const next = url.searchParams.get("next") ?? "/dashboard";
+    // When the login page was opened from "Switch accounts", we forward
+    // prompt=select_account so Google/Microsoft show their account picker
+    // even if the browser still has a live session for that provider.
+    // Both Google and Microsoft honor this OAuth 2.0 prompt value.
+    const queryParams: Record<string, string> | undefined = forcePicker
+      ? { prompt: "select_account" }
+      : undefined;
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         scopes: provider === "azure" ? "email openid profile" : undefined,
+        queryParams,
       },
     });
     if (error) setError(error.message);
@@ -81,9 +107,30 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Wordmark size="lg" />
-          <p className="mt-3 text-sm text-ink-soft">
-            Sign in to forecast your taxes.
-          </p>
+          {forcePicker ? (
+            <>
+              <p className="mt-3 text-sm font-medium text-forest-900">
+                Choose a different account
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Your previous session was signed out. Pick the account you want
+                to use.
+              </p>
+            </>
+          ) : isHq ? (
+            <>
+              <p className="mt-3 text-sm font-medium text-forest-900">
+                Sign in to the Taxottic cockpit.
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Super-admin operations for Techno Optics.
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-sm text-ink-soft">
+              Sign in to forecast your taxes.
+            </p>
+          )}
         </div>
 
         <div className="card p-7">
@@ -94,12 +141,22 @@ export default function LoginPage() {
             >
               Continue with Google
             </button>
-            <button
-              onClick={() => oauth("azure")}
-              className="btn-ghost w-full"
-            >
-              Continue with Microsoft
-            </button>
+            {/* Microsoft (Azure) is gated on NEXT_PUBLIC_ENABLE_AZURE_LOGIN
+                until the provider is fully wired in the Supabase project.
+                Previously clicking it landed on
+                ?error=invalid_request&error_code=bad_oauth_state because the
+                Azure provider returned a malformed state - better to hide the
+                button entirely than offer a broken handshake. Flip the env
+                var to "true" in Vercel once Azure OAuth is configured and the
+                redirect URI is registered in Supabase. */}
+            {process.env.NEXT_PUBLIC_ENABLE_AZURE_LOGIN === "true" ? (
+              <button
+                onClick={() => oauth("azure")}
+                className="btn-ghost w-full"
+              >
+                Continue with Microsoft
+              </button>
+            ) : null}
             {/* Apple SSO requires an Apple Developer membership and is not
                 yet enabled on this Supabase project. Hidden until configured. */}
           </div>
@@ -118,15 +175,48 @@ export default function LoginPage() {
             <div className="h-px flex-1 bg-forest-200/60" />
           </div>
 
-          <form onSubmit={sendMagicLink} className="grid gap-3">
+          <form
+            onSubmit={sendMagicLink}
+            className="grid gap-3"
+            noValidate
+          >
             <input
               type="email"
               required
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input"
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (status === "error") {
+                  setStatus("idle");
+                  setError(null);
+                }
+              }}
+              aria-invalid={status === "error" ? true : undefined}
+              aria-describedby={
+                status === "error" ? "magic-link-error" : undefined
+              }
+              className={
+                "input " +
+                (status === "error"
+                  ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                  : "")
+              }
             />
+            {/* Error rendered immediately after the field so the visual
+                association is obvious - red border on the input plus a
+                role="alert" message that screen readers announce. Earlier
+                we rendered the error as a generic paragraph far below the
+                button, which usability testing flagged as missable. */}
+            {status === "error" && error ? (
+              <p
+                id="magic-link-error"
+                role="alert"
+                className="text-xs text-red-700 -mt-1"
+              >
+                {error}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={status === "sending"}
@@ -141,7 +231,14 @@ export default function LoginPage() {
               Check your inbox for the sign-in link.
             </p>
           )}
-          {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+          {/* OAuth-callback errors still surface here (separate from the
+              inline magic-link error above) since they're not tied to a
+              single field. */}
+          {status !== "error" && error ? (
+            <p className="mt-4 text-sm text-red-700" role="alert">
+              {error}
+            </p>
+          ) : null}
         </div>
 
         <p className="mt-6 text-[11px] leading-relaxed text-ink-muted text-center max-w-sm mx-auto">

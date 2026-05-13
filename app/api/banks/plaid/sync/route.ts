@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { syncPlaidConnection } from "@/lib/plaid/sync";
+import { requireFeatureGate } from "@/lib/plans/gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,6 +22,12 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
+
+  // Manual sync hits Plaid's /transactions/sync, which is a billable
+  // call. Gate it so a downgraded-to-free user can't keep firing
+  // syncs after their subscription ends.
+  const gateFail = await requireFeatureGate(supabase, user.id, "bankConnect");
+  if (gateFail) return gateFail;
 
   const body = await req.json().catch(() => ({}));
   const connectionId = body?.connectionId as string | undefined;

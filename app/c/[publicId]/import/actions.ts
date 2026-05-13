@@ -64,7 +64,51 @@ const VALID_ACCOUNT_TYPES = new Set([
   "other",
 ]);
 
-export async function uploadCsv(formData: FormData) {
+/**
+ * Map any thrown error -> a short, user-facing message we can pass back
+ * via ?error= on the import page. Common failure modes are normalized
+ * so the user gets actionable copy instead of a raw Postgres error or
+ * a Next 500. Anything we don't recognize falls through to a generic
+ * "Upload failed" with the raw message appended for debuggability.
+ */
+function uploadErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  // Plan-limit guard string match - friendly upgrade copy
+  if (/free CSV import|csv.*limit|csvImports/i.test(raw)) {
+    return "You've reached your CSV-import limit for this month. Upgrade your plan or wait for next month.";
+  }
+  // Postgres unique violation (filename clash, duplicate import row)
+  if (
+    /duplicate key value|unique constraint|already exists/i.test(raw) ||
+    /\b23505\b/.test(raw)
+  ) {
+    return "Looks like you already imported this file. Open the existing import or rename the CSV before re-uploading.";
+  }
+  // Postgres FK / RLS rejection
+  if (/violates foreign key|row-level security|permission denied/i.test(raw)) {
+    return "We couldn't save the import for this company. Refresh and try again.";
+  }
+  if (/CSV is empty|Could not find required columns|Invalid upload/i.test(raw)) {
+    return raw;
+  }
+  if (/Not a member of this company/i.test(raw)) {
+    return "You don't have access to this company.";
+  }
+  return `Upload failed: ${raw.slice(0, 200)}`;
+}
+
+/**
+ * Pure import worker — does the auth + parse + insert + categorize
+ * work and returns a result without any redirects. Both the
+ * form-bound `uploadCsv` (which redirects on success/error) and the
+ * client-callable `uploadCsvBatch` (which returns a result so a
+ * multi-file dropzone can loop without each upload navigating away)
+ * thunk through here.
+ */
+async function runCsvImport(formData: FormData): Promise<
+  | { ok: true; importId: string; publicId: string }
+  | { ok: false; error: string; publicId: string }
+> {
   const { supabase, admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const file = formData.get("file");
@@ -72,100 +116,172 @@ export async function uploadCsv(formData: FormData) {
   const accountType = VALID_ACCOUNT_TYPES.has(rawAccountType)
     ? rawAccountType
     : "checking";
-  if (!companyId || !(file instanceof File)) {
-    throw new Error("Invalid upload");
-  }
-  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
-    throw new Error("Not a member of this company");
-  }
 
-  const limit = await checkCsvImportLimit(supabase, user.id);
-  if (!limit.ok) {
-    throw new Error(
-      "You've used your free CSV import this month. Upgrade to Pro at /billing for unlimited imports.",
-    );
-  }
-
-  const text = await file.text();
-  const rows = parseCsv(text);
-  if (rows.length < 2) throw new Error("CSV is empty or has no data rows");
-
-  const headers = rows[0];
-  const cols = sniffColumns(headers);
-  if (cols.description === -1 || cols.amount === -1) {
-    throw new Error(
-      "Could not find required columns. CSV needs at least Description and Amount.",
-    );
+  // Resolve public_id once up front so the error redirect path is
+  // available regardless of where in the flow we fail. We need it for
+  // both the success redirect and the error redirect.
+  let publicId = "";
+  if (companyId) {
+    const { data: company } = await admin
+      .from("companies")
+      .select("public_id")
+      .eq("id", companyId)
+      .maybeSingle();
+    publicId = company?.public_id ?? "";
   }
 
-  const dataRows = rows.slice(1);
-
-  const { data: importRow, error: importErr } = await admin
-    .from("bank_imports")
-    .insert({
-      company_id: companyId,
-      user_id: user.id,
-      filename: file.name,
-      row_count: dataRows.length,
-      status: "reviewing",
-      account_type: accountType,
-    })
-    .select("id")
-    .single();
-  if (importErr || !importRow) throw new Error(importErr?.message ?? "import failed");
-
-  const transactions = dataRows.map((r) => {
-    const desc = (r[cols.description] ?? "").trim();
-    const amountCents = parseAmountCents(r[cols.amount] ?? "");
-    const dateRaw = cols.date >= 0 ? (r[cols.date] ?? "").trim() : "";
-    const rawCategory = cols.category >= 0 ? (r[cols.category] ?? "").trim() : null;
-    const suggested = desc ? autoCategorize(desc) : null;
-    return {
-      import_id: importRow.id,
-      company_id: companyId,
-      posted_at: parseDate(dateRaw),
-      description: desc.slice(0, 500) || "(no description)",
-      amount_cents: amountCents ?? 0,
-      raw_category: rawCategory,
-      suggested_category_code: suggested,
-    };
-  });
-
-  const BATCH = 500;
-  for (let i = 0; i < transactions.length; i += BATCH) {
-    const slice = transactions.slice(i, i + BATCH);
-    const { error } = await admin.from("bank_transactions").insert(slice);
-    if (error) throw new Error(error.message);
-  }
-
-  // Auto-run Bella over the freshly-imported batch. Failures here
-  // (insufficient credits, model timeout, anything else) are
-  // swallowed — the import succeeded and the user can still
-  // categorize manually on the review page.
+  // The whole flow runs inside a try block so any thrown error - plan
+  // limit, parse error, Postgres constraint violation, RLS rejection,
+  // anything - lands the user back on the import page with a friendly
+  // banner via ?error=, rather than rendering Next's generic 500
+  // boundary. Previously a second-upload crash on demo was caused by
+  // a thrown error from the action surfacing as "server error" because
+  // the form had no client-side handler.
+  let importId: string | null = null;
   try {
-    await runBellaCategorize({
-      supabase,
-      admin,
-      userId: user.id,
-      importId: importRow.id,
-      companyId,
-      onInsufficientCredits: () => {
-        // no-op: the user lands on the review page with rows
-        // un-applied and can buy credits or categorize manually
-      },
+    if (!companyId || !(file instanceof File)) {
+      throw new Error("Invalid upload");
+    }
+    if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+      throw new Error("Not a member of this company");
+    }
+
+    const limit = await checkCsvImportLimit(supabase, user.id);
+    if (!limit.ok) {
+      throw new Error(
+        "You've used your CSV import allowance this month. Upgrade your plan to keep importing.",
+      );
+    }
+
+    const text = await file.text();
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw new Error("CSV is empty or has no data rows");
+
+    const headers = rows[0];
+    const cols = sniffColumns(headers);
+    if (cols.description === -1 || cols.amount === -1) {
+      throw new Error(
+        "Could not find required columns. CSV needs at least Description and Amount.",
+      );
+    }
+
+    const dataRows = rows.slice(1);
+
+    const { data: importRow, error: importErr } = await admin
+      .from("bank_imports")
+      .insert({
+        company_id: companyId,
+        user_id: user.id,
+        filename: file.name,
+        row_count: dataRows.length,
+        status: "reviewing",
+        account_type: accountType,
+      })
+      .select("id")
+      .single();
+    if (importErr || !importRow) {
+      throw new Error(importErr?.message ?? "import failed");
+    }
+    importId = importRow.id;
+
+    const transactions = dataRows.map((r) => {
+      const desc = (r[cols.description] ?? "").trim();
+      const amountCents = parseAmountCents(r[cols.amount] ?? "");
+      const dateRaw = cols.date >= 0 ? (r[cols.date] ?? "").trim() : "";
+      const rawCategory =
+        cols.category >= 0 ? (r[cols.category] ?? "").trim() : null;
+      const suggested = desc ? autoCategorize(desc) : null;
+      return {
+        import_id: importRow.id,
+        company_id: companyId,
+        posted_at: parseDate(dateRaw),
+        description: desc.slice(0, 500) || "(no description)",
+        amount_cents: amountCents ?? 0,
+        raw_category: rawCategory,
+        suggested_category_code: suggested,
+      };
     });
+
+    const BATCH = 500;
+    for (let i = 0; i < transactions.length; i += BATCH) {
+      const slice = transactions.slice(i, i + BATCH);
+      const { error } = await admin.from("bank_transactions").insert(slice);
+      if (error) throw new Error(error.message);
+    }
+
+    // Auto-run Bella over the freshly-imported batch. Failures here
+    // (insufficient credits, model timeout, anything else) are
+    // swallowed - the import already succeeded and the user can still
+    // categorize manually on the review page.
+    try {
+      await runBellaCategorize({
+        supabase,
+        admin,
+        userId: user.id,
+        importId: importRow.id,
+        companyId,
+        onInsufficientCredits: () => {
+          // no-op: the user lands on the review page with rows
+          // un-applied and can buy credits or categorize manually
+        },
+      });
+    } catch (err) {
+      console.error("auto-categorize on upload failed:", err);
+    }
   } catch (err) {
-    console.error("auto-categorize on upload failed:", err);
+    // runCsvImport is now a pure helper - never redirects. Just shape
+    // the error into a return value the callers can act on. The
+    // form-bound `uploadCsv` will translate this into a redirect; the
+    // batch action will surface it as a JSON-friendly result.
+    console.error("runCsvImport failed:", err);
+    return {
+      ok: false,
+      error: uploadErrorMessage(err),
+      publicId,
+    };
   }
 
-  const { data: company } = await admin
-    .from("companies")
-    .select("public_id")
-    .eq("id", companyId)
-    .single();
+  if (!importId) {
+    return { ok: false, error: "Upload failed", publicId };
+  }
+  return { ok: true, importId, publicId };
+}
 
-  revalidatePath(`/c/${company?.public_id ?? ""}/import`);
-  redirect(`/c/${company?.public_id ?? ""}/import/${importRow.id}`);
+/**
+ * Form-bound action: runs one CSV import and redirects to the review
+ * page on success, or back to the import page with ?error= on
+ * failure. Used by the single-file fallback flow.
+ *
+ * NOTE: The dropzone-based UI calls `uploadCsvBatch` instead so it
+ * can loop without each upload navigating away mid-batch.
+ */
+export async function uploadCsv(formData: FormData) {
+  const result = await runCsvImport(formData);
+  if (result.ok) {
+    revalidatePath(`/c/${result.publicId}/import`);
+    redirect(`/c/${result.publicId}/import/${result.importId}`);
+  }
+  const path = result.publicId
+    ? `/c/${result.publicId}/import`
+    : "/dashboard";
+  revalidatePath(path);
+  redirect(`${path}?error=${encodeURIComponent(result.error)}`);
+}
+
+/**
+ * Client-callable action used by the multi-file dropzone. Returns the
+ * result instead of redirecting, so the dropzone can iterate through
+ * a queue of files and only navigate the user once everything is in.
+ *
+ * The dropzone handles the post-batch navigation itself (router.push
+ * to the last importId, or surfacing the error inline on the row
+ * that failed).
+ */
+export async function uploadCsvBatch(formData: FormData): Promise<
+  | { ok: true; importId: string; publicId: string }
+  | { ok: false; error: string; publicId: string }
+> {
+  return runCsvImport(formData);
 }
 
 export async function applyTransactions(formData: FormData) {

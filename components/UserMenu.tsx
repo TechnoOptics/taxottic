@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { FeedbackModal } from "./FeedbackModal";
+
+type Platform = "user" | "enterprise" | "hq";
 
 type Props = {
   email: string | null;
@@ -13,14 +16,71 @@ type Props = {
   // Used on hq.taxottic.com so super-admins don't see broken links
   // to /dashboard, /goals, etc. that don't exist on the admin host.
   adminMode?: boolean;
+  /**
+   * True when the signed-in user is a super-admin (per the
+   * super_admins seed table). When true, the dropdown shows a
+   * "Switch portal" section that lets them jump between the three
+   * platforms (Consumer / Enterprise / HQ).
+   */
+  isSuperAdmin?: boolean;
+  /**
+   * The user's currently active platform, used to mark the right
+   * option in the switcher. Defaults to "user" if not provided.
+   */
+  currentPlatform?: Platform | null;
+  /**
+   * Server action that updates profiles.active_platform AND redirects
+   * to the platform's landing page. Passed in from the server-side
+   * AppHeader so the menu can wire each option to a single-button
+   * <form action={setPlatformAction}>.
+   */
+  setPlatformAction?: (formData: FormData) => Promise<void>;
+  /**
+   * Server action that records a feedback submission. When provided,
+   * the dropdown renders a "Send feedback" item that opens the
+   * modal. Previously the same modal lived behind a floating FAB
+   * above the Bella button - we removed the FAB and re-anchored the
+   * entry point here per product feedback ("two stacked bubbles
+   * looked cluttered").
+   */
+  submitFeedbackAction?: (formData: FormData) => Promise<void>;
 };
 
 type AnchorRect = { top: number; right: number };
 
-export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Props) {
+// Each portal label includes its host so a super-admin can see at a
+// glance which subdomain they're switching to. The hint stays
+// human-readable for context. The portal-switcher form action
+// (setActivePlatform) handles the actual cross-subdomain redirect.
+const PLATFORM_META: Record<Platform, { label: string; hint: string }> = {
+  user: {
+    label: "Consumer app",
+    hint: "taxottic.com — dashboard, forecast, Bella",
+  },
+  enterprise: {
+    label: "Enterprise",
+    hint: "enterprise.taxottic.com — firm operations, client list",
+  },
+  hq: {
+    label: "HQ",
+    hint: "hq.taxottic.com — super-admin operations",
+  },
+};
+
+export function UserMenu({
+  email,
+  fullName,
+  avatarUrl,
+  adminMode = false,
+  isSuperAdmin = false,
+  currentPlatform = "user",
+  setPlatformAction,
+  submitFeedbackAction,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -76,6 +136,9 @@ export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Prop
     .map((s) => s[0]?.toUpperCase())
     .join("");
 
+  const showSwitcher = isSuperAdmin && setPlatformAction;
+  const showFeedback = Boolean(submitFeedbackAction);
+
   const dropdown =
     open && anchor && mounted
       ? createPortal(
@@ -94,7 +157,7 @@ export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Prop
               zIndex: 9999,
               maxWidth: "calc(100vw - 16px)",
             }}
-            className="w-64 card p-2 shadow-2xl"
+            className="w-72 card p-2 shadow-2xl"
           >
             <div className="px-3 py-2.5 border-b border-forest-100">
               <div className="text-sm font-medium text-forest-900 truncate">
@@ -103,7 +166,72 @@ export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Prop
               {email ? (
                 <div className="text-xs text-ink-muted truncate">{email}</div>
               ) : null}
+              {isSuperAdmin ? (
+                <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
+                  Super-admin
+                </div>
+              ) : null}
             </div>
+
+            {/* Platform switcher (super-admins only). Each option is a
+                single-button form posting to setActivePlatform with the
+                target platform; the action persists the choice and
+                redirects to that platform's landing page. */}
+            {showSwitcher ? (
+              <div className="px-1 py-2 border-b border-forest-100">
+                <div className="px-2 pt-1 pb-2 text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                  Switch portal
+                </div>
+                <ul className="grid gap-1">
+                  {(Object.keys(PLATFORM_META) as Platform[]).map((p) => {
+                    const meta = PLATFORM_META[p];
+                    const isCurrent = currentPlatform === p;
+                    return (
+                      <li key={p}>
+                        <form
+                          action={setPlatformAction}
+                          onSubmit={() => setOpen(false)}
+                        >
+                          <input type="hidden" name="platform" value={p} />
+                          <button
+                            type="submit"
+                            disabled={isCurrent}
+                            className={
+                              "w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 group " +
+                              (isCurrent
+                                ? "bg-cream text-forest-900 cursor-default"
+                                : "text-forest-800 hover:bg-cream")
+                            }
+                          >
+                            <span className="flex-1 min-w-0">
+                              <span className="block font-medium">
+                                {meta.label}
+                              </span>
+                              <span className="block text-[11px] text-ink-muted">
+                                {meta.hint}
+                              </span>
+                            </span>
+                            {isCurrent ? (
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium shrink-0">
+                                Current
+                              </span>
+                            ) : (
+                              <span
+                                aria-hidden="true"
+                                className="text-ink-muted group-hover:text-forest-800 shrink-0"
+                              >
+                                →
+                              </span>
+                            )}
+                          </button>
+                        </form>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+
             <ul className="py-1.5">
               {adminMode ? (
                 <>
@@ -114,7 +242,7 @@ export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Prop
                     Tax-prep firms
                   </MenuLink>
                   <MenuLink href="/feedback" onClick={() => setOpen(false)}>
-                    Feedback
+                    Feedback queue
                   </MenuLink>
                   <li>
                     <a
@@ -155,7 +283,74 @@ export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Prop
                 </>
               )}
             </ul>
+
+            {/* Send feedback - replaces the standalone FAB. The modal
+                opens when this is clicked; the dropdown closes
+                simultaneously so the modal isn't behind the menu. */}
+            {showFeedback ? (
+              <div className="border-t border-forest-100 pt-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setFeedbackOpen(true);
+                  }}
+                  className="w-full text-left rounded-lg px-3 py-2 text-sm text-forest-800 hover:bg-cream flex items-center gap-2"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 4 L17 4 L17 14 L11 14 L7 17 L7 14 L3 14 Z" />
+                  </svg>
+                  Send feedback
+                </button>
+              </div>
+            ) : null}
+
             <div className="border-t border-forest-100 pt-1.5">
+              {/* Switch accounts — clears the current session AND tells the
+                  login page to force Google/Microsoft's account picker (via
+                  ?force_picker=1, which the login page translates into
+                  prompt=select_account on the OAuth call). Without this,
+                  a user who's signed into multiple Google accounts in
+                  Chrome gets silently re-authenticated as whichever one
+                  the provider considers "default", which is exactly the
+                  "it auto-signs me into an account I don't want" complaint. */}
+              <form action="/auth/signout" method="post">
+                <input
+                  type="hidden"
+                  name="next"
+                  value="/login?force_picker=1"
+                />
+                <button
+                  type="submit"
+                  className="w-full text-left rounded-lg px-3 py-2 text-sm text-forest-800 hover:bg-cream flex items-center gap-2"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 7 L16 7 M12 3 L16 7 L12 11" />
+                    <path d="M16 13 L4 13 M8 9 L4 13 L8 17" />
+                  </svg>
+                  Switch accounts
+                </button>
+              </form>
               <form action="/auth/signout" method="post">
                 <button
                   type="submit"
@@ -194,6 +389,16 @@ export function UserMenu({ email, fullName, avatarUrl, adminMode = false }: Prop
         )}
       </button>
       {dropdown}
+      {/* The feedback modal lives at the UserMenu level so the
+          dropdown can open/close it without prop-drilling state up to
+          AppHeader. Renders nothing when feedbackOpen is false. */}
+      {submitFeedbackAction ? (
+        <FeedbackModal
+          open={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
+          submitAction={submitFeedbackAction}
+        />
+      ) : null}
     </div>
   );
 }
