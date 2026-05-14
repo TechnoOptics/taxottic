@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { bulkInviteClients } from "./actions";
+import { CsvImportPreview } from "@/components/firm/CsvImportPreview";
 
 // /firm/clients/import — bulk CSV onboarding.
 //
@@ -111,20 +112,7 @@ export default async function BulkImportPage() {
             </label>
           </div>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium text-forest-800">
-              Paste CSV
-            </span>
-            <textarea
-              name="csv"
-              required
-              rows={14}
-              className="input font-mono text-[12px] leading-snug"
-              placeholder={
-                "email,full_name,business_name,kind\nfounder@maplelane.com,Riley Chen,Maple Lane Design Co.,tax_prep\nowner@ridgelinephoto.com,Jordan Park,Ridgeline Photography,bookkeeping"
-              }
-            />
-          </label>
+          <CsvImportPreview defaultKind="tax_prep" />
 
           <div className="flex flex-wrap items-center gap-2 pt-2">
             <button type="submit" className="btn-primary text-sm">

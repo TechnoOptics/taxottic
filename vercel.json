@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/oauth-refresh",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/firm-activity-retention",
+      "schedule": "0 3 * * *"
     }
   ]
 }

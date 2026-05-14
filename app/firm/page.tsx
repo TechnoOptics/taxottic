@@ -334,6 +334,12 @@ export default async function FirmPage() {
               ) : null}
             </Link>
             <Link
+              href="/firm/bella"
+              className="btn-ghost text-sm"
+            >
+              Bella
+            </Link>
+            <Link
               href="/firm/threads"
               className="btn-ghost text-sm"
             >
