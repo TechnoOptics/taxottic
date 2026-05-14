@@ -8,6 +8,7 @@ import {
   generateScheduleCDraft,
   generateK1Drafts,
   generate1099Batch,
+  sendDocumentForSignature,
   archiveDocument,
 } from "./actions";
 
@@ -167,7 +168,7 @@ export default async function DocumentsPage({
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                         <Link
                           href={`/api/firm/documents/${d.id}/pdf`}
                           target="_blank"
@@ -176,6 +177,65 @@ export default async function DocumentsPage({
                         >
                           PDF
                         </Link>
+                        <Link
+                          href={`/firm/clients/${engagementId}/documents/${d.id}/versions`}
+                          className="btn-ghost text-xs px-3 h-9"
+                        >
+                          History
+                        </Link>
+                        {(d.status === "ready_for_review" ||
+                          d.status === "draft") &&
+                        (d.kind === "engagement_letter" ||
+                          d.kind === "schedule_c_draft" ||
+                          d.kind === "k1_draft" ||
+                          d.kind === "1099_nec_draft" ||
+                          d.kind === "1099_misc_draft" ||
+                          d.kind === "1040_draft") ? (
+                          <details className="relative">
+                            <summary className="btn-primary text-xs px-3 h-9 cursor-pointer list-none">
+                              Send for signature
+                            </summary>
+                            <form
+                              action={sendDocumentForSignature}
+                              className="absolute right-0 top-10 z-10 card p-3 w-72 grid gap-2"
+                            >
+                              <input
+                                type="hidden"
+                                name="document_id"
+                                value={d.id}
+                              />
+                              <label className="grid gap-1">
+                                <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                                  Recipient email
+                                </span>
+                                <input
+                                  type="email"
+                                  name="recipient_email"
+                                  required
+                                  placeholder="client@example.com"
+                                  className="input text-sm"
+                                />
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                                  Recipient name
+                                </span>
+                                <input
+                                  type="text"
+                                  name="recipient_name"
+                                  placeholder="Riley Chen"
+                                  className="input text-sm"
+                                />
+                              </label>
+                              <button
+                                type="submit"
+                                className="btn-primary text-xs"
+                              >
+                                Dispatch envelope
+                              </button>
+                            </form>
+                          </details>
+                        ) : null}
                         <form action={archiveDocument}>
                           <input type="hidden" name="id" value={d.id} />
                           <input

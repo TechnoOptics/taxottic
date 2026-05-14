@@ -371,6 +371,133 @@ export async function generateScheduleCDraft(formData: FormData) {
   redirect(`/firm/clients/${engagementId}/documents`);
 }
 
+// Tier 1 #2: Send a generated document for e-signature.
+//
+// Pulls the stored HTML, renders it to PDF, hands the PDF bytes to
+// the configured e-signature provider (Documenso default,
+// DocuSign on the enterprise tier), creates the envelope with the
+// recipient as the signer, updates the document row with the
+// envelope id + status='awaiting_signature'.
+//
+// The recipient gets an email from the provider with the
+// signing URL. Provider webhooks (Phase 5's /api/webhooks/documenso)
+// flip the document to 'signed' on completion.
+export async function sendDocumentForSignature(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await requireFirmContext();
+  const documentId = String(formData.get("document_id") ?? "");
+  const recipientEmail = String(formData.get("recipient_email") ?? "")
+    .trim()
+    .toLowerCase();
+  const recipientName =
+    String(formData.get("recipient_name") ?? "").trim() || null;
+  if (!documentId) throw new Error("Missing document id.");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipientEmail)) {
+    throw new Error("Provide a valid recipient email.");
+  }
+
+  // Pull the document + verify firm ownership.
+  const { data: doc } = await admin
+    .from("firm_documents")
+    .select(
+      "id, firm_id, engagement_id, company_id, kind, status, storage_path, filename",
+    )
+    .eq("id", documentId)
+    .eq("firm_id", ctx.firm.id)
+    .maybeSingle();
+  if (!doc) throw new Error("Document not found.");
+  if (doc.status === "signed" || doc.status === "filed") {
+    throw new Error("Document is already signed.");
+  }
+  if (doc.status === "awaiting_signature") {
+    throw new Error(
+      "An envelope is already out for this document. Void it before sending another.",
+    );
+  }
+  if (!doc.storage_path) {
+    throw new Error("Document has no stored content yet — regenerate first.");
+  }
+
+  // Fetch the stored HTML.
+  const { data: blob, error: dlErr } = await admin.storage
+    .from("firm-documents")
+    .download(doc.storage_path);
+  if (dlErr || !blob) {
+    throw new Error(`Failed to read stored document: ${dlErr?.message ?? "unknown"}`);
+  }
+  const html = await blob.text();
+
+  // Render to PDF for the envelope.
+  const { renderHtmlToPdf } = await import("@/lib/firm/documents/render-pdf");
+  const pdfBytes = await renderHtmlToPdf({ html });
+
+  // Resolve provider for the firm's tier.
+  const { getEsigProvider } = await import("@/lib/firm/esignature/provider");
+  const provider = await getEsigProvider(
+    ctx.firm.tier as "starter" | "growth" | "firm" | "enterprise",
+  );
+  if (!provider) {
+    throw new Error(
+      "No e-signature provider configured. Set DOCUMENSO_API_URL + DOCUMENSO_API_KEY in env to enable.",
+    );
+  }
+
+  // Create the envelope. We send the inviter as a CC so they get a
+  // copy of the completed envelope.
+  const envelope = await provider.createEnvelope({
+    externalId: doc.id,
+    title: doc.filename.replace(/\.html?$/i, ""),
+    pdfBuffer: pdfBytes,
+    recipients: [
+      { email: recipientEmail, name: recipientName ?? undefined, role: "signer" },
+      ...(user.email
+        ? [
+            {
+              email: user.email,
+              name: (user.user_metadata?.full_name as string) ?? undefined,
+              role: "cc" as const,
+            },
+          ]
+        : []),
+    ],
+    metadata: {
+      firm_document_id: doc.id,
+      firm_id: doc.firm_id,
+      engagement_id: doc.engagement_id ?? "",
+    },
+  });
+  if (!envelope.ok) {
+    throw new Error(envelope.reason ?? "Envelope creation failed.");
+  }
+
+  await admin
+    .from("firm_documents")
+    .update({
+      status: "awaiting_signature",
+      provider: provider.id,
+      provider_envelope_id: envelope.envelopeId,
+      sent_at: new Date().toISOString(),
+    })
+    .eq("id", doc.id);
+
+  await logFirmActivity({
+    client: admin,
+    firmId: ctx.firm.id,
+    companyId: doc.company_id,
+    engagementId: doc.engagement_id,
+    kind: "firm.signature_requested",
+    summary: `Sent ${doc.filename} to ${recipientEmail} for signature via ${provider.id}.`,
+    payload: {
+      document_id: doc.id,
+      provider: provider.id,
+      envelope_id: envelope.envelopeId,
+      recipient_email: recipientEmail,
+    },
+  });
+
+  revalidatePath(`/firm/clients/${doc.engagement_id}/documents`);
+}
+
 // Phase 11.5: K-1 batch generator. Reads partner / shareholder list
 // from the company's `business_profile.k1_partners` (JSONB) column;
 // if that's not populated we fall back to a single 100% K-1 for the
