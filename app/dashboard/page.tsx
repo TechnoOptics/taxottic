@@ -652,10 +652,46 @@ export default async function DashboardPage() {
                   year: "numeric",
                   timeZone: "UTC",
                 }).format(dueDate);
+                // Round-2 audit Section 6 friction: at-a-glance urgency
+                // is hard to read when every card looks identical. Color
+                // the pill + left edge by how close the deadline is —
+                // overdue is already filtered to the recap, so here we
+                // only have to differentiate "this week" (amber) from
+                // "later" (neutral gold).
+                const urgencyTone =
+                  days <= 7
+                    ? {
+                        border: "border-amber-300/70 dark:border-amber-600/40",
+                        pill: "text-amber-700 dark:text-amber-200",
+                        dot: "bg-amber-500",
+                      }
+                    : days <= 30
+                      ? {
+                          border:
+                            "border-gold-300/60 dark:border-gold-600/30",
+                          pill: "text-gold-700",
+                          dot: "bg-gold-400",
+                        }
+                      : {
+                          border: "",
+                          pill: "text-ink-muted",
+                          dot: "bg-forest-300 dark:bg-forest-500",
+                        };
                 return (
-                  <li key={r.id} className="card p-4">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-                      In {days} day{days === 1 ? "" : "s"}
+                  <li
+                    key={r.id}
+                    className={`card p-4 ${urgencyTone.border}`}
+                  >
+                    <div
+                      className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] ${urgencyTone.pill}`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`size-1.5 rounded-full ${urgencyTone.dot}`}
+                      />
+                      {days === 0
+                        ? "Due today"
+                        : `In ${days} day${days === 1 ? "" : "s"}`}
                     </div>
                     <div className="display text-base text-forest-900 mt-1">
                       {r.title}

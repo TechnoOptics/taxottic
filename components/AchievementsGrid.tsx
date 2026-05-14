@@ -56,8 +56,55 @@ export function AchievementsGrid({ earnedCodes }: Props) {
   const all = Object.values(BADGES);
   const focused = selected ? BADGES[selected] : null;
 
+  // "Next up" hint — the easiest unearned bronze badge from the
+  // ordered catalog. Round-2 audit Section 6 friction: the grid
+  // alone doesn't tell the user what to do next. Surfacing one
+  // concrete next-step turns the row from decoration into a
+  // progression mechanic. We pick bronze first (lowest barrier),
+  // then silver, then gold — so a user who's already cleared
+  // bronze still sees something to chase.
+  const tierOrder: Badge["tier"][] = ["bronze", "silver", "gold"];
+  const nextUp =
+    tierOrder
+      .map((t) =>
+        all.find((b) => b.tier === t && !earned.has(b.code)),
+      )
+      .find((b): b is Badge => b !== undefined) ?? null;
+
   return (
     <>
+      {nextUp ? (
+        <button
+          type="button"
+          onClick={() => setSelected(nextUp.code)}
+          className="mt-4 w-full flex items-start gap-3 rounded-2xl border border-gold-300/60 bg-cream-50 px-4 py-3 text-left hover:border-gold-400 hover:bg-cream-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 dark:border-gold-700/40 dark:bg-forest-900/40 dark:hover:bg-forest-800/60"
+          aria-label={`Next up to earn: ${nextUp.title}`}
+        >
+          <span
+            aria-hidden="true"
+            className="shrink-0"
+          >
+            <BadgeMedal code={nextUp.code} earned={false} size={36} />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[10px] uppercase tracking-[0.2em] text-gold-700">
+              Next up
+            </span>
+            <span className="block display text-base text-forest-900 mt-0.5 dark:text-cream">
+              {nextUp.title}
+            </span>
+            <span className="block text-[11px] text-ink-soft mt-0.5 dark:text-cream/70">
+              {HOW_TO_EARN[nextUp.code] ?? nextUp.description}
+            </span>
+          </span>
+          <span
+            aria-hidden="true"
+            className="text-ink-muted text-sm shrink-0 mt-1"
+          >
+            →
+          </span>
+        </button>
+      ) : null}
       <div className="mt-4 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
         {all.map((b) => {
           const isEarned = earned.has(b.code);

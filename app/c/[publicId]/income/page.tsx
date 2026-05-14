@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
@@ -40,6 +41,16 @@ export default async function IncomePage({ params }: { params: Params }) {
     .order("created_at", { ascending: false });
 
   const total = (rows ?? []).reduce((a, r) => a + r.amount_cents, 0);
+  // Recent unique notes for the vendor-autocomplete <datalist>. Server-
+  // rendered: the browser wires up the keyboard picker natively when
+  // an input has `list=`. Cap at 20 to keep the HTML small.
+  const recentNotes = Array.from(
+    new Set(
+      (rows ?? [])
+        .map((r) => (r.notes ?? "").trim())
+        .filter((n) => n.length > 0),
+    ),
+  ).slice(0, 20);
 
   return (
     <main id="main" className="min-h-screen">
@@ -110,7 +121,16 @@ export default async function IncomePage({ params }: { params: Params }) {
                 type="text"
                 className="input"
                 placeholder="Invoice 1042, ABC Corp"
+                list={recentNotes.length > 0 ? "income-vendors" : undefined}
+                autoComplete="off"
               />
+              {recentNotes.length > 0 ? (
+                <datalist id="income-vendors">
+                  {recentNotes.map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+              ) : null}
             </label>
             <div className="sm:col-span-2">
               <button className="btn-primary w-full sm:w-auto">Add income</button>
@@ -174,8 +194,33 @@ export default async function IncomePage({ params }: { params: Params }) {
                 </li>
               ))
             ) : (
-              <li className="py-8 text-center text-sm text-ink-muted">
-                No income entries yet for {taxYear}.
+              // Empty state with import + bank CTAs. Round-2 audit
+              // Section 6: the prior dead-end empty state didn't tell
+              // the user where to go next. Point at both real paths
+              // for backfilling a year's worth of income at once.
+              <li className="py-10 text-center">
+                <div className="text-sm text-ink-muted">
+                  No income entries yet for {taxYear}.
+                </div>
+                <p className="mt-3 text-xs text-ink-soft max-w-md mx-auto leading-relaxed">
+                  Use the form above for a single row, or backfill the
+                  whole year from your invoicing CSV or a connected
+                  bank account.
+                </p>
+                <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-2">
+                  <Link
+                    href={`/c/${publicId}/import`}
+                    className="btn-ghost text-xs px-3 h-9"
+                  >
+                    Import a CSV →
+                  </Link>
+                  <Link
+                    href={`/c/${publicId}/banks`}
+                    className="btn-ghost text-xs px-3 h-9"
+                  >
+                    Connect a bank
+                  </Link>
+                </div>
               </li>
             )}
           </ul>

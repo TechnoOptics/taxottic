@@ -316,6 +316,36 @@ main, header, footer, nav {
     font-variant-numeric: oldstyle-nums proportional-nums;
   }
 
+  /* Single source of truth for the small "kicker" subhead seen above
+     every card / section title across the app (e.g. "TAX YEAR 2026
+     FORECAST" or "RECEIPTS"). Round-2 audit caught the case style
+     drifting from ALL CAPS to "Sentence case" mid-run because each
+     page redefined the pattern inline. Now: write `.kicker` and you
+     get the exact spacing + size + color + gold tone in one
+     class. Inline `text-[10px] uppercase tracking-[0.32em] text-gold-700`
+     remains valid for older callsites; new code should prefer the
+     class so we converge over time. */
+  .kicker {
+    font-size: 10px;
+    line-height: 1.4;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--color-gold-700);
+  }
+  /* Smaller "inline kicker" used inside a card right above the title.
+     Same color + caps treatment but with `0.2em` tracking and 11px so
+     it doesn't overpower the title. Use this one when the kicker
+     sits adjacent to body text. */
+  .kicker-sm {
+    font-size: 11px;
+    line-height: 1.4;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--color-gold-700);
+  }
+
   /* Card: hairline border, paper background, gentle shadow plus a thin
      gold "lit from above" highlight along the top edge. Sits as a
      pseudo-element so the radius stays clean.

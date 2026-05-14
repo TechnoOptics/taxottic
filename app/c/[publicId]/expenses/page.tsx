@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
@@ -92,12 +93,37 @@ export default async function ExpensesPage({ params }: { params: Params }) {
 
         <div className="card mt-6 p-6">
           <h2 className="display text-xl text-forest-900">Add an expense</h2>
+          {/* Recent-vendor autocomplete + "Repeat last" shortcut.
+              Round-2 audit Section 6 friction: power-users entering 30
+              transactions per session were slowed by zero
+              autocomplete on the Notes field. Browsers handle the
+              picker natively when the input has `list=`, so passing
+              the unique recent notes (capped at 20 to keep the HTML
+              small) gives a free suggestion experience with no
+              extra JS. */}
           <AddExpenseForm
             companyId={company.id}
             taxYear={taxYear}
             currentMonth={currentMonth}
             categories={(categories as CategoryRow[] | null) ?? []}
             action={addExpense}
+            recentVendors={Array.from(
+              new Set(
+                (rows ?? [])
+                  .map((r) => (r.notes ?? "").trim())
+                  .filter((n) => n.length > 0),
+              ),
+            ).slice(0, 20)}
+            lastExpense={
+              rows && rows.length > 0
+                ? {
+                    categoryCode: rows[0].category_code,
+                    amountCents: rows[0].amount_cents,
+                    recurrence: rows[0].recurrence,
+                    notes: rows[0].notes ?? "",
+                  }
+                : null
+            }
           />
         </div>
 
@@ -167,8 +193,36 @@ export default async function ExpensesPage({ params }: { params: Params }) {
                 );
               })
             ) : (
-              <li className="py-8 text-center text-sm text-ink-muted">
-                No expenses entered yet for {taxYear}.
+              // Round-2 audit Section 6 friction: the empty state was a
+              // dead end. A user landing here for the first time saw "No
+              // expenses entered yet" and had to find the Import tab on
+              // their own. Surface the two real next-steps directly —
+              // the manual form is already on this page, and the CSV
+              // import lives one tab over. Both routes are first-class;
+              // we just had to point at them.
+              <li className="py-10 text-center">
+                <div className="text-sm text-ink-muted">
+                  No expenses entered yet for {taxYear}.
+                </div>
+                <p className="mt-3 text-xs text-ink-soft max-w-md mx-auto leading-relaxed">
+                  Add one with the form above to see your forecast
+                  tighten, or paste a year of expenses in one shot
+                  from your bank or accountant&apos;s CSV.
+                </p>
+                <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-2">
+                  <Link
+                    href={`/c/${publicId}/import`}
+                    className="btn-ghost text-xs px-3 h-9"
+                  >
+                    Import a CSV →
+                  </Link>
+                  <Link
+                    href={`/c/${publicId}/banks`}
+                    className="btn-ghost text-xs px-3 h-9"
+                  >
+                    Connect a bank
+                  </Link>
+                </div>
               </li>
             )}
           </ul>

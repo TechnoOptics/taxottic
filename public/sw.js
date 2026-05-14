@@ -22,7 +22,12 @@
 // itself; the bump forces the activate handler to drop the v8 caches
 // so the new server HTML hydrates against newly-fetched chunks even
 // for clients that still had a v8 SW controlling them.
-const CACHE_VERSION = "v9";
+// v10 (May 2026 Round-2 follow-up): bumping again for the next-audit
+// UX changes — dashboard "Coming up" urgency colors, achievements
+// next-up row, expenses/income empty-state CTAs, vendor autocomplete.
+// All HTML/markup tweaks; bumping prevents v9 clients from hydrating
+// new server HTML against cached v9 chunks.
+const CACHE_VERSION = "v10";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
