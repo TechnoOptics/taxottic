@@ -183,6 +183,12 @@ export default async function DocumentsPage({
                         >
                           History
                         </Link>
+                        <Link
+                          href={`/firm/clients/${engagementId}/documents/${d.id}/comments`}
+                          className="btn-ghost text-xs px-3 h-9"
+                        >
+                          Comments
+                        </Link>
                         {(d.status === "ready_for_review" ||
                           d.status === "draft") &&
                         (d.kind === "engagement_letter" ||

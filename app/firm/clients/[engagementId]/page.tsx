@@ -215,6 +215,12 @@ export default async function FirmClientPage({
               W-9s
             </Link>
             <Link
+              href={`/firm/clients/${eng.id}/banks`}
+              className="btn-ghost text-sm"
+            >
+              Banks
+            </Link>
+            <Link
               href={`/c/${company.public_id}/forecast`}
               className="btn-primary text-sm"
             >

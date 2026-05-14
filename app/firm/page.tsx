@@ -334,6 +334,30 @@ export default async function FirmPage() {
               ) : null}
             </Link>
             <Link
+              href="/firm/threads"
+              className="btn-ghost text-sm"
+            >
+              Threads
+            </Link>
+            <Link
+              href="/firm/templates"
+              className="btn-ghost text-sm"
+            >
+              Templates
+            </Link>
+            <Link
+              href="/firm/audit-log"
+              className="btn-ghost text-sm"
+            >
+              Audit
+            </Link>
+            <Link
+              href="/firm/billing"
+              className="btn-ghost text-sm"
+            >
+              Billing
+            </Link>
+            <Link
               href="/firm/settings"
               className="btn-ghost text-sm"
             >
