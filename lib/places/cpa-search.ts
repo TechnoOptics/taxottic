@@ -86,12 +86,34 @@ export async function searchCpas(
     };
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: baseHeaders,
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
+  // Cap the upstream Google Places call at 6 seconds. Without this,
+  // a slow Google response (or a network blip on the Vercel edge)
+  // leaves the route handler hung — clients abort their fetch on
+  // their own 8-second timer but the server-side request keeps
+  // running, burning a serverless invocation. Reported in the May
+  // 2026 weekly re-audit ("/api/cpa-search POST stays pending").
+  const upstream = new AbortController();
+  const upstreamTimeout = setTimeout(() => upstream.abort(), 6000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: baseHeaders,
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: upstream.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      // Treat upstream timeout the same as a missing API key — the
+      // route handler returns `results: null` and the client falls
+      // back to the Google Maps link.
+      return null;
+    }
+    throw err;
+  } finally {
+    clearTimeout(upstreamTimeout);
+  }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(`Places API ${res.status}: ${detail.slice(0, 300)}`);

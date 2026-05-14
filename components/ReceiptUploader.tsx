@@ -180,13 +180,13 @@ export function ReceiptUploader({
               </span>
               {draft.date ? (
                 <>
-                  <span className="text-gold-500">·</span>
+                  <span className="text-gold-700">·</span>
                   <span>{draft.date}</span>
                 </>
               ) : null}
               {draft.payment_method ? (
                 <>
-                  <span className="text-gold-500">·</span>
+                  <span className="text-gold-700">·</span>
                   <span>{draft.payment_method}</span>
                 </>
               ) : null}

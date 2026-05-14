@@ -8,7 +8,14 @@
  * PWASetup) shows a "New version - Refresh" toast and posts SKIP_WAITING
  * when the user taps it.
  */
-const CACHE_VERSION = "v7";
+// Bump on every behavior change to this SW. Bumping forces existing
+// clients to drop stale caches in the `activate` handler below.
+// v8 (May 2026): stop caching /_next/* — Next content-hashes its
+// chunks, the browser's HTTP cache handles freshness, and caching
+// them in the SW was the root cause of a persistent React #418
+// hydration error after deploys (old client chunks hydrating against
+// new server HTML).
+const CACHE_VERSION = "v8";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
@@ -55,9 +62,23 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
   if (url.pathname.startsWith("/auth/")) return;
 
-  // Static assets: cache-first.
+  // SKIP /_next/* entirely. Next.js content-hashes its JS chunks and
+  // static assets — the filename changes on every deploy, so the
+  // browser's HTTP cache handles freshness correctly. Caching them
+  // in the service worker means old chunks survive deploys, and a
+  // returning visitor gets new server HTML hydrating against old
+  // client code → React error #418 (hydration mismatch). The May
+  // 2026 weekly audit re-confirmed #418 after a build cycle; the
+  // root cause was THIS code path. Removing /_next/* from the SW
+  // cache fixes it without losing PWA offline capability for the
+  // assets that actually benefit from caching (fonts, images).
+  if (url.pathname.startsWith("/_next/")) {
+    return; // fall through to default browser fetch
+  }
+
+  // Other static assets — cache-first is fine because these don't
+  // version-skew the React tree.
   if (
-    url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/fonts/") ||
     /\.(png|svg|jpg|jpeg|webp|woff2|ttf|ico)$/i.test(url.pathname)
   ) {
