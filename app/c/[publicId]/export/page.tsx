@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
-import { formatCents } from "@/lib/tax/forecast";
+import { formatCents, ABOVE_THE_LINE_CODES } from "@/lib/tax/forecast";
+import {
+  computeNetBusinessIncome,
+  expensesByCategory,
+  MEALS_CATEGORY_CODE,
+} from "@/lib/tax/net-business-income";
 import { PrintActionsClient } from "@/components/PrintActionsClient";
 import { CompanyLogo } from "@/components/CompanyLogo";
 
@@ -77,34 +82,37 @@ export default async function ExportPage({
     });
   }
 
-  // Aggregate expenses by category for the summary table
-  const byCategory = new Map<
-    string,
-    { total: number; count: number; rows: typeof expenseRows }
-  >();
-  for (const e of expenseRows ?? []) {
-    const bucket = byCategory.get(e.category_code) ?? {
-      total: 0,
-      count: 0,
-      rows: [] as typeof expenseRows,
-    };
-    bucket.total += e.amount_cents;
-    bucket.count += 1;
-    bucket.rows!.push(e);
-    byCategory.set(e.category_code, bucket);
-  }
-  const orderedCategories = [...byCategory.entries()].sort(
-    (a, b) => b[1].total - a[1].total,
+  // Build the per-category rollup via the single source of truth
+  // (`lib/tax/net-business-income.ts`). This is the same helper the
+  // forecast page calls — guaranteeing that "Net business income" on
+  // this export matches the headline number on /c/{id}/forecast, and
+  // that Schedule C Line 24b carries the post-50% meals figure (not
+  // the gross). Resolves the May 2026 audit's Critical #1 + Critical
+  // #2 + High #5.
+  const categoryTotals = expensesByCategory(expenseRows ?? []);
+  // Sort by deductible amount (what actually goes on Schedule C),
+  // descending. Above-the-line categories drop to the bottom (their
+  // deductibleCents is 0 by definition — they're Schedule 1
+  // adjustments, not Schedule C expenses).
+  const orderedCategories = [...categoryTotals].sort(
+    (a, b) => b.deductibleCents - a.deductibleCents,
   );
 
   const totalIncome = (incomeRows ?? []).reduce(
     (a, r) => a + r.amount_cents,
     0,
   );
-  const totalExpense = (expenseRows ?? []).reduce(
-    (a, r) => a + r.amount_cents,
-    0,
-  );
+  const nbi = computeNetBusinessIncome({
+    incomeCents: totalIncome,
+    byCategory: categoryTotals,
+  });
+  // "Total expenses" in the page-level summary uses the deductible
+  // figure, not the gross — that's the line that has to reconcile with
+  // Net Business Income. The expense-detail section below still shows
+  // the gross per-row figure (footnoted) so users can audit their own
+  // entries against bank/receipts.
+  const totalExpense = nbi.deductibleExpensesCents;
+  const totalGrossExpense = nbi.grossExpensesCents;
 
   const businessDisplayName = bp?.legal_name || company.name;
 
@@ -212,13 +220,28 @@ export default async function ExportPage({
           />
         </section>
 
-        {/* Totals */}
+        {/* Totals. Note: "Total expenses" is the *deductible* number
+            (what flows to Schedule C and reconciles with Net Business
+            Income), not the gross. Meals are halved per IRC §274(n). A
+            separate "Logged (gross)" row makes the gap visible when it
+            differs from the deductible figure. */}
         <section className="mt-10 grid grid-cols-2 sm:grid-cols-3 gap-4">
           <Big label="Gross income" value={formatCents(totalIncome)} />
-          <Big label="Total expenses" value={formatCents(totalExpense)} />
+          <Big
+            label="Total deductible expenses"
+            value={formatCents(totalExpense)}
+            hint={
+              totalGrossExpense !== totalExpense
+                ? `Logged ${formatCents(totalGrossExpense)} gross; ${formatCents(
+                    totalGrossExpense - totalExpense,
+                  )} of meals is non-deductible per IRC §274(n).`
+                : undefined
+            }
+          />
           <Big
             label="Net business income"
-            value={formatCents(Math.max(0, totalIncome - totalExpense))}
+            value={formatCents(nbi.netBusinessIncomeCents)}
+            hint="Schedule C Line 31"
           />
         </section>
 
@@ -257,7 +280,12 @@ export default async function ExportPage({
                       {r.notes ?? ""}
                     </td>
                     <td className="py-1.5 text-right tabular-nums">
-                      {formatCents(r.amount_cents)}
+                      {/* Cents on individual rows — audit Medium #1.
+                          A user looking at "$7,501" cannot tell if their
+                          $7,500.50 entry was saved or rounded. Per-line
+                          gets full precision; the page-top rollup keeps
+                          whole-dollar formatting. */}
+                      {formatCents(r.amount_cents, { showCents: true })}
                     </td>
                   </tr>
                 ))
@@ -267,7 +295,7 @@ export default async function ExportPage({
                   Total income
                 </td>
                 <td className="py-2 text-right tabular-nums">
-                  {formatCents(totalIncome)}
+                  {formatCents(totalIncome, { showCents: true })}
                 </td>
               </tr>
             </tbody>
@@ -297,15 +325,29 @@ export default async function ExportPage({
                   </td>
                 </tr>
               ) : (
-                orderedCategories.map(([code, b]) => {
-                  const meta = catMap.get(code);
+                orderedCategories.map((b) => {
+                  const meta = catMap.get(b.code);
+                  const isMeals = b.code === MEALS_CATEGORY_CODE;
+                  const isAboveTheLine = ABOVE_THE_LINE_CODES.has(b.code);
                   return (
                     <tr
-                      key={code}
+                      key={b.code}
                       className="border-b border-forest-50 break-inside-avoid"
                     >
                       <td className="py-1.5 pr-3 font-medium align-top">
-                        {meta?.label ?? code}
+                        {meta?.label ?? b.code}
+                        {isMeals ? (
+                          <div className="text-[10px] text-ink-muted font-normal mt-0.5">
+                            Logged {formatCents(b.grossCents)} gross · 50%
+                            deductible per IRC §274(n)
+                          </div>
+                        ) : null}
+                        {isAboveTheLine ? (
+                          <div className="text-[10px] text-ink-muted font-normal mt-0.5">
+                            Above-the-line (Schedule 1), not Schedule C.
+                            Tracked but excluded from this total.
+                          </div>
+                        ) : null}
                       </td>
                       <td className="py-1.5 pr-3 align-top text-ink-soft">
                         {meta?.schedule_c_line ?? "-"}
@@ -317,7 +359,11 @@ export default async function ExportPage({
                         {meta?.irs_pub ?? "-"}
                       </td>
                       <td className="py-1.5 text-right tabular-nums">
-                        {formatCents(b.total)}
+                        {isAboveTheLine
+                          ? formatCents(b.grossCents, { showCents: true })
+                          : formatCents(b.deductibleCents, {
+                              showCents: true,
+                            })}
                       </td>
                     </tr>
                   );
@@ -325,10 +371,10 @@ export default async function ExportPage({
               )}
               <tr className="font-medium">
                 <td className="py-2 pr-3" colSpan={4}>
-                  Total expenses
+                  Total deductible expenses
                 </td>
                 <td className="py-2 text-right tabular-nums">
-                  {formatCents(totalExpense)}
+                  {formatCents(totalExpense, { showCents: true })}
                 </td>
               </tr>
             </tbody>
@@ -375,7 +421,11 @@ export default async function ExportPage({
                       {r.notes ?? ""}
                     </td>
                     <td className="py-1.5 text-right tabular-nums">
-                      {formatCents(r.amount_cents)}
+                      {/* Gross figure — what the user actually spent.
+                          The 50% meals haircut is applied at the
+                          category-rollup level (above) and visible in
+                          the "Logged X / 50% deductible" footnote. */}
+                      {formatCents(r.amount_cents, { showCents: true })}
                     </td>
                   </tr>
                 ))
@@ -431,13 +481,26 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Big({ label, value }: { label: string; value: string }) {
+function Big({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="border border-forest-100 rounded-xl p-4">
       <div className="text-[11px] uppercase tracking-wide text-ink-muted">
         {label}
       </div>
       <div className="mt-1 display text-2xl text-forest-900">{value}</div>
+      {hint ? (
+        <div className="mt-1 text-[10px] text-ink-muted leading-snug">
+          {hint}
+        </div>
+      ) : null}
     </div>
   );
 }
