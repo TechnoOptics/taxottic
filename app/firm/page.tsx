@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { getFirmContext } from "@/lib/firm/context";
+import { getUnreadActivityCount } from "@/lib/firm/notifications";
 import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 
 export const metadata = {
@@ -89,7 +90,7 @@ const STATUS_TONE: Record<
 };
 
 export default async function FirmPage() {
-  const { admin, user } = await requireUserWithAdmin();
+  const { admin, supabase, user } = await requireUserWithAdmin();
   const ctx = await getFirmContext();
   const taxYear = new Date().getUTCFullYear();
   const nowIso = new Date().toISOString();
@@ -141,6 +142,10 @@ export default async function FirmPage() {
   }
 
   const firm = ctx.firm;
+  // Header inbox badge: cheap RPC call (capped at 50 server-side
+  // via least() so a backlog of 5,000 unread events still renders
+  // "50+" without round-tripping that count).
+  const unreadCount = await getUnreadActivityCount(supabase, firm.id);
 
   // Pull every engagement for this firm — including pending and
   // completed — sorted by urgency below. PostgREST nested select on
@@ -316,6 +321,17 @@ export default async function FirmPage() {
               className="btn-ghost text-sm"
             >
               Outreach
+            </Link>
+            <Link
+              href="/firm/inbox"
+              className="btn-ghost text-sm inline-flex items-center gap-1.5"
+            >
+              Inbox
+              {unreadCount > 0 ? (
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold tabular-nums">
+                  {unreadCount >= 50 ? "50+" : unreadCount}
+                </span>
+              ) : null}
             </Link>
             <Link
               href="/firm/settings"
