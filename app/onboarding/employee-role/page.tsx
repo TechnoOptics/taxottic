@@ -61,7 +61,7 @@ export default async function EmployeeRolePage({
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-lg mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        <div className="card p-7 sm:p-8">
+        <div className="card p-5 sm:p-7 sm:p-8">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
             Welcome aboard
           </div>

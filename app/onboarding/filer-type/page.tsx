@@ -44,7 +44,7 @@ export default async function FilerTypePage({
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-2xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <div className="card p-7 sm:p-9">
+        <div className="card p-5 sm:p-7 sm:p-9">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
             Welcome
           </div>

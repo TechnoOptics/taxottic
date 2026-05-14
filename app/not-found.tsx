@@ -19,7 +19,7 @@ export default function NotFound() {
         <div className="mb-8">
           <Wordmark size="lg" />
         </div>
-        <div className="card p-8 sm:p-10">
+        <div className="card p-6 sm:p-8 sm:p-10">
           <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
             404
           </div>

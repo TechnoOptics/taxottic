@@ -200,7 +200,7 @@ export default async function FirmPage() {
           </div>
 
           {rows.length === 0 ? (
-            <div className="mt-4 card p-8 text-center">
+            <div className="mt-4 card p-6 sm:p-8 text-center">
               <h3 className="display text-xl text-forest-900">
                 No client companies yet.
               </h3>

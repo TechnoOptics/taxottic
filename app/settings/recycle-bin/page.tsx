@@ -99,7 +99,7 @@ export default async function RecycleBinPage() {
         </p>
 
         {items.length === 0 ? (
-          <section className="mt-8 card p-10 text-center">
+          <section className="mt-8 card p-6 sm:p-10 text-center">
             <h2 className="display text-xl text-forest-900">
               Nothing here.
             </h2>

@@ -191,7 +191,7 @@ export default function HelpPage() {
             "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
@@ -204,7 +204,7 @@ export default function HelpPage() {
         </div>
       </header>
 
-      <section className="max-w-3xl mx-auto px-6 pt-12 sm:pt-16 pb-8">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-8">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Help &amp; FAQ
         </div>
@@ -224,7 +224,7 @@ export default function HelpPage() {
         </p>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 py-8">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           5-minute quickstart
         </div>
@@ -250,7 +250,7 @@ export default function HelpPage() {
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-6 py-12 sm:py-16 grid gap-10">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16 grid gap-10">
         <FaqCategory title="Getting started">
           <Faq q="Is there really no credit card to try?">
             Correct — the Free tier doesn&apos;t take a card. Paid tiers
@@ -381,8 +381,8 @@ export default function HelpPage() {
         </FaqCategory>
       </section>
 
-      <section className="max-w-3xl mx-auto px-6 pb-16">
-        <div className="card p-8 grid gap-3">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+        <div className="card p-6 sm:p-8 grid gap-3">
           <h2 className="display text-xl text-forest-900">
             Still stuck? Email a human.
           </h2>

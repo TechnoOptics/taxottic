@@ -31,7 +31,7 @@ export default async function GoalsPage() {
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
-      <section className="max-w-3xl mx-auto px-6 py-10">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Goals
         </div>

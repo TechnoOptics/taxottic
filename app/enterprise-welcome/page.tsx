@@ -39,7 +39,7 @@ export default function EnterpriseWelcomePage() {
           </div>
         </div>
 
-        <div className="card p-7">
+        <div className="card p-5 sm:p-7">
           <h1 className="display text-2xl text-forest-900 leading-tight">
             For accounting firms and operations teams.
           </h1>

@@ -502,7 +502,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-5xl mx-auto px-6 py-10">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
             <CompanyLogo
@@ -853,7 +853,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
         </div>
 
         {/* Monthly chart + per-month grid */}
-        <div className="mt-6 card p-7">
+        <div className="mt-6 card p-5 sm:p-7">
           <h2 className="display text-xl text-forest-900">
             Month by month
           </h2>

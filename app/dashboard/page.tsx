@@ -140,8 +140,8 @@ export default async function DashboardPage() {
     return (
       <main id="main" className="min-h-screen">
         <AppHeader email={user.email ?? undefined} />
-        <section className="max-w-2xl mx-auto px-6 py-16">
-          <div className="card p-10 text-center">
+        <section className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
+          <div className="card p-6 sm:p-10 text-center">
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
               {isSuperAdmin ? "Operator view" : "Welcome"}
             </div>

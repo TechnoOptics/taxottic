@@ -143,7 +143,7 @@ export default function ChangelogPage() {
             "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
@@ -156,7 +156,7 @@ export default function ChangelogPage() {
         </div>
       </header>
 
-      <section className="max-w-3xl mx-auto px-6 pt-12 sm:pt-16 pb-8">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-8">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Changelog
         </div>
@@ -176,7 +176,7 @@ export default function ChangelogPage() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-6 pb-16 grid gap-7">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 grid gap-7">
         {ENTRIES.map((e, i) => (
           <article key={i} className="card p-5 sm:p-6">
             <div className="flex flex-wrap items-baseline justify-between gap-2">

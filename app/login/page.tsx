@@ -236,7 +236,7 @@ export default function LoginPage() {
           )}
         </div>
 
-        <div className="card p-7">
+        <div className="card p-5 sm:p-7">
           {/* Three OAuth providers always rendered. Per-provider
               configuration lives in the Supabase dashboard (see
               SETUP.md "SSO providers"). If a provider is enabled

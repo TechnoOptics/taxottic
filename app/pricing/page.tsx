@@ -262,7 +262,7 @@ export default function PricingPage() {
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
@@ -283,7 +283,7 @@ export default function PricingPage() {
         />
       </header>
 
-      <section className="max-w-6xl mx-auto px-6 pt-12 sm:pt-20 pb-6">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-6">
         <div className="text-center">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
             Pricing
@@ -317,14 +317,14 @@ export default function PricingPage() {
       </section>
 
       {/* Secondary tiers (Filer + Practice) shown below the primary row */}
-      <section className="max-w-6xl mx-auto px-6 py-6">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <div className="grid gap-5 sm:grid-cols-2">
           <TierCard tier="filer" anchor="filer" />
           <TierCard tier="practice" anchor="practice" />
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-6 py-12 sm:py-16">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         <h2 className="display text-2xl text-forest-900">FAQ</h2>
         <div className="mt-6 grid gap-5 text-sm text-ink-soft leading-relaxed">
           <Faq q="Is there a free trial on paid tiers?">
@@ -375,7 +375,7 @@ export default function PricingPage() {
       </section>
 
       <footer className="border-t border-forest-100 bg-cream">
-        <div className="max-w-6xl mx-auto px-6 py-8 grid gap-4 sm:grid-cols-2 text-xs text-ink-muted">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 grid gap-4 sm:grid-cols-2 text-xs text-ink-muted">
           <div>
             <Wordmark size="sm" tone="forest" />
             <p className="mt-2 leading-relaxed max-w-md">

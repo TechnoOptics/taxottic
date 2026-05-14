@@ -27,7 +27,13 @@
 // next-up row, expenses/income empty-state CTAs, vendor autocomplete.
 // All HTML/markup tweaks; bumping prevents v9 clients from hydrating
 // new server HTML against cached v9 chunks.
-const CACHE_VERSION = "v10";
+// v11 (May 2026): mobile-responsive pass — page-wrapper padding
+// `px-6` → `px-4 sm:px-6` across 35+ files, card internal padding
+// gets a mobile shrink (`p-5 sm:p-7` patterns), ReadinessHelp
+// popover viewport-clamped. Pure CSS/markup changes; bump invalidates
+// stale HTML caches so phone users actually see the new spacing on
+// their next visit.
+const CACHE_VERSION = "v11";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

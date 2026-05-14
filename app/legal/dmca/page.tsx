@@ -24,7 +24,7 @@ export const metadata = {
 export default function DmcaPage() {
   return (
     <main id="main" className="min-h-screen">
-      <section className="max-w-3xl mx-auto px-6 py-12">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           DMCA Policy
         </div>

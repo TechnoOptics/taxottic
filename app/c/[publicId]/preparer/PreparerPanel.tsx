@@ -268,7 +268,7 @@ export function PreparerPanel({
       {active.length === 0 &&
       pendingMine.length === 0 &&
       pendingTheirs.length === 0 ? (
-        <section className="mt-6 card p-7 text-center">
+        <section className="mt-6 card p-5 sm:p-7 text-center">
           <h3 className="display text-xl text-forest-900">
             No tax preparer yet.
           </h3>

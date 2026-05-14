@@ -54,7 +54,7 @@ export default async function ManageCompanyPage({
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-3xl mx-auto px-6 py-10">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
           {company.public_id} <span className="text-gold-700">·</span> Team
         </div>
@@ -117,7 +117,7 @@ export default async function ManageCompanyPage({
             think the feature didn't exist). */}
         <section
           id="add-employee"
-          className="mt-6 card p-7 border-gold-300/60"
+          className="mt-6 card p-5 sm:p-7 border-gold-300/60"
         >
           <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
             Add an employee
@@ -262,7 +262,7 @@ export default async function ManageCompanyPage({
             because /manage is where a user goes when they're already
             thinking "what's the state of this company". */}
         {isManager ? (
-          <section className="mt-6 card p-7 border-red-200/60 bg-red-50/30">
+          <section className="mt-6 card p-5 sm:p-7 border-red-200/60 bg-red-50/30">
             <div className="text-[10px] uppercase tracking-[0.32em] text-red-700 font-medium">
               Close this company
             </div>
@@ -301,7 +301,7 @@ export default async function ManageCompanyPage({
         ) : null}
 
         {/* Existing team roster, now BELOW the add-employee section */}
-        <section className="mt-6 card p-7">
+        <section className="mt-6 card p-5 sm:p-7">
           <h2 className="display text-xl text-forest-900">Current team</h2>
           <ul className="mt-4 grid gap-2">
             {members?.map((m) => {

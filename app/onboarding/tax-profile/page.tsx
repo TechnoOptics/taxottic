@@ -67,7 +67,7 @@ export default async function TaxProfilePage({
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
-      <section className="max-w-2xl mx-auto px-6 py-12">
+      <section className="max-w-2xl mx-auto px-4 sm:px-6 py-12">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Personal tax profile
         </div>

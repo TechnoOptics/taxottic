@@ -74,7 +74,11 @@ export function ReadinessHelp({
         <div
           role="dialog"
           aria-label="Tax-ready score explained"
-          className="absolute left-0 top-6 z-20 w-72 rounded-xl border border-cream-300 bg-white p-4 text-left shadow-lg dark:border-forest-700 dark:bg-forest-900"
+          // Width clamps so we don't overflow a 320px viewport. On the
+          // narrowest phones the popover fills the available column
+          // (minus 1.5rem so it doesn't kiss the page edge); on tablet+
+          // it's a fixed 288px card.
+          className="absolute left-0 top-6 z-20 w-[min(18rem,calc(100vw-1.5rem))] rounded-xl border border-cream-300 bg-white p-4 text-left shadow-lg dark:border-forest-700 dark:bg-forest-900"
         >
           <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-gold-700">
             Tax-ready · {score}%
