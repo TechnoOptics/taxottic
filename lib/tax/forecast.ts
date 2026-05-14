@@ -342,6 +342,15 @@ export type ForecastResult = {
 
   monthlySaveTargetCents: number;
   effectiveRate: number;
+  /**
+   * Federal income tax / taxable income (or 0 when taxable income is
+   * 0). The UI shows this as "Effective rate" under the Federal Income
+   * Tax tile — distinct from `effectiveRate` which is the combined
+   * total/gross figure used in overall "you'll keep ~X%" copy.
+   * Introduced in response to the May 2026 audit's High #4 finding
+   * that the FIT tile was rendering 11% on a $0 federal income tax.
+   */
+  federalIncomeTaxEffectiveRate: number;
   marginalRate: number;
 
   // Quarterly estimated-tax payment plan. Length 4. Past quarters
@@ -567,6 +576,11 @@ export function forecast(input: ForecastInput): ForecastResult {
       refundCents: refund,
       monthlySaveTargetCents: monthlySaveTarget,
       effectiveRate: projectedIncome > 0 ? totalTax / projectedIncome : 0,
+      // C-Corps don't have an ordinary FIT tile to label, but keep the
+      // field shape uniform so the UI doesn't have to branch on
+      // entity type. Use the flat federal rate as the "FIT effective
+      // rate" — same value the UI shows as the marginal rate.
+      federalIncomeTaxEffectiveRate: netBiz > 0 ? cTax / netBiz : 0,
       marginalRate: C_CORP_RATE,
       quarterlyEstimates,
       underpaymentRisk,
@@ -1304,7 +1318,19 @@ export function forecast(input: ForecastInput): ForecastResult {
   const monthlySaveTarget = Math.round(remaining / monthsRemaining);
 
   const marginal = marginalFederalRate(taxableIncome, input.filingStatus, k);
+  // Overall effective rate: total tax (federal income + SE + state +
+  // additional Medicare + NIIT, less credits) over gross projected
+  // income. This is the "you'll lose ~X% of every dollar to tax"
+  // number — useful as a top-line stat.
   const effective = projectedIncome > 0 ? totalTax / projectedIncome : 0;
+  // Federal-income-tax-specific effective rate: federal income tax over
+  // TAXABLE income. The May 2026 audit (High #4) caught the UI showing
+  // the combined `effective` under a tile labelled "Federal income tax
+  // — Effective rate" with $0 federal income tax. That label promised
+  // FIT/taxable but the value was total/gross. Split it out so the UI
+  // can show the right number under the right label.
+  const federalIncomeTaxEffectiveRate =
+    taxableIncome > 0 ? fedTax / taxableIncome : 0;
 
   // Underpayment-penalty safe harbor: pay at least 90% of this year's
   // tax to avoid the penalty. We surface the risk via a hint; the
@@ -1564,6 +1590,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     refundCents: refund,
     monthlySaveTargetCents: monthlySaveTarget,
     effectiveRate: effective,
+    federalIncomeTaxEffectiveRate,
     marginalRate: marginal,
     quarterlyEstimates,
     underpaymentRisk,

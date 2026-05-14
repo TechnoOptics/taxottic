@@ -35,6 +35,7 @@ import {
   buildScorecard,
   eligibleDeductions,
 } from "@/lib/deductions/eligibility";
+import { deductibleAmountForCategory } from "@/lib/tax/net-business-income";
 import {
   combineMonthly,
   expandRowToMonthly,
@@ -258,7 +259,14 @@ export default async function ForecastPage({ params }: { params: Params }) {
   > = {
     taxYear,
     filingStatus: taxProfile.filing_status as FilingStatus,
-    stateCode: taxProfile.state_code,
+    // Bind the state-tax estimate to the COMPANY's state of operation
+    // (set when the company was created), not the user's personal tax
+    // profile. The May 2026 audit (High #1) caught a Texas company
+    // forecasting Minnesota state tax because the engine was reading
+    // the user's profile-level state. Fall through to the profile only
+    // if the company didn't capture one — keeps single-user / single-
+    // state setups working without changes.
+    stateCode: company.state_code ?? taxProfile.state_code,
     age: taxProfile.age,
     isBlind: taxProfile.is_blind,
     itemize: taxProfile.itemize,
@@ -383,27 +391,32 @@ export default async function ForecastPage({ params }: { params: Params }) {
   // Captured-by-code uses the projected year-end amount (one-off pace
   // + recurring full year) so the deduction scorecard reflects what the
   // user is actually likely to capture for the year.
+  //
+  // The May 2026 audit's High #5: the scorecard was showing GROSS
+  // captured dollars for meals — but the meals category is labelled
+  // "Meals (50% deductible)" and elsewhere on the page we report the
+  // post-50% number. Run every captured amount through
+  // `deductibleAmountForCategory` so the scorecard tracks DEDUCTIBLE
+  // dollars (matching the forecast's headline expense figure).
   const capturedByCode = new Map<string, number>();
   for (const r of expenses) {
+    let gross: number;
     if (isRecurring(r)) {
-      const yearTotal = totalOfMonthly(
+      gross = totalOfMonthly(
         expandRowToMonthly({
           month: r.month,
           amount_cents: r.amount_cents,
           recurrence: r.recurrence,
         }),
       );
-      capturedByCode.set(
-        r.category_code,
-        (capturedByCode.get(r.category_code) ?? 0) + yearTotal,
-      );
     } else {
-      capturedByCode.set(
-        r.category_code,
-        (capturedByCode.get(r.category_code) ?? 0) +
-          Math.round(r.amount_cents * oneOffPaceFactor),
-      );
+      gross = Math.round(r.amount_cents * oneOffPaceFactor);
     }
+    const deductible = deductibleAmountForCategory(r.category_code, gross);
+    capturedByCode.set(
+      r.category_code,
+      (capturedByCode.get(r.category_code) ?? 0) + deductible,
+    );
   }
   const { data: categoryRows } = await supabase
     .from("deduction_categories")
@@ -516,45 +529,96 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="forecast" />
         </div>
 
-        {/* Story hero: the human-language forecast. */}
+        {/* Story hero: the human-language forecast.
+            Banner copy is conditional on whether the user actually has
+            data that paces (recurring rows). When everything logged is
+            one-off and there's no recurring data, "if you keep up at
+            this pace" is misleading — the math doesn't pace one-offs,
+            it counts them once. Resolves the May 2026 audit's Critical
+            #3 framing concern (the math behind each panel is correct;
+            the labels just over-promised). */}
+        {(() => {
+          const hasRecurring =
+            recurringIncomeMonthly.some((c) => c > 0) ||
+            recurringExpenseMonthly.some((c) => c > 0);
+          const headlineCopy = hasRecurring ? (
+            <>
+              If you keep up at this pace,{" "}
+              <span className="text-forest-800 font-semibold">
+                {company.name}
+              </span>{" "}
+              will owe about{" "}
+              <span className="gold-shine">
+                {formatCents(result.totalTaxCents)}
+              </span>{" "}
+              for the year.
+            </>
+          ) : (
+            <>
+              Based on what you&apos;ve logged so far,{" "}
+              <span className="text-forest-800 font-semibold">
+                {company.name}
+              </span>{" "}
+              will owe about{" "}
+              <span className="gold-shine">
+                {formatCents(result.totalTaxCents)}
+              </span>{" "}
+              for the year.
+            </>
+          );
+          const subhead = hasRecurring
+            ? `We project that to year-end and apply the IRS-published brackets for tax year ${taxYear} (Rev. Proc. 2025-32, including the One Big Beautiful Bill amendments).`
+            : `Year-end estimate uses the figures you've logged once each (one-off entries aren't multiplied by a pace factor). Switch a row's cadence to monthly or quarterly on the income/expenses pages if you want it to repeat through year-end.`;
+          return (
+            <div className="card mt-8 p-6 sm:p-9">
+              <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+                Tax year {taxYear} forecast
+              </div>
+              <h2 className="display mt-2 text-2xl sm:text-3xl text-forest-900 leading-tight">
+                {headlineCopy}
+              </h2>
+              <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-2xl">
+                Right now you have logged{" "}
+                <strong className="text-forest-900">
+                  {formatCents(ytdResult.ytdIncomeCents)}
+                </strong>{" "}
+                of income and{" "}
+                <strong className="text-forest-900">
+                  {formatCents(ytdResult.ytdDeductibleExpensesCents)}
+                </strong>{" "}
+                of deductible expenses across {input.monthsEntered} month
+                {input.monthsEntered === 1 ? "" : "s"}. {subhead}
+              </p>
+              {/* Surface the active tax profile so the user doesn't
+                  silently inherit an old default (audit Medium #4). */}
+              <div className="mt-3 text-[11px] text-ink-muted leading-relaxed">
+                Using your saved tax profile:{" "}
+                <span className="text-forest-800 font-medium">
+                  {prettyFilingStatus(taxProfile.filing_status as FilingStatus)}
+                </span>
+                , {taxProfile.dependents} dependent
+                {taxProfile.dependents === 1 ? "" : "s"}
+                {taxProfile.age != null ? `, age ${taxProfile.age}` : ""}.{" "}
+                <Link
+                  href={`/onboarding/tax-profile?next=/c/${publicId}/forecast`}
+                  className="underline decoration-dotted hover:text-forest-900"
+                >
+                  Edit
+                </Link>
+              </div>
+            </div>
+          );
+        })()}
+        <div className="hidden">
+          {/* Anchor element so the JSX below (compare columns + tiles +
+              breakdown) keeps its original location in the rendered
+              tree. The headline above was wrapped in an IIFE to share
+              the `hasRecurring` flag with the subhead text. */}
+        </div>
         <div className="card mt-8 p-6 sm:p-9">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-            Tax year {taxYear} forecast
+            Year-end view
           </div>
-          <h2 className="display mt-2 text-2xl sm:text-3xl text-forest-900 leading-tight">
-            If you keep up at this pace,{" "}
-            <span className="text-forest-800 font-semibold">
-              {company.name}
-            </span>{" "}
-            will owe about{" "}
-            <span className="gold-shine">
-              {formatCents(result.totalTaxCents)}
-            </span>{" "}
-            for the year.
-          </h2>
-          <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-2xl">
-            Right now you have logged{" "}
-            <strong className="text-forest-900">
-              {/* "Logged" means actual YTD, not the projected forecast.
-                 Previously we used `result.ytdIncomeCents` which is the
-                 projected forecast's view of YTD - that pulls one-offs +
-                 recurring at full-year cadence, so the inline copy
-                 disagreed with the YTD card right below by hundreds of
-                 dollars. Use the dedicated ytdResult (which is fed the
-                 truly-realised one-offs + month-by-month recurring) to
-                 keep the headline and the YTD card in lockstep. */}
-              {formatCents(ytdResult.ytdIncomeCents)}
-            </strong>{" "}
-            of income and{" "}
-            <strong className="text-forest-900">
-              {formatCents(ytdResult.ytdDeductibleExpensesCents)}
-            </strong>{" "}
-            of deductible expenses across {input.monthsEntered} month
-            {input.monthsEntered === 1 ? "" : "s"}. We project that to year-
-            end and apply the IRS-published brackets for tax year{" "}
-            {taxYear} (Rev. Proc. 2025-32, including the One Big Beautiful
-            Bill amendments).
-          </p>
 
           {/* YTD vs Projected side-by-side. The YTD column answers "if
               you closed the books today, here's where you stand"; the
@@ -592,7 +656,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
               ]}
             />
             <CompareColumn
-              kicker="Projected to year-end"
+              kicker="Year-end estimate"
               tone="bright"
               rows={[
                 {
@@ -688,7 +752,20 @@ export default async function ForecastPage({ params }: { params: Params }) {
               />
             ) : null}
             <RowKV label="Marginal rate" value={pct(result.marginalRate)} />
-            <RowKV label="Effective rate" value={pct(result.effectiveRate)} />
+            {/* "Effective rate" under the FIT tile is FIT / taxable
+                income — the audit's High #4 caught the UI rendering
+                the combined total/gross figure here, which produced
+                things like "Federal income tax $0, Effective rate 11%".
+                Combined effective rate moved to its own row below
+                with a clear label. */}
+            <RowKV
+              label="Effective rate (FIT / taxable)"
+              value={pct(result.federalIncomeTaxEffectiveRate)}
+            />
+            <RowKV
+              label="Overall (all tax / gross)"
+              value={pct(result.effectiveRate)}
+            />
           </Card>
           <Card title="Self-employment tax">
             <BigNumber>{formatCents(result.selfEmploymentTaxCents)}</BigNumber>
@@ -704,14 +781,26 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </Card>
           <Card title="State">
             <BigNumber>{formatCents(result.stateTaxCents)}</BigNumber>
-            <RowKV label="State" value={taxProfile.state_code ?? "Not set"} />
+            <RowKV
+              label="State"
+              value={
+                company.state_code ?? taxProfile.state_code ?? "Not set"
+              }
+            />
             <RowKV
               label="Method"
               value="Flat-rate estimate"
             />
             <p className="mt-3 text-xs text-ink-muted leading-relaxed">
-              State estimate uses a curated flat rate. Real bracketed math for
-              all 50 states is on the roadmap.
+              State estimate uses the company&apos;s state of operation
+              {company.state_code && taxProfile.state_code && company.state_code !== taxProfile.state_code ? (
+                <>
+                  {" "}
+                  ({company.state_code}, not your personal profile state{" "}
+                  {taxProfile.state_code})
+                </>
+              ) : null}
+              . Real bracketed math for all 50 states is on the roadmap.
             </p>
           </Card>
         </div>
@@ -1214,5 +1303,17 @@ function prettyEntity(t: EntityType): string {
       partnership: "Partnership",
       self_employed_1099: "1099 / Self-Employed",
     }[t] ?? t
+  );
+}
+
+function prettyFilingStatus(s: FilingStatus): string {
+  return (
+    {
+      single: "Single",
+      married_filing_jointly: "Married filing jointly",
+      married_filing_separately: "Married filing separately",
+      head_of_household: "Head of household",
+      qualifying_widow: "Qualifying widow(er)",
+    }[s] ?? s
   );
 }
