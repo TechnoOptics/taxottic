@@ -871,7 +871,15 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </div>
         </Link>
 
-        {/* Quarterly estimated payment schedule */}
+        {/* Quarterly estimated payment schedule.
+            A quarter that ended BEFORE this company was created should
+            not surface as "Past — you missed $X." The business didn't
+            exist; there's no catch-up to do. The May 2026 audit
+            (Medium #2) caught a today-created company showing Q1 as
+            "PAST $629" with a "Catch up on Q1" prompt; that was
+            misleading at best and could prompt an unnecessary IRS
+            payment at worst. Pre-formation quarters now render with a
+            "Pre-formation" badge and a muted explanation. */}
         {result.quarterlyEstimates.some((q) => q.amountCents > 0) ? (
           <div className="mt-6 card p-6 sm:p-7">
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
@@ -886,32 +894,52 @@ export default async function ForecastPage({ params }: { params: Params }) {
               four quarters; the table below shows what to send for each one.
             </p>
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {result.quarterlyEstimates.map((q) => (
-                <div
-                  key={q.quarter}
-                  className={
-                    "rounded-xl border p-4 " +
-                    (q.isPast
-                      ? "bg-cream/50 border-forest-100 text-forest-900"
-                      : "bg-white border-gold-300/60 text-forest-900")
-                  }
-                >
-                  <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em]">
-                    <span className={q.isPast ? "text-ink-muted" : "text-gold-700"}>
-                      Q{q.quarter}
-                    </span>
-                    {q.isPast ? (
-                      <span className="text-ink-muted">Past</span>
+              {result.quarterlyEstimates.map((q) => {
+                const companyCreatedAt = company.created_at
+                  ? new Date(company.created_at)
+                  : null;
+                const quarterDue = new Date(q.dueDate);
+                const isPreFormation =
+                  companyCreatedAt != null &&
+                  q.isPast &&
+                  companyCreatedAt > quarterDue;
+                return (
+                  <div
+                    key={q.quarter}
+                    className={
+                      "rounded-xl border p-4 " +
+                      (q.isPast
+                        ? "bg-cream/50 border-forest-100 text-forest-900"
+                        : "bg-white border-gold-300/60 text-forest-900")
+                    }
+                  >
+                    <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em]">
+                      <span
+                        className={q.isPast ? "text-ink-muted" : "text-gold-700"}
+                      >
+                        Q{q.quarter}
+                      </span>
+                      {isPreFormation ? (
+                        <span className="text-ink-muted">Pre-formation</span>
+                      ) : q.isPast ? (
+                        <span className="text-ink-muted">Past</span>
+                      ) : null}
+                    </div>
+                    <div className="display text-lg sm:text-xl mt-1 tabular-nums">
+                      {formatCents(q.amountCents)}
+                    </div>
+                    <div className="text-[11px] text-ink-muted mt-1">
+                      Due {formatQuarterlyDate(q.dueDate)}
+                    </div>
+                    {isPreFormation ? (
+                      <div className="text-[10px] text-ink-muted mt-1 leading-snug">
+                        Company was created after this quarter — no catch-up
+                        needed.
+                      </div>
                     ) : null}
                   </div>
-                  <div className="display text-lg sm:text-xl mt-1 tabular-nums">
-                    {formatCents(q.amountCents)}
-                  </div>
-                  <div className="text-[11px] text-ink-muted mt-1">
-                    Due {formatQuarterlyDate(q.dueDate)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <p className="mt-3 text-[11px] text-ink-muted leading-relaxed">
               Pay online at{" "}
@@ -923,9 +951,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
               >
                 IRS Direct Pay
               </a>
-              . Past-quarter amounts are what you should have paid by then —
-              if you missed them, sending the catch-up before the next due
-              date trims any underpayment penalty.
+              . Past-quarter amounts (other than pre-formation quarters)
+              are what you should have paid by then — if you missed them,
+              sending the catch-up before the next due date trims any
+              underpayment penalty.
             </p>
           </div>
         ) : null}

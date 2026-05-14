@@ -148,7 +148,12 @@ export default async function IncomePage({ params }: { params: Params }) {
                     ) : null}
                   </div>
                   <div className="text-forest-900 font-medium tabular-nums">
-                    {formatCents(r.amount_cents)}
+                    {/* Show full cents on per-row figures so a user
+                        looking at "$7,501" cannot wonder whether their
+                        $7,500.50 entry was saved or rounded. The
+                        page-top YTD total keeps whole-dollar formatting.
+                        Audit Medium #1. */}
+                    {formatCents(r.amount_cents, { showCents: true })}
                     {r.recurrence && r.recurrence !== "one_off" ? (
                       <span className="ml-1 text-[10px] text-ink-muted">
                         / {shortCadence(r.recurrence)}

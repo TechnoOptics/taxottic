@@ -141,7 +141,8 @@ export default async function ExpensesPage({ params }: { params: Params }) {
                       ) : null}
                     </div>
                     <div className="text-forest-900 font-medium tabular-nums">
-                      {formatCents(r.amount_cents)}
+                      {/* Cents on per-row figures (audit Medium #1). */}
+                      {formatCents(r.amount_cents, { showCents: true })}
                       {r.recurrence && r.recurrence !== "one_off" ? (
                         <span className="ml-1 text-[10px] text-ink-muted">
                           / {shortCadence(r.recurrence)}
