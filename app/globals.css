@@ -775,6 +775,37 @@ main, header, footer, nav {
      equivalent so text remains readable. */
   html[data-theme="dark"] .bg-cream         { background-color: rgba(15, 45, 36, 0.55) !important; }
   html[data-theme="dark"] .bg-white         { background-color: rgba(15, 45, 36, 0.55) !important; }
+  /* Tailwind opacity-modified white backgrounds (`bg-white/40`,
+     `bg-white/60`, `bg-white/70`, `bg-white/80`) bypass the plain
+     `.bg-white` override because Tailwind generates a separate class
+     per opacity. Without these explicit rules, "list row" / card
+     tiles render as washed-out milky surfaces on dark — the
+     scorecard's "Still on the table" cards in the May 2026 audit
+     screenshot were the obvious example, but the pattern is used in
+     dozens of places (income / expense / banks / firm-ops lists,
+     CSV-import rows, Bella chat reply chips, etc.). Map each
+     opacity tier to a forest tint of the equivalent strength so
+     dark-mode "still" / "row" surfaces read as a subtle elevation
+     above the page background, not as a transparent overlay. */
+  /* Tile rows nested inside a .card should read as RECESSED — a
+     subtle inset, not an elevated overlay. The parent .card sits at
+     forest-800 (rgba(15, 45, 36, 0.62)) in dark mode; tiles use
+     forest-950 (rgba(10, 32, 26, ...)) so they look like the page
+     showing through, with the card framing them. */
+  html[data-theme="dark"] .bg-white\/40     { background-color: rgba(10, 32, 26, 0.45) !important; }
+  html[data-theme="dark"] .bg-white\/50     { background-color: rgba(10, 32, 26, 0.50) !important; }
+  html[data-theme="dark"] .bg-white\/60     { background-color: rgba(10, 32, 26, 0.55) !important; }
+  html[data-theme="dark"] .bg-white\/70     { background-color: rgba(10, 32, 26, 0.55) !important; }
+  html[data-theme="dark"] .bg-white\/80     { background-color: rgba(10, 32, 26, 0.60) !important; }
+  /* Same treatment for cream opacity variants used as hover / accent
+     surfaces (`bg-cream/40`, `bg-cream/60` in scorecard expand-rows,
+     receipt-uploader drop targets, etc.). Cream hovers stay a touch
+     lighter than the white tier so a `hover:bg-cream/40` over a
+     `bg-white/70` row reads as a hint of warmth, not just darker. */
+  html[data-theme="dark"] .bg-cream\/40     { background-color: rgba(213, 187, 126, 0.08) !important; }
+  html[data-theme="dark"] .bg-cream\/50     { background-color: rgba(213, 187, 126, 0.10) !important; }
+  html[data-theme="dark"] .bg-cream\/60     { background-color: rgba(213, 187, 126, 0.12) !important; }
+  html[data-theme="dark"] .bg-cream\/70     { background-color: rgba(213, 187, 126, 0.15) !important; }
   /* Forest-50 was the "subtle differentiation" tint on light cards;
      in dark mode it should be even darker than the body bg. */
   html[data-theme="dark"] .bg-forest-50     { background-color: rgba(10, 32, 26, 0.7) !important; }
