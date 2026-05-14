@@ -8,6 +8,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 // {slug}.taxottic.com. Server components read it to pick the
 // "current firm" before falling back to profiles.active_firm_id.
 const FIRM_SLUG_HEADER = "x-taxottic-firm-slug";
+const FIRM_CUSTOM_HOST_HEADER = "x-taxottic-firm-custom-host";
 
 /**
  * Read the firm slug embedded in the host by the wildcard-subdomain
@@ -20,6 +21,15 @@ export async function firmSlugFromHost(): Promise<string | null> {
   const h = await headers();
   const slug = h.get(FIRM_SLUG_HEADER);
   return slug && slug.length > 0 ? slug : null;
+}
+
+/** Phase 2.5: BYO custom domain. Returns the host the firm
+ *  attached (e.g., `firm.smithcpa-secure.com`) when the request
+ *  arrived on a non-Taxottic domain. */
+export async function firmCustomHostFromHeaders(): Promise<string | null> {
+  const h = await headers();
+  const host = h.get(FIRM_CUSTOM_HOST_HEADER);
+  return host && host.length > 0 ? host : null;
 }
 
 // Phase 1 of the enterprise build: a single resolver for "what firm
@@ -94,13 +104,29 @@ async function _getFirmContext(): Promise<FirmContext | null> {
   if (!memberships || memberships.length === 0) return null;
 
   // Pick the active firm. Resolution order:
-  //   1. If the host is {slug}.taxottic.com AND the user is a
+  //   1. If the host is a BYO custom domain, resolve via
+  //      firm_custom_domains; if the user is a member of that
+  //      firm we use it.
+  //   2. If the host is {slug}.taxottic.com AND the user is a
   //      member of that firm, prefer it. Pinning the firm to the
   //      URL means a preparer who multi-firms can't accidentally
   //      act on the wrong client's data.
-  //   2. Otherwise honor profiles.active_firm_id when set.
-  //   3. Otherwise the earliest-joined firm wins.
+  //   3. Otherwise honor profiles.active_firm_id when set.
+  //   4. Otherwise the earliest-joined firm wins.
   const hostSlug = await firmSlugFromHost();
+  const customHost = await firmCustomHostFromHeaders();
+
+  let customDomainFirmId: string | null = null;
+  if (customHost) {
+    const { data: domainRow } = await admin
+      .from("firm_custom_domains")
+      .select("firm_id")
+      .ilike("hostname", customHost)
+      .eq("status", "active")
+      .maybeSingle();
+    customDomainFirmId = (domainRow?.firm_id as string | null) ?? null;
+  }
+
   const { data: profile } = await admin
     .from("profiles")
     .select("active_firm_id")
@@ -113,6 +139,8 @@ async function _getFirmContext(): Promise<FirmContext | null> {
   };
   const rows = memberships as unknown as RawRow[];
   const preferred =
+    (customDomainFirmId &&
+      rows.find((r) => r.firm.id === customDomainFirmId)) ||
     (hostSlug && rows.find((r) => r.firm.slug === hostSlug)) ||
     rows.find((r) => preferredId && r.firm.id === preferredId) ||
     rows[0];

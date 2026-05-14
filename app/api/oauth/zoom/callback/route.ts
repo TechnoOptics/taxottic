@@ -43,16 +43,19 @@ export async function GET(req: NextRequest) {
   const token = exchanged.token;
   const userinfo = await fetchUserinfo("zoom", token.access_token);
 
-  // Phase 10 v1: store the token JSON as base64 in
-  // encrypted_token_blob. Real envelope encryption (pgsodium /
-  // KMS) lands in Phase 10.5 alongside the same upgrade for the
-  // bank_connection_secrets table. Service-role-only reads (RLS
-  // already restricts SELECT to the owning user); base64 keeps
-  // the column type consistent with the future encrypted version.
+  // Phase 10.5: AES-256-GCM authenticated encryption via
+  // OAUTH_TOKEN_VAULT_KEY. Legacy v0 blobs (plain base64) still
+  // decode via the dual-path reader in token-vault.ts, so existing
+  // calendars connected in Phase 10 keep working without forcing
+  // a reconnect.
+  const { encryptTokenJson } = await import("@/lib/firm/oauth/token-vault");
   const expiresAt = token.expires_in
     ? new Date(Date.now() + token.expires_in * 1000).toISOString()
     : null;
-  const blob = Buffer.from(JSON.stringify(token)).toString("base64");
+  const blob = encryptTokenJson({
+    ...token,
+    expires_at: expiresAt,
+  });
 
   await admin
     .from("firm_calendar_integrations")

@@ -203,6 +203,12 @@ export default async function FirmClientPage({
               Invoices
             </Link>
             <Link
+              href={`/firm/clients/${eng.id}/filings`}
+              className="btn-ghost text-sm"
+            >
+              Filings
+            </Link>
+            <Link
               href={`/c/${company.public_id}/forecast`}
               className="btn-primary text-sm"
             >

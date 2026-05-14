@@ -6,6 +6,7 @@ import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { createServiceClient } from "@/lib/supabase/server";
 import { PreparerPanel } from "./PreparerPanel";
 import { FromYourFirmPanel } from "@/components/client/FromYourFirmPanel";
+import { FromYourFirmRealtime } from "@/components/client/FromYourFirmRealtime";
 import {
   acceptFirmInitiatedEngagement,
   cancelEngagement,
@@ -130,7 +131,6 @@ export default async function PreparerPage({ params }: { params: Params }) {
       invoices: assets.invoices,
     });
   }
-  void activeEngagementIds;
 
   return (
     <main id="main" className="min-h-screen">
@@ -176,6 +176,16 @@ export default async function PreparerPage({ params }: { params: Params }) {
             invoices={f.invoices}
           />
         ))}
+
+        {/* Phase 9.5: subscribe to firm_documents/meetings/invoices
+            for every active engagement on this company, refresh the
+            server-rendered panels live. */}
+        {activeEngagementIds.length > 0 ? (
+          <FromYourFirmRealtime
+            companyId={company.id}
+            engagementIds={activeEngagementIds}
+          />
+        ) : null}
       </section>
     </main>
   );

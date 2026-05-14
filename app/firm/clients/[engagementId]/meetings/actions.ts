@@ -82,10 +82,8 @@ export async function scheduleMeeting(formData: FormData) {
     .maybeSingle();
   if (!eng) throw new Error("Engagement not found.");
 
-  // Phase 10: decode the stored token blob and let the provider
-  // adapter mint the meeting URL. Token blob is base64-encoded JSON
-  // (Phase 10.5 will upgrade to envelope-encrypted pgsodium without
-  // changing the column shape).
+  // Phase 10.5: decode via the token vault (AES-256-GCM for new
+  // connections, plain-base64 fallback for legacy v0 blobs).
   let providerEventId: string | null = null;
   let meetingUrl: string | null = manualUrl;
   if (provider !== "manual") {
@@ -96,20 +94,10 @@ export async function scheduleMeeting(formData: FormData) {
       .eq("user_id", user.id)
       .eq("provider", provider)
       .maybeSingle();
-    let accessToken: string | null = null;
-    if (integration?.encrypted_token_blob) {
-      try {
-        const decoded = JSON.parse(
-          Buffer.from(
-            integration.encrypted_token_blob,
-            "base64",
-          ).toString("utf8"),
-        ) as { access_token?: string };
-        accessToken = decoded.access_token ?? null;
-      } catch {
-        accessToken = null;
-      }
-    }
+    const { decodeAccessToken } = await import("@/lib/firm/oauth/token-vault");
+    const accessToken = decodeAccessToken(
+      integration?.encrypted_token_blob ?? null,
+    );
     if (accessToken) {
       const adapter = await loadCalendarProvider(provider);
       if (adapter) {

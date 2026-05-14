@@ -103,6 +103,18 @@ export default async function FirmSettingsHubPage() {
           ? { tone: "warn", text: "Onboarding" }
           : { tone: "muted", text: "Not connected" },
     },
+    {
+      label: "Custom domain",
+      href: "/firm/settings/domain",
+      body:
+        ctx.firm.tier === "enterprise"
+          ? "Point your own domain at this firm portal. Enterprise tier."
+          : "Available on the Enterprise tier.",
+      status:
+        ctx.firm.tier === "enterprise"
+          ? { tone: "muted", text: "Configure" }
+          : { tone: "muted", text: "Enterprise only" },
+    },
   ];
 
   return (

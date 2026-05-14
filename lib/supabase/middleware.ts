@@ -70,6 +70,12 @@ const RESERVED_SUBDOMAINS = new Set([
 // `lib/firm/context.ts`; middleware just sets the slug header so the
 // page knows which firm to load.
 const FIRM_SLUG_HEADER = "x-taxottic-firm-slug";
+// Phase 2.5: BYO custom domain. When a firm has connected
+// {their-domain}.com to their portal, middleware sets this header
+// instead of the slug header; lib/firm/context.ts resolves the
+// firm via firm_custom_domains lookup on the first server-component
+// fetch.
+const FIRM_CUSTOM_HOST_HEADER = "x-taxottic-firm-custom-host";
 
 // Paths that bypass the admin-host -> /admin URL rewrite. Auth flows
 // must keep their canonical /auth/* URLs because the OAuth callback
@@ -135,6 +141,7 @@ export async function updateSession(request: NextRequest) {
   // lazily; if the slug doesn't match a real firm, the page renders
   // a "firm not found" panel and links to /firms/request-account.
   let firmSlugFromHost: string | null = null;
+  let customFirmHost: string | null = null;
   if (
     host.endsWith(`.${ROOT_DOMAIN}`) &&
     !isHq &&
@@ -152,8 +159,23 @@ export async function updateSession(request: NextRequest) {
     ) {
       firmSlugFromHost = sub;
     }
+  } else if (
+    host &&
+    host !== ROOT_DOMAIN &&
+    host !== `www.${ROOT_DOMAIN}` &&
+    !host.endsWith(".vercel.app") &&
+    !host.startsWith("localhost") &&
+    !host.startsWith("127.") &&
+    !host.endsWith(`.${ROOT_DOMAIN}`)
+  ) {
+    // Phase 2.5: BYO custom domain. Anything that's not a Taxottic
+    // host AND isn't a preview / local dev address is a candidate
+    // for a firm_custom_domains lookup. We set a header here; the
+    // firm-context resolver in lib/firm/context.ts does the DB
+    // hit lazily so the middleware stays Supabase-free.
+    customFirmHost = host;
   }
-  const isFirmHost = firmSlugFromHost !== null;
+  const isFirmHost = firmSlugFromHost !== null || customFirmHost !== null;
 
   // Move admin off the customer domain — BUT only when the destination
   // subdomain is actually live. The NEXT_PUBLIC_*_HOST_LIVE env flags
@@ -208,14 +230,16 @@ export async function updateSession(request: NextRequest) {
         rewriteTo.pathname = `/admin${pathname}`;
       }
     }
-  } else if (isFirmHost && firmSlugFromHost) {
-    // Firm subdomain: forward to the /firm cockpit at root, leave
-    // every other path on its own (so /c/{publicId}/forecast,
-    // /onboarding/*, /auth/*, /api/*, /_next/* all work
-    // identically across hosts). The slug header lets
-    // lib/firm/context.ts resolve the firm without re-parsing
-    // the host string.
-    request.headers.set(FIRM_SLUG_HEADER, firmSlugFromHost);
+  } else if (isFirmHost) {
+    // Firm subdomain OR custom BYO domain. Forward / to /firm
+    // (the cockpit), set the appropriate header for the firm-context
+    // resolver to pick the right firm.
+    if (firmSlugFromHost) {
+      request.headers.set(FIRM_SLUG_HEADER, firmSlugFromHost);
+    }
+    if (customFirmHost) {
+      request.headers.set(FIRM_CUSTOM_HOST_HEADER, customFirmHost);
+    }
     if (pathname === "/") {
       rewriteTo = request.nextUrl.clone();
       rewriteTo.pathname = "/firm";

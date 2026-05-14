@@ -33,10 +33,11 @@ export async function GET(req: NextRequest) {
   }
   const token = exchanged.token;
   const userinfo = await fetchUserinfo("microsoft", token.access_token);
+  const { encryptTokenJson } = await import("@/lib/firm/oauth/token-vault");
   const expiresAt = token.expires_in
     ? new Date(Date.now() + token.expires_in * 1000).toISOString()
     : null;
-  const blob = Buffer.from(JSON.stringify(token)).toString("base64");
+  const blob = encryptTokenJson({ ...token, expires_at: expiresAt });
   await admin
     .from("firm_calendar_integrations")
     .upsert(
