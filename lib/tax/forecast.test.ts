@@ -827,6 +827,21 @@ describe("Audit regression matrix: State sanity at $50k/$100k/$200k", () => {
     expect(r.stateTaxCents).toBeGreaterThan(cents(5_000));
   });
 
+  it("OR Single $60k → ~$4,000-$4,400 state tax (Round-5 audit pin)", () => {
+    // OR brackets (Single): 4.75% to $4,300, 6.75% to $10,750,
+    // 8.75% to $125,000. With AGI ≈ $60k − ½SE (~$4,239) = $55,761,
+    // less OR std deduction ($2,700) ≈ $53,061 state taxable:
+    //   4.75% × 4,300 = $204
+    //   6.75% × 6,450 = $435
+    //   8.75% × 42,311 = $3,702
+    //   Total ≈ $4,341
+    // Auditor's hand-calc said $4,000-$4,400. Pin loose band so a
+    // future bracket-table edit doesn't trip on a $20 rounding tweak.
+    const r = soleProp(60_000, "OR");
+    expect(r.stateTaxCents).toBeGreaterThan(cents(3_800));
+    expect(r.stateTaxCents).toBeLessThan(cents(4_600));
+  });
+
   it("IL Single $100k → ~4.95% flat rate, $2k-$5k state tax", () => {
     const r = soleProp(100_000, "IL");
     expect(r.stateTaxCents).toBeGreaterThan(cents(2_000));

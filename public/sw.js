@@ -33,7 +33,11 @@
 // popover viewport-clamped. Pure CSS/markup changes; bump invalidates
 // stale HTML caches so phone users actually see the new spacing on
 // their next visit.
-const CACHE_VERSION = "v11";
+// v12 (May 2026 Round-5): /c/{id}/team and /tax-preparer redirect
+// shims + inline edit on income & expense rows + confirm-on-Remove.
+// Markup changes warrant a cache flush so the v11 clients pick up
+// the new server HTML on next visit.
+const CACHE_VERSION = "v12";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

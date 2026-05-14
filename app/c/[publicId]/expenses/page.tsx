@@ -3,8 +3,9 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
-import { addExpense, deleteExpense } from "./actions";
+import { addExpense, deleteExpense, updateExpense } from "./actions";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
+import { ExpenseRow } from "@/components/ExpenseRow";
 import { ReceiptUploader } from "@/components/ReceiptUploader";
 
 const MONTH_LABELS = [
@@ -142,54 +143,24 @@ export default async function ExpensesPage({ params }: { params: Params }) {
                   is_meal: boolean;
                 } | null;
                 return (
-                  <li
+                  <ExpenseRow
                     key={r.id}
-                    className="flex items-center justify-between rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-forest-900">
-                        {MONTH_LABELS[r.month - 1]} - {cat?.label ?? r.category_code}
-                        {cat?.is_meal ? (
-                          <span className="ml-2 text-[10px] uppercase tracking-wide text-gold-700">
-                            50%
-                          </span>
-                        ) : null}
-                        {r.recurrence && r.recurrence !== "one_off" ? (
-                          <span className="ml-2 text-[10px] uppercase tracking-wide text-forest-700 bg-forest-100 rounded px-1.5 py-0.5">
-                            {prettyCadence(r.recurrence)}
-                          </span>
-                        ) : null}
-                      </div>
-                      {r.notes ? (
-                        <div className="text-xs text-ink-muted truncate">
-                          {r.notes}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="text-forest-900 font-medium tabular-nums">
-                      {/* Cents on per-row figures (audit Medium #1). */}
-                      {formatCents(r.amount_cents, { showCents: true })}
-                      {r.recurrence && r.recurrence !== "one_off" ? (
-                        <span className="ml-1 text-[10px] text-ink-muted">
-                          / {shortCadence(r.recurrence)}
-                        </span>
-                      ) : null}
-                    </div>
-                    <form action={deleteExpense}>
-                      <input
-                        type="hidden"
-                        name="company_id"
-                        value={company.id}
-                      />
-                      <input type="hidden" name="id" value={r.id} />
-                      <button
-                        type="submit"
-                        className="text-xs text-ink-muted hover:text-red-700 px-2 py-1"
-                      >
-                        Remove
-                      </button>
-                    </form>
-                  </li>
+                    row={{
+                      id: r.id,
+                      month: r.month,
+                      amount_cents: r.amount_cents,
+                      category_code: r.category_code,
+                      recurrence: r.recurrence,
+                      notes: r.notes,
+                      category: cat,
+                    }}
+                    companyId={company.id}
+                    taxYear={taxYear}
+                    currentMonth={currentMonth}
+                    categories={(categories as CategoryRow[] | null) ?? []}
+                    updateAction={updateExpense}
+                    deleteAction={deleteExpense}
+                  />
                 );
               })
             ) : (
@@ -232,24 +203,3 @@ export default async function ExpensesPage({ params }: { params: Params }) {
   );
 }
 
-function prettyCadence(r: string): string {
-  return (
-    {
-      weekly: "Weekly",
-      monthly: "Monthly",
-      quarterly: "Quarterly",
-      annual: "Annual",
-    }[r] ?? r
-  );
-}
-
-function shortCadence(r: string): string {
-  return (
-    {
-      weekly: "wk",
-      monthly: "mo",
-      quarterly: "qtr",
-      annual: "yr",
-    }[r] ?? r
-  );
-}
