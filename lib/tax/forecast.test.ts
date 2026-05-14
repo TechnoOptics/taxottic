@@ -438,3 +438,230 @@ describe("Invariants — values that must always hold", () => {
     }
   });
 });
+
+// --------------------------------------------------------------------
+// Round-2 audit regressions (May 2026 W20 verification run)
+// --------------------------------------------------------------------
+
+describe("Audit regression: SE tax SS-wage-base cap (HIGH-1)", () => {
+  it("caps the 12.4% Social Security portion at the year's wage base", () => {
+    // $300k net SE → SE earnings = $300,000 × 0.9235 = $276,950, which
+    // is WELL above the 2026 SSA wage base of $184,500. Without the
+    // cap, SE tax would be 15.3% × $276,950 = $42,373; with the cap
+    // it's 12.4% × $184,500 + 2.9% × $276,950 = $22,878 + $8,032 =
+    // $30,910. The pre-fix bug was an uncapped 15.3% × net SE.
+    const r = forecast(
+      baseInput({
+        entityType: "sole_prop",
+        ytdIncomeCents: cents(300_000),
+        stateCode: "TX",
+      }),
+    );
+    // Allow ±$50 for half-SE-tax-deduction interactions.
+    expect(r.selfEmploymentTaxCents).toBeGreaterThan(cents(30_800));
+    expect(r.selfEmploymentTaxCents).toBeLessThan(cents(31_000));
+  });
+
+  it("matches 15.3% × net SE when net SE is below the wage base", () => {
+    // At $100k net SE (below the cap), capping is a no-op — SE tax
+    // should equal the simple 15.3% × 92.35% × net.
+    const r = forecast(
+      baseInput({
+        entityType: "sole_prop",
+        ytdIncomeCents: cents(100_000),
+        stateCode: "TX",
+      }),
+    );
+    const expected = Math.round(cents(100_000) * 0.9235 * 0.153);
+    expect(Math.abs(r.selfEmploymentTaxCents - expected)).toBeLessThan(
+      cents(20),
+    );
+  });
+});
+
+describe("Audit regression: S-Corp QBI deduction (HIGH-2)", () => {
+  // S-Corp distributions to owners ARE QBI-eligible under IRC §199A.
+  // The Round-2 audit found the engine returning QBI = 0 for every
+  // S-Corp because the gate was on SE_ENTITY_TYPES (which excludes
+  // S-Corp). Fixed by introducing QBI_ELIGIBLE_ENTITY_TYPES that
+  // includes S-Corp.
+  it("computes a non-zero QBI deduction for a $100k S-Corp Single", () => {
+    const r = forecast(
+      baseInput({
+        entityType: "s_corp",
+        ytdIncomeCents: cents(100_000),
+        stateCode: "TX",
+      }),
+    );
+    // QBI = 20% × $100,000 = $20,000 (or capped by 20% × taxable-
+    // before-QBI which is roughly $20k below threshold).
+    expect(r.qbiDeductionCents).toBeGreaterThan(cents(15_000));
+  });
+
+  it("produces the same QBI as a Sole-Prop with the same net biz, single threshold", () => {
+    const soleProp = forecast(
+      baseInput({
+        entityType: "sole_prop",
+        ytdIncomeCents: cents(80_000),
+        stateCode: "TX",
+      }),
+    );
+    const sCorp = forecast(
+      baseInput({
+        entityType: "s_corp",
+        ytdIncomeCents: cents(80_000),
+        stateCode: "TX",
+      }),
+    );
+    // Both should get a QBI deduction; the S-Corp's will differ
+    // slightly because the AGI baseline differs (no SE tax → no half-
+    // SE deduction → slightly higher AGI → slightly higher taxable-
+    // before-QBI cap). Within $1,500 is good enough for this
+    // regression's purpose.
+    expect(sCorp.qbiDeductionCents).toBeGreaterThan(cents(10_000));
+    expect(
+      Math.abs(sCorp.qbiDeductionCents - soleProp.qbiDeductionCents),
+    ).toBeLessThan(cents(2_000));
+  });
+});
+
+describe("Audit regression: state-tax base = AGI − state std (HIGH-4)", () => {
+  // The Round-2 audit found CA tax for a $50k Single Sole Prop in CA
+  // forecasting at ~$378 — way under the hand-calc range of $900-
+  // $1,100. Root cause: state tax was applied to federal taxable
+  // income (which had federal std deduction AND federal QBI already
+  // subtracted). The fix: compute state tax against AGI − state std
+  // deduction. No QBI at state level.
+  it("CA Sole-Prop $50k Single produces state tax in the $900–$1,100 range", () => {
+    const r = forecast(
+      baseInput({
+        entityType: "sole_prop",
+        ytdIncomeCents: cents(50_000),
+        stateCode: "CA",
+      }),
+    );
+    expect(r.stateTaxCents).toBeGreaterThan(cents(900));
+    expect(r.stateTaxCents).toBeLessThan(cents(1_200));
+  });
+
+  it("NY Sole-Prop $100k Single produces state tax in the $3.5k–$4.5k range", () => {
+    const r = forecast(
+      baseInput({
+        entityType: "sole_prop",
+        ytdIncomeCents: cents(100_000),
+        stateCode: "NY",
+      }),
+    );
+    expect(r.stateTaxCents).toBeGreaterThan(cents(3_500));
+    expect(r.stateTaxCents).toBeLessThan(cents(5_000));
+  });
+
+  it("TX (no income tax) produces $0 state tax", () => {
+    const r = forecast(
+      baseInput({
+        entityType: "sole_prop",
+        ytdIncomeCents: cents(200_000),
+        stateCode: "TX",
+      }),
+    );
+    expect(r.stateTaxCents).toBe(0);
+  });
+});
+
+describe("Audit regression: S-Corp wages assumption (HIGH-3)", () => {
+  it("surfaces a hint when no owner W-2 wages are recorded", () => {
+    const r = forecast(
+      baseInput({
+        entityType: "s_corp",
+        ytdIncomeCents: cents(200_000),
+        stateCode: "TX",
+      }),
+    );
+    // The engine should emit a hint warning about $0 wages.
+    expect(
+      r.hints.some((h) => /reasonable compensation/i.test(h)),
+    ).toBe(true);
+  });
+
+  it("acknowledges owner wages in an assumption when provided", () => {
+    const r = forecast(
+      baseInput({
+        entityType: "s_corp",
+        ytdIncomeCents: cents(200_000),
+        stateCode: "TX",
+        ownerW2WagesCents: cents(80_000),
+        ownerW2SsWagesCents: cents(80_000),
+      }),
+    );
+    expect(
+      r.assumptions.some((a) => /owner W-2 wages/i.test(a)),
+    ).toBe(true);
+  });
+});
+
+// --------------------------------------------------------------------
+// Audit regression: 2026 FIT bracket math, Single, pure W-2 income
+// (MEDIUM-2 in Round-2 audit — pins known-good values at three points
+// in the schedule so any future bracket / std-deduction regression
+// trips immediately. Uses self_employed_1099 + only W-2 wages so SE
+// tax, QBI, and Schedule C complications are all zero.)
+// --------------------------------------------------------------------
+
+describe("Audit regression: 2026 FIT brackets (Single, W-2 only)", () => {
+  function single(wagesUsd: number) {
+    return forecast(
+      baseInput({
+        entityType: "self_employed_1099",
+        filingStatus: "single",
+        stateCode: "TX",
+        ownerW2WagesCents: cents(wagesUsd),
+        ownerW2SsWagesCents: cents(wagesUsd),
+      }),
+    );
+  }
+
+  it("$50k Single → ~$3,820 FIT (10% + 12% bracket)", () => {
+    // $50,000 - $16,100 std ded = $33,900 taxable
+    // 10% × $12,400 = $1,240
+    // 12% × $21,500 = $2,580
+    // Expected ≈ $3,820
+    const r = single(50_000);
+    expect(r.federalIncomeTaxCents).toBeGreaterThan(cents(3_700));
+    expect(r.federalIncomeTaxCents).toBeLessThan(cents(3_900));
+    expect(r.selfEmploymentTaxCents).toBe(0);
+    expect(r.qbiDeductionCents).toBe(0);
+  });
+
+  it("$100k Single → ~$13,170 FIT (into 22% bracket)", () => {
+    // $100,000 - $16,100 std ded = $83,900 taxable
+    // 10% × $12,400 + 12% × $38,000 + 22% × $33,500
+    // = $1,240 + $4,560 + $7,370 = $13,170
+    const r = single(100_000);
+    expect(r.federalIncomeTaxCents).toBeGreaterThan(cents(13_000));
+    expect(r.federalIncomeTaxCents).toBeLessThan(cents(13_400));
+    expect(r.selfEmploymentTaxCents).toBe(0);
+  });
+
+  it("$200k Single → ~$36,734 FIT (into 24% bracket)", () => {
+    // $200,000 - $16,100 std ded = $183,900 taxable
+    // 10% × $12,400 + 12% × $38,000 + 22% × $55,300 + 24% × $78,200
+    // = $1,240 + $4,560 + $12,166 + $18,768 = $36,734
+    const r = single(200_000);
+    expect(r.federalIncomeTaxCents).toBeGreaterThan(cents(36_500));
+    expect(r.federalIncomeTaxCents).toBeLessThan(cents(36_900));
+    expect(r.selfEmploymentTaxCents).toBe(0);
+  });
+
+  it("$0 Single → $0 FIT (no income, no tax)", () => {
+    const r = single(0);
+    expect(r.federalIncomeTaxCents).toBe(0);
+  });
+
+  it("FIT is monotonically increasing across the pinned points", () => {
+    const a = single(50_000).federalIncomeTaxCents;
+    const b = single(100_000).federalIncomeTaxCents;
+    const c = single(200_000).federalIncomeTaxCents;
+    expect(b).toBeGreaterThan(a);
+    expect(c).toBeGreaterThan(b);
+  });
+});

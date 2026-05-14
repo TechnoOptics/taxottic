@@ -42,7 +42,10 @@ import { getTaxYearConstants, type TaxYearConstants } from "./constants";
 import { computeEitcCents } from "./credits/eitc";
 import { computeSaversCreditCents } from "./credits/savers";
 import { computeEducationCreditCents } from "./credits/education";
-import { computeStateTaxFromBrackets } from "./state-brackets";
+import {
+  computeStateTaxFromBrackets,
+  stateTaxableIncomeFromAgi,
+} from "./state-brackets";
 
 export type EntityType =
   | "sole_prop"
@@ -384,6 +387,21 @@ const SE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
   "partnership",
 ]);
 
+// Entities whose owner gets the §199A QBI deduction on net pass-
+// through income. Same set as `SE_ENTITY_TYPES` PLUS `s_corp` — S-Corp
+// distributions to owners ARE QBI-eligible under IRC §199A even
+// though the entity itself pays no SE tax. The May 2026 round-2
+// audit caught the engine returning QBI = 0 for every S-Corp because
+// the old code path gated QBI on `SE_ENTITY_TYPES.has(...)`.
+const QBI_ELIGIBLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
+  "sole_prop",
+  "single_llc",
+  "self_employed_1099",
+  "multi_llc",
+  "partnership",
+  "s_corp",
+]);
+
 const C_CORP_RATE = 0.21;
 
 export function forecast(input: ForecastInput): ForecastResult {
@@ -629,11 +647,16 @@ export function forecast(input: ForecastInput): ForecastResult {
   // SE tax (only for pass-throughs / sole prop / partnerships / 1099).
   // S-Corp owners pay payroll on W-2 wages instead; we don't model wages here.
   //
-  // Wage-base interaction: the $176,100 Social Security wage base is
-  // shared between W-2 wages and SE earnings. If the owner already paid
-  // SS on W-2 wages, only the remaining headroom is subject to the SS
-  // portion of SE tax. Spouse W-2 SS wages do NOT count - the wage base
-  // is per-person.
+  // Wage-base interaction: the Social Security wage base is shared
+  // between W-2 wages and SE earnings. If the owner already paid SS on
+  // W-2 wages, only the remaining headroom is subject to the SS
+  // portion of SE tax. Spouse W-2 SS wages do NOT count - the wage
+  // base is per-person. The actual dollar threshold is per tax year
+  // and lives on `k.SE_TAX.socialSecurityWageBase` (see constants-
+  // 2026.ts for the SSA's October announcement); the May 2026 round-2
+  // audit caught this comment + the assumption text below carrying
+  // the stale 2025 number ($176,100) even though the math correctly
+  // used 2026's $184,500.
   let seTax = 0;
   let seEarningsForAddtlMedicare = 0;
   if (SE_ENTITY_TYPES.has(input.entityType)) {
@@ -645,7 +668,11 @@ export function forecast(input: ForecastInput): ForecastResult {
     seTax = result.totalSeTax;
     seEarningsForAddtlMedicare = result.seEarnings;
     assumptions.push(
-      "Self-employment tax: 12.4% Social Security up to the $176,100 wage base + 2.9% Medicare uncapped, on 92.35% of net earnings (IRC §1401).",
+      `Self-employment tax: 12.4% Social Security up to the $${(
+        k.SE_TAX.socialSecurityWageBase / 100
+      ).toLocaleString()} wage base + 2.9% Medicare uncapped, on ${(
+        k.SE_TAX.netEarningsFactor * 100
+      ).toFixed(2)}% of net earnings (IRC §1401).`,
     );
     if (input.ownerW2SsWagesCents > 0) {
       assumptions.push(
@@ -654,9 +681,29 @@ export function forecast(input: ForecastInput): ForecastResult {
     }
   }
   if (input.entityType === "s_corp") {
-    hints.push(
-      "S-Corp owner-employees pay payroll tax on reasonable W-2 wages instead of SE tax. Track W-2 wages separately.",
-    );
+    // S-Corp owner-employees are required by the IRS to take
+    // "reasonable compensation" via W-2 payroll before any net
+    // distributions. The May 2026 round-2 audit caught that the
+    // engine doesn't yet capture owner wages, so the full pass-
+    // through is being modeled as distribution and the savings vs
+    // Sole-Prop look unrealistically large. We don't have the input
+    // wired into the wizard yet; surface the assumption explicitly
+    // so a user (or their CPA) doesn't take the forecast at face
+    // value.
+    if (input.ownerW2WagesCents > 0) {
+      assumptions.push(
+        `S-Corp: this forecast assumes you take $${(
+          input.ownerW2WagesCents / 100
+        ).toLocaleString()} in owner W-2 wages (already runs through payroll-tax withholding) and the remainder as distribution. Increase or decrease that figure on your tax profile if reality differs.`,
+      );
+    } else {
+      hints.push(
+        "S-Corp: this forecast assumes $0 owner W-2 wages, which is NOT a defensible position with the IRS — every S-Corp owner-employee must take reasonable compensation before distributions. The forecast over-states the SE-tax savings until you record your owner wages on the tax-profile page (Owner W-2 wages field). If you take $0 wages this year the IRS can re-characterise distributions as wages and assess back FICA + penalties.",
+      );
+      assumptions.push(
+        "S-Corp owner-employees pay payroll tax (FICA) on reasonable W-2 wages instead of SE tax on the same dollars. The whole-amount-as-distribution treatment below is provisional until owner wages are recorded.",
+      );
+    }
   }
 
   // Additional Medicare 0.9% surtax. IRC §3101(b)(2) / §1401(b)(2).
@@ -847,7 +894,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   // undefined and this block is a no-op for back-year forecasts.
   let qbi = 0;
   const qbiThreshold = k.QBI.thresholdBelow[input.filingStatus];
-  if (SE_ENTITY_TYPES.has(input.entityType) && netBiz > 0) {
+  if (QBI_ELIGIBLE_ENTITY_TYPES.has(input.entityType) && netBiz > 0) {
     if (agi <= qbiThreshold) {
       // QBI is limited to lesser of (20% of QBI, 20% of taxable income before QBI).
       const taxableBeforeQbi = Math.max(0, agi - deduction);
@@ -1205,8 +1252,20 @@ export function forecast(input: ForecastInput): ForecastResult {
   // method/year was used.
   let stTax = 0;
   if (input.stateCode) {
+    // STATE taxable income ≠ FEDERAL taxable income. Most states key
+    // off federal AGI then subtract their own state standard
+    // deduction; NONE of them recognise the federal QBI deduction. If
+    // we pass `taxableIncome` (which has both federal std deduction
+    // and federal QBI removed) into the bracket math we under-state
+    // state tax — the May 2026 round-2 audit caught this on CA at
+    // ~$378 vs ~$1,033 hand-calc. Use the AGI-based helper instead.
+    const stateBase = stateTaxableIncomeFromAgi({
+      agiCents: agi,
+      filingStatus: input.filingStatus,
+      stateCode: input.stateCode,
+    });
     const brackets = computeStateTaxFromBrackets({
-      taxableIncomeCents: taxableIncome,
+      taxableIncomeCents: stateBase,
       filingStatus: input.filingStatus,
       stateCode: input.stateCode,
       taxYear: input.taxYear,
@@ -1227,9 +1286,11 @@ export function forecast(input: ForecastInput): ForecastResult {
         );
       }
     } else {
-      // Fall back to the curated flat rate.
+      // Fall back to the curated flat rate against the SAME state-
+      // taxable base — using `taxableIncome` (federal) would under-
+      // state state tax for the same reason described above.
       const stRate = stateRate(input.stateCode);
-      stTax = Math.round(taxableIncome * stRate);
+      stTax = Math.round(stateBase * stRate);
       if (stRate > 0) {
         assumptions.push(
           `State estimate for ${input.stateCode} uses a curated ${(stRate * 100).toFixed(2)}% flat rate. Real bracket math is encoded for CA, NY, NJ, MA, MN, OR, HI, DC, MD, CT; other graduated states fall back to this approximation - confirm against your state's published brackets.`,

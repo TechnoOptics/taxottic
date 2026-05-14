@@ -3,10 +3,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { W2Fieldset } from "@/components/W2Fieldset";
 import { PriorYearUploader } from "@/components/PriorYearUploader";
 import { US_STATES } from "@/data/us-states";
-import {
-  STANDARD_DEDUCTION_2025,
-  type FilingStatus,
-} from "@/lib/tax/constants-2025";
+import { type FilingStatus } from "@/lib/tax/constants-2025";
+import { getTaxYearConstants } from "@/lib/tax/constants";
 import { formatCents } from "@/lib/tax/forecast";
 import { saveTaxProfile } from "./actions";
 
@@ -299,13 +297,23 @@ export default async function TaxProfilePage({
             <legend className="text-xs uppercase tracking-[0.2em] text-gold-700 px-2">
               Deduction
             </legend>
+            {/* Read the standard deduction off the SAME year-aware
+                constants bundle the forecast engine uses, so the copy
+                here and the math there agree. The previous import
+                pinned this to STANDARD_DEDUCTION_2025 (`$15,000`
+                Single) while the engine for taxYear=2026 was using
+                $16,100 — the May 2026 round-2 audit caught the gap. */}
             <p className="text-xs text-ink-muted leading-relaxed">
               Most filers take the standard deduction (
-              {formatCents(STANDARD_DEDUCTION_2025[startingFilingStatus])} for
-              your filing status, before age / blind add-ons). Itemize only if
-              your mortgage interest, state and local taxes (capped at
-              $10,000), charitable gifts, and large medical expenses together
-              exceed that.
+              {formatCents(
+                getTaxYearConstants(taxYear).STANDARD_DEDUCTION[
+                  startingFilingStatus
+                ],
+              )}{" "}
+              for your filing status, before age / blind add-ons). Itemize
+              only if your mortgage interest, state and local taxes (capped
+              at $10,000), charitable gifts, and large medical expenses
+              together exceed that.
             </p>
             <label className="flex items-start gap-3 cursor-pointer">
               <input
