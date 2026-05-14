@@ -15,7 +15,14 @@
 // them in the SW was the root cause of a persistent React #418
 // hydration error after deploys (old client chunks hydrating against
 // new server HTML).
-const CACHE_VERSION = "v8";
+// v9 (May 2026 Round-2): bumping to invalidate caches alongside the
+// MedalCelebration Math.random fix (which was *also* a #418 source
+// on the dashboard), the dashboard recap-card markup change, and
+// the host-aware login/callback redirects. A no-op for the SW logic
+// itself; the bump forces the activate handler to drop the v8 caches
+// so the new server HTML hydrates against newly-fetched chunks even
+// for clients that still had a v8 SW controlling them.
+const CACHE_VERSION = "v9";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

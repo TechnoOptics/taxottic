@@ -42,12 +42,46 @@ const ENCOURAGEMENT: Record<Badge["tier"], string[]> = {
 export function MedalCelebration({ newlyEarnedCodes }: Props) {
   const [queue, setQueue] = useState<string[]>(newlyEarnedCodes);
   const [reduceMotion, setReduceMotion] = useState(false);
+  // Hydration-safe random pick: SSR + first client render both use
+  // index 0 (deterministic, same on both sides → no React #418), and
+  // a useEffect after mount swaps in a real Math.random pick. The
+  // overlay only ever flashes for a frame in the worst case, and
+  // only when the user just earned a badge — well worth avoiding
+  // the hydration mismatch that took down the forecast page in
+  // production. The index is per-badge so consecutive medals don't
+  // repeat the same line.
+  const [messageIndexByCode, setMessageIndexByCode] = useState<
+    Record<string, number>
+  >({});
 
   useEffect(() => {
     setReduceMotion(
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     );
   }, []);
+
+  // After mount, randomize the message index per queued code. Runs
+  // every time the queue changes so a fresh dismissal lands on a new
+  // line. SSR rendered with empty `messageIndexByCode`, so the
+  // server falls through the `?? 0` and the first client render
+  // matches. After this effect runs, React commits a new render
+  // with a real random index — *post* hydration, which is fine.
+  useEffect(() => {
+    if (queue.length === 0) return;
+    const top = queue[0];
+    const badge = BADGES[top];
+    if (!badge) return;
+    setMessageIndexByCode((prev) =>
+      prev[top] != null
+        ? prev
+        : {
+            ...prev,
+            [top]: Math.floor(
+              Math.random() * ENCOURAGEMENT[badge.tier].length,
+            ),
+          },
+    );
+  }, [queue]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -67,10 +101,8 @@ export function MedalCelebration({ newlyEarnedCodes }: Props) {
   const badge = BADGES[code];
   if (!badge) return null;
 
-  const message =
-    ENCOURAGEMENT[badge.tier][
-      Math.floor(Math.random() * ENCOURAGEMENT[badge.tier].length)
-    ];
+  const messageIndex = messageIndexByCode[code] ?? 0;
+  const message = ENCOURAGEMENT[badge.tier][messageIndex];
   const remaining = queue.length - 1;
 
   return (

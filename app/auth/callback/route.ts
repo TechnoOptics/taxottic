@@ -45,7 +45,18 @@ export async function GET(request: NextRequest) {
       cookieNext = cookieNextRaw;
     }
   }
-  const next = searchParams.get("next") ?? cookieNext ?? "/dashboard";
+  // Host-aware fallback. On the operator subdomains the consumer path
+  // `/dashboard` doesn't exist — middleware rewrites it to
+  // `/admin/dashboard`, which 404s. Use "/" instead so the host's
+  // own root rewrite (hq → /admin, enterprise → /admin/firms) picks
+  // up the correct destination. Mirrors the same defaulting we do
+  // on the client-side OAuth path so magic-link flows aren't an
+  // outlier.
+  const host = (request.headers.get("host") ?? "").toLowerCase();
+  const isOperatorHost =
+    host === "hq.taxottic.com" || host === "enterprise.taxottic.com";
+  const defaultNext = isOperatorHost ? "/" : "/dashboard";
+  const next = searchParams.get("next") ?? cookieNext ?? defaultNext;
 
   // Upstream OAuth error (Google/Microsoft/Apple rejected before
   // issuing a code). Forward both the error code and the description

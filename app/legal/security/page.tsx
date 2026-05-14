@@ -233,6 +233,71 @@ export default function SecurityPage() {
             </p>
           </Section>
 
+          <Section title="Super-admin role and cross-tenant access">
+            <p>
+              Members of the immutable{" "}
+              <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                public.super_admins
+              </code>{" "}
+              allowlist (today:{" "}
+              <em>contact@taxottic.com</em> and{" "}
+              <em>contact@technooptics.com</em>) bypass row-level
+              security and may read any tenant&apos;s data when
+              providing support or investigating an incident. The
+              following safeguards apply:
+            </p>
+            <ul className="list-disc pl-5 grid gap-2">
+              <li>
+                <strong>Visible disclosure.</strong> When a super-admin
+                opens a company they do not own, every page on{" "}
+                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                  /c/&#123;publicId&#125;/*
+                </code>{" "}
+                renders an amber banner at the top reading{" "}
+                <em>Viewing as super-admin · Tenant: NAME · Owner:
+                NAME &lt;EMAIL&gt;</em>. The banner is non-dismissible
+                and shown for the entire session of that visit.
+              </li>
+              <li>
+                <strong>Append-only audit log.</strong> Every
+                cross-tenant page load is recorded in{" "}
+                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                  admin_cross_tenant_access_log
+                </code>{" "}
+                with the admin&apos;s identity, the company that was
+                read, the request path, and a timestamp. Inserts are
+                deduped per (admin, company, path) on a 5-minute window
+                to keep the log readable without losing forensic
+                detail. The table is write-protected: only the
+                SECURITY DEFINER function{" "}
+                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                  log_cross_tenant_access()
+                </code>{" "}
+                can append, and it re-checks{" "}
+                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                  is_super_admin()
+                </code>{" "}
+                before writing.
+              </li>
+              <li>
+                <strong>Tenant visibility.</strong> Company managers
+                may query the rows that pertain to their company via
+                row-level security (policy{" "}
+                <em>tenant manager reads cross-tenant log for their
+                companies</em>). The user-facing report surfacing that
+                data lives behind the company settings page and is
+                planned for the next release.
+              </li>
+              <li>
+                <strong>Writes by super-admins are restricted.</strong>{" "}
+                Cross-tenant writes are not performed silently from the
+                consumer app; admin tooling that needs to write on a
+                tenant&apos;s behalf lives on hq.taxottic.com and is
+                gated by a separate sign-in.
+              </li>
+            </ul>
+          </Section>
+
           <Section title="Single sign-on across Techno Optics products">
             <p>
               Techno Optics ships several products under the same roof
