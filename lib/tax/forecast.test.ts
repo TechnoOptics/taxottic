@@ -855,3 +855,66 @@ describe("Audit regression matrix: State sanity at $50k/$100k/$200k", () => {
     }
   });
 });
+
+// --------------------------------------------------------------------
+// Tier 1 #4: Multi-state apportionment regression matrix.
+// --------------------------------------------------------------------
+
+describe("Multi-state apportionment (Tier 1 #4)", () => {
+  function multiStateInput(
+    incomeUsd: number,
+    nexus: Array<{ stateCode: string; isResident: boolean; salesFactorBps: number }>,
+  ) {
+    return baseInput({
+      entityType: "sole_prop",
+      ytdIncomeCents: cents(incomeUsd),
+      stateCode: null,
+      stateNexus: nexus,
+    });
+  }
+
+  it("MN-resident, all sales in IL: total tax between IL-only and MN-only", () => {
+    const r = forecast(
+      multiStateInput(100_000, [
+        { stateCode: "MN", isResident: true, salesFactorBps: 0 },
+        { stateCode: "IL", isResident: false, salesFactorBps: 10000 },
+      ]),
+    );
+    expect(r.stateTaxCents).toBeGreaterThan(cents(2_500));
+    expect(r.stateTaxCents).toBeLessThan(cents(8_000));
+  });
+
+  it("MN-resident, 50/50 split: between IL-only and MN-only", () => {
+    const r = forecast(
+      multiStateInput(100_000, [
+        { stateCode: "MN", isResident: true, salesFactorBps: 5000 },
+        { stateCode: "IL", isResident: false, salesFactorBps: 5000 },
+      ]),
+    );
+    expect(r.stateTaxCents).toBeGreaterThan(cents(3_000));
+    expect(r.stateTaxCents).toBeLessThan(cents(9_000));
+  });
+
+  it("TX-resident (no income tax) with IL nexus pays IL tax only", () => {
+    const r = forecast(
+      multiStateInput(100_000, [
+        { stateCode: "TX", isResident: true, salesFactorBps: 5000 },
+        { stateCode: "IL", isResident: false, salesFactorBps: 5000 },
+      ]),
+    );
+    expect(r.stateTaxCents).toBeGreaterThan(cents(1_500));
+    expect(r.stateTaxCents).toBeLessThan(cents(4_000));
+  });
+
+  it("emits an apportionment assumption", () => {
+    const r = forecast(
+      multiStateInput(100_000, [
+        { stateCode: "MN", isResident: true, salesFactorBps: 7000 },
+        { stateCode: "IL", isResident: false, salesFactorBps: 3000 },
+      ]),
+    );
+    expect(
+      r.assumptions.some((a) => /multi-state apportionment/i.test(a)),
+    ).toBe(true);
+  });
+});

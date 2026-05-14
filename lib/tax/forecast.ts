@@ -63,10 +63,31 @@ export const ABOVE_THE_LINE_CODES: ReadonlySet<string> = new Set([
   "hsa_contribution",
 ]);
 
+/**
+ * Multi-state apportionment input. When provided, the engine
+ * computes state tax PER state and sums the result with a credit
+ * back to the resident state for taxes paid to non-resident
+ * states (Schedule M1CR-equivalent).
+ *
+ * Sales factor weights are basis-points (0-10000). Should sum to
+ * roughly 10000 across all rows; the engine normalizes if not.
+ */
+export type StateNexusRow = {
+  stateCode: string;
+  isResident: boolean;
+  salesFactorBps: number;
+};
+
 export type ForecastInput = {
   taxYear: number;
   filingStatus: FilingStatus;
+  /** Single-state mode (legacy). Use stateNexus instead when the
+   *  company has nexus in multiple states. */
   stateCode: string | null;
+  /** Multi-state mode. When set + length > 1, the engine apportions
+   *  income across states using sales-factor weights and credits the
+   *  resident state for taxes paid elsewhere. */
+  stateNexus?: StateNexusRow[];
   age: number | null;
   isBlind: boolean;
   itemize: boolean;
@@ -1251,7 +1272,103 @@ export function forecast(input: ForecastInput): ForecastResult {
   // way via the assumptions strip so the user can verify what
   // method/year was used.
   let stTax = 0;
-  if (input.stateCode) {
+  // Tier 1 #4: multi-state apportionment. When the company has
+  // declared nexus in >1 state, we apportion AGI across states by
+  // the sales-factor weights, compute each state's tax against its
+  // own brackets, and credit the resident state for taxes paid to
+  // non-resident states. The result lands in stTax as a single
+  // aggregate number (the single-state UI doesn't know about
+  // per-state breakdown yet; the assumptions strip explains).
+  if (input.stateNexus && input.stateNexus.length > 1) {
+    // Normalize weights to sum to 10000.
+    const totalBps = input.stateNexus.reduce(
+      (a, r) => a + Math.max(0, r.salesFactorBps),
+      0,
+    );
+    const normalize = (bps: number) =>
+      totalBps > 0 ? bps / totalBps : 1 / input.stateNexus!.length;
+
+    let nonResidentTax = 0;
+    let residentGrossTax = 0;
+    const residentRow = input.stateNexus.find((r) => r.isResident);
+    if (!residentRow) {
+      // No resident state declared — treat the first row as resident
+      // and warn.
+      hints.push(
+        "Multi-state nexus declared but no resident state flagged. Pick a home state under the company profile.",
+      );
+    }
+
+    for (const row of input.stateNexus) {
+      const code = row.stateCode.toUpperCase();
+      const weight = normalize(row.salesFactorBps);
+      const apportionedAgi = Math.round(agi * weight);
+      const base = stateTaxableIncomeFromAgi({
+        agiCents: apportionedAgi,
+        filingStatus: input.filingStatus,
+        stateCode: code,
+      });
+      const brackets = computeStateTaxFromBrackets({
+        taxableIncomeCents: base,
+        filingStatus: input.filingStatus,
+        stateCode: code,
+        taxYear: input.taxYear,
+      });
+      const oneStateTax = brackets
+        ? brackets.taxCents
+        : Math.round(base * stateRate(code));
+      if (row.isResident || (!residentRow && row === input.stateNexus[0])) {
+        residentGrossTax = brackets
+          ? brackets.taxCents
+          : oneStateTax;
+        // Compute the resident state on FULL AGI (resident states
+        // tax worldwide income), not just the apportioned slice.
+        const residentFullBase = stateTaxableIncomeFromAgi({
+          agiCents: agi,
+          filingStatus: input.filingStatus,
+          stateCode: code,
+        });
+        const residentFullBrackets = computeStateTaxFromBrackets({
+          taxableIncomeCents: residentFullBase,
+          filingStatus: input.filingStatus,
+          stateCode: code,
+          taxYear: input.taxYear,
+        });
+        residentGrossTax = residentFullBrackets
+          ? residentFullBrackets.taxCents
+          : Math.round(residentFullBase * stateRate(code));
+      } else {
+        nonResidentTax += oneStateTax;
+      }
+    }
+
+    // Resident state credit (Schedule M1CR-equivalent): the
+    // resident state allows a dollar-for-dollar credit for taxes
+    // paid to other states on the income those states taxed, up
+    // to the resident state's tax on the SAME slice of income.
+    // Conservative approximation: credit = min(nonResidentTax,
+    // residentGrossTax × (sum of non-resident weights)).
+    const nonResidentWeightSum = input.stateNexus
+      .filter((r) => !r.isResident)
+      .reduce((a, r) => a + normalize(r.salesFactorBps), 0);
+    const creditCap = Math.round(residentGrossTax * nonResidentWeightSum);
+    const credit = Math.min(nonResidentTax, creditCap);
+    const residentNetTax = Math.max(0, residentGrossTax - credit);
+    stTax = residentNetTax + nonResidentTax;
+
+    const stateList = input.stateNexus
+      .map(
+        (r) =>
+          `${r.stateCode.toUpperCase()}${r.isResident ? "*" : ""} ${(normalize(r.salesFactorBps) * 100).toFixed(1)}%`,
+      )
+      .join(", ");
+    assumptions.push(
+      `Multi-state apportionment applied: ${stateList} (* = resident state). Resident state credits taxes paid elsewhere up to the resident-state-equivalent tax on the same income slice.`,
+    );
+    hints.push(
+      "Multi-state apportionment is an estimate; confirm each state's specific apportionment rules (single sales factor vs three-factor) and any throwback / throwout rules with your CPA.",
+    );
+  } else if (input.stateCode) {
     // STATE taxable income ≠ FEDERAL taxable income. Most states key
     // off federal AGI then subtract their own state standard
     // deduction; NONE of them recognise the federal QBI deduction. If
