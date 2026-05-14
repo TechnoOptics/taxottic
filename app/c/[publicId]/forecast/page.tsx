@@ -493,6 +493,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
     itemize: taxProfile.itemize,
     ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
     currentMonth,
+    // Pass company creation date so suggestions can suppress
+    // "missed Q1 estimate" and underpayment-shortfall framing for
+    // quarters that ended before the company existed.
+    companyCreatedAt: company.created_at ?? null,
   });
 
   return (
@@ -508,7 +512,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             />
             <div>
               <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-                {company.public_id} <span className="text-gold-500">·</span>{" "}
+                {company.public_id} <span className="text-gold-700">·</span>{" "}
                 Tax year {taxYear}
               </div>
               <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
@@ -1013,7 +1017,12 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
           <FindCpaCard
             zip={businessProfile?.zip ?? null}
-            stateCode={taxProfile.state_code ?? company.state_code ?? null}
+            // Prefer the COMPANY's state — same posture as the state-
+            // tax tile (audit High #1). A Texas company should surface
+            // CPAs near Texas, not near the user's personal-profile
+            // state. Fall through to taxProfile only if the company
+            // didn't capture a state.
+            stateCode={company.state_code ?? taxProfile.state_code ?? null}
             city={businessProfile?.city ?? null}
           />
         </section>

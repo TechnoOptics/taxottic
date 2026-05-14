@@ -726,7 +726,7 @@ function BankFeedMockup() {
               </div>
               <div className="text-[11px] text-ink-muted mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                 <span>{t.date}</span>
-                <span className="text-gold-500">·</span>
+                <span className="text-gold-700">·</span>
                 <span className="text-gold-600">↳</span>
                 <span className="text-forest-700">Bella suggested:</span>
                 <span className="text-forest-900 font-medium">{t.category}</span>

@@ -68,6 +68,13 @@ const ADMIN_PASSTHROUGH_EXACT = new Set([
   // cascade into a /login redirect. The body itself is host-aware
   // in app/sitemap.ts and returns an empty list on admin hosts.
   "/sitemap.xml",
+  // The enterprise unauth splash lives at /enterprise-welcome on
+  // every host so the same component renders identically (see the
+  // `isEnterprise && pathname === "/" && !user` rewrite below). On
+  // the admin hosts we need to passthrough or the admin-host
+  // rewrite (`/admin${pathname}`) would turn this into
+  // `/admin/enterprise-welcome`, which doesn't exist.
+  "/enterprise-welcome",
 ]);
 
 export async function updateSession(request: NextRequest) {

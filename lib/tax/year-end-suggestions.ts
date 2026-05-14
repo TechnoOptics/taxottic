@@ -50,6 +50,13 @@ export type SuggestionInput = {
   // Effective Jan 1 of the tax year, so suggestions know "how much of
   // the year is left." Defaults to the current month if absent.
   currentMonth: number;
+  // ISO timestamp of when the company was created. Suggestions that
+  // talk about "missed Q1" or safe-harbor shortfalls are misleading
+  // when the company didn't exist before the quarter's due date —
+  // there was nothing to estimate. Resolves the May 2026 weekly
+  // re-audit finding that the Year-End Moves card kept saying
+  // "Catch up Q1" for a company created in May.
+  companyCreatedAt?: string | null;
 };
 
 const SE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
@@ -83,8 +90,21 @@ export function buildYearEndSuggestions(
     }
   }
 
+  // Exclude pre-formation quarters from the "missed estimates" set
+  // and from the underpayment-risk math. If the company didn't exist
+  // before the quarter's due date, there was no obligation to send an
+  // estimate for that quarter — so neither the "Catch up Q1" Year-End
+  // Moves card nor the "below safe-harbor" copy should fire on it.
+  // Aligns these surfaces with the Quarterly Estimates panel fix
+  // shipped earlier (audit Medium #2 on the re-verification run).
+  const companyCreatedAt = input.companyCreatedAt
+    ? new Date(input.companyCreatedAt)
+    : null;
+  const isPreFormation = (q: typeof result.quarterlyEstimates[number]) =>
+    companyCreatedAt != null && new Date(q.dueDate) < companyCreatedAt;
+
   const pastDue = result.quarterlyEstimates.filter(
-    (q) => q.isPast && q.amountCents > 0,
+    (q) => q.isPast && q.amountCents > 0 && !isPreFormation(q),
   );
   if (pastDue.length > 0 && result.underpaymentRisk) {
     const totalPastDue = pastDue.reduce((a, q) => a + q.amountCents, 0);

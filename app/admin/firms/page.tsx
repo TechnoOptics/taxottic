@@ -41,7 +41,7 @@ export default async function AdminFirmsPage() {
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-              Super-admin <span className="text-gold-500">·</span> Enterprise
+              Super-admin <span className="text-gold-700">·</span> Enterprise
             </div>
             <h1 className="display mt-2 text-3xl text-forest-900">
               Tax preparer firms

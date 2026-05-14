@@ -125,7 +125,7 @@ export default async function SalesTaxPage({
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-4xl mx-auto px-6 py-10">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          {company.public_id} <span className="text-gold-500">·</span>{" "}
+          {company.public_id} <span className="text-gold-700">·</span>{" "}
           Sales tax · TY {taxYear}
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">
