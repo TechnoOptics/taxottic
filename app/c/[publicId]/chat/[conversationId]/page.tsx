@@ -167,7 +167,7 @@ export default async function ConversationPage({
   ).map((m) => m.user_id);
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">

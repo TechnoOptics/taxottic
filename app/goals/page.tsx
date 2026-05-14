@@ -29,7 +29,7 @@ export default async function GoalsPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-3xl mx-auto px-6 py-10">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">

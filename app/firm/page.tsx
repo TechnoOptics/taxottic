@@ -113,7 +113,7 @@ export default async function FirmPage() {
   ).length;
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">

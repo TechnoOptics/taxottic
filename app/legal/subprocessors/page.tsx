@@ -70,7 +70,7 @@ const SUBPROCESSORS: Sub[] = [
 
 export default function SubprocessorsPage() {
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <section className="max-w-4xl mx-auto px-6 py-12">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Subprocessors

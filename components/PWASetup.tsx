@@ -23,6 +23,20 @@ export function PWASetup() {
   const [installed, setInstalled] = useState(false);
   const [waitingWorker, setWaitingWorker] =
     useState<ServiceWorker | null>(null);
+  // Hydration safety. The server renders `null` (no waitingWorker, no
+  // installed, no deferred prompt — all initial state is falsey). The
+  // SW-registration effect below can synchronously promote those to
+  // truthy on the first client tick — e.g. when a service worker is
+  // already waiting after a deploy, or when the PWA is opened in
+  // standalone mode. If the first paint of this component differs
+  // from the SSR HTML, React throws Minified React error #418 (the
+  // May 2026 audit found this on /c/{id}/forecast). Gate every
+  // branch on a one-shot `mounted` flag so the SSR/initial-client
+  // render is always `null`, and toasts only appear AFTER hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -127,6 +141,11 @@ export function PWASetup() {
     waitingWorker.postMessage({ type: "SKIP_WAITING" });
     // controllerchange listener (above) will reload once the new SW activates.
   }
+
+  // Before hydration completes, render nothing — the SSR-rendered
+  // output is also `null`, so first commit cannot mismatch. See the
+  // `mounted` comment up top.
+  if (!mounted) return null;
 
   // Update toast takes precedence over install prompts.
   if (waitingWorker) {

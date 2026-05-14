@@ -35,7 +35,7 @@ export default async function AdminFeedbackPage() {
   }
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} homeHref="/" />
       <section className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <Link href="/" className="text-sm text-ink-soft hover:text-forest-800">

@@ -14,32 +14,36 @@
  * correctly.
  */
 
+// Time-of-day buckets used to live here, but the May 2026 weekly
+// audit observed "Working late" / "Burning the midnight oil" rendered
+// at 7:40 PM PT — the Vercel server's UTC clock was past 03:00 the
+// next day, hitting the LATE bucket while the user's wall clock said
+// early evening. Until we capture the user's timezone offset, the
+// only way to guarantee the greeting reads correctly is to use
+// phrases that are time-of-day-neutral.
+//
+// We keep the MORNING/MIDDAY/EVENING buckets so a future
+// TZ-aware caller can still differentiate, but the lines inside
+// each bucket are now safe to read at *any* hour. The LATE bucket
+// is gone — its specifically-after-dark phrases were the source
+// of the audit finding.
 const MORNING = [
-  "Good morning",
   "Welcome back",
-  "Bright and early",
-  "Quiet morning",
+  "Glad to see you",
+  "Right back at it",
+  "Good to see you",
 ];
 const MIDDAY = [
   "Welcome back",
-  "Good afternoon",
   "Glad to see you",
   "Right back at it",
+  "Hope you're well",
 ];
 const EVENING = [
-  "Good evening",
   "Welcome back",
-  "Evening, friend",
-  "Wrapping up the day",
-];
-// Reserved for the small wee-hours window only. We deliberately do NOT
-// rotate "Burning the midnight oil" into any other bucket - it reads
-// wrong any time the sun is up.
-const LATE = [
-  "Welcome back",
-  "Working late",
-  "Up at this hour",
-  "Burning the midnight oil",
+  "Glad to see you",
+  "Good to see you",
+  "Hope you're well",
 ];
 
 const PLEASANTRIES = [
@@ -55,19 +59,15 @@ export function buildGreeting(args: {
   fullName?: string | null;
   email?: string | null;
 }) {
-  // Local time on the server. On Vercel this is UTC; that's an
-  // approximation until we capture the user's timezone. The buckets
-  // below are conservative so the worst case is a generic "Welcome
-  // back" rather than something obviously time-wrong like
-  // "Burning the midnight oil" at noon.
+  // Server-local hour (UTC on Vercel by default). With the lines in
+  // each bucket now time-neutral, a mismatch between server-UTC and
+  // user-local hour can only ever change rotation, never produce
+  // a wrong-feeling phrase. A future tz-aware caller (e.g. passing
+  // a `_tz_offset_min` cookie set client-side) can plug in here.
   const now = new Date();
   const hour = now.getHours();
   let bucket: string[];
-  if (hour >= 23 || hour < 4) {
-    // 11 PM to 4 AM only - the actual "late night" window where lines
-    // like "Burning the midnight oil" make sense.
-    bucket = LATE;
-  } else if (hour < 12) {
+  if (hour < 12) {
     bucket = MORNING;
   } else if (hour < 17) {
     bucket = MIDDAY;

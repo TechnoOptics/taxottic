@@ -136,7 +136,7 @@ export default async function DashboardPage() {
     }>;
 
     return (
-      <main className="min-h-screen">
+      <main id="main" className="min-h-screen">
         <AppHeader email={user.email ?? undefined} />
         <section className="max-w-2xl mx-auto px-6 py-16">
           <div className="card p-10 text-center">
@@ -515,7 +515,7 @@ export default async function DashboardPage() {
   const trial = await getTrialState(supabase, user.id);
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">

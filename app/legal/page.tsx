@@ -48,7 +48,7 @@ const PAGES = [
 
 export default function LegalIndex() {
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <JsonLd data={LEGAL_BREADCRUMB_LD} />
       <section className="max-w-3xl mx-auto px-6 py-12">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
