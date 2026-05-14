@@ -562,7 +562,13 @@ export default async function DashboardPage() {
           </section>
         ) : null}
 
-        {/* Upcoming reminders */}
+        {/* Upcoming reminders. Multi-company users were seeing the
+            same quarterly-estimate reminder rendered once per company
+            (audit's Low finding: three identical "Q2 estimated tax
+            (2026)" rows at "in 33 days"). Dedupe in render by
+            (title, due_at) — the user only needs to see the deadline
+            once. The deeper /reminders page can still split by company
+            if a power user wants the per-company view. */}
         {upcomingReminders && upcomingReminders.length > 0 ? (
           <section className="mt-8">
             <div className="flex items-end justify-between">
@@ -575,7 +581,7 @@ export default async function DashboardPage() {
               </Link>
             </div>
             <ul className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {upcomingReminders.map((r) => {
+              {dedupeReminders(upcomingReminders).map((r) => {
                 const dueDate = new Date(r.due_at);
                 const days = Math.max(
                   0,
@@ -867,4 +873,26 @@ export default async function DashboardPage() {
       <MedalCelebration newlyEarnedCodes={newlyEarnedCodes} />
     </main>
   );
+}
+
+/**
+ * Collapse reminder rows that share the same (title, due_at) — typical
+ * shape: one quarterly-estimate reminder seeded per company. On the
+ * dashboard the user sees a single coalesced card; the `/reminders`
+ * page can still break them out per company if a power user wants
+ * that view. Audit Low finding: three identical "Q2 estimated tax
+ * (2026)" rows for a three-company user.
+ */
+function dedupeReminders<R extends { id: string; title: string; due_at: string }>(
+  rows: ReadonlyArray<R>,
+): R[] {
+  const seen = new Set<string>();
+  const out: R[] = [];
+  for (const r of rows) {
+    const key = `${r.title} ${r.due_at}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }

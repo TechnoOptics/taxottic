@@ -57,9 +57,20 @@ export function FindCpaCard({ zip, stateCode, city }: Props) {
   // On mount, try a text-based search using the address. If the
   // server has no GOOGLE_PLACES_API_KEY it returns results: null and
   // we render the Maps link instead.
+  //
+  // The May 2026 audit's Low finding: "Searching..." was rendering
+  // indefinitely after navigate-away/back. Root cause: `fetch` has
+  // no default timeout, so a slow Google Places API call (or an
+  // upstream hang) would leave `loading=true` until the user closed
+  // the tab. Add an AbortController-backed 8s timeout to match the
+  // geolocation call below and fall back to the Maps link on
+  // timeout. Cleanup aborts the in-flight request if the component
+  // unmounts mid-fetch.
   useEffect(() => {
     if (!locationLabel) return;
     let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     (async () => {
       setLoading(true);
       try {
@@ -67,6 +78,7 @@ export function FindCpaCard({ zip, stateCode, city }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: fallbackQuery }),
+          signal: controller.signal,
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { results: CpaResult[] | null };
@@ -74,11 +86,14 @@ export function FindCpaCard({ zip, stateCode, city }: Props) {
       } catch {
         // Silent: fall back to the Maps link.
       } finally {
+        clearTimeout(timeoutId);
         if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
+      controller.abort();
     };
   }, [fallbackQuery, locationLabel]);
 
