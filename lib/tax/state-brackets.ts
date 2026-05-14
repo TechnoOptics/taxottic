@@ -385,8 +385,18 @@ export function computeStateTaxFromBrackets(args: {
     surchargeNote = ` Plus $${(surTax / 100).toLocaleString()} from the ${stateUpper} high-income surcharge (${table.surcharge.note}).`;
   }
 
+  // Be honest about which year of brackets we're using. Currently all
+  // tables in this module are 2025; for a 2026 forecast we surface
+  // that explicitly so the user knows it's a placeholder until the
+  // state publishes 2026 figures (audit High #2: the footer said
+  // "MN 2025 bracket table" inside a 2026 forecast with no context).
+  const BRACKETS_DATA_YEAR = 2025;
+  const bracketYearNote =
+    args.taxYear === BRACKETS_DATA_YEAR
+      ? `${BRACKETS_DATA_YEAR} bracket table`
+      : `${BRACKETS_DATA_YEAR} bracket table — placeholder for ${args.taxYear} until ${stateUpper} publishes the year's brackets`;
   return {
     taxCents: tax,
-    note: `State tax computed using ${stateUpper} 2025 bracket table${useMfjBrackets ? " (MFJ column)" : ""}.${surchargeNote}`,
+    note: `State tax computed using ${stateUpper} ${bracketYearNote}${useMfjBrackets ? " (MFJ column)" : ""}.${surchargeNote}`,
   };
 }
