@@ -46,6 +46,7 @@ import {
   computeStateTaxFromBrackets,
   stateTaxableIncomeFromAgi,
 } from "./state-brackets";
+import { computeStateEntityTax } from "./state-entity-taxes";
 
 export type EntityType =
   | "sole_prop"
@@ -572,8 +573,21 @@ export function forecast(input: ForecastInput): ForecastResult {
   // sole-shareholder running both threads gets the right cash picture.
   if (input.entityType === "c_corp") {
     const cTax = Math.round(netBiz * C_CORP_RATE);
-    const stRate = stateRate(input.stateCode);
-    const stTax = Math.round(netBiz * stRate);
+    // Replace the personal-rate fallback with the proper C-Corp
+    // state rate. The new `computeStateEntityTax()` helper applies
+    // (a) the C-Corp state income tax at the correct corporate
+    // rate, (b) gross-receipts / margin taxes (TX, OH, WA, OR, NV)
+    // when receipts exceed the state-specific threshold, and
+    // (c) hints for PTET availability + QBI conformity.
+    const entityTax = computeStateEntityTax({
+      stateCode: input.stateCode,
+      entityType: "c_corp",
+      netBusinessIncomeCents: netBiz,
+      grossReceiptsCents: projectedIncome,
+    });
+    const stTax = entityTax.totalEntityTaxCents;
+    for (const n of entityTax.notes) assumptions.push(n);
+    for (const h of entityTax.hints) hints.push(h);
     const totalTax = cTax + stTax;
     const w2WithheldTotal =
       input.ownerW2WithheldCents + input.spouseW2WithheldCents;
@@ -1418,6 +1432,38 @@ export function forecast(input: ForecastInput): ForecastResult {
         );
       }
     }
+  }
+
+  // Entity-level state taxes (pass-through path).
+  //
+  // The bracket math above gives us the OWNER's personal-side state
+  // income tax. On top of that, the ENTITY itself may owe:
+  //   - S-Corp net-income tax (CA 1.5%, IL 1.5%, MA 8%)
+  //   - LLC franchise tax + tiered gross-receipts fee (CA)
+  //   - Gross-receipts / margin tax (TX, OH, WA, OR, NV)
+  //
+  // C-Corps are handled in the dedicated short-circuit earlier in
+  // this function; this block runs for sole_prop / single_llc /
+  // multi_llc / partnership / s_corp / self_employed_1099. The 1099
+  // self-employed case has no registered entity at the state level —
+  // map it to sole_prop so the gross-receipts taxes (which apply
+  // regardless of entity registration) still fire if applicable.
+  {
+    const entityTypeForState =
+      input.entityType === "self_employed_1099"
+        ? "sole_prop"
+        : input.entityType;
+    const entityTax = computeStateEntityTax({
+      stateCode: input.stateCode,
+      entityType: entityTypeForState,
+      netBusinessIncomeCents: netBiz,
+      grossReceiptsCents: projectedIncome,
+    });
+    if (entityTax.totalEntityTaxCents > 0) {
+      stTax += entityTax.totalEntityTaxCents;
+      for (const n of entityTax.notes) assumptions.push(n);
+    }
+    for (const h of entityTax.hints) hints.push(h);
   }
 
   // Net Investment Income Tax (NIIT). IRC §1411 — 3.8% on the lesser
