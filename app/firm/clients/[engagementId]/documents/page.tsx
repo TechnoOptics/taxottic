@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
-import { generateEngagementLetter, archiveDocument } from "./actions";
+import {
+  generateEngagementLetter,
+  generateScheduleCDraft,
+  archiveDocument,
+} from "./actions";
 
 // /firm/clients/{engagementId}/documents — every doc on this
 // engagement. Two columns: the action panel (generate / upload /
@@ -199,9 +203,21 @@ export default async function DocumentsPage({
                   Engagement letter
                 </button>
               </form>
+              <form action={generateScheduleCDraft} className="mt-2">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <button className="btn-ghost text-sm w-full">
+                  Schedule C draft
+                </button>
+              </form>
               <p className="mt-3 text-[11px] text-ink-muted leading-relaxed">
-                Schedule C / K-1 / 1099 drafts ship in Phase 5.5
-                with per-form, per-tax-year templates.
+                Schedule C reads YTD income + expenses, maps each
+                category to the IRS line, and applies the 50% meals
+                limit. Sole-prop / single-member-LLC only. K-1 /
+                1099 generators ship next.
               </p>
             </div>
 
