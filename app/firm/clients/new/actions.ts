@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { logFirmActivity } from "@/lib/firm/activity";
+import { sendEmail } from "@/lib/email/transport";
+import { renderFirmInviteClientEmail } from "@/lib/email/templates/firm-invite-client";
 
 // Server actions for `/firm/clients/new`.
 //
@@ -118,6 +120,42 @@ export async function inviteClient(formData: FormData) {
         payload: { email, full_name: fullName, business_name: businessName },
       });
 
+      // Send the firm-branded email. Accept URL deep-links into the
+      // engagement so the existing client lands directly on the
+      // engagement details rather than the generic dashboard.
+      const companyPublicId =
+        (managerMembership as unknown as {
+          company: { public_id: string } | null;
+        }).company?.public_id ?? "";
+      const acceptUrl = `https://taxottic.com/login?next=${encodeURIComponent(
+        `/c/${companyPublicId}/preparer?engagementId=${eng?.id ?? ""}`,
+      )}`;
+      const rendered = renderFirmInviteClientEmail({
+        firmName: ctx.firm.name,
+        firmSlug: ctx.firm.slug ?? "enterprise",
+        firmLogoUrl: ctx.firm.logo_url,
+        firmAccentColor: ctx.firm.accent_color,
+        recipientName: fullName,
+        engagementKindLabel: prettyKind(kind),
+        taxYear,
+        message,
+        inviterName: user.user_metadata?.full_name as string | undefined,
+        inviterEmail: user.email ?? null,
+        acceptUrl,
+      });
+      await sendEmail({
+        to: email,
+        fromName: rendered.fromName,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        replyTo: rendered.replyTo,
+        tags: {
+          kind: "firm-invite-existing-user",
+          firm_slug: ctx.firm.slug ?? "no-slug",
+        },
+      });
+
       revalidatePath("/firm");
       if (eng?.id) {
         redirect(`/firm/clients/${eng.id}`);
@@ -159,11 +197,40 @@ export async function inviteClient(formData: FormData) {
     },
   });
 
-  // Phase 1: we don't actually send the email yet — that wires into
-  // the magic-link sender in a follow-up commit. The row is created
-  // so the operator can see it on the firm cockpit pending list and
-  // the prospect can sign up directly via taxottic.com/login at
-  // which point pending_firm_outreach_for_me() will surface it.
+  // Phase 3: send the firm-branded invitation email. We render the
+  // body with the firm's logo + accent color, set the firm name as
+  // the from-display-name, and point the accept URL at the
+  // taxottic.com/login path so an account is created on first
+  // click. The `pending_firm_outreach_for_me()` RPC surfaces this
+  // outreach once the prospect signs up.
+  const acceptUrl = `https://taxottic.com/login?next=${encodeURIComponent(
+    "/dashboard?from=firm-invite",
+  )}`;
+  const rendered = renderFirmInviteClientEmail({
+    firmName: ctx.firm.name,
+    firmSlug: ctx.firm.slug ?? "enterprise",
+    firmLogoUrl: ctx.firm.logo_url,
+    firmAccentColor: ctx.firm.accent_color,
+    recipientName: fullName,
+    engagementKindLabel: prettyKind(kind),
+    taxYear,
+    message,
+    inviterName: user.user_metadata?.full_name as string | undefined,
+    inviterEmail: user.email ?? null,
+    acceptUrl,
+  });
+  await sendEmail({
+    to: email,
+    fromName: rendered.fromName,
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+    replyTo: rendered.replyTo,
+    tags: {
+      kind: "firm-invite-client",
+      firm_slug: ctx.firm.slug ?? "no-slug",
+    },
+  });
 
   revalidatePath("/firm");
   redirect("/firm");

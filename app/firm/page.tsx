@@ -306,6 +306,18 @@ export default async function FirmPage() {
               + Onboard a client
             </Link>
             <Link
+              href="/firm/clients/import"
+              className="btn-ghost text-sm"
+            >
+              Bulk import
+            </Link>
+            <Link
+              href="/firm/outreach"
+              className="btn-ghost text-sm"
+            >
+              Outreach
+            </Link>
+            <Link
               href="/firm/settings"
               className="btn-ghost text-sm"
             >
