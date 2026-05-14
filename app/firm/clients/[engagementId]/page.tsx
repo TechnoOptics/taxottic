@@ -185,6 +185,12 @@ export default async function FirmClientPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              href={`/firm/clients/${eng.id}/documents`}
+              className="btn-ghost text-sm"
+            >
+              Documents
+            </Link>
+            <Link
               href={`/c/${company.public_id}/forecast`}
               className="btn-primary text-sm"
             >
