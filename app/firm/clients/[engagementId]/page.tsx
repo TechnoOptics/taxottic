@@ -197,6 +197,12 @@ export default async function FirmClientPage({
               Meetings
             </Link>
             <Link
+              href={`/firm/clients/${eng.id}/invoices`}
+              className="btn-ghost text-sm"
+            >
+              Invoices
+            </Link>
+            <Link
               href={`/c/${company.public_id}/forecast`}
               className="btn-primary text-sm"
             >
