@@ -82,12 +82,10 @@ export async function scheduleMeeting(formData: FormData) {
     .maybeSingle();
   if (!eng) throw new Error("Engagement not found.");
 
-  // Attempt to auto-mint a meeting URL when a calendar provider is
-  // requested AND the organizer has a connected integration AND a
-  // non-empty (decrypted) access token. For Phase 6 v1 we leave the
-  // token-decrypt path as a TODO — the column holds an encrypted
-  // blob that the lib/firm/scheduling/secrets.ts helper (Phase 6.5)
-  // will unwrap. Until then we fall through to manual.
+  // Phase 10: decode the stored token blob and let the provider
+  // adapter mint the meeting URL. Token blob is base64-encoded JSON
+  // (Phase 10.5 will upgrade to envelope-encrypted pgsodium without
+  // changing the column shape).
   let providerEventId: string | null = null;
   let meetingUrl: string | null = manualUrl;
   if (provider !== "manual") {
@@ -98,10 +96,20 @@ export async function scheduleMeeting(formData: FormData) {
       .eq("user_id", user.id)
       .eq("provider", provider)
       .maybeSingle();
-    // TODO Phase 6.5: decrypt encrypted_token_blob into accessToken.
-    // For now, treat a present row as "connected but token sealed"
-    // and skip auto-mint.
-    const accessToken: string | null = integration ? null : null;
+    let accessToken: string | null = null;
+    if (integration?.encrypted_token_blob) {
+      try {
+        const decoded = JSON.parse(
+          Buffer.from(
+            integration.encrypted_token_blob,
+            "base64",
+          ).toString("utf8"),
+        ) as { access_token?: string };
+        accessToken = decoded.access_token ?? null;
+      } catch {
+        accessToken = null;
+      }
+    }
     if (accessToken) {
       const adapter = await loadCalendarProvider(provider);
       if (adapter) {
