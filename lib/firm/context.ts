@@ -1,7 +1,26 @@
 import { cache } from "react";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
+
+// Header set by middleware on every request whose host is
+// {slug}.taxottic.com. Server components read it to pick the
+// "current firm" before falling back to profiles.active_firm_id.
+const FIRM_SLUG_HEADER = "x-taxottic-firm-slug";
+
+/**
+ * Read the firm slug embedded in the host by the wildcard-subdomain
+ * middleware. Returns null on hosts that aren't firm subdomains
+ * (consumer / HQ / enterprise / preview / localhost). Pages that
+ * want firm-branded chrome (logo, color) can read this directly
+ * without doing a DB lookup themselves.
+ */
+export async function firmSlugFromHost(): Promise<string | null> {
+  const h = await headers();
+  const slug = h.get(FIRM_SLUG_HEADER);
+  return slug && slug.length > 0 ? slug : null;
+}
 
 // Phase 1 of the enterprise build: a single resolver for "what firm
 // does the current user belong to?" Every firm-scoped page calls
@@ -74,8 +93,14 @@ async function _getFirmContext(): Promise<FirmContext | null> {
 
   if (!memberships || memberships.length === 0) return null;
 
-  // Pick the active firm: respect profiles.active_firm_id when
-  // present, otherwise the earliest-joined membership wins.
+  // Pick the active firm. Resolution order:
+  //   1. If the host is {slug}.taxottic.com AND the user is a
+  //      member of that firm, prefer it. Pinning the firm to the
+  //      URL means a preparer who multi-firms can't accidentally
+  //      act on the wrong client's data.
+  //   2. Otherwise honor profiles.active_firm_id when set.
+  //   3. Otherwise the earliest-joined firm wins.
+  const hostSlug = await firmSlugFromHost();
   const { data: profile } = await admin
     .from("profiles")
     .select("active_firm_id")
@@ -88,7 +113,9 @@ async function _getFirmContext(): Promise<FirmContext | null> {
   };
   const rows = memberships as unknown as RawRow[];
   const preferred =
-    rows.find((r) => preferredId && r.firm.id === preferredId) ?? rows[0];
+    (hostSlug && rows.find((r) => r.firm.slug === hostSlug)) ||
+    rows.find((r) => preferredId && r.firm.id === preferredId) ||
+    rows[0];
 
   return {
     firm: preferred.firm,

@@ -43,6 +43,33 @@ const PUBLIC_PATHS = [
 
 const HQ_HOST = "hq.taxottic.com";
 const ENTERPRISE_HOST = "enterprise.taxottic.com";
+const ROOT_DOMAIN = "taxottic.com";
+
+// Subdomains we treat as reserved (NOT firm portals) — these short-
+// circuit the wildcard logic and fall through to consumer / admin
+// handling. `www` is canonicalized to the root; `dev`/`staging`/
+// `preview` are environment buckets; `assets`/`cdn` are static.
+const RESERVED_SUBDOMAINS = new Set([
+  "www",
+  "hq",
+  "enterprise",
+  "dev",
+  "staging",
+  "preview",
+  "assets",
+  "cdn",
+  "api",
+  "mail",
+  "email",
+  "auth",
+]);
+
+// Headers we set when a firm subdomain is detected. Server components
+// read these to resolve firm context without re-parsing the host on
+// every page. The actual DB lookup (slug → firm record) happens in
+// `lib/firm/context.ts`; middleware just sets the slug header so the
+// page knows which firm to load.
+const FIRM_SLUG_HEADER = "x-taxottic-firm-slug";
 
 // Paths that bypass the admin-host -> /admin URL rewrite. Auth flows
 // must keep their canonical /auth/* URLs because the OAuth callback
@@ -92,6 +119,41 @@ export async function updateSession(request: NextRequest) {
   const isEnterprise = host === ENTERPRISE_HOST;
   const isAdminHost = isHq || isEnterprise;
   const { pathname } = request.nextUrl;
+
+  // Wildcard subdomain detection.
+  //
+  // {slug}.taxottic.com → firm portal. The middleware extracts the
+  // slug, sets x-taxottic-firm-slug header so server components can
+  // read it without re-parsing host, and rewrites `/` to `/firm`
+  // (the cockpit). Paths under /admin or /api etc. pass through so
+  // a firm member can still hit super-admin tooling (gated by
+  // role) and API routes work identically across hosts.
+  //
+  // We deliberately DON'T look up the firm in the DB from middleware
+  // — that would add a Supabase round-trip to every request. The
+  // firm-context resolver in lib/firm/context.ts does the lookup
+  // lazily; if the slug doesn't match a real firm, the page renders
+  // a "firm not found" panel and links to /firms/request-account.
+  let firmSlugFromHost: string | null = null;
+  if (
+    host.endsWith(`.${ROOT_DOMAIN}`) &&
+    !isHq &&
+    !isEnterprise
+  ) {
+    const sub = host.slice(0, -(`.${ROOT_DOMAIN}`.length));
+    // Multi-level subdomains (e.g. preview.smithcpa.taxottic.com)
+    // aren't firm portals — only single-level subdomains are.
+    if (
+      sub.length >= 3 &&
+      sub.length <= 32 &&
+      !sub.includes(".") &&
+      !RESERVED_SUBDOMAINS.has(sub) &&
+      /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(sub)
+    ) {
+      firmSlugFromHost = sub;
+    }
+  }
+  const isFirmHost = firmSlugFromHost !== null;
 
   // Move admin off the customer domain — BUT only when the destination
   // subdomain is actually live. The NEXT_PUBLIC_*_HOST_LIVE env flags
@@ -145,6 +207,18 @@ export async function updateSession(request: NextRequest) {
       } else {
         rewriteTo.pathname = `/admin${pathname}`;
       }
+    }
+  } else if (isFirmHost && firmSlugFromHost) {
+    // Firm subdomain: forward to the /firm cockpit at root, leave
+    // every other path on its own (so /c/{publicId}/forecast,
+    // /onboarding/*, /auth/*, /api/*, /_next/* all work
+    // identically across hosts). The slug header lets
+    // lib/firm/context.ts resolve the firm without re-parsing
+    // the host string.
+    request.headers.set(FIRM_SLUG_HEADER, firmSlugFromHost);
+    if (pathname === "/") {
+      rewriteTo = request.nextUrl.clone();
+      rewriteTo.pathname = "/firm";
     }
   }
 

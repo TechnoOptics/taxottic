@@ -2,7 +2,12 @@ import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
+import { deriveSlugCandidate } from "@/lib/firm/slug";
 import { approveFirmRequest, rejectFirmRequest } from "./actions";
+
+function suggestSlug(firmName: string): string {
+  return deriveSlugCandidate(firmName) || "smithcpa";
+}
 
 /**
  * Super-admin firm provisioning. Lists pending requests submitted via
@@ -25,7 +30,7 @@ export default async function AdminFirmsPage() {
       .order("created_at", { ascending: false }),
     admin
       .from("firms")
-      .select("id, public_id, name, status, tier, created_at, approved_at")
+      .select("id, public_id, slug, name, status, tier, created_at, approved_at")
       .order("created_at", { ascending: false }),
   ]);
 
@@ -93,14 +98,40 @@ export default async function AdminFirmsPage() {
                       {new Date(p.created_at).toLocaleString()}
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center gap-2 flex-wrap">
-                    <form action={approveFirmRequest}>
+                  <div className="mt-4">
+                    {/* Subdomain slug input. Approval auto-derives a
+                        slug from the firm name (see lib/firm/slug.ts);
+                        leave blank to accept the auto-derivation. The
+                        approval action validates against the format
+                        check + reserved-words list. */}
+                    <form
+                      action={approveFirmRequest}
+                      className="flex items-end gap-2 flex-wrap"
+                    >
                       <input type="hidden" name="request_id" value={p.id} />
+                      <label className="grid gap-1.5 max-w-[18rem]">
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                          Subdomain slug (optional)
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            name="slug"
+                            placeholder={suggestSlug(p.firm_name)}
+                            maxLength={32}
+                            pattern="[a-z0-9][a-z0-9-]{1,30}[a-z0-9]"
+                            className="input text-sm flex-1 min-w-0"
+                          />
+                          <span className="text-[11px] text-ink-muted whitespace-nowrap">
+                            .taxottic.com
+                          </span>
+                        </div>
+                      </label>
                       <button className="btn-primary text-sm">
-                        Approve and invite owner
+                        Approve & invite owner
                       </button>
                     </form>
-                    <form action={rejectFirmRequest}>
+                    <form action={rejectFirmRequest} className="mt-2">
                       <input type="hidden" name="request_id" value={p.id} />
                       <button className="btn-ghost text-sm">Reject</button>
                     </form>
@@ -126,7 +157,16 @@ export default async function AdminFirmsPage() {
                       {f.name}
                     </div>
                     <div className="text-xs text-ink-muted">
-                      {f.public_id} · tier {f.tier} · {f.status}
+                      {f.slug ? (
+                        <span className="font-mono text-forest-800">
+                          {f.slug}.taxottic.com
+                        </span>
+                      ) : (
+                        <span className="text-amber-700">
+                          No slug — backfill required
+                        </span>
+                      )}{" "}
+                      · {f.public_id} · tier {f.tier} · {f.status}
                     </div>
                   </div>
                   <div className="text-[11px] text-ink-muted">

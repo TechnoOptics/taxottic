@@ -8,6 +8,8 @@ import {
   enterpriseSiteOrigin,
   sendFirmInviteMagicLink,
 } from "@/lib/email/send-firm-invite";
+import { logFirmActivity } from "@/lib/firm/activity";
+import { isValidSlugFormat, pickAvailableSlug } from "@/lib/firm/slug";
 
 /**
  * Approve a firm access request:
@@ -27,6 +29,12 @@ export async function approveFirmRequest(formData: FormData) {
   await requireSuperAdmin();
   const admin = createServiceClient();
   const requestId = String(formData.get("request_id") ?? "");
+  // Optional operator-supplied slug. We validate against the
+  // firms_slug_format_check + reserved-words list; if invalid we
+  // fall through to auto-derivation from the firm name.
+  const manualSlugRaw = String(formData.get("slug") ?? "")
+    .trim()
+    .toLowerCase();
   if (!requestId) throw new Error("Missing request id");
 
   const { data: req } = await admin
@@ -37,18 +45,34 @@ export async function approveFirmRequest(formData: FormData) {
   if (!req) throw new Error("Request not found");
   if (req.status !== "pending") throw new Error("Already reviewed");
 
+  // Mint a slug FIRST so we can include it in the firm insert. If
+  // the operator supplied a manual slug we honor it (after format
+  // check); otherwise derive from firm_name and let
+  // pickAvailableSlug() handle uniqueness.
+  if (manualSlugRaw && !isValidSlugFormat(manualSlugRaw)) {
+    throw new Error(
+      "Slug must be 3-32 chars, lowercase alphanumeric + hyphens, no reserved words (admin, hq, www, etc.).",
+    );
+  }
+  const slug = await pickAvailableSlug(
+    admin,
+    req.firm_name,
+    manualSlugRaw || undefined,
+  );
+
   // 1. Create the firm. Status active so the firm can sign in
   //    immediately when the invitee accepts.
   const { data: firm, error: firmError } = await admin
     .from("firms")
     .insert({
       name: req.firm_name,
+      slug,
       email: req.contact_email,
       phone: req.contact_phone,
       status: "active",
       tier: "starter",
     })
-    .select("id, public_id")
+    .select("id, public_id, slug")
     .single();
   if (firmError || !firm) throw new Error(firmError?.message ?? "Insert failed");
 
@@ -93,6 +117,25 @@ export async function approveFirmRequest(formData: FormData) {
       `[firm-invite] welcome email sent to ${req.contact_email} for "${req.firm_name}" -> ${sendResult.inviteUrl}`,
     );
   }
+
+  // Activity log: the firm itself doesn't have any members yet
+  // (invitation hasn't been accepted) so the firm-side activity
+  // stream stays empty until that lands. We log the approval
+  // anyway as a system-side event so the audit trail captures
+  // who approved which request.
+  await logFirmActivity({
+    client: admin,
+    firmId: firm.id,
+    kind: "firm.member_invited",
+    summary: `Firm provisioned at ${slug}.taxottic.com — owner invitation sent to ${req.contact_email}.`,
+    payload: {
+      request_id: requestId,
+      slug,
+      owner_email: req.contact_email,
+      owner_name: req.contact_full_name,
+    },
+    actorSide: "system",
+  });
 
   revalidatePath(`/admin/firms`);
 }
