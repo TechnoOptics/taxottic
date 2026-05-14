@@ -332,6 +332,18 @@ export default async function DocumentsPage({
                 </button>
               </form>
               <hr className="my-3 border-forest-100" />
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900 mb-2">
+                <strong className="block uppercase tracking-[0.15em] text-[10px] mb-1">
+                  Tax-return drafts
+                </strong>
+                These generators produce <strong>review starters</strong>,
+                not file-ready returns. Schedule A itemization,
+                Schedule D capital gains, Schedule L balance sheet,
+                Form 4562 depreciation detail, and QBI phaseouts
+                above the threshold still need preparer attention.
+                Each output is watermarked DRAFT — verify line-by-
+                line against the IRS-issued form before signing.
+              </div>
               <form action={generateForm1040Draft}>
                 <input
                   type="hidden"

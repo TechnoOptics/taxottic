@@ -234,6 +234,42 @@ export default function PrivacyPage() {
               separate &ldquo;deleted customer&rdquo; archive.
             </p>
             <p>
+              <strong>Firm activity log — 365-day rolling retention.</strong>{" "}
+              Firms running on the Taxottic cockpit generate an event
+              stream (document uploads, signature dispatches, invoice
+              sends, notes added, etc.). To keep the activity inbox
+              and notification queries fast, rows older than 365 days
+              are bulk-deleted by a nightly cron. The window covers a
+              full tax cycle plus a buffer for amended returns.
+              Tenants who need pre-retention rows for a specific
+              investigation can request them via{" "}
+              <a
+                href="mailto:trust@taxottic.com"
+                className="underline hover:text-forest-900"
+              >
+                trust@taxottic.com
+              </a>
+              ; we can serve them from point-in-time recovery
+              snapshots for up to seven additional days. Retention
+              days are tunable in the deployment via
+              {" "}
+              <code>FIRM_ACTIVITY_RETENTION_DAYS</code>; minimum is
+              30 to prevent accidental aggressive deletion.
+            </p>
+            <p>
+              <strong>Cross-tenant access log — indefinite retention.</strong>{" "}
+              When a Taxottic support engineer accesses a tenant&apos;s
+              data on the tenant&apos;s behalf (always recorded against
+              the engineer&apos;s identity, never anonymized), the
+              event is appended to{" "}
+              <code>admin_cross_tenant_access_log</code>. These rows
+              are retained indefinitely and visible to the tenant
+              owner at{" "}
+              <code>/c/&lt;company&gt;/audit-log</code> (consumer side)
+              and to the firm at <code>/firm/audit-log</code> (firm
+              side, rolled up across all engaged clients).
+            </p>
+            <p>
               You can always export everything we have on you first,
               before deleting, at{" "}
               <Link

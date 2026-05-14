@@ -19,7 +19,20 @@ import { requireFirmAdmin } from "@/lib/firm/context";
 //   engagement, the firm is the trust anchor for their client base —
 //   they want to verify their own SLA to *their* clients, and they
 //   want the rollup across all of them in one place. So this page
-//   joins on every company the firm has an active engagement with.
+//   joins on every company the firm has an engagement with.
+//
+// Historical-rows policy (post-engagement-end):
+//   We deliberately include completed/terminated engagements in the
+//   company_id IN filter, not just active ones. The IRS retention
+//   rules + discovery requirements ask firms to be able to answer
+//   "who accessed this client's data" for the year following
+//   engagement end, plus the 3-year statute window for amended-
+//   return audit. Trimming to active-only would silently lose that
+//   visibility. If a firm ever needs to *suppress* a former client
+//   from the viewer (e.g., the client requested data portability +
+//   deletion), the right place is a per-engagement "suppressed_from_
+//   audit_log" flag — not implemented yet but documented here so
+//   the reasoning survives.
 //
 // Scope:
 //   - Read-only (writes happen exclusively via the SECURITY DEFINER
@@ -181,7 +194,10 @@ export default async function FirmAuditLogPage() {
         )}
 
         <p className="mt-8 text-[11px] text-ink-muted max-w-2xl leading-relaxed">
-          The cross-tenant access log retains rows indefinitely. If
+          The cross-tenant access log retains rows indefinitely.
+          Former clients stay visible here even after the engagement
+          ends, so the firm can answer post-engagement audit
+          questions during the 3-year amended-return window. If
           you need to report a specific access event, copy the
           timestamp + engineer name and contact{" "}
           <a

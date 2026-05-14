@@ -32,7 +32,9 @@ export const maxDuration = 300;
  */
 
 const DEFAULT_RETENTION_DAYS = 365;
+const MIN_RETENTION_DAYS = 30;
 const BATCH_LIMIT = 5000;
+const WALL_BUDGET_MS = 4 * 60 * 1000; // 4 of 5 min Vercel ceiling
 
 export async function GET(req: NextRequest) {
   const isCron = req.headers.get("x-vercel-cron") === "1";
@@ -51,7 +53,7 @@ export async function GET(req: NextRequest) {
     process.env.FIRM_ACTIVITY_RETENTION_DAYS ?? DEFAULT_RETENTION_DAYS,
   );
   const retentionDays =
-    Number.isFinite(retentionDaysRaw) && retentionDaysRaw >= 30
+    Number.isFinite(retentionDaysRaw) && retentionDaysRaw >= MIN_RETENTION_DAYS
       ? Math.floor(retentionDaysRaw)
       : DEFAULT_RETENTION_DAYS;
 
@@ -59,38 +61,64 @@ export async function GET(req: NextRequest) {
   const cutoffIso = cutoff.toISOString();
 
   const admin = createServiceClient();
+  const startMs = Date.now();
 
-  // Two-step delete: first we look up the IDs older than cutoff,
-  // capped at BATCH_LIMIT, then we DELETE by id. Using LIMIT
-  // directly on DELETE isn't supported in the supabase-js builder,
-  // and an unbounded DELETE on a 5M-row table would lock too much.
-  const { data: stale, error: selectErr } = await admin
-    .from("firm_activity_log")
-    .select("id")
-    .lt("created_at", cutoffIso)
-    .order("created_at", { ascending: true })
-    .limit(BATCH_LIMIT);
-  if (selectErr) {
-    return NextResponse.json(
-      { error: selectErr.message },
-      { status: 500 },
-    );
-  }
-
-  const ids = (stale ?? []).map((r) => r.id);
   let deleted = 0;
-  if (ids.length > 0) {
+  let batches = 0;
+  let hadMore = false;
+
+  // Loop in BATCH_LIMIT chunks until either we drain the backlog
+  // or we hit the wall budget. Two-step inside each chunk:
+  // SELECT ids then DELETE WHERE id IN (...), because the
+  // supabase-js builder doesn't expose LIMIT on DELETE and an
+  // unbounded DELETE on a multi-million-row table would lock too
+  // much.
+  while (true) {
+    if (Date.now() - startMs > WALL_BUDGET_MS) {
+      hadMore = true;
+      break;
+    }
+
+    const { data: stale, error: selectErr } = await admin
+      .from("firm_activity_log")
+      .select("id")
+      .lt("created_at", cutoffIso)
+      .order("created_at", { ascending: true })
+      .limit(BATCH_LIMIT);
+    if (selectErr) {
+      return NextResponse.json(
+        {
+          status: "error",
+          error: selectErr.message,
+          deleted,
+          batches,
+        },
+        { status: 500 },
+      );
+    }
+
+    const ids = (stale ?? []).map((r) => r.id);
+    if (ids.length === 0) break;
+
     const { error: delErr, count } = await admin
       .from("firm_activity_log")
       .delete({ count: "exact" })
       .in("id", ids);
     if (delErr) {
       return NextResponse.json(
-        { error: delErr.message },
+        {
+          status: "error",
+          error: delErr.message,
+          deleted,
+          batches,
+        },
         { status: 500 },
       );
     }
-    deleted = count ?? ids.length;
+
+    deleted += count ?? ids.length;
+    batches++;
+    if (ids.length < BATCH_LIMIT) break; // drained
   }
 
   return NextResponse.json({
@@ -98,6 +126,8 @@ export async function GET(req: NextRequest) {
     retention_days: retentionDays,
     cutoff: cutoffIso,
     deleted,
-    has_more: ids.length >= BATCH_LIMIT,
+    batches,
+    has_more: hadMore,
+    duration_ms: Date.now() - startMs,
   });
 }
