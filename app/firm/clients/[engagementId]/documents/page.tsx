@@ -8,6 +8,8 @@ import {
   generateScheduleCDraft,
   generateK1Drafts,
   generate1099Batch,
+  generateForm1040Draft,
+  generateEntityReturnDraft,
   sendDocumentForSignature,
   archiveDocument,
 } from "./actions";
@@ -31,6 +33,9 @@ const KIND_LABEL: Record<string, string> = {
   "1099_nec_draft": "Form 1099-NEC (draft)",
   "1099_misc_draft": "Form 1099-MISC (draft)",
   "1040_draft": "Form 1040 (draft)",
+  "1065_draft": "Form 1065 (draft)",
+  "1120_draft": "Form 1120 (draft)",
+  "1120_s_draft": "Form 1120-S (draft)",
   tax_return_packet: "Return packet",
   client_upload_w2: "Client W-2",
   client_upload_1099: "Client 1099",
@@ -196,7 +201,10 @@ export default async function DocumentsPage({
                           d.kind === "k1_draft" ||
                           d.kind === "1099_nec_draft" ||
                           d.kind === "1099_misc_draft" ||
-                          d.kind === "1040_draft") ? (
+                          d.kind === "1040_draft" ||
+                          d.kind === "1065_draft" ||
+                          d.kind === "1120_draft" ||
+                          d.kind === "1120_s_draft") ? (
                           <details className="relative">
                             <summary className="btn-primary text-xs px-3 h-9 cursor-pointer list-none">
                               Send for signature
@@ -321,6 +329,50 @@ export default async function DocumentsPage({
                 <input type="hidden" name="variant" value="1099-MISC" />
                 <button className="btn-ghost text-sm w-full">
                   1099-MISC batch
+                </button>
+              </form>
+              <hr className="my-3 border-forest-100" />
+              <form action={generateForm1040Draft}>
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1040 draft
+                </button>
+              </form>
+              <form action={generateEntityReturnDraft} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1065" />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1065 (partnership)
+                </button>
+              </form>
+              <form action={generateEntityReturnDraft} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1120" />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1120 (C-Corp)
+                </button>
+              </form>
+              <form action={generateEntityReturnDraft} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1120-S" />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1120-S (S-Corp)
                 </button>
               </form>
               <p className="mt-3 text-[11px] text-ink-muted leading-relaxed">

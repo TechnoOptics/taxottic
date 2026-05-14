@@ -20,6 +20,15 @@ import {
   loadMISCRecipients,
   render1099HTML,
 } from "@/lib/firm/documents/generate-1099";
+import {
+  loadForm1040Data,
+  renderForm1040HTML,
+} from "@/lib/firm/documents/generate-1040";
+import {
+  loadEntityReturnTotals,
+  renderEntityReturnHTML,
+  type EntityForm,
+} from "@/lib/firm/documents/generate-entity-return";
 
 // Server actions for /firm/clients/{engagementId}/documents.
 //
@@ -863,4 +872,299 @@ export async function archiveDocument(formData: FormData) {
     .eq("firm_id", ctx.firm.id);
   if (error) throw new Error(error.message);
   revalidatePath(`/firm/clients/${engagementId}/documents`);
+}
+
+// Tier 4 #1: Form 1040 generator. Only meaningful when the
+// engagement's company is a sole proprietorship or single-member
+// LLC — partnership / corp returns flow through Forms 1065 /
+// 1120 / 1120-S below.
+export async function generateForm1040Draft(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await requireFirmContext();
+  const engagementId = String(formData.get("engagement_id") ?? "");
+  if (!engagementId) throw new Error("Missing engagement.");
+
+  const { data: eng } = await admin
+    .from("firm_engagements")
+    .select(
+      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, entity_type, deleted_at)",
+    )
+    .eq("id", engagementId)
+    .eq("firm_id", ctx.firm.id)
+    .maybeSingle();
+  if (!eng) throw new Error("Engagement not found.");
+  const company = (
+    eng as unknown as {
+      company: {
+        id: string;
+        name: string;
+        entity_type: string | null;
+        deleted_at: string | null;
+      };
+    }
+  ).company;
+
+  // Resolve the company's manager (the would-be 1040 taxpayer).
+  const { data: ownerRow } = await admin
+    .from("company_members")
+    .select("user_id")
+    .eq("company_id", company.id)
+    .eq("role", "manager")
+    .order("joined_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const ownerUserId = ownerRow?.user_id;
+  if (!ownerUserId) {
+    throw new Error(
+      "Cannot draft Form 1040 — no manager found for the client's company.",
+    );
+  }
+
+  const { data: firmRow } = await admin
+    .from("firms")
+    .select("name, accent_color, logo_url")
+    .eq("id", ctx.firm.id)
+    .maybeSingle();
+  if (!firmRow) throw new Error("Firm record missing.");
+
+  const data = await loadForm1040Data(admin, {
+    ownerUserId,
+    companyId: company.id,
+    taxYear: eng.tax_year,
+  });
+
+  const { html, filename } = renderForm1040HTML({
+    firm: {
+      name: firmRow.name,
+      accent_color: firmRow.accent_color,
+      logo_url: firmRow.logo_url,
+    },
+    taxYear: eng.tax_year,
+    taxpayer: data.taxpayer,
+    filingStatus: data.filingStatus,
+    dependents: data.dependents,
+    isOver65: data.isOver65,
+    isBlind: data.isBlind,
+    income: data.income,
+    adjustments: data.adjustments,
+    itemize: data.itemize,
+    itemizedTotalCents: data.itemizedTotalCents,
+    payments: data.payments,
+    preparer: {
+      full_name: (user.user_metadata?.full_name as string) ?? null,
+      ptin: null,
+    },
+  });
+
+  const { data: docRow, error: insertErr } = await admin
+    .from("firm_documents")
+    .insert({
+      firm_id: ctx.firm.id,
+      engagement_id: engagementId,
+      company_id: eng.company_id,
+      uploader_user_id: user.id,
+      kind: "1040_draft",
+      status: "ready_for_review",
+      provider: "generated",
+      filename,
+      content_type: "text/html",
+      size_bytes: new Blob([html]).size,
+      tax_year: eng.tax_year,
+      storage_path: "",
+      notes: `Form 1040 draft (filing status: ${data.filingStatus}).`,
+    })
+    .select("id")
+    .single();
+  if (insertErr || !docRow) {
+    throw new Error(insertErr?.message ?? "Insert failed.");
+  }
+
+  const storagePath = `firms/${ctx.firm.id}/engagements/${engagementId}/${docRow.id}.html`;
+  await admin.storage
+    .from("firm-documents")
+    .upload(storagePath, html, {
+      contentType: "text/html",
+      upsert: true,
+    });
+  await admin
+    .from("firm_documents")
+    .update({ storage_path: storagePath })
+    .eq("id", docRow.id);
+
+  await logFirmActivity({
+    client: admin,
+    firmId: ctx.firm.id,
+    companyId: eng.company_id,
+    engagementId,
+    kind: "firm.tax_form_drafted",
+    summary: `Drafted Form 1040 for ${company.name} (tax year ${eng.tax_year}).`,
+    payload: {
+      document_id: docRow.id,
+      filing_status: data.filingStatus,
+      tax_year: eng.tax_year,
+    },
+  });
+
+  revalidatePath(`/firm/clients/${engagementId}/documents`);
+  redirect(`/firm/clients/${engagementId}/documents`);
+}
+
+// Tier 4 #2: Form 1065 / 1120 / 1120-S entity-return generator.
+// The `variant` form field picks the form; the company's
+// entity_type must match (we don't draft a 1120 for a sole prop).
+export async function generateEntityReturnDraft(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await requireFirmContext();
+  const engagementId = String(formData.get("engagement_id") ?? "");
+  const variantRaw = String(formData.get("variant") ?? "");
+  const ALLOWED: EntityForm[] = ["1065", "1120", "1120-S"];
+  if (!engagementId) throw new Error("Missing engagement.");
+  if (!ALLOWED.includes(variantRaw as EntityForm)) {
+    throw new Error(`Unknown entity return: ${variantRaw}`);
+  }
+  const variant = variantRaw as EntityForm;
+
+  const { data: eng } = await admin
+    .from("firm_engagements")
+    .select(
+      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, ein, entity_type, state_code, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
+    )
+    .eq("id", engagementId)
+    .eq("firm_id", ctx.firm.id)
+    .maybeSingle();
+  if (!eng) throw new Error("Engagement not found.");
+  const company = (
+    eng as unknown as {
+      company: {
+        id: string;
+        name: string;
+        legal_name: string | null;
+        ein: string | null;
+        entity_type: string | null;
+        state_code: string | null;
+        address_line_1: string | null;
+        address_city: string | null;
+        address_region: string | null;
+        address_postal_code: string | null;
+        deleted_at: string | null;
+      };
+    }
+  ).company;
+
+  // Entity-type sanity check. A C-Corp shouldn't get a 1065 draft.
+  const fits: Record<EntityForm, (e: string | null) => boolean> = {
+    "1065": (e) => e === "partnership" || e === "multi_llc",
+    "1120": (e) => e === "c_corp",
+    "1120-S": (e) => e === "s_corp",
+  };
+  if (!fits[variant](company.entity_type)) {
+    throw new Error(
+      `Form ${variant} doesn't fit entity_type "${company.entity_type ?? "unknown"}".`,
+    );
+  }
+
+  const { data: firmRow } = await admin
+    .from("firms")
+    .select("name, accent_color, logo_url")
+    .eq("id", ctx.firm.id)
+    .maybeSingle();
+  if (!firmRow) throw new Error("Firm record missing.");
+
+  // Owner count from business_profiles.k1_partners or fallback 1.
+  const { data: biz } = await admin
+    .from("business_profiles")
+    .select("k1_partners")
+    .eq("company_id", company.id)
+    .maybeSingle();
+  const ownerCount = Array.isArray(biz?.k1_partners)
+    ? (biz!.k1_partners as unknown[]).length || 1
+    : 1;
+
+  const totals = await loadEntityReturnTotals(admin, company.id, eng.tax_year);
+
+  const { html, filename } = renderEntityReturnHTML({
+    form: variant,
+    firm: {
+      name: firmRow.name,
+      accent_color: firmRow.accent_color,
+      logo_url: firmRow.logo_url,
+    },
+    company: {
+      name: company.name,
+      legal_name: company.legal_name,
+      ein: company.ein,
+      entity_type: company.entity_type,
+      incorporated_state: company.state_code,
+      address_line_1: company.address_line_1,
+      address_city: company.address_city,
+      address_region: company.address_region,
+      address_postal_code: company.address_postal_code,
+    },
+    taxYear: eng.tax_year,
+    totals,
+    ownerCount,
+    preparer: {
+      full_name: (user.user_metadata?.full_name as string) ?? null,
+      ptin: null,
+    },
+  });
+
+  const kind =
+    variant === "1065"
+      ? "1065_draft"
+      : variant === "1120"
+        ? "1120_draft"
+        : "1120_s_draft";
+
+  const { data: docRow, error: insertErr } = await admin
+    .from("firm_documents")
+    .insert({
+      firm_id: ctx.firm.id,
+      engagement_id: engagementId,
+      company_id: eng.company_id,
+      uploader_user_id: user.id,
+      kind,
+      status: "ready_for_review",
+      provider: "generated",
+      filename,
+      content_type: "text/html",
+      size_bytes: new Blob([html]).size,
+      tax_year: eng.tax_year,
+      storage_path: "",
+      notes: `Form ${variant} draft for ${company.name} (entity_type: ${company.entity_type}).`,
+    })
+    .select("id")
+    .single();
+  if (insertErr || !docRow) {
+    throw new Error(insertErr?.message ?? "Insert failed.");
+  }
+
+  const storagePath = `firms/${ctx.firm.id}/engagements/${engagementId}/${docRow.id}.html`;
+  await admin.storage
+    .from("firm-documents")
+    .upload(storagePath, html, {
+      contentType: "text/html",
+      upsert: true,
+    });
+  await admin
+    .from("firm_documents")
+    .update({ storage_path: storagePath })
+    .eq("id", docRow.id);
+
+  await logFirmActivity({
+    client: admin,
+    firmId: ctx.firm.id,
+    companyId: eng.company_id,
+    engagementId,
+    kind: "firm.tax_form_drafted",
+    summary: `Drafted Form ${variant} for ${company.name} (tax year ${eng.tax_year}).`,
+    payload: {
+      document_id: docRow.id,
+      variant,
+      tax_year: eng.tax_year,
+    },
+  });
+
+  revalidatePath(`/firm/clients/${engagementId}/documents`);
+  redirect(`/firm/clients/${engagementId}/documents`);
 }
