@@ -10,6 +10,16 @@ import {
   loadScheduleCData,
   renderScheduleCHTML,
 } from "@/lib/firm/documents/generate-schedule-c";
+import {
+  loadK1Data,
+  renderK1HTML,
+  type K1Variant,
+} from "@/lib/firm/documents/generate-k1";
+import {
+  loadNECRecipients,
+  loadMISCRecipients,
+  render1099HTML,
+} from "@/lib/firm/documents/generate-1099";
 
 // Server actions for /firm/clients/{engagementId}/documents.
 //
@@ -354,6 +364,355 @@ export async function generateScheduleCDraft(formData: FormData) {
         (a, c) => a + c,
         0,
       ),
+    },
+  });
+
+  revalidatePath(`/firm/clients/${engagementId}/documents`);
+  redirect(`/firm/clients/${engagementId}/documents`);
+}
+
+// Phase 11.5: K-1 batch generator. Reads partner / shareholder list
+// from the company's `business_profile.k1_partners` (JSONB) column;
+// if that's not populated we fall back to a single 100% K-1 for the
+// company's manager. Each partner gets one HTML doc.
+export async function generateK1Drafts(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await requireFirmContext();
+  const engagementId = String(formData.get("engagement_id") ?? "");
+  if (!engagementId) throw new Error("Missing engagement.");
+
+  const { data: eng } = await admin
+    .from("firm_engagements")
+    .select(
+      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, ein, entity_type, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
+    )
+    .eq("id", engagementId)
+    .eq("firm_id", ctx.firm.id)
+    .maybeSingle();
+  if (!eng) throw new Error("Engagement not found.");
+  const company = (
+    eng as unknown as {
+      company: {
+        id: string;
+        name: string;
+        legal_name: string | null;
+        ein: string | null;
+        entity_type: string | null;
+        address_line_1: string | null;
+        address_city: string | null;
+        address_region: string | null;
+        address_postal_code: string | null;
+        deleted_at: string | null;
+      };
+    }
+  ).company;
+
+  // Variant from entity type.
+  const variant: K1Variant | null =
+    company.entity_type === "partnership" || company.entity_type === "multi_llc"
+      ? "partnership"
+      : company.entity_type === "s_corp"
+        ? "s_corp"
+        : null;
+  if (!variant) {
+    throw new Error(
+      `K-1 only applies to partnerships and S-Corps. This client is ${company.entity_type ?? "unknown"}.`,
+    );
+  }
+
+  const { data: firmRow } = await admin
+    .from("firms")
+    .select("name, accent_color, logo_url")
+    .eq("id", ctx.firm.id)
+    .maybeSingle();
+  if (!firmRow) throw new Error("Firm record missing.");
+
+  // Resolve partners. Optional `business_profiles.k1_partners` JSONB
+  // gives the firm a place to maintain the partner / shareholder
+  // list. When missing, we generate a single 100% K-1 for the
+  // company manager as a starting point the preparer edits.
+  const { data: biz } = await admin
+    .from("business_profiles")
+    .select("k1_partners")
+    .eq("company_id", company.id)
+    .maybeSingle();
+  type StoredPartner = {
+    name: string;
+    ownership_pct: number;
+    partner_type?: "general" | "limited";
+    address?: string;
+    tin_placeholder?: string;
+  };
+  let partners: StoredPartner[] = Array.isArray(biz?.k1_partners)
+    ? (biz!.k1_partners as StoredPartner[])
+    : [];
+  if (partners.length === 0) {
+    const { data: ownerRow } = await admin
+      .from("company_members")
+      .select("profiles!inner(full_name, email)")
+      .eq("company_id", company.id)
+      .eq("role", "manager")
+      .order("joined_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const ownerProfile =
+      (ownerRow as unknown as { profiles?: { full_name: string | null; email: string } })
+        ?.profiles ?? null;
+    partners = [
+      {
+        name: ownerProfile?.full_name ?? ownerProfile?.email ?? company.name,
+        ownership_pct: 1,
+      },
+    ];
+  }
+
+  const totals = await loadK1Data(admin, company.id, eng.tax_year);
+  const created: string[] = [];
+
+  for (const p of partners) {
+    const { html, filename } = renderK1HTML(
+      {
+        variant,
+        firm: {
+          name: firmRow.name,
+          accent_color: firmRow.accent_color,
+          logo_url: firmRow.logo_url,
+        },
+        company: {
+          name: company.name,
+          legal_name: company.legal_name,
+          ein: company.ein,
+          address_line_1: company.address_line_1,
+          address_city: company.address_city,
+          address_region: company.address_region,
+          address_postal_code: company.address_postal_code,
+        },
+        taxYear: eng.tax_year,
+        totals,
+        partners,
+        preparer: {
+          full_name: (user.user_metadata?.full_name as string) ?? null,
+          ptin: null,
+        },
+      },
+      {
+        name: p.name,
+        ownership_pct: p.ownership_pct,
+        partner_type: p.partner_type,
+        address: p.address ?? null,
+        tin_placeholder: p.tin_placeholder,
+      },
+    );
+
+    const { data: docRow, error: insertErr } = await admin
+      .from("firm_documents")
+      .insert({
+        firm_id: ctx.firm.id,
+        engagement_id: engagementId,
+        company_id: eng.company_id,
+        uploader_user_id: user.id,
+        kind: "k1_draft",
+        status: "ready_for_review",
+        provider: "generated",
+        filename,
+        content_type: "text/html",
+        size_bytes: new Blob([html]).size,
+        tax_year: eng.tax_year,
+        storage_path: "",
+        notes: `K-1 for ${p.name} (${(p.ownership_pct * 100).toFixed(2)}%)`,
+      })
+      .select("id")
+      .single();
+    if (insertErr || !docRow) continue;
+
+    const storagePath = `firms/${ctx.firm.id}/engagements/${engagementId}/${docRow.id}.html`;
+    await admin.storage
+      .from("firm-documents")
+      .upload(storagePath, html, {
+        contentType: "text/html",
+        upsert: true,
+      });
+    await admin
+      .from("firm_documents")
+      .update({ storage_path: storagePath })
+      .eq("id", docRow.id);
+    created.push(docRow.id);
+  }
+
+  await logFirmActivity({
+    client: admin,
+    firmId: ctx.firm.id,
+    companyId: eng.company_id,
+    engagementId,
+    kind: "firm.tax_form_drafted",
+    summary: `Drafted ${created.length} K-1${created.length === 1 ? "" : "s"} for ${company.name} (tax year ${eng.tax_year}).`,
+    payload: {
+      variant,
+      partner_count: partners.length,
+      document_ids: created,
+      tax_year: eng.tax_year,
+    },
+  });
+
+  revalidatePath(`/firm/clients/${engagementId}/documents`);
+  redirect(`/firm/clients/${engagementId}/documents`);
+}
+
+// Phase 11.5: 1099 batch. Walks every recipient whose YTD payments
+// meet the $600 threshold and produces one HTML draft per. Variant
+// is selectable: NEC (contract labor) or MISC (rents + royalties).
+export async function generate1099Batch(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await requireFirmContext();
+  const engagementId = String(formData.get("engagement_id") ?? "");
+  const variantRaw = String(formData.get("variant") ?? "1099-NEC");
+  if (!engagementId) throw new Error("Missing engagement.");
+  const variant =
+    variantRaw === "1099-MISC" ? "1099-MISC" : "1099-NEC";
+
+  const { data: eng } = await admin
+    .from("firm_engagements")
+    .select(
+      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, ein, address_line_1, address_city, address_region, address_postal_code, phone, deleted_at)",
+    )
+    .eq("id", engagementId)
+    .eq("firm_id", ctx.firm.id)
+    .maybeSingle();
+  if (!eng) throw new Error("Engagement not found.");
+  const company = (
+    eng as unknown as {
+      company: {
+        id: string;
+        name: string;
+        legal_name: string | null;
+        ein: string | null;
+        address_line_1: string | null;
+        address_city: string | null;
+        address_region: string | null;
+        address_postal_code: string | null;
+        phone: string | null;
+      };
+    }
+  ).company;
+
+  const { data: firmRow } = await admin
+    .from("firms")
+    .select("name, accent_color, logo_url")
+    .eq("id", ctx.firm.id)
+    .maybeSingle();
+  if (!firmRow) throw new Error("Firm record missing.");
+
+  const baseInput = {
+    variant: variant as "1099-NEC" | "1099-MISC",
+    firm: {
+      name: firmRow.name,
+      accent_color: firmRow.accent_color,
+      logo_url: firmRow.logo_url,
+    },
+    payer: {
+      name: company.name,
+      legal_name: company.legal_name,
+      ein: company.ein,
+      address_line_1: company.address_line_1,
+      address_city: company.address_city,
+      address_region: company.address_region,
+      address_postal_code: company.address_postal_code,
+      phone: company.phone,
+    },
+    taxYear: eng.tax_year,
+    recipients: [] as never,
+    preparer: {
+      full_name: (user.user_metadata?.full_name as string) ?? null,
+      ptin: null,
+    },
+  };
+
+  type RecipientBundle = Array<{
+    recipient: Awaited<ReturnType<typeof loadNECRecipients>>[number];
+    miscBox?: "rents" | "royalties";
+    docKind: "1099_nec_draft" | "1099_misc_draft";
+  }>;
+  const todo: RecipientBundle = [];
+
+  if (variant === "1099-NEC") {
+    const recipients = await loadNECRecipients(admin, company.id, eng.tax_year);
+    for (const r of recipients) {
+      todo.push({ recipient: r, docKind: "1099_nec_draft" });
+    }
+  } else {
+    const { rents, royalties } = await loadMISCRecipients(
+      admin,
+      company.id,
+      eng.tax_year,
+    );
+    for (const r of rents) {
+      todo.push({ recipient: r, miscBox: "rents", docKind: "1099_misc_draft" });
+    }
+    for (const r of royalties) {
+      todo.push({
+        recipient: r,
+        miscBox: "royalties",
+        docKind: "1099_misc_draft",
+      });
+    }
+  }
+
+  if (todo.length === 0) {
+    throw new Error(
+      `No recipients hit the $600 ${variant} threshold for ${eng.tax_year}.`,
+    );
+  }
+
+  const created: string[] = [];
+  for (const t of todo) {
+    const { html, filename } = render1099HTML(
+      baseInput,
+      t.recipient,
+      t.miscBox ?? "rents",
+    );
+    const { data: docRow } = await admin
+      .from("firm_documents")
+      .insert({
+        firm_id: ctx.firm.id,
+        engagement_id: engagementId,
+        company_id: eng.company_id,
+        uploader_user_id: user.id,
+        kind: t.docKind,
+        status: "ready_for_review",
+        provider: "generated",
+        filename,
+        content_type: "text/html",
+        size_bytes: new Blob([html]).size,
+        tax_year: eng.tax_year,
+        storage_path: "",
+        notes: `${variant} for ${t.recipient.name} ($${(t.recipient.total_cents / 100).toFixed(2)})`,
+      })
+      .select("id")
+      .single();
+    if (!docRow) continue;
+    const path = `firms/${ctx.firm.id}/engagements/${engagementId}/${docRow.id}.html`;
+    await admin.storage
+      .from("firm-documents")
+      .upload(path, html, { contentType: "text/html", upsert: true });
+    await admin
+      .from("firm_documents")
+      .update({ storage_path: path })
+      .eq("id", docRow.id);
+    created.push(docRow.id);
+  }
+
+  await logFirmActivity({
+    client: admin,
+    firmId: ctx.firm.id,
+    companyId: eng.company_id,
+    engagementId,
+    kind: "firm.tax_form_drafted",
+    summary: `Drafted ${created.length} ${variant} form${created.length === 1 ? "" : "s"} for ${company.name}.`,
+    payload: {
+      variant,
+      recipient_count: todo.length,
+      document_ids: created,
+      tax_year: eng.tax_year,
     },
   });
 

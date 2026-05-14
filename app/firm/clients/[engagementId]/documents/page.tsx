@@ -6,6 +6,8 @@ import { requireFirmContext } from "@/lib/firm/context";
 import {
   generateEngagementLetter,
   generateScheduleCDraft,
+  generateK1Drafts,
+  generate1099Batch,
   archiveDocument,
 } from "./actions";
 
@@ -165,17 +167,27 @@ export default async function DocumentsPage({
                           </span>
                         </div>
                       </div>
-                      <form action={archiveDocument}>
-                        <input type="hidden" name="id" value={d.id} />
-                        <input
-                          type="hidden"
-                          name="engagement_id"
-                          value={engagementId}
-                        />
-                        <button className="btn-ghost text-xs px-3 h-9 hover:text-red-700">
-                          Archive
-                        </button>
-                      </form>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Link
+                          href={`/api/firm/documents/${d.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-ghost text-xs px-3 h-9"
+                        >
+                          PDF
+                        </Link>
+                        <form action={archiveDocument}>
+                          <input type="hidden" name="id" value={d.id} />
+                          <input
+                            type="hidden"
+                            name="engagement_id"
+                            value={engagementId}
+                          />
+                          <button className="btn-ghost text-xs px-3 h-9 hover:text-red-700">
+                            Archive
+                          </button>
+                        </form>
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -213,11 +225,44 @@ export default async function DocumentsPage({
                   Schedule C draft
                 </button>
               </form>
+              <form action={generateK1Drafts} className="mt-2">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <button className="btn-ghost text-sm w-full">
+                  K-1 batch (partnership / S-Corp)
+                </button>
+              </form>
+              <form action={generate1099Batch} className="mt-2">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1099-NEC" />
+                <button className="btn-ghost text-sm w-full">
+                  1099-NEC batch
+                </button>
+              </form>
+              <form action={generate1099Batch} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1099-MISC" />
+                <button className="btn-ghost text-sm w-full">
+                  1099-MISC batch
+                </button>
+              </form>
               <p className="mt-3 text-[11px] text-ink-muted leading-relaxed">
-                Schedule C reads YTD income + expenses, maps each
-                category to the IRS line, and applies the 50% meals
-                limit. Sole-prop / single-member-LLC only. K-1 /
-                1099 generators ship next.
+                Generators read YTD books + the firm letterhead.
+                K-1 picks up the partners list from{" "}
+                <code className="font-mono">business_profiles.k1_partners</code>{" "}
+                (fallback: 100% to the company manager). 1099s
+                aggregate by recipient name and filter ≥ $600.
               </p>
             </div>
 

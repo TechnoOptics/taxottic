@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
+    "@sparticuz/chromium": "^131.0.1",
     "@capacitor/android": "^8.3.4",
     "@capacitor/app": "^8.1.0",
     "@capacitor/camera": "^8.2.0",
@@ -38,6 +39,7 @@
     "next": "16.2.4",
     "pdfjs-dist": "^5.7.284",
     "plaid": "^42.2.0",
+    "puppeteer-core": "^23.10.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-plaid-link": "^4.1.1",
