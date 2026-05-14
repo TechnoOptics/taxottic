@@ -219,7 +219,15 @@ export async function submitViaMef(formData: FormData) {
     throw new Error(`Cannot submit a filing in status '${row.status}'.`);
   }
 
-  const submissionId = `DCN-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1_000_000).toString(36).toUpperCase()}`;
+  // Tier 1 #6: emit a real MeF-shaped submission ID when EFIN is
+  // configured for the firm. Falls back to the legacy synthetic
+  // DCN format when EFIN isn't wired, so the demo loop keeps
+  // working.
+  const { generateSubmissionId } = await import("@/lib/firm/efile/mef");
+  const efin = process.env.IRS_EFIN ?? "";
+  const submissionId = efin
+    ? generateSubmissionId(efin, Math.floor(Math.random() * 1_000_000))
+    : `DCN-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1_000_000).toString(36).toUpperCase()}`;
   await admin
     .from("firm_efilings")
     .update({
