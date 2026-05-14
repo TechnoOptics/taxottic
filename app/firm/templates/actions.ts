@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmAdmin } from "@/lib/firm/context";
 import { logFirmActivity } from "@/lib/firm/activity";
+import { computeNextIssueAt } from "@/lib/firm/invoice-templates/schedule";
 
 // Tier 2 #2: Recurring invoice templates.
 //
@@ -65,39 +66,6 @@ function parseAmountCents(s: string): number | null {
   const n = Number(cleaned);
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100);
-}
-
-/**
- * Compute the next scheduled issue date for a template. We anchor
- * to UTC midnight to avoid timezone drift across daylight savings.
- */
-export function computeNextIssueAt(args: {
-  cadence: "monthly" | "quarterly" | "annual";
-  issueDayOfMonth: number | null;
-  reference: Date;
-}): Date {
-  const day = Math.min(28, Math.max(1, args.issueDayOfMonth ?? 1));
-  const next = new Date(
-    Date.UTC(
-      args.reference.getUTCFullYear(),
-      args.reference.getUTCMonth(),
-      day,
-      12,
-      0,
-      0,
-    ),
-  );
-  // If the anchored day has already passed this period, roll forward.
-  if (next <= args.reference) {
-    if (args.cadence === "monthly") {
-      next.setUTCMonth(next.getUTCMonth() + 1);
-    } else if (args.cadence === "quarterly") {
-      next.setUTCMonth(next.getUTCMonth() + 3);
-    } else {
-      next.setUTCFullYear(next.getUTCFullYear() + 1);
-    }
-  }
-  return next;
 }
 
 export async function createTemplate(formData: FormData) {

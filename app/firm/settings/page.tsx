@@ -12,8 +12,7 @@ import { requireFirmContext } from "@/lib/firm/context";
 // sees at-a-glance what's wired up vs not (Stripe connected? Team
 // has more than one member? Notifications configured?).
 
-const dynamic = "force-dynamic";
-export { dynamic };
+export const dynamic = "force-dynamic";
 
 type AreaCard = {
   label: string;

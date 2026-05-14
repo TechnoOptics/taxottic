@@ -81,3 +81,4 @@ android/app/release/
 *.ipa
 *.aab
 *.apk
+.claude-pr-body.md

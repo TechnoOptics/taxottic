@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { computeNextIssueAt } from "@/app/firm/templates/actions";
+import { computeNextIssueAt } from "@/lib/firm/invoice-templates/schedule";
 import { logFirmActivity } from "@/lib/firm/activity";
 
 export const runtime = "nodejs";
