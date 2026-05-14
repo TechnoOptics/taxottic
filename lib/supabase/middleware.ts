@@ -33,6 +33,12 @@ const PUBLIC_PATHS = [
   // about whether the request gets through middleware at all.
   "/robots.txt",
   "/sitemap.xml",
+  // Unauth splash for enterprise.taxottic.com root. Reached via a
+  // middleware-side rewrite when an anonymous visitor hits
+  // `enterprise.taxottic.com/`; the page itself is public so it can
+  // also be linked to directly without an auth bounce. See the
+  // `isEnterprise && pathname === "/" && !user` branch below.
+  "/enterprise-welcome",
 ];
 
 const HQ_HOST = "hq.taxottic.com";
@@ -165,6 +171,21 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // enterprise.taxottic.com unauth splash. Without this, anonymous
+  // visitors to the enterprise root were getting rewritten to
+  // /admin/firms (above), which then redirected to /login — the
+  // subdomain looked abandoned. The splash explains what the portal
+  // is, surfaces Sign In + Book a Demo, and links back to the
+  // consumer site. Resolves the May 2026 weekly audit's Critical #4.
+  //
+  // For authenticated users we keep the existing /admin/firms rewrite
+  // so super-admins land directly in the firm-ops console.
+  if (isEnterprise && pathname === "/" && !user) {
+    const splash = request.nextUrl.clone();
+    splash.pathname = "/enterprise-welcome";
+    return NextResponse.rewrite(splash, { request });
+  }
 
   // The auth gate runs against the *internal* path (the page that's
   // about to render), so a hq.taxottic.com/firms request sees /admin

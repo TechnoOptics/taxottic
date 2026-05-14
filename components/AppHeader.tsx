@@ -75,6 +75,27 @@ export async function AppHeader({
 
   return (
     <>
+      {/* Skip-to-main-content link. Visually hidden until focused so
+          keyboard + screen-reader users can jump straight to the page
+          content without tabbing through the wordmark / UserMenu /
+          portal-switcher / Bella FAB stack every time. Pairs with the
+          `id="main"` we set on every <main> below; for pages whose
+          <main> doesn't have that id, the browser scrolls to the
+          top instead — still better than nothing.
+          Added in response to the May 2026 weekly audit (Quick Win
+          #4: "Skip to main content"). */}
+      <a
+        href="#main"
+        className="
+          sr-only focus:not-sr-only
+          focus:fixed focus:top-2 focus:left-2 focus:z-50
+          focus:rounded-md focus:bg-forest-900 focus:text-cream
+          focus:px-3 focus:py-2 focus:text-sm focus:font-medium
+          focus:outline-none focus:ring-2 focus:ring-gold-400
+        "
+      >
+        Skip to main content
+      </a>
       {/* Sticky header (was `fixed` pre-May 2026). `sticky top-0` keeps
           the header pinned to the viewport top once it scrolls into
           view but lets it participate in normal layout — so we no

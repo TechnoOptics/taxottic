@@ -45,7 +45,7 @@ export default async function BillingPage({
   const remainingTopup = await topUpRemaining(admin, user.id, plan);
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">

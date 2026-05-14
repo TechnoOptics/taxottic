@@ -116,7 +116,7 @@ export default async function AdminPage() {
   ];
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} homeHref="/" />
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">

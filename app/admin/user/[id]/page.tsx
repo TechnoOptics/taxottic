@@ -53,7 +53,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
   })();
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={adminUser.email ?? undefined} homeHref="/" />
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <Link

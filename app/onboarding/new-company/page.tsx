@@ -66,7 +66,7 @@ export default async function NewCompanyPage() {
     !profile?.full_name?.trim() && (ownedCompanyCount ?? 0) === 0;
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <NewCompanyWizard
         entityTypes={ENTITY_TYPES}

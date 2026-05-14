@@ -156,7 +156,7 @@ export default async function AccessTransparencyPage({
   }));
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-6 py-10">
         <Link

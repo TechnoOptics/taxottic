@@ -4,7 +4,7 @@ export const metadata = { title: "Privacy - Taxottic" };
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <section className="max-w-3xl mx-auto px-6 py-12">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Privacy Policy

@@ -26,7 +26,7 @@ export default async function ProfilePage({ params }: { params: Params }) {
     .maybeSingle();
 
   return (
-    <main className="min-h-screen">
+    <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
