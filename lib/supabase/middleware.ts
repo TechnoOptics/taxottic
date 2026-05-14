@@ -66,16 +66,6 @@ const ADMIN_PASSTHROUGH_EXACT = new Set([
 
 export async function updateSession(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").toLowerCase();
-  // TRACE diagnostic (PR #50): if a request arrives with `?code=...` in
-  // the query, an OAuth provider's auth code is mid-flight. Capture the
-  // pathname into a cookie so we can prove server-side which URL the
-  // browser landed on (real OAuth flows never trigger our /auth/callback
-  // trace, suggesting Supabase 302s somewhere else). Cookie is short-
-  // lived and contains only a pathname — no secrets.
-  const hasOauthCode =
-    request.nextUrl.searchParams.has("code") &&
-    request.nextUrl.searchParams.has("state");
-  // Snapshot path + query so we can read it off the cookie post-flow.
   // Three portals on three real subdomains:
   //   - taxottic.com               → consumer app (default)
   //   - hq.taxottic.com            → super-admin overview at /admin
@@ -148,39 +138,6 @@ export async function updateSession(request: NextRequest) {
   let response = rewriteTo
     ? NextResponse.rewrite(rewriteTo, { request })
     : NextResponse.next({ request });
-
-  if (hasOauthCode) {
-    const traceVal = `${pathname}?${request.nextUrl.searchParams.toString()}`;
-    // Visible to JS so we can read it from the browser console after the
-    // flow. Lax SameSite + 60s TTL — long enough to inspect, short enough
-    // to not pollute.
-    response.cookies.set("_oauth_trace_path", traceVal.slice(0, 500), {
-      maxAge: 60,
-      path: "/",
-      sameSite: "lax",
-      httpOnly: false,
-    });
-  }
-
-  // Stack-trace EVERY request (PR #51): append the current path to a
-  // rolling-window cookie so we can see the last ~5 paths middleware
-  // processed for this browser. If the real Google OAuth flow doesn't
-  // show /auth/callback in the trail, we know the browser never visited
-  // it. Cookie is short-lived and only contains paths (no query, no
-  // secrets).
-  try {
-    const prev = request.cookies.get("_mw_trail")?.value ?? "";
-    const trail = prev ? `${prev}|${pathname}` : pathname;
-    const lastFive = trail.split("|").slice(-5).join("|");
-    response.cookies.set("_mw_trail", lastFive.slice(0, 500), {
-      maxAge: 120,
-      path: "/",
-      sameSite: "lax",
-      httpOnly: false,
-    });
-  } catch {
-    // best-effort diagnostic; do not break the request
-  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
