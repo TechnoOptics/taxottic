@@ -70,6 +70,30 @@ export async function nativeOAuthSignIn(
 ): Promise<{ handled: boolean; error?: string }> {
   if (!(await isNativeApp())) return { handled: false };
 
+  // CRITICAL graceful-degradation guard.
+  //
+  // @capacitor/browser's native code is compiled INTO the app
+  // binary. The web bundle deploys instantly via taxottic.com, but
+  // any already-installed build that predates the plugin has no
+  // native Browser implementation — calling Browser.open() there
+  // throws "Browser plugin is not implemented on ios", which is
+  // STRICTLY WORSE than the old behaviour (it hard-blocks sign-in).
+  //
+  // isPluginAvailable("Browser") is true only when the running
+  // binary actually contains the plugin. If it doesn't, we return
+  // { handled: false } so the login page falls back to the standard
+  // web redirect — the original imperfect-but-not-erroring flow —
+  // until the user installs a rebuilt binary that includes the
+  // plugin (at which point the proper custom-scheme flow engages).
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    if (!Capacitor.isPluginAvailable("Browser")) {
+      return { handled: false };
+    }
+  } catch {
+    return { handled: false };
+  }
+
   // Stash the post-login destination — the custom-scheme redirect
   // must be the EXACT allow-listed URL (no query string), so we
   // can't pass `next` through redirectTo. localStorage survives the
