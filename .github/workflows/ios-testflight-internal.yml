@@ -55,9 +55,6 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install JWT dep
-        run: npm i --no-save jsonwebtoken@9
-
       - name: Distribute to internal testers
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -68,7 +65,7 @@ jobs:
           TESTER_EMAILS: ${{ inputs.tester_emails }}
         run: |
           cat > /tmp/distribute.mjs <<'SCRIPT'
-          import jwt from "jsonwebtoken";
+          import crypto from "node:crypto";
 
           const KEY_ID = process.env.ASC_KEY_ID;
           const ISSUER = process.env.ASC_ISSUER_ID;
@@ -78,13 +75,29 @@ jobs:
           const EMAILS = (process.env.TESTER_EMAILS || "")
             .split(",").map(s => s.trim()).filter(Boolean);
 
-          const token = jwt.sign({}, PRIVATE_KEY, {
-            algorithm: "ES256",
-            keyid: KEY_ID,
-            issuer: ISSUER,
-            expiresIn: "15m",
-            audience: "appstoreconnect-v1",
+          // ES256 App Store Connect JWT using Node's built-in crypto —
+          // no npm dependency (the prior jsonwebtoken approach failed
+          // module resolution because there's no checkout/node_modules
+          // adjacent to the /tmp script). `dsaEncoding: ieee-p1363`
+          // yields the raw r||s signature JOSE/JWT requires; without
+          // it Node emits DER and Apple rejects the token.
+          const b64url = (b) =>
+            Buffer.from(b).toString("base64")
+              .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+          const now = Math.floor(Date.now() / 1000);
+          const header = { alg: "ES256", kid: KEY_ID, typ: "JWT" };
+          const payload = {
+            iss: ISSUER, iat: now, exp: now + 60 * 15,
+            aud: "appstoreconnect-v1",
+          };
+          const signingInput =
+            b64url(JSON.stringify(header)) + "." + b64url(JSON.stringify(payload));
+          const sig = crypto.sign("sha256", Buffer.from(signingInput), {
+            key: PRIVATE_KEY, dsaEncoding: "ieee-p1363",
           });
+          const token = signingInput + "." +
+            sig.toString("base64")
+              .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
           const API = "https://api.appstoreconnect.apple.com/v1";
           const H = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
