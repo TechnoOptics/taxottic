@@ -72,6 +72,23 @@ export type EntityType =
 // ============================================================================
 
 /**
+ * Rates table source year. Bump when refreshing.
+ *
+ * Verification cadence: every state's department of revenue publishes
+ * the next year's bulletin between November and January. Any state
+ * marked with a phase-down note (NC, PA, GA, NE, IN) is moving year-
+ * over-year — re-verify those most carefully.
+ *
+ * Known caveats baked into the 2025 figures below:
+ *   - LA flipped from bracketed (3.5/5.5/7.5%) to flat 5.5% per HB 1
+ *     signed Dec 2024 (effective 2025).
+ *   - NC, PA, IN, NE, GA are mid-multi-year phase-downs; we use the
+ *     scheduled 2025 rate but check the state DOR bulletin before
+ *     relying on the forecast for actual filing.
+ */
+export const STATE_RATES_AS_OF_YEAR = 2025;
+
+/**
  * C-Corp state income tax rate per state.
  *
  * For states with bracketed C-Corp tax (NY, NJ, AK, IL), we use
@@ -102,7 +119,7 @@ export const C_CORP_STATE_RATE: Record<string, { rate: number; note: string }> =
   IA: { rate: 0.071, note: "Iowa: 5.5% / 7.1% bracketed; top on income > $100,000." },
   KS: { rate: 0.06, note: "Kansas: 3.5% (first $50,000) + 2.5% surtax = 6% combined on income > $50,000." },
   KY: { rate: 0.05, note: "Kentucky: flat 5%." },
-  LA: { rate: 0.075, note: "Louisiana: graduated 3.5–7.5%; top on income > $150,000." },
+  LA: { rate: 0.055, note: "Louisiana: flat 5.5% effective tax year 2025 (HB 1 signed Dec 2024 consolidated the previous 3.5/5.5/7.5% brackets into a flat rate)." },
   ME: { rate: 0.0893, note: "Maine: graduated 3.5–8.93%; top on income > $3.5M." },
   MD: { rate: 0.0825, note: "Maryland: flat 8.25%." },
   MA: { rate: 0.08, note: "Massachusetts: 8% on net income (S-Corps see separate rate below)." },
@@ -121,7 +138,7 @@ export const C_CORP_STATE_RATE: Record<string, { rate: number; note: string }> =
   ND: { rate: 0.0431, note: "North Dakota: graduated 1.41–4.31%; top on income > $50,000." },
   OH: { rate: 0, note: "Ohio: no corporate income tax. Commercial Activity Tax (CAT) on gross receipts > $3M applies — see below." },
   OK: { rate: 0.04, note: "Oklahoma: flat 4%." },
-  OR: { rate: 0.0775, note: "Oregon: 6.6%/7.6% bracketed; plus Corporate Activity Tax (CAT) on receipts > $1M." },
+  OR: { rate: 0.076, note: "Oregon: 6.6%/7.6% bracketed (top rate on income > $1M); plus Corporate Activity Tax (CAT) on receipts > $1M." },
   PA: { rate: 0.0799, note: "Pennsylvania: 7.99% in 2025, phasing to 4.99% by 2031." },
   RI: { rate: 0.07, note: "Rhode Island: flat 7%." },
   SC: { rate: 0.05, note: "South Carolina: flat 5%." },
@@ -132,7 +149,7 @@ export const C_CORP_STATE_RATE: Record<string, { rate: number; note: string }> =
   VT: { rate: 0.085, note: "Vermont: graduated 6/7/8.5%; top on income > $25,000." },
   VA: { rate: 0.06, note: "Virginia: flat 6%." },
   WA: { rate: 0, note: "Washington: no corporate income tax. B&O tax on gross receipts applies — see below." },
-  WV: { rate: 0.0651, note: "West Virginia: flat 6.5% (effective 2024)." },
+  WV: { rate: 0.065, note: "West Virginia: flat 6.5% (effective tax year 2024+)." },
   WI: { rate: 0.079, note: "Wisconsin: flat 7.9%." },
   WY: { rate: 0, note: "Wyoming: no corporate income tax." },
 };
@@ -403,6 +420,15 @@ export function computeStateEntityTax(
       result.breakdown.cCorpIncomeTaxCents = tax;
       result.totalEntityTaxCents += tax;
       result.notes.push(cCorp.note);
+      // Phase-down states are moving year-over-year; nudge the
+      // preparer to re-verify the rate against the state DOR
+      // bulletin before relying on the forecast for actual filing.
+      const PHASE_DOWN_STATES = new Set(["NC", "PA", "IN", "NE", "GA", "AR"]);
+      if (PHASE_DOWN_STATES.has(state)) {
+        result.hints.push(
+          `${state} is in a multi-year corporate tax phase-down. We use the scheduled ${STATE_RATES_AS_OF_YEAR} rate; verify against the state DOR bulletin before filing.`,
+        );
+      }
     } else if (cCorp) {
       result.notes.push(cCorp.note);
     }

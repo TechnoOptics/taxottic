@@ -106,6 +106,68 @@ applicable but does not auto-compute:
    this for clients with multi-state nexus; not part of the income
    tax forecast.
 
+## Sales tax for services across state lines (Wayfair regime)
+
+Sales tax is a separate question from income tax: even an entity
+that doesn't owe income tax in a state may owe sales tax there if
+it has nexus + sells a taxable service.
+
+See `lib/tax/service-sales-tax.ts` and
+`lib/tax/service-sales-tax.test.ts` (36 tests).
+
+### Economic-nexus thresholds (post-South Dakota v. Wayfair, 2018)
+
+| State threshold pattern | States |
+|---|---|
+| $500K (no transaction count) | CA, TX |
+| $500K + 100 transactions (BOTH required) | NY |
+| $250K | AL, MS |
+| $100K OR 200 transactions | CT (BOTH), DC, GA, HI, IL, KY, MD, MI, MN (rolling 12), NE, NV, OH, RI, UT, VA, VT, WV, WY |
+| $100K (no transaction count) | AZ, CO, FL, ID, IA, KS, IN, LA, ME, MA, MO, NC, ND, OK, PA, SC, SD, TN, WA, WI |
+| No statewide sales tax | AK*, DE, MT, NH, OR |
+
+*AK has no statewide sales tax but tracks $100K nexus via the
+Alaska Remote Seller Sales Tax Commission for local-rate
+participation.
+
+### Service taxability — which states tax which categories
+
+| Category | Broadly taxable in | Notes |
+|---|---|---|
+| **Professional services** (legal, accounting, consulting) | HI, NM, SD, WV | Other 46 states exempt. HI GET / NM GRT apply at the state base rate. |
+| **SaaS** | ~24 states including AL, AZ, CT, DC, HI, IA, KY, MA, MD, MS, NE, NM, NY, OH, PA, RI, SD, TN, TX, UT, VT, WA, WI, WV | Half the country. Most rapidly-changing category. |
+| **Digital goods** (e-books, downloaded software) | ~35 states | Broader than SaaS. |
+| **Installation / repair services** | State-specific | Often taxable when underlying good is. |
+| **Landscaping** | HI, NM, SD, WV, NJ, NY, OH, TX | Often taxable. |
+
+### What `computeServiceSalesTax()` does
+
+Given a home state + per-state revenue + transaction count + service
+category, it returns:
+- `hasEconomicNexus` per state (Wayfair test + home state physical
+  presence)
+- `serviceTaxable` per state (matrix above)
+- `estimatedTaxOwedCents` per state when both gates are true
+- `approachingThresholdStates` (80%+ of threshold, warn-soon list)
+- `nexusExemptStates` (nexus present but service exempt; may still
+  need a $0-return registration)
+
+### What it does NOT do
+
+- **Sourcing** (origin vs destination per state) — assumes
+  destination
+- **Local tax overlays** (city/county) — base rate only
+- **Marketplace facilitator** carve-outs (Amazon/eBay collect for
+  you on those platforms)
+- **Resale certificates** for B2B exempt customers
+- **Use tax** on purchases (a separate compliance flow)
+- **Foreign / cross-border** transactions
+
+For production-grade sales-tax compliance, customers should connect
+Avalara, TaxJar, or Stripe Tax. The forecast engine's role is to
+SURFACE THE RISK so the customer knows when they need to register
++ collect, not to BE the compliance system.
+
 ## Refresh cadence
 
 State rates are revisited annually in late Q4 when departments of
