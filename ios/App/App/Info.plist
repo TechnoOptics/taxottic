@@ -47,5 +47,23 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Export compliance: the app uses only standard HTTPS/TLS,
+	     which is exempt encryption. Declaring false here removes the
+	     manual export-compliance question on every App Store Connect
+	     submission. If you ever add non-exempt cryptography, flip
+	     this and file the required French/US documentation. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- Camera + photo-library usage strings. @capacitor/camera is
+	     installed (receipt capture). iOS hard-crashes + App Review
+	     auto-rejects if the camera/photo APIs are reachable without
+	     these purpose strings. Wording is user-facing — keep it
+	     specific about WHY. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Taxottic uses the camera so you can photograph receipts and tax documents to attach them to your books.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Taxottic accesses your photo library so you can attach an existing receipt or tax-document image to your books.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Taxottic saves a copy of captured receipts to your photo library when you choose to keep one.</string>
 </dict>
 </plist>
