@@ -2,6 +2,15 @@
 
 Operational steps for shipping the Taxottic Capacitor shell to the Apple App Store + Google Play. The code is ready; this is the human/compliance work.
 
+> **Start here:** the build automation is DONE. Two GitHub Actions
+> workflows (`.github/workflows/ios-release.yml`,
+> `android-release.yml`) build + upload to TestFlight / Play
+> Internal with no Mac required. Follow
+> **`docs/store-listing/OPERATOR_CHECKLIST.md`** for the exact
+> ~60–90 min sequence, with paste-ready listing copy in
+> `CONTENT_PACK.md` and reconciled privacy declarations in
+> `PRIVACY_DATA_MAP.md`. This file below is the deeper reference.
+
 ## What's already built
 
 - **Capacitor 8.3.4** with iOS + Android platforms wired
