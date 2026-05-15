@@ -9,6 +9,34 @@ Operational steps for shipping the Taxottic Capacitor shell to the Apple App Sto
 - **iOS deployment target 17.0** + **Android compileSdk/targetSdk 36**
 - Native value-add already configured: Camera, Push Notifications, Preferences, Haptics, StatusBar, SplashScreen
 - Splash screen + status-bar theming tuned to the brand
+- **iOS version build settings set**: `MARKETING_VERSION = 1.0`,
+  `CURRENT_PROJECT_VERSION = 1`, `PRODUCT_BUNDLE_IDENTIFIER =
+  com.taxottic.app` in both Debug + Release configs
+- **iOS Info.plist privacy declarations done**:
+  `ITSAppUsesNonExemptEncryption=false` (removes the
+  export-compliance question every submission) +
+  `NSCameraUsageDescription` / `NSPhotoLibraryUsageDescription` /
+  `NSPhotoLibraryAddUsageDescription` (without these iOS
+  hard-crashes on camera access and App Review auto-rejects)
+- **Android manifest permissions wired** to match the installed
+  plugins: `CAMERA` (+ `uses-feature required="false"` so Play
+  doesn't filter camera-less devices) and `POST_NOTIFICATIONS`
+  (mandatory for push on Android 13+)
+
+## ⚠️ Hard prerequisite: you cannot build iOS on Windows
+
+The dev machine for this project is Windows. **iOS apps cannot be
+archived or signed without macOS + Xcode — there is no exception.**
+Before any Apple submission you need one of:
+
+- A Mac (even a base Mac mini) with Xcode installed
+- A cloud-Mac CI service: **Codemagic**, **Ionic Appflow**,
+  **Expo EAS Build** (works with Capacitor), or **GitHub Actions
+  `macos-latest` runners**
+- A rented remote Mac (MacStadium, MacinCloud)
+
+Android builds (`./gradlew bundleRelease`) run fine on Windows.
+So Google Play can proceed independently of the Mac problem.
 
 ## Apple App Store
 
@@ -117,17 +145,39 @@ Google's Play Billing rules mirror Apple's but are slightly more permissive:
 
 ## Pre-submission checklist
 
-- [ ] Apple Developer Program enrollment active
-- [ ] Google Play Console developer account active
+### Code-side (DONE — verified in repo)
+
+- [x] iOS Info.plist: `ITSAppUsesNonExemptEncryption=false`
+- [x] iOS Info.plist: camera + photo-library usage strings
+- [x] iOS version build settings (`MARKETING_VERSION`,
+      `CURRENT_PROJECT_VERSION`, bundle ID) in both configs
+- [x] Android manifest: `CAMERA` + `uses-feature` + `POST_NOTIFICATIONS`
+- [x] Privacy policy live at `https://taxottic.com/legal/privacy`
+      with the 365-day retention + cross-tenant-log sections
+
+### Human / account work (only you can do these)
+
+- [ ] **Provision a Mac or cloud-Mac CI** (hard blocker for iOS —
+      see the warning section above)
+- [ ] Apple Developer Program enrollment active ($99/yr, DUNS for org)
+- [ ] Google Play Console developer account active ($25)
 - [ ] Bundle ID `com.taxottic.app` registered on both
 - [ ] iOS Distribution Certificate + provisioning profile generated
-- [ ] Android Play App Signing key uploaded
-- [ ] Privacy policy live at `https://taxottic.com/legal/privacy` and matches actual data collection
-- [ ] App Store Connect listing fields filled (name, subtitle, category, screenshots, nutrition labels)
-- [ ] Play Console listing fields filled (name, descriptions, screenshots, data safety)
-- [ ] Apple External Link Account entitlement applied for (if not using IAP)
-- [ ] Demo account created (`review@taxottic.com` or similar) with seeded data
-- [ ] Screenshots generated for all required sizes (iPhone 6.7", iPhone 6.5", iPad 12.9", Android phone, Android tablet)
+- [ ] Android Play App Signing key generated + stored securely
+      (Google holds the upload key; losing yours is unrecoverable)
+- [ ] App Store Connect listing fields filled (name, subtitle,
+      category, screenshots, nutrition labels)
+- [ ] Play Console listing fields filled (name, descriptions,
+      screenshots, data safety)
+- [ ] **Payment-compliance decision made** (IAP vs. External Link
+      Account Entitlement — this is the #1 first-submission
+      rejection risk; decide before you submit, not after)
+- [ ] Apple External Link Account entitlement applied for (if not
+      using IAP)
+- [ ] Demo account created (`review@taxottic.com` or similar) with
+      seeded data — Apple WILL reject if they can't log in
+- [ ] Screenshots generated for all required sizes (iPhone 6.7",
+      iPhone 6.5", iPad 12.9", Android phone, Android tablet)
 
 ## Screenshot sizes required
 

@@ -32,4 +32,19 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Camera: @capacitor/camera is installed for receipt capture.
+         The matching uses-feature is required="false" so Google Play
+         does NOT filter the app off camera-less devices (camera is
+         value-add, not core to the WebView shell). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Push notifications: @capacitor/push-notifications is
+         installed for tax-deadline reminders. POST_NOTIFICATIONS is
+         REQUIRED on Android 13+ (API 33+) — without it the app
+         silently fails to show any notification on modern devices. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
