@@ -4,6 +4,22 @@
     {
       "path": "/api/cron/plaid-sync",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/firm-digest",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/firm-invoice-issue",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/oauth-refresh",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/firm-activity-retention",
+      "schedule": "0 3 * * *"
     }
   ]
 }

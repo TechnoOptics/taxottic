@@ -90,7 +90,7 @@ export default function ExamplePage() {
             "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
@@ -108,7 +108,7 @@ export default function ExamplePage() {
         </div>
       </header>
 
-      <section className="max-w-5xl mx-auto px-6 pt-12 sm:pt-16 pb-4">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-4">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Example dashboard · Read-only sample
         </div>
@@ -131,7 +131,7 @@ export default function ExamplePage() {
       </section>
 
       {/* Greeting + recap */}
-      <section className="max-w-5xl mx-auto px-6 py-6">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Your workspace
         </div>
@@ -157,7 +157,7 @@ export default function ExamplePage() {
       </section>
 
       {/* Forecast tiles */}
-      <section className="max-w-5xl mx-auto px-6 py-6">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <h2 className="display text-xl text-forest-900">
           Live forecast — Tax year 2026
         </h2>
@@ -224,7 +224,7 @@ export default function ExamplePage() {
       </section>
 
       {/* Bank feed */}
-      <section className="max-w-5xl mx-auto px-6 py-6">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <h2 className="display text-xl text-forest-900">Bank feed</h2>
         <div className="mt-3 card p-5">
           <div className="flex items-center justify-between text-xs text-ink-muted">
@@ -270,8 +270,8 @@ export default function ExamplePage() {
       </section>
 
       {/* CTA */}
-      <section className="max-w-5xl mx-auto px-6 py-12">
-        <div className="card p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
+        <div className="card p-6 sm:p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div>
             <h2 className="display text-2xl text-forest-900">
               See your own version.

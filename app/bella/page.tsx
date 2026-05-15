@@ -28,7 +28,7 @@ export default async function BellaPage({
   return (
     <main className="min-h-screen flex flex-col">
       <AppHeader email={user.email ?? undefined} />
-      <section className="flex-1 max-w-3xl w-full mx-auto px-6 py-8 flex flex-col">
+      <section className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           Bella - your tax guide
         </div>

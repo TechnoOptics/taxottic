@@ -127,7 +127,22 @@ export default function LoginPage() {
   async function oauth(provider: Provider) {
     setError(null);
     const url = new URL(window.location.href);
-    const next = url.searchParams.get("next") ?? "/dashboard";
+    // Host-aware default `next`. On hq.taxottic.com and
+    // enterprise.taxottic.com the consumer path /dashboard doesn't
+    // exist — the middleware rewrites it to /admin/dashboard which
+    // 404s. Default to "/" instead, which the middleware then routes
+    // to the right /admin/** root (hq → /admin, enterprise →
+    // /admin/firms). The auditor's Round-2 finding that
+    // enterprise.taxottic.com "still redirects to consumer dashboard"
+    // reproduced precisely here: signing in from the enterprise
+    // splash sent the user to /dashboard, the rewrite missed, and
+    // the user ended up on the consumer host's dashboard via the
+    // requireSuperAdmin fallback.
+    const host = url.host.toLowerCase();
+    const isOperatorHost =
+      host === "hq.taxottic.com" || host === "enterprise.taxottic.com";
+    const defaultNext = isOperatorHost ? "/" : "/dashboard";
+    const next = url.searchParams.get("next") ?? defaultNext;
     // When the login page was opened from "Switch accounts", we forward
     // prompt=select_account so Google/Microsoft show their account picker
     // even if the browser still has a live session for that provider.
@@ -221,7 +236,7 @@ export default function LoginPage() {
           )}
         </div>
 
-        <div className="card p-7">
+        <div className="card p-5 sm:p-7">
           {/* Three OAuth providers always rendered. Per-provider
               configuration lives in the Supabase dashboard (see
               SETUP.md "SSO providers"). If a provider is enabled

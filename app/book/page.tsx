@@ -31,7 +31,7 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
         }}
       >
-        <div className="max-w-3xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
           <Link
             href="/"
@@ -42,7 +42,7 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
         </div>
       </header>
 
-      <section className="max-w-3xl mx-auto px-6 py-12 sm:py-16">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         <div className="text-xs uppercase tracking-[0.22em] text-gold-700">
           {audience === "firm"
             ? "For tax-prep firms"

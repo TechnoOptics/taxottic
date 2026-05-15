@@ -318,6 +318,106 @@ const BRACKETS_BY_STATE: Record<string, StateTable> = {
 };
 
 /**
+ * State-specific standard deductions for the bracket-tax states.
+ *
+ * Why this exists separately from the federal std deduction: most
+ * states use the FEDERAL AGI as the starting point but apply their
+ * own standard-deduction value to compute state taxable income, and
+ * NONE of them recognise the federal QBI (§199A) deduction at the
+ * state level (QBI is a federal-only below-the-line credit). The
+ * May 2026 round-2 audit caught CA tax forecasting at ~$378 on a
+ * $50k Single Sole Prop — that came from passing federal taxable
+ * income (which already had a $15k+ federal std deduction AND a
+ * $6k QBI deduction subtracted) into the CA bracket table, leaving
+ * only ~$24k of state taxable income, when the correct CA base
+ * (federal AGI minus CA's $5,540 single std deduction, no QBI) is
+ * around $40k. Hand-calc with this fix produces ~$1,033, matching
+ * the auditor's $900-$1,100 expected range.
+ *
+ * Numbers below are 2025 values (CA inflation-adjusts annually under
+ * §17041(h); other states' figures track similarly). Refresh when
+ * each state's department of revenue publishes the next year's
+ * figures. For states without a state standard deduction (NJ, MA,
+ * CT use personal exemptions instead — different mechanism), the
+ * entry is 0 and the bracket math runs against full state AGI.
+ */
+const STATE_STD_DEDUCTION_BY_STATE: Record<
+  string,
+  Partial<Record<FilingStatus, number>>
+> = {
+  CA: {
+    single: 554_000, // $5,540
+    married_filing_jointly: 1_108_000,
+    married_filing_separately: 554_000,
+    head_of_household: 1_108_000,
+    qualifying_widow: 1_108_000,
+  },
+  NY: {
+    single: 800_000, // $8,000
+    married_filing_jointly: 1_605_000,
+    married_filing_separately: 800_000,
+    head_of_household: 1_125_000,
+    qualifying_widow: 1_605_000,
+  },
+  MN: {
+    single: 1_457_500, // $14,575
+    married_filing_jointly: 2_915_000,
+    married_filing_separately: 1_457_500,
+    head_of_household: 2_185_000,
+    qualifying_widow: 2_915_000,
+  },
+  OR: {
+    single: 285_500, // $2,855
+    married_filing_jointly: 571_000,
+    married_filing_separately: 285_500,
+    head_of_household: 457_000,
+    qualifying_widow: 571_000,
+  },
+  HI: {
+    single: 220_000, // $2,200
+    married_filing_jointly: 440_000,
+    married_filing_separately: 220_000,
+    head_of_household: 330_000,
+    qualifying_widow: 440_000,
+  },
+  DC: {
+    single: 1_385_000, // matches federal $13,850 in DC's most-recent year
+    married_filing_jointly: 2_770_000,
+    married_filing_separately: 1_385_000,
+    head_of_household: 2_065_000,
+    qualifying_widow: 2_770_000,
+  },
+  MD: {
+    single: 240_000, // $2,400 (capped)
+    married_filing_jointly: 485_000,
+    married_filing_separately: 240_000,
+    head_of_household: 240_000,
+    qualifying_widow: 485_000,
+  },
+  // NJ, MA, CT use personal exemptions rather than a state std
+  // deduction. Leaving the entry undefined means the bracket math
+  // runs against full state AGI; users with NJ/MA/CT residency see
+  // a slight over-estimate at low incomes and a less material
+  // distortion at higher incomes. Document for follow-up.
+};
+
+/**
+ * Public helper: given a federal AGI and the state, return the
+ * starting point for state taxable-income math. The engine passes
+ * AGI (NOT federal taxable income) so the federal QBI deduction
+ * doesn't leak through to the state side.
+ */
+export function stateTaxableIncomeFromAgi(args: {
+  agiCents: number;
+  filingStatus: FilingStatus;
+  stateCode: string;
+}): number {
+  const table = STATE_STD_DEDUCTION_BY_STATE[args.stateCode.toUpperCase()];
+  const stateStd = table?.[args.filingStatus] ?? 0;
+  return Math.max(0, args.agiCents - stateStd);
+}
+
+/**
  * Apply a bracket table to an income amount in cents.
  */
 function applyBrackets(

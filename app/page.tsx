@@ -217,7 +217,7 @@ export default async function Home({
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
           <Link
             href="/login"
@@ -279,7 +279,7 @@ function Hero({ audience }: { audience: Audience }) {
             "radial-gradient(800px 320px at 20% 0%, rgba(213,187,126,0.18), transparent 70%), radial-gradient(700px 320px at 100% 100%, rgba(213,187,126,0.10), transparent 70%)",
         }}
       />
-      <div className="max-w-6xl mx-auto px-6 pt-16 sm:pt-24 pb-20 sm:pb-28 text-cream">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-20 sm:pb-28 text-cream">
         <AudienceToggle audience={audience} />
 
         <h1 className="display mt-8 text-4xl sm:text-6xl lg:text-7xl text-cream max-w-4xl leading-[1.05]">
@@ -452,7 +452,7 @@ const ENTERPRISE: Capability[] = [
 function Capabilities({ audience }: { audience: Audience }) {
   const items = audience === "personal" ? PERSONAL : ENTERPRISE;
   return (
-    <section className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
       <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
         What you get
       </div>
@@ -496,7 +496,7 @@ function Capabilities({ audience }: { audience: Audience }) {
 function ProductTour() {
   return (
     <section className="bg-white">
-      <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
           See it on Company X
         </div>
@@ -927,7 +927,7 @@ function ProofBand() {
           "linear-gradient(180deg, #0f2d24 0%, #0a201a 100%)",
       }}
     >
-      <div className="max-w-6xl mx-auto px-6 py-16 sm:py-20 text-cream">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-cream">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-300">
           Under the hood
         </div>
@@ -958,7 +958,7 @@ function ProofBand() {
 function FomoBand({ audience }: { audience: Audience }) {
   const personal = audience === "personal";
   return (
-    <section className="max-w-5xl mx-auto px-6 py-20 sm:py-28">
+    <section className="max-w-5xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
       <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
         What we believe
       </div>
@@ -993,8 +993,8 @@ function FomoBand({ audience }: { audience: Audience }) {
 function FinalCta({ audience }: { audience: Audience }) {
   const personal = audience === "personal";
   return (
-    <section className="max-w-5xl mx-auto px-6 pb-20 sm:pb-28">
-      <div className="card p-8 sm:p-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+    <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-20 sm:pb-28">
+      <div className="card p-6 sm:p-8 sm:p-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div className="max-w-2xl">
           <h2 className="display text-2xl sm:text-3xl text-forest-900">
             {personal
@@ -1034,7 +1034,7 @@ function FinalCta({ audience }: { audience: Audience }) {
 function Footer() {
   return (
     <footer className="border-t border-forest-100">
-      <div className="max-w-6xl mx-auto px-6 py-10 grid gap-8 sm:grid-cols-2">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 grid gap-8 sm:grid-cols-2">
         <div>
           <p className="text-xs text-ink-muted max-w-md leading-relaxed">
             Taxottic provides tax forecasting and educational guidance. It

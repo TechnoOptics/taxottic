@@ -79,6 +79,70 @@ export async function addIncome(formData: FormData) {
   }
 }
 
+// Round-5 audit Medium: rows had Remove but no Edit. Power users
+// fixing a typo had to delete + re-enter, which loses cadence /
+// notes / source metadata and risks double-counting in the window
+// between the delete and the re-add. updateIncome accepts the same
+// fields as addIncome plus the row id; it validates the row belongs
+// to the current user and rejects future-dated edits + entries from
+// other tax years on the same rules as addIncome.
+export async function updateIncome(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const id = String(formData.get("id") ?? "");
+  const companyId = String(formData.get("company_id") ?? "");
+  const taxYear = Number(formData.get("tax_year"));
+  const month = Number(formData.get("month"));
+  const source = String(formData.get("source") ?? "sales");
+  const cents = parseDollarsToCents(String(formData.get("amount") ?? ""));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const recurrenceRaw = String(formData.get("recurrence") ?? "one_off");
+  const recurrence = VALID_RECURRENCES.has(recurrenceRaw)
+    ? recurrenceRaw
+    : "one_off";
+
+  if (!id || !companyId || !taxYear || !month || cents === null || cents <= 0) {
+    throw new Error("Invalid input");
+  }
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
+  if (taxYear !== currentYear) {
+    throw new Error("You can only edit entries for the current tax year.");
+  }
+  if (month < 1 || month > 12 || month > currentMonth) {
+    throw new Error("You cannot move an entry to a future month.");
+  }
+  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+    throw new Error("Not a member of this company");
+  }
+
+  // Scope the update by id + user_id so a user can only edit their
+  // own rows. RLS would also enforce this, but matching the delete
+  // path's pattern keeps the surface auditable.
+  const { error } = await admin
+    .from("monthly_income")
+    .update({
+      month,
+      amount_cents: cents,
+      source,
+      recurrence,
+      notes,
+    })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  if (company) {
+    revalidatePath(`/c/${company.public_id}/income`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+  }
+}
+
 export async function deleteIncome(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");

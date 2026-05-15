@@ -5,6 +5,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
+import { ForecastDisclaimer } from "@/components/ForecastDisclaimer";
 import { YearEndSuggestionsCard } from "@/components/YearEndSuggestionsCard";
 import {
   AmtTile,
@@ -502,7 +503,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-5xl mx-auto px-6 py-10">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
             <CompanyLogo
@@ -613,6 +614,49 @@ export default async function ForecastPage({ params }: { params: Params }) {
             </div>
           );
         })()}
+        {/* S-Corp reasonable-compensation warning (Round-2 audit HIGH-3).
+            §3121(d)(1) / Rev. Rul. 74-44: an S-Corp shareholder-employee
+            who works in the business MUST take "reasonable" W-2 wages
+            before any distribution. Taking $0 wages is the textbook
+            audit trigger for the IRS to recharacterize distributions as
+            wages and assess back FICA + penalties + interest. The
+            forecast currently treats the whole pass-through as
+            distribution, which is the most optimistic possible
+            scenario; surface a warning so the user adds wages on the
+            profile page before relying on the forecast. */}
+        {(company.entity_type ?? "sole_prop") === "s_corp" &&
+          (taxProfile.owner_w2_wages_cents ?? 0) === 0 && (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-5 sm:p-6 dark:border-amber-700/40 dark:bg-amber-900/20">
+              <div className="flex items-start gap-3">
+                <div
+                  aria-hidden="true"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-800/40 dark:text-amber-200"
+                >
+                  !
+                </div>
+                <div className="flex-1 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+                  <div className="font-semibold">
+                    This S-Corp forecast assumes $0 owner wages.
+                  </div>
+                  <p className="mt-1.5 text-amber-900/90 dark:text-amber-100/90">
+                    The IRS requires S-Corp owner-employees to take{" "}
+                    <em>reasonable compensation</em> as W-2 wages before
+                    any distribution (Rev. Rul. 74-44). Taking $0 wages
+                    is a textbook audit trigger and the forecast below
+                    will look more favorable than what you can defend on
+                    return. Add your annualized W-2 wages on the profile
+                    page so the SE-tax-vs-FICA math reflects reality.
+                  </p>
+                  <Link
+                    href={`/onboarding/tax-profile?next=/c/${publicId}/forecast`}
+                    className="mt-3 inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700/50 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
+                  >
+                    Add owner W-2 wages →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
         <div className="hidden">
           {/* Anchor element so the JSX below (compare columns + tiles +
               breakdown) keeps its original location in the rendered
@@ -810,7 +854,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
         </div>
 
         {/* Monthly chart + per-month grid */}
-        <div className="mt-6 card p-7">
+        <div className="mt-6 card p-5 sm:p-7">
           <h2 className="display text-xl text-forest-900">
             Month by month
           </h2>
@@ -1055,6 +1099,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
           Beautiful Bill amendments) and a curated state rate; they are not a
           tax return. Talk with a licensed CPA for decisions that matter.
         </p>
+
+        <div className="mt-6">
+          <ForecastDisclaimer variant="card" />
+        </div>
       </section>
     </main>
   );

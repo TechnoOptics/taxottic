@@ -18,6 +18,8 @@ import { checkCompanyLimit } from "@/lib/plans/usage";
 import { completeWelcomeTour } from "@/app/actions/tour";
 import { GoalDismissButton } from "@/components/GoalDismissButton";
 import { purgeExpiredRecycleBin } from "@/app/actions/recycle-bin";
+import { dismissAllOverdueReminders } from "@/app/reminders/actions";
+import { ReadinessHelp } from "@/components/ReadinessHelp";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -138,8 +140,8 @@ export default async function DashboardPage() {
     return (
       <main id="main" className="min-h-screen">
         <AppHeader email={user.email ?? undefined} />
-        <section className="max-w-2xl mx-auto px-6 py-16">
-          <div className="card p-10 text-center">
+        <section className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
+          <div className="card p-6 sm:p-10 text-center">
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
               {isSuperAdmin ? "Operator view" : "Welcome"}
             </div>
@@ -295,7 +297,20 @@ export default async function DashboardPage() {
   // first-visit version: same reminder, gentler copy and `info` tone
   // (gold, not red). Once the user has actually started using the
   // product, we return to the original urgent treatment.
-  const recap: { title: string; body: string; href: string; tone: "warn" | "info" }[] = [];
+  // `dismissAction` is the server-action ID a small "X" button on the
+  // card invokes when the user wants to clear it. Only the overdue-
+  // reminders card sets it today — the audit's Low finding was that
+  // the banner had no way to be dismissed. Other recap entries are
+  // recoverable by the underlying state (logging an expense clears
+  // "No expenses logged this month" automatically), so we don't need
+  // a manual dismiss for them.
+  const recap: {
+    title: string;
+    body: string;
+    href: string;
+    tone: "warn" | "info";
+    dismissAction?: "overdue-reminders";
+  }[] = [];
 
   const earliestJoin = companies.length
     ? Math.min(...companies.map((m) => new Date(m.joined_at).getTime()))
@@ -329,6 +344,7 @@ export default async function DashboardPage() {
           "Welcome — these are the standard quarterly tax dates that fell before today. Open the list to mark off ones you already handled.",
         href: "/reminders",
         tone: "info",
+        dismissAction: "overdue-reminders",
       });
     } else {
       recap.push({
@@ -337,6 +353,7 @@ export default async function DashboardPage() {
           "These tax-payment dates already passed. Knock them out so they stop nagging.",
         href: "/reminders",
         tone: "warn",
+        dismissAction: "overdue-reminders",
       });
     }
   }
@@ -530,18 +547,30 @@ export default async function DashboardPage() {
 
         <TrialBanner trial={trial} />
 
-        {/* Recap: what needs attention right now */}
+        {/* Recap: what needs attention right now.
+            Cards that have a `dismissAction` render a small "X" in the
+            top-right corner so the user can clear the card in one
+            click. We can't nest a <form>+<button> inside the outer
+            <Link> (HTML doesn't allow nested interactive elements and
+            React warns about it), so the card root is a <div> with a
+            sibling overlay Link covering the click target. The X
+            button sits above the overlay (z-10) and stops propagation
+            so clicking it doesn't also navigate. */}
         {recap.length > 0 ? (
           <section className="mt-6 grid gap-3">
             {recap.map((r, i) => (
-              <Link
+              <div
                 key={i}
-                href={r.href}
                 className={
-                  "card p-4 flex items-start gap-3 hover:border-gold-300 transition-colors " +
+                  "card relative p-4 flex items-start gap-3 hover:border-gold-300 transition-colors " +
                   (r.tone === "warn" ? "border-red-200" : "")
                 }
               >
+                <Link
+                  href={r.href}
+                  aria-label={r.title}
+                  className="absolute inset-0 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                />
                 <div
                   className={
                     "mt-1 size-2 rounded-full shrink-0 " +
@@ -556,8 +585,34 @@ export default async function DashboardPage() {
                     {r.body}
                   </div>
                 </div>
-                <span className="text-ink-muted text-sm">→</span>
-              </Link>
+                <span className="text-ink-muted text-sm shrink-0">→</span>
+                {r.dismissAction === "overdue-reminders" ? (
+                  <form
+                    action={dismissAllOverdueReminders}
+                    className="absolute right-2 top-2 z-10"
+                  >
+                    <button
+                      type="submit"
+                      aria-label="Dismiss overdue reminders"
+                      title="Dismiss — you can still open them from /reminders"
+                      className="rounded-full p-1 text-ink-muted hover:bg-cream-200 hover:text-forest-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 dark:hover:bg-forest-800"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 14 14"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M3 3 L11 11 M11 3 L3 11" />
+                      </svg>
+                    </button>
+                  </form>
+                ) : null}
+              </div>
             ))}
           </section>
         ) : null}
@@ -597,10 +652,46 @@ export default async function DashboardPage() {
                   year: "numeric",
                   timeZone: "UTC",
                 }).format(dueDate);
+                // Round-2 audit Section 6 friction: at-a-glance urgency
+                // is hard to read when every card looks identical. Color
+                // the pill + left edge by how close the deadline is —
+                // overdue is already filtered to the recap, so here we
+                // only have to differentiate "this week" (amber) from
+                // "later" (neutral gold).
+                const urgencyTone =
+                  days <= 7
+                    ? {
+                        border: "border-amber-300/70 dark:border-amber-600/40",
+                        pill: "text-amber-700 dark:text-amber-200",
+                        dot: "bg-amber-500",
+                      }
+                    : days <= 30
+                      ? {
+                          border:
+                            "border-gold-300/60 dark:border-gold-600/30",
+                          pill: "text-gold-700",
+                          dot: "bg-gold-400",
+                        }
+                      : {
+                          border: "",
+                          pill: "text-ink-muted",
+                          dot: "bg-forest-300 dark:bg-forest-500",
+                        };
                 return (
-                  <li key={r.id} className="card p-4">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-                      In {days} day{days === 1 ? "" : "s"}
+                  <li
+                    key={r.id}
+                    className={`card p-4 ${urgencyTone.border}`}
+                  >
+                    <div
+                      className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] ${urgencyTone.pill}`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`size-1.5 rounded-full ${urgencyTone.dot}`}
+                      />
+                      {days === 0
+                        ? "Due today"
+                        : `In ${days} day${days === 1 ? "" : "s"}`}
                     </div>
                     <div className="display text-base text-forest-900 mt-1">
                       {r.title}
@@ -701,8 +792,18 @@ export default async function DashboardPage() {
                       </div>
                       <div className="mt-3 max-w-sm" title={tooltip}>
                         <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                          <span className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                          <span className="inline-flex items-center text-[10px] uppercase tracking-[0.2em] text-gold-700">
                             Tax-ready · {score}%
+                            {r ? (
+                              <ReadinessHelp
+                                score={score}
+                                triagedTx={r.triagedTx}
+                                totalTx={r.totalTx}
+                                categoriesUsed={r.categoriesUsed}
+                                targetCategories={r.targetCategories}
+                                hasBankFeed={r.hasBankFeed}
+                              />
+                            ) : null}
                           </span>
                           <span className="text-[11px] text-ink-muted">
                             {breakdown}

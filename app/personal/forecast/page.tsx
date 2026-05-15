@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { TrialBanner } from "@/components/TrialBanner";
+import { ForecastDisclaimer } from "@/components/ForecastDisclaimer";
 import { getTrialState } from "@/lib/plans/usage";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -284,6 +285,10 @@ export default async function PersonalForecastPage() {
           Investment Income Tax (Form 8960), and a curated state rate.
           Educational guidance only — talk with a CPA for binding decisions.
         </p>
+
+        <div className="mt-6">
+          <ForecastDisclaimer variant="card" />
+        </div>
       </section>
     </main>
   );

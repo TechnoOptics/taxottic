@@ -42,7 +42,11 @@ import { getTaxYearConstants, type TaxYearConstants } from "./constants";
 import { computeEitcCents } from "./credits/eitc";
 import { computeSaversCreditCents } from "./credits/savers";
 import { computeEducationCreditCents } from "./credits/education";
-import { computeStateTaxFromBrackets } from "./state-brackets";
+import {
+  computeStateTaxFromBrackets,
+  stateTaxableIncomeFromAgi,
+} from "./state-brackets";
+import { computeStateEntityTax } from "./state-entity-taxes";
 
 export type EntityType =
   | "sole_prop"
@@ -60,10 +64,31 @@ export const ABOVE_THE_LINE_CODES: ReadonlySet<string> = new Set([
   "hsa_contribution",
 ]);
 
+/**
+ * Multi-state apportionment input. When provided, the engine
+ * computes state tax PER state and sums the result with a credit
+ * back to the resident state for taxes paid to non-resident
+ * states (Schedule M1CR-equivalent).
+ *
+ * Sales factor weights are basis-points (0-10000). Should sum to
+ * roughly 10000 across all rows; the engine normalizes if not.
+ */
+export type StateNexusRow = {
+  stateCode: string;
+  isResident: boolean;
+  salesFactorBps: number;
+};
+
 export type ForecastInput = {
   taxYear: number;
   filingStatus: FilingStatus;
+  /** Single-state mode (legacy). Use stateNexus instead when the
+   *  company has nexus in multiple states. */
   stateCode: string | null;
+  /** Multi-state mode. When set + length > 1, the engine apportions
+   *  income across states using sales-factor weights and credits the
+   *  resident state for taxes paid elsewhere. */
+  stateNexus?: StateNexusRow[];
   age: number | null;
   isBlind: boolean;
   itemize: boolean;
@@ -384,6 +409,21 @@ const SE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
   "partnership",
 ]);
 
+// Entities whose owner gets the §199A QBI deduction on net pass-
+// through income. Same set as `SE_ENTITY_TYPES` PLUS `s_corp` — S-Corp
+// distributions to owners ARE QBI-eligible under IRC §199A even
+// though the entity itself pays no SE tax. The May 2026 round-2
+// audit caught the engine returning QBI = 0 for every S-Corp because
+// the old code path gated QBI on `SE_ENTITY_TYPES.has(...)`.
+const QBI_ELIGIBLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
+  "sole_prop",
+  "single_llc",
+  "self_employed_1099",
+  "multi_llc",
+  "partnership",
+  "s_corp",
+]);
+
 const C_CORP_RATE = 0.21;
 
 export function forecast(input: ForecastInput): ForecastResult {
@@ -533,8 +573,21 @@ export function forecast(input: ForecastInput): ForecastResult {
   // sole-shareholder running both threads gets the right cash picture.
   if (input.entityType === "c_corp") {
     const cTax = Math.round(netBiz * C_CORP_RATE);
-    const stRate = stateRate(input.stateCode);
-    const stTax = Math.round(netBiz * stRate);
+    // Replace the personal-rate fallback with the proper C-Corp
+    // state rate. The new `computeStateEntityTax()` helper applies
+    // (a) the C-Corp state income tax at the correct corporate
+    // rate, (b) gross-receipts / margin taxes (TX, OH, WA, OR, NV)
+    // when receipts exceed the state-specific threshold, and
+    // (c) hints for PTET availability + QBI conformity.
+    const entityTax = computeStateEntityTax({
+      stateCode: input.stateCode,
+      entityType: "c_corp",
+      netBusinessIncomeCents: netBiz,
+      grossReceiptsCents: projectedIncome,
+    });
+    const stTax = entityTax.totalEntityTaxCents;
+    for (const n of entityTax.notes) assumptions.push(n);
+    for (const h of entityTax.hints) hints.push(h);
     const totalTax = cTax + stTax;
     const w2WithheldTotal =
       input.ownerW2WithheldCents + input.spouseW2WithheldCents;
@@ -629,11 +682,16 @@ export function forecast(input: ForecastInput): ForecastResult {
   // SE tax (only for pass-throughs / sole prop / partnerships / 1099).
   // S-Corp owners pay payroll on W-2 wages instead; we don't model wages here.
   //
-  // Wage-base interaction: the $176,100 Social Security wage base is
-  // shared between W-2 wages and SE earnings. If the owner already paid
-  // SS on W-2 wages, only the remaining headroom is subject to the SS
-  // portion of SE tax. Spouse W-2 SS wages do NOT count - the wage base
-  // is per-person.
+  // Wage-base interaction: the Social Security wage base is shared
+  // between W-2 wages and SE earnings. If the owner already paid SS on
+  // W-2 wages, only the remaining headroom is subject to the SS
+  // portion of SE tax. Spouse W-2 SS wages do NOT count - the wage
+  // base is per-person. The actual dollar threshold is per tax year
+  // and lives on `k.SE_TAX.socialSecurityWageBase` (see constants-
+  // 2026.ts for the SSA's October announcement); the May 2026 round-2
+  // audit caught this comment + the assumption text below carrying
+  // the stale 2025 number ($176,100) even though the math correctly
+  // used 2026's $184,500.
   let seTax = 0;
   let seEarningsForAddtlMedicare = 0;
   if (SE_ENTITY_TYPES.has(input.entityType)) {
@@ -645,7 +703,11 @@ export function forecast(input: ForecastInput): ForecastResult {
     seTax = result.totalSeTax;
     seEarningsForAddtlMedicare = result.seEarnings;
     assumptions.push(
-      "Self-employment tax: 12.4% Social Security up to the $176,100 wage base + 2.9% Medicare uncapped, on 92.35% of net earnings (IRC §1401).",
+      `Self-employment tax: 12.4% Social Security up to the $${(
+        k.SE_TAX.socialSecurityWageBase / 100
+      ).toLocaleString()} wage base + 2.9% Medicare uncapped, on ${(
+        k.SE_TAX.netEarningsFactor * 100
+      ).toFixed(2)}% of net earnings (IRC §1401).`,
     );
     if (input.ownerW2SsWagesCents > 0) {
       assumptions.push(
@@ -654,9 +716,29 @@ export function forecast(input: ForecastInput): ForecastResult {
     }
   }
   if (input.entityType === "s_corp") {
-    hints.push(
-      "S-Corp owner-employees pay payroll tax on reasonable W-2 wages instead of SE tax. Track W-2 wages separately.",
-    );
+    // S-Corp owner-employees are required by the IRS to take
+    // "reasonable compensation" via W-2 payroll before any net
+    // distributions. The May 2026 round-2 audit caught that the
+    // engine doesn't yet capture owner wages, so the full pass-
+    // through is being modeled as distribution and the savings vs
+    // Sole-Prop look unrealistically large. We don't have the input
+    // wired into the wizard yet; surface the assumption explicitly
+    // so a user (or their CPA) doesn't take the forecast at face
+    // value.
+    if (input.ownerW2WagesCents > 0) {
+      assumptions.push(
+        `S-Corp: this forecast assumes you take $${(
+          input.ownerW2WagesCents / 100
+        ).toLocaleString()} in owner W-2 wages (already runs through payroll-tax withholding) and the remainder as distribution. Increase or decrease that figure on your tax profile if reality differs.`,
+      );
+    } else {
+      hints.push(
+        "S-Corp: this forecast assumes $0 owner W-2 wages, which is NOT a defensible position with the IRS — every S-Corp owner-employee must take reasonable compensation before distributions. The forecast over-states the SE-tax savings until you record your owner wages on the tax-profile page (Owner W-2 wages field). If you take $0 wages this year the IRS can re-characterise distributions as wages and assess back FICA + penalties.",
+      );
+      assumptions.push(
+        "S-Corp owner-employees pay payroll tax (FICA) on reasonable W-2 wages instead of SE tax on the same dollars. The whole-amount-as-distribution treatment below is provisional until owner wages are recorded.",
+      );
+    }
   }
 
   // Additional Medicare 0.9% surtax. IRC §3101(b)(2) / §1401(b)(2).
@@ -847,7 +929,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   // undefined and this block is a no-op for back-year forecasts.
   let qbi = 0;
   const qbiThreshold = k.QBI.thresholdBelow[input.filingStatus];
-  if (SE_ENTITY_TYPES.has(input.entityType) && netBiz > 0) {
+  if (QBI_ELIGIBLE_ENTITY_TYPES.has(input.entityType) && netBiz > 0) {
     if (agi <= qbiThreshold) {
       // QBI is limited to lesser of (20% of QBI, 20% of taxable income before QBI).
       const taxableBeforeQbi = Math.max(0, agi - deduction);
@@ -1204,9 +1286,117 @@ export function forecast(input: ForecastInput): ForecastResult {
   // way via the assumptions strip so the user can verify what
   // method/year was used.
   let stTax = 0;
-  if (input.stateCode) {
+  // Tier 1 #4: multi-state apportionment. When the company has
+  // declared nexus in >1 state, we apportion AGI across states by
+  // the sales-factor weights, compute each state's tax against its
+  // own brackets, and credit the resident state for taxes paid to
+  // non-resident states. The result lands in stTax as a single
+  // aggregate number (the single-state UI doesn't know about
+  // per-state breakdown yet; the assumptions strip explains).
+  if (input.stateNexus && input.stateNexus.length > 1) {
+    // Normalize weights to sum to 10000.
+    const totalBps = input.stateNexus.reduce(
+      (a, r) => a + Math.max(0, r.salesFactorBps),
+      0,
+    );
+    const normalize = (bps: number) =>
+      totalBps > 0 ? bps / totalBps : 1 / input.stateNexus!.length;
+
+    let nonResidentTax = 0;
+    let residentGrossTax = 0;
+    const residentRow = input.stateNexus.find((r) => r.isResident);
+    if (!residentRow) {
+      // No resident state declared — treat the first row as resident
+      // and warn.
+      hints.push(
+        "Multi-state nexus declared but no resident state flagged. Pick a home state under the company profile.",
+      );
+    }
+
+    for (const row of input.stateNexus) {
+      const code = row.stateCode.toUpperCase();
+      const weight = normalize(row.salesFactorBps);
+      const apportionedAgi = Math.round(agi * weight);
+      const base = stateTaxableIncomeFromAgi({
+        agiCents: apportionedAgi,
+        filingStatus: input.filingStatus,
+        stateCode: code,
+      });
+      const brackets = computeStateTaxFromBrackets({
+        taxableIncomeCents: base,
+        filingStatus: input.filingStatus,
+        stateCode: code,
+        taxYear: input.taxYear,
+      });
+      const oneStateTax = brackets
+        ? brackets.taxCents
+        : Math.round(base * stateRate(code));
+      if (row.isResident || (!residentRow && row === input.stateNexus[0])) {
+        residentGrossTax = brackets
+          ? brackets.taxCents
+          : oneStateTax;
+        // Compute the resident state on FULL AGI (resident states
+        // tax worldwide income), not just the apportioned slice.
+        const residentFullBase = stateTaxableIncomeFromAgi({
+          agiCents: agi,
+          filingStatus: input.filingStatus,
+          stateCode: code,
+        });
+        const residentFullBrackets = computeStateTaxFromBrackets({
+          taxableIncomeCents: residentFullBase,
+          filingStatus: input.filingStatus,
+          stateCode: code,
+          taxYear: input.taxYear,
+        });
+        residentGrossTax = residentFullBrackets
+          ? residentFullBrackets.taxCents
+          : Math.round(residentFullBase * stateRate(code));
+      } else {
+        nonResidentTax += oneStateTax;
+      }
+    }
+
+    // Resident state credit (Schedule M1CR-equivalent): the
+    // resident state allows a dollar-for-dollar credit for taxes
+    // paid to other states on the income those states taxed, up
+    // to the resident state's tax on the SAME slice of income.
+    // Conservative approximation: credit = min(nonResidentTax,
+    // residentGrossTax × (sum of non-resident weights)).
+    const nonResidentWeightSum = input.stateNexus
+      .filter((r) => !r.isResident)
+      .reduce((a, r) => a + normalize(r.salesFactorBps), 0);
+    const creditCap = Math.round(residentGrossTax * nonResidentWeightSum);
+    const credit = Math.min(nonResidentTax, creditCap);
+    const residentNetTax = Math.max(0, residentGrossTax - credit);
+    stTax = residentNetTax + nonResidentTax;
+
+    const stateList = input.stateNexus
+      .map(
+        (r) =>
+          `${r.stateCode.toUpperCase()}${r.isResident ? "*" : ""} ${(normalize(r.salesFactorBps) * 100).toFixed(1)}%`,
+      )
+      .join(", ");
+    assumptions.push(
+      `Multi-state apportionment applied: ${stateList} (* = resident state). Resident state credits taxes paid elsewhere up to the resident-state-equivalent tax on the same income slice.`,
+    );
+    hints.push(
+      "Multi-state apportionment is an estimate; confirm each state's specific apportionment rules (single sales factor vs three-factor) and any throwback / throwout rules with your CPA.",
+    );
+  } else if (input.stateCode) {
+    // STATE taxable income ≠ FEDERAL taxable income. Most states key
+    // off federal AGI then subtract their own state standard
+    // deduction; NONE of them recognise the federal QBI deduction. If
+    // we pass `taxableIncome` (which has both federal std deduction
+    // and federal QBI removed) into the bracket math we under-state
+    // state tax — the May 2026 round-2 audit caught this on CA at
+    // ~$378 vs ~$1,033 hand-calc. Use the AGI-based helper instead.
+    const stateBase = stateTaxableIncomeFromAgi({
+      agiCents: agi,
+      filingStatus: input.filingStatus,
+      stateCode: input.stateCode,
+    });
     const brackets = computeStateTaxFromBrackets({
-      taxableIncomeCents: taxableIncome,
+      taxableIncomeCents: stateBase,
       filingStatus: input.filingStatus,
       stateCode: input.stateCode,
       taxYear: input.taxYear,
@@ -1227,9 +1417,11 @@ export function forecast(input: ForecastInput): ForecastResult {
         );
       }
     } else {
-      // Fall back to the curated flat rate.
+      // Fall back to the curated flat rate against the SAME state-
+      // taxable base — using `taxableIncome` (federal) would under-
+      // state state tax for the same reason described above.
       const stRate = stateRate(input.stateCode);
-      stTax = Math.round(taxableIncome * stRate);
+      stTax = Math.round(stateBase * stRate);
       if (stRate > 0) {
         assumptions.push(
           `State estimate for ${input.stateCode} uses a curated ${(stRate * 100).toFixed(2)}% flat rate. Real bracket math is encoded for CA, NY, NJ, MA, MN, OR, HI, DC, MD, CT; other graduated states fall back to this approximation - confirm against your state's published brackets.`,
@@ -1240,6 +1432,38 @@ export function forecast(input: ForecastInput): ForecastResult {
         );
       }
     }
+  }
+
+  // Entity-level state taxes (pass-through path).
+  //
+  // The bracket math above gives us the OWNER's personal-side state
+  // income tax. On top of that, the ENTITY itself may owe:
+  //   - S-Corp net-income tax (CA 1.5%, IL 1.5%, MA 8%)
+  //   - LLC franchise tax + tiered gross-receipts fee (CA)
+  //   - Gross-receipts / margin tax (TX, OH, WA, OR, NV)
+  //
+  // C-Corps are handled in the dedicated short-circuit earlier in
+  // this function; this block runs for sole_prop / single_llc /
+  // multi_llc / partnership / s_corp / self_employed_1099. The 1099
+  // self-employed case has no registered entity at the state level —
+  // map it to sole_prop so the gross-receipts taxes (which apply
+  // regardless of entity registration) still fire if applicable.
+  {
+    const entityTypeForState =
+      input.entityType === "self_employed_1099"
+        ? "sole_prop"
+        : input.entityType;
+    const entityTax = computeStateEntityTax({
+      stateCode: input.stateCode,
+      entityType: entityTypeForState,
+      netBusinessIncomeCents: netBiz,
+      grossReceiptsCents: projectedIncome,
+    });
+    if (entityTax.totalEntityTaxCents > 0) {
+      stTax += entityTax.totalEntityTaxCents;
+      for (const n of entityTax.notes) assumptions.push(n);
+    }
+    for (const h of entityTax.hints) hints.push(h);
   }
 
   // Net Investment Income Tax (NIIT). IRC §1411 — 3.8% on the lesser

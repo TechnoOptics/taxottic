@@ -15,7 +15,29 @@
 // them in the SW was the root cause of a persistent React #418
 // hydration error after deploys (old client chunks hydrating against
 // new server HTML).
-const CACHE_VERSION = "v8";
+// v9 (May 2026 Round-2): bumping to invalidate caches alongside the
+// MedalCelebration Math.random fix (which was *also* a #418 source
+// on the dashboard), the dashboard recap-card markup change, and
+// the host-aware login/callback redirects. A no-op for the SW logic
+// itself; the bump forces the activate handler to drop the v8 caches
+// so the new server HTML hydrates against newly-fetched chunks even
+// for clients that still had a v8 SW controlling them.
+// v10 (May 2026 Round-2 follow-up): bumping again for the next-audit
+// UX changes — dashboard "Coming up" urgency colors, achievements
+// next-up row, expenses/income empty-state CTAs, vendor autocomplete.
+// All HTML/markup tweaks; bumping prevents v9 clients from hydrating
+// new server HTML against cached v9 chunks.
+// v11 (May 2026): mobile-responsive pass — page-wrapper padding
+// `px-6` → `px-4 sm:px-6` across 35+ files, card internal padding
+// gets a mobile shrink (`p-5 sm:p-7` patterns), ReadinessHelp
+// popover viewport-clamped. Pure CSS/markup changes; bump invalidates
+// stale HTML caches so phone users actually see the new spacing on
+// their next visit.
+// v12 (May 2026 Round-5): /c/{id}/team and /tax-preparer redirect
+// shims + inline edit on income & expense rows + confirm-on-Remove.
+// Markup changes warrant a cache flush so the v11 clients pick up
+// the new server HTML on next visit.
+const CACHE_VERSION = "v12";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

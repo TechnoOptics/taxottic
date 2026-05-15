@@ -158,7 +158,7 @@ export default async function AccessTransparencyPage({
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-3xl mx-auto px-6 py-10">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <Link
           href={`/c/${publicId}/preparer`}
           className="text-xs text-ink-soft hover:text-forest-900"

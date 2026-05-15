@@ -7,7 +7,7 @@ export default function SuspendedPage() {
         <div className="mb-6">
           <Wordmark size="lg" />
         </div>
-        <div className="card p-8">
+        <div className="card p-6 sm:p-8">
           <div className="text-xs uppercase tracking-[0.2em] text-red-700">
             Account suspended
           </div>

@@ -1,0 +1,423 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { AppHeader } from "@/components/AppHeader";
+import { requireUserWithAdmin } from "@/lib/auth";
+import { requireFirmContext } from "@/lib/firm/context";
+import {
+  generateEngagementLetter,
+  generateScheduleCDraft,
+  generateK1Drafts,
+  generate1099Batch,
+  generateForm1040Draft,
+  generateEntityReturnDraft,
+  sendDocumentForSignature,
+  archiveDocument,
+} from "./actions";
+
+// /firm/clients/{engagementId}/documents — every doc on this
+// engagement. Two columns: the action panel (generate / upload /
+// send for signature) and the document list.
+
+type Params = Promise<{ engagementId: string }>;
+
+const KIND_LABEL: Record<string, string> = {
+  engagement_letter: "Engagement letter",
+  organizer: "Tax organizer",
+  invoice: "Invoice",
+  receipt: "Receipt",
+  firm_letter: "Firm letter",
+  internal_memo: "Internal memo",
+  schedule_c_draft: "Schedule C (draft)",
+  schedule_e_draft: "Schedule E (draft)",
+  k1_draft: "Schedule K-1 (draft)",
+  "1099_nec_draft": "Form 1099-NEC (draft)",
+  "1099_misc_draft": "Form 1099-MISC (draft)",
+  "1040_draft": "Form 1040 (draft)",
+  "1065_draft": "Form 1065 (draft)",
+  "1120_draft": "Form 1120 (draft)",
+  "1120_s_draft": "Form 1120-S (draft)",
+  tax_return_packet: "Return packet",
+  client_upload_w2: "Client W-2",
+  client_upload_1099: "Client 1099",
+  client_upload_receipt: "Client receipt",
+  client_upload_prior_return: "Prior return",
+  client_upload_other: "Client upload",
+  manual_upload: "Upload",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  ready_for_review: "Ready for review",
+  awaiting_signature: "Awaiting signature",
+  signed: "Signed",
+  filed: "Filed",
+  sent_to_client: "Sent to client",
+  archived: "Archived",
+  error: "Error",
+};
+
+const STATUS_TONE: Record<string, string> = {
+  draft: "bg-cream-200 text-forest-800 border-forest-200",
+  ready_for_review: "bg-amber-50 text-amber-800 border-amber-200",
+  awaiting_signature: "bg-gold-50 text-gold-800 border-gold-200",
+  signed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  filed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  sent_to_client: "bg-cream-100 text-forest-800 border-forest-100",
+  archived: "bg-cream-100 text-ink-muted border-forest-100",
+  error: "bg-red-50 text-red-700 border-red-200",
+};
+
+export default async function DocumentsPage({
+  params,
+}: {
+  params: Params;
+}) {
+  const { engagementId } = await params;
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await requireFirmContext();
+
+  const { data: eng } = await admin
+    .from("firm_engagements")
+    .select(
+      "id, firm_id, tax_year, kind, company:companies!inner(id, name, public_id)",
+    )
+    .eq("id", engagementId)
+    .eq("firm_id", ctx.firm.id)
+    .maybeSingle();
+  if (!eng) notFound();
+  const company = (eng as unknown as { company: { id: string; name: string; public_id: string } }).company;
+
+  const { data: docs } = await admin
+    .from("firm_documents")
+    .select(
+      "id, kind, status, provider, provider_envelope_id, filename, content_type, size_bytes, tax_year, created_at, signed_at, filed_at, sent_at",
+    )
+    .eq("firm_id", ctx.firm.id)
+    .eq("engagement_id", engagementId)
+    .neq("status", "archived")
+    .order("created_at", { ascending: false });
+
+  return (
+    <main id="main" className="min-h-screen">
+      <AppHeader email={user.email ?? undefined} />
+
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+          <Link
+            href="/firm"
+            className="underline decoration-dotted hover:text-forest-900"
+          >
+            Firm cockpit
+          </Link>{" "}
+          ·{" "}
+          <Link
+            href={`/firm/clients/${engagementId}`}
+            className="underline decoration-dotted hover:text-forest-900"
+          >
+            {company.name}
+          </Link>{" "}
+          · Documents
+        </div>
+        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
+          Documents for tax year {eng.tax_year}.
+        </h1>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_18rem]">
+          {/* Document list */}
+          <section>
+            <h2 className="display text-xl text-forest-900">All documents</h2>
+            {(docs ?? []).length === 0 ? (
+              <div className="mt-3 card p-6 text-center">
+                <p className="text-sm text-ink-soft">
+                  No documents yet. Generate an engagement letter to
+                  get started.
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-3 grid gap-3">
+                {(docs ?? []).map((d) => (
+                  <li key={d.id} className="card p-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="display text-base text-forest-900">
+                            {KIND_LABEL[d.kind] ?? d.kind}
+                          </span>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] rounded-full border ${
+                              STATUS_TONE[d.status] ??
+                              "bg-cream-100 text-ink-muted border-forest-100"
+                            }`}
+                          >
+                            {STATUS_LABEL[d.status] ?? d.status}
+                          </span>
+                          {d.provider !== "manual" &&
+                          d.provider !== "generated" ? (
+                            <span className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
+                              via {d.provider}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="text-xs text-ink-muted mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                          <span>{d.filename}</span>
+                          <span>·</span>
+                          <span>{formatBytes(d.size_bytes ?? 0)}</span>
+                          <span>·</span>
+                          <span>
+                            Created{" "}
+                            {new Intl.DateTimeFormat("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            }).format(new Date(d.created_at))}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                        <Link
+                          href={`/api/firm/documents/${d.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-ghost text-xs px-3 h-9"
+                        >
+                          PDF
+                        </Link>
+                        <Link
+                          href={`/firm/clients/${engagementId}/documents/${d.id}/versions`}
+                          className="btn-ghost text-xs px-3 h-9"
+                        >
+                          History
+                        </Link>
+                        <Link
+                          href={`/firm/clients/${engagementId}/documents/${d.id}/comments`}
+                          className="btn-ghost text-xs px-3 h-9"
+                        >
+                          Comments
+                        </Link>
+                        {(d.status === "ready_for_review" ||
+                          d.status === "draft") &&
+                        (d.kind === "engagement_letter" ||
+                          d.kind === "schedule_c_draft" ||
+                          d.kind === "k1_draft" ||
+                          d.kind === "1099_nec_draft" ||
+                          d.kind === "1099_misc_draft" ||
+                          d.kind === "1040_draft" ||
+                          d.kind === "1065_draft" ||
+                          d.kind === "1120_draft" ||
+                          d.kind === "1120_s_draft") ? (
+                          <details className="relative">
+                            <summary className="btn-primary text-xs px-3 h-9 cursor-pointer list-none">
+                              Send for signature
+                            </summary>
+                            <form
+                              action={sendDocumentForSignature}
+                              className="absolute right-0 top-10 z-10 card p-3 w-72 grid gap-2"
+                            >
+                              <input
+                                type="hidden"
+                                name="document_id"
+                                value={d.id}
+                              />
+                              <label className="grid gap-1">
+                                <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                                  Recipient email
+                                </span>
+                                <input
+                                  type="email"
+                                  name="recipient_email"
+                                  required
+                                  placeholder="client@example.com"
+                                  className="input text-sm"
+                                />
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                                  Recipient name
+                                </span>
+                                <input
+                                  type="text"
+                                  name="recipient_name"
+                                  placeholder="Riley Chen"
+                                  className="input text-sm"
+                                />
+                              </label>
+                              <button
+                                type="submit"
+                                className="btn-primary text-xs"
+                              >
+                                Dispatch envelope
+                              </button>
+                            </form>
+                          </details>
+                        ) : null}
+                        <form action={archiveDocument}>
+                          <input type="hidden" name="id" value={d.id} />
+                          <input
+                            type="hidden"
+                            name="engagement_id"
+                            value={engagementId}
+                          />
+                          <button className="btn-ghost text-xs px-3 h-9 hover:text-red-700">
+                            Archive
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* Generate panel */}
+          <aside className="grid gap-4">
+            <div className="card p-4">
+              <h2 className="display text-base text-forest-900">
+                Generate
+              </h2>
+              <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                Auto-populated from the engagement metadata + firm
+                profile.
+              </p>
+              <form action={generateEngagementLetter} className="mt-3">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <button className="btn-primary text-sm w-full">
+                  Engagement letter
+                </button>
+              </form>
+              <form action={generateScheduleCDraft} className="mt-2">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <button className="btn-ghost text-sm w-full">
+                  Schedule C draft
+                </button>
+              </form>
+              <form action={generateK1Drafts} className="mt-2">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <button className="btn-ghost text-sm w-full">
+                  K-1 batch (partnership / S-Corp)
+                </button>
+              </form>
+              <form action={generate1099Batch} className="mt-2">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1099-NEC" />
+                <button className="btn-ghost text-sm w-full">
+                  1099-NEC batch
+                </button>
+              </form>
+              <form action={generate1099Batch} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1099-MISC" />
+                <button className="btn-ghost text-sm w-full">
+                  1099-MISC batch
+                </button>
+              </form>
+              <hr className="my-3 border-forest-100" />
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900 mb-2">
+                <strong className="block uppercase tracking-[0.15em] text-[10px] mb-1">
+                  Tax-return drafts
+                </strong>
+                These generators produce <strong>review starters</strong>,
+                not file-ready returns. Schedule A itemization,
+                Schedule D capital gains, Schedule L balance sheet,
+                Form 4562 depreciation detail, and QBI phaseouts
+                above the threshold still need preparer attention.
+                Each output is watermarked DRAFT — verify line-by-
+                line against the IRS-issued form before signing.
+              </div>
+              <form action={generateForm1040Draft}>
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1040 draft
+                </button>
+              </form>
+              <form action={generateEntityReturnDraft} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1065" />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1065 (partnership)
+                </button>
+              </form>
+              <form action={generateEntityReturnDraft} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1120" />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1120 (C-Corp)
+                </button>
+              </form>
+              <form action={generateEntityReturnDraft} className="mt-1">
+                <input
+                  type="hidden"
+                  name="engagement_id"
+                  value={engagementId}
+                />
+                <input type="hidden" name="variant" value="1120-S" />
+                <button className="btn-ghost text-sm w-full">
+                  Form 1120-S (S-Corp)
+                </button>
+              </form>
+              <p className="mt-3 text-[11px] text-ink-muted leading-relaxed">
+                Generators read YTD books + the firm letterhead.
+                K-1 picks up the partners list from{" "}
+                <code className="font-mono">business_profiles.k1_partners</code>{" "}
+                (fallback: 100% to the company manager). 1099s
+                aggregate by recipient name and filter ≥ $600.
+              </p>
+            </div>
+
+            <div className="card p-4 opacity-90">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                Phase 5.5
+              </div>
+              <h3 className="display text-base text-forest-900 mt-1">
+                E-signature
+              </h3>
+              <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                Send drafts for signature via Documenso (default) or
+                DocuSign (enterprise tier). Webhook updates status
+                on signature.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

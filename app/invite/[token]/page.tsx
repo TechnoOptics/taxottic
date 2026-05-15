@@ -149,7 +149,7 @@ function Frame({ children }: { children: React.ReactNode }) {
         <div className="text-center mb-6">
           <Wordmark size="md" />
         </div>
-        <div className="card p-8">{children}</div>
+        <div className="card p-6 sm:p-8">{children}</div>
       </div>
     </main>
   );
