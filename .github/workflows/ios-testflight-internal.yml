@@ -36,7 +36,7 @@ on:
       group_name:
         description: "TestFlight internal group name"
         required: true
-        default: "Techo Testers"
+        default: "Techno Testers"
       bundle_id:
         description: "App bundle identifier"
         required: true
@@ -73,7 +73,7 @@ jobs:
           const KEY_ID = process.env.ASC_KEY_ID;
           const ISSUER = process.env.ASC_ISSUER_ID;
           const PRIVATE_KEY = process.env.ASC_PRIVATE_KEY;
-          const GROUP_NAME = process.env.GROUP_NAME || "Techo Testers";
+          const GROUP_NAME = process.env.GROUP_NAME || "Techno Testers";
           const BUNDLE_ID = process.env.BUNDLE_ID || "com.taxottic.app";
           const EMAILS = (process.env.TESTER_EMAILS || "")
             .split(",").map(s => s.trim()).filter(Boolean);
