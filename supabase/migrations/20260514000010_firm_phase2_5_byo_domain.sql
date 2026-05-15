@@ -32,9 +32,14 @@ create table if not exists public.firm_custom_domains (
   added_at timestamptz not null default now(),
   verified_at timestamptz,
   removed_at timestamptz,
-  notes text,
-  unique (lower(hostname))
+  notes text
 );
+
+-- Hostname uniqueness via a functional unique index (inline
+-- `unique (lower(hostname))` isn't valid Postgres syntax for
+-- expression-based constraints — must be a separate index).
+create unique index if not exists firm_custom_domains_hostname_unique
+  on public.firm_custom_domains (lower(hostname));
 
 create index if not exists firm_custom_domains_firm_idx
   on public.firm_custom_domains (firm_id);

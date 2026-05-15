@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { ForecastDisclaimer } from "@/components/ForecastDisclaimer";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { computeReadiness } from "@/lib/dashboard/readiness";
@@ -393,6 +394,10 @@ export default async function FirmClientPage({
             />
           </ul>
         </section>
+
+        <div className="mt-8">
+          <ForecastDisclaimer variant="card" />
+        </div>
       </section>
     </main>
   );

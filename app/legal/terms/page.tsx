@@ -35,7 +35,7 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section title="What Taxottic does (and does not do)">
+          <Section title="What Taxottic does (and does not do)" id="forecast-vs-advice">
             <p>
               Taxottic forecasts your taxes and organises deductions based
               on data you enter or import. It is{" "}
@@ -47,6 +47,56 @@ export default function TermsPage() {
             <p>
               Taxottic is not the IRS, not a tax preparer, and does not
               file returns on your behalf.
+            </p>
+            <h3 className="display text-base text-forest-900 mt-2">
+              Forecast vs. tax advice — the distinction
+            </h3>
+            <p>
+              Every number Taxottic shows is a <strong>forecast</strong>:
+              a computation produced by a tax engine, run against the
+              books and tax-profile data you supplied, using current-year
+              federal and state rate tables that we maintain on a
+              best-effort basis. This includes:
+            </p>
+            <ul className="list-disc ml-5 grid gap-1">
+              <li>Projected federal + state income tax owed</li>
+              <li>Quarterly estimated payment recommendations</li>
+              <li>Refund / amount-owed estimates on Form 1040 drafts</li>
+              <li>Schedule C, K-1, 1099, 1065, 1120, 1120-S generators</li>
+              <li>
+                Multi-state apportionment math + sales-tax nexus
+                detection
+              </li>
+              <li>Bella AI educational answers about tax code</li>
+            </ul>
+            <p>
+              Forecasts are <strong>not</strong>:
+            </p>
+            <ul className="list-disc ml-5 grid gap-1">
+              <li>
+                Tax advice rendered by a licensed Enrolled Agent, CPA,
+                or attorney
+              </li>
+              <li>A filed return — only the IRS / state DOR + your
+                preparer can produce that
+              </li>
+              <li>
+                A substitute for preparer judgment on facts and
+                circumstances the engine doesn&apos;t see
+              </li>
+              <li>
+                A guarantee that the rate tables we use are current —
+                states publish rate changes at varying cadences and
+                we may lag a few weeks
+              </li>
+            </ul>
+            <p>
+              Generated documents are watermarked DRAFT for a reason.
+              Before you sign anything, pay the IRS based on a
+              Taxottic figure, or send a return to the authority, run
+              the work past a licensed tax professional. If a number
+              we showed turns out to be wrong, the
+              limitation-of-liability section below applies.
             </p>
           </Section>
 
@@ -243,9 +293,17 @@ export default function TermsPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  id,
+  children,
+}: {
+  title: string;
+  id?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section>
+    <section id={id} className={id ? "scroll-mt-24" : undefined}>
       <h2 className="display text-xl text-forest-900">{title}</h2>
       <div className="mt-3 grid gap-3">{children}</div>
     </section>

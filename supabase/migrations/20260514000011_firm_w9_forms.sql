@@ -100,9 +100,14 @@ create table if not exists public.firm_w9_forms (
   requested_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '90 days'),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (firm_id, lower(recipient_email))
+  updated_at timestamptz not null default now()
 );
+
+-- Per-firm uniqueness on lowercased email via a functional index
+-- (inline `unique (firm_id, lower(recipient_email))` isn't valid
+-- Postgres syntax — must be a separate index).
+create unique index if not exists firm_w9_forms_firm_email_unique
+  on public.firm_w9_forms (firm_id, lower(recipient_email));
 
 create index if not exists firm_w9_forms_firm_idx
   on public.firm_w9_forms (firm_id, status, created_at desc);

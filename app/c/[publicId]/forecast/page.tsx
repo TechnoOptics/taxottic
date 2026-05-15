@@ -5,6 +5,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
+import { ForecastDisclaimer } from "@/components/ForecastDisclaimer";
 import { YearEndSuggestionsCard } from "@/components/YearEndSuggestionsCard";
 import {
   AmtTile,
@@ -1098,6 +1099,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
           Beautiful Bill amendments) and a curated state rate; they are not a
           tax return. Talk with a licensed CPA for decisions that matter.
         </p>
+
+        <div className="mt-6">
+          <ForecastDisclaimer variant="card" />
+        </div>
       </section>
     </main>
   );
