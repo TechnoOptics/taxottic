@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { PasskeySignInButton } from "@/components/PasskeySignInButton";
+import { isNativeApp, nativeOAuthSignIn } from "@/lib/capacitor/auth-bridge";
 
 // Identity providers we render on the login page. Each one needs its
 // OAuth credentials registered in the Supabase dashboard
@@ -171,6 +172,44 @@ export default function LoginPage() {
     if (typeof document !== "undefined") {
       document.cookie = `_oauth_next=${encodeURIComponent(next)}; Path=/; Max-Age=600; SameSite=Lax; Secure`;
     }
+
+    // Native Capacitor shell: the cookie-based web flow strands the
+    // session in the system browser (Google blocks embedded-WebView
+    // OAuth). Route through the custom-scheme bridge instead, which
+    // opens an in-app browser tab and hands the session back into
+    // the WebView via the appUrlOpen listener. On web this is false
+    // and we fall straight through to the unchanged flow below.
+    if (await isNativeApp()) {
+      const r = await nativeOAuthSignIn(supabase, provider, {
+        scopes,
+        queryParams,
+        next,
+      });
+      if (r.handled) {
+        if (r.error) {
+          const lower = r.error.toLowerCase();
+          if (
+            lower.includes("provider is not enabled") ||
+            lower.includes("unsupported provider") ||
+            lower.includes("provider not enabled")
+          ) {
+            const label =
+              provider === "azure"
+                ? "Microsoft"
+                : provider === "apple"
+                  ? "Apple"
+                  : "Google";
+            setError(
+              `${label} sign-in isn't fully set up yet — try Google, a passkey, or a magic link below.`,
+            );
+          } else {
+            setError(r.error);
+          }
+        }
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {

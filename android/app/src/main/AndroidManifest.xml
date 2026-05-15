@@ -18,6 +18,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Native OAuth handoff. Supabase redirects the in-app
+                 browser tab to com.taxottic.app://auth-callback after
+                 sign-in; this filter routes that custom scheme back
+                 into MainActivity (launchMode singleTask), Capacitor
+                 fires appUrlOpen, and the WebView completes the
+                 session. Without it the OAuth session strands in the
+                 system browser. The scheme must also be allow-listed
+                 in Supabase Auth -> URL Configuration. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="com.taxottic.app"
+                    android:host="auth-callback" />
+            </intent-filter>
         </activity>
 
         <provider

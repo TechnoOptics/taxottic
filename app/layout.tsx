@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { Fraunces, Inter } from "next/font/google";
 import { PWASetup } from "@/components/PWASetup";
+import { CapacitorAuth } from "@/components/CapacitorAuth";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -216,6 +217,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col safe-pad-bottom">
         {children}
         <PWASetup />
+        <CapacitorAuth />
       </body>
     </html>
   );

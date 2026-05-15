@@ -65,5 +65,23 @@
 	<string>Taxottic accesses your photo library so you can attach an existing receipt or tax-document image to your books.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Taxottic saves a copy of captured receipts to your photo library when you choose to keep one.</string>
+	<!-- Custom URL scheme for the native OAuth handoff. Supabase
+	     redirects the in-app browser tab to
+	     com.taxottic.app://auth-callback after sign-in; the OS routes
+	     that scheme back into the app, Capacitor fires appUrlOpen,
+	     and the WebView completes the session. Without this the OAuth
+	     session strands in the system browser. The scheme must also
+	     be allow-listed in Supabase Auth -> URL Configuration. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.taxottic.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.taxottic.app</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
