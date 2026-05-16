@@ -118,7 +118,11 @@ export async function AppHeader({
         <div
           className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 relative"
           style={{
-            paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))",
+            // The <header> above already reserves
+            // env(safe-area-inset-top); adding it again here
+            // double-counted the status-bar height and made the bar
+            // ~one notch too tall. Just the symmetric visual padding.
+            paddingTop: "0.625rem",
             paddingBottom: "0.625rem",
           }}
         >

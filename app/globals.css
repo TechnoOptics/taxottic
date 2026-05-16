@@ -465,10 +465,18 @@ main, header, footer, nav {
     box-shadow: 0 0 0 3px rgba(15, 45, 36, 0.12);
   }
 
-  /* Select uses .input plus a forest-colored chevron and right padding so the
-     value never collides with the icon. Hides the native arrow for a clean
-     cross-browser look. */
-  select.input,
+  /* Select: ONE forest chevron, never the OS one.
+
+     iOS WKWebView is the reason this targets the bare `select`
+     element, not just `select.input`. On iOS a styled <select> still
+     paints its own native disclosure chevron unless appearance is
+     reset on the element itself — that's the "two/many arrows in the
+     box" the user saw. Resetting every <select> (every select in the
+     app is .input-styled anyway) guarantees exactly one arrow. The
+     `background` shorthand on .input would wipe background-image, so
+     the chevron + its no-repeat/position/size are set together here
+     and this rule's element specificity keeps them. */
+  select,
   .select {
     appearance: none;
     -webkit-appearance: none;
@@ -480,7 +488,12 @@ main, header, footer, nav {
     background-size: 16px 16px;
     cursor: pointer;
   }
-  select.input:disabled,
+  /* Kill the iOS/Safari inner spin/expand affordance some versions
+     still render on top of an appearance-reset select. */
+  select::-ms-expand {
+    display: none;
+  }
+  select:disabled,
   .select:disabled {
     cursor: not-allowed;
     opacity: 0.6;
@@ -775,9 +788,10 @@ main, header, footer, nav {
     border-color: rgba(213, 187, 126, 0.7);
     box-shadow: 0 0 0 3px rgba(213, 187, 126, 0.18);
   }
-  html[data-theme="dark"] select.input,
+  html[data-theme="dark"] select,
   html[data-theme="dark"] .select {
-    /* Re-tint the chevron so it reads against the dark surface. */
+    /* Re-tint the chevron so it reads against the dark surface.
+       Targets bare `select` to match the broadened base rule. */
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path fill='none' stroke='%23fbf7e9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M4 6l4 4 4-4'/></svg>");
   }
 

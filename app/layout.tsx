@@ -4,6 +4,7 @@ import { Fraunces, Inter } from "next/font/google";
 import { PWASetup } from "@/components/PWASetup";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
 import { CapacitorNativeInit } from "@/components/CapacitorNativeInit";
+import { EdgeSwipeBack } from "@/components/EdgeSwipeBack";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -220,6 +221,7 @@ export default function RootLayout({
         <PWASetup />
         <CapacitorAuth />
         <CapacitorNativeInit />
+        <EdgeSwipeBack />
       </body>
     </html>
   );
