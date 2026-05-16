@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { captureReceiptPhoto } from "@/lib/capacitor/camera-capture";
 
 type Category = {
   code: string;
@@ -66,6 +67,7 @@ export function ReceiptUploader({
   const [category, setCategory] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const webCamInputRef = useRef<HTMLInputElement | null>(null);
 
   const reset = () => {
     setFile(null);
@@ -77,13 +79,14 @@ export function ReceiptUploader({
     setNotes("");
   };
 
-  const onUpload = async () => {
-    if (!file) return;
+  const onUpload = async (explicitFile?: File) => {
+    const f = explicitFile ?? file;
+    if (!f) return;
     setBusy(true);
     setError(null);
     try {
       const fd = new FormData();
-      fd.set("file", file);
+      fd.set("file", f);
       const res = await fetch("/api/receipts/extract", {
         method: "POST",
         body: fd,
@@ -118,6 +121,22 @@ export function ReceiptUploader({
     }
   };
 
+  const onTakePhoto = async () => {
+    setError(null);
+    const r = await captureReceiptPhoto();
+    if (r.kind === "file") {
+      setFile(r.file);
+      await onUpload(r.file); // native capture → read immediately
+    } else if (r.kind === "unavailable") {
+      // Web (incl. mobile browsers): the capture-hinted input opens the
+      // camera on a phone and a file picker on desktop.
+      webCamInputRef.current?.click();
+    } else if (r.kind === "error") {
+      setError(r.message);
+    }
+    // "cancelled" → user backed out of the native camera; do nothing.
+  };
+
   const onCommit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
@@ -138,10 +157,37 @@ export function ReceiptUploader({
       {!draft ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-ink-soft leading-relaxed">
-            Drop a receipt photo or PDF. Bella reads the vendor, date, total,
-            and a likely category. You confirm before it lands.
+            Snap a photo of a receipt or drop a photo/PDF. Bella reads the
+            vendor, date, total, and a likely category. You confirm before
+            it lands.
           </p>
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onTakePhoto}
+              disabled={busy}
+              className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {busy ? "Reading…" : "Take a photo"}
+            </button>
+            {/* Hidden camera-hinted input: the web fallback for phones
+               (opens the camera) and desktop (opens a file picker). */}
+            <input
+              ref={webCamInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                setError(null);
+                if (f) {
+                  setFile(f);
+                  void onUpload(f);
+                }
+              }}
+            />
+            <span className="text-xs text-ink-muted">or</span>
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,application/pdf"
@@ -153,7 +199,7 @@ export function ReceiptUploader({
             />
             <button
               type="button"
-              onClick={onUpload}
+              onClick={() => onUpload()}
               disabled={!file || busy}
               className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
