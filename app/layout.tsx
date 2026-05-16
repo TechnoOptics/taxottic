@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { Fraunces, Inter } from "next/font/google";
 import { PWASetup } from "@/components/PWASetup";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
+import { CapacitorNativeInit } from "@/components/CapacitorNativeInit";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -218,6 +219,7 @@ export default function RootLayout({
         {children}
         <PWASetup />
         <CapacitorAuth />
+        <CapacitorNativeInit />
       </body>
     </html>
   );

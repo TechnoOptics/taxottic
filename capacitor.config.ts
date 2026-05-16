@@ -45,15 +45,18 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: "automatic",
-    // Match the cream brand tone for the WebView background so
-    // pull-to-refresh doesn't reveal a jarring white edge.
-    backgroundColor: "#fbf7e9",
+    // Brand DARK GREEN, not cream. The WebView background shows in
+    // the status-bar/notch/home-indicator safe areas and on
+    // overscroll. Cream (#fbf7e9) read as ugly "white bars" on a
+    // device; #0a1f19 matches the header + splash so those areas
+    // blend into the app instead of framing it in white.
+    backgroundColor: "#0a1f19",
     // Allow apple-touch-icon to be used by Add-to-Home-Screen so the
     // PWA fallback path stays consistent.
     limitsNavigationsToAppBoundDomains: false,
   },
   android: {
-    backgroundColor: "#fbf7e9",
+    backgroundColor: "#0a1f19",
     allowMixedContent: false,
     // Capture taxottic.com deep links so /auth/callback, /billing
     // success/cancel returns from Stripe checkout, and Plaid Link
@@ -72,8 +75,15 @@ const config: CapacitorConfig = {
       splashImmersive: true,
     },
     StatusBar: {
+      // style DARK = light/WHITE status-bar text+icons (clock,
+      // battery, signal) — correct for our dark-green header.
       style: "DARK",
       backgroundColor: "#0a1f19",
+      // Draw the WebView UNDER the status bar so the green header
+      // extends behind it (full-screen, no white/black status-bar
+      // strip). The header carries env(safe-area-inset-top) padding
+      // so content still starts below the notch / Dynamic Island.
+      overlaysWebView: true,
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],

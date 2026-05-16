@@ -34,8 +34,21 @@ export function PWASetup() {
   // branch on a one-shot `mounted` flag so the SSR/initial-client
   // render is always `null`, and toasts only appear AFTER hydration.
   const [mounted, setMounted] = useState(false);
+  // True inside the Capacitor native shell. The whole "Install
+  // Taxottic" / iOS "Add to Home Screen" prompt is nonsensical there
+  // — the user is already in the installed app. Suppress all
+  // install UI when native (the SW "Refresh" update toast still
+  // applies because the shell loads the remote site).
+  const [isNative, setIsNative] = useState(false);
   useEffect(() => {
     setMounted(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cap = (window as any).Capacitor;
+      if (cap?.isNativePlatform?.() === true) setIsNative(true);
+    } catch {
+      /* not in a Capacitor context */
+    }
   }, []);
 
   useEffect(() => {
@@ -105,9 +118,18 @@ export function PWASetup() {
       setInstalled(true);
     }
 
+    // Native shell: no install prompts at all. Checked directly
+    // (not via the `isNative` state — this effect's closure would
+    // capture the stale initial value).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nativeShell = (window as any).Capacitor?.isNativePlatform?.() === true;
+
     // iOS install hint.
     const ua = window.navigator.userAgent.toLowerCase();
-    const isIos = /iphone|ipad|ipod/.test(ua) && !/crios|fxios/.test(ua);
+    const isIos =
+      !nativeShell &&
+      /iphone|ipad|ipod/.test(ua) &&
+      !/crios|fxios/.test(ua);
     let iosTimer: ReturnType<typeof setTimeout> | null = null;
     if (isIos && !standalone) {
       iosTimer = setTimeout(() => {
@@ -124,7 +146,7 @@ export function PWASetup() {
       setInstalled(true);
       setDeferred(null);
     };
-    if (!isIos) {
+    if (!isIos && !nativeShell) {
       window.addEventListener("beforeinstallprompt", onBeforeInstall);
       window.addEventListener("appinstalled", onAppInstalled);
     }
@@ -172,6 +194,10 @@ export function PWASetup() {
   }
 
   if (installed) return null;
+
+  // Native shell: never show install / Add-to-Home prompts (the
+  // SW "Refresh" toast above already returned earlier if relevant).
+  if (isNative) return null;
 
   if (deferred) {
     return (

@@ -610,7 +610,11 @@ main, header, footer, nav {
      feeling jumpy. */
   @media (max-width: 640px) {
     body.app-scrolled .app-header-row {
-      padding-top: calc(0.4rem + env(safe-area-inset-top, 0px)) !important;
+      /* The .app-header element now always owns the
+         env(safe-area-inset-top) inset (see AppHeader.tsx). Adding
+         it here too would double-pad on scroll, so this is just the
+         tightened row padding. */
+      padding-top: 0.4rem !important;
       padding-bottom: 0.4rem !important;
     }
     body.app-scrolled .app-header {

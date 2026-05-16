@@ -104,6 +104,13 @@ export async function AppHeader({
       <header
         className="app-header app-header-shrinkable sticky top-0 left-0 right-0 z-20"
         style={{
+          // Always reserve the status-bar / notch / Dynamic-Island
+          // height so the sticky header's green extends behind the
+          // status bar (white text on green) and its content never
+          // sits under the island — not just after scroll. The
+          // globals.css scrolled-state rule no longer adds this (it
+          // would double-pad).
+          paddingTop: "env(safe-area-inset-top, 0px)",
           paddingLeft: "env(safe-area-inset-left, 0px)",
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
