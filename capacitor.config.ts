@@ -16,8 +16,6 @@ import type { CapacitorConfig } from "@capacitor/cli";
  *     active company / dashboard pref
  *   - `@capacitor/haptics` — subtle nudge when a transaction applies
  *   - `@capacitor/status-bar` — match Taxottic's forest/cream theme
- *   - `@capacitor-community/background-geolocation` — opt-in
- *     automatic mileage tracking (drives → IRS deduction)
  *   - Biometric login routes through the existing WebAuthn passkeys
  *     (we already implemented that — Face ID / Touch ID work via the
  *     native authenticator without an extra plugin).

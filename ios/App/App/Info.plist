@@ -65,14 +65,6 @@
 	<string>Taxottic accesses your photo library so you can attach an existing receipt or tax-document image to your books.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Taxottic saves a copy of captured receipts to your photo library when you choose to keep one.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Taxottic uses your location to detect business drives and calculate your IRS mileage deduction. You turn this on with a toggle and can stop it any time.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Taxottic logs your drives in the background so a business trip is captured even when the app is closed, purely to compute your mileage deduction. It is an opt-in toggle you control and can switch off any time. Location is never sold or shared.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-	</array>
 	<!-- Custom URL scheme for the native OAuth handoff. Supabase
 	     redirects the in-app browser tab to
 	     com.taxottic.app://auth-callback after sign-in; the OS routes
