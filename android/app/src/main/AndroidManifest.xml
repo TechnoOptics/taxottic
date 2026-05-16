@@ -64,4 +64,22 @@
          REQUIRED on Android 13+ (API 33+) — without it the app
          silently fails to show any notification on modern devices. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Automatic mileage tracking
+         (@capacitor-community/background-geolocation, ANDROID ONLY —
+         the iOS release workflow strips the plugin because its iOS
+         Swift package is stuck on Capacitor 7). The plugin's own
+         manifest merges the location foreground service +
+         FOREGROUND_SERVICE / FOREGROUND_SERVICE_LOCATION /
+         ACCESS_FINE|COARSE_LOCATION. ACCESS_BACKGROUND_LOCATION is
+         NOT in the plugin manifest — Google Play requires the app to
+         declare and justify it directly (Play Console "Permissions
+         declaration" + the prominent-disclosure flow). It is what
+         lets a drive keep logging when the app is backgrounded; the
+         feature is an explicit opt-in toggle the user controls. The
+         fine/coarse lines are restated here for auditability; the
+         manifest merger dedupes them against the plugin's. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 </manifest>
