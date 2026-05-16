@@ -1,0 +1,85 @@
+"use client";
+
+import { useEffect } from "react";
+
+/**
+ * One-shot native runtime setup, mounted at the root layout next to
+ * <PWASetup /> and <CapacitorAuth />. Pure no-op on web
+ * (isNativePlatform() false). Two jobs:
+ *
+ *  1. StatusBar — belt-and-suspenders with capacitor.config.ts:
+ *     overlay the WebView + light (white) text, so the dark-green
+ *     header extends behind the status bar with readable white
+ *     clock/battery/signal. Config sets this at launch; doing it
+ *     again at runtime survives any plugin re-init.
+ *
+ *  2. Push notifications — request permission + register so the
+ *     OS prompt actually appears and the device gets a token.
+ *
+ * NOTE (honest scope): registering for push is the CLIENT half.
+ * Actual delivery still needs: iOS Push Notifications capability +
+ * an APNs key, Android google-services.json + FCM, and a server to
+ * send. This wires the prompt + registration; delivery infra is a
+ * separate task. Until a build includes these plugins natively the
+ * calls below simply no-op (isPluginAvailable guard — the lesson
+ * from the #69 "Browser plugin not implemented" regression: never
+ * call a native plugin that may be absent from the running binary).
+ */
+export function CapacitorNativeInit() {
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (typeof window === "undefined") return;
+      let Capacitor:
+        | { isNativePlatform: () => boolean; isPluginAvailable: (n: string) => boolean }
+        | undefined;
+      try {
+        ({ Capacitor } = await import("@capacitor/core"));
+      } catch {
+        return;
+      }
+      if (!Capacitor?.isNativePlatform()) return;
+
+      // --- StatusBar: overlay + white text ---
+      if (Capacitor.isPluginAvailable("StatusBar")) {
+        try {
+          const { StatusBar, Style } = await import("@capacitor/status-bar");
+          await StatusBar.setOverlaysWebView({ overlay: true });
+          // Style.Dark == light/WHITE content (for dark backgrounds).
+          await StatusBar.setStyle({ style: Style.Dark });
+        } catch {
+          /* plugin shape changed / not in this binary — ignore */
+        }
+      }
+
+      // --- Push notifications: request + register ---
+      if (
+        !cancelled &&
+        Capacitor.isPluginAvailable("PushNotifications")
+      ) {
+        try {
+          const { PushNotifications } = await import(
+            "@capacitor/push-notifications"
+          );
+          const perm = await PushNotifications.checkPermissions();
+          let receive = perm.receive;
+          if (receive === "prompt" || receive === "prompt-with-rationale") {
+            receive = (await PushNotifications.requestPermissions()).receive;
+          }
+          if (receive === "granted") {
+            await PushNotifications.register();
+          }
+        } catch {
+          /* not in this binary / no APNs entitlement yet — ignore */
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return null;
+}
