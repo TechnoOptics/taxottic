@@ -59,3 +59,62 @@ export function summarizeMileageDeduction(
     deductionCents: businessMileageDeductionCents(businessMiles, taxYear),
   };
 }
+
+/**
+ * Decide which auto-mileage deduction flows into the forecast engine's
+ * `autoMileageCents`, for both the YTD ("close the books today") and
+ * the year-end projected scenarios.
+ *
+ * Precedence — and the reason this lives in one tested place rather
+ * than inline in two pages:
+ *
+ *  1. The standard-mileage vs. actual-expense election is binding per
+ *     vehicle per year. The stored per-trip `deduction_cents` is a
+ *     standard-rate figure, so on the actual-expense method (or no
+ *     vehicle) NEITHER path applies — result is zero.
+ *  2. If the company actually used the GPS tracker and has classified-
+ *     business trips, that is an IRS-grade contemporaneous mileage log
+ *     — strictly better evidence than a hand-typed
+ *     `vehicle_business_miles` estimate — so it wins. Its YTD value is
+ *     ground truth (real, dated drives, not pace-projected); the
+ *     year-end figure pace-projects that real YTD with the same month
+ *     basis the manual path uses.
+ *  3. Otherwise fall back to the caller's manual estimate unchanged
+ *     (users who never opened the tracker see zero behaviour change).
+ *
+ * The caller passes its already-computed manual figures so the (page-
+ * specific) manual projection basis stays where it belongs.
+ */
+export function resolveAutoMileageCents(args: {
+  /** business_profiles.has_vehicle && vehicle_method === "standard". */
+  onStandardVehicle: boolean;
+  /** Σ stored deduction_cents for classified-business trips this year. */
+  trackedYtdCents: number;
+  /** Count of those classified-business tracked trips. */
+  trackedTripCount: number;
+  /** Manual-estimate fallback, annualized to year-end. */
+  manualProjectedCents: number;
+  /** Manual-estimate fallback pro-rated to the elapsed year. */
+  manualYtdCents: number;
+  /** Months of real data; pace-projects the tracked YTD to year-end. */
+  trackedProjectionMonths: number;
+}): { ytdCents: number; projectedCents: number } {
+  if (!args.onStandardVehicle) return { ytdCents: 0, projectedCents: 0 };
+
+  const useTracked =
+    args.trackedTripCount > 0 && args.trackedYtdCents > 0;
+  if (useTracked) {
+    const months = Math.min(
+      12,
+      Math.max(1, args.trackedProjectionMonths),
+    );
+    return {
+      ytdCents: args.trackedYtdCents,
+      projectedCents: Math.round((args.trackedYtdCents * 12) / months),
+    };
+  }
+  return {
+    ytdCents: args.manualYtdCents,
+    projectedCents: args.manualProjectedCents,
+  };
+}

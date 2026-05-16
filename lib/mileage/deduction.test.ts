@@ -3,6 +3,7 @@ import {
   businessMileageDeductionCents,
   tripDeductionCents,
   summarizeMileageDeduction,
+  resolveAutoMileageCents,
 } from "./deduction";
 
 // IRS standard business mileage rate is 70¢/mi for both 2025 and
@@ -69,5 +70,73 @@ describe("summarizeMileageDeduction", () => {
       2025,
     );
     expect(s).toEqual({ businessMiles: 0, deductionCents: 0 });
+  });
+});
+
+describe("resolveAutoMileageCents", () => {
+  const base = {
+    onStandardVehicle: true,
+    trackedYtdCents: 0,
+    trackedTripCount: 0,
+    manualProjectedCents: 12000,
+    manualYtdCents: 3000,
+    trackedProjectionMonths: 3,
+  };
+
+  it("actual-expense method (or no vehicle) suppresses both paths", () => {
+    expect(
+      resolveAutoMileageCents({
+        ...base,
+        onStandardVehicle: false,
+        trackedYtdCents: 50000,
+        trackedTripCount: 9,
+      }),
+    ).toEqual({ ytdCents: 0, projectedCents: 0 });
+  });
+
+  it("no tracked trips → manual estimate passes through unchanged", () => {
+    expect(resolveAutoMileageCents(base)).toEqual({
+      ytdCents: 3000,
+      projectedCents: 12000,
+    });
+  });
+
+  it("tracked classified-business trips override the manual estimate", () => {
+    // 3 months of real drives totalling $400; year-end pace = 400 × 12/3.
+    const r = resolveAutoMileageCents({
+      ...base,
+      trackedYtdCents: 40000,
+      trackedTripCount: 7,
+      trackedProjectionMonths: 3,
+    });
+    expect(r.ytdCents).toBe(40000); // ground truth, not projected
+    expect(r.projectedCents).toBe(160000); // 40000 × 12 / 3
+  });
+
+  it("a tracked total of $0 does not override (falls back to manual)", () => {
+    expect(
+      resolveAutoMileageCents({ ...base, trackedTripCount: 4, trackedYtdCents: 0 }),
+    ).toEqual({ ytdCents: 3000, projectedCents: 12000 });
+  });
+
+  it("clamps the tracked projection month basis to [1, 12]", () => {
+    // 0 months → treated as 1 (no divide-by-zero, no >12 inflation).
+    expect(
+      resolveAutoMileageCents({
+        ...base,
+        trackedYtdCents: 5000,
+        trackedTripCount: 1,
+        trackedProjectionMonths: 0,
+      }).projectedCents,
+    ).toBe(60000); // 5000 × 12 / 1
+    // 18 months → clamped to 12 → projected == ytd.
+    expect(
+      resolveAutoMileageCents({
+        ...base,
+        trackedYtdCents: 5000,
+        trackedTripCount: 1,
+        trackedProjectionMonths: 18,
+      }).projectedCents,
+    ).toBe(5000); // 5000 × 12 / 12
   });
 });

@@ -21,6 +21,8 @@ import {
 } from "@/components/forecast/BenefitTiles";
 import { buildYearEndSuggestions } from "@/lib/tax/year-end-suggestions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { createServiceClient } from "@/lib/supabase/server";
+import { resolveAutoMileageCents } from "@/lib/mileage/deduction";
 import {
   ABOVE_THE_LINE_CODES,
   computeHomeOfficeSimplifiedCents,
@@ -220,20 +222,47 @@ export default async function ForecastPage({ params }: { params: Params }) {
         !ABOVE_THE_LINE_CODES.has(r.category_code),
     ) + totalOfMonthly(recurringBizExpenseMonthly);
 
-  // Auto-deductions from business profile. Mileage pace-projects from
-  // YTD miles using one-off-style logic; for the YTD view we don't
-  // project, we use the real YTD value.
-  const autoMileageProjected = businessProfile?.has_vehicle &&
-    businessProfile?.vehicle_method === "standard"
+  // Auto-deductions from business profile. The manual estimate pace-
+  // projects from typed YTD miles; resolveAutoMileageCents then lets
+  // the GPS tracker's classified-business trips (an IRS-grade log)
+  // override it, gated by the standard-vs-actual-expense election. See
+  // that helper for the precedence rationale.
+  const onStandardVehicle =
+    !!businessProfile?.has_vehicle &&
+    businessProfile?.vehicle_method === "standard";
+  const manualMileageProjected = onStandardVehicle
     ? computeMileageDeductionCents({
-        ytdMiles: businessProfile.vehicle_business_miles ?? 0,
+        ytdMiles: businessProfile?.vehicle_business_miles ?? 0,
         monthsEntered: Math.max(1, monthsWithOneOff),
       })
     : 0;
-  const autoMileageYtd = businessProfile?.has_vehicle &&
-    businessProfile?.vehicle_method === "standard"
-    ? Math.round(autoMileageProjected * (currentMonth / 12))
-    : 0;
+
+  const admin = createServiceClient();
+  const { data: bizTripRows } = await admin
+    .from("mileage_trips")
+    .select("deduction_cents")
+    .eq("company_id", company.id)
+    .eq("classification", "business")
+    .eq("tax_year", taxYear);
+  const trackedTrips = (bizTripRows ?? []) as unknown as {
+    deduction_cents: number;
+  }[];
+  const trackedYtdMileageCents = trackedTrips.reduce(
+    (a, t) => a + Number(t.deduction_cents ?? 0),
+    0,
+  );
+
+  const { ytdCents: autoMileageYtd, projectedCents: autoMileageProjected } =
+    resolveAutoMileageCents({
+      onStandardVehicle,
+      trackedYtdCents: trackedYtdMileageCents,
+      trackedTripCount: trackedTrips.length,
+      manualProjectedCents: manualMileageProjected,
+      manualYtdCents: Math.round(
+        manualMileageProjected * (currentMonth / 12),
+      ),
+      trackedProjectionMonths: monthsWithOneOff,
+    });
   const autoHomeOfficeFull = computeHomeOfficeSimplifiedCents({
     hasHomeOffice: businessProfile?.has_home_office ?? false,
     homeOfficeSqft: businessProfile?.home_office_sqft ?? null,

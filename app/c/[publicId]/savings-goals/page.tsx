@@ -4,6 +4,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { SavingsGoalCard } from "@/components/SavingsGoalCard";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { createServiceClient } from "@/lib/supabase/server";
+import { resolveAutoMileageCents } from "@/lib/mileage/deduction";
 import {
   ABOVE_THE_LINE_CODES,
   computeHomeOfficeSimplifiedCents,
@@ -175,13 +177,41 @@ export default async function SavingsGoalsPage({
           !ABOVE_THE_LINE_CODES.has(r.category_code),
       ),
     );
-  const autoMileageProjected =
-    businessProfile?.has_vehicle && businessProfile?.vehicle_method === "standard"
-      ? computeMileageDeductionCents({
-          ytdMiles: businessProfile.vehicle_business_miles ?? 0,
-          monthsEntered: Math.max(1, currentMonth),
-        })
-      : 0;
+  // The forward-looking savings target only needs the year-end
+  // figure. resolveAutoMileageCents lets the GPS tracker's classified-
+  // business trips (an IRS-grade log) override the manual estimate,
+  // gated by the standard-vs-actual-expense election — see that helper.
+  const onStandardVehicle =
+    !!businessProfile?.has_vehicle &&
+    businessProfile?.vehicle_method === "standard";
+  const manualMileageProjected = onStandardVehicle
+    ? computeMileageDeductionCents({
+        ytdMiles: businessProfile?.vehicle_business_miles ?? 0,
+        monthsEntered: Math.max(1, currentMonth),
+      })
+    : 0;
+  const admin = createServiceClient();
+  const { data: bizTripRows } = await admin
+    .from("mileage_trips")
+    .select("deduction_cents")
+    .eq("company_id", company.id)
+    .eq("classification", "business")
+    .eq("tax_year", taxYear);
+  const trackedTrips = (bizTripRows ?? []) as unknown as {
+    deduction_cents: number;
+  }[];
+  const trackedYtdMileageCents = trackedTrips.reduce(
+    (a, t) => a + Number(t.deduction_cents ?? 0),
+    0,
+  );
+  const { projectedCents: autoMileageProjected } = resolveAutoMileageCents({
+    onStandardVehicle,
+    trackedYtdCents: trackedYtdMileageCents,
+    trackedTripCount: trackedTrips.length,
+    manualProjectedCents: manualMileageProjected,
+    manualYtdCents: 0,
+    trackedProjectionMonths: currentMonth,
+  });
   const autoHomeOfficeFull = computeHomeOfficeSimplifiedCents({
     hasHomeOffice: businessProfile?.has_home_office ?? false,
     homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
