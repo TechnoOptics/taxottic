@@ -15,8 +15,38 @@
 // and no-ops cleanly so the /mileage page still renders.
 
 import { registerPlugin } from "@capacitor/core";
-import type { BackgroundGeolocationPlugin } from "@capacitor-community/background-geolocation";
 import type { GpsPoint } from "./segmentation";
+
+// Local plugin contract. The npm package was REMOVED: its iOS Swift
+// Package pins capacitor-swift-pm 7.x while this app is on Capacitor
+// 8, so `cap sync ios` could not resolve the SPM graph and the
+// TestFlight archive failed. Until a Capacitor-8-compatible
+// background-geolocation plugin is chosen, we keep the (fully
+// guarded) tracker scaffolding compiling against this minimal
+// interface. registerPlugin() still returns a proxy; the
+// isPluginAvailable() guard below means we never actually call it
+// when the native side is absent, so this is a clean no-op build.
+type BgLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  speed: number | null;
+  time: number | null;
+};
+type BgCallbackError = { message: string; code?: string };
+type BackgroundGeolocationPlugin = {
+  addWatcher(
+    options: {
+      backgroundMessage?: string;
+      backgroundTitle?: string;
+      requestPermissions?: boolean;
+      stale?: boolean;
+      distanceFilter?: number;
+    },
+    callback: (location?: BgLocation, error?: BgCallbackError) => void,
+  ): Promise<string>;
+  removeWatcher(options: { id: string }): Promise<void>;
+};
 
 const LS_ENABLED = "taxottic.mileage.enabled";
 const LS_COMPANY = "taxottic.mileage.companyId";
