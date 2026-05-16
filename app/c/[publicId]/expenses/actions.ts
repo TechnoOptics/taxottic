@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
+import { notify } from "@/lib/push";
 
 async function userBelongsToCompany(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
@@ -63,17 +64,33 @@ export async function addExpense(formData: FormData) {
     throw new Error("Not a member of this company");
   }
 
-  const { error } = await admin.from("monthly_expenses").insert({
-    company_id: companyId,
-    user_id: user.id,
-    tax_year: taxYear,
-    month,
-    amount_cents: cents,
-    category_code: categoryCode,
-    recurrence,
-    notes,
-  });
+  const { data: inserted, error } = await admin
+    .from("monthly_expenses")
+    .insert({
+      company_id: companyId,
+      user_id: user.id,
+      tax_year: taxYear,
+      month,
+      amount_cents: cents,
+      category_code: categoryCode,
+      recurrence,
+      notes,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+
+  // Phase-3 producer. Meals are 50%-limited and substantiation-
+  // sensitive, so ask "was this business?"; everything else is a
+  // quiet "added" FYI. Idempotent + no-op until push creds exist.
+  if (inserted?.id) {
+    await notify(
+      user.id,
+      categoryCode === "meals"
+        ? { kind: "clarify", subject: "meal", refId: inserted.id }
+        : { kind: "expense_applied", refId: inserted.id },
+    );
+  }
 
   const { data: company } = await admin
     .from("companies")

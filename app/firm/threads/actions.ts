@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
+import { notify } from "@/lib/push";
 
 export async function createThread(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -40,13 +41,60 @@ export async function postMessage(formData: FormData) {
   // Extract @mentions from body — pattern @{firstname.lastname} or
   // @email. For v1 we leave the array empty and let the UI parse
   // later; the column exists for future routing.
-  const { error } = await admin.from("firm_messages").insert({
-    thread_id: threadId,
-    firm_id: ctx.firm.id,
-    author_id: user.id,
-    body,
-  });
-  if (error) throw new Error(error.message);
+  const { data: msg, error } = await admin
+    .from("firm_messages")
+    .insert({
+      thread_id: threadId,
+      firm_id: ctx.firm.id,
+      author_id: user.id,
+      body,
+    })
+    .select("id")
+    .single();
+  if (error || !msg) throw new Error(error?.message ?? "Insert failed.");
+
+  // Phase-3 producer: notify the other people on this thread (prior
+  // authors + the thread starter, minus the sender). Wrapped so a
+  // notification hiccup can never fail the message post itself.
+  try {
+    const [{ data: priorAuthors }, { data: thread }, { data: me }] =
+      await Promise.all([
+        admin
+          .from("firm_messages")
+          .select("author_id")
+          .eq("thread_id", threadId),
+        admin
+          .from("firm_threads")
+          .select("created_by")
+          .eq("id", threadId)
+          .maybeSingle(),
+        admin
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", user.id)
+          .maybeSingle(),
+      ]);
+    const recipients = new Set<string>();
+    for (const a of priorAuthors ?? []) {
+      if (a.author_id && a.author_id !== user.id) recipients.add(a.author_id);
+    }
+    if (thread?.created_by && thread.created_by !== user.id) {
+      recipients.add(thread.created_by);
+    }
+    const fromName =
+      me?.full_name?.trim() || me?.email || "A teammate";
+    for (const rid of recipients) {
+      await notify(rid, {
+        kind: "message",
+        fromName,
+        threadId,
+        messageId: msg.id,
+      });
+    }
+  } catch {
+    /* posting succeeded; notification is best-effort */
+  }
+
   revalidatePath(`/firm/threads/${threadId}`);
 }
 

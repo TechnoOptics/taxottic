@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { notify } from "@/lib/push";
+import { BADGES } from "./catalog";
 
 /**
  * Lightweight badge evaluation. Reads the user's current state and inserts
@@ -109,6 +111,17 @@ export async function evaluateBadges(
   // raced.
   try {
     await supabase.from("badges").insert(toInsert);
+    // Push the award (Phase 3 producer). notify() is idempotent
+    // (notification_log dedupe) and a clean no-op until APNs/FCM
+    // creds exist, so awaiting here is safe + cheap; toInsert is
+    // non-empty only the once a badge is first earned.
+    for (const b of toInsert) {
+      await notify(userId, {
+        kind: "badge_awarded",
+        badgeLabel: BADGES[b.badge_code]?.title ?? b.badge_code,
+        badgeCode: b.badge_code,
+      });
+    }
   } catch {
     // ignore
   }
