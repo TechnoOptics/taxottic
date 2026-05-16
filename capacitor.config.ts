@@ -16,6 +16,11 @@ import type { CapacitorConfig } from "@capacitor/cli";
  *     active company / dashboard pref
  *   - `@capacitor/haptics` — subtle nudge when a transaction applies
  *   - `@capacitor/status-bar` — match Taxottic's forest/cream theme
+ *   - `@capacitor-community/background-geolocation` — opt-in
+ *     automatic mileage tracking. ANDROID ONLY: the iOS release
+ *     workflow strips it before `cap sync ios` because its iOS Swift
+ *     package pins Capacitor 7 (no Cap-8 release yet). iOS users log
+ *     mileage manually; the runtime is isPluginAvailable-guarded.
  *   - Biometric login routes through the existing WebAuthn passkeys
  *     (we already implemented that — Face ID / Touch ID work via the
  *     native authenticator without an extra plugin).
