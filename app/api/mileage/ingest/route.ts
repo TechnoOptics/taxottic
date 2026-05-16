@@ -7,6 +7,7 @@ import {
   type Place,
 } from "@/lib/mileage/segmentation";
 import { tripDeductionCents } from "@/lib/mileage/deduction";
+import { notify } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -182,6 +183,14 @@ export async function POST(req: NextRequest) {
     if (classification === "business") {
       businessMiles += trip.distanceMiles;
       deductionCents += dCents;
+    } else if (classification === "unclassified") {
+      // Phase-3 producer: a drive we couldn't auto-classify → ask.
+      // Idempotent (notification_log dedupe on the trip id) and a
+      // no-op until push creds exist; never throws.
+      await notify(user.id, {
+        kind: "trip_classify",
+        tripId: inserted.id,
+      });
     }
   }
 
