@@ -89,6 +89,30 @@ export function CapacitorNativeInit() {
               /* APNs/FCM not provisioned yet — nothing to store */
             },
           );
+          // Phase 2: a tapped action button (Business / Personal, or
+          // the body itself). Hand the action + data to the server,
+          // which re-auths and dispatches (reclassify a trip, etc.).
+          // The interactive BUTTONS still need native category
+          // registration to appear on-device (see the spec) — this
+          // listener also fires for the default "tap" so the routing
+          // is correct the moment categories land.
+          await PushNotifications.addListener(
+            "pushNotificationActionPerformed",
+            (e: {
+              actionId: string;
+              notification: { data?: Record<string, string> };
+            }) => {
+              void fetch("/api/push/action", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  data: e.notification?.data ?? {},
+                  actionId: e.actionId,
+                }),
+              }).catch(() => {});
+            },
+          );
           const perm = await PushNotifications.checkPermissions();
           let receive = perm.receive;
           if (receive === "prompt" || receive === "prompt-with-rationale") {
