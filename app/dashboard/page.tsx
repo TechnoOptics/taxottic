@@ -70,11 +70,23 @@ export default async function DashboardPage() {
     checkCompanyLimit(supabase, user.id),
     admin
       .from("profiles")
-      .select("full_name, tour_completed_at, tax_filer_type")
+      .select(
+        "full_name, tour_completed_at, tax_filer_type, tax_disclaimer_accepted_at",
+      )
       .eq("id", user.id)
       .maybeSingle(),
   ]);
   const profile = profileResult.data;
+
+  // Legal disclaimer gate — the very first onboarding step. Before a
+  // new user picks W-2 vs business (or a w2 user is bounced to the
+  // personal forecast) they must acknowledge that Taxottic produces
+  // forecasts/estimates, not a filed return. One-shot: cleared once
+  // tax_disclaimer_accepted_at is set. Placed before the filer-type
+  // fork so it precedes every downstream redirect.
+  if (profile && !profile.tax_disclaimer_accepted_at) {
+    redirect("/onboarding/disclaimer");
+  }
 
   // Plan-aware "+ New company" gating. Free is capped at 1 company;
   // when at the cap we show the link greyed out with an upgrade
