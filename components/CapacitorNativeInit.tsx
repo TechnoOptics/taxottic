@@ -32,7 +32,11 @@ export function CapacitorNativeInit() {
     (async () => {
       if (typeof window === "undefined") return;
       let Capacitor:
-        | { isNativePlatform: () => boolean; isPluginAvailable: (n: string) => boolean }
+        | {
+            isNativePlatform: () => boolean;
+            isPluginAvailable: (n: string) => boolean;
+            getPlatform: () => string;
+          }
         | undefined;
       try {
         ({ Capacitor } = await import("@capacitor/core"));
@@ -61,6 +65,29 @@ export function CapacitorNativeInit() {
         try {
           const { PushNotifications } = await import(
             "@capacitor/push-notifications"
+          );
+          // Capture the APNs/FCM token and persist it server-side so
+          // the Phase-1 send pipeline has somewhere to deliver. Listen
+          // BEFORE register() so the registration event isn't missed.
+          // Best-effort: a failed POST just means no push until the
+          // next cold start re-registers.
+          const platform = Capacitor.getPlatform();
+          await PushNotifications.addListener(
+            "registration",
+            (t: { value: string }) => {
+              void fetch("/api/push/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ token: t.value, platform }),
+              }).catch(() => {});
+            },
+          );
+          await PushNotifications.addListener(
+            "registrationError",
+            () => {
+              /* APNs/FCM not provisioned yet — nothing to store */
+            },
           );
           const perm = await PushNotifications.checkPermissions();
           let receive = perm.receive;
