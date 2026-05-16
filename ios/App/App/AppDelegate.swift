@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +8,40 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Interactive notification categories for the Phase-2
+        // "Business / Personal" actions (mileage / clarify). iOS only
+        // renders action buttons — on the lock screen and a paired
+        // Apple Watch — for a category whose identifier matches the
+        // push payload's `aps.category`.
+        //
+        // These identifiers are a CONTRACT with the JS side and must
+        // stay in sync:
+        //   category id "TRIP_CLASSIFY" / "CLARIFY"
+        //     ← lib/push/payloads.ts buildPayload().category
+        //   action id  "business" / "personal"
+        //     ← lib/push/action-map.ts resolvePushAction() (it
+        //        lowercases actionId and matches these)
+        //
+        // UserNotifications only — no new dependency / SPM change, so
+        // this cannot reintroduce the Capacitor-version resolution
+        // break. Setting categories here is idempotent and additive;
+        // @capacitor/push-notifications still owns delegate/handling.
+        let business = UNNotificationAction(
+            identifier: "business", title: "Business", options: [])
+        let personal = UNNotificationAction(
+            identifier: "personal", title: "Personal", options: [])
+        let tripCategory = UNNotificationCategory(
+            identifier: "TRIP_CLASSIFY",
+            actions: [business, personal],
+            intentIdentifiers: [],
+            options: [])
+        let clarifyCategory = UNNotificationCategory(
+            identifier: "CLARIFY",
+            actions: [business, personal],
+            intentIdentifiers: [],
+            options: [])
+        UNUserNotificationCenter.current().setNotificationCategories(
+            [tripCategory, clarifyCategory])
         return true
     }
 
