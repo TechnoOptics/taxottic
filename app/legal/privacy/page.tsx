@@ -70,6 +70,13 @@ export default function PrivacyPage() {
                 Bella&apos;s answers.
               </li>
               <li>
+                <strong>Location</strong>, only if you turn on automatic
+                mileage tracking: GPS points while you drive, used solely to
+                compute your IRS mileage deduction. Off by default, opt-in,
+                and stoppable any time. See &quot;Location &amp; automatic
+                mileage tracking&quot; below.
+              </li>
+              <li>
                 <strong>Operational data</strong>: timestamps, IP address (at
                 request time, not stored long-term), browser user-agent, and
                 usage events necessary for security, debugging, and billing.
@@ -97,6 +104,31 @@ export default function PrivacyPage() {
               . You can disconnect a bank at any time from{" "}
               <em>Banks &raquo; Disconnect</em>; we then revoke the access
               token and stop syncing.
+            </p>
+          </Section>
+
+          <Section title="Location & automatic mileage tracking">
+            <p>
+              Automatic mileage tracking is <strong>off by default</strong>.
+              It turns on only when you flip the toggle on the Mileage
+              screen, and you can turn it off there at any time.
+            </p>
+            <p>
+              While on, the app records GPS points as you drive — including
+              in the background, so a trip is captured even when the app is
+              closed — and sends them to your own Taxottic account. We use
+              them only to detect trips and calculate your IRS mileage
+              deduction. Location data is <strong>never sold, never shared
+              with advertisers, and never used for any purpose other than
+              your mileage deduction</strong>. You can delete logged trips
+              from the Mileage screen.
+            </p>
+            <p>
+              On iOS and Android the operating system asks for your
+              permission first; denying it simply means you log drives
+              manually instead. An account manager you have an active
+              engagement with can see trips for the company you drive for,
+              the same as your other business records.
             </p>
           </Section>
 
