@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { MileageMap, type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
+import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
 import { reclassifyTrip } from "./actions";
 
 // Employee mileage dashboard. Their own driving trails for a
@@ -123,6 +124,10 @@ export default async function MileagePage({
           <>
             <div className="mt-2 text-sm text-ink-soft">
               {company.name} · {rangeCfg.label.toLowerCase()}
+            </div>
+
+            <div className="mt-4">
+              <AutoTrackToggle companyId={company.id} />
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">

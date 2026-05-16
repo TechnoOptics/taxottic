@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
-    "@sparticuz/chromium": "^131.0.1",
+    "@capacitor-community/background-geolocation": "^1.2.26",
     "@capacitor/android": "^8.3.4",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.1",
@@ -37,6 +37,7 @@
     "@napi-rs/canvas": "^1.0.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
+    "@sparticuz/chromium": "^131.0.1",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.0",
     "jose": "^6.2.3",

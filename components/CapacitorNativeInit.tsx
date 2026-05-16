@@ -74,6 +74,22 @@ export function CapacitorNativeInit() {
           /* not in this binary / no APNs entitlement yet — ignore */
         }
       }
+
+      // --- Mileage: re-arm background tracking if the user left it on ---
+      // Watcher ids don't survive a process kill, so an explicit
+      // resume on launch is required. The helper self-guards on the
+      // plugin being present and also drains any points a killed-mid-
+      // drive session left buffered.
+      if (!cancelled) {
+        try {
+          const { resumeMileageTrackingIfEnabled } = await import(
+            "@/lib/mileage/native-tracker"
+          );
+          await resumeMileageTrackingIfEnabled();
+        } catch {
+          /* plugin absent in this binary — no-op */
+        }
+      }
     })();
 
     return () => {
