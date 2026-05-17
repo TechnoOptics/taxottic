@@ -44,7 +44,17 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   ios: {
-    contentInset: "automatic",
+    // "never" = WKWebView contentInsetAdjustmentBehavior .never, so
+    // the web content is pinned edge-to-edge with NO automatic
+    // safe-area inset and NO elastic give. The app already owns every
+    // safe area itself via CSS env(safe-area-inset-*) (header top
+    // inset, body side insets, safe-pad-bottom) + the StatusBar
+    // overlay, so "automatic" was DOUBLE-insetting — that was the
+    // "play" / doesn't-cover-the-screen-perfectly feel. "never" makes
+    // the page fill the device exactly on every size; the only bounce
+    // suppression needed is the CSS overscroll-behavior:none in
+    // globals.css (honoured by iOS 16+ WKWebView + Android Chromium).
+    contentInset: "never",
     // Brand DARK GREEN, not cream. The WebView background shows in
     // the status-bar/notch/home-indicator safe areas and on
     // overscroll. Cream (#fbf7e9) read as ugly "white bars" on a
