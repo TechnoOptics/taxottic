@@ -74,20 +74,6 @@ jobs:
           ls /Applications | grep Xcode
           exit 1
 
-      # Android-only plugin exclusion. @capacitor-community/background-
-      # geolocation is intentionally a dependency (Android auto-mileage
-      # uses it), but its iOS Swift Package pins capacitor-swift-pm 7.x
-      # while this app is on Capacitor 8 — `cap sync ios` would re-add
-      # that and the archive's SPM resolution would fail (it did, on
-      # the first Phase-4 build). npm ci installs it from the lockfile;
-      # we remove it from node_modules HERE so `cap sync ios` simply
-      # doesn't discover it. The runtime is already guarded by
-      # isPluginAvailable("BackgroundGeolocation"), so iOS cleanly
-      # no-ops (manual mileage entry) while Android keeps the plugin.
-      # Revisit if/when the community plugin ships a Cap-8 release.
-      - name: Exclude Android-only background-geolocation from iOS sync
-        run: rm -rf node_modules/@capacitor-community/background-geolocation
-
       # Capacitor sync copies the latest web assets (none in our case
       # — server.url is live) and refreshes plugin native code.
       - run: npx cap sync ios
