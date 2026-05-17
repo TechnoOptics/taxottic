@@ -1,0 +1,100 @@
+name: DB migrations — push to prod Supabase
+
+# WHY THIS EXISTS
+# A repo migration (20260512000001_tax_profile_benefit_fields.sql) never
+# reached the prod Supabase project, so saveTaxProfile 500'd in
+# production for weeks (it wrote 20 columns that didn't exist). Nothing
+# was applying supabase/migrations to prod automatically — they were
+# applied by hand. This workflow closes that gap: every migration that
+# lands on main is pushed to prod with the official Supabase CLI, which
+# tracks applied versions in supabase_migrations.schema_migrations and
+# only applies what's pending.
+#
+# ONE-TIME PREREQUISITE (see docs/SUPABASE_MIGRATIONS_RUNBOOK.md):
+# because past migrations were applied out-of-band, the remote history
+# table does NOT list the repo filenames. Before this can run cleanly
+# you must baseline (`supabase migration repair --status applied ...`)
+# so `db push` doesn't try to re-apply the ~58 already-applied
+# migrations. Until that baseline is done, run this MANUALLY
+# (workflow_dispatch) and read the dry-run output — do not trust the
+# auto-on-push path yet. Flip `AUTO_PUSH` to "1" (repo variable) only
+# after the baseline + a clean manual run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List pending migrations only (no apply)"
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+
+concurrency:
+  group: db-migrate-prod
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    # Secrets gate: the job no-ops cleanly if the token isn't configured,
+    # so merging this workflow can never break CI before you're ready.
+    steps:
+      - name: Guard — secrets present
+        id: guard
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "SUPABASE_ACCESS_TOKEN not set — skipping (see runbook)."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Auto-push gate
+        id: auto
+        run: |
+          # On push events, only proceed if the AUTO_PUSH repo variable
+          # is explicitly "1" (set it after baselining). workflow_dispatch
+          # always proceeds (you're driving it intentionally).
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ vars.AUTO_PUSH }}" != "1" ]; then
+            echo "AUTO_PUSH not enabled — skipping the push-triggered run."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.skip == '0' && steps.auto.outputs.skip == '0'
+
+      - uses: supabase/setup-cli@v1
+        if: steps.guard.outputs.skip == '0' && steps.auto.outputs.skip == '0'
+        with:
+          version: latest
+
+      - name: Link project
+        if: steps.guard.outputs.skip == '0' && steps.auto.outputs.skip == '0'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref enisnjjbxqaliydepacc
+
+      - name: List pending migrations
+        if: steps.guard.outputs.skip == '0' && steps.auto.outputs.skip == '0'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase migration list --linked
+
+      - name: Push migrations
+        # Skip the actual apply on a dispatch dry-run.
+        if: >-
+          steps.guard.outputs.skip == '0' &&
+          steps.auto.outputs.skip == '0' &&
+          !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push
