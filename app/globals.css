@@ -884,4 +884,39 @@ main, header, footer, nav {
   html[data-theme="dark"] .border-forest-100 { border-color: rgba(213, 187, 126, 0.18) !important; }
   html[data-theme="dark"] .border-forest-200 { border-color: rgba(213, 187, 126, 0.28) !important; }
   html[data-theme="dark"] .divide-forest-50 > * + * { border-color: rgba(213, 187, 126, 0.14) !important; }
+
+  /* ------------------------------------------------------------------
+     Semantic status colours found by the full audit: red (error /
+     negative), emerald (success / positive), amber (warning), and
+     gold-800. Light theme uses the dark -700/800/900 shade as text,
+     often on a pale -50/100 badge. On the dark surface BOTH must flip
+     together — the badge bg/border go dark-translucent AND the text
+     goes to the bright -300/400 shade — so bare coloured text on the
+     page (e.g. red error lines) AND coloured badges both stay
+     readable. Same proven pattern as .bg-white / .text-forest-900
+     above. This is the remainder of the "text same colour as
+     background" the user reported, fixed app-wide. */
+  /* red — errors / amounts owed */
+  html[data-theme="dark"] .text-red-700 { color: #f87171 !important; }
+  html[data-theme="dark"] .text-red-800 { color: #fca5a5 !important; }
+  html[data-theme="dark"] .text-red-900 { color: #fecaca !important; }
+  html[data-theme="dark"] .bg-red-50    { background-color: rgba(248, 113, 113, 0.12) !important; }
+  html[data-theme="dark"] .bg-red-100   { background-color: rgba(248, 113, 113, 0.18) !important; }
+  html[data-theme="dark"] .border-red-200 { border-color: rgba(248, 113, 113, 0.35) !important; }
+  /* emerald — success / deductions / refunds */
+  html[data-theme="dark"] .text-emerald-700 { color: #34d399 !important; }
+  html[data-theme="dark"] .text-emerald-800 { color: #6ee7b7 !important; }
+  html[data-theme="dark"] .text-emerald-900 { color: #a7f3d0 !important; }
+  html[data-theme="dark"] .bg-emerald-50    { background-color: rgba(52, 211, 153, 0.12) !important; }
+  html[data-theme="dark"] .bg-emerald-100   { background-color: rgba(52, 211, 153, 0.18) !important; }
+  html[data-theme="dark"] .border-emerald-200 { border-color: rgba(52, 211, 153, 0.35) !important; }
+  /* amber — warnings */
+  html[data-theme="dark"] .text-amber-700 { color: #fbbf24 !important; }
+  html[data-theme="dark"] .text-amber-800 { color: #fcd34d !important; }
+  html[data-theme="dark"] .text-amber-900 { color: #fde68a !important; }
+  html[data-theme="dark"] .bg-amber-50    { background-color: rgba(251, 191, 36, 0.12) !important; }
+  html[data-theme="dark"] .bg-amber-100   { background-color: rgba(251, 191, 36, 0.18) !important; }
+  html[data-theme="dark"] .border-amber-200 { border-color: rgba(251, 191, 36, 0.35) !important; }
+  /* dark gold — consistent with the gold-700/600 flip above */
+  html[data-theme="dark"] .text-gold-800 { color: var(--color-gold-300) !important; }
 }
