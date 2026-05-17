@@ -824,6 +824,21 @@ main, header, footer, nav {
      they're brand colors, not theme colors. */
   html[data-theme="dark"] .text-forest-900 { color: #fbf7e9 !important; }
   html[data-theme="dark"] .text-forest-800 { color: rgba(251, 247, 233, 0.92) !important; }
+  /* forest-500/600/700 are used as FOREGROUND text (muted body,
+     "Best fit:" detail, chevrons, inline links) — dark green that
+     vanishes on the dark surface (the deductions/explorer cards were
+     the reported example). Flip them to cream-alpha on the same
+     900→800 scale so the hierarchy is preserved and they stay
+     legible everywhere at once. (bg-* / border-* palette below is
+     unchanged — only text foregrounds flip.) */
+  html[data-theme="dark"] .text-forest-700 { color: rgba(251, 247, 233, 0.82) !important; }
+  html[data-theme="dark"] .text-forest-600 { color: rgba(251, 247, 233, 0.72) !important; }
+  html[data-theme="dark"] .text-forest-500 { color: rgba(251, 247, 233, 0.64) !important; }
+  /* Dark golds (gold-600/700) are accent label colours ("Best fit:",
+     kickers) — near-invisible on #0a1f19. Lift to the brand's
+     champagne (gold-300) which is the correct gold tone on dark. */
+  html[data-theme="dark"] .text-gold-700   { color: var(--color-gold-300) !important; }
+  html[data-theme="dark"] .text-gold-600   { color: var(--color-gold-300) !important; }
   html[data-theme="dark"] .text-ink-soft    { color: rgba(251, 247, 233, 0.78) !important; }
   html[data-theme="dark"] .text-ink-muted   { color: rgba(251, 247, 233, 0.58) !important; }
   html[data-theme="dark"] .text-ink         { color: #fbf7e9 !important; }
