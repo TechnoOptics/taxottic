@@ -197,10 +197,19 @@ html, body {
   color: #18181b;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Stop iOS rubber-banding past edges and pull-to-refresh inside the app */
+  /* Lock the app to the screen: no rubber-band / pull-to-refresh, no
+     Android stretch, no horizontal play. overscroll-behavior is
+     honoured by Android Chromium WebView and iOS 16+ WKWebView; the
+     iOS WebView itself is pinned full-bleed via
+     capacitor.config ios.contentInset:"never" (the app owns its
+     safe-area insets through env(safe-area-inset-*)). */
+  width: 100%;
   overscroll-behavior: none;
-  /* Prevent stray oversized children from pushing horizontal scroll on mobile */
+  overscroll-behavior-x: none;
+  /* Prevent any stray oversized child from creating a horizontal
+     scrollbar / sideways drag on mobile. */
   overflow-x: clip;
+  max-width: 100%;
   /* Prevent iOS auto-zoom on input focus (font-size >= 16px on form fields) */
   -webkit-text-size-adjust: 100%;
   /* Color transitions during theme flips. Authenticated routes mount
