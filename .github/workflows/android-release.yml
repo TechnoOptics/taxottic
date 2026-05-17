@@ -52,6 +52,22 @@ jobs:
 
       - run: npm ci
 
+      # Exclude @capacitor/push-notifications from the ANDROID binary
+      # until Firebase is configured. On Android the plugin pulls
+      # firebase-messaging; with no google-services.json the
+      # FirebaseApp never initializes and the app HARD-CRASHES on
+      # launch ("Default FirebaseApp is not initialized" — confirmed
+      # in logcat). npm ci installs it from the lockfile (iOS/APNs
+      # needs it); removing it from node_modules here means
+      # `cap sync android` doesn't add it, so isPluginAvailable(
+      # "PushNotifications") is false on Android and CapacitorNativeInit
+      # cleanly no-ops. RE-ENABLE: delete this step once
+      # android/app/google-services.json + the com.google.gms.google-
+      # services Gradle plugin are wired (see the notifications spec /
+      # the Apple-Firebase setup) — then Android push works.
+      - name: Exclude push-notifications from Android (no Firebase yet)
+        run: rm -rf node_modules/@capacitor/push-notifications
+
       - run: npx cap sync android
 
       - name: Restore keystore
