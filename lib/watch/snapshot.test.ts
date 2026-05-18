@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { buildWatchSnapshot, badgeTitle } from "./snapshot";
+import { buildWatchSnapshot, badgeTitle, type SnapshotInput } from "./snapshot";
+
+const base: SnapshotInput = {
+  readinessScore: 70,
+  ytdDeductionCents: 0,
+  todayBusinessMiles: 0,
+  todayDeductionCents: 0,
+  pendingTrips: [],
+  pendingExpenses: [],
+  goals: [],
+  deductions: [],
+  forecast: undefined,
+  latestBadgeCode: null,
+  newBadgeCode: null,
+  companyId: null,
+};
 
 describe("badgeTitle", () => {
   it("humanizes a badge code", () => {
@@ -9,68 +24,89 @@ describe("badgeTitle", () => {
 });
 
 describe("buildWatchSnapshot", () => {
-  it("clamps readiness 0–100 and rounds", () => {
+  it("clamps readiness 0–100", () => {
     expect(
-      buildWatchSnapshot({
-        readinessScore: 142.6,
-        ytdBusinessMiles: 0,
-        ytdDeductionCents: 0,
-        pendingTrip: null,
-        latestBadgeCode: null,
-      }).taxReadinessPct,
+      buildWatchSnapshot({ ...base, readinessScore: 142 }).taxReadinessPct,
     ).toBe(100);
     expect(
-      buildWatchSnapshot({
-        readinessScore: -5,
-        ytdBusinessMiles: 0,
-        ytdDeductionCents: 0,
-        pendingTrip: null,
-        latestBadgeCode: null,
-      }).taxReadinessPct,
+      buildWatchSnapshot({ ...base, readinessScore: -3 }).taxReadinessPct,
     ).toBe(0);
   });
 
-  it("derives the rough tax-saved estimate from the deduction", () => {
-    const s = buildWatchSnapshot({
-      readinessScore: 70,
-      ytdBusinessMiles: 1000,
-      ytdDeductionCents: 67_000,
-      pendingTrip: null,
-      latestBadgeCode: null,
-    });
-    expect(s.ytdDeductionCents).toBe(67_000);
+  it("derives the rough tax-saved estimate", () => {
+    const s = buildWatchSnapshot({ ...base, ytdDeductionCents: 67_000 });
     expect(s.estimatedTaxSavedCents).toBe(Math.round(67_000 * 0.22));
   });
 
-  it("maps a pending trip + badge", () => {
+  it("builds a swipe deck from trips + expenses", () => {
     const s = buildWatchSnapshot({
-      readinessScore: 50,
-      ytdBusinessMiles: 0,
-      ytdDeductionCents: 0,
-      pendingTrip: {
-        id: "trip_1",
-        distanceMiles: 12.42,
-        startedAtISO: "2026-05-18T14:14:00Z",
-        estDeductionCents: 832,
+      ...base,
+      pendingTrips: [
+        {
+          id: "t1",
+          distanceMiles: 12.42,
+          startedAtISO: "2026-05-18T14:14:00Z",
+          estDeductionCents: 832,
+        },
+      ],
+      pendingExpenses: [
+        {
+          id: "e1",
+          kind: "expense",
+          label: "Lunch · Sweetgreen",
+          note: "needs a category",
+          amountCents: 1840,
+        },
+      ],
+    });
+    expect(s.confirmations).toHaveLength(2);
+    expect(s.confirmations[0]).toMatchObject({
+      kind: "trip",
+      leftLabel: "Business",
+      rightLabel: "Personal",
+    });
+    expect(s.confirmations[0].title.startsWith("Drive · 12.4 mi")).toBe(true);
+    expect(s.confirmations[1]).toMatchObject({
+      kind: "expense",
+      leftLabel: "Deduct",
+      rightLabel: "Skip",
+    });
+  });
+
+  it("maps goals, deductions, today mileage, forecast, badges", () => {
+    const s = buildWatchSnapshot({
+      ...base,
+      todayBusinessMiles: 8.2,
+      todayDeductionCents: 549,
+      goals: [{ id: "g1", title: "Roth", savedCents: 250000, targetCents: 700000 }],
+      deductions: [{ name: "Home office", amountCents: 150000, captured: false }],
+      forecast: {
+        label: "2026 federal estimate",
+        netCents: 412300,
+        effectiveRatePct: 18,
+        ytdIncomeCents: 5_200_000,
       },
       latestBadgeCode: "road_warrior",
+      newBadgeCode: "road_warrior",
     });
-    expect(s.pendingTrip?.id).toBe("trip_1");
-    expect(s.pendingTrip?.summary.startsWith("12.4 mi")).toBe(true);
-    expect(s.pendingTrip?.estDeductionCents).toBe(832);
+    expect(s.goals[0]).toEqual({
+      id: "g1",
+      title: "Roth",
+      savedCents: 250000,
+      targetCents: 700000,
+    });
+    expect(s.deductions[0].name).toBe("Home office");
+    expect(s.mileage.todayDeductionCents).toBe(549);
+    expect(s.forecast?.netCents).toBe(412300);
     expect(s.latestBadge).toEqual({ title: "Road Warrior", symbol: "rosette" });
+    expect(s.newBadgeCode).toBe("road_warrior");
   });
 
   it("is empty-safe", () => {
-    const s = buildWatchSnapshot({
-      readinessScore: null,
-      ytdBusinessMiles: 0,
-      ytdDeductionCents: 0,
-      pendingTrip: null,
-      latestBadgeCode: null,
-    });
+    const s = buildWatchSnapshot({ ...base, readinessScore: null });
     expect(s.taxReadinessPct).toBe(0);
-    expect(s.pendingTrip).toBeUndefined();
-    expect(s.latestBadge).toBeUndefined();
+    expect(s.confirmations).toEqual([]);
+    expect(s.goals).toEqual([]);
+    expect(s.mileage.trackingActive).toBe(false);
   });
 });

@@ -1,46 +1,11 @@
 //  WatchConnectivityManager.swift
-//  Receives the glanceable snapshot from the phone and sends one-tap
-//  actions back. The watch and the actionable push do the SAME server
-//  work (POST /api/push/action) — the watch is just the richer,
-//  more beautiful surface.
+//  Receives the snapshot from the phone and sends one-gesture actions
+//  back. The watch and the actionable push do the SAME server work
+//  (POST /api/push/action) — the watch is just the richer surface.
 
 import Foundation
 import WatchConnectivity
 import WidgetKit
-
-/// Everything the watch can show. Keep field names in sync with the
-/// phone-side bridge (see README) and lib/push/payloads.ts.
-struct WatchSnapshot: Codable, Equatable {
-    /// 0–100 overall tax-readiness (drives the hero dial).
-    var taxReadinessPct: Int = 0
-    var ytdDeductionCents: Int = 0
-    /// Rough tax actually saved by those deductions (marginal-rate
-    /// estimate computed phone-side).
-    var estimatedTaxSavedCents: Int = 0
-
-    var nextQuarterly: Quarterly?
-    var pendingTrip: PendingTrip?
-    var latestBadge: Badge?
-    /// Consecutive days the user logged something — the "streak".
-    var streakDays: Int = 0
-
-    struct Quarterly: Codable, Equatable {
-        var label: String          // "Q2 2026 estimate"
-        var dueISO: String         // "2026-06-15"
-        var amountCents: Int
-    }
-    struct PendingTrip: Codable, Equatable {
-        var id: String
-        var summary: String        // "12.4 mi · 28 min · today 9:14 AM"
-        var estDeductionCents: Int
-    }
-    struct Badge: Codable, Equatable {
-        var title: String          // "Deduction Hunter"
-        var symbol: String         // SF Symbol name
-    }
-
-    static let empty = WatchSnapshot()
-}
 
 private let appGroup = "group.com.taxottic.app"
 
@@ -48,7 +13,11 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchModel()
 
     @Published private(set) var snapshot: WatchSnapshot = .empty
-    @Published private(set) var lastActionError: String?
+    /// One-shot: set to a badge title when a NEW medal lands, so the
+    /// celebration overlay fires once. The view clears it.
+    @Published var celebrate: String?
+
+    private var lastCelebratedCode: String?
 
     private override init() {
         super.init()
@@ -59,21 +28,39 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    // MARK: - Outgoing one-tap actions
+    // MARK: - Outgoing one-gesture actions
 
-    func classifyPendingTrip(business: Bool) {
-        guard let trip = snapshot.pendingTrip else { return }
+    /// Swipe a card. `left` = the card's leftLabel (Business/Deduct);
+    /// `!left` = rightLabel (Personal/Skip).
+    func confirm(_ item: WatchSnapshot.Confirm, left: Bool) {
         send([
-            "type": "trip-classify",
-            "tripId": trip.id,
-            "classification": business ? "business" : "personal",
+            "type": "confirm",
+            "kind": item.kind,
+            "id": item.id,
+            "decision": left ? "left" : "right",
         ])
         Haptic.success()
-        var s = snapshot; s.pendingTrip = nil; snapshot = s
+        var s = snapshot
+        s.confirmations.removeAll { $0.id == item.id }
+        snapshot = s
     }
 
-    /// "Log an expense" → hands off to the phone, which opens the
-    /// dictation/camera capture flow (the heavy UI stays on the phone).
+    func setMileageTracking(on: Bool) {
+        send(["type": "mileage", "action": on ? "start" : "stop"])
+        Haptic.select()
+        var s = snapshot
+        s.mileage.trackingActive = on
+        snapshot = s
+    }
+
+    func setAutoApply(on: Bool) {
+        send(["type": "autoApply", "value": on ? "on" : "off"])
+        Haptic.tap()
+        var s = snapshot
+        s.mileage.autoApplyBusiness = on
+        snapshot = s
+    }
+
     func requestExpenseCapture() {
         send(["type": "open", "route": "expense-capture"])
         Haptic.tap()
@@ -82,9 +69,9 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
     private func send(_ message: [String: Any]) {
         let session = WCSession.default
         if session.isReachable {
-            session.sendMessage(message, replyHandler: nil) { [weak self] err in
-                DispatchQueue.main.async { self?.lastActionError = err.localizedDescription }
-            }
+            session.sendMessage(message, replyHandler: nil, errorHandler: { _ in
+                session.transferUserInfo(message)
+            })
         } else {
             session.transferUserInfo(message)
         }
@@ -103,13 +90,20 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
         else { return }
         DispatchQueue.main.async {
             self.snapshot = decoded
-            // Mirror the headline figure to the App Group so the
-            // watch-face complication can render it without launching
-            // the app, then ask WidgetKit to refresh the timeline.
-            UserDefaults(suiteName: appGroup)?
-                .set(decoded.ytdDeductionCents, forKey: "ytdDeductionCents")
-            UserDefaults(suiteName: appGroup)?
-                .set(decoded.taxReadinessPct, forKey: "taxReadinessPct")
+
+            // One-shot medal celebration.
+            if let code = decoded.newBadgeCode,
+               code != self.lastCelebratedCode {
+                self.lastCelebratedCode = code
+                self.celebrate = decoded.latestBadge?.title ?? "New medal"
+                Haptic.success()
+            }
+
+            // Mirror headline figures for the complication.
+            if let d = UserDefaults(suiteName: appGroup) {
+                d.set(decoded.ytdDeductionCents, forKey: "ytdDeductionCents")
+                d.set(decoded.taxReadinessPct, forKey: "taxReadinessPct")
+            }
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
