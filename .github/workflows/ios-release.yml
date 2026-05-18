@@ -56,6 +56,20 @@ jobs:
 
       - run: npm ci
 
+      # Regenerate the app icon + launch screen from the navy brand
+      # SVGs (assets/*.svg) so a rebrand never leaves stale-colour
+      # raster icons in the binary. Non-fatal: icons are cosmetic and
+      # must never block shipping the JS/native fixes a release
+      # carries — a generator hiccup just keeps the committed icons.
+      - name: Regenerate brand assets (navy)
+        run: |
+          npx capacitor-assets generate --ios \
+            --iconBackgroundColor '#121A2A' \
+            --iconBackgroundColorDark '#121A2A' \
+            --splashBackgroundColor '#121A2A' \
+            --splashBackgroundColorDark '#121A2A' \
+          || echo "::warning::asset regeneration skipped — shipping committed icons"
+
       # Apple now rejects App Store uploads built with anything older
       # than the iOS 26 SDK (Xcode 26+). The macos-15 runner ships
       # multiple Xcode versions in /Applications; pick the latest

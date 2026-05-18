@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" role="img" aria-label="Taxottic">
+  <!-- Dark-mode launch screen. Same brand navy + centered mark; the
+       app is dark-first so the dark and light splashes match. -->
+  <rect width="2732" height="2732" fill="#121a2a"/>
+  <g transform="translate(1366 1366) scale(1.6) translate(-256 -256)">
+    <text x="256" y="368"
+          text-anchor="middle"
+          font-family="Fraunces, 'Hoefler Text', 'Garamond', 'Times New Roman', serif"
+          font-weight="500"
+          font-size="380"
+          letter-spacing="-2"
+          fill="#fbf7e9">t</text>
+    <g fill="#c4a25d">
+      <circle cx="216" cy="412" r="3.5"/>
+      <rect x="225" y="410" width="62" height="4" rx="2"/>
+      <circle cx="296" cy="412" r="3.5"/>
+    </g>
+  </g>
+</svg>
