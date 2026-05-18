@@ -1,30 +1,48 @@
 //  WatchConnectivityManager.swift
-//  Receives glanceable state from the phone and sends the one-tap
-//  trip classification back. Mirrors the push spec's data contract so
-//  the watch and the actionable notification do the SAME server work
-//  (POST /api/push/action) — the watch just gives a richer surface.
+//  Receives the glanceable snapshot from the phone and sends one-tap
+//  actions back. The watch and the actionable push do the SAME server
+//  work (POST /api/push/action) — the watch is just the richer,
+//  more beautiful surface.
 
 import Foundation
 import WatchConnectivity
+import WidgetKit
 
-/// The snapshot the phone pushes to the watch. Keep field names in
-/// sync with the phone-side bridge (see README) and lib/push/payloads.
+/// Everything the watch can show. Keep field names in sync with the
+/// phone-side bridge (see README) and lib/push/payloads.ts.
 struct WatchSnapshot: Codable, Equatable {
-    var ytdDeductionCents: Int
-    var nextQuarterlyDueISO: String?     // e.g. "2026-06-15"
-    var pendingTrip: PendingTrip?
+    /// 0–100 overall tax-readiness (drives the hero dial).
+    var taxReadinessPct: Int = 0
+    var ytdDeductionCents: Int = 0
+    /// Rough tax actually saved by those deductions (marginal-rate
+    /// estimate computed phone-side).
+    var estimatedTaxSavedCents: Int = 0
 
+    var nextQuarterly: Quarterly?
+    var pendingTrip: PendingTrip?
+    var latestBadge: Badge?
+    /// Consecutive days the user logged something — the "streak".
+    var streakDays: Int = 0
+
+    struct Quarterly: Codable, Equatable {
+        var label: String          // "Q2 2026 estimate"
+        var dueISO: String         // "2026-06-15"
+        var amountCents: Int
+    }
     struct PendingTrip: Codable, Equatable {
         var id: String
-        var summary: String              // "12.4 mi · 28 min · today 9:14 AM"
+        var summary: String        // "12.4 mi · 28 min · today 9:14 AM"
+        var estDeductionCents: Int
+    }
+    struct Badge: Codable, Equatable {
+        var title: String          // "Deduction Hunter"
+        var symbol: String         // SF Symbol name
     }
 
-    static let empty = WatchSnapshot(
-        ytdDeductionCents: 0,
-        nextQuarterlyDueISO: nil,
-        pendingTrip: nil
-    )
+    static let empty = WatchSnapshot()
 }
+
+private let appGroup = "group.com.taxottic.app"
 
 final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchModel()
@@ -41,62 +59,58 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    // MARK: - Outgoing: one-tap trip classification
+    // MARK: - Outgoing one-tap actions
 
-    /// Sends the user's Business/Personal choice to the phone, which
-    /// re-auths and calls the same /api/push/action the notification
-    /// action uses. Optimistically clears the pending card.
     func classifyPendingTrip(business: Bool) {
         guard let trip = snapshot.pendingTrip else { return }
-        let message: [String: Any] = [
+        send([
             "type": "trip-classify",
             "tripId": trip.id,
             "classification": business ? "business" : "personal",
-        ]
+        ])
+        Haptic.success()
+        var s = snapshot; s.pendingTrip = nil; snapshot = s
+    }
+
+    /// "Log an expense" → hands off to the phone, which opens the
+    /// dictation/camera capture flow (the heavy UI stays on the phone).
+    func requestExpenseCapture() {
+        send(["type": "open", "route": "expense-capture"])
+        Haptic.tap()
+    }
+
+    private func send(_ message: [String: Any]) {
         let session = WCSession.default
         if session.isReachable {
             session.sendMessage(message, replyHandler: nil) { [weak self] err in
-                DispatchQueue.main.async {
-                    self?.lastActionError = err.localizedDescription
-                }
+                DispatchQueue.main.async { self?.lastActionError = err.localizedDescription }
             }
         } else {
-            // Phone asleep/out of range — queue it; the phone drains
-            // transferUserInfo on next launch and POSTs then.
             session.transferUserInfo(message)
         }
-        var s = snapshot
-        s.pendingTrip = nil
-        snapshot = s
     }
 
-    // MARK: - WCSessionDelegate (incoming snapshots)
+    // MARK: - WCSessionDelegate (incoming)
 
-    func session(
-        _ session: WCSession,
-        activationDidCompleteWith activationState: WCSessionActivationState,
-        error: Error?
-    ) {}
-
-    func session(
-        _ session: WCSession,
-        didReceiveApplicationContext applicationContext: [String: Any]
-    ) {
-        apply(applicationContext)
-    }
-
-    func session(
-        _ session: WCSession,
-        didReceiveUserInfo userInfo: [String: Any]
-    ) {
-        apply(userInfo)
-    }
+    func session(_ s: WCSession, activationDidCompleteWith _: WCSessionActivationState, error _: Error?) {}
+    func session(_ s: WCSession, didReceiveApplicationContext ctx: [String: Any]) { apply(ctx) }
+    func session(_ s: WCSession, didReceiveUserInfo info: [String: Any]) { apply(info) }
 
     private func apply(_ dict: [String: Any]) {
         guard
             let data = dict["snapshot"] as? Data,
             let decoded = try? JSONDecoder().decode(WatchSnapshot.self, from: data)
         else { return }
-        DispatchQueue.main.async { self.snapshot = decoded }
+        DispatchQueue.main.async {
+            self.snapshot = decoded
+            // Mirror the headline figure to the App Group so the
+            // watch-face complication can render it without launching
+            // the app, then ask WidgetKit to refresh the timeline.
+            UserDefaults(suiteName: appGroup)?
+                .set(decoded.ytdDeductionCents, forKey: "ytdDeductionCents")
+            UserDefaults(suiteName: appGroup)?
+                .set(decoded.taxReadinessPct, forKey: "taxReadinessPct")
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 }

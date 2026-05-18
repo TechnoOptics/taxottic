@@ -1,10 +1,7 @@
 //  TaxotticComplication.swift
-//  WidgetKit accessory complication (watchOS 9+) — the glanceable
-//  "YTD deduction" the spec calls for on the watch face.
-//
-//  WidgetKit (not legacy ClockKit) is the modern complication API.
-//  The timeline is refreshed from the App Group the watch app writes
-//  whenever it receives a new WatchSnapshot (see README → App Group).
+//  Watch-face jewelry: a gold-gauge circular complication, a rich
+//  rectangular one, and an inline line. WidgetKit (watchOS 9+).
+//  Reads the App Group the watch app mirrors on every sync.
 
 import WidgetKit
 import SwiftUI
@@ -14,27 +11,26 @@ private let appGroup = "group.com.taxottic.app"
 struct TaxotticEntry: TimelineEntry {
     let date: Date
     let ytdDeductionCents: Int
+    let taxReadinessPct: Int
 }
 
 struct TaxotticProvider: TimelineProvider {
-    func placeholder(in context: Context) -> TaxotticEntry {
-        TaxotticEntry(date: .now, ytdDeductionCents: 124_300)
+    func placeholder(in _: Context) -> TaxotticEntry {
+        TaxotticEntry(date: .now, ytdDeductionCents: 124_300, taxReadinessPct: 78)
     }
-
-    func getSnapshot(in context: Context, completion: @escaping (TaxotticEntry) -> Void) {
-        completion(currentEntry())
+    func getSnapshot(in _: Context, completion: @escaping (TaxotticEntry) -> Void) {
+        completion(current())
     }
-
-    func getTimeline(in context: Context, completion: @escaping (Timeline<TaxotticEntry>) -> Void) {
-        // Static until the watch app writes a new value + reloads
-        // timelines (WidgetCenter.shared.reloadAllTimelines()).
-        completion(Timeline(entries: [currentEntry()], policy: .never))
+    func getTimeline(in _: Context, completion: @escaping (Timeline<TaxotticEntry>) -> Void) {
+        completion(Timeline(entries: [current()], policy: .never))
     }
-
-    private func currentEntry() -> TaxotticEntry {
-        let cents = UserDefaults(suiteName: appGroup)?
-            .integer(forKey: "ytdDeductionCents") ?? 0
-        return TaxotticEntry(date: .now, ytdDeductionCents: cents)
+    private func current() -> TaxotticEntry {
+        let d = UserDefaults(suiteName: appGroup)
+        return TaxotticEntry(
+            date: .now,
+            ytdDeductionCents: d?.integer(forKey: "ytdDeductionCents") ?? 0,
+            taxReadinessPct: d?.integer(forKey: "taxReadinessPct") ?? 0
+        )
     }
 }
 
@@ -43,22 +39,56 @@ struct TaxotticComplicationView: View {
     let entry: TaxotticEntry
 
     private var dollars: String {
-        (Double(entry.ytdDeductionCents) / 100.0)
+        (Double(entry.ytdDeductionCents) / 100)
             .formatted(.currency(code: "USD").precision(.fractionLength(0)))
+    }
+    private var goldSheen: LinearGradient {
+        LinearGradient(colors: [Color(hex: 0xC4A25D), Color(hex: 0xF2D896), Color(hex: 0xD5BB7E)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     var body: some View {
         switch family {
         case .accessoryCircular:
-            Gauge(value: 0) { Image(systemName: "car.fill") }
-                .gaugeStyle(.accessoryCircularCapacity)
-                .overlay(Text(dollars).font(.system(size: 11, weight: .semibold)))
+            Gauge(value: Double(entry.taxReadinessPct), in: 0...100) {
+                Image(systemName: "car.fill")
+            } currentValueLabel: {
+                Text("\(entry.taxReadinessPct)")
+                    .font(.system(.caption, design: .rounded)).bold()
+            }
+            .gaugeStyle(.accessoryCircular)
+            .tint(goldSheen)
+
         case .accessoryInline:
-            Label("Taxottic \(dollars) YTD", systemImage: "car.fill")
+            Label("\(dollars) deductions · \(entry.taxReadinessPct)% ready",
+                  systemImage: "sparkles")
+
+        case .accessoryCorner:
+            Text(dollars)
+                .font(.system(.caption, design: .rounded)).bold()
+                .widgetLabel {
+                    Gauge(value: Double(entry.taxReadinessPct), in: 0...100) {
+                        Text("ready")
+                    }
+                    .tint(goldSheen)
+                }
+
         default: // .accessoryRectangular
-            VStack(alignment: .leading) {
-                Text("YTD mileage deduction").font(.caption2).foregroundStyle(.secondary)
-                Text(dollars).font(.headline)
+            HStack(spacing: 8) {
+                Gauge(value: Double(entry.taxReadinessPct), in: 0...100) {
+                    Image(systemName: "car.fill")
+                }
+                .gaugeStyle(.accessoryCircularCapacity)
+                .tint(goldSheen)
+                .scaleEffect(0.9)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("YTD deduction")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Text(dollars)
+                        .font(.system(.headline, design: .rounded))
+                        .minimumScaleFactor(0.7)
+                }
             }
         }
     }
@@ -71,7 +101,10 @@ struct TaxotticComplication: Widget {
             TaxotticComplicationView(entry: entry)
         }
         .configurationDisplayName("Taxottic")
-        .description("Your year-to-date mileage tax deduction.")
-        .supportedFamilies([.accessoryCircular, .accessoryInline, .accessoryRectangular])
+        .description("Tax-readiness and your year-to-date deduction.")
+        .supportedFamilies([
+            .accessoryCircular, .accessoryInline,
+            .accessoryCorner, .accessoryRectangular,
+        ])
     }
 }
