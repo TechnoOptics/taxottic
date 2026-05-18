@@ -3,10 +3,11 @@ package com.taxottic.wear
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,8 +20,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
-import androidx.wear.compose.foundation.pager.VerticalPager
-import androidx.wear.compose.foundation.pager.rememberPagerState
 import kotlin.math.abs
 
 /**
@@ -227,13 +226,19 @@ private fun GoalsScreen(goals: List<WatchSnapshot.Goal>) {
                 Text("${(g.progress * 100).toInt()}%", color = Brand.gold,
                     fontSize = 11.sp)
             }
-            LinearProgressIndicator(
-                progress = g.progress,
-                modifier = Modifier.fillMaxWidth().height(5.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = Brand.goldBright,
-                backgroundColor = Brand.ink700,
-            )
+            Box(
+                Modifier.fillMaxWidth().height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Brand.ink700),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(g.progress.coerceIn(0f, 1f))
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Brand.goldBright),
+                )
+            }
         }
     }
 }
