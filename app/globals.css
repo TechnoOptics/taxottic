@@ -207,19 +207,33 @@ html, body {
   max-width: 100%;
   overscroll-behavior: none;
   overscroll-behavior-x: none;
-  /* NOTE: do NOT put overflow-x: clip/hidden here. An overflow value
-     other than `visible` on html/body makes them a clip/scroll
-     context, which BREAKS `position: sticky` on the app header (it
-     scrolled away instead of pinning). Horizontal-bounce is already
-     killed by overscroll-behavior-x:none + ios contentInset:"never";
-     if a specific element ever overflows sideways, clip THAT element,
-     never the sticky header's ancestor. */
+  /* Kill ALL horizontal scrolling at every width (narrowest foldable
+     → widest tablet). This is now SAFE: the app header is
+     position:fixed (not sticky), whose containing block is the
+     viewport, so an ancestor's overflow:clip can't break or clip it.
+     overflow-x:clip stops the scroll without creating a scroll
+     container. */
+  overflow-x: clip;
   /* Prevent iOS auto-zoom on input focus (font-size >= 16px on form fields) */
   -webkit-text-size-adjust: 100%;
   /* Color transitions during theme flips. Authenticated routes mount
      a <DarkThemeMount> client component that sets data-theme="dark"
      on <html>; without the transition, the flip is jarring. */
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Content-fits-the-screen guards (narrowest foldable → widest tablet).
+   overflow-x:clip stops the SCROLL; these stop the most common
+   width-blowers so content actually reflows to fit instead of being
+   clipped: media never wider than its column, and long unbroken
+   strings (tokens, emails, URLs in tax data) wrap instead of pushing
+   the page wide. */
+img, svg, video, canvas, iframe, table {
+  max-width: 100%;
+  height: auto;
+}
+body {
+  overflow-wrap: anywhere;
 }
 
 /* ============================================================================
