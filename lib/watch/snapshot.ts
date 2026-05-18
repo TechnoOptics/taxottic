@@ -1,26 +1,49 @@
-import type { WatchSnapshot } from "./types";
+import type {
+  WatchSnapshot,
+  WatchConfirm,
+  WatchGoal,
+  WatchDeduction,
+} from "./types";
 import { EMPTY_WATCH_SNAPSHOT } from "./types";
 
-// Rough blended marginal rate for the "≈ tax saved" line. This is a
-// deliberately conservative ESTIMATE shown with a "≈" — consistent
-// with Taxottic's forecasts-not-advice posture. It is intentionally
-// not the forecast engine's precise number; the watch is a glance.
+// Rough blended marginal rate for the "≈ tax saved" line — a
+// deliberately conservative ESTIMATE shown with "≈", consistent with
+// Taxottic's forecasts-not-advice posture. Not the forecast engine's
+// precise number; the watch is a glance.
 const ROUGH_MARGINAL_RATE = 0.22;
 
 export type SnapshotInput = {
   readinessScore: number | null;
-  ytdBusinessMiles: number;
   ytdDeductionCents: number;
-  pendingTrip: {
+  todayBusinessMiles: number;
+  todayDeductionCents: number;
+  pendingTrips: Array<{
     id: string;
     distanceMiles: number;
     startedAtISO: string;
     estDeductionCents: number;
-  } | null;
+  }>;
+  /** Generic expense/income items awaiting a business/personal call. */
+  pendingExpenses: Array<{
+    id: string;
+    kind: "expense" | "income";
+    label: string;
+    note: string;
+    amountCents: number;
+  }>;
+  goals: Array<{
+    id: string;
+    title: string;
+    savedCents: number;
+    targetCents: number;
+  }>;
+  deductions: WatchDeduction[];
+  forecast: WatchSnapshot["forecast"];
   latestBadgeCode: string | null;
+  newBadgeCode: string | null;
+  companyId: string | null;
 };
 
-/** Prettify a badge_code like "deduction_hunter" → "Deduction Hunter". */
 export function badgeTitle(code: string): string {
   return code
     .replace(/[_-]+/g, " ")
@@ -28,26 +51,34 @@ export function badgeTitle(code: string): string {
     .trim();
 }
 
-function tripSummary(distanceMiles: number, startedAtISO: string): string {
-  const miles = distanceMiles.toFixed(1);
-  const d = new Date(startedAtISO);
-  const time = Number.isNaN(d.getTime())
-    ? ""
-    : ` · ${d.toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })}`;
-  return `${miles} mi${time}`;
+function fmtMiles(m: number): string {
+  return `${m.toFixed(1)} mi`;
+}
+
+function whenLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 /**
- * Pure mapper: already-fetched primitives → WatchSnapshot. No I/O, so
- * it is fully unit-tested; the route does the (resilient) fetching.
+ * Pure mapper: already-fetched primitives → WatchSnapshot. No I/O so
+ * it is fully unit-tested; the route does the resilient fetching and
+ * the client bridge merges device-only mileage flags.
  */
 export function buildWatchSnapshot(input: SnapshotInput): WatchSnapshot {
-  const snap: WatchSnapshot = { ...EMPTY_WATCH_SNAPSHOT };
+  const snap: WatchSnapshot = {
+    ...EMPTY_WATCH_SNAPSHOT,
+    confirmations: [],
+    deductions: [],
+    goals: [],
+    mileage: { ...EMPTY_WATCH_SNAPSHOT.mileage },
+  };
 
   if (input.readinessScore != null && Number.isFinite(input.readinessScore)) {
     snap.taxReadinessPct = Math.max(
@@ -56,24 +87,54 @@ export function buildWatchSnapshot(input: SnapshotInput): WatchSnapshot {
     );
   }
 
-  snap.ytdDeductionCents = Math.max(0, Math.round(input.ytdDeductionCents));
-  snap.estimatedTaxSavedCents = Math.round(
-    snap.ytdDeductionCents * ROUGH_MARGINAL_RATE,
+  // YTD deduction is the sum the route computed from confirmed
+  // business trips; the rough saved figure derives from it.
+  const ytd = Math.max(0, Math.round(input.ytdDeductionCents));
+  snap.ytdDeductionCents = ytd;
+  snap.estimatedTaxSavedCents = Math.round(ytd * ROUGH_MARGINAL_RATE);
+
+  const tripCards: WatchConfirm[] = input.pendingTrips.map((t) => ({
+    id: t.id,
+    kind: "trip",
+    title: `Drive · ${fmtMiles(t.distanceMiles)}`,
+    subtitle: whenLabel(t.startedAtISO),
+    amountCents: Math.max(0, Math.round(t.estDeductionCents)),
+    leftLabel: "Business",
+    rightLabel: "Personal",
+  }));
+  const expenseCards: WatchConfirm[] = input.pendingExpenses.map((e) => ({
+    id: e.id,
+    kind: e.kind,
+    title: e.label,
+    subtitle: e.note,
+    amountCents: Math.max(0, Math.round(e.amountCents)),
+    leftLabel: e.kind === "income" ? "Business" : "Deduct",
+    rightLabel: e.kind === "income" ? "Personal" : "Skip",
+  }));
+  snap.confirmations = [...tripCards, ...expenseCards];
+
+  snap.goals = input.goals.map(
+    (g): WatchGoal => ({
+      id: g.id,
+      title: g.title,
+      savedCents: Math.max(0, Math.round(g.savedCents)),
+      targetCents: Math.max(0, Math.round(g.targetCents)),
+    }),
   );
 
-  if (input.pendingTrip) {
-    snap.pendingTrip = {
-      id: input.pendingTrip.id,
-      summary: tripSummary(
-        input.pendingTrip.distanceMiles,
-        input.pendingTrip.startedAtISO,
-      ),
-      estDeductionCents: Math.max(
-        0,
-        Math.round(input.pendingTrip.estDeductionCents),
-      ),
-    };
-  }
+  snap.deductions = input.deductions.map((d) => ({
+    name: d.name,
+    amountCents: Math.max(0, Math.round(d.amountCents)),
+    captured: !!d.captured,
+  }));
+
+  snap.mileage.todayMiles = Math.max(0, input.todayBusinessMiles);
+  snap.mileage.todayDeductionCents = Math.max(
+    0,
+    Math.round(input.todayDeductionCents),
+  );
+
+  if (input.forecast) snap.forecast = input.forecast;
 
   if (input.latestBadgeCode) {
     snap.latestBadge = {
@@ -81,6 +142,8 @@ export function buildWatchSnapshot(input: SnapshotInput): WatchSnapshot {
       symbol: "rosette",
     };
   }
+  if (input.newBadgeCode) snap.newBadgeCode = input.newBadgeCode;
+  if (input.companyId) snap.companyId = input.companyId;
 
   return snap;
 }

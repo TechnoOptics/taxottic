@@ -20,31 +20,51 @@ is the *additive, premium* layer.
 
 ## What it does (features)
 
-- **Hero tax-readiness dial** — animated brushed-gold gauge (spring
-  settle, travelling catch-light), YTD deduction figure, "≈ $X saved
-  in tax", and a streak chip.
-- **One-gesture trip classify** — Digital-Crown page to a jewel card:
-  Business / Personal pill buttons with haptics; the same
-  `POST /api/push/action` server path as the notification action.
-- **Quarterly countdown** — next estimated-tax amount + days-left
-  with urgency styling, or a calm "no estimate due" state.
-- **Achievement + quick action** — latest badge medal and a "Log an
-  expense" hand-off to the phone capture flow.
-- **Complications** — circular gold gauge, rectangular (gauge +
-  figure), inline, and corner. Reads the App Group the app mirrors
-  on every sync; refreshes via WidgetKit.
+Vertical Digital-Crown pages, midnight-and-gold throughout:
+
+- **Hero dial** — animated brushed-gold tax-readiness gauge (spring
+  settle + travelling catch-light), rolling YTD-deduction figure,
+  "≈ $X saved", streak chip.
+- **Live forecast window** — projected owed/refund counting up,
+  effective rate + YTD income; elegant "updates on your iPhone"
+  state until the forecast field is fed (no fabricated tax numbers).
+- **Confirm deck** — the signature interaction. A card stack of
+  trips / expenses / income the system isn't sure about. **Swipe
+  left = Business/Deduct, swipe right = Personal/Skip**: live colour,
+  glow, rotation, a commit-threshold haptic, fly-off + spring, a
+  running count, and a shimmering "all caught up" finish. Each commit
+  hits the same `POST /api/push/action` core as the notification.
+- **Mileage** — auto-track toggle (arms/stops the phone GPS tracker
+  from the wrist), auto-apply-business toggle, a pulsing live
+  indicator, today's miles + deduction.
+- **Available deductions** — captured/uncaptured list with values
+  (readiness-ring summary until the per-deduction feed lands).
+- **Goals** — gold progress bars, saved / target.
+- **Achievements + medal celebration** — latest medal; when a NEW
+  medal lands, a full-screen gold-ray + struck-medal celebration
+  fires once with a success haptic. Plus a "Log an expense" hand-off.
+- **Complications** — circular gold gauge, rectangular, inline,
+  corner; App-Group backed, WidgetKit-refreshed.
 
 ## Files
 
 | File | Role |
 |---|---|
 | `TaxotticWatchApp.swift` | `@main` SwiftUI app entry |
-| `Theme.swift` | Design system: navy+gold palette, gold-sheen gradients, `jewelCard`/`goldRim` modifiers, figure font, haptics |
-| `GoldGauge.swift` | The animated brushed-gold ring + `PillButton` |
-| `ContentView.swift` | Vertical-paged glance (Hero / Trip / Quarterly / Achievement) |
-| `WatchConnectivityManager.swift` | `WatchSnapshot` model, receives snapshots, sends one-tap actions |
+| `Models.swift` | `WatchSnapshot` struct (mirror of `lib/watch/types.ts`) + money formatters |
+| `Theme.swift` | Design system: navy+gold palette, gold-sheen, `jewelCard`/`goldRim`, shimmer, pulse, counting money, haptics |
+| `GoldGauge.swift` | Animated brushed-gold ring + `PillButton` |
+| `ConfirmDeck.swift` | Swipe-left/right confirm-deck (the signature interaction) |
+| `MedalCelebration.swift` | One-shot medal reward overlay |
+| `ContentView.swift` | Vertical-paged glance: Hero · Forecast · Confirm · Mileage · Deductions · Goals · Achievements |
+| `WatchConnectivityManager.swift` | WCSession: receives snapshot, sends swipe / mileage / auto-apply actions, fires the medal one-shot |
 | `TaxotticComplication.swift` | WidgetKit complications (4 families) |
 | `Info.plist` | watchOS app plist (`WKApplication`) |
+
+Inbound watch → phone messages handled by `lib/watch/bridge.ts`:
+`{type:"confirm",kind,id,decision:"left|right"}` → `/api/push/action`;
+`{type:"mileage",action:"start|stop"}` → native mileage tracker;
+`{type:"autoApply",value:"on|off"}`; `{type:"open",route}`.
 
 ## Add the targets in Xcode (needs a Mac)
 
@@ -97,8 +117,16 @@ iPhone to sync" state and the complication shows `$0 / 0%`. The
 target+signing (Mac) and this plugin file are independent of the web
 half and can land in any order.
 
-> Not yet wired: `nextQuarterly` (needs a forecast amount source) and
-> `streakDays` are emitted as their empty defaults for now — the
-> dial, YTD deduction, est. tax saved, pending-trip classify, and
-> latest badge are fully populated. Those two are a small follow-up
-> on the endpoint only (no app/Swift change).
+> **Wired now** (endpoint → watch, no app change needed): readiness
+> dial, YTD deduction + est. saved, the confirm deck from unclassified
+> trips (swipe → reclassify), today's mileage, goals, latest badge +
+> the new-medal one-shot celebration, and the mileage / auto-apply
+> toggles (round-tripped through `lib/watch/bridge.ts`).
+>
+> **Endpoint-only follow-up** (no app/Swift change — the UI already
+> renders them the moment the endpoint supplies them): the `forecast`
+> object (deliberately omitted until reused from the real forecast
+> engine — no fabricated tax figure on the wrist), per-deduction
+> dollar values, and the `expense`/`income` confirm cards. The deck,
+> forecast page, and deductions page show elegant placeholder states
+> until then.

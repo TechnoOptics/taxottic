@@ -79,6 +79,84 @@ enum Haptic {
     static func tap()     { WKInterfaceDevice.current().play(.click) }
     static func success() { WKInterfaceDevice.current().play(.success) }
     static func select()  { WKInterfaceDevice.current().play(.directionUp) }
+    static func warn()    { WKInterfaceDevice.current().play(.retry) }
+}
+
+/// A gold light that travels across the content — the catch-light of
+/// a polished surface. Used on headline numerals and the medal.
+struct Shimmer: ViewModifier {
+    @State private var x: CGFloat = -1
+    func body(content: Content) -> some View {
+        content.overlay(
+            GeometryReader { geo in
+                LinearGradient(
+                    colors: [.clear, Brand.goldBright.opacity(0.85), .clear],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                .frame(width: geo.size.width * 0.55)
+                .offset(x: x * geo.size.width)
+                .blendMode(.screen)
+            }
+            .mask(content)
+        )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: false)) {
+                x = 1.4
+            }
+        }
+    }
+}
+
+/// Slow breathing scale+glow for "live" states (mileage tracking).
+struct Pulse: ViewModifier {
+    var active: Bool
+    @State private var on = false
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(active && on ? 1.08 : 1.0)
+            .opacity(active && on ? 1.0 : 0.78)
+            .onAppear {
+                guard active else { return }
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                    on = true
+                }
+            }
+    }
+}
+
+extension View {
+    func shimmer() -> some View { modifier(Shimmer()) }
+    func pulse(_ active: Bool) -> some View { modifier(Pulse(active: active)) }
+}
+
+/// A money figure that rolls up to its value on appear/change — the
+/// "real-time" feel. Renders in the engraved gold sheen.
+struct CountingMoney: View {
+    var cents: Int
+    var size: CGFloat = 24
+    @State private var shown: Double = 0
+
+    var body: some View {
+        Text((shown / 100).formatted(.currency(code: "USD").precision(.fractionLength(0))))
+            .font(.figure(size))
+            .foregroundStyle(Brand.goldSheen)
+            .shimmer()
+            .onAppear { roll(to: Double(cents)) }
+            .onChange(of: cents) { _, v in roll(to: Double(v)) }
+    }
+    private func roll(to v: Double) {
+        withAnimation(.easeOut(duration: 0.9)) { shown = v }
+    }
+}
+
+struct Eyebrow: View {
+    let text: String
+    var body: some View {
+        Text(text.uppercased())
+            .font(.eyebrow())
+            .tracking(1.4)
+            .foregroundStyle(Brand.gold)
+    }
 }
 
 /// Hairline-gold rounded rim — the single most "jewelry" detail,
