@@ -492,24 +492,13 @@ export default async function DashboardPage() {
     // SECURITY DEFINER function the routes themselves use.
     const { data: isSuperAdmin } = await supabase.rpc("is_super_admin");
     if (isSuperAdmin) {
-      const siteOrigin = (
-        process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://taxottic.com"
-      ).replace(/\/$/, "");
-      const host = siteOrigin.replace(/^https?:\/\//, "").split("/")[0];
-      const isLocal = /^(localhost|127\.0\.0\.1)/i.test(host);
-      const proto = siteOrigin.startsWith("http://") ? "http" : "https";
-      const hqLive = process.env.NEXT_PUBLIC_HQ_HOST_LIVE !== "false";
-      const entLive = process.env.NEXT_PUBLIC_ENTERPRISE_HOST_LIVE === "true";
-      const useSubdomain = !isLocal && (ap === "hq" ? hqLive : entLive);
-      if (useSubdomain) {
-        redirect(
-          ap === "hq"
-            ? `${proto}://hq.${host}/`
-            : `${proto}://enterprise.${host}/`,
-        );
-      }
-      // Fallback: render the admin shell on the consumer host. Same
-      // codebase, same /admin/** tree, just no cross-origin hop.
+      // SAME-ORIGIN ONLY. A cross-origin redirect to
+      // hq./enterprise.taxottic.com ejects the Capacitor app to the
+      // system browser (the WebView is pinned to taxottic.com), which
+      // is exactly the "kicked out to Chrome" bug. The portals are the
+      // same codebase under /admin/** — render them here, no
+      // cross-origin hop, so the app (and web) stay put. Subdomains
+      // still resolve if visited directly on the web.
       redirect(ap === "hq" ? "/admin" : "/admin/firms");
     }
     // Non-super-admin with a stale active_platform: clear it so the

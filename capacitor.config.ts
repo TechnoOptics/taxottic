@@ -42,6 +42,14 @@ const config: CapacitorConfig = {
     url: "https://taxottic.com",
     cleartext: false,
     androidScheme: "https",
+    // Keep every Taxottic origin INSIDE the WebView. Without this a
+    // navigation to hq./enterprise.taxottic.com (portal switch, or a
+    // hardcoded enterprise link) is treated as external and opens the
+    // system browser — ejecting the user from the app. The portal
+    // routing was also made same-origin (app/settings/actions.ts,
+    // app/dashboard/page.tsx); this is defense-in-depth for any other
+    // *.taxottic.com link and applies on the next native build.
+    allowNavigation: ["taxottic.com", "*.taxottic.com"],
   },
   ios: {
     // "never" = WKWebView contentInsetAdjustmentBehavior .never, so
