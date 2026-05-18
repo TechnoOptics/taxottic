@@ -67,34 +67,38 @@ is the *additive, premium* layer.
    once the targets exist. Apple requires the watch app to ship with
    the iOS app (same App Store record).
 
-## The phone-side bridge (follow-up, ~half a day)
+## The phone-side bridge
 
-The phone app is a Capacitor remote-WebView shell, so website JS must
-hand data to native `WCSession`:
+**The JS/API half already ships** (merged, CI-tested, deploys live):
 
-1. **Tiny Capacitor plugin** `TaxotticWatchBridge.sync({ snapshot })`
-   → `WCSession.default.updateApplicationContext(["snapshot": data])`
-   where `data` is JSON-encoded **`WatchSnapshot`**:
+- `lib/watch/types.ts` — the `WatchSnapshot` contract (mirror of the
+  Swift `struct WatchSnapshot`).
+- `lib/watch/snapshot.ts` (+ `.test.ts`) — pure builder, unit-tested.
+- `app/api/watch/snapshot/route.ts` — auth + assembles the snapshot
+  from the existing readiness / mileage-deduction cores (best-effort
+  per field; never errors).
+- `lib/watch/bridge.ts` — guarded `syncWatch()` (fetch → native
+  `TaxotticWatchBridge.sync`) and `startWatchBridge()` (inbound watch
+  actions → existing `POST /api/push/action`, the same path the
+  notification action uses). Mounted in `CapacitorNativeInit`.
 
-   ```ts
-   {
-     taxReadinessPct: number,            // 0–100
-     ytdDeductionCents: number,
-     estimatedTaxSavedCents: number,
-     streakDays: number,
-     nextQuarterly?: { label, dueISO, amountCents },
-     pendingTrip?:   { id, summary, estDeductionCents },
-     latestBadge?:   { title, symbol }   // SF Symbol name
-   }
-   ```
-2. **JS caller** where the dashboard already computes readiness / YTD
-   mileage deduction / next quarterly reminder / latest badge — reuse
-   the existing `lib/push/payloads.ts` numbers so watch + push stay
-   consistent. Inbound `sendMessage` (trip classify, expense capture)
-   routes to the existing `POST /api/push/action` — no new
-   tax/mileage logic.
+**The remaining native half is one Swift file**, scaffolded here:
 
-Until the bridge ships the app builds and runs, showing the "Open
-Taxottic on iPhone to sync" state; the complication shows `$0 / 0%`.
-The target+signing (Mac) and the bridge (JS/native, CI-testable) are
-independent and can land in either order.
+- `TaxotticWatchBridgePlugin.swift` — add it to the iOS **App**
+  target in Xcode (NOT the watch target): the Capacitor plugin that
+  does `updateApplicationContext`, writes the App Group, reloads the
+  complication, and forwards inbound watch messages to JS. Because
+  the JS half already ships, **data flows the moment this file is
+  compiled into a build** — no further web work.
+
+Until that file is in the App target, `syncWatch()` cleanly no-ops
+(plugin not available), so the watch shows the "Open Taxottic on
+iPhone to sync" state and the complication shows `$0 / 0%`. The
+target+signing (Mac) and this plugin file are independent of the web
+half and can land in any order.
+
+> Not yet wired: `nextQuarterly` (needs a forecast amount source) and
+> `streakDays` are emitted as their empty defaults for now — the
+> dial, YTD deduction, est. tax saved, pending-trip classify, and
+> latest badge are fully populated. Those two are a small follow-up
+> on the endpoint only (no app/Swift change).
