@@ -433,3 +433,124 @@ checklist:
       account in your test-users list → no "unverified app" warning
       (test users always skip it; the warning only goes away for
       everyone after verification finalizes)
+
+---
+
+## 5. Push notifications — the wrist / lock-screen experience (30–40 min)
+
+This unlocks everything on the watch: post-trip "Business / Personal?"
+one-tap, "expense applied", goal/badge/message alerts. **No watch app
+is required** — a paired Apple Watch / Wear OS mirrors these
+automatically. The code (token capture, payload builders, action
+handlers, send service) is already built and merged; it is dormant
+only because these credentials don't exist yet. There are three
+independent pieces: **A. Apple APNs (iOS)**, **B. Firebase/FCM
+(Android)**, **C. the iOS Push capability**.
+
+### A. Apple APNs key (iOS) — ~10 min
+
+#### Click track
+
+1. https://developer.apple.com/account → **Certificates, IDs &
+   Profiles** → **Keys** → **+**.
+2. Name it `Taxottic Push`, tick **Apple Push Notifications service
+   (APNs)**, **Continue → Register**.
+3. **Download** the `.p8` file (you can only download it once — keep
+   it safe) and note the **Key ID** (10 chars).
+4. Top-right of the page → your **Team ID** (10 chars), also under
+   Membership.
+5. Still in **Identifiers**, open the App ID `com.taxottic.app` →
+   enable **Push Notifications** → **Save**. (Capability flip only;
+   the entitlement side is section C.)
+
+#### What to paste me
+
+These are **server** env vars (the send service runs on
+taxottic.com / Vercel — NOT GitHub):
+
+```
+APNS_KEY_ID=<10-char Key ID>
+APNS_TEAM_ID=<10-char Team ID>
+APNS_BUNDLE_ID=com.taxottic.app
+APNS_PRODUCTION=1
+APNS_PRIVATE_KEY=<paste the FULL contents of the .p8, including the
+-----BEGIN PRIVATE KEY----- / -----END PRIVATE KEY----- lines>
+```
+
+I set these in Vercel → Project → Settings → Environment Variables
+and redeploy. `lib/push/providers.ts` already reads exactly these
+names and only "arms" APNs once all four are present, so nothing
+breaks before you provide them.
+
+### B. Firebase / FCM (Android) — ~15 min
+
+#### Click track
+
+1. https://console.firebase.google.com → **Add project** (or reuse
+   one) → name `Taxottic`. Google Analytics optional.
+2. **Add app → Android.** Package name **exactly**
+   `com.taxottic.app`. Nickname `Taxottic`. Register.
+3. **Download `google-services.json`.** (No need to add the SDK
+   snippets — Capacitor handles that.)
+4. Project **Settings (gear) → Service accounts → Generate new
+   private key** → downloads a JSON file (this is the FCM v1
+   credential).
+
+#### What to paste me
+
+Two destinations:
+
+- **GitHub repo secret** (for the Android build) — Settings → Secrets
+  and variables → Actions → New repository secret:
+  ```
+  GOOGLE_SERVICES_JSON = <entire contents of google-services.json>
+  ```
+  The android-release workflow is already safe-by-default: the moment
+  this secret exists it writes `android/app/google-services.json`,
+  Gradle auto-applies `com.google.gms.google-services` (the classpath
+  is already in `android/build.gradle`), and the push plugin is kept
+  in the build. No code or workflow change needed. Until then the
+  build strips the plugin so the app can't crash.
+
+- **Vercel server env var** (for the send service):
+  ```
+  FCM_SERVICE_ACCOUNT_JSON=<entire contents of the service-account
+  private-key JSON, on one line>
+  ```
+  `lib/push/providers.ts` only arms FCM when this is present.
+
+### C. iOS Push capability / entitlement (one Xcode step)
+
+APNs also needs the app binary to carry the `aps-environment`
+entitlement. This is the **one piece that needs Xcode** (it edits the
+Xcode project, which I deliberately do not hand-edit so the working
+iOS release pipeline can't be broken). On a Mac with the project
+open: target **App → Signing & Capabilities → + Capability → Push
+Notifications**. Commit the generated `App.entitlements` +
+`project.pbxproj` change. If you don't have a Mac, tell me and I'll
+add `App/App.entitlements` + the `CODE_SIGN_ENTITLEMENTS` build
+setting as a small isolated PR (slightly higher risk, done carefully
+and CI-built on the macOS runner).
+
+### After A + B + C: smoke test
+
+I redeploy taxottic.com with the new env vars and trigger fresh
+iOS/Android builds, then:
+
+- [ ] Install the fresh build, sign in → accept the OS notification
+      prompt.
+- [ ] DB check: a row appears in `device_tokens` for your user
+      (proves token capture end-to-end).
+- [ ] Log an expense → within a few seconds an "expense applied"
+      notification arrives on the phone **and mirrors to a paired
+      watch**.
+- [ ] Finish a drive (mileage auto-capture on) → a **Business /
+      Personal** actionable notification arrives; tapping an action
+      reclassifies the trip server-side (no app open).
+- [ ] Earn a badge / hit a goal → alert arrives.
+
+That is the full requested wrist experience, delivered without a
+dedicated watch app. (The optional native watch app — complications,
+glanceable "YTD deduction" — is scaffolded under `ios/TaxotticWatch/`
+with its own integration runbook; it is additive and not required for
+any of the above.)
