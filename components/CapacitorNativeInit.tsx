@@ -193,6 +193,22 @@ export function CapacitorNativeInit() {
           /* plugin absent in this binary — no-op */
         }
       }
+
+      // --- Watch: push the latest glance + listen for one-tap
+      // actions. Self-guards on the TaxotticWatchBridge plugin being
+      // present, so binaries built before the watch target is added
+      // (and web) are a clean no-op.
+      if (!cancelled) {
+        try {
+          const { syncWatch, startWatchBridge } = await import(
+            "@/lib/watch/bridge"
+          );
+          await startWatchBridge();
+          await syncWatch();
+        } catch {
+          /* bridge plugin absent in this binary — no-op */
+        }
+      }
     })();
 
     return () => {
