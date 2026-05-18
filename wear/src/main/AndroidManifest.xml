@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Wear OS app. Standalone-capable; pairs with the phone app by the
+     shared package name (com.taxottic.app). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.taxottic.app">
+
+    <uses-feature android:name="android.hardware.type.watch" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Taxottic"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.DeviceDefault">
+
+        <uses-library android:name="com.google.android.wearable"
+            android:required="true" />
+        <!-- Standalone: runs without a companion phone app present. -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Glanceable tile (the "complication" equivalent). -->
+        <service
+            android:name=".TaxotticTileService"
+            android:exported="true"
+            android:label="Taxottic"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
