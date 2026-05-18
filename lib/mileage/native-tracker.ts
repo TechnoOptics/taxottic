@@ -4,8 +4,20 @@
 // /api/mileage/ingest. Every bit of intelligence (trip segmentation,
 // classification, IRS deduction) is server-side and already unit-
 // tested — see docs/MILEAGE_TRACKER_SPEC.md. So this module is
-// deliberately thin: subscribe to @capacitor-community/background-
-// geolocation, buffer points, flush them in batches.
+// deliberately thin: subscribe to the background-geolocation plugin,
+// buffer points, flush them in batches.
+//
+// Plugin: @capgo/background-geolocation. We previously targeted
+// @capacitor-community/background-geolocation, but its iOS Swift
+// Package pinned capacitor-swift-pm 7.x while this app is on
+// Capacitor 8, so `cap sync ios` could not resolve the SPM graph and
+// the TestFlight archive failed. The Cap-go fork ships a Package.swift
+// that depends on capacitor-swift-pm `from: 8.0.0`, so it resolves
+// cleanly in the existing CapApp-SPM project, is free, and is more
+// accurate than the community plugin. Its API is start()/stop()
+// (not addWatcher/removeWatcher) but the option + location shapes are
+// otherwise the same, so the buffer/flush/segmentation pipeline below
+// is unchanged.
 //
 // Graceful-degradation discipline (the #69 "Browser plugin not
 // implemented" regression): the plugin's native code is compiled
@@ -14,18 +26,13 @@
 // isNativePlatform() + isPluginAvailable("BackgroundGeolocation")
 // and no-ops cleanly so the /mileage page still renders.
 
-import { registerPlugin } from "@capacitor/core";
 import type { GpsPoint } from "./segmentation";
 
-// Local plugin contract. The npm package was REMOVED: its iOS Swift
-// Package pins capacitor-swift-pm 7.x while this app is on Capacitor
-// 8, so `cap sync ios` could not resolve the SPM graph and the
-// TestFlight archive failed. Until a Capacitor-8-compatible
-// background-geolocation plugin is chosen, we keep the (fully
-// guarded) tracker scaffolding compiling against this minimal
-// interface. registerPlugin() still returns a proxy; the
-// isPluginAvailable() guard below means we never actually call it
-// when the native side is absent, so this is a clean no-op build.
+// Minimal contract for the slice of @capgo/background-geolocation we
+// use. Declared locally (rather than importing the package's types at
+// module scope) so nothing from the native plugin is pulled into the
+// web bundle's static graph — the package is only ever reached through
+// the dynamic import in guard().
 type BgLocation = {
   latitude: number;
   longitude: number;
@@ -33,9 +40,9 @@ type BgLocation = {
   speed: number | null;
   time: number | null;
 };
-type BgCallbackError = { message: string; code?: string };
+type BgCallbackError = { message?: string; code?: string };
 type BackgroundGeolocationPlugin = {
-  addWatcher(
+  start(
     options: {
       backgroundMessage?: string;
       backgroundTitle?: string;
@@ -44,8 +51,9 @@ type BackgroundGeolocationPlugin = {
       distanceFilter?: number;
     },
     callback: (location?: BgLocation, error?: BgCallbackError) => void,
-  ): Promise<string>;
-  removeWatcher(options: { id: string }): Promise<void>;
+  ): Promise<void>;
+  stop(): Promise<void>;
+  openSettings(): Promise<void>;
 };
 
 const LS_ENABLED = "taxottic.mileage.enabled";
@@ -66,7 +74,7 @@ const MAX_BUFFER = 5_000;
 type TrackingState = { supported: boolean; enabled: boolean };
 
 let plugin: BackgroundGeolocationPlugin | null = null;
-let watcherId: string | null = null;
+let tracking = false;
 let buffer: GpsPoint[] = [];
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 let flushing = false;
@@ -86,9 +94,17 @@ async function guard(): Promise<BackgroundGeolocationPlugin | null> {
     return null;
   }
   if (!plugin) {
-    plugin = registerPlugin<BackgroundGeolocationPlugin>(
-      "BackgroundGeolocation",
-    );
+    try {
+      const mod = await import("@capgo/background-geolocation");
+      const bg = mod.BackgroundGeolocation as unknown as
+        | BackgroundGeolocationPlugin
+        | undefined;
+      if (!bg || typeof bg.start !== "function") return null;
+      plugin = bg;
+    } catch {
+      // Package not in this bundle / native side absent — clean no-op.
+      return null;
+    }
   }
   return plugin;
 }
@@ -164,16 +180,16 @@ function toPoint(p: {
 
 /**
  * Start streaming drives for `forCompanyId`. Idempotent (a second
- * call while a watcher is live is a no-op). Persists the preference
+ * call while tracking is live is a no-op). Persists the preference
  * so resumeMileageTrackingIfEnabled() can re-arm on a cold start —
- * watcher ids do NOT survive a process kill.
+ * the plugin's tracking session does NOT survive a process kill.
  */
 export async function startMileageTracking(
   forCompanyId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const bg = await guard();
   if (!bg) return { ok: false, error: "unavailable" };
-  if (watcherId) return { ok: true };
+  if (tracking) return { ok: true };
 
   companyId = forCompanyId;
   try {
@@ -185,7 +201,7 @@ export async function startMileageTracking(
   loadPersistedBuffer();
 
   try {
-    watcherId = await bg.addWatcher(
+    await bg.start(
       {
         // Presence of backgroundMessage is what enables background
         // delivery; on Android it is the persistent-notification text
@@ -199,7 +215,7 @@ export async function startMileageTracking(
       },
       (location, error) => {
         if (error) {
-          // NOT_AUTHORIZED → the user denied/▸revoked location. Stop
+          // NOT_AUTHORIZED → the user denied/revoked location. Stop
           // cleanly and drop the preference so we don't nag forever.
           if (error.code === "NOT_AUTHORIZED") void stopMileageTracking();
           return;
@@ -213,11 +229,12 @@ export async function startMileageTracking(
         if (buffer.length >= FLUSH_AT_POINTS) void flush();
       },
     );
+    tracking = true;
   } catch (e) {
-    watcherId = null;
+    tracking = false;
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "watch_failed",
+      error: e instanceof Error ? e.message : "start_failed",
     };
   }
 
@@ -227,8 +244,7 @@ export async function startMileageTracking(
   return { ok: true };
 }
 
-/** Stop tracking, flush whatever is buffered, forget the preference.
- *  Watchers can only be removed, not paused (plugin semantics). */
+/** Stop tracking, flush whatever is buffered, forget the preference. */
 export async function stopMileageTracking(): Promise<void> {
   try {
     window.localStorage.removeItem(LS_ENABLED);
@@ -240,14 +256,14 @@ export async function stopMileageTracking(): Promise<void> {
     flushTimer = null;
   }
   const bg = await guard();
-  if (bg && watcherId) {
+  if (bg && tracking) {
     try {
-      await bg.removeWatcher({ id: watcherId });
+      await bg.stop();
     } catch {
-      /* already gone */
+      /* already stopped */
     }
   }
-  watcherId = null;
+  tracking = false;
   await flush(); // best-effort final upload
 }
 
@@ -270,7 +286,7 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   loadPersistedBuffer();
   companyId = savedCompany;
   void flush(); // drain a killed-mid-drive leftover
-  if (!watcherId) await startMileageTracking(savedCompany);
+  if (!tracking) await startMileageTracking(savedCompany);
 }
 
 /** Snapshot for the UI toggle. `supported` is true only on the

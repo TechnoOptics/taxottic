@@ -73,6 +73,11 @@ const config: CapacitorConfig = {
     // redirects all open back inside the app rather than the
     // browser.
     captureInput: true,
+    // Required by @capgo/background-geolocation: without the legacy
+    // bridge Android halts WebView-bridge location callbacks after
+    // ~5 min in the background, so mileage capture would silently die
+    // mid-drive. (capacitor-community/background-geolocation#89.)
+    useLegacyBridge: true,
   },
   plugins: {
     SplashScreen: {

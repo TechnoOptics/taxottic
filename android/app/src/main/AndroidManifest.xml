@@ -64,4 +64,17 @@
          REQUIRED on Android 13+ (API 33+) — without it the app
          silently fails to show any notification on modern devices. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Background mileage capture (@capgo/background-geolocation).
+         Continuous drive logging runs as a foreground service with a
+         persistent notification (the allowed pattern) so we do NOT
+         request ACCESS_BACKGROUND_LOCATION — that is only needed for
+         geofencing, which we don't use, and avoids the heightened
+         Play review for background location. FOREGROUND_SERVICE_LOCATION
+         is the typed permission Android 14+ (API 34) requires for a
+         location-type foreground service. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 </manifest>

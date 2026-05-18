@@ -4,4 +4,9 @@
     <string name="title_activity_main">Taxottic</string>
     <string name="package_name">com.taxottic.app</string>
     <string name="custom_url_scheme">com.taxottic.app</string>
+    <!-- @capgo/background-geolocation: the channel name shown when the
+         user presses & holds the persistent mileage-tracking
+         notification. Icon intentionally left unset so the plugin
+         falls back to the app launcher icon (no extra drawable). -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Taxottic mileage tracking</string>
 </resources>
