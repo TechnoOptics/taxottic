@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/Wordmark";
-import { StudioFamilyFAB } from "@/components/StudioFamilyFAB";
 import { JsonLd } from "@/components/seo/JsonLd";
 import {
   PLAN_PRICING,
@@ -244,12 +243,6 @@ export default async function Home({
       <FomoBand audience={audience} />
       <FinalCta audience={audience} />
       <Footer />
-      {/* Family-of-products floating launcher in the bottom-left.
-          Same visual treatment as the Bella FAB (gold conic ring,
-          forest core) but for cross-product nav — so a prospect
-          landing here sees Advottic and the Techno Optics studio
-          one click away. Visible on every public marketing route. */}
-      <StudioFamilyFAB />
     </main>
   );
 }

@@ -204,12 +204,16 @@ html, body {
      capacitor.config ios.contentInset:"never" (the app owns its
      safe-area insets through env(safe-area-inset-*)). */
   width: 100%;
+  max-width: 100%;
   overscroll-behavior: none;
   overscroll-behavior-x: none;
-  /* Prevent any stray oversized child from creating a horizontal
-     scrollbar / sideways drag on mobile. */
-  overflow-x: clip;
-  max-width: 100%;
+  /* NOTE: do NOT put overflow-x: clip/hidden here. An overflow value
+     other than `visible` on html/body makes them a clip/scroll
+     context, which BREAKS `position: sticky` on the app header (it
+     scrolled away instead of pinning). Horizontal-bounce is already
+     killed by overscroll-behavior-x:none + ios contentInset:"never";
+     if a specific element ever overflows sideways, clip THAT element,
+     never the sticky header's ancestor. */
   /* Prevent iOS auto-zoom on input focus (font-size >= 16px on form fields) */
   -webkit-text-size-adjust: 100%;
   /* Color transitions during theme flips. Authenticated routes mount
