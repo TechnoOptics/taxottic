@@ -64,17 +64,44 @@ export function CapacitorNativeInit() {
           // Style.Dark == light/WHITE content (for dark backgrounds).
           await StatusBar.setStyle({ style: Style.Dark });
           if (isAndroid) {
-            await StatusBar.setBackgroundColor({ color: "#0a1f19" });
-            // The Android edge-to-edge opt-out already makes the OS
-            // reserve the status-bar strip, but the WebView still
-            // reports a non-zero env(safe-area-inset-top) — which the
-            // header was adding ON TOP, producing a big empty band.
-            // Zero the header's safe-top on Android so it sits tight
-            // under the status bar. iOS leaves the var unset and the
-            // header falls back to env() for the real notch.
+            await StatusBar.setBackgroundColor({ color: "#0a1f19" }).catch(
+              () => {},
+            );
+            // Android safe-top is platform-dependent and env() can't be
+            // trusted (the Android WebView reports
+            // env(safe-area-inset-top)=0 even when drawing UNDER the
+            // status bar). Two real-world states:
+            //
+            //  - WebView is BELOW the status bar (the native
+            //    `windowOptOutEdgeToEdgeEnforcement` opt-out in
+            //    styles.xml is present, i.e. a fresh build): the OS
+            //    reserves the strip, so the header needs 0 extra inset.
+            //  - WebView is OVERLAYING the status bar (older binaries
+            //    that predate the opt-out, or forced edge-to-edge on
+            //    API 35): now that the header is truly position:fixed
+            //    it pins to the physical top and sits behind the
+            //    clock/battery. env() is 0 here so CSS can't rescue it
+            //    — reserve a conservative strip from JS instead.
+            //
+            // getInfo().overlays reflects the actual window state, so
+            // this self-corrects: fresh builds report not-overlaying →
+            // 0px (no double gap); old builds report overlaying → a
+            // status-bar strip clears the clock. ~28px covers the
+            // common 24dp bar plus slack for camera cutouts; the
+            // header background is brand dark-green so a small
+            // overshoot is an invisible green band, never a clash.
+            let overlaying = false;
+            try {
+              const info = await StatusBar.getInfo();
+              overlaying = Boolean(
+                (info as { overlays?: boolean })?.overlays,
+              );
+            } catch {
+              /* getInfo missing in this binary — leave overlaying false */
+            }
             document.documentElement.style.setProperty(
               "--app-safe-top",
-              "0px",
+              overlaying ? "28px" : "0px",
             );
           }
         } catch {
