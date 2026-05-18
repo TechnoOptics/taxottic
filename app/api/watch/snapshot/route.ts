@@ -4,7 +4,14 @@ import { getMyCompanies } from "@/lib/auth";
 import { computeReadiness } from "@/lib/dashboard/readiness";
 import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
 import { buildWatchSnapshot, type SnapshotInput } from "@/lib/watch/snapshot";
-import { EMPTY_WATCH_SNAPSHOT } from "@/lib/watch/types";
+import { EMPTY_WATCH_SNAPSHOT, type WatchSnapshot } from "@/lib/watch/types";
+import {
+  buildCompanyForecast,
+  type ForecastTaxProfile,
+  type ForecastBusinessProfile,
+  type IncomeRow,
+  type ExpenseRow,
+} from "@/lib/tax/company-forecast";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +47,7 @@ export async function GET() {
   let latestBadgeCode: string | null = null;
   let newBadgeCode: string | null = null;
   let companyId: string | null = null;
+  let forecastOut: WatchSnapshot["forecast"] = undefined;
 
   try {
     const companies = await getMyCompanies();
@@ -162,6 +170,92 @@ export async function GET() {
     /* no badges */
   }
 
+  // Real projected forecast — via the SAME buildCompanyForecast the
+  // forecast page uses, so the wrist number can't diverge from the
+  // app. Best-effort: if the tax profile isn't set up yet (the page
+  // would redirect to onboarding) we just omit forecast and the watch
+  // shows its elegant "updates on your iPhone" state.
+  if (companyId) {
+    try {
+      const [companyRes, tpRes, bpRes, incRes, expRes, tripRes] =
+        await Promise.all([
+          admin
+            .from("companies")
+            .select("state_code, entity_type")
+            .eq("id", companyId)
+            .maybeSingle(),
+          admin
+            .from("tax_profiles")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("tax_year", taxYear)
+            .maybeSingle(),
+          admin
+            .from("business_profiles")
+            .select("*")
+            .eq("company_id", companyId)
+            .eq("tax_year", taxYear)
+            .maybeSingle(),
+          admin
+            .from("monthly_income")
+            .select("amount_cents, month, recurrence")
+            .eq("company_id", companyId)
+            .eq("tax_year", taxYear),
+          admin
+            .from("monthly_expenses")
+            .select("amount_cents, month, category_code, recurrence")
+            .eq("company_id", companyId)
+            .eq("tax_year", taxYear),
+          admin
+            .from("mileage_trips")
+            .select("deduction_cents")
+            .eq("company_id", companyId)
+            .eq("classification", "business")
+            .eq("tax_year", taxYear),
+        ]);
+      const taxProfile = tpRes.data as ForecastTaxProfile | null;
+      if (taxProfile) {
+        const company = (companyRes.data ?? {}) as {
+          state_code: string | null;
+          entity_type: string | null;
+        };
+        const trips = (tripRes.data ?? []) as unknown as {
+          deduction_cents: number;
+        }[];
+        const { result } = buildCompanyForecast({
+          taxYear,
+          currentMonth: new Date().getUTCMonth() + 1,
+          company: {
+            state_code: company.state_code ?? null,
+            entity_type: company.entity_type ?? null,
+          },
+          taxProfile,
+          businessProfile:
+            (bpRes.data as ForecastBusinessProfile | null) ?? null,
+          incomes: (incRes.data ?? []) as IncomeRow[],
+          expenses: (expRes.data ?? []) as ExpenseRow[],
+          trackedYtdMileageCents: trips.reduce(
+            (a, t) => a + Number(t.deduction_cents ?? 0),
+            0,
+          ),
+          trackedTripCount: trips.length,
+        });
+        const net =
+          result.stillOwedCents > 0
+            ? result.stillOwedCents
+            : -result.refundCents;
+        forecastOut = {
+          label: `${taxYear} projected estimate`,
+          netCents: net,
+          effectiveRatePct: Math.round((result.effectiveRate ?? 0) * 100),
+          ytdIncomeCents: result.projectedIncomeCents ?? 0,
+        };
+      }
+    } catch {
+      /* tax profile missing / engine unavailable — omit forecast */
+    }
+  }
+
   try {
     return NextResponse.json(
       buildWatchSnapshot({
@@ -173,7 +267,7 @@ export async function GET() {
         pendingExpenses: [],
         goals,
         deductions: [],
-        forecast: undefined,
+        forecast: forecastOut,
         latestBadgeCode,
         newBadgeCode,
         companyId,

@@ -22,16 +22,9 @@ import {
 import { buildYearEndSuggestions } from "@/lib/tax/year-end-suggestions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { createServiceClient } from "@/lib/supabase/server";
-import { resolveAutoMileageCents } from "@/lib/mileage/deduction";
 import {
-  ABOVE_THE_LINE_CODES,
-  computeHomeOfficeSimplifiedCents,
-  computeMileageDeductionCents,
-  forecast,
   formatCents,
   type EntityType,
-  type ForecastInput,
-  type ForecastResult,
 } from "@/lib/tax/forecast";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
 import {
@@ -44,8 +37,14 @@ import {
   expandRowToMonthly,
   totalOfMonthly,
   ytdOfMonthly,
-  type Recurrence,
 } from "@/lib/tax/recurrence";
+import {
+  buildCompanyForecast,
+  type IncomeRow,
+  type ExpenseRow,
+  type ForecastTaxProfile,
+  type ForecastBusinessProfile,
+} from "@/lib/tax/company-forecast";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -93,150 +92,11 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
   const currentMonth = new Date().getUTCMonth() + 1;
 
-  // Split rows by recurrence. One-off rows are samples that we still
-  // pace-project for the year-end view; recurring rows are deterministic
-  // rates that we expand to a per-month series so the YTD vs projected
-  // numbers are honest for users who have, say, $1000/mo rent.
-  type IncomeRow = {
-    amount_cents: number;
-    month: number;
-    recurrence: Recurrence | null;
-  };
-  type ExpenseRow = IncomeRow & { category_code: string };
-
   const incomes = (incomeRows ?? []) as IncomeRow[];
   const expenses = (expenseRows ?? []) as ExpenseRow[];
 
-  const isRecurring = (r: { recurrence: Recurrence | null }) =>
-    (r.recurrence ?? "one_off") !== "one_off";
-
-  // ---------- Pace projection for one-off rows ----------
-  // The user's expected behavior: "I logged income for the months that
-  // happened so far; project that to year-end." Recurring rows opt out
-  // of pace projection (they have an explicit cadence).
-  const oneOffIncomes = incomes.filter((r) => !isRecurring(r));
-  const oneOffExpenses = expenses.filter((r) => !isRecurring(r));
-  const monthsWithOneOff = uniqueMonths([
-    ...oneOffIncomes.map((r) => r.month),
-    ...oneOffExpenses.map((r) => r.month),
-  ]);
-  const oneOffPaceFactor = monthsWithOneOff > 0 ? 12 / monthsWithOneOff : 1;
-
-  // ---------- Recurring rows expanded ----------
-  const recurringIncomeMonthly = combineMonthly(
-    incomes.filter(isRecurring).map((r) =>
-      expandRowToMonthly({
-        month: r.month,
-        amount_cents: r.amount_cents,
-        recurrence: r.recurrence,
-      }),
-    ),
-  );
-  const recurringExpenseMonthly = combineMonthly(
-    expenses.filter(isRecurring).map((r) =>
-      expandRowToMonthly({
-        month: r.month,
-        amount_cents: r.amount_cents,
-        recurrence: r.recurrence,
-      }),
-    ),
-  );
-
-  // Bucket helper: sum amounts for a predicate from one-off rows.
-  const sumOneOff = (
-    rows: ExpenseRow[],
-    pick: (r: ExpenseRow) => boolean,
-  ): number =>
-    rows
-      .filter((r) => !isRecurring(r) && pick(r))
-      .reduce((a, r) => a + r.amount_cents, 0);
-
-  // Bucket recurring expenses by category type. We need per-bucket
-  // monthly arrays so we can take YTD or full-year for each.
-  const monthlyForExpenses = (pick: (r: ExpenseRow) => boolean): number[] =>
-    combineMonthly(
-      expenses
-        .filter((r) => isRecurring(r) && pick(r))
-        .map((r) =>
-          expandRowToMonthly({
-            month: r.month,
-            amount_cents: r.amount_cents,
-            recurrence: r.recurrence,
-          }),
-        ),
-    );
-
-  const recurringMealsMonthly = monthlyForExpenses(
-    (r) => r.category_code === "meals",
-  );
-  const recurringAboveTheLineMonthly = monthlyForExpenses((r) =>
-    ABOVE_THE_LINE_CODES.has(r.category_code),
-  );
-  const recurringBizExpenseMonthly = monthlyForExpenses(
-    (r) =>
-      r.category_code !== "meals" &&
-      !ABOVE_THE_LINE_CODES.has(r.category_code),
-  );
-
-  // ---------- "As-of-today" totals (close books today) ----------
-  const ytdIncomeRealised =
-    oneOffIncomes.reduce((a, r) => a + r.amount_cents, 0) +
-    ytdOfMonthly(recurringIncomeMonthly, currentMonth);
-  const ytdMealsRealised =
-    sumOneOff(expenses, (r) => r.category_code === "meals") +
-    ytdOfMonthly(recurringMealsMonthly, currentMonth);
-  const ytdAboveTheLineRealised =
-    sumOneOff(expenses, (r) => ABOVE_THE_LINE_CODES.has(r.category_code)) +
-    ytdOfMonthly(recurringAboveTheLineMonthly, currentMonth);
-  const ytdBizExpensesRealised =
-    sumOneOff(
-      expenses,
-      (r) =>
-        r.category_code !== "meals" &&
-        !ABOVE_THE_LINE_CODES.has(r.category_code),
-    ) + ytdOfMonthly(recurringBizExpenseMonthly, currentMonth);
-
-  // ---------- Year-end projected totals ----------
-  // A "one-off" is by user definition a single event - we count it
-  // once, full stop. We DO NOT pace-project one-offs (a $500 expense
-  // logged in March was previously becoming $500 × 12/3 = $2000
-  // year-end, which surprised everyone). Recurring rows still get
-  // their deterministic per-cadence expansion via expandRowToMonthly.
-  // The oneOffPaceFactor is now only used by the auto-mileage
-  // pro-rate below where we genuinely need to extrapolate from
-  // limited odometer data.
-  const projIncome =
-    oneOffIncomes.reduce((a, r) => a + r.amount_cents, 0) +
-    totalOfMonthly(recurringIncomeMonthly);
-  const projMeals =
-    sumOneOff(expenses, (r) => r.category_code === "meals") +
-    totalOfMonthly(recurringMealsMonthly);
-  const projAboveTheLine =
-    sumOneOff(expenses, (r) => ABOVE_THE_LINE_CODES.has(r.category_code)) +
-    totalOfMonthly(recurringAboveTheLineMonthly);
-  const projBizExpenses =
-    sumOneOff(
-      expenses,
-      (r) =>
-        r.category_code !== "meals" &&
-        !ABOVE_THE_LINE_CODES.has(r.category_code),
-    ) + totalOfMonthly(recurringBizExpenseMonthly);
-
-  // Auto-deductions from business profile. The manual estimate pace-
-  // projects from typed YTD miles; resolveAutoMileageCents then lets
-  // the GPS tracker's classified-business trips (an IRS-grade log)
-  // override it, gated by the standard-vs-actual-expense election. See
-  // that helper for the precedence rationale.
-  const onStandardVehicle =
-    !!businessProfile?.has_vehicle &&
-    businessProfile?.vehicle_method === "standard";
-  const manualMileageProjected = onStandardVehicle
-    ? computeMileageDeductionCents({
-        ytdMiles: businessProfile?.vehicle_business_miles ?? 0,
-        monthsEntered: Math.max(1, monthsWithOneOff),
-      })
-    : 0;
-
+  // Tracked business-trip deduction (IRS-grade GPS log). Fetched here
+  // so the shared forecast helper stays I/O-free + unit-testable.
   const admin = createServiceClient();
   const { data: bizTripRows } = await admin
     .from("mileage_trips")
@@ -252,138 +112,62 @@ export default async function ForecastPage({ params }: { params: Params }) {
     0,
   );
 
-  const { ytdCents: autoMileageYtd, projectedCents: autoMileageProjected } =
-    resolveAutoMileageCents({
-      onStandardVehicle,
-      trackedYtdCents: trackedYtdMileageCents,
-      trackedTripCount: trackedTrips.length,
-      manualProjectedCents: manualMileageProjected,
-      manualYtdCents: Math.round(
-        manualMileageProjected * (currentMonth / 12),
-      ),
-      trackedProjectionMonths: monthsWithOneOff,
-    });
-  const autoHomeOfficeFull = computeHomeOfficeSimplifiedCents({
-    hasHomeOffice: businessProfile?.has_home_office ?? false,
-    homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
-  });
-  // Home office simplified is a year-cap deduction; for the YTD view we
-  // pro-rate it to the share of year that has elapsed.
-  const autoHomeOfficeYtd = Math.round(
-    autoHomeOfficeFull * (currentMonth / 12),
-  );
-
-  // The engine is also our tax calculator. By passing monthsEntered=12
-  // we tell it "don't pace-project anything; the numbers I'm giving you
-  // ARE the year-end numbers". We then run it twice: once with the YTD
-  // figures (close books today) and once with the projected figures.
-  const sharedInput: Omit<
-    ForecastInput,
-    | "ytdIncomeCents"
-    | "ytdBusinessExpensesCents"
-    | "ytdMealsCents"
-    | "ytdAboveTheLineCents"
-    | "autoMileageCents"
-    | "autoHomeOfficeCents"
-    | "monthsEntered"
-  > = {
+  // The entire YTD/projected assembly + the two forecast() runs now
+  // live in lib/tax/company-forecast.ts so the watch glance computes
+  // the IDENTICAL numbers (they can't drift). Behaviour-preserving
+  // move — same inputs, same engine calls, same rounding.
+  const {
+    ytdResult,
+    result,
+    summary: input,
+    monthsWithOneOff,
+    oneOffPaceFactor,
+    isRecurring,
+    oneOffIncomes,
+    oneOffExpenses,
+    recurringIncomeMonthly,
+    recurringExpenseMonthly,
+    recurringBizExpenseMonthly,
+    recurringMealsMonthly,
+    recurringAboveTheLineMonthly,
+  } = buildCompanyForecast({
     taxYear,
-    filingStatus: taxProfile.filing_status as FilingStatus,
-    // Bind the state-tax estimate to the COMPANY's state of operation
-    // (set when the company was created), not the user's personal tax
-    // profile. The May 2026 audit (High #1) caught a Texas company
-    // forecasting Minnesota state tax because the engine was reading
-    // the user's profile-level state. Fall through to the profile only
-    // if the company didn't capture one — keeps single-user / single-
-    // state setups working without changes.
-    stateCode: company.state_code ?? taxProfile.state_code,
-    age: taxProfile.age,
-    isBlind: taxProfile.is_blind,
-    itemize: taxProfile.itemize,
-    dependents: taxProfile.dependents,
-    dependentsUnder17: taxProfile.dependents_under_17 ?? 0,
-    spouseIncomeCents: taxProfile.spouse_income_cents ?? 0,
-    estimatedPaymentsCents: taxProfile.estimated_payments_cents ?? 0,
-    ownerW2WagesCents: taxProfile.owner_w2_wages_cents ?? 0,
-    ownerW2WithheldCents: taxProfile.owner_w2_withheld_cents ?? 0,
-    ownerW2SsWagesCents: taxProfile.owner_w2_ss_wages_cents ?? 0,
-    spouseW2WagesCents: taxProfile.spouse_w2_wages_cents ?? 0,
-    spouseW2WithheldCents: taxProfile.spouse_w2_withheld_cents ?? 0,
-    spouseW2SsWagesCents: taxProfile.spouse_w2_ss_wages_cents ?? 0,
-    entityType: (company.entity_type ?? "sole_prop") as EntityType,
-    ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
-    // Structured benefit fields - same enrichment as /personal/forecast.
-    retirementSolo401kCents:
-      taxProfile.solo_401k_contribution_cents ?? 0,
-    retirementSepIraCents: taxProfile.sep_ira_contribution_cents ?? 0,
-    retirementTraditionalIraCents:
-      taxProfile.traditional_ira_contribution_cents ?? 0,
-    retirementRothIraCents:
-      taxProfile.roth_ira_contribution_cents ?? 0,
-    retirementHsaCents: taxProfile.hsa_contribution_cents ?? 0,
-    selfEmployedHealthInsuranceCents:
-      taxProfile.se_health_insurance_cents ?? 0,
-    longTermCapitalGainsCents:
-      taxProfile.long_term_capital_gains_cents ?? 0,
-    qualifiedDividendsCents:
-      taxProfile.qualified_dividends_cents ?? 0,
-    foreignEarnedIncomeCents:
-      taxProfile.foreign_earned_income_cents ?? 0,
-    studentLoanInterestCents:
-      taxProfile.student_loan_interest_cents ?? 0,
-    qualifiedEducationExpensesCents:
-      taxProfile.qualified_education_expenses_cents ?? 0,
-    claimAotc: taxProfile.claim_aotc ?? false,
-    itemizedSaltCents: taxProfile.itemized_salt_cents ?? undefined,
-    itemizedMortgageInterestCents:
-      taxProfile.itemized_mortgage_interest_cents ?? undefined,
-    itemizedCharityCents:
-      taxProfile.itemized_charity_cents ?? undefined,
-    itemizedMedicalCents:
-      taxProfile.itemized_medical_cents ?? undefined,
-    section179ExpenseCents: taxProfile.section_179_expense_cents ?? 0,
-    residentialEnergyCreditCents:
-      taxProfile.residential_energy_credit_cents ?? 0,
-    evCreditCents: taxProfile.ev_credit_cents ?? 0,
-    ptcAdvancePaymentsCents:
-      taxProfile.ptc_advance_payments_cents ?? 0,
-  };
-
-  // YTD scenario: "if you closed your books today, what's the bill?"
-  const ytdResult: ForecastResult = forecast({
-    ...sharedInput,
-    ytdIncomeCents: Math.round(ytdIncomeRealised),
-    ytdBusinessExpensesCents: Math.round(ytdBizExpensesRealised),
-    ytdMealsCents: Math.round(ytdMealsRealised),
-    ytdAboveTheLineCents: Math.round(ytdAboveTheLineRealised),
-    autoMileageCents: autoMileageYtd,
-    autoHomeOfficeCents: autoHomeOfficeYtd,
-    monthsEntered: 12,
+    currentMonth,
+    company: {
+      state_code: company.state_code ?? null,
+      entity_type: company.entity_type ?? null,
+    },
+    taxProfile: taxProfile as unknown as ForecastTaxProfile,
+    businessProfile:
+      (businessProfile as unknown as ForecastBusinessProfile | null) ?? null,
+    incomes,
+    expenses,
+    trackedYtdMileageCents,
+    trackedTripCount: trackedTrips.length,
   });
 
-  // Projected scenario: "if you keep up at this pace + recurring rates."
-  const result: ForecastResult = forecast({
-    ...sharedInput,
-    ytdIncomeCents: Math.round(projIncome),
-    ytdBusinessExpensesCents: Math.round(projBizExpenses),
-    ytdMealsCents: Math.round(projMeals),
-    ytdAboveTheLineCents: Math.round(projAboveTheLine),
-    autoMileageCents: autoMileageProjected,
-    autoHomeOfficeCents: autoHomeOfficeFull,
-    monthsEntered: 12,
-  });
-
-  // Build a "summary input" that the existing UI references for things
-  // like the entity type display and the months-of-data hint string.
-  const input = {
-    monthsEntered: Math.max(
-      1,
-      monthsWithOneOff > 0
-        ? monthsWithOneOff
-        : Math.min(currentMonth, 12),
-    ),
-    entityType: (company.entity_type ?? "sole_prop") as EntityType,
-  };
+  // Tiny pure closures the scorecard / year-end blocks below use.
+  // Rebuilt from the helper's returned rows (no logic duplication —
+  // identical predicates, same isRecurring).
+  const sumOneOff = (
+    rows: ExpenseRow[],
+    pick: (r: ExpenseRow) => boolean,
+  ): number =>
+    rows
+      .filter((r) => !isRecurring(r) && pick(r))
+      .reduce((a, r) => a + r.amount_cents, 0);
+  const monthlyForExpenses = (pick: (r: ExpenseRow) => boolean): number[] =>
+    combineMonthly(
+      expenses
+        .filter((r) => isRecurring(r) && pick(r))
+        .map((r) =>
+          expandRowToMonthly({
+            month: r.month,
+            amount_cents: r.amount_cents,
+            recurrence: r.recurrence,
+          }),
+        ),
+    );
 
   // Per-month series for the chart now respects recurrence. One-off
   // rows land in their own month; recurring rows spread across the
@@ -1387,10 +1171,6 @@ function MonthlyBars({
       </div>
     </div>
   );
-}
-
-function uniqueMonths(months: number[]): number {
-  return new Set(months).size;
 }
 
 function pct(rate: number): string {
