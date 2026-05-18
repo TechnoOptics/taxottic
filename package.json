@@ -33,6 +33,7 @@
     "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@capgo/background-geolocation": "^8.0.35",
     "@napi-rs/canvas": "^1.0.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",

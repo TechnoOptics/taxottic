@@ -83,5 +83,21 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Background mileage capture (@capgo/background-geolocation).
+	     The app detects drives and logs trip distance for the IRS
+	     mileage deduction. iOS hard-crashes + App Review auto-rejects
+	     if the Core Location APIs are reachable without these purpose
+	     strings, and "always"/background needs UIBackgroundModes:
+	     location. Wording is user-facing and states WHY (tax mileage)
+	     and that it runs while the app is backgrounded — App Review
+	     requires the background justification to be explicit. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Taxottic uses your location while you drive to measure trip distance for your IRS mileage tax deduction. You choose whether each trip is business or personal.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Taxottic logs your drives in the background so you never miss a deductible business mile. Location is used only to compute your mileage deduction, sent to your Taxottic account, and never sold or shared. Turn it off any time.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>
