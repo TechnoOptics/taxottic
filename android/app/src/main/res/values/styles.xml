@@ -10,10 +10,10 @@
     </style>
 
     <!-- Post-splash theme Capacitor's BridgeActivity switches to.
-         Brand dark green (#0a1f19) is the WINDOW background AND the
+         Brand dark green (#121a2a) is the WINDOW background AND the
          status/navigation bar colours so there is never a white
          strip: pre-Android-15 the bars are coloured directly; on
-         Android 15 colours: window background #0a1f19 (shows behind
+         Android 15 colours: window background #121a2a (shows behind
          the bars) + white glyphs, so there's never a white strip.
 
          windowOptOutEdgeToEdgeEnforcement=true: Android 15 (API 35)
@@ -30,9 +30,9 @@
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:windowBackground">#0a1f19</item>
-        <item name="android:statusBarColor">#0a1f19</item>
-        <item name="android:navigationBarColor">#0a1f19</item>
+        <item name="android:windowBackground">#121a2a</item>
+        <item name="android:statusBarColor">#121a2a</item>
+        <item name="android:navigationBarColor">#121a2a</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:enforceStatusBarContrast">false</item>
@@ -42,12 +42,12 @@
 
 
     <!-- Launch/splash theme. Window background stays the branded
-         splash drawable (already #0a1f19); colour the bars dark too
+         splash drawable (already #121a2a); colour the bars dark too
          so there's no white flash before the WebView paints. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
-        <item name="android:statusBarColor">#0a1f19</item>
-        <item name="android:navigationBarColor">#0a1f19</item>
+        <item name="android:statusBarColor">#121a2a</item>
+        <item name="android:navigationBarColor">#121a2a</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>

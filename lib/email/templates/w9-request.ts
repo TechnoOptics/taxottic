@@ -25,7 +25,7 @@ export function renderW9RequestEmail(args: W9RequestArgs): {
   fromName: string;
   replyTo?: string;
 } {
-  const cta = args.firmAccentColor || "#0F2D24";
+  const cta = args.firmAccentColor || "#1d2843";
   const greet = args.recipientName
     ? `Hi ${escapeHtml(args.recipientName.split(" ")[0])},`
     : "Hi,";
@@ -40,14 +40,14 @@ export function renderW9RequestEmail(args: W9RequestArgs): {
 
   const logoLine = args.firmLogoUrl
     ? `<img src="${escapeAttr(args.firmLogoUrl)}" alt="${escapeAttr(args.firmName)}" style="height: 32px; width: auto; margin-bottom: 24px;" />`
-    : `<div style="font-family: Georgia, serif; font-size: 18px; font-weight: 600; color: #0F2D24; margin-bottom: 24px;">${escapeHtml(args.firmName)}</div>`;
+    : `<div style="font-family: Georgia, serif; font-size: 18px; font-weight: 600; color: #1d2843; margin-bottom: 24px;">${escapeHtml(args.firmName)}</div>`;
 
   const subject = `${args.firmName} needs your W-9 (takes 2 minutes)`;
   const html = `<!doctype html><html><body style="font-family: -apple-system, sans-serif; background: #F5EDD6; margin: 0; padding: 32px 16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
       <table role="presentation" width="560" style="background: #FFFFFF; border-radius: 16px; max-width: 560px;"><tr><td style="padding: 32px;">
         ${logoLine}
-        <h1 style="font-family: Georgia, serif; font-size: 22px; color: #0F2D24; margin: 0 0 16px;">${greet}</h1>
+        <h1 style="font-family: Georgia, serif; font-size: 22px; color: #1d2843; margin: 0 0 16px;">${greet}</h1>
         <p style="margin: 0 0 16px; color: #18181B; font-size: 14px; line-height: 1.6;">
           ${inviterLine} needs your IRS Form W-9 before issuing your end-of-year 1099. The form captures your legal name, taxpayer identification number (SSN or EIN), and address.
         </p>

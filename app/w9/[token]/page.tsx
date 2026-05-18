@@ -41,7 +41,7 @@ export default async function W9Page({ params }: { params: Params }) {
   };
   const lookup = (rows as unknown as Row[] | null)?.[0] ?? null;
   if (!lookup) notFound();
-  const cta = lookup.firm_accent_color || "#0F2D24";
+  const cta = lookup.firm_accent_color || "#1d2843";
 
   return (
     <main id="main" className="min-h-screen bg-cream-100 flex items-start justify-center px-4 sm:px-6 py-10">

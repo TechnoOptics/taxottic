@@ -133,7 +133,7 @@ export function render1099HTML(
    *  Defaults to Box 1 (Rents). */
   miscBox: "rents" | "royalties" = "rents",
 ): { html: string; filename: string } {
-  const cta = input.firm.accent_color || "#0F2D24";
+  const cta = input.firm.accent_color || "#1d2843";
   const isNec = input.variant === "1099-NEC";
 
   // NEC has a single box; MISC has many.

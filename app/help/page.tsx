@@ -188,7 +188,7 @@ export default function HelpPage() {
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
+            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
         }}
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">

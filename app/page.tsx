@@ -212,7 +212,7 @@ export default async function Home({
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
+            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
         }}
       >
@@ -261,7 +261,7 @@ function Hero({ audience }: { audience: Audience }) {
         className="absolute inset-0 -z-10"
         style={{
           background:
-            "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
+            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
         }}
       />
       <div
@@ -613,13 +613,13 @@ function MockupFrame({
             "radial-gradient(60% 60% at 50% 40%, rgba(213,187,126,0.25), transparent 70%)",
         }}
       />
-      <div className="rounded-2xl border border-forest-100 bg-[var(--color-cream)] shadow-[0_24px_60px_-30px_rgba(15,45,36,0.35)] overflow-hidden">
+      <div className="rounded-2xl border border-forest-100 bg-[var(--color-cream)] shadow-[0_24px_60px_-30px_rgba(29, 40, 67,0.35)] overflow-hidden">
         {/* Faux app chrome: forest header strip with the company badge */}
         <div
           className="flex items-center justify-between px-4 py-2.5"
           style={{
             background:
-              "linear-gradient(180deg, #1a4031 0%, #0f2d24 100%)",
+              "linear-gradient(180deg, #2a3a5e 0%, #1d2843 100%)",
           }}
         >
           <div className="flex items-center gap-2">
@@ -646,7 +646,7 @@ function CompanyMonogram() {
       className="size-6 rounded-md flex items-center justify-center text-[10px] font-semibold"
       style={{
         background:
-          "linear-gradient(135deg, #1a4031 0%, #0f2d24 100%)",
+          "linear-gradient(135deg, #2a3a5e 0%, #1d2843 100%)",
         color: "#d5bb7e",
         boxShadow: "inset 0 0 0 1px rgba(213,187,126,0.25)",
       }}
@@ -917,7 +917,7 @@ function ProofBand() {
       className="relative"
       style={{
         background:
-          "linear-gradient(180deg, #0f2d24 0%, #0a201a 100%)",
+          "linear-gradient(180deg, #1d2843 0%, #121a2a 100%)",
       }}
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-cream">

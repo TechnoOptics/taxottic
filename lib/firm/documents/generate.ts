@@ -75,7 +75,7 @@ export function generateEngagementLetterHTML(
   input: EngagementLetterInput,
 ): { html: string; filename: string } {
   const narrative = KIND_NARRATIVE[input.engagement.kind];
-  const cta = input.firm.accent_color || "#0F2D24";
+  const cta = input.firm.accent_color || "#1d2843";
   const firmLegal = input.firm.legal_name || input.firm.name;
   const feeLine = input.engagement.fee_estimate_cents
     ? `<p><strong>Fee estimate.</strong> Our fee for the work described above is estimated at <strong>${formatCents(

@@ -79,7 +79,7 @@ export function CompanyNav({ publicId, active }: CompanyNavProps) {
         className="absolute left-0 right-0 bottom-0 h-px"
         style={{
           background:
-            "linear-gradient(90deg, transparent, rgba(213, 187, 126, 0.45) 8%, rgba(15, 45, 36, 0.18) 50%, rgba(213, 187, 126, 0.45) 92%, transparent)",
+            "linear-gradient(90deg, transparent, rgba(213, 187, 126, 0.45) 8%, rgba(29, 40, 67, 0.18) 50%, rgba(213, 187, 126, 0.45) 92%, transparent)",
         }}
       />
     </nav>

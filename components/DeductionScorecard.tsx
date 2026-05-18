@@ -353,7 +353,7 @@ function EmptyCircle() {
       width="18"
       height="18"
       fill="none"
-      stroke="rgba(15, 45, 36, 0.35)"
+      stroke="rgba(29, 40, 67, 0.35)"
       strokeWidth="1.4"
       className="mt-0.5 shrink-0"
     >

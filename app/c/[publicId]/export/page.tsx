@@ -460,7 +460,7 @@ export default async function ExportPage({
           .export-page { font-size: 11px; }
           /* Ensure dark text */
           .export-page, .export-page * {
-            color: #0f2d24 !important;
+            color: #1d2843 !important;
             background: white !important;
             box-shadow: none !important;
           }

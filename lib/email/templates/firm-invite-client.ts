@@ -57,7 +57,7 @@ export function renderFirmInviteClientEmail(
   const greet = args.recipientName
     ? `Hi ${escapeHtml(args.recipientName.split(" ")[0])},`
     : "Hi,";
-  const cta = args.firmAccentColor || "#0F2D24";
+  const cta = args.firmAccentColor || "#1d2843";
   const portalUrl = `https://${args.firmSlug}.taxottic.com`;
   const subject = `${args.firmName} invited you to a ${args.engagementKindLabel} engagement on Taxottic`;
   const inviterLine = args.inviterName
@@ -70,7 +70,7 @@ export function renderFirmInviteClientEmail(
     : "";
   const logoLine = args.firmLogoUrl
     ? `<img src="${escapeAttr(args.firmLogoUrl)}" alt="${escapeAttr(args.firmName)}" style="height: 32px; width: auto; margin-bottom: 24px;" />`
-    : `<div style="font-family: Georgia, 'Times New Roman', serif; font-size: 18px; font-weight: 600; color: #0F2D24; margin-bottom: 24px;">${escapeHtml(args.firmName)}</div>`;
+    : `<div style="font-family: Georgia, 'Times New Roman', serif; font-size: 18px; font-weight: 600; color: #1d2843; margin-bottom: 24px;">${escapeHtml(args.firmName)}</div>`;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -83,11 +83,11 @@ export function renderFirmInviteClientEmail(
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #F5EDD6;">
       <tr>
         <td align="center" style="padding: 32px 16px;">
-          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 24px rgba(15, 45, 36, 0.08); max-width: 560px;">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 24px rgba(29, 40, 67, 0.08); max-width: 560px;">
             <tr>
               <td style="padding: 32px 32px 24px;">
                 ${logoLine}
-                <h1 style="font-family: Georgia, 'Times New Roman', serif; font-size: 22px; color: #0F2D24; margin: 0 0 16px; line-height: 1.3;">
+                <h1 style="font-family: Georgia, 'Times New Roman', serif; font-size: 22px; color: #1d2843; margin: 0 0 16px; line-height: 1.3;">
                   ${greet}
                 </h1>
                 <p style="margin: 0 0 16px; color: #18181B; font-size: 14px; line-height: 1.6;">

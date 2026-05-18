@@ -243,7 +243,7 @@ export function renderForm1040HTML(input: Form1040Input): {
   html: string;
   filename: string;
 } {
-  const cta = input.firm.accent_color || "#0F2D24";
+  const cta = input.firm.accent_color || "#1d2843";
 
   // Line math.
   const totalIncome =

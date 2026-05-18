@@ -166,7 +166,7 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
   html: string;
   filename: string;
 } {
-  const cta = input.firm.accent_color || "#0F2D24";
+  const cta = input.firm.accent_color || "#1d2843";
   const pct = partner.ownership_pct;
   const share = (cents: number) => Math.round(cents * pct);
   const isPartnership = input.variant === "partnership";

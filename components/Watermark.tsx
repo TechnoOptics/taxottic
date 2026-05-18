@@ -27,7 +27,7 @@ export function Watermark({ email }: Props) {
   const safeEmail = email.replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const svg = `
     <svg xmlns='http://www.w3.org/2000/svg' width='560' height='320' viewBox='0 0 560 320'>
-      <g transform='rotate(-22 280 160)' fill='rgba(15,45,36,0.10)'
+      <g transform='rotate(-22 280 160)' fill='rgba(29, 40, 67,0.10)'
          font-family='ui-sans-serif, system-ui, -apple-system, sans-serif'
          font-size='14'
          font-weight='500'>
