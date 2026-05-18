@@ -45,13 +45,27 @@ export function CapacitorNativeInit() {
       }
       if (!Capacitor?.isNativePlatform()) return;
 
-      // --- StatusBar: overlay + white text ---
+      // --- StatusBar: per-platform so the header never overlaps it ---
+      // iOS: overlay the WebView and let the header's
+      //   env(safe-area-inset-top) padding clear the notch — iOS
+      //   reliably reports that inset.
+      // Android: DON'T overlay. Android WebView almost always reports
+      //   env(safe-area-inset-top)=0 even when drawing under the
+      //   status bar, so the header rendered ON TOP of the clock /
+      //   battery ("header overlapping the notification bar"). With
+      //   overlay=false the OS reserves a solid status-bar strip; we
+      //   paint it the brand dark green so it's seamless with the
+      //   header and the header starts cleanly below it.
       if (Capacitor.isPluginAvailable("StatusBar")) {
         try {
+          const isAndroid = Capacitor.getPlatform() === "android";
           const { StatusBar, Style } = await import("@capacitor/status-bar");
-          await StatusBar.setOverlaysWebView({ overlay: true });
+          await StatusBar.setOverlaysWebView({ overlay: !isAndroid });
           // Style.Dark == light/WHITE content (for dark backgrounds).
           await StatusBar.setStyle({ style: Style.Dark });
+          if (isAndroid) {
+            await StatusBar.setBackgroundColor({ color: "#0a1f19" });
+          }
         } catch {
           /* plugin shape changed / not in this binary — ignore */
         }
