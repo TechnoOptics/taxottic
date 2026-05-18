@@ -65,6 +65,17 @@ export function CapacitorNativeInit() {
           await StatusBar.setStyle({ style: Style.Dark });
           if (isAndroid) {
             await StatusBar.setBackgroundColor({ color: "#0a1f19" });
+            // The Android edge-to-edge opt-out already makes the OS
+            // reserve the status-bar strip, but the WebView still
+            // reports a non-zero env(safe-area-inset-top) — which the
+            // header was adding ON TOP, producing a big empty band.
+            // Zero the header's safe-top on Android so it sits tight
+            // under the status bar. iOS leaves the var unset and the
+            // header falls back to env() for the real notch.
+            document.documentElement.style.setProperty(
+              "--app-safe-top",
+              "0px",
+            );
           }
         } catch {
           /* plugin shape changed / not in this binary — ignore */

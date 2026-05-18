@@ -1,6 +1,4 @@
 import { Wordmark } from "./Wordmark";
-import { BellaFAB } from "./BellaFAB";
-import { StudioFamilyFAB } from "./StudioFamilyFAB";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { HeaderScrollHider } from "./HeaderScrollHider";
@@ -104,13 +102,15 @@ export async function AppHeader({
       <header
         className="app-header app-header-shrinkable sticky top-0 left-0 right-0 z-20"
         style={{
-          // Always reserve the status-bar / notch / Dynamic-Island
-          // height so the sticky header's green extends behind the
-          // status bar (white text on green) and its content never
-          // sits under the island — not just after scroll. The
-          // globals.css scrolled-state rule no longer adds this (it
-          // would double-pad).
-          paddingTop: "env(safe-area-inset-top, 0px)",
+          // Reserve the notch / Dynamic-Island height on iOS via
+          // env(safe-area-inset-top). On Android the edge-to-edge
+          // opt-out makes the OS already reserve the status-bar strip,
+          // yet the WebView still reports a non-zero
+          // env(safe-area-inset-top) — that double-counted as a big
+          // empty band between the status bar and the wordmark. So
+          // CapacitorNativeInit sets --app-safe-top:0 on Android; iOS
+          // leaves it unset and falls back to env() (real notch).
+          paddingTop: "var(--app-safe-top, env(safe-area-inset-top, 0px))",
           paddingLeft: "env(safe-area-inset-left, 0px)",
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
@@ -147,23 +147,11 @@ export async function AppHeader({
           mount <AppHeader> so they stay light by default. See
           components/DarkThemeMount.tsx for the full story. */}
       <DarkThemeMount />
-      {/* Bella stays as a customer-app FAB. The "Send feedback" FAB
-          used to live above it; that stacked-bubbles look read as
-          cluttered, so the feedback entry point moved into the
-          UserMenu dropdown ("Send feedback" near "Sign out"). Bella
-          is hidden on admin pages (hq.taxottic.com) so the super-
-          admin view stays focused and we don't spend Anthropic
-          tokens from the ops console. */}
-      {user && homeHref !== "/" ? (
-        <BellaFAB companyId={bellaCompanyId} enabled={bellaEnabled} />
-      ) : null}
-      {/* Cross-product launcher in the bottom-LEFT (sibling to the
-          Bella FAB on the bottom-right). Lists Taxottic + Advottic +
-          Techno Optics studio so the family relationship is visible
-          on every authenticated page. Visible on admin pages too —
-          super-admins are the audience who most often cross between
-          sister products. */}
-      {user ? <StudioFamilyFAB /> : null}
+      {/* The Bella (bottom-right) and Studio-family (bottom-left)
+          floating circles were removed per product direction — they
+          cluttered the bottom of every screen. Bella can be
+          re-surfaced from the UserMenu dropdown later if wanted, the
+          same way "Send feedback" was relocated there. */}
       {needsConsent ? <GdprBanner acceptAction={recordGdprConsent} /> : null}
     </>
   );
