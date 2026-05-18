@@ -776,7 +776,7 @@ export default async function DashboardPage() {
               return (
                 <li
                   key={m.company_id}
-                  className="card card-hover p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  className="card card-hover p-5 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                   <div className="flex items-center gap-4 min-w-0 flex-1">
                     <CompanyLogo
