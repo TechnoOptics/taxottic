@@ -720,19 +720,23 @@ export default async function DashboardPage() {
 
         {/* Companies */}
         <section className="mt-8">
-          <div className="flex items-end justify-between">
+          {/* flex-wrap so the "+ New company" link drops below the
+              heading instead of being clipped on very narrow foldable
+              cover screens (~240px) where html/body has
+              overflow-x:clip. */}
+          <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
             <h2 className="display text-xl text-forest-900">Companies</h2>
             {canCreateCompany ? (
               <Link
                 href="/onboarding/new-company"
-                className="text-sm text-forest-700 hover:text-forest-900"
+                className="text-sm text-forest-700 hover:text-forest-900 whitespace-nowrap"
               >
                 + New company
               </Link>
             ) : (
               <Link
                 href="/billing?reason=company_limit"
-                className="text-sm text-ink-muted hover:text-forest-900 inline-flex items-center gap-1.5"
+                className="text-sm text-ink-muted hover:text-forest-900 inline-flex items-center gap-1.5 whitespace-nowrap"
                 title={newCompanyTooltip}
               >
                 <span aria-hidden="true">🔒</span>
@@ -837,24 +841,27 @@ export default async function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {/* One-click bank connection on companies that don't
                         have a Plaid item yet. The May 2026 audit's P2
                         cluster called out that bank-connect was buried
                         behind /forecast → /banks. This surface puts it
                         right next to "Open" so a brand-new company can
-                        wire up its feed in a single hop. */}
+                        wire up its feed in a single hop.
+                        flex-wrap so the two buttons stack instead of
+                        overflowing the card on the narrowest foldable
+                        cover screens. */}
                     {r && !r.hasBankFeed ? (
                       <Link
                         href={`/c/${m.company.public_id}/banks`}
-                        className="btn-ghost text-sm"
+                        className="btn-ghost text-sm whitespace-nowrap"
                       >
                         Connect bank
                       </Link>
                     ) : null}
                     <Link
                       href={`/c/${m.company.public_id}/forecast`}
-                      className="btn-primary text-sm"
+                      className="btn-primary text-sm whitespace-nowrap"
                     >
                       Open
                     </Link>

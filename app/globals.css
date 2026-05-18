@@ -311,8 +311,17 @@ body::before {
   mask-image: linear-gradient(180deg, black 0%, black 30%, rgba(0, 0, 0, 0.5) 100%);
 }
 
-/* Keep page content above the backdrop */
-main, header, footer, nav {
+/* Keep page content above the fixed body::before backdrop.
+   IMPORTANT: do NOT include `header` here. This rule is UNLAYERED,
+   and unlayered CSS wins over @layer utilities regardless of
+   specificity — so `header { position: relative }` was silently
+   overriding Tailwind's `.fixed` / `.sticky` on the app header,
+   which is the real reason the header never pinned (sticky AND
+   fixed both lost to this). The app header manages its own
+   stacking (position:fixed, z-30, well above the z-0 backdrop);
+   section/marketing headers sit inside <main> (z-1 stacking
+   context) so they stay above the backdrop too. */
+main, footer, nav {
   position: relative;
   z-index: 1;
 }
