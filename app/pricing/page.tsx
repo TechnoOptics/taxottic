@@ -258,7 +258,7 @@ export default function PricingPage() {
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
+            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
         }}
       >

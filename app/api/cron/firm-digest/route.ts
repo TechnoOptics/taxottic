@@ -156,13 +156,13 @@ export async function GET(req: NextRequest) {
       const html = `<!doctype html><html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F5EDD6; margin: 0; padding: 32px 16px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
           <table role="presentation" width="560" style="background-color: #FFFFFF; border-radius: 16px; max-width: 560px;"><tr><td style="padding: 32px;">
-            <div style="font-family: Georgia, serif; font-size: 18px; font-weight: 600; color: #0F2D24; margin-bottom: 24px;">${escapeHtml(firm.name)}</div>
-            <h1 style="font-family: Georgia, serif; font-size: 22px; color: #0F2D24; margin: 0 0 16px;">${row.digest_cadence === "weekly" ? "This week on " : "Today on "}${escapeHtml(firm.name)}</h1>
+            <div style="font-family: Georgia, serif; font-size: 18px; font-weight: 600; color: #1d2843; margin-bottom: 24px;">${escapeHtml(firm.name)}</div>
+            <h1 style="font-family: Georgia, serif; font-size: 22px; color: #1d2843; margin: 0 0 16px;">${row.digest_cadence === "weekly" ? "This week on " : "Today on "}${escapeHtml(firm.name)}</h1>
             <p style="margin: 0 0 24px; color: #18181B; font-size: 14px; line-height: 1.6;">
               ${activity.length} event${activity.length === 1 ? "" : "s"} since your last digest.
             </p>
             <ul style="margin: 0 0 24px; padding: 0 0 0 16px;">${list}</ul>
-            <a href="${portalUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0F2D24; color: #F5EDD6; text-decoration: none; border-radius: 999px; font-size: 14px;">Open the inbox →</a>
+            <a href="${portalUrl}" style="display: inline-block; padding: 12px 24px; background-color: #1d2843; color: #F5EDD6; text-decoration: none; border-radius: 999px; font-size: 14px;">Open the inbox →</a>
             <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 32px 0 24px;" />
             <p style="margin: 0; color: #71717A; font-size: 11px; line-height: 1.6;">
               You're receiving this because your ${row.digest_cadence} digest is enabled. <a href="${portalUrl.replace("/inbox", "/settings/notifications")}" style="color: #71717A;">Change cadence or turn off</a>.

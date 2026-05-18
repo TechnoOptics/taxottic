@@ -110,7 +110,7 @@ export function AchievementsGrid({ earnedCodes }: Props) {
           const isEarned = earned.has(b.code);
           const borderBg = isEarned
             ? TIER_BORDER[b.tier]
-            : "linear-gradient(135deg, rgba(15,45,36,0.18), rgba(15,45,36,0.08))";
+            : "linear-gradient(135deg, rgba(29, 40, 67,0.18), rgba(29, 40, 67,0.08))";
           return (
             <button
               type="button"

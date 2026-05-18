@@ -29,7 +29,7 @@ export default function OpengraphImage() {
           padding: 64,
           // Forest gradient that matches the live site header.
           background:
-            "linear-gradient(180deg, #1a4031 0%, #0f2d24 60%, #0a201a 100%)",
+            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
           color: "#fbf7e9",
           fontFamily: "system-ui, -apple-system, sans-serif",
         }}
@@ -59,7 +59,7 @@ export default function OpengraphImage() {
                 height: 48,
                 borderRadius: 10,
                 background: "linear-gradient(135deg, #d5bb7e 0%, #f2d896 100%)",
-                color: "#0f2d24",
+                color: "#1d2843",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

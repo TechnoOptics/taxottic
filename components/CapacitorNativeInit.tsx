@@ -64,7 +64,7 @@ export function CapacitorNativeInit() {
           // Style.Dark == light/WHITE content (for dark backgrounds).
           await StatusBar.setStyle({ style: Style.Dark });
           if (isAndroid) {
-            await StatusBar.setBackgroundColor({ color: "#0a1f19" }).catch(
+            await StatusBar.setBackgroundColor({ color: "#121a2a" }).catch(
               () => {},
             );
             // Android safe-top is platform-dependent and env() can't be

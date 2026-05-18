@@ -4,8 +4,8 @@
   "description": "Forecast your taxes. Maximize your deductions.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a1f19",
-  "theme_color": "#0f2d24",
+  "background_color": "#121a2a",
+  "theme_color": "#1d2843",
   "orientation": "any",
   "categories": ["finance", "productivity", "business"],
   "icons": [

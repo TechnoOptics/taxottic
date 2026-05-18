@@ -3,7 +3,7 @@
 /* ============================================================================
    Taxottic brand tokens
    Aligned with sister brands Advottic + Techno Optics:
-   - Forest green primary (#0F2D24)
+   - Forest green primary (#1d2843)
    - Champagne gold accent (#D5BB7E)
    - Warm cream surface (#F5EDD6)
    - Charcoal ink (#18181B)
@@ -20,17 +20,17 @@
 }
 
 @theme inline {
-  --color-forest-50: #f0f5f3;
-  --color-forest-100: #d6e3dd;
-  --color-forest-200: #aac4b8;
-  --color-forest-300: #7ea58f;
-  --color-forest-400: #538867;
-  --color-forest-500: #356a4d;
-  --color-forest-600: #234e39;
-  --color-forest-700: #173a2c;
-  --color-forest-800: #0f2d24;
-  --color-forest-900: #0c241d;
-  --color-forest-950: #0a1f19;
+  --color-forest-50: #eef1f6;
+  --color-forest-100: #d6dded;
+  --color-forest-200: #b0bcd6;
+  --color-forest-300: #8898bd;
+  --color-forest-400: #5e6f9c;
+  --color-forest-500: #41527d;
+  --color-forest-600: #2f3e63;
+  --color-forest-700: #243150;
+  --color-forest-800: #1d2843;
+  --color-forest-900: #192539;
+  --color-forest-950: #121a2a;
 
   --color-gold-50: #fbf6e6;
   --color-gold-100: #f5edd6;
@@ -130,7 +130,7 @@ body.no-capture img {
     padding: 4em 2em;
     font-family: var(--font-display);
     font-size: 18pt;
-    color: #0f2d24;
+    color: #1d2843;
     text-align: center;
   }
 }
@@ -252,7 +252,7 @@ body {
    shifts.
 
    Design goals (matching Advottic):
-     - body bg → forest-950 (#0a1f19)
+     - body bg → forest-950 (#121a2a)
      - body text → cream (#fbf7e9)
      - .card → semi-transparent forest with the same gold ring
      - .input → forest-900 with cream text + softer gold border focus
@@ -261,7 +261,7 @@ body {
 ============================================================================ */
 html[data-theme="dark"],
 html[data-theme="dark"] body {
-  background-color: #0a1f19;
+  background-color: #121a2a;
   color: #fbf7e9;
 }
 html[data-theme="dark"] body::before {
@@ -307,7 +307,7 @@ body::before {
   z-index: 0;
   background-image:
     radial-gradient(1200px 600px at 90% -10%, hsla(42, 51%, 66%, 0.16), transparent 60%),
-    radial-gradient(900px 500px at -10% 100%, rgba(15, 45, 36, 0.06), transparent 60%);
+    radial-gradient(900px 500px at -10% 100%, rgba(29, 40, 67, 0.06), transparent 60%);
   mask-image: linear-gradient(180deg, black 0%, black 30%, rgba(0, 0, 0, 0.5) 100%);
 }
 
@@ -392,12 +392,12 @@ main, footer, nav {
   .card {
     position: relative;
     background: #ffffff;
-    border: 1px solid rgba(15, 45, 36, 0.08);
+    border: 1px solid rgba(29, 40, 67, 0.08);
     border-radius: 1rem;
     box-shadow:
       0 0 0 1px hsla(42, 51%, 66%, 0.18),
-      0 1px 2px rgba(15, 45, 36, 0.04),
-      0 8px 24px -4px rgba(15, 45, 36, 0.18),
+      0 1px 2px rgba(29, 40, 67, 0.04),
+      0 8px 24px -4px rgba(29, 40, 67, 0.18),
       inset 0 1px 0 rgba(213, 187, 126, 0.14);
   }
   /* Soft champagne highlight catching the top of the card. */
@@ -424,7 +424,7 @@ main, footer, nav {
   .card-hover:hover {
     transform: translateY(-1px);
     border-color: rgba(213, 187, 126, 0.5);
-    box-shadow: 0 2px 4px rgba(15, 45, 36, 0.05), 0 12px 28px rgba(15, 45, 36, 0.08);
+    box-shadow: 0 2px 4px rgba(29, 40, 67, 0.05), 0 12px 28px rgba(29, 40, 67, 0.08);
   }
 
   /* Primary button: forest with subtle gold inner highlight + lift hover */
@@ -436,20 +436,20 @@ main, footer, nav {
     height: 2.75rem;
     padding: 0 1.25rem;
     border-radius: 0.625rem;
-    background: linear-gradient(180deg, #173a2c 0%, #0f2d24 100%);
+    background: linear-gradient(180deg, #243150 0%, #1d2843 100%);
     color: #fbf7e9;
     font-size: 0.875rem;
     font-weight: 500;
     box-shadow:
       inset 0 1px 0 rgba(213, 187, 126, 0.18),
-      0 1px 2px rgba(15, 45, 36, 0.2);
+      0 1px 2px rgba(29, 40, 67, 0.2);
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   }
   .btn-primary:hover {
     transform: translateY(-1px);
     box-shadow:
       inset 0 1px 0 rgba(213, 187, 126, 0.28),
-      0 6px 18px rgba(15, 45, 36, 0.25);
+      0 6px 18px rgba(29, 40, 67, 0.25);
   }
   .btn-primary:disabled {
     opacity: 0.6;
@@ -467,8 +467,8 @@ main, footer, nav {
     padding: 0 1.25rem;
     border-radius: 0.625rem;
     background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(15, 45, 36, 0.18);
-    color: #0f2d24;
+    border: 1px solid rgba(29, 40, 67, 0.18);
+    color: #1d2843;
     font-size: 0.875rem;
     font-weight: 500;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
@@ -486,7 +486,7 @@ main, footer, nav {
     height: 2.75rem;
     padding: 0 0.875rem;
     background: #ffffff;
-    border: 1px solid rgba(15, 45, 36, 0.18);
+    border: 1px solid rgba(29, 40, 67, 0.18);
     border-radius: 0.625rem;
     color: #18181b;
     font-size: 1rem;
@@ -497,8 +497,8 @@ main, footer, nav {
     .input { font-size: 0.875rem; }
   }
   .input:focus {
-    border-color: #0f2d24;
-    box-shadow: 0 0 0 3px rgba(15, 45, 36, 0.12);
+    border-color: #1d2843;
+    box-shadow: 0 0 0 3px rgba(29, 40, 67, 0.12);
   }
 
   /* Select: ONE forest chevron, never the OS one.
@@ -574,12 +574,12 @@ main, footer, nav {
     --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1   0 0 0 0 1   0 0 0 0 1   0 0 0 0.16 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   }
   .reward-tile-inner.is-earned {
-    background-color: #0f2d24;
+    background-color: #1d2843;
     background-image:
       var(--grain),
       radial-gradient(120% 90% at 30% 0%, rgba(213, 187, 126, 0.2), transparent 65%),
-      radial-gradient(110% 90% at 80% 100%, rgba(35, 78, 57, 0.55), transparent 70%),
-      linear-gradient(160deg, #1d4538 0%, #0f2d24 55%, #0a201a 100%);
+      radial-gradient(110% 90% at 80% 100%, rgba(47, 62, 99, 0.55), transparent 70%),
+      linear-gradient(160deg, #1d4538 0%, #1d2843 55%, #121a2a 100%);
     background-size: 160px 160px, 240% 240%, 240% 240%, 240% 240%;
     background-position: 0 0, 0% 0%, 100% 100%, 0% 0%;
     background-blend-mode: overlay, normal, normal, normal;
@@ -589,11 +589,11 @@ main, footer, nav {
     animation: reward-drift 16s ease-in-out infinite;
   }
   .reward-tile-inner.is-locked {
-    background-color: #0e2620;
+    background-color: #1b2540;
     background-image:
       var(--grain),
       radial-gradient(120% 80% at 30% 0%, rgba(213, 187, 126, 0.06), transparent 60%),
-      linear-gradient(160deg, #1a3a2f 0%, #0e2620 100%);
+      linear-gradient(160deg, #1a3a2f 0%, #1b2540 100%);
     background-size: 160px 160px, 200% 200%, auto;
     background-blend-mode: overlay, normal, normal;
     box-shadow: 0 -8px 18px -8px rgba(0, 0, 0, 0.3) inset;
@@ -637,13 +637,13 @@ main, footer, nav {
   .app-header {
     background:
       linear-gradient(180deg,
-        rgba(26, 64, 49, 0.94) 0%,
-        rgba(15, 45, 36, 0.96) 60%,
-        rgba(10, 32, 26, 0.97) 100%);
+        rgba(42, 58, 94, 0.94) 0%,
+        rgba(29, 40, 67, 0.96) 60%,
+        rgba(18, 26, 42, 0.97) 100%);
     border-bottom: 1px solid rgba(213, 187, 126, 0.14);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.04) inset,
-      0 8px 24px -10px rgba(10, 32, 26, 0.45);
+      0 8px 24px -10px rgba(18, 26, 42, 0.45);
     color: #fbf7e9;
     isolation: isolate;
     /* Always-on frosted backdrop. The gradient alphas above
@@ -722,7 +722,7 @@ main, footer, nav {
       #ffffff 35%,
       #f2d896 45%,
       #8a661f 70%,
-      #0f2d24 100%
+      #1d2843 100%
     );
     z-index: -1;
     animation: bella-spin 6s linear infinite;
@@ -732,7 +732,7 @@ main, footer, nav {
     position: absolute;
     inset: 0;
     border-radius: 9999px;
-    background: linear-gradient(180deg, #234e39 0%, #0f2d24 100%);
+    background: linear-gradient(180deg, #2f3e63 0%, #1d2843 100%);
     z-index: -1;
   }
   .bella-fab-inner {
@@ -797,7 +797,7 @@ main, footer, nav {
      and the catch-light along the top edge so it still reads as the
      same .card primitive — just in a darker mood. */
   html[data-theme="dark"] .card {
-    background: rgba(15, 45, 36, 0.62);
+    background: rgba(29, 40, 67, 0.62);
     border-color: rgba(213, 187, 126, 0.18);
     box-shadow:
       0 0 0 1px hsla(42, 51%, 66%, 0.22),
@@ -808,12 +808,12 @@ main, footer, nav {
   }
   html[data-theme="dark"] .card-hover:hover {
     border-color: rgba(213, 187, 126, 0.55);
-    background: rgba(15, 45, 36, 0.78);
+    background: rgba(29, 40, 67, 0.78);
   }
 
   /* Inputs / selects / textareas */
   html[data-theme="dark"] .input {
-    background: rgba(10, 32, 26, 0.85);
+    background: rgba(18, 26, 42, 0.85);
     border-color: rgba(213, 187, 126, 0.22);
     color: #fbf7e9;
   }
@@ -862,7 +862,7 @@ main, footer, nav {
   html[data-theme="dark"] .text-forest-600 { color: rgba(251, 247, 233, 0.72) !important; }
   html[data-theme="dark"] .text-forest-500 { color: rgba(251, 247, 233, 0.64) !important; }
   /* Dark golds (gold-600/700) are accent label colours ("Best fit:",
-     kickers) — near-invisible on #0a1f19. Lift to the brand's
+     kickers) — near-invisible on #121a2a. Lift to the brand's
      champagne (gold-300) which is the correct gold tone on dark. */
   html[data-theme="dark"] .text-gold-700   { color: var(--color-gold-300) !important; }
   html[data-theme="dark"] .text-gold-600   { color: var(--color-gold-300) !important; }
@@ -872,8 +872,8 @@ main, footer, nav {
   /* Cream-background pages (legal hub, marketing-style routes
      accidentally hit by the auth gate, etc.) get a deep forest
      equivalent so text remains readable. */
-  html[data-theme="dark"] .bg-cream         { background-color: rgba(15, 45, 36, 0.55) !important; }
-  html[data-theme="dark"] .bg-white         { background-color: rgba(15, 45, 36, 0.55) !important; }
+  html[data-theme="dark"] .bg-cream         { background-color: rgba(29, 40, 67, 0.55) !important; }
+  html[data-theme="dark"] .bg-white         { background-color: rgba(29, 40, 67, 0.55) !important; }
   /* Tailwind opacity-modified white backgrounds (`bg-white/40`,
      `bg-white/60`, `bg-white/70`, `bg-white/80`) bypass the plain
      `.bg-white` override because Tailwind generates a separate class
@@ -888,14 +888,14 @@ main, footer, nav {
      above the page background, not as a transparent overlay. */
   /* Tile rows nested inside a .card should read as RECESSED — a
      subtle inset, not an elevated overlay. The parent .card sits at
-     forest-800 (rgba(15, 45, 36, 0.62)) in dark mode; tiles use
-     forest-950 (rgba(10, 32, 26, ...)) so they look like the page
+     forest-800 (rgba(29, 40, 67, 0.62)) in dark mode; tiles use
+     forest-950 (rgba(18, 26, 42, ...)) so they look like the page
      showing through, with the card framing them. */
-  html[data-theme="dark"] .bg-white\/40     { background-color: rgba(10, 32, 26, 0.45) !important; }
-  html[data-theme="dark"] .bg-white\/50     { background-color: rgba(10, 32, 26, 0.50) !important; }
-  html[data-theme="dark"] .bg-white\/60     { background-color: rgba(10, 32, 26, 0.55) !important; }
-  html[data-theme="dark"] .bg-white\/70     { background-color: rgba(10, 32, 26, 0.55) !important; }
-  html[data-theme="dark"] .bg-white\/80     { background-color: rgba(10, 32, 26, 0.60) !important; }
+  html[data-theme="dark"] .bg-white\/40     { background-color: rgba(18, 26, 42, 0.45) !important; }
+  html[data-theme="dark"] .bg-white\/50     { background-color: rgba(18, 26, 42, 0.50) !important; }
+  html[data-theme="dark"] .bg-white\/60     { background-color: rgba(18, 26, 42, 0.55) !important; }
+  html[data-theme="dark"] .bg-white\/70     { background-color: rgba(18, 26, 42, 0.55) !important; }
+  html[data-theme="dark"] .bg-white\/80     { background-color: rgba(18, 26, 42, 0.60) !important; }
   /* Same treatment for cream opacity variants used as hover / accent
      surfaces (`bg-cream/40`, `bg-cream/60` in scorecard expand-rows,
      receipt-uploader drop targets, etc.). Cream hovers stay a touch
@@ -907,7 +907,7 @@ main, footer, nav {
   html[data-theme="dark"] .bg-cream\/70     { background-color: rgba(213, 187, 126, 0.15) !important; }
   /* Forest-50 was the "subtle differentiation" tint on light cards;
      in dark mode it should be even darker than the body bg. */
-  html[data-theme="dark"] .bg-forest-50     { background-color: rgba(10, 32, 26, 0.7) !important; }
+  html[data-theme="dark"] .bg-forest-50     { background-color: rgba(18, 26, 42, 0.7) !important; }
   html[data-theme="dark"] .border-forest-100 { border-color: rgba(213, 187, 126, 0.18) !important; }
   html[data-theme="dark"] .border-forest-200 { border-color: rgba(213, 187, 126, 0.28) !important; }
   html[data-theme="dark"] .divide-forest-50 > * + * { border-color: rgba(213, 187, 126, 0.14) !important; }

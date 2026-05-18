@@ -3,12 +3,12 @@
 import type { CompanyMember } from "./types";
 
 const PALETTE = [
-  { bg: "#0f2d24", fg: "#fbf7e9" }, // forest
+  { bg: "#1d2843", fg: "#fbf7e9" }, // forest
   { bg: "#5e3812", fg: "#fbf7e9" }, // bronze
   { bg: "#6a4612", fg: "#fbf7e9" }, // gold
-  { bg: "#234e39", fg: "#fbf7e9" }, // forest-600
-  { bg: "#356a4d", fg: "#fbf7e9" }, // forest-500
-  { bg: "#a78540", fg: "#0f2d24" }, // gold-600
+  { bg: "#2f3e63", fg: "#fbf7e9" }, // forest-600
+  { bg: "#41527d", fg: "#fbf7e9" }, // forest-500
+  { bg: "#a78540", fg: "#1d2843" }, // gold-600
 ];
 
 function pickColor(userId: string) {

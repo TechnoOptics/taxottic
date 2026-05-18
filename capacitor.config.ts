@@ -58,15 +58,15 @@ const config: CapacitorConfig = {
     // Brand DARK GREEN, not cream. The WebView background shows in
     // the status-bar/notch/home-indicator safe areas and on
     // overscroll. Cream (#fbf7e9) read as ugly "white bars" on a
-    // device; #0a1f19 matches the header + splash so those areas
+    // device; #121a2a matches the header + splash so those areas
     // blend into the app instead of framing it in white.
-    backgroundColor: "#0a1f19",
+    backgroundColor: "#121a2a",
     // Allow apple-touch-icon to be used by Add-to-Home-Screen so the
     // PWA fallback path stays consistent.
     limitsNavigationsToAppBoundDomains: false,
   },
   android: {
-    backgroundColor: "#0a1f19",
+    backgroundColor: "#121a2a",
     allowMixedContent: false,
     // Capture taxottic.com deep links so /auth/callback, /billing
     // success/cancel returns from Stripe checkout, and Plaid Link
@@ -83,7 +83,7 @@ const config: CapacitorConfig = {
     SplashScreen: {
       // Show our branded splash for ~1.5s while the WebView warms up.
       launchShowDuration: 1500,
-      backgroundColor: "#0a1f19",
+      backgroundColor: "#121a2a",
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
       splashFullScreen: true,
@@ -93,7 +93,7 @@ const config: CapacitorConfig = {
       // style DARK = light/WHITE status-bar text+icons (clock,
       // battery, signal) — correct for our dark-green header.
       style: "DARK",
-      backgroundColor: "#0a1f19",
+      backgroundColor: "#121a2a",
       // Draw the WebView UNDER the status bar so the green header
       // extends behind it (full-screen, no white/black status-bar
       // strip). The header carries env(safe-area-inset-top) padding

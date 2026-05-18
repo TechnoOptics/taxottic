@@ -191,7 +191,7 @@ export function renderEntityReturnHTML(input: EntityReturnInput): {
   html: string;
   filename: string;
 } {
-  const cta = input.firm.accent_color || "#0F2D24";
+  const cta = input.firm.accent_color || "#1d2843";
   const isC = input.form === "1120";
   const isS = input.form === "1120-S";
   const isPartnership = input.form === "1065";

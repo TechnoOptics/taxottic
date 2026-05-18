@@ -197,7 +197,7 @@ function Confetti() {
         ? "#d5bb7e"
         : i % 3 === 1
           ? "#c4a25d"
-          : "#356a4d",
+          : "#41527d",
     rotation: (i * 47) % 360,
   }));
   return (

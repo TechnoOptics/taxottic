@@ -204,7 +204,7 @@ export async function sendInvoice(formData: FormData) {
     subject: `Invoice ${invoice.invoice_number} from ${ctx.firm.name}`,
     html: invoiceEmailHTML({
       firmName: ctx.firm.name,
-      firmAccent: ctx.firm.accent_color ?? "#0F2D24",
+      firmAccent: ctx.firm.accent_color ?? "#1d2843",
       invoiceNumber: invoice.invoice_number,
       totalCents: invoice.total_cents,
       currency: invoice.currency,
@@ -275,14 +275,14 @@ function invoiceEmailHTML(args: {
   return `<!doctype html><html><body style="font-family: -apple-system, sans-serif; background-color: #F5EDD6; margin: 0; padding: 32px 16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
       <table role="presentation" width="560" style="background: #FFFFFF; border-radius: 16px; max-width: 560px;"><tr><td style="padding: 32px;">
-        <div style="font-family: Georgia, serif; font-size: 18px; font-weight: 600; color: #0F2D24; margin-bottom: 24px;">${escapeHtml(args.firmName)}</div>
-        <h1 style="font-family: Georgia, serif; font-size: 22px; color: #0F2D24; margin: 0 0 16px;">${greet}</h1>
+        <div style="font-family: Georgia, serif; font-size: 18px; font-weight: 600; color: #1d2843; margin-bottom: 24px;">${escapeHtml(args.firmName)}</div>
+        <h1 style="font-family: Georgia, serif; font-size: 22px; color: #1d2843; margin: 0 0 16px;">${greet}</h1>
         <p style="margin: 0 0 16px; color: #18181B; font-size: 14px; line-height: 1.6;">
           ${escapeHtml(args.firmName)} has sent you an invoice.
         </p>
         <div style="background: #F5EDD6; padding: 16px; border-radius: 12px; margin: 16px 0;">
           <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; color: #71717A;">Invoice ${escapeHtml(args.invoiceNumber)}</div>
-          <div style="font-family: Georgia, serif; font-size: 28px; color: #0F2D24; margin-top: 8px;">${formatCents(args.totalCents)} ${args.currency.toUpperCase()}</div>
+          <div style="font-family: Georgia, serif; font-size: 28px; color: #1d2843; margin-top: 8px;">${formatCents(args.totalCents)} ${args.currency.toUpperCase()}</div>
         </div>
         <a href="${escapeAttr(args.checkoutUrl)}" style="display: inline-block; padding: 12px 24px; background: ${escapeAttr(args.firmAccent)}; color: #F5EDD6; text-decoration: none; border-radius: 999px; font-size: 14px;">Pay securely →</a>
         <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 32px 0 16px;" />

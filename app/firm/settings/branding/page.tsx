@@ -205,15 +205,15 @@ export default async function BrandingPage() {
                 <input
                   type="text"
                   name="accent_color"
-                  placeholder="#0F2D24"
+                  placeholder="#1d2843"
                   maxLength={7}
-                  defaultValue={firm?.accent_color ?? "#0F2D24"}
+                  defaultValue={firm?.accent_color ?? "#1d2843"}
                   className="input text-sm font-mono flex-1"
                 />
                 <span
                   className="size-8 rounded-md border border-forest-100 shrink-0"
                   style={{
-                    backgroundColor: firm?.accent_color ?? "#0F2D24",
+                    backgroundColor: firm?.accent_color ?? "#1d2843",
                   }}
                 />
               </div>
