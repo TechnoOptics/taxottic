@@ -1,7 +1,6 @@
 import { Wordmark } from "./Wordmark";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
-import { HeaderScrollHider } from "./HeaderScrollHider";
 import { DarkThemeMount } from "./DarkThemeMount";
 import { createClient } from "@/lib/supabase/server";
 import { recordGdprConsent } from "@/app/actions/consent";
@@ -99,33 +98,28 @@ export async function AppHeader({
           view but lets it participate in normal layout — so we no
           longer need the spacer div that used to push content down.
           Pattern borrowed from Advottic for cross-product cohesion. */}
+      {/* position: FIXED, not sticky. `sticky` repeatedly failed in
+          the Capacitor WebView — it breaks if ANY ancestor has
+          overflow != visible, and we need overflow-x:clip on
+          html/body to stop horizontal scroll. A fixed header's
+          containing block is the viewport, so it is immune to
+          ancestor overflow AND lets us clip horizontal overflow
+          safely. A constant-height spacer below replaces the layout
+          space the in-flow header used to occupy (no scroll-shrink,
+          so the spacer always matches exactly). */}
       <header
-        className="app-header app-header-shrinkable sticky top-0 left-0 right-0 z-20"
+        className="app-header fixed top-0 left-0 right-0 z-30"
         style={{
-          // Reserve the notch / Dynamic-Island height on iOS via
-          // env(safe-area-inset-top). On Android the edge-to-edge
-          // opt-out makes the OS already reserve the status-bar strip,
-          // yet the WebView still reports a non-zero
-          // env(safe-area-inset-top) — that double-counted as a big
-          // empty band between the status bar and the wordmark. So
-          // CapacitorNativeInit sets --app-safe-top:0 on Android; iOS
-          // leaves it unset and falls back to env() (real notch).
+          // iOS: env(safe-area-inset-top) clears the notch. Android:
+          // CapacitorNativeInit sets --app-safe-top:0 (the OS already
+          // reserves the status-bar strip via the edge-to-edge
+          // opt-out), so it sits tight under the status bar.
           paddingTop: "var(--app-safe-top, env(safe-area-inset-top, 0px))",
           paddingLeft: "env(safe-area-inset-left, 0px)",
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        <div
-          className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 relative"
-          style={{
-            // The <header> above already reserves
-            // env(safe-area-inset-top); adding it again here
-            // double-counted the status-bar height and made the bar
-            // ~one notch too tall. Just the symmetric visual padding.
-            paddingTop: "0.625rem",
-            paddingBottom: "0.625rem",
-          }}
-        >
+        <div className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 h-[3.25rem] flex items-center justify-between gap-3 relative">
           <Wordmark href={homeHref} size="sm" tone="cream" />
           <UserMenu
             email={email ?? null}
@@ -139,9 +133,16 @@ export async function AppHeader({
           />
         </div>
       </header>
-      {/* Auto-shrinks the header on scroll on mobile (CSS-only, no
-          JS animation - we just toggle a body class). */}
-      <HeaderScrollHider />
+      {/* Spacer: exactly the fixed header's height (safe-area inset +
+          the 3.25rem row) so page content starts below it on every
+          screen. */}
+      <div
+        aria-hidden="true"
+        style={{
+          height:
+            "calc(var(--app-safe-top, env(safe-area-inset-top, 0px)) + 3.25rem)",
+        }}
+      />
       {/* Flip <html data-theme="dark"> for the duration of any
           authenticated page render. Public marketing routes don't
           mount <AppHeader> so they stay light by default. See
