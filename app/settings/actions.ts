@@ -56,25 +56,25 @@ const HQ_HOST_LIVE = process.env.NEXT_PUBLIC_HQ_HOST_LIVE !== "false";
 const ENTERPRISE_HOST_LIVE =
   process.env.NEXT_PUBLIC_ENTERPRISE_HOST_LIVE === "true";
 
+// SAME-ORIGIN ON PURPOSE. The portals are the same codebase served
+// under /admin/**; the pretty `hq.` / `enterprise.` subdomains were a
+// cosmetic split. A cross-origin redirect breaks the mobile app: the
+// Capacitor WebView is pinned to taxottic.com, so a 303 to
+// enterprise.taxottic.com gets punted to the SYSTEM BROWSER and the
+// user is ejected from the app (signed out, on a marketing page).
+// Routing every portal same-origin keeps the user inside the app on
+// every binary, for every portal, with zero cross-origin hop — using
+// the exact `/admin` + `/admin/firms` paths the code already treats
+// as the canonical fallback. The subdomains still resolve if visited
+// directly on the web. (HOST_LIVE flags / siblingSubdomainOrigin kept
+// referenced below so the env contract + dev helper don't go stale.)
+void HQ_HOST_LIVE;
+void ENTERPRISE_HOST_LIVE;
+void siblingSubdomainOrigin;
 const PLATFORM_LANDING: Record<"user" | "enterprise" | "hq", string> = {
   user: `${SITE_ORIGIN}/dashboard`,
-  // Enterprise — once the subdomain is live, root path on
-  // enterprise.taxottic.com; the middleware rewrites "/" to
-  // "/admin/firms" on that host. Until then (default), fall back to
-  // /admin/firms on the consumer host so the click does SOMETHING
-  // instead of failing with DNS_PROBE_FINISHED_NXDOMAIN.
-  enterprise:
-    IS_LOCALHOST || !ENTERPRISE_HOST_LIVE
-      ? `${SITE_ORIGIN}/admin/firms`
-      : `${siblingSubdomainOrigin("enterprise")}/`,
-  // HQ subdomain — root path; middleware rewrites "/" to "/admin".
-  // HQ has been live since the original three-portal architecture, but
-  // we still feature-gate via NEXT_PUBLIC_HQ_HOST_LIVE so a future
-  // rollback is one env-var flip away.
-  hq:
-    IS_LOCALHOST || !HQ_HOST_LIVE
-      ? `${SITE_ORIGIN}/admin`
-      : `${siblingSubdomainOrigin("hq")}/`,
+  enterprise: `${SITE_ORIGIN}/admin/firms`,
+  hq: `${SITE_ORIGIN}/admin`,
 };
 
 /**
