@@ -79,9 +79,31 @@ export function EdgeSwipeBack() {
       }
       document.addEventListener("touchstart", onStart, { passive: true });
       document.addEventListener("touchend", onEnd, { passive: true });
+
+      // Android's system back GESTURE/button reaches Capacitor as
+      // `backButton`; the default behaviour is to exit the app
+      // instantly — which is why "swipe to go back" felt broken on
+      // Android. Route it through history so it behaves like every
+      // other app, only exiting when there's nowhere left to go.
+      let removeBack: (() => void) | null = null;
+      try {
+        const { App } = await import("@capacitor/app");
+        const h = await App.addListener("backButton", ({ canGoBack }) => {
+          if (canGoBack || window.history.length > 1) {
+            window.history.back();
+          } else {
+            void App.exitApp();
+          }
+        });
+        removeBack = () => void h.remove();
+      } catch {
+        /* @capacitor/app absent in this binary — edge swipe still works */
+      }
+
       detach = () => {
         document.removeEventListener("touchstart", onStart);
         document.removeEventListener("touchend", onEnd);
+        removeBack?.();
       };
     })();
 
