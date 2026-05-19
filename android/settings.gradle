@@ -2,4 +2,12 @@ include ':app'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
+// Wear OS app. Lives at repo-root /wear (sibling of /android, which
+// is this Gradle build's root), so the projectDir is one level up.
+// :app does NOT depend on :wear — including it only makes the Wear
+// module configurable/buildable; `./gradlew :app:bundleRelease`
+// (the phone release path) is unchanged.
+include ':wear'
+project(':wear').projectDir = new File('../wear/')
+
 apply from: 'capacitor.settings.gradle'
