@@ -62,10 +62,9 @@ object Brand {
 
 val Figure = FontFamily.Default
 
-fun Modifier.jewelCard(): Modifier = this
-    .clip(RoundedCornerShape(20.dp))
-    .background(Brand.glass)
-    .padding(14.dp)
+// No box. Content lands directly on the guilloché dial — just
+// breathing room so it clears the fluted bezel + chapter ring.
+fun Modifier.jewelCard(): Modifier = this.padding(horizontal = 18.dp, vertical = 6.dp)
 
 /** App-matching blue gradient + centre glow. */
 @Composable

@@ -189,14 +189,10 @@ extension View {
         modifier(GoldRim(radius: radius))
     }
 
-    /// Standard "jewel card" container: midnight glass + gold rim +
-    /// soft shadow so it sits above the gemstone backdrop.
+    /// No box. Content lands directly on the guilloché dial — just
+    /// breathing room so it clears the fluted bezel + chapter ring.
     func jewelCard(radius: CGFloat = 16) -> some View {
-        self
-            .padding(12)
-            .background(Brand.glass, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .goldRim(radius: radius)
-            .shadow(color: .black.opacity(0.45), radius: 8, y: 4)
+        self.padding(.horizontal, 14).padding(.vertical, 4)
     }
 }
 
