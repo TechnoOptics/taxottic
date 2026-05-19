@@ -135,7 +135,7 @@ export default async function AdminPage() {
             <Link href="/firms" className="btn-ghost">
               Tax-prep firms
             </Link>
-            <Link href="/admin/companies" className="btn-ghost">
+            <Link href="/companies" className="btn-ghost">
               Companies
             </Link>
             <Link href="/feedback" className="btn-ghost">
