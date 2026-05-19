@@ -112,15 +112,27 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/taxottic.jks
           echo "STORE_FILE=$RUNNER_TEMP/taxottic.jks" >> $GITHUB_ENV
 
-      - name: Bump versionCode
+      - name: Bump versionCode (phone + watch)
         working-directory: android
         run: |
           # github.run_number is monotonic per workflow — perfect
           # versionCode source. android.defaultConfig.versionCode in
           # build.gradle gets replaced with this value.
           sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/" app/build.gradle
+          # The Wear bundle ships in the SAME Play app (com.taxottic.app)
+          # and Play requires every bundle in an app to have a UNIQUE
+          # versionCode. Give the watch a disjoint, still-monotonic
+          # range (run_number + 2,000,000) so phone and watch codes can
+          # never collide and the watch code always increases. Play
+          # delivers the right bundle by form factor (the Wear manifest
+          # declares uses-feature android.hardware.type.watch +
+          # com.google.android.wearable.standalone), so the codes only
+          # need to be unique, not ordered against each other.
+          # Kotlin DSL: `versionCode = N` (note the spaces around `=`).
+          WEAR_VC=$(( ${{ github.run_number }} + 2000000 ))
+          sed -i "s/versionCode = [0-9]*/versionCode = ${WEAR_VC}/" ../wear/build.gradle.kts
 
-      - name: Build signed AAB
+      - name: Build signed AABs (phone + watch)
         working-directory: android
         env:
           STORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PWD }}
@@ -132,18 +144,34 @@ jobs:
           # the bit in git via update-index --chmod=+x, but this is
           # cheap defense-in-depth in case it ever drifts again.
           chmod +x ./gradlew
-          ./gradlew bundleRelease \
+          # Explicit targets (was bare `bundleRelease`): build BOTH the
+          # Capacitor phone bundle and the standalone Wear OS bundle.
+          # The injected signing props apply to every module's release
+          # variant, so the watch AAB is signed with the same upload
+          # key. :app does not depend on :wear — they build independently.
+          ./gradlew :app:bundleRelease :wear:bundleRelease \
             -Pandroid.injected.signing.store.file=$STORE_FILE \
             -Pandroid.injected.signing.store.password=$STORE_PWD \
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$KEY_PWD
 
-      - name: Upload to Play
+      # Both bundles go into ONE Play release on the same app. Play's
+      # form-factor delivery routes the Wear AAB to watches and the
+      # phone AAB to phones automatically (Wear manifest declares the
+      # watch hardware feature + standalone metadata).
+      #
+      # ONE-TIME Play Console prerequisite (not automatable, not done
+      # here): the app must be opted into Wear OS distribution and the
+      # internal-testing tester list must include the tester's Google
+      # account. See docs/MOBILE_APP_STORE_RUNBOOK.md.
+      - name: Upload to Play (phone + watch, one release)
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT }}
           packageName: com.taxottic.app
-          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          releaseFiles: |
+            android/app/build/outputs/bundle/release/app-release.aab
+            wear/build/outputs/bundle/release/wear-release.aab
           track: ${{ inputs.track || 'internal' }}
           status: completed
           changesNotSentForReview: false
@@ -151,5 +179,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: |
+            android/app/build/outputs/bundle/release/app-release.aab
+            wear/build/outputs/bundle/release/wear-release.aab
           retention-days: 14
