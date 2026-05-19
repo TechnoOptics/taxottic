@@ -249,57 +249,24 @@ struct RolexDial: View {
     }
 }
 
-/// Datejust-style FLUTED bezel that doubles as the scroll/value dial.
-/// Radial gold flutes around the rim; the sector covered by
-/// `progress` is lit (polished) and the whole ring turns a touch as
-/// it fills — a real rotating bezel. Driven by the Digital Crown.
+/// A single thin gold bezel: a faint full rail with a brushed-gold
+/// arc that grows from 12 o'clock and turns slightly as the Digital
+/// Crown scrolls — a fine rotating bezel, nothing thick.
 struct FlutedBezel: View {
     /// 0‥1 — page progress, or the Set-Aside value fraction.
     var progress: Double
 
     var body: some View {
         let p = max(0, min(1, progress))
-        Canvas { ctx, size in
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let outer = min(size.width, size.height) / 2 - 2
-            let inner = outer - 9
-            let flutes = 72
-            // Dark machined base the flutes are cut into.
-            ctx.stroke(
-                Path(ellipseIn: CGRect(x: c.x - inner - 4, y: c.y - inner - 4,
-                                       width: (inner + 4) * 2, height: (inner + 4) * 2)),
-                with: .color(Brand.goldRoot),
-                style: StrokeStyle(lineWidth: 11)
-            )
-            for i in 0 ..< flutes {
-                let frac = Double(i) / Double(flutes)
-                let lit = frac <= p
-                let a = (Double(i) * 360 / Double(flutes) - 90 + p * 16) * .pi / 180
-                let edge = i % 2 == 0 ? outer : outer - 2.5
-                let s = CGPoint(x: c.x + cos(a) * inner, y: c.y + sin(a) * inner)
-                let e = CGPoint(x: c.x + cos(a) * edge, y: c.y + sin(a) * edge)
-                let m = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2)
-                // Each flute: a DARK root rising to a lit tip — the
-                // gradient tint that gives cut-metal depth.
-                let rootCol: Color = lit ? Brand.goldDark : Brand.goldRoot
-                let tipCol: Color = lit
-                    ? (i % 2 == 0 ? Brand.goldBright : Brand.gold)
-                    : (i % 2 == 0 ? Brand.goldDeep.opacity(0.45) : Brand.goldShadow.opacity(0.30))
-                var root = Path(); root.move(to: s); root.addLine(to: m)
-                ctx.stroke(root, with: .color(rootCol),
-                           style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
-                var tip = Path(); tip.move(to: m); tip.addLine(to: e)
-                ctx.stroke(tip, with: .color(tipCol),
-                           style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
-            }
-        }
-        .overlay(
+        ZStack {
+            Circle()
+                .stroke(Brand.gold.opacity(0.14), lineWidth: 3.5)
             Circle()
                 .trim(from: 0, to: max(0.012, p))
-                .stroke(Brand.goldArc, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                .stroke(Brand.goldArc, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
                 .rotationEffect(.degrees(-90 + p * 16))
-                .padding(4)
-        )
+        }
+        .padding(4)
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: progress)
