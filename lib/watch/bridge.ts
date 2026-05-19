@@ -22,7 +22,13 @@ type WatchBridgePlugin = {
 
 let lastCompanyId: string | null = null;
 
-async function plugin(): Promise<WatchBridgePlugin | null> {
+// IMPORTANT: never return the Capacitor plugin proxy directly from an
+// async function. The proxy forwards EVERY property access to native,
+// so `await plugin()` makes the runtime invoke proxy.then(...) →
+// Capacitor reports `TaxotticWatchBridge.then() is not implemented`
+// and the whole sync silently fails. Wrap it in a plain holder so
+// `await` resolves a non-thenable; `.bg` is the real proxy.
+async function plugin(): Promise<{ bg: WatchBridgePlugin } | null> {
   if (typeof window === "undefined") return null;
   try {
     const { Capacitor, registerPlugin } = await import("@capacitor/core");
@@ -32,7 +38,7 @@ async function plugin(): Promise<WatchBridgePlugin | null> {
     ) {
       return null;
     }
-    return registerPlugin<WatchBridgePlugin>("TaxotticWatchBridge");
+    return { bg: registerPlugin<WatchBridgePlugin>("TaxotticWatchBridge") };
   } catch {
     return null;
   }
@@ -41,8 +47,9 @@ async function plugin(): Promise<WatchBridgePlugin | null> {
 /** Fetch the freshest snapshot, fold in the device-only mileage
  *  flags, and hand it to the watch. Best-effort. */
 export async function syncWatch(): Promise<void> {
-  const bg = await plugin();
-  if (!bg) return;
+  const p = await plugin();
+  if (!p) return;
+  const bg = p.bg;
   try {
     const res = await fetch("/api/watch/snapshot", {
       credentials: "include",
@@ -87,8 +94,9 @@ let actionUnsub: (() => void) | null = null;
 
 /** Forward inbound one-gesture watch actions. Idempotent. */
 export async function startWatchBridge(): Promise<void> {
-  const bg = await plugin();
-  if (!bg || actionUnsub) return;
+  const p = await plugin();
+  if (!p || actionUnsub) return;
+  const bg = p.bg;
   try {
     const handle = await bg.addListener("action", (msg) => {
       void handleAction(msg);
