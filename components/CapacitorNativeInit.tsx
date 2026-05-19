@@ -64,7 +64,12 @@ export function CapacitorNativeInit() {
           // Style.Dark == light/WHITE content (for dark backgrounds).
           await StatusBar.setStyle({ style: Style.Dark });
           if (isAndroid) {
-            await StatusBar.setBackgroundColor({ color: "#121a2a" }).catch(
+            // Match the header's TOP gradient stop so the OS-reserved
+            // status-bar strip (overlay=false) blends into the header
+            // instead of showing a hard dark band ("green bar")
+            // between the clock and the header. (#121a2a is the
+            // BOTTOM of the header gradient — wrong end for the strip.)
+            await StatusBar.setBackgroundColor({ color: "#2a3a5e" }).catch(
               () => {},
             );
             // Android safe-top is platform-dependent and env() can't be

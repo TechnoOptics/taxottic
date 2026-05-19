@@ -99,9 +99,15 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       // style DARK = light/WHITE status-bar text+icons (clock,
-      // battery, signal) — correct for our dark-green header.
+      // battery, signal) — correct for our dark navy header.
       style: "DARK",
-      backgroundColor: "#121a2a",
+      // Match the HEADER's TOP gradient stop (#2a3a5e), not the
+      // brand-bg #121a2a. With Android overlay=false the OS paints a
+      // solid status-bar strip directly above the header; #121a2a is
+      // the BOTTOM of the header gradient, so it read as a hard dark
+      // band ("green bar") between the clock and the header. Using the
+      // top stop makes the OS strip flow seamlessly into the header.
+      backgroundColor: "#2a3a5e",
       // Draw the WebView UNDER the status bar so the green header
       // extends behind it (full-screen, no white/black status-bar
       // strip). The header carries env(safe-area-inset-top) padding
