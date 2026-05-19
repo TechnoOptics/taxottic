@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
@@ -29,8 +30,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -55,12 +58,25 @@ import kotlin.math.sin
 @Composable
 fun WearApp(
     snapshot: WatchSnapshot,
+    pairState: PairManager.State,
     onConfirm: (WatchSnapshot.Confirm, Boolean) -> Unit,
     onMileage: (Boolean) -> Unit,
     onAutoApply: (Boolean) -> Unit,
     onCapture: () -> Unit,
     onClearBadge: () -> Unit,
 ) {
+    // Not linked AND nothing arriving over the Data Layer either →
+    // show the scan-to-pair QR instead of an empty dial. If the phone
+    // bridge IS feeding data (snapshot != EMPTY) we stay on the dial
+    // even while a token is still being negotiated — the bridge is
+    // the working fallback.
+    if (pairState is PairManager.State.NeedsPair &&
+        snapshot == WatchSnapshot.EMPTY
+    ) {
+        GemstoneBackground { PairScreen(pairState) }
+        return
+    }
+
     // 5 pages (the crown "Set-Aside" tool was removed — too much
     // fiddly input for a watch). The gold bezel arc is pure scroll
     // progress now, so it reads as a COMPLETE ring on the last page.
@@ -221,6 +237,58 @@ private fun Wordmark() {
                 .clip(RoundedCornerShape(50)).background(Brand.gold))
             Box(Modifier.size(3.dp).clip(RoundedCornerShape(50))
                 .background(Brand.goldDeep))
+        }
+    }
+}
+
+/** Shown when the watch isn't linked and nothing is arriving over
+ *  the phone bridge: a QR the signed-in Taxottic phone app scans to
+ *  bind this watch to the account. The QR encodes a /watch/link?code
+ *  URL (single-use, ~120s); the short code is shown too as a fallback. */
+@Composable
+private fun PairScreen(state: PairManager.State.NeedsPair) {
+    val sizePx = with(LocalDensity.current) { 116.dp.roundToPx() }
+    val bmp = remember(state.qrPayload, sizePx) {
+        PairManager.qrBitmap(state.qrPayload, sizePx)
+    }
+    Column(
+        Modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Wordmark()
+        Spacer(Modifier.height(10.dp))
+        if (bmp != null) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Brand.cream)
+                    .padding(6.dp),
+            ) {
+                Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = "Pairing QR code",
+                    modifier = Modifier.size(116.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Scan in the Taxottic\napp on your phone",
+                color = Brand.cream, fontSize = 11.sp,
+                textAlign = TextAlign.Center, maxLines = 2,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                state.code,
+                color = Brand.gold, fontSize = 13.sp,
+                letterSpacing = 2.sp, fontWeight = FontWeight.Bold,
+            )
+        } else {
+            Text(
+                "Preparing pairing…",
+                color = Brand.creamMuted, fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
