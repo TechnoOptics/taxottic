@@ -22,6 +22,7 @@ class MainActivity : ComponentActivity() {
                 onConfirm = WatchData::confirm,
                 onMileage = WatchData::setMileage,
                 onAutoApply = WatchData::setAutoApply,
+                onCapture = WatchData::requestCapture,
                 onClearBadge = WatchData::clearBadge,
             )
         }

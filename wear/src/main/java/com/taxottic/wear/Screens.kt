@@ -16,7 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -28,12 +32,17 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
- * The dial + the bezel. Pages are turned with the rotating bezel /
- * rotary crown; a luminous gold arc around the rim advances as you go
- * — the "scroll bezel". Same blue gradient as the app, gold the only
- * accent. Twin of ContentView.swift.
+ * The dial + the bezel, finished like a fine watch:
+ *  • a FLUTED gold bezel (Datejust signature) whose lit sector tracks
+ *    scroll progress and turns slightly,
+ *  • a guilloché sunburst behind the content,
+ *  • an engraved chapter-ring of tick indices,
+ * over the app's blue gradient. The rotating bezel / Digital Crown
+ * turns the pages — and on the Set-Aside tool it BECOMES a value dial.
  */
 @Composable
 fun WearApp(
@@ -41,56 +50,67 @@ fun WearApp(
     onConfirm: (WatchSnapshot.Confirm, Boolean) -> Unit,
     onMileage: (Boolean) -> Unit,
     onAutoApply: (Boolean) -> Unit,
+    onCapture: () -> Unit,
     onClearBadge: () -> Unit,
 ) {
-    val pageCount = 5
+    val pageCount = 6
+    val setAsideIndex = 5
     val pager = rememberPagerState { pageCount }
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
 
-    // Smoothly-tracked scroll position for the bezel (0f‥1f).
-    val rawProgress =
-        (pager.currentPage + pager.currentPageOffsetFraction) /
-            (pageCount - 1).coerceAtLeast(1)
-    val progress by animateFloatAsState(
-        rawProgress.coerceIn(0f, 1f), tween(450), label = "bezel"
-    )
+    // Crown "Set-Aside" value (whole dollars). Stepped by the crown
+    // when that page is showing.
+    var setAside by remember { mutableStateOf(2_000) }
+    val ratePct = snapshot.forecast?.effectiveRatePct?.takeIf { it > 0 } ?: 25
+
+    val onSetAsidePage = pager.currentPage == setAsideIndex
+    val pageProg = (pager.currentPage + pager.currentPageOffsetFraction) /
+        (pageCount - 1).coerceAtLeast(1)
+    val targetBezel = if (onSetAsidePage)
+        (setAside / 20_000f).coerceIn(0f, 1f) else pageProg.coerceIn(0f, 1f)
+    val bezel by animateFloatAsState(targetBezel, tween(420), label = "bezel")
 
     GemstoneBackground {
         Box(
             Modifier
                 .fillMaxSize()
-                // Rotating bezel / rotary crown turns the pages.
                 .onRotaryScrollEvent { e ->
-                    scope.launch {
-                        val next = (pager.currentPage +
-                            if (e.verticalScrollPixels > 0) 1 else -1)
-                            .coerceIn(0, pageCount - 1)
-                        pager.animateScrollToPage(next)
+                    val dir = if (e.verticalScrollPixels > 0) 1 else -1
+                    if (pager.currentPage == setAsideIndex) {
+                        setAside = (setAside + dir * 100).coerceIn(0, 20_000)
+                    } else scope.launch {
+                        pager.animateScrollToPage(
+                            (pager.currentPage + dir).coerceIn(0, pageCount - 1)
+                        )
                     }
                     true
                 }
                 .focusRequester(fr)
                 .focusable(),
         ) {
+            // Guilloché sunburst + engraved chapter ring (under content).
+            RolexDial()
+
             VerticalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize().padding(26.dp),
+                modifier = Modifier.fillMaxSize().padding(30.dp),
             ) { page ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     when (page) {
-                        0 -> HeroScreen(snapshot)
+                        0 -> HeroScreen(snapshot, onCapture)
                         1 -> ForecastScreen(snapshot.forecast)
                         2 -> ConfirmScreen(snapshot.confirmations, onConfirm)
                         3 -> MileageScreen(snapshot.mileage, onMileage, onAutoApply)
-                        else -> GoalsScreen(snapshot.goals)
+                        4 -> GoalsScreen(snapshot.goals)
+                        else -> SetAsideScreen(setAside, ratePct)
                     }
                 }
             }
 
-            // The gold scroll-bezel, drawn on the rim above everything.
-            GoldBezel(progress)
+            // The fluted gold bezel, drawn on the rim above everything.
+            FlutedBezel(bezel)
 
             snapshot.newBadgeCode?.let {
                 MedalCelebration(snapshot.latestBadge?.title ?: "New medal", onClearBadge)
@@ -99,37 +119,82 @@ fun WearApp(
     }
 }
 
-/** A faint full gold rail + a bright gold arc that grows and slowly
- *  rotates with scroll progress — a Rolex-style turning bezel. */
+/** Faint gold sunburst rays + an engraved chapter ring of ticks —
+ *  the hand-finished dial texture, kept very subtle. */
 @Composable
-private fun GoldBezel(progress: Float) {
+private fun RolexDial() {
     Canvas(Modifier.fillMaxSize()) {
-        val stroke = 7.dp.toPx()
-        val inset = stroke / 2f + 1.5f
-        val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
-        val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-        // Engraved rail.
-        drawArc(
-            color = Brand.gold.copy(alpha = 0.16f),
-            startAngle = 0f, sweepAngle = 360f, useCenter = false,
-            topLeft = topLeft, size = arcSize,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
-        )
-        // Travelling gold sweep — starts at 12 o'clock, grows clockwise,
-        // and the brushed sheen rotates a touch as it fills.
-        rotate(degrees = progress * 22f) {
-            drawArc(
-                brush = Brand.goldSheen,
-                startAngle = -90f,
-                sweepAngle = (360f * progress).coerceAtLeast(6f),
-                useCenter = false,
-                topLeft = topLeft, size = arcSize,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    stroke,
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                ),
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val r = size.minDimension / 2f
+        // Sunburst: 90 hairline rays from the centre, barely there.
+        for (i in 0 until 90) {
+            val a = Math.toRadians(i * 4.0)
+            drawLine(
+                color = Brand.gold.copy(alpha = if (i % 2 == 0) 0.045f else 0.02f),
+                start = Offset(cx, cy),
+                end = Offset(cx + (cos(a) * r).toFloat(), cy + (sin(a) * r).toFloat()),
+                strokeWidth = 1.2f,
             )
         }
+        // Chapter ring: 60 ticks just inside the bezel; every 5th longer.
+        val ringR = r - 16.dp.toPx()
+        for (i in 0 until 60) {
+            val a = Math.toRadians(i * 6.0 - 90)
+            val long = i % 5 == 0
+            val inner = ringR - (if (long) 9.dp.toPx() else 4.dp.toPx())
+            drawLine(
+                color = Brand.gold.copy(alpha = if (long) 0.5f else 0.22f),
+                start = Offset(cx + (cos(a) * ringR).toFloat(), cy + (sin(a) * ringR).toFloat()),
+                end = Offset(cx + (cos(a) * inner).toFloat(), cy + (sin(a) * inner).toFloat()),
+                strokeWidth = if (long) 2.4f else 1.4f,
+            )
+        }
+    }
+}
+
+/** Datejust-style fluted bezel: radial gold flutes around the rim;
+ *  the sector covered by `progress` is lit (polished) and the whole
+ *  ring turns a touch as it fills — a real rotating bezel. */
+@Composable
+private fun FlutedBezel(progress: Float) {
+    Canvas(Modifier.fillMaxSize()) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val outer = size.minDimension / 2f - 2f
+        val inner = outer - 9.dp.toPx()
+        val flutes = 72
+        rotate(degrees = progress * 16f) {
+            for (i in 0 until flutes) {
+                val frac = i.toFloat() / flutes
+                val lit = frac <= progress
+                val a = Math.toRadians(i * (360.0 / flutes) - 90)
+                val edge = if (i % 2 == 0) outer else outer - 2.5f
+                val col = when {
+                    lit && i % 2 == 0 -> Brand.goldBright
+                    lit -> Brand.gold
+                    i % 2 == 0 -> Brand.goldDeep.copy(alpha = 0.5f)
+                    else -> Brand.goldShadow.copy(alpha = 0.35f)
+                }
+                drawLine(
+                    color = col,
+                    start = Offset(cx + (cos(a) * inner).toFloat(), cy + (sin(a) * inner).toFloat()),
+                    end = Offset(cx + (cos(a) * edge).toFloat(), cy + (sin(a) * edge).toFloat()),
+                    strokeWidth = 3.4f,
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        // A bright polished arc riding the lit flutes for sheen.
+        drawArc(
+            brush = Brand.goldSheen,
+            startAngle = -90f,
+            sweepAngle = (360f * progress).coerceAtLeast(4f),
+            useCenter = false,
+            topLeft = Offset(cx - inner, cy - inner),
+            size = Size(inner * 2, inner * 2),
+            style = Stroke(2.2f, cap = StrokeCap.Round),
+        )
     }
 }
 
@@ -140,7 +205,7 @@ private fun Eyebrow(text: String) = Text(
 )
 
 @Composable
-private fun HeroScreen(s: WatchSnapshot) {
+private fun HeroScreen(s: WatchSnapshot, onCapture: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
             val anim by animateFloatAsState(
@@ -148,27 +213,31 @@ private fun HeroScreen(s: WatchSnapshot) {
             )
             CircularProgressIndicator(
                 progress = anim,
-                modifier = Modifier.size(108.dp),
+                modifier = Modifier.size(104.dp),
                 strokeWidth = 7.dp,
                 indicatorColor = Brand.goldBright,
                 trackColor = Brand.ink700,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("${s.taxReadinessPct}%", color = Brand.goldBright,
-                    fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 Text("tax-ready", color = Brand.creamMuted, fontSize = 11.sp)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(s.ytdDeductionCents.usd0(), color = Brand.goldBright,
-            fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("deductions · ≈${s.estimatedTaxSavedCents.usd0()} saved",
-            color = Brand.creamMuted, fontSize = 11.sp)
-        if (s.streakDays > 0) {
-            Spacer(Modifier.height(6.dp))
-            Text("· ${s.streakDays}-day streak ·",
-                color = Brand.gold, fontSize = 11.sp)
-        }
+            color = Brand.creamMuted, fontSize = 10.sp)
+        Spacer(Modifier.height(8.dp))
+        CompactChip(
+            onClick = onCapture,
+            colors = ChipDefaults.chipColors(
+                backgroundColor = Brand.gold, contentColor = Brand.ink950
+            ),
+            label = { Text("＋ Capture expense", fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold) },
+        )
     }
 }
 
@@ -203,6 +272,28 @@ private fun Stat(value: String, label: String) =
             fontWeight = FontWeight.Bold)
         Text(label, color = Brand.creamMuted, fontSize = 9.sp)
     }
+
+/** The crown tool. Turn the bezel/crown → set a payment amount; it
+ *  instantly shows the tax reserve at your real effective rate. */
+@Composable
+private fun SetAsideScreen(amount: Int, ratePct: Int) {
+    val reserve = amount * ratePct / 100
+    Column(
+        Modifier.jewelCard(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Eyebrow("Set aside · turn crown")
+        Text("On a payment of", color = Brand.creamMuted, fontSize = 11.sp)
+        Text("$" + "%,d".format(amount), color = Brand.cream,
+            fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text("Set aside", color = Brand.creamMuted, fontSize = 11.sp)
+        Text("$" + "%,d".format(reserve), color = Brand.goldBright,
+            fontSize = 34.sp, fontWeight = FontWeight.Bold)
+        Text("for taxes · ~$ratePct% rate", color = Brand.creamMuted,
+            fontSize = 10.sp)
+    }
+}
 
 @Composable
 private fun ConfirmScreen(
