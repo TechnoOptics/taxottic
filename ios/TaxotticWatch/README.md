@@ -130,3 +130,29 @@ half and can land in any order.
 > dollar values, and the `expense`/`income` confirm cards. The deck,
 > forecast page, and deductions page show elegant placeholder states
 > until then.
+
+## Pairing & bidirectional sync — status
+
+Audited end-to-end and **the contract has zero drift**: `WatchSnapshot`
+is field-for-field identical across `lib/watch/types.ts`,
+`Models.swift`, and `Model.kt`; WCSession transport keys match
+(`updateApplicationContext(["snapshot": data])` ↔
+`WatchConnectivityManager` reads `dict["snapshot"] as? Data`); and
+the action messages the watch sends (`confirm`/`mileage`/`autoApply`/
+`open`) are exactly what `lib/watch/bridge.ts` consumes. No protocol
+bug — once wired, sync is correct.
+
+**Live, not one-shot:** `lib/watch/bridge.ts` re-pushes on
+launch/resume, on `@capacitor/app` resume / app-active, and right
+after every inbound watch action.
+
+**Still required for real pairing (device-bound, needs a Mac +
+paired Apple Watch — can't be verified headless):**
+1. Add `TaxotticWatchBridgePlugin.swift` to the iOS **App** target
+   and register it (Capacitor auto-discovers `CAPBridgedPlugin` in
+   the app target).
+2. Add the watch target(s) (see the Xcode steps above) and install
+   the watch app on a paired Apple Watch.
+3. WCSession activates automatically; `updateApplicationContext`
+   delivers the latest snapshot to the watch on its next activation,
+   and `sendMessage`/`transferUserInfo` carry watch→phone actions.

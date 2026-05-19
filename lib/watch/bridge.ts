@@ -97,6 +97,22 @@ export async function startWatchBridge(): Promise<void> {
   } catch {
     /* absent — no-op */
   }
+
+  // Keep the watch live: re-push the snapshot whenever the phone
+  // comes back to the foreground (the phone may have changed state
+  // while the watch was glanced at), so "updates from the phone
+  // update the watch" holds beyond the initial launch sync.
+  try {
+    const { App } = await import("@capacitor/app");
+    await App.addListener("resume", () => {
+      void syncWatch();
+    });
+    await App.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) void syncWatch();
+    });
+  } catch {
+    /* @capacitor/app absent — launch + post-action sync still apply */
+  }
 }
 
 async function handleAction(msg: Record<string, unknown>): Promise<void> {
@@ -117,6 +133,9 @@ async function handleAction(msg: Record<string, unknown>): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, kind, decision }),
     }).catch(() => {});
+    // Re-pull so the watch reflects the new server truth (the row is
+    // now classified/ignored and anything new surfaces).
+    void syncWatch();
     return;
   }
 
@@ -133,6 +152,7 @@ async function handleAction(msg: Record<string, unknown>): Promise<void> {
     } catch {
       /* tracker plugin absent — no-op */
     }
+    void syncWatch(); // reflect the new tracking state on the watch
     return;
   }
 
@@ -145,6 +165,7 @@ async function handleAction(msg: Record<string, unknown>): Promise<void> {
     } catch {
       /* private mode */
     }
+    void syncWatch();
     return;
   }
 
