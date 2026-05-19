@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { createServiceClient } from "@/lib/supabase/server";
-import { blockUser, unblockUser } from "../../actions";
+import { blockUser, unblockUser, deleteUserHard } from "../../actions";
+import { TypedConfirmDelete } from "@/components/admin/TypedConfirmDelete";
 
 type Params = Promise<{ id: string }>;
 
@@ -195,6 +196,33 @@ export default async function AdminUserPage({ params }: { params: Params }) {
                 </p>
               </form>
             )}
+          </section>
+        ) : null}
+
+        {!isForeverAdmin && profile.id !== adminUser.id ? (
+          <section
+            className="mt-8 card p-6"
+            style={{ borderColor: "#b91c1c33" }}
+          >
+            <h2 className="display text-xl" style={{ color: "#b91c1c" }}>
+              Danger zone — delete account
+            </h2>
+            <p className="mt-2 text-sm text-ink-muted">
+              Permanently removes this user from auth and cascades through
+              every table that references them (profiles, company
+              memberships, device tokens, etc.). The person will need to
+              sign up afresh. This action cannot be undone.
+            </p>
+            <TypedConfirmDelete
+              formAction={deleteUserHard}
+              hiddenFields={{ user_id: profile.id }}
+              inputName="confirm_email"
+              requireText={profile.email ?? ""}
+              label={`Type the user's email to confirm: ${profile.email ?? ""}`}
+              placeholder="user@example.com"
+              buttonText="Delete account permanently"
+              destructiveCopy="No recycle bin, no restore — the row is gone the moment you click. Logged to admin_actions."
+            />
           </section>
         ) : null}
 
