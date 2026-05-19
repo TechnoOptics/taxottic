@@ -96,4 +96,10 @@ object WatchData : DataClient.OnDataChangedListener {
     fun clearBadge() {
         _snapshot.value = _snapshot.value.copy(newBadgeCode = null)
     }
+
+    /** Quick-capture: hand off to the phone's voice/camera expense
+     *  capture (lib/watch/bridge.ts routes "open" → foreground). */
+    fun requestCapture() {
+        send("""{"type":"open","route":"expense-capture"}""")
+    }
 }

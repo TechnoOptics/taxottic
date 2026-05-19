@@ -10,29 +10,42 @@ struct ContentView: View {
     @EnvironmentObject private var model: WatchModel
     private var s: WatchSnapshot { model.snapshot }
     @State private var page = 0
-    private let pageCount = 7
+    @State private var setAside = 2_000
+    private let pageCount = 8
+    private let setAsideIndex = 7
+
+    private var rate: Int {
+        let r = s.forecast?.effectiveRatePct ?? 0
+        return r > 0 ? r : 25
+    }
+    private var bezel: Double {
+        page == setAsideIndex
+            ? min(1, Double(setAside) / 20_000)
+            : Double(page) / Double(pageCount - 1)
+    }
 
     var body: some View {
         ZStack {
             Brand.backdrop
-            // .verticalPage is driven by the Digital Crown on
-            // watchOS; the selection binding lets the gold bezel
-            // track the crown as it turns the pages.
+            // Guilloché sunburst + chapter ring, under the content.
+            RolexDial()
+            // .verticalPage is driven by the Digital Crown on watchOS;
+            // the selection binding lets the fluted bezel track it.
             TabView(selection: $page) {
-                HeroPage(s: s).tag(0)
+                HeroPage(s: s) { model.requestExpenseCapture() }.tag(0)
                 ForecastPage(f: s.forecast).tag(1)
                 ConfirmDeck().tag(2)
                 MileagePage().tag(3)
                 DeductionsPage(s: s).tag(4)
                 GoalsPage(goals: s.goals).tag(5)
                 AchievementPage(s: s) { model.requestExpenseCapture() }.tag(6)
+                SetAsidePage(amount: $setAside, ratePct: rate).tag(7)
             }
             .tabViewStyle(.verticalPage)
 
-            // The gold scroll-bezel rides the rim, turning with the crown.
-            BezelProgress(
-                progress: Double(page) / Double(pageCount - 1)
-            )
+            // The fluted gold bezel rides the rim, turning with the
+            // crown — and on Set-Aside it IS the value dial.
+            FlutedBezel(progress: bezel)
 
             if s == .empty {
                 Text("Open Taxottic on iPhone to sync")
@@ -56,33 +69,76 @@ struct ContentView: View {
 
 private struct HeroPage: View {
     let s: WatchSnapshot
+    var onCapture: () -> Void
     var body: some View {
         VStack(spacing: 6) {
             GoldGauge(progress: Double(s.taxReadinessPct) / 100) {
                 VStack(spacing: 1) {
                     Text("\(s.taxReadinessPct)%")
-                        .font(.figure(26)).foregroundStyle(Brand.goldSheen)
+                        .font(.figure(24)).foregroundStyle(Brand.goldSheen)
                     Text("tax-ready").font(.eyebrow())
                         .foregroundStyle(Brand.creamMuted)
                 }
             }
-            .frame(width: 116, height: 116)
+            .frame(width: 108, height: 108)
 
-            CountingMoney(cents: s.ytdDeductionCents, size: 22)
+            CountingMoney(cents: s.ytdDeductionCents, size: 20)
             Text("deductions · ≈\(s.estimatedTaxSavedCents.usd0) saved")
-                .font(.system(size: 11, design: .rounded))
+                .font(.system(size: 10, design: .rounded))
                 .foregroundStyle(Brand.creamMuted)
 
-            if s.streakDays > 0 {
-                Label("\(s.streakDays)-day streak", systemImage: "flame.fill")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Brand.goldBright)
-                    .padding(.horizontal, 9).padding(.vertical, 4)
-                    .background(Capsule().fill(Brand.ink800))
-                    .goldRim(radius: 20)
+            // Quick capture — log a deductible the instant you pay.
+            Button(action: onCapture) {
+                Text("＋ Capture expense")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Brand.ink950)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Capsule().fill(Brand.goldSheen))
             }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 6)
+    }
+}
+
+// MARK: Set-Aside crown tool
+
+/// Turn the Digital Crown → set a payment amount; it instantly shows
+/// the tax reserve at your real effective rate. The fluted bezel
+/// doubles as the value dial.
+private struct SetAsidePage: View {
+    @Binding var amount: Int
+    var ratePct: Int
+    @State private var crown = 2_000.0
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Eyebrow(text: "Set aside · turn crown")
+            Text("On a payment of")
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(Brand.creamMuted)
+            Text("$\(amount.formatted(.number.grouping(.automatic)))")
+                .font(.figure(18)).foregroundStyle(Brand.cream)
+            Spacer().frame(height: 4)
+            Text("Set aside")
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(Brand.creamMuted)
+            Text("$\((amount * ratePct / 100).formatted(.number.grouping(.automatic)))")
+                .font(.figure(34)).foregroundStyle(Brand.goldSheen).shimmer()
+            Text("for taxes · ~\(ratePct)% rate")
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(Brand.creamMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .jewelCard()
+        .padding(.horizontal, 6)
+        .focusable(true)
+        .digitalCrownRotation(
+            $crown, from: 0, through: 20_000, by: 100,
+            sensitivity: .medium, isContinuous: false
+        )
+        .onChange(of: crown) { _, v in amount = Int(v) }
+        .onAppear { crown = Double(amount) }
     }
 }
 

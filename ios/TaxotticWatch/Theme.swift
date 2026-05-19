@@ -200,31 +200,76 @@ extension View {
     }
 }
 
-/// The scroll bezel. A faint full gold rail traces the rim; a bright
-/// brushed-gold arc grows from 12 o'clock and turns slightly as the
-/// Digital Crown moves through the pages — a Rolex-style rotating
-/// bezel that doubles as the scroll-position indicator. Overlaid on
-/// the whole watch face, above content, ignoring safe area so it
-/// hugs the physical edge.
-struct BezelProgress: View {
-    /// 0‥1 — current page over (pageCount - 1).
+/// Guilloché sunburst + engraved chapter ring — the hand-finished
+/// dial texture, kept very subtle, drawn under the content.
+struct RolexDial: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let r = min(size.width, size.height) / 2
+            // Sunburst: 90 hairline gold rays from the centre.
+            for i in 0 ..< 90 {
+                let a = Double(i) * 4 * .pi / 180
+                var p = Path()
+                p.move(to: c)
+                p.addLine(to: CGPoint(x: c.x + cos(a) * r, y: c.y + sin(a) * r))
+                ctx.stroke(p, with: .color(Brand.gold.opacity(i % 2 == 0 ? 0.045 : 0.02)), lineWidth: 1.1)
+            }
+            // Chapter ring: 60 ticks, every 5th longer.
+            let ringR = r - 16
+            for i in 0 ..< 60 {
+                let a = (Double(i) * 6 - 90) * .pi / 180
+                let long = i % 5 == 0
+                let inner = ringR - (long ? 9 : 4)
+                var p = Path()
+                p.move(to: CGPoint(x: c.x + cos(a) * ringR, y: c.y + sin(a) * ringR))
+                p.addLine(to: CGPoint(x: c.x + cos(a) * inner, y: c.y + sin(a) * inner))
+                ctx.stroke(p, with: .color(Brand.gold.opacity(long ? 0.5 : 0.22)),
+                           lineWidth: long ? 2.4 : 1.4)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
+/// Datejust-style FLUTED bezel that doubles as the scroll/value dial.
+/// Radial gold flutes around the rim; the sector covered by
+/// `progress` is lit (polished) and the whole ring turns a touch as
+/// it fills — a real rotating bezel. Driven by the Digital Crown.
+struct FlutedBezel: View {
+    /// 0‥1 — page progress, or the Set-Aside value fraction.
     var progress: Double
 
     var body: some View {
         let p = max(0, min(1, progress))
-        ZStack {
-            Circle()
-                .stroke(Brand.gold.opacity(0.16), lineWidth: 6)
-            Circle()
-                .trim(from: 0, to: max(0.015, p))
-                .stroke(
-                    Brand.goldArc,
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90 + p * 22))
-                .shadow(color: Brand.goldBright.opacity(0.5), radius: 3)
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let outer = min(size.width, size.height) / 2 - 2
+            let inner = outer - 9
+            let flutes = 72
+            for i in 0 ..< flutes {
+                let frac = Double(i) / Double(flutes)
+                let lit = frac <= p
+                let a = (Double(i) * 360 / Double(flutes) - 90 + p * 16) * .pi / 180
+                let edge = i % 2 == 0 ? outer : outer - 2.5
+                let col: Color = lit
+                    ? (i % 2 == 0 ? Brand.goldBright : Brand.gold)
+                    : (i % 2 == 0 ? Brand.goldDeep.opacity(0.5) : Brand.goldShadow.opacity(0.35))
+                var path = Path()
+                path.move(to: CGPoint(x: c.x + cos(a) * inner, y: c.y + sin(a) * inner))
+                path.addLine(to: CGPoint(x: c.x + cos(a) * edge, y: c.y + sin(a) * edge))
+                ctx.stroke(path, with: .color(col),
+                           style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
+            }
         }
-        .padding(3)
+        .overlay(
+            Circle()
+                .trim(from: 0, to: max(0.012, p))
+                .stroke(Brand.goldArc, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                .rotationEffect(.degrees(-90 + p * 16))
+                .padding(4)
+        )
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: progress)
