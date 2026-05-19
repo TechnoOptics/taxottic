@@ -169,9 +169,14 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT }}
           packageName: com.taxottic.app
-          releaseFiles: |
-            android/app/build/outputs/bundle/release/app-release.aab
-            wear/build/outputs/bundle/release/wear-release.aab
+          # r0adkll/upload-google-play@v1 does NOT split releaseFiles
+          # on newlines — a multiline block is treated as ONE pattern
+          # ("Unable to find any release file matching <both paths>").
+          # Multiple bundles must come from a single GLOB. Only :app
+          # and :wear emit a release bundle, so this matches exactly
+          # app-release.aab + wear-release.aab and nothing else; Play
+          # form-factor delivery routes each to the right device.
+          releaseFiles: "**/build/outputs/bundle/release/*-release.aab"
           track: ${{ inputs.track || 'internal' }}
           status: completed
           changesNotSentForReview: false
