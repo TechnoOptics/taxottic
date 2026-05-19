@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { rethrowIfRedirect } from "@/lib/next/redirect-error";
+import { AddressAutocomplete } from "@/components/maps/AddressAutocomplete";
 
 type Props = {
   companyId: string;
@@ -214,13 +215,14 @@ export function BusinessProfileForm({
           <span className="text-sm font-medium text-forest-800">
             Street address
           </span>
-          <input
+          <AddressAutocomplete
             name="address_line1"
-            type="text"
             className="input"
             disabled={!isManager}
             defaultValue={initial.addressLine1 ?? ""}
             placeholder="1234 Main St"
+            cityInputName="city"
+            zipInputName="zip"
           />
         </label>
         <label className="grid gap-1.5 sm:col-span-2">

@@ -68,8 +68,12 @@ export function loadGoogleMaps(): Promise<GoogleMapsApi> {
       s.id = "gmaps-js";
       s.async = true;
       s.defer = true;
+      // geometry — encodePath() for the mileage breadcrumb polylines.
+      // places  — the Autocomplete widget on the business address.
+      // Both ship in one script load; pulling `places` here is what
+      // makes <AddressAutocomplete> light up (no extra request).
       s.src =
-        "https://maps.googleapis.com/maps/api/js?v=quarterly&libraries=geometry&key=" +
+        "https://maps.googleapis.com/maps/api/js?v=quarterly&libraries=geometry,places&key=" +
         encodeURIComponent(key);
       s.onload = () => {
         if (window.google?.maps) resolve(window.google.maps);
