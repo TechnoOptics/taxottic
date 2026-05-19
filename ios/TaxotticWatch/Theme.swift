@@ -22,6 +22,10 @@ enum Brand {
     static let gold       = Color(hex: 0xD5BB7E)
     static let goldDeep   = Color(hex: 0xC4A25D)
     static let goldShadow = Color(hex: 0xA78540)
+    // Deep anodized edge + machined root — the dark gradient tint the
+    // gold sinks toward so it reads as cut metal, not flat paint.
+    static let goldDark   = Color(hex: 0x6E561F)
+    static let goldRoot   = Color(hex: 0x4A3A16)
 
     static let cream = Color(hex: 0xFBF7E9)
     static let creamMuted = Color(hex: 0xFBF7E9).opacity(0.62)
@@ -43,15 +47,31 @@ enum Brand {
         .ignoresSafeArea()
     }
 
-    /// Brushed-gold gradient used for rims, gauges and key numerals.
+    /// Fine brushed-aluminium grain: tightly-alternating close gold
+    /// tones with an overall DARK tint (more deep/shadow than bright)
+    /// so numerals & rims read as anisotropic machined metal. Used as
+    /// a foregroundStyle on the key figures.
     static let goldSheen = LinearGradient(
-        colors: [goldShadow, goldBright, gold, goldShadow],
-        startPoint: .topLeading, endPoint: .bottomTrailing
+        stops: [
+            .init(color: goldDark, location: 0.00),
+            .init(color: goldShadow, location: 0.08),
+            .init(color: gold, location: 0.16),
+            .init(color: goldBright, location: 0.24),
+            .init(color: goldDeep, location: 0.34),
+            .init(color: gold, location: 0.46),
+            .init(color: goldDark, location: 0.56),
+            .init(color: goldShadow, location: 0.66),
+            .init(color: goldBright, location: 0.76),
+            .init(color: goldDeep, location: 0.88),
+            .init(color: goldDark, location: 1.00),
+        ],
+        startPoint: .leading, endPoint: .trailing
     )
 
-    /// Angular brushed-gold sweep for the scroll bezel.
+    /// Dark-biased angular sweep for the scroll bezel — one raking
+    /// catch-light band on a deep anodized field.
     static let goldArc = AngularGradient(
-        colors: [goldShadow, goldDeep, goldBright, gold, goldBright, goldDeep, goldShadow],
+        colors: [goldRoot, goldDark, goldShadow, gold, goldBright, gold, goldShadow, goldDark, goldRoot],
         center: .center
     )
 
@@ -244,18 +264,32 @@ struct FlutedBezel: View {
             let outer = min(size.width, size.height) / 2 - 2
             let inner = outer - 9
             let flutes = 72
+            // Dark machined base the flutes are cut into.
+            ctx.stroke(
+                Path(ellipseIn: CGRect(x: c.x - inner - 4, y: c.y - inner - 4,
+                                       width: (inner + 4) * 2, height: (inner + 4) * 2)),
+                with: .color(Brand.goldRoot),
+                style: StrokeStyle(lineWidth: 11)
+            )
             for i in 0 ..< flutes {
                 let frac = Double(i) / Double(flutes)
                 let lit = frac <= p
                 let a = (Double(i) * 360 / Double(flutes) - 90 + p * 16) * .pi / 180
                 let edge = i % 2 == 0 ? outer : outer - 2.5
-                let col: Color = lit
+                let s = CGPoint(x: c.x + cos(a) * inner, y: c.y + sin(a) * inner)
+                let e = CGPoint(x: c.x + cos(a) * edge, y: c.y + sin(a) * edge)
+                let m = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2)
+                // Each flute: a DARK root rising to a lit tip — the
+                // gradient tint that gives cut-metal depth.
+                let rootCol: Color = lit ? Brand.goldDark : Brand.goldRoot
+                let tipCol: Color = lit
                     ? (i % 2 == 0 ? Brand.goldBright : Brand.gold)
-                    : (i % 2 == 0 ? Brand.goldDeep.opacity(0.5) : Brand.goldShadow.opacity(0.35))
-                var path = Path()
-                path.move(to: CGPoint(x: c.x + cos(a) * inner, y: c.y + sin(a) * inner))
-                path.addLine(to: CGPoint(x: c.x + cos(a) * edge, y: c.y + sin(a) * edge))
-                ctx.stroke(path, with: .color(col),
+                    : (i % 2 == 0 ? Brand.goldDeep.opacity(0.45) : Brand.goldShadow.opacity(0.30))
+                var root = Path(); root.move(to: s); root.addLine(to: m)
+                ctx.stroke(root, with: .color(rootCol),
+                           style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
+                var tip = Path(); tip.move(to: m); tip.addLine(to: e)
+                ctx.stroke(tip, with: .color(tipCol),
                            style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
             }
         }
