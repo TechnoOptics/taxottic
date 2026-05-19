@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { reclassifyTripCore } from "@/lib/mileage/reclassify";
+import { resolveWatchUserId } from "@/lib/watch/device-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,11 +16,17 @@ export const dynamic = "force-dynamic";
 // ignoreTx (Business → keep with its suggested category; Personal →
 // ignore), scoped to a company the user belongs to.
 export async function POST(req: NextRequest) {
+  // Dual auth: phone session OR the watch's bearer device token
+  // (QR-pairing). The watch action is still untrusted — every target
+  // row is re-authorised below against the resolved account.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
+  const uid =
+    user?.id ??
+    (await resolveWatchUserId(req.headers.get("authorization")));
+  if (!uid) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -41,7 +48,7 @@ export async function POST(req: NextRequest) {
   if (kind === "trip") {
     const res = await reclassifyTripCore(
       admin,
-      user.id,
+      uid,
       id,
       business ? "business" : "personal",
     );
@@ -75,7 +82,7 @@ export async function POST(req: NextRequest) {
     .from("company_members")
     .select("user_id")
     .eq("company_id", (tx as { company_id: string }).company_id)
-    .eq("user_id", user.id)
+    .eq("user_id", uid)
     .maybeSingle();
   if (!membership) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
