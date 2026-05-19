@@ -1,7 +1,13 @@
 package com.taxottic.wear
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -325,28 +331,76 @@ private fun SetAsideScreen(amount: Int, ratePct: Int) {
     }
 }
 
+/** Animated directional chevrons — a "swipe this way" motion
+ *  graphic. Three chevrons ripple toward the edge; the active side
+ *  (while dragging that way) brightens. The zone is also tappable as
+ *  a quiet reliability fallback. */
+@Composable
+private fun SwipeHint(
+    pointLeft: Boolean,
+    label: String,
+    active: Boolean,
+    onTap: () -> Unit,
+) {
+    val t = rememberInfiniteTransition(label = "hint")
+    val phase by t.animateFloat(
+        0f, 3f,
+        infiniteRepeatable(tween(1100), RepeatMode.Restart),
+        label = "phase",
+    )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() },
+        ) { onTap() },
+    ) {
+        Row {
+            val order = if (pointLeft) listOf(2, 1, 0) else listOf(0, 1, 2)
+            order.forEach { i ->
+                val lead = (phase.toInt() % 3)
+                val a = if (active) 1f
+                    else 0.25f + 0.6f * (if (i == lead) 1f else 0f)
+                Text(
+                    if (pointLeft) "‹" else "›",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = (if (active) Brand.goldBright else Brand.gold)
+                        .copy(alpha = a),
+                )
+            }
+        }
+        Text(label, fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold, maxLines = 1,
+            color = if (active) Brand.goldBright else Brand.creamMuted)
+    }
+}
+
 @Composable
 private fun ConfirmScreen(
     items: List<WatchSnapshot.Confirm>,
     onConfirm: (WatchSnapshot.Confirm, Boolean) -> Unit,
 ) {
     if (items.isEmpty()) {
-        Column(Modifier.jewelCard(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("✓", color = Brand.goldBright, fontSize = 30.sp)
-            Text("All caught up", color = Brand.cream, fontSize = 14.sp,
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("✓", color = Brand.goldBright, fontSize = 34.sp)
+            Text("All caught up", color = Brand.cream, fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold)
         }
         return
     }
     val item = items.first()
     var dx by remember(item.id) { mutableStateOf(0f) }
-    Column(
+    val draggingLeft = dx < -8f
+    val draggingRight = dx > 8f
+
+    Box(
         Modifier
-            .jewelCard()
-            .graphicsLayer { translationX = dx; rotationZ = dx / 22f }
-            // draggable(Horizontal) reliably claims the horizontal
-            // axis from the enclosing vertical pager (detectHorizontal-
-            // DragGestures lost the gesture to the pager).
+            .fillMaxSize()
             .draggable(
                 orientation = Orientation.Horizontal,
                 state = rememberDraggableState { delta -> dx += delta },
@@ -358,43 +412,55 @@ private fun ConfirmScreen(
                     dx = 0f
                 },
             ),
+        contentAlignment = Alignment.Center,
     ) {
-        Eyebrow(item.kind)
-        Text(item.title, color = Brand.cream, fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold)
-        Text(item.subtitle, color = Brand.creamMuted, fontSize = 11.sp)
-        Spacer(Modifier.height(8.dp))
-        // Swipe OR tap — on a tiny screen an explicit tap target is
-        // the reliable path; the swipe is the delight for real
-        // fingers. Both commit the same classification.
-        Column(
-            Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+        val tint = when {
+            draggingLeft -> Brand.goldBright
+            draggingRight -> Color(0xFF8898BD)
+            else -> Color.Transparent
+        }
+        // hint │ centered content │ hint — no overlap, content gets
+        // the full middle. Hints are pure motion graphics.
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Chip(
-                onClick = { onConfirm(item, true) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ChipDefaults.chipColors(
-                    backgroundColor = Brand.ink700,
-                    contentColor = Brand.cream,
-                ),
-                label = {
-                    Text("◀  ${item.leftLabel}", fontSize = 13.sp,
-                        maxLines = 1, fontWeight = FontWeight.SemiBold)
-                },
-            )
-            Chip(
-                onClick = { onConfirm(item, false) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ChipDefaults.chipColors(
-                    backgroundColor = Brand.ink700,
-                    contentColor = Brand.cream,
-                ),
-                label = {
-                    Text("${item.rightLabel}  ▶", fontSize = 13.sp,
-                        maxLines = 1, fontWeight = FontWeight.SemiBold)
-                },
-            )
+            SwipeHint(true, item.leftLabel, draggingLeft) {
+                onConfirm(item, true)
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .weight(1f)
+                    .graphicsLayer { translationX = dx; rotationZ = dx / 26f },
+            ) {
+                Eyebrow(item.kind)
+                Spacer(Modifier.height(3.dp))
+                Text(item.title, color = Brand.cream, fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center, maxLines = 2)
+                if (item.amountCents > 0) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(item.amountCents.usd2(), fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(brush = Brand.brushedGold))
+                }
+                if (kotlin.math.abs(dx) > 55f) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        (if (draggingLeft) item.leftLabel else item.rightLabel)
+                            .uppercase(),
+                        color = Brand.ink950, fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(tint, RoundedCornerShape(50))
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                    )
+                }
+            }
+            SwipeHint(false, item.rightLabel, draggingRight) {
+                onConfirm(item, false)
+            }
         }
     }
 }
