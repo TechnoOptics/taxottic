@@ -5,7 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -23,7 +25,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -343,27 +344,57 @@ private fun ConfirmScreen(
         Modifier
             .jewelCard()
             .graphicsLayer { translationX = dx; rotationZ = dx / 22f }
-            .pointerInput(item.id) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        when {
-                            dx < -90f -> onConfirm(item, true)
-                            dx > 90f -> onConfirm(item, false)
-                        }
-                        dx = 0f
-                    },
-                ) { _, drag -> dx += drag }
-            },
+            // draggable(Horizontal) reliably claims the horizontal
+            // axis from the enclosing vertical pager (detectHorizontal-
+            // DragGestures lost the gesture to the pager).
+            .draggable(
+                orientation = Orientation.Horizontal,
+                state = rememberDraggableState { delta -> dx += delta },
+                onDragStopped = {
+                    when {
+                        dx < -90f -> onConfirm(item, true)
+                        dx > 90f -> onConfirm(item, false)
+                    }
+                    dx = 0f
+                },
+            ),
     ) {
         Eyebrow(item.kind)
         Text(item.title, color = Brand.cream, fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold)
         Text(item.subtitle, color = Brand.creamMuted, fontSize = 11.sp)
-        Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("◀ ${item.leftLabel}", color = Brand.creamMuted, fontSize = 11.sp)
-            Text("${item.rightLabel} ▶", color = Brand.creamMuted, fontSize = 11.sp)
+        Spacer(Modifier.height(8.dp))
+        // Swipe OR tap — on a tiny screen an explicit tap target is
+        // the reliable path; the swipe is the delight for real
+        // fingers. Both commit the same classification.
+        Column(
+            Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Chip(
+                onClick = { onConfirm(item, true) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ChipDefaults.chipColors(
+                    backgroundColor = Brand.ink700,
+                    contentColor = Brand.cream,
+                ),
+                label = {
+                    Text("◀  ${item.leftLabel}", fontSize = 13.sp,
+                        maxLines = 1, fontWeight = FontWeight.SemiBold)
+                },
+            )
+            Chip(
+                onClick = { onConfirm(item, false) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ChipDefaults.chipColors(
+                    backgroundColor = Brand.ink700,
+                    contentColor = Brand.cream,
+                ),
+                label = {
+                    Text("${item.rightLabel}  ▶", fontSize = 13.sp,
+                        maxLines = 1, fontWeight = FontWeight.SemiBold)
+                },
+            )
         }
     }
 }
