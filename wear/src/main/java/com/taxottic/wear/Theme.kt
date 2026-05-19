@@ -31,6 +31,10 @@ object Brand {
     val gold = Color(0xFFD5BB7E)
     val goldDeep = Color(0xFFC4A25D)
     val goldShadow = Color(0xFFA78540)
+    // Deep anodized edge — the "dark gradient tint" the gold sinks
+    // toward, so it reads as machined metal, not flat paint.
+    val goldDark = Color(0xFF6E561F)
+    val goldRoot = Color(0xFF4A3A16)
 
     val cream = Color(0xFFFBF7E9)
     val creamMuted = Color(0x9EFBF7E9)
@@ -52,9 +56,26 @@ object Brand {
         listOf(ink700.copy(alpha = 0.45f), Color.Transparent),
     )
 
-    /** Brushed-gold sweep for the bezel ring + key numerals. */
+    /** Bezel sweep — now dark-biased: one bright catch-light band on
+     *  a deep anodized field, like light raking across machined
+     *  metal rather than flat gold. */
     val goldSheen = Brush.sweepGradient(
-        listOf(goldShadow, goldDeep, goldBright, gold, goldBright, goldDeep, goldShadow),
+        listOf(goldRoot, goldDark, goldShadow, gold, goldBright, gold, goldShadow, goldDark, goldRoot),
+    )
+
+    /** Fine brushed-aluminium grain for gold numerals/surfaces: a
+     *  tight near-horizontal gradient that alternates close gold
+     *  tones so it shimmers like an anisotropic brushed finish, with
+     *  an overall dark tint (more deep/shadow than bright). */
+    val brushedGold = Brush.linearGradient(
+        0.00f to goldDark, 0.07f to goldShadow, 0.13f to gold,
+        0.19f to goldDeep, 0.26f to goldBright, 0.33f to goldDeep,
+        0.41f to gold, 0.49f to goldShadow, 0.57f to goldDark,
+        0.64f to goldShadow, 0.72f to gold, 0.80f to goldBright,
+        0.88f to goldDeep, 1.00f to goldDark,
+        start = Offset(0f, 0f),
+        end = Offset(140f, 9f),
+        tileMode = androidx.compose.ui.graphics.TileMode.Mirror,
     )
 
     val glass = Brush.verticalGradient(listOf(ink800, ink900))

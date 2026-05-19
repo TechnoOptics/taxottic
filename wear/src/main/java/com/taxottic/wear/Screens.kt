@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -164,28 +165,42 @@ private fun FlutedBezel(progress: Float) {
         val outer = size.minDimension / 2f - 2f
         val inner = outer - 9.dp.toPx()
         val flutes = 72
+        // Dark machined base ring the flutes are cut into.
+        drawArc(
+            color = Brand.goldRoot,
+            startAngle = 0f, sweepAngle = 360f, useCenter = false,
+            topLeft = Offset(cx - (inner + 4f), cy - (inner + 4f)),
+            size = Size((inner + 4f) * 2, (inner + 4f) * 2),
+            style = Stroke(11.dp.toPx()),
+        )
         rotate(degrees = progress * 16f) {
             for (i in 0 until flutes) {
                 val frac = i.toFloat() / flutes
                 val lit = frac <= progress
                 val a = Math.toRadians(i * (360.0 / flutes) - 90)
                 val edge = if (i % 2 == 0) outer else outer - 2.5f
-                val col = when {
+                val sx = cx + (cos(a) * inner).toFloat()
+                val sy = cy + (sin(a) * inner).toFloat()
+                val ex = cx + (cos(a) * edge).toFloat()
+                val ey = cy + (sin(a) * edge).toFloat()
+                val mx = (sx + ex) / 2f
+                val my = (sy + ey) / 2f
+                // Each flute is cut metal: a DARK root rising to a
+                // lit tip — the gradient tint that gives it depth.
+                val rootCol = if (lit) Brand.goldDark else Brand.goldRoot
+                val tipCol = when {
                     lit && i % 2 == 0 -> Brand.goldBright
                     lit -> Brand.gold
-                    i % 2 == 0 -> Brand.goldDeep.copy(alpha = 0.5f)
-                    else -> Brand.goldShadow.copy(alpha = 0.35f)
+                    i % 2 == 0 -> Brand.goldDeep.copy(alpha = 0.45f)
+                    else -> Brand.goldShadow.copy(alpha = 0.30f)
                 }
-                drawLine(
-                    color = col,
-                    start = Offset(cx + (cos(a) * inner).toFloat(), cy + (sin(a) * inner).toFloat()),
-                    end = Offset(cx + (cos(a) * edge).toFloat(), cy + (sin(a) * edge).toFloat()),
-                    strokeWidth = 3.4f,
-                    cap = StrokeCap.Round,
-                )
+                drawLine(rootCol, Offset(sx, sy), Offset(mx, my),
+                    strokeWidth = 3.4f, cap = StrokeCap.Round)
+                drawLine(tipCol, Offset(mx, my), Offset(ex, ey),
+                    strokeWidth = 3.4f, cap = StrokeCap.Round)
             }
         }
-        // A bright polished arc riding the lit flutes for sheen.
+        // Raking catch-light across the lit flutes — brushed sheen.
         drawArc(
             brush = Brand.goldSheen,
             startAngle = -90f,
@@ -193,7 +208,7 @@ private fun FlutedBezel(progress: Float) {
             useCenter = false,
             topLeft = Offset(cx - inner, cy - inner),
             size = Size(inner * 2, inner * 2),
-            style = Stroke(2.2f, cap = StrokeCap.Round),
+            style = Stroke(2.0f, cap = StrokeCap.Round),
         )
     }
 }
@@ -219,14 +234,16 @@ private fun HeroScreen(s: WatchSnapshot, onCapture: () -> Unit) {
                 trackColor = Brand.ink700,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${s.taxReadinessPct}%", color = Brand.goldBright,
-                    fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Text("${s.taxReadinessPct}%", fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(brush = Brand.brushedGold))
                 Text("tax-ready", color = Brand.creamMuted, fontSize = 11.sp)
             }
         }
         Spacer(Modifier.height(6.dp))
-        Text(s.ytdDeductionCents.usd0(), color = Brand.goldBright,
-            fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        Text(s.ytdDeductionCents.usd0(), fontSize = 21.sp,
+            fontWeight = FontWeight.Bold,
+            style = TextStyle(brush = Brand.brushedGold))
         Text("deductions · ≈${s.estimatedTaxSavedCents.usd0()} saved",
             color = Brand.creamMuted, fontSize = 10.sp)
         Spacer(Modifier.height(8.dp))
@@ -254,8 +271,9 @@ private fun ForecastScreen(f: WatchSnapshot.Forecast?) {
             val owe = f.netCents >= 0
             Text(if (owe) "Projected owed" else "Projected refund",
                 color = Brand.creamMuted, fontSize = 11.sp)
-            Text(abs(f.netCents).usd0(), color = Brand.goldBright,
-                fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text(abs(f.netCents).usd0(), fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+                style = TextStyle(brush = Brand.brushedGold))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Stat("${f.effectiveRatePct}%", "Eff. rate")
                 Stat(f.ytdIncomeCents.usd0(), "YTD income")
@@ -288,8 +306,9 @@ private fun SetAsideScreen(amount: Int, ratePct: Int) {
             fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text("Set aside", color = Brand.creamMuted, fontSize = 11.sp)
-        Text("$" + "%,d".format(reserve), color = Brand.goldBright,
-            fontSize = 34.sp, fontWeight = FontWeight.Bold)
+        Text("$" + "%,d".format(reserve), fontSize = 34.sp,
+            fontWeight = FontWeight.Bold,
+            style = TextStyle(brush = Brand.brushedGold))
         Text("for taxes · ~$ratePct% rate", color = Brand.creamMuted,
             fontSize = 10.sp)
     }
