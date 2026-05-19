@@ -155,28 +155,24 @@ jobs:
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$KEY_PWD
 
-      # Both bundles go into ONE Play release on the same app. Play's
-      # form-factor delivery routes the Wear AAB to watches and the
-      # phone AAB to phones automatically (Wear manifest declares the
-      # watch hardware feature + standalone metadata).
-      #
-      # ONE-TIME Play Console prerequisite (not automatable, not done
-      # here): the app must be opted into Wear OS distribution and the
-      # internal-testing tester list must include the tester's Google
-      # account. See docs/MOBILE_APP_STORE_RUNBOOK.md.
-      - name: Upload to Play (phone + watch, one release)
+      # PHONE bundle only goes to Play. The phone-only release path is
+      # proven (16+ green runs). Co-releasing the Wear AAB in the same
+      # edit makes Play's API return "Internal error encountered" until
+      # a ONE-TIME, non-automatable Play Console step is done: the app
+      # must be explicitly opted into Wear OS distribution (Advanced
+      # settings → Form factors → Wear OS). Until that's done, bundling
+      # the watch AAB here blocks the phone release that testers need.
+      # So: ship the phone AAB now; the watch AAB is still built and
+      # kept as a CI artifact (downloadable below) for sideload / for
+      # the Play Wear upload once the console opt-in is complete. See
+      # docs/MOBILE_APP_STORE_RUNBOOK.md. The internal-testing tester
+      # list (adding tester Google accounts) is also Console-only.
+      - name: Upload to Play (phone — internal track)
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT }}
           packageName: com.taxottic.app
-          # r0adkll/upload-google-play@v1 does NOT split releaseFiles
-          # on newlines — a multiline block is treated as ONE pattern
-          # ("Unable to find any release file matching <both paths>").
-          # Multiple bundles must come from a single GLOB. Only :app
-          # and :wear emit a release bundle, so this matches exactly
-          # app-release.aab + wear-release.aab and nothing else; Play
-          # form-factor delivery routes each to the right device.
-          releaseFiles: "**/build/outputs/bundle/release/*-release.aab"
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: ${{ inputs.track || 'internal' }}
           status: completed
           changesNotSentForReview: false
