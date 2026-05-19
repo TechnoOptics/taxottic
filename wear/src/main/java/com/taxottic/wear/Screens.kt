@@ -61,23 +61,18 @@ fun WearApp(
     onCapture: () -> Unit,
     onClearBadge: () -> Unit,
 ) {
-    val pageCount = 6
-    val setAsideIndex = 5
+    // 5 pages (the crown "Set-Aside" tool was removed — too much
+    // fiddly input for a watch). The gold bezel arc is pure scroll
+    // progress now, so it reads as a COMPLETE ring on the last page.
+    val pageCount = 5
     val pager = rememberPagerState { pageCount }
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
 
-    // Crown "Set-Aside" value (whole dollars). Stepped by the crown
-    // when that page is showing.
-    var setAside by remember { mutableStateOf(2_000) }
-    val ratePct = snapshot.forecast?.effectiveRatePct?.takeIf { it > 0 } ?: 25
-
-    val onSetAsidePage = pager.currentPage == setAsideIndex
     val pageProg = (pager.currentPage + pager.currentPageOffsetFraction) /
         (pageCount - 1).coerceAtLeast(1)
-    val targetBezel = if (onSetAsidePage)
-        (setAside / 20_000f).coerceIn(0f, 1f) else pageProg.coerceIn(0f, 1f)
+    val targetBezel = pageProg.coerceIn(0f, 1f)
     val bezel by animateFloatAsState(targetBezel, tween(420), label = "bezel")
 
     GemstoneBackground {
@@ -86,9 +81,7 @@ fun WearApp(
                 .fillMaxSize()
                 .onRotaryScrollEvent { e ->
                     val dir = if (e.verticalScrollPixels > 0) 1 else -1
-                    if (pager.currentPage == setAsideIndex) {
-                        setAside = (setAside + dir * 100).coerceIn(0, 20_000)
-                    } else scope.launch {
+                    scope.launch {
                         pager.animateScrollToPage(
                             (pager.currentPage + dir).coerceIn(0, pageCount - 1)
                         )
@@ -111,8 +104,7 @@ fun WearApp(
                         1 -> ForecastScreen(snapshot.forecast)
                         2 -> ConfirmScreen(snapshot.confirmations, onConfirm)
                         3 -> MileageScreen(snapshot.mileage, onMileage, onAutoApply)
-                        4 -> GoalsScreen(snapshot.goals)
-                        else -> SetAsideScreen(setAside, ratePct)
+                        else -> GoalsScreen(snapshot.goals)
                     }
                 }
             }
@@ -235,33 +227,69 @@ private fun Wordmark() {
 
 @Composable
 private fun HeroScreen(s: WatchSnapshot, onCapture: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    val f = s.forecast
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.widthIn(max = 168.dp),
+    ) {
         Wordmark()
         Spacer(Modifier.height(8.dp))
+        // The showpiece is now the LIVE FORECAST (tax-readiness was
+        // removed). A brushed-gold net figure inside a thin gold ring
+        // that fills with the effective rate — the deeper breakdown
+        // is still one swipe away on the Forecast page.
         Box(contentAlignment = Alignment.Center) {
-            val anim by animateFloatAsState(
-                s.taxReadinessPct / 100f, tween(1000), label = "gauge"
+            val ratePct = (f?.effectiveRatePct ?: 0)
+            val ring by animateFloatAsState(
+                (ratePct / 100f).coerceIn(0f, 1f), tween(1000),
+                label = "gauge",
             )
-            CircularProgressIndicator(
-                progress = anim,
-                modifier = Modifier.size(104.dp),
-                strokeWidth = 7.dp,
-                indicatorColor = Brand.goldBright,
-                trackColor = Brand.ink700,
-            )
+            Canvas(Modifier.size(108.dp)) {
+                val st = 7.dp.toPx()
+                drawArc(
+                    color = Brand.gold.copy(alpha = 0.14f),
+                    startAngle = 0f, sweepAngle = 360f, useCenter = false,
+                    style = Stroke(st),
+                )
+                drawArc(
+                    brush = Brand.goldSheen,
+                    startAngle = -90f,
+                    sweepAngle = (360f * ring).coerceAtLeast(6f),
+                    useCenter = false,
+                    style = Stroke(st, cap = StrokeCap.Round),
+                )
+            }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${s.taxReadinessPct}%", fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    style = TextStyle(brush = Brand.brushedGold))
-                Text("tax-ready", color = Brand.creamMuted, fontSize = 11.sp)
+                if (f == null) {
+                    Text("forecast", color = Brand.creamMuted,
+                        fontSize = 10.sp, letterSpacing = 1.5.sp)
+                    Text("—", fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(brush = Brand.brushedGold))
+                    Text("syncs from phone", color = Brand.creamMuted,
+                        fontSize = 9.sp)
+                } else {
+                    Text(if (f.netCents >= 0) "you'll owe" else "refund",
+                        color = Brand.creamMuted, fontSize = 10.sp,
+                        letterSpacing = 1.5.sp)
+                    Text(abs(f.netCents).usd0(), fontSize = 25.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(brush = Brand.brushedGold))
+                    Text("${f.effectiveRatePct}% eff. rate",
+                        color = Brand.gold, fontSize = 9.sp)
+                }
             }
         }
         Spacer(Modifier.height(6.dp))
-        Text(s.ytdDeductionCents.usd0(), fontSize = 21.sp,
+        Text(s.ytdDeductionCents.usd0(), fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             style = TextStyle(brush = Brand.brushedGold))
+        // Was a single overflowing line clipped by the round bezel
+        // (the "white cut-out" text). Center + wrap inside the
+        // width-capped column so it never gets sliced.
         Text("deductions · ≈${s.estimatedTaxSavedCents.usd0()} saved",
-            color = Brand.creamMuted, fontSize = 10.sp)
+            color = Brand.creamMuted, fontSize = 10.sp,
+            textAlign = TextAlign.Center, maxLines = 2)
         Spacer(Modifier.height(8.dp))
         CompactChip(
             onClick = onCapture,
@@ -327,37 +355,6 @@ private fun ForecastScreen(f: WatchSnapshot.Forecast?) {
         Text("on ${f.ytdIncomeCents.usd0()} income · ${f.label}",
             color = Brand.creamMuted, fontSize = 10.sp,
             textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun Stat(value: String, label: String) =
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Brand.cream, fontSize = 14.sp,
-            fontWeight = FontWeight.Bold)
-        Text(label, color = Brand.creamMuted, fontSize = 9.sp)
-    }
-
-/** The crown tool. Turn the bezel/crown → set a payment amount; it
- *  instantly shows the tax reserve at your real effective rate. */
-@Composable
-private fun SetAsideScreen(amount: Int, ratePct: Int) {
-    val reserve = amount * ratePct / 100
-    Column(
-        Modifier.jewelCard(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Eyebrow("Set aside · turn crown")
-        Text("On a payment of", color = Brand.creamMuted, fontSize = 11.sp)
-        Text("$" + "%,d".format(amount), color = Brand.cream,
-            fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text("Set aside", color = Brand.creamMuted, fontSize = 11.sp)
-        Text("$" + "%,d".format(reserve), fontSize = 34.sp,
-            fontWeight = FontWeight.Bold,
-            style = TextStyle(brush = Brand.brushedGold))
-        Text("for taxes · ~$ratePct% rate", color = Brand.creamMuted,
-            fontSize = 10.sp)
     }
 }
 
