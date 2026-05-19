@@ -7,6 +7,7 @@ import { PlaidSyncButton } from "@/components/PlaidSyncButton";
 import { PlaidAutoSync } from "@/components/PlaidAutoSync";
 import { StripeConnectButton } from "@/components/StripeConnectButton";
 import { StripeSyncButton } from "@/components/StripeSyncButton";
+import { isStripeConnectConfigured } from "@/lib/stripe-connect/client";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
@@ -205,10 +206,19 @@ export default async function BanksPage({
                   companyId={company.id}
                   className="btn-primary text-sm"
                 />
-                <StripeConnectButton
-                  companyId={company.id}
-                  className="btn-ghost text-xs whitespace-nowrap"
-                />
+                {/* Stripe Connect (Standard OAuth) is an optional
+                    bank-data import alternative to Plaid. Only show
+                    the button when its OAuth client is configured on
+                    the server — otherwise clicking it just throws
+                    "STRIPE_CONNECT_CLIENT_ID not configured" and the
+                    user has nothing actionable. Plaid stays as the
+                    primary connect path either way. */}
+                {isStripeConnectConfigured() ? (
+                  <StripeConnectButton
+                    companyId={company.id}
+                    className="btn-ghost text-xs whitespace-nowrap"
+                  />
+                ) : null}
               </div>
             ) : (
               <p className="text-xs text-ink-muted max-w-[14rem]">
