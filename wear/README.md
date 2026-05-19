@@ -70,3 +70,33 @@ A Wear module changes the Gradle build graph; hand-adding it to
 release that ships the real fixes. The data/JS half is live and
 CI-tested; only this native module + the phone plugin need the
 device-bound wiring above.
+
+## Pairing & bidirectional sync — status
+
+Audited end-to-end and **the contract has zero drift**: the
+`WatchSnapshot` shape is field-for-field identical across
+`lib/watch/types.ts` (TS), `Models.swift`, and `Model.kt`; the
+Data-Layer paths/keys match on both ends (`/watch/snapshot` key
+`"snapshot"`; actions on `/watch/action`); and every action message
+shape (`confirm` / `mileage` / `autoApply` / `open`) the watch sends
+is exactly what `lib/watch/bridge.ts` consumes. So once wired, sync
+is correct — there is no protocol bug.
+
+**Live, not just one-shot:** `lib/watch/bridge.ts` now re-pushes the
+snapshot (a) on launch/resume, (b) on `@capacitor/app` resume /
+app-active, and (c) immediately after every inbound watch action —
+so phone-side changes reach the watch continuously and the watch
+reflects server truth right after a swipe/tap.
+
+**What's still required for real pairing (device-bound, can't be
+done/verified headless):**
+1. Register the phone-side `TaxotticWatchBridge` plugin in the
+   Android app: add `phone-bridge/TaxotticWatchBridgePlugin.kt` under
+   `android/app` (`com.taxottic.app`), `registerPlugin(...)` in
+   `MainActivity`, and add
+   `com.google.android.gms:play-services-wearable` to
+   `android/app/build.gradle`.
+2. Adopt the `:wear` module (see "Wire it up" above) and install it.
+3. Pair the Wear OS emulator/watch with the phone via the Wear OS
+   companion app so the Data Layer link is established (same package
+   name `com.taxottic.app` enables auto-association).
