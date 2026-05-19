@@ -22,6 +22,7 @@ data class WatchSnapshot(
     val latestBadge: Badge? = null,
     val newBadgeCode: String? = null,
     val companyId: String? = null,
+    val reward: Reward? = null,
 ) {
     @Serializable
     data class Forecast(
@@ -72,6 +73,9 @@ data class WatchSnapshot(
 
     @Serializable
     data class Badge(val title: String, val symbol: String)
+
+    @Serializable
+    data class Reward(val title: String, val detail: String)
 
     companion object {
         val EMPTY = WatchSnapshot()

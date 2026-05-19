@@ -64,6 +64,9 @@ export type WatchSnapshot = {
   /** Set to the badge code when a medal was JUST earned — the watch
    *  fires the celebration overlay + a haptic, one-shot. */
   newBadgeCode?: string;
+  /** A rewarding moment to celebrate on the wrist — a goal reached,
+   *  or a new business-deduction category unlocked. One-shot overlay. */
+  reward?: { title: string; detail: string };
 
   /** The user's primary company id. Not shown on the watch — the
    *  phone bridge needs it to arm mileage tracking from the wrist. */

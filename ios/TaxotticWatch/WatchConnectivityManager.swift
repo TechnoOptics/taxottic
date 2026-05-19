@@ -91,11 +91,17 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
         DispatchQueue.main.async {
             self.snapshot = decoded
 
-            // One-shot medal celebration.
+            // One-shot celebration — a new medal, or a reward (goal
+            // reached / a new deduction category unlocked).
             if let code = decoded.newBadgeCode,
                code != self.lastCelebratedCode {
                 self.lastCelebratedCode = code
                 self.celebrate = decoded.latestBadge?.title ?? "New medal"
+                Haptic.success()
+            } else if let r = decoded.reward,
+                      r.title + r.detail != self.lastCelebratedCode {
+                self.lastCelebratedCode = r.title + r.detail
+                self.celebrate = "\(r.title)\n\(r.detail)"
                 Haptic.success()
             }
 

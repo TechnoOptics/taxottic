@@ -113,8 +113,15 @@ fun WearApp(
             // The fluted gold bezel, drawn on the rim above everything.
             FlutedBezel(bezel)
 
+            // Rewarding moments — a new medal, a goal reached, or a
+            // new deduction category unlocked. One-shot overlay.
             snapshot.newBadgeCode?.let {
-                MedalCelebration(snapshot.latestBadge?.title ?: "New medal", onClearBadge)
+                Celebration("🏅", "Medal earned",
+                    snapshot.latestBadge?.title ?: "New medal", onClearBadge)
+            }
+            snapshot.reward?.let { r ->
+                var seen by remember(r) { mutableStateOf(false) }
+                if (!seen) Celebration("✦", r.title, r.detail) { seen = true }
             }
         }
     }
@@ -232,26 +239,57 @@ private fun HeroScreen(s: WatchSnapshot, onCapture: () -> Unit) {
 
 @Composable
 private fun ForecastScreen(f: WatchSnapshot.Forecast?) {
-    Column(Modifier.jewelCard(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.jewelCard(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Eyebrow("Live forecast")
         if (f == null) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Text("Your forecast updates\non your phone",
                 color = Brand.creamMuted, fontSize = 12.sp,
                 textAlign = TextAlign.Center)
-        } else {
-            val owe = f.netCents >= 0
-            Text(if (owe) "Projected owed" else "Projected refund",
-                color = Brand.creamMuted, fontSize = 11.sp)
-            Text(abs(f.netCents).usd0(), fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                style = TextStyle(brush = Brand.brushedGold))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Stat("${f.effectiveRatePct}%", "Eff. rate")
-                Stat(f.ytdIncomeCents.usd0(), "YTD income")
-            }
-            Text(f.label, color = Brand.creamMuted, fontSize = 10.sp)
+            return@Column
         }
+        val owe = f.netCents >= 0
+        // The headline: a big brushed-gold figure inside a thin gold
+        // rate-ring — the showpiece. The ring fills with the
+        // effective rate, so the number sits in its own gauge.
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(top = 4.dp)) {
+            val ring by animateFloatAsState(
+                (f.effectiveRatePct / 100f).coerceIn(0f, 1f),
+                tween(900), label = "rate"
+            )
+            Canvas(Modifier.size(132.dp)) {
+                val s = 6.dp.toPx()
+                drawArc(
+                    color = Brand.gold.copy(alpha = 0.14f),
+                    startAngle = 0f, sweepAngle = 360f, useCenter = false,
+                    style = Stroke(s),
+                )
+                drawArc(
+                    brush = Brand.goldSheen,
+                    startAngle = -90f,
+                    sweepAngle = (360f * ring).coerceAtLeast(6f),
+                    useCenter = false,
+                    style = Stroke(s, cap = StrokeCap.Round),
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (owe) "you'll owe" else "refund",
+                    color = Brand.creamMuted, fontSize = 10.sp,
+                    letterSpacing = 1.5.sp)
+                Text(abs(f.netCents).usd0(), fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(brush = Brand.brushedGold))
+                Text("${f.effectiveRatePct}% eff. rate",
+                    color = Brand.gold, fontSize = 10.sp)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("on ${f.ytdIncomeCents.usd0()} income · ${f.label}",
+            color = Brand.creamMuted, fontSize = 10.sp,
+            textAlign = TextAlign.Center)
     }
 }
 
@@ -388,14 +426,25 @@ private fun GoalsScreen(goals: List<WatchSnapshot.Goal>) {
 }
 
 @Composable
-private fun MedalCelebration(title: String, onDone: () -> Unit) {
-    LaunchedEffect(title) { kotlinx.coroutines.delay(2600); onDone() }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun Celebration(
+    glyph: String,
+    eyebrow: String,
+    title: String,
+    onDone: () -> Unit,
+) {
+    LaunchedEffect(eyebrow, title) {
+        kotlinx.coroutines.delay(2600); onDone()
+    }
+    Box(
+        Modifier.fillMaxSize().background(Brand.ink950.copy(alpha = 0.86f)),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🏅", fontSize = 44.sp)
-            Eyebrow("Medal earned")
-            Text(title, color = Brand.cream, fontSize = 16.sp,
-                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(glyph, fontSize = 44.sp)
+            Eyebrow(eyebrow)
+            Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                style = TextStyle(brush = Brand.brushedGold))
         }
     }
 }

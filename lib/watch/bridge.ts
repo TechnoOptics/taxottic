@@ -102,36 +102,21 @@ export async function startWatchBridge(): Promise<void> {
 async function handleAction(msg: Record<string, unknown>): Promise<void> {
   const type = String(msg.type ?? "");
 
-  // Swipe-confirm: left = business/deduct, right = personal/skip.
+  // Swipe-confirm: left = Business, right = Personal. Trips AND
+  // bank-synced expense/income clarification both go through the
+  // session-authed /api/watch/confirm (it reuses the same
+  // reclassify / setTxCategory / ignoreTx writes the app uses).
   if (type === "confirm") {
     const kind = String(msg.kind ?? "trip");
     const id = String(msg.id ?? "");
-    const left = String(msg.decision ?? "") === "left";
+    const decision = String(msg.decision ?? "") === "left" ? "left" : "right";
     if (!id) return;
-    if (kind === "trip") {
-      const classification = left ? "business" : "personal";
-      await fetch("/api/push/action", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          data: { kind: "trip", tripId: id, classification },
-          actionId: classification,
-        }),
-      }).catch(() => {});
-    } else {
-      // expense / income — forwarded for forward-compat; the server
-      // maps known shapes and no-ops unknown ones.
-      await fetch("/api/push/action", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          data: { kind, id, decision: left ? "left" : "right" },
-          actionId: left ? "business" : "personal",
-        }),
-      }).catch(() => {});
-    }
+    await fetch("/api/watch/confirm", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, kind, decision }),
+    }).catch(() => {});
     return;
   }
 

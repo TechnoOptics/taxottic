@@ -20,6 +20,7 @@ struct WatchSnapshot: Codable, Equatable {
     var latestBadge: Badge?
     var newBadgeCode: String?
     var companyId: String?
+    var reward: Reward?
 
     struct Forecast: Codable, Equatable {
         var label: String
@@ -61,6 +62,10 @@ struct WatchSnapshot: Codable, Equatable {
     struct Badge: Codable, Equatable {
         var title: String
         var symbol: String
+    }
+    struct Reward: Codable, Equatable {
+        var title: String
+        var detail: String
     }
 
     static let empty = WatchSnapshot()

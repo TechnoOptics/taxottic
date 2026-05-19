@@ -14,6 +14,7 @@ const base: SnapshotInput = {
   latestBadgeCode: null,
   newBadgeCode: null,
   companyId: null,
+  reward: null,
 };
 
 describe("badgeTitle", () => {
@@ -68,8 +69,8 @@ describe("buildWatchSnapshot", () => {
     expect(s.confirmations[0].title.startsWith("Drive · 12.4 mi")).toBe(true);
     expect(s.confirmations[1]).toMatchObject({
       kind: "expense",
-      leftLabel: "Deduct",
-      rightLabel: "Skip",
+      leftLabel: "Business",
+      rightLabel: "Personal",
     });
   });
 
