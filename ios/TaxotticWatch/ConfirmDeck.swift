@@ -82,14 +82,30 @@ private struct SwipeCard: View {
             Text(item.subtitle)
                 .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(Brand.creamMuted)
-            HStack {
-                Label(item.leftLabel, systemImage: "arrow.left")
-                Spacer()
-                Label(item.rightLabel, systemImage: "arrow.right")
+            // Swipe OR tap — an explicit target is the reliable path
+            // on a tiny screen; the swipe is the delight. Both commit
+            // the same classification.
+            HStack(spacing: 8) {
+                Button { onCommit(true) } label: {
+                    Text(item.leftLabel)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Brand.ink800))
+                        .foregroundStyle(Brand.cream)
+                }
+                .buttonStyle(.plain)
+                Button { onCommit(false) } label: {
+                    Text(item.rightLabel)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Brand.ink800))
+                        .foregroundStyle(Brand.cream)
+                }
+                .buttonStyle(.plain)
             }
-            .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(Brand.creamMuted)
-            .padding(.top, 1)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .jewelCard()
