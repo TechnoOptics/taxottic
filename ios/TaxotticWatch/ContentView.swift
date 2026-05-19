@@ -9,20 +9,30 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var model: WatchModel
     private var s: WatchSnapshot { model.snapshot }
+    @State private var page = 0
+    private let pageCount = 7
 
     var body: some View {
         ZStack {
             Brand.backdrop
-            TabView {
-                HeroPage(s: s)
-                ForecastPage(f: s.forecast)
-                ConfirmDeck()
-                MileagePage()
-                DeductionsPage(s: s)
-                GoalsPage(goals: s.goals)
-                AchievementPage(s: s) { model.requestExpenseCapture() }
+            // .verticalPage is driven by the Digital Crown on
+            // watchOS; the selection binding lets the gold bezel
+            // track the crown as it turns the pages.
+            TabView(selection: $page) {
+                HeroPage(s: s).tag(0)
+                ForecastPage(f: s.forecast).tag(1)
+                ConfirmDeck().tag(2)
+                MileagePage().tag(3)
+                DeductionsPage(s: s).tag(4)
+                GoalsPage(goals: s.goals).tag(5)
+                AchievementPage(s: s) { model.requestExpenseCapture() }.tag(6)
             }
             .tabViewStyle(.verticalPage)
+
+            // The gold scroll-bezel rides the rim, turning with the crown.
+            BezelProgress(
+                progress: Double(page) / Double(pageCount - 1)
+            )
 
             if s == .empty {
                 Text("Open Taxottic on iPhone to sync")

@@ -15,6 +15,7 @@ enum Brand {
     static let ink950 = Color(hex: 0x121A2A)   // deepest
     static let ink800 = Color(hex: 0x1D2843)
     static let ink700 = Color(hex: 0x243150)
+    static let ink600 = Color(hex: 0x2F3E63)
 
     // Metallic gold ramp — the jewelry.
     static let goldBright = Color(hex: 0xF2D896)
@@ -25,14 +26,18 @@ enum Brand {
     static let cream = Color(hex: 0xFBF7E9)
     static let creamMuted = Color(hex: 0xFBF7E9).opacity(0.62)
 
-    /// The page backdrop: a soft midnight radial so the watch face
-    /// "glows" from its center like a gemstone, not a flat fill.
+    /// The page backdrop: the SAME blue gradient as the app — a
+    /// top-lit slate sweeping down into the deepest midnight, with a
+    /// soft centre catch-light. Reads as one polished dial surface.
     static var backdrop: some View {
         ZStack {
-            ink950
+            LinearGradient(
+                colors: [ink600, ink900, ink950],
+                startPoint: .top, endPoint: .bottom
+            )
             RadialGradient(
-                colors: [ink700.opacity(0.55), ink950],
-                center: .center, startRadius: 4, endRadius: 180
+                colors: [ink700.opacity(0.45), .clear],
+                center: .center, startRadius: 2, endRadius: 150
             )
         }
         .ignoresSafeArea()
@@ -42,6 +47,12 @@ enum Brand {
     static let goldSheen = LinearGradient(
         colors: [goldShadow, goldBright, gold, goldShadow],
         startPoint: .topLeading, endPoint: .bottomTrailing
+    )
+
+    /// Angular brushed-gold sweep for the scroll bezel.
+    static let goldArc = AngularGradient(
+        colors: [goldShadow, goldDeep, goldBright, gold, goldBright, goldDeep, goldShadow],
+        center: .center
     )
 
     /// Faint inner-glass fill for cards.
@@ -186,5 +197,36 @@ extension View {
             .background(Brand.glass, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .goldRim(radius: radius)
             .shadow(color: .black.opacity(0.45), radius: 8, y: 4)
+    }
+}
+
+/// The scroll bezel. A faint full gold rail traces the rim; a bright
+/// brushed-gold arc grows from 12 o'clock and turns slightly as the
+/// Digital Crown moves through the pages — a Rolex-style rotating
+/// bezel that doubles as the scroll-position indicator. Overlaid on
+/// the whole watch face, above content, ignoring safe area so it
+/// hugs the physical edge.
+struct BezelProgress: View {
+    /// 0‥1 — current page over (pageCount - 1).
+    var progress: Double
+
+    var body: some View {
+        let p = max(0, min(1, progress))
+        ZStack {
+            Circle()
+                .stroke(Brand.gold.opacity(0.16), lineWidth: 6)
+            Circle()
+                .trim(from: 0, to: max(0.015, p))
+                .stroke(
+                    Brand.goldArc,
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90 + p * 22))
+                .shadow(color: Brand.goldBright.opacity(0.5), radius: 3)
+        }
+        .padding(3)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: progress)
     }
 }
