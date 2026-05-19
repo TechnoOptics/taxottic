@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { getMyCompanies } from "@/lib/auth";
+import { getMyCompanies, getCompaniesForUserId } from "@/lib/auth";
+import { resolveWatchUserId } from "@/lib/watch/device-auth";
 import { computeReadiness } from "@/lib/dashboard/readiness";
 import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
 import { buildWatchSnapshot, type SnapshotInput } from "@/lib/watch/snapshot";
@@ -26,12 +27,20 @@ export const dynamic = "force-dynamic";
 // expense+income are intentionally left to a follow-up (no fabricated
 // tax numbers on the wrist); the swipe deck + pages already render
 // them the moment the endpoint supplies them.
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Dual auth: the phone hits this with a session cookie; the watch
+  // hits it directly with `Authorization: Bearer <device token>`
+  // (QR-pairing). Session is tried first and is unchanged; the bearer
+  // path resolves the same account via the hashed device token.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
+  const viaSession = !!user;
+  const uid =
+    user?.id ??
+    (await resolveWatchUserId(req.headers.get("authorization")));
+  if (!uid) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -52,7 +61,9 @@ export async function GET() {
   let reward: SnapshotInput["reward"] = null;
 
   try {
-    const companies = await getMyCompanies();
+    const companies = viaSession
+      ? await getMyCompanies()
+      : await getCompaniesForUserId(uid);
     companyId = companies[0]?.company.id ?? null;
     if (companyId) {
       readinessScore = (await computeReadiness(admin, companyId, taxYear))
@@ -66,7 +77,7 @@ export async function GET() {
     const { data } = await admin
       .from("mileage_trips")
       .select("distance_miles")
-      .eq("driver_user_id", user.id)
+      .eq("driver_user_id", uid)
       .eq("classification", "business")
       .eq("tax_year", taxYear);
     const miles = (data ?? []).reduce(
@@ -84,7 +95,7 @@ export async function GET() {
     const { data } = await admin
       .from("mileage_trips")
       .select("distance_miles")
-      .eq("driver_user_id", user.id)
+      .eq("driver_user_id", uid)
       .eq("classification", "business")
       .gte("started_at", startOfDay.toISOString());
     todayBusinessMiles = (data ?? []).reduce(
@@ -103,7 +114,7 @@ export async function GET() {
     const { data } = await admin
       .from("mileage_trips")
       .select("id, distance_miles, started_at")
-      .eq("driver_user_id", user.id)
+      .eq("driver_user_id", uid)
       .eq("classification", "unclassified")
       .order("started_at", { ascending: false })
       .limit(6);
@@ -129,7 +140,7 @@ export async function GET() {
     const { data } = await admin
       .from("goals")
       .select("id, title, target_cents, saved_cents")
-      .eq("user_id", user.id)
+      .eq("user_id", uid)
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(5);
@@ -194,7 +205,7 @@ export async function GET() {
     const { data } = await admin
       .from("badges")
       .select("badge_code, awarded_at")
-      .eq("user_id", user.id)
+      .eq("user_id", uid)
       .order("awarded_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -228,7 +239,7 @@ export async function GET() {
           admin
             .from("tax_profiles")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", uid)
             .eq("tax_year", taxYear)
             .maybeSingle(),
           admin

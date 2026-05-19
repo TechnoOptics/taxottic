@@ -140,3 +140,25 @@ export async function getMyCompanies(): Promise<CompanyMembership[]> {
     .order("joined_at", { ascending: true });
   return (data ?? []) as unknown as CompanyMembership[];
 }
+
+/**
+ * Same shape as getMyCompanies() but for an explicit userId via the
+ * service client — for non-session callers (the watch authenticating
+ * with a device bearer token). The explicit `.eq("user_id", userId)`
+ * is the same belt-and-braces tenant scoping; soft-deleted companies
+ * are filtered identically.
+ */
+export async function getCompaniesForUserId(
+  userId: string,
+): Promise<CompanyMembership[]> {
+  const admin = createServiceClient();
+  const { data } = await admin
+    .from("company_members")
+    .select(
+      "company_id, role, joined_at, company:companies!inner(id, public_id, name, logo_url, deleted_at)",
+    )
+    .eq("user_id", userId)
+    .is("company.deleted_at", null)
+    .order("joined_at", { ascending: true });
+  return (data ?? []) as unknown as CompanyMembership[];
+}
