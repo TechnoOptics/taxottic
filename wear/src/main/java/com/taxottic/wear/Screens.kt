@@ -205,9 +205,39 @@ private fun Eyebrow(text: String) = Text(
     letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold,
 )
 
+/** The maker's signature — like the brand name under 12 o'clock on
+ *  a fine watch dial: tracked brushed-gold wordmark + the house gold
+ *  flourish (dot · bar · dot, same motif as the app icon). */
+@Composable
+private fun Wordmark() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            "TAXOTTIC",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 4.5.sp,
+            style = TextStyle(brush = Brand.brushedGold),
+        )
+        Spacer(Modifier.height(3.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Box(Modifier.size(3.dp).clip(RoundedCornerShape(50))
+                .background(Brand.goldDeep))
+            Box(Modifier.width(34.dp).height(2.dp)
+                .clip(RoundedCornerShape(50)).background(Brand.gold))
+            Box(Modifier.size(3.dp).clip(RoundedCornerShape(50))
+                .background(Brand.goldDeep))
+        }
+    }
+}
+
 @Composable
 private fun HeroScreen(s: WatchSnapshot, onCapture: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Wordmark()
+        Spacer(Modifier.height(8.dp))
         Box(contentAlignment = Alignment.Center) {
             val anim by animateFloatAsState(
                 s.taxReadinessPct / 100f, tween(1000), label = "gauge"

@@ -67,11 +67,32 @@ struct ContentView: View {
 
 // MARK: Hero
 
+/// The maker's signature — brand name under 12 o'clock like a fine
+/// watch dial: tracked brushed-gold wordmark + the house gold
+/// flourish (dot · bar · dot, same motif as the app icon).
+private struct Wordmark: View {
+    var body: some View {
+        VStack(spacing: 3) {
+            Text("TAXOTTIC")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .tracking(4.5)
+                .foregroundStyle(Brand.goldSheen)
+            HStack(spacing: 3) {
+                Circle().fill(Brand.goldDeep).frame(width: 3, height: 3)
+                Capsule().fill(Brand.gold).frame(width: 34, height: 2)
+                Circle().fill(Brand.goldDeep).frame(width: 3, height: 3)
+            }
+        }
+        .padding(.bottom, 2)
+    }
+}
+
 private struct HeroPage: View {
     let s: WatchSnapshot
     var onCapture: () -> Void
     var body: some View {
         VStack(spacing: 6) {
+            Wordmark()
             GoldGauge(progress: Double(s.taxReadinessPct) / 100) {
                 VStack(spacing: 1) {
                     Text("\(s.taxReadinessPct)%")
