@@ -10,6 +10,19 @@ buildscript {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
 
+        // Kotlin toolchain for the :wear module ONLY. The Capacitor
+        // :app / :capacitor-* modules are Java and never apply the
+        // Kotlin plugin, so these classpaths are inert for the phone
+        // release build (bundleRelease is unchanged) — they just let
+        // wear/build.gradle.kts resolve the `org.jetbrains.kotlin.*`
+        // plugin ids without a per-module version, so the Wear OS app
+        // builds from a clean checkout (adb sideload + Play pipeline).
+        // Kotlin 2.0.21: compose-compiler-gradle-plugin replaces the
+        // old composeOptions.kotlinCompilerExtensionVersion.
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
+        classpath 'org.jetbrains.kotlin:kotlin-serialization:2.0.21'
+        classpath 'org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.0.21'
+
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
