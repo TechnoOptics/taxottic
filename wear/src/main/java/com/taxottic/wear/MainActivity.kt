@@ -15,10 +15,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WatchData.start(this)
+        PairManager.start(this)
         setContent {
             val snap by WatchData.snapshot.collectAsState()
+            val pair by PairManager.state.collectAsState()
             WearApp(
                 snapshot = snap,
+                pairState = pair,
                 onConfirm = WatchData::confirm,
                 onMileage = WatchData::setMileage,
                 onAutoApply = WatchData::setAutoApply,
@@ -30,6 +33,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         WatchData.stop(this)
+        PairManager.stop()
         super.onDestroy()
     }
 }

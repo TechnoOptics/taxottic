@@ -101,6 +101,11 @@ object WatchData : DataClient.OnDataChangedListener {
         }
     }
 
+    /** Server-pull (PairManager) feeds the SAME snapshot the Data
+     *  Layer feeds — one source of truth, whichever transport is
+     *  live. Last write wins; both run the identical decoder. */
+    fun applyRemoteSnapshot(raw: String) = decodeJson(raw)
+
     private fun registerRelay() {
         val ctx = appContext ?: return
         relayRx = object : BroadcastReceiver() {
