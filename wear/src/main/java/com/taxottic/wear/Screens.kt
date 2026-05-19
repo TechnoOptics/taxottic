@@ -154,62 +154,34 @@ private fun RolexDial() {
     }
 }
 
-/** Datejust-style fluted bezel: radial gold flutes around the rim;
- *  the sector covered by `progress` is lit (polished) and the whole
- *  ring turns a touch as it fills — a real rotating bezel. */
+/** A single thin gold bezel: a faint full rail with a brushed-gold
+ *  arc that grows from 12 o'clock and turns slightly as you scroll —
+ *  a fine rotating bezel, nothing thick. */
 @Composable
 private fun FlutedBezel(progress: Float) {
     Canvas(Modifier.fillMaxSize()) {
         val cx = size.width / 2f
         val cy = size.height / 2f
-        val outer = size.minDimension / 2f - 2f
-        val inner = outer - 9.dp.toPx()
-        val flutes = 72
-        // Dark machined base ring the flutes are cut into.
+        val r = size.minDimension / 2f - 4f
+        val tl = Offset(cx - r, cy - r)
+        val sz = Size(r * 2, r * 2)
+        // Engraved rail.
         drawArc(
-            color = Brand.goldRoot,
+            color = Brand.gold.copy(alpha = 0.14f),
             startAngle = 0f, sweepAngle = 360f, useCenter = false,
-            topLeft = Offset(cx - (inner + 4f), cy - (inner + 4f)),
-            size = Size((inner + 4f) * 2, (inner + 4f) * 2),
-            style = Stroke(11.dp.toPx()),
+            topLeft = tl, size = sz, style = Stroke(3.5f),
         )
+        // Travelling brushed-gold arc — turns a touch as it fills.
         rotate(degrees = progress * 16f) {
-            for (i in 0 until flutes) {
-                val frac = i.toFloat() / flutes
-                val lit = frac <= progress
-                val a = Math.toRadians(i * (360.0 / flutes) - 90)
-                val edge = if (i % 2 == 0) outer else outer - 2.5f
-                val sx = cx + (cos(a) * inner).toFloat()
-                val sy = cy + (sin(a) * inner).toFloat()
-                val ex = cx + (cos(a) * edge).toFloat()
-                val ey = cy + (sin(a) * edge).toFloat()
-                val mx = (sx + ex) / 2f
-                val my = (sy + ey) / 2f
-                // Each flute is cut metal: a DARK root rising to a
-                // lit tip — the gradient tint that gives it depth.
-                val rootCol = if (lit) Brand.goldDark else Brand.goldRoot
-                val tipCol = when {
-                    lit && i % 2 == 0 -> Brand.goldBright
-                    lit -> Brand.gold
-                    i % 2 == 0 -> Brand.goldDeep.copy(alpha = 0.45f)
-                    else -> Brand.goldShadow.copy(alpha = 0.30f)
-                }
-                drawLine(rootCol, Offset(sx, sy), Offset(mx, my),
-                    strokeWidth = 3.4f, cap = StrokeCap.Round)
-                drawLine(tipCol, Offset(mx, my), Offset(ex, ey),
-                    strokeWidth = 3.4f, cap = StrokeCap.Round)
-            }
+            drawArc(
+                brush = Brand.goldSheen,
+                startAngle = -90f,
+                sweepAngle = (360f * progress).coerceAtLeast(4f),
+                useCenter = false,
+                topLeft = tl, size = sz,
+                style = Stroke(3.5f, cap = StrokeCap.Round),
+            )
         }
-        // Raking catch-light across the lit flutes — brushed sheen.
-        drawArc(
-            brush = Brand.goldSheen,
-            startAngle = -90f,
-            sweepAngle = (360f * progress).coerceAtLeast(4f),
-            useCenter = false,
-            topLeft = Offset(cx - inner, cy - inner),
-            size = Size(inner * 2, inner * 2),
-            style = Stroke(2.0f, cap = StrokeCap.Round),
-        )
     }
 }
 
