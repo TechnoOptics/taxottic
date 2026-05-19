@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { MileageMap, type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
+import { TripThumbnail } from "@/components/maps/TripThumbnail";
 import { reclassifyTrip } from "./actions";
 
 // Employee mileage dashboard. Their own driving trails for a
@@ -184,16 +185,31 @@ export default async function MileagePage({
                     key={t.id}
                     className="card p-4 grid sm:grid-cols-[1fr_auto] gap-3 items-center"
                   >
-                    <div className="min-w-0">
-                      <div className="text-sm text-forest-900">
-                        {new Date(t.started_at).toLocaleString()} —{" "}
-                        {new Date(t.ended_at).toLocaleTimeString()}
-                      </div>
-                      <div className="text-xs text-ink-muted mt-0.5">
-                        {fmtMiles(Number(t.distance_miles))} mi ·{" "}
-                        {t.classification === "business"
-                          ? `${fmtUsd(Number(t.deduction_cents))} deduction`
-                          : t.classification}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <TripThumbnail
+                        points={[...t.mileage_points]
+                          .sort((a, b) =>
+                            a.captured_at < b.captured_at ? -1 : 1,
+                          )
+                          .map((p) => ({ lat: p.lat, lng: p.lng }))}
+                        classification={
+                          t.classification === "business" ||
+                          t.classification === "personal"
+                            ? t.classification
+                            : "unclassified"
+                        }
+                      />
+                      <div className="min-w-0">
+                        <div className="text-sm text-forest-900">
+                          {new Date(t.started_at).toLocaleString()} —{" "}
+                          {new Date(t.ended_at).toLocaleTimeString()}
+                        </div>
+                        <div className="text-xs text-ink-muted mt-0.5">
+                          {fmtMiles(Number(t.distance_miles))} mi ·{" "}
+                          {t.classification === "business"
+                            ? `${fmtUsd(Number(t.deduction_cents))} deduction`
+                            : t.classification}
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-1.5">
