@@ -42,7 +42,18 @@ export type SnapshotInput = {
   latestBadgeCode: string | null;
   newBadgeCode: string | null;
   companyId: string | null;
+  reward: { title: string; detail: string } | null;
 };
+
+/** A trip that started on a weekend or outside ~8am–6pm is more
+ *  likely personal — surface it so the user double-checks. */
+function afterHours(iso: string): boolean {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const day = d.getUTCDay(); // 0 Sun, 6 Sat
+  const h = d.getUTCHours();
+  return day === 0 || day === 6 || h < 8 || h >= 18;
+}
 
 export function badgeTitle(code: string): string {
   return code
@@ -93,23 +104,30 @@ export function buildWatchSnapshot(input: SnapshotInput): WatchSnapshot {
   snap.ytdDeductionCents = ytd;
   snap.estimatedTaxSavedCents = Math.round(ytd * ROUGH_MARGINAL_RATE);
 
-  const tripCards: WatchConfirm[] = input.pendingTrips.map((t) => ({
-    id: t.id,
-    kind: "trip",
-    title: `Drive · ${fmtMiles(t.distanceMiles)}`,
-    subtitle: whenLabel(t.startedAtISO),
-    amountCents: Math.max(0, Math.round(t.estDeductionCents)),
-    leftLabel: "Business",
-    rightLabel: "Personal",
-  }));
+  const tripCards: WatchConfirm[] = input.pendingTrips.map((t) => {
+    const ah = afterHours(t.startedAtISO);
+    return {
+      id: t.id,
+      kind: "trip",
+      title: `Drive · ${fmtMiles(t.distanceMiles)}`,
+      // Flag out-of-hours drives so the user looks twice.
+      subtitle: ah
+        ? `${whenLabel(t.startedAtISO)} · after-hours`
+        : whenLabel(t.startedAtISO),
+      amountCents: Math.max(0, Math.round(t.estDeductionCents)),
+      leftLabel: "Business",
+      rightLabel: "Personal",
+    };
+  });
+  // Bank-synced expense/income awaiting a business-or-personal call.
   const expenseCards: WatchConfirm[] = input.pendingExpenses.map((e) => ({
     id: e.id,
     kind: e.kind,
     title: e.label,
     subtitle: e.note,
     amountCents: Math.max(0, Math.round(e.amountCents)),
-    leftLabel: e.kind === "income" ? "Business" : "Deduct",
-    rightLabel: e.kind === "income" ? "Personal" : "Skip",
+    leftLabel: "Business",
+    rightLabel: "Personal",
   }));
   snap.confirmations = [...tripCards, ...expenseCards];
 
@@ -144,6 +162,7 @@ export function buildWatchSnapshot(input: SnapshotInput): WatchSnapshot {
   }
   if (input.newBadgeCode) snap.newBadgeCode = input.newBadgeCode;
   if (input.companyId) snap.companyId = input.companyId;
+  if (input.reward) snap.reward = input.reward;
 
   return snap;
 }

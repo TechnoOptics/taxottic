@@ -151,17 +151,31 @@ private struct ForecastPage: View {
             Eyebrow(text: "Live forecast")
             if let f {
                 let owe = f.netCents >= 0
-                Text(owe ? "Projected owed" : "Projected refund")
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(Brand.creamMuted)
-                CountingMoney(cents: abs(f.netCents), size: 30)
-                HStack(spacing: 10) {
-                    Stat(label: "Eff. rate", value: "\(f.effectiveRatePct)%")
-                    Stat(label: "YTD income", value: f.ytdIncomeCents.usd0)
+                // The showpiece: a big brushed-gold figure inside a
+                // thin gold rate-ring (fills with the effective rate).
+                ZStack {
+                    Circle()
+                        .stroke(Brand.gold.opacity(0.14), lineWidth: 6)
+                    Circle()
+                        .trim(from: 0, to: max(0.04, min(1, Double(f.effectiveRatePct) / 100)))
+                        .stroke(Brand.goldSheen,
+                                style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 1) {
+                        Text(owe ? "you'll owe" : "refund")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(Brand.creamMuted)
+                        CountingMoney(cents: abs(f.netCents), size: 26)
+                        Text("\(f.effectiveRatePct)% eff. rate")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(Brand.gold)
+                    }
                 }
-                Text(f.label)
+                .frame(width: 132, height: 132)
+                Text("on \(f.ytdIncomeCents.usd0) income · \(f.label)")
                     .font(.system(size: 10, design: .rounded))
                     .foregroundStyle(Brand.creamMuted)
+                    .multilineTextAlignment(.center)
             } else {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .font(.system(size: 26)).foregroundStyle(Brand.goldSheen)

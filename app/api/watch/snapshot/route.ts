@@ -43,11 +43,13 @@ export async function GET() {
   let todayBusinessMiles = 0;
   let todayDeductionCents = 0;
   let pendingTrips: SnapshotInput["pendingTrips"] = [];
+  let pendingExpenses: SnapshotInput["pendingExpenses"] = [];
   let goals: SnapshotInput["goals"] = [];
   let latestBadgeCode: string | null = null;
   let newBadgeCode: string | null = null;
   let companyId: string | null = null;
   let forecastOut: WatchSnapshot["forecast"] = undefined;
+  let reward: SnapshotInput["reward"] = null;
 
   try {
     const companies = await getMyCompanies();
@@ -147,6 +149,45 @@ export async function GET() {
     });
   } catch {
     /* no goals */
+  }
+
+  // Reward: a goal just reached its target → celebrate on the wrist.
+  const hitGoal = goals.find(
+    (g) => g.targetCents > 0 && g.savedCents >= g.targetCents,
+  );
+  if (hitGoal) reward = { title: "Goal reached!", detail: hitGoal.title };
+
+  // Bank-synced transactions awaiting a business-or-personal call —
+  // the swipe deck's expense cards.
+  if (companyId) {
+    try {
+      const { data } = await admin
+        .from("bank_transactions")
+        .select("id, description, amount_cents")
+        .eq("company_id", companyId)
+        .eq("ignored", false)
+        .is("applied_category_code", null)
+        .is("applied_expense_id", null)
+        .is("applied_income_id", null)
+        .order("posted_at", { ascending: false })
+        .limit(8);
+      pendingExpenses = (data ?? []).map((row) => {
+        const t = row as {
+          id: string;
+          description: string | null;
+          amount_cents: number;
+        };
+        return {
+          id: t.id,
+          kind: "expense" as const,
+          label: (t.description || "Bank expense").slice(0, 40),
+          note: "needs business or personal",
+          amountCents: Math.abs(Number(t.amount_cents || 0)),
+        };
+      });
+    } catch {
+      /* no bank feed yet */
+    }
   }
 
   try {
@@ -264,13 +305,14 @@ export async function GET() {
         todayBusinessMiles,
         todayDeductionCents,
         pendingTrips,
-        pendingExpenses: [],
+        pendingExpenses,
         goals,
         deductions: [],
         forecast: forecastOut,
         latestBadgeCode,
         newBadgeCode,
         companyId,
+        reward,
       }),
     );
   } catch {
