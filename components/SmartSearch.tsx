@@ -165,7 +165,7 @@ export function SmartSearch({ companyPublicId }: Props) {
           ref={popoverRef}
           role="dialog"
           aria-label="Bella's answer"
-          className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-forest-100 bg-paper shadow-xl p-4"
+          className="card card-opaque absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-[70vh] overflow-y-auto !p-4"
         >
           {status === "asking" ? (
             <div className="flex items-center gap-2 text-sm text-ink-soft">

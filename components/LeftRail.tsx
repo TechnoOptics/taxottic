@@ -30,6 +30,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 const DEFAULT_ORDER: ItemKey[] = [
   "dashboard",
+  "mileage",
   "tax_profile",
   "goals",
   "reminders",
@@ -41,6 +42,7 @@ const DEFAULT_ORDER: ItemKey[] = [
 
 type ItemKey =
   | "dashboard"
+  | "mileage"
   | "tax_profile"
   | "goals"
   | "reminders"
@@ -63,6 +65,15 @@ const ITEMS: Record<ItemKey, ItemDef> = {
     href: "/dashboard",
     icon: (
       <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />
+    ),
+  },
+  mileage: {
+    key: "mileage",
+    label: "Mileage",
+    href: "/mileage",
+    // Steering wheel-ish: car silhouette + a wheel below.
+    icon: (
+      <Path d="M5 13l1.5-4.5A2 2 0 018.4 7h7.2a2 2 0 011.9 1.5L19 13M3 13h18v3a2 2 0 01-2 2h-1a2 2 0 01-2-2H8a2 2 0 01-2 2H5a2 2 0 01-2-2v-3zM7 16h.01M17 16h.01" />
     ),
   },
   tax_profile: {
@@ -215,19 +226,24 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
     "group/item flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors";
 
   // Expand-on-hover on the desktop rail; sheet mode is always wide.
+  // `card card-opaque` gives us the right surface in BOTH themes —
+  // white in light mode, forest-800 in dark mode — automatically via
+  // the existing globals.css overrides. The previous `bg-paper/95`
+  // didn't flip in dark mode, leaving a stark white block on the
+  // navy page (May 20 regression report).
   const railClass =
     mode === "rail"
-      ? // The fixed rail is collapsed (64px showing icons + a 4px
-        // peek of the label). It expands to 224px on hover OR while
-        // reordering is on. Position: fixed keeps it pinned to the
-        // viewport without affecting layout of existing pages.
-        "fixed left-2 z-40 rounded-2xl border border-forest-100 bg-paper/95 backdrop-blur shadow-lg p-2 " +
+      ? // The fixed rail is collapsed (64px showing icons). It
+        // expands to 224px on hover OR while reordering is on.
+        // Position: fixed keeps it pinned to the viewport without
+        // affecting layout of existing pages.
+        "card card-opaque fixed left-2 z-40 !rounded-2xl !p-2 " +
         "hidden lg:flex flex-col transition-all duration-200 " +
         (reordering ? "w-56" : "w-16 hover:w-56")
       : // Sheet mode (mobile drawer) — full-width content panel
         // inside a backdrop. Parent controls the open state +
-        // backdrop click.
-        "relative w-72 max-w-[85vw] rounded-r-2xl border-r border-forest-100 bg-paper p-2 flex flex-col";
+        // backdrop click. card-opaque so it survives dark theme.
+        "card card-opaque relative w-72 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
   // Top offset for the rail: header is 3.25rem + safe-top. We start
   // the rail just below it so it never overlaps the wordmark / search.
