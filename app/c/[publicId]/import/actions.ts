@@ -1126,3 +1126,66 @@ export async function deleteAccountTransactions(formData: FormData) {
   // Surface the count for the client toast.
   return { deleted: count ?? ownedIds.length };
 }
+
+/**
+ * Toggle bank_accounts.is_excluded. An excluded account stays linked
+ * (you still see it in the list) but its transactions are filtered
+ * out of forecast/deductions/etc. — useful when an owner connects a
+ * personal card alongside the business one. Manager-only.
+ */
+export async function setAccountExcluded(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const accountId = String(formData.get("account_id") ?? "");
+  const company_id = String(formData.get("company_id") ?? "");
+  const excludedRaw = String(formData.get("excluded") ?? "");
+  const excluded =
+    excludedRaw === "true" || excludedRaw === "1" || excludedRaw === "on";
+
+  if (!accountId) throw new Error("Missing account_id.");
+  if (!company_id) throw new Error("Missing company_id.");
+
+  // Manager/owner only — same role required for disconnect / delete.
+  const { data: membership } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("company_id", company_id)
+    .maybeSingle();
+  if (
+    !membership ||
+    (membership.role !== "manager" && membership.role !== "owner")
+  ) {
+    throw new Error("Only the company manager can edit accounts.");
+  }
+
+  // Account must roll up to a bank_connection of THIS company.
+  const { data: row } = await admin
+    .from("bank_accounts")
+    .select(
+      "id, connection:bank_connections!inner(company_id)",
+    )
+    .eq("id", accountId)
+    .maybeSingle();
+  const ownerCompany = (row as unknown as {
+    connection?: { company_id?: string };
+  } | null)?.connection?.company_id;
+  if (!row || ownerCompany !== company_id) {
+    throw new Error("Account does not belong to this company.");
+  }
+
+  const { error } = await admin
+    .from("bank_accounts")
+    .update({ is_excluded: excluded })
+    .eq("id", accountId);
+  if (error) throw new Error(error.message);
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", company_id)
+    .single();
+  if (company?.public_id) {
+    revalidatePath(`/c/${company.public_id}/banks`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+  }
+}
