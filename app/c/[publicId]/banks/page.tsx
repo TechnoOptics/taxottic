@@ -13,6 +13,7 @@ import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
 import { disconnectBank } from "@/app/actions/recycle-bin";
 import { TransactionsBulkDeleter } from "@/components/banking/TransactionsBulkDeleter";
+import { deleteAccountTransactions } from "@/app/c/[publicId]/import/actions";
 
 type Params = Promise<{ publicId: string }>;
 type SearchParams = Promise<{
@@ -479,7 +480,8 @@ export default async function BanksPage({
               <div className="flex items-center gap-4">
                 {isManager ? (
                   <TransactionsBulkDeleter
-                    companyId={company.id}
+                    action={deleteAccountTransactions}
+                    hiddenFields={{ company_id: company.id }}
                     transactions={txs.map((t) => ({
                       id: t.id,
                       merchant:
