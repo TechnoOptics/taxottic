@@ -128,7 +128,11 @@ export default async function BanksPage({
         "id, posted_date, amount_cents, merchant_name, description, personal_finance_category, user_action",
       )
       .order("posted_date", { ascending: false })
-      .limit(20),
+      // 20 → 500 once monthly accordions land: each month folds to a
+      // single summary line, so the page stays light even with a
+      // year of activity. Current-year-only filter (PR #154 in the
+      // sync) keeps this bounded.
+      .limit(500),
   ]);
 
   type ConnRow = {
@@ -560,26 +564,118 @@ export default async function BanksPage({
                 </Link>
               </div>
             </div>
+            {/* Group by month so a year of bank activity isn't a
+                500-row scroll. <details> stays server-rendered (no
+                client JS), current month opens by default, prior
+                months collapse to a one-line summary with their
+                month total + tx count. */}
             <ul className="mt-3 grid gap-2">
-              {txs.map((t) => {
-                const merchant = t.merchant_name ?? t.description ?? "Transaction";
-                const isExpense = t.amount_cents > 0;
-                const master = isExpense
-                  ? findMasterForExpense(merchant, t.personal_finance_category)
-                  : null;
-                const amount = new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                }).format(Math.abs(t.amount_cents) / 100);
-                const date = new Date(t.posted_date).toLocaleDateString(
-                  "en-US",
-                  { month: "short", day: "numeric" },
+              {(() => {
+                // Bucket by "YYYY-MM" so a calendar year wraparound
+                // (Dec 2025 vs Dec 2026) sorts correctly.
+                const MONTH_LABELS = [
+                  "January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December",
+                ];
+                const nowYear = new Date().getUTCFullYear();
+                const nowMonth = new Date().getUTCMonth() + 1;
+                const buckets = new Map<string, typeof txs>();
+                for (const t of txs) {
+                  const d = new Date(t.posted_date);
+                  const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+                  const arr = buckets.get(key) ?? [];
+                  arr.push(t);
+                  buckets.set(key, arr);
+                }
+                // Sort newest first.
+                const sortedKeys = Array.from(buckets.keys()).sort((a, b) =>
+                  a < b ? 1 : a > b ? -1 : 0,
                 );
-                return (
-                  <li
-                    key={t.id}
-                    className="card p-3 sm:p-4 flex items-start gap-3 sm:gap-4"
-                  >
+                return sortedKeys.map((key) => {
+                  const monthTxs = buckets.get(key)!;
+                  const [yStr, mStr] = key.split("-");
+                  const y = Number(yStr);
+                  const m = Number(mStr);
+                  const isCurrent = y === nowYear && m === nowMonth;
+                  // Inflow vs outflow nets: total expense (positive
+                  // cents in our convention) minus total income
+                  // (negative cents). Show net only — the cards
+                  // below carry the per-row sign cues.
+                  const net = monthTxs.reduce((a, t) => a + t.amount_cents, 0);
+                  const netLabel = new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                  }).format(Math.abs(net) / 100);
+                  return (
+                    <li key={key}>
+                      <details
+                        open={isCurrent}
+                        className="group rounded-xl border border-forest-100 bg-white overflow-hidden"
+                      >
+                        <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-cream/40 list-none">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <svg
+                              className="size-4 text-forest-700 transition-transform group-open:rotate-90 shrink-0"
+                              viewBox="0 0 20 20"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M7 5l6 5-6 5"
+                              />
+                            </svg>
+                            <span className="display text-base text-forest-900 truncate">
+                              {MONTH_LABELS[m - 1]} {y}
+                              {isCurrent ? (
+                                <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
+                                  This month
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="text-xs text-ink-muted">
+                              · {monthTxs.length}{" "}
+                              {monthTxs.length === 1 ? "tx" : "txs"}
+                            </span>
+                          </div>
+                          <div
+                            className={
+                              "display text-base shrink-0 tabular-nums " +
+                              (net >= 0 ? "text-forest-900" : "text-emerald-700")
+                            }
+                          >
+                            {net >= 0 ? netLabel : `+${netLabel}`}
+                          </div>
+                        </summary>
+                        <ul className="px-3 sm:px-4 pb-3 grid gap-2 border-t border-forest-100">
+                          {monthTxs.map((t) => {
+                            const merchant =
+                              t.merchant_name ?? t.description ?? "Transaction";
+                            const isExpense = t.amount_cents > 0;
+                            const master = isExpense
+                              ? findMasterForExpense(
+                                  merchant,
+                                  t.personal_finance_category,
+                                )
+                              : null;
+                            const amount = new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: "USD",
+                            }).format(Math.abs(t.amount_cents) / 100);
+                            const date = new Date(
+                              t.posted_date,
+                            ).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            });
+                            return (
+                              <li
+                                key={t.id}
+                                className="card p-3 sm:p-4 flex items-start gap-3 sm:gap-4"
+                              >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-sm sm:text-base text-forest-900 font-medium truncate">
@@ -641,9 +737,15 @@ export default async function BanksPage({
                         {t.user_action}
                       </span>
                     </div>
-                  </li>
-                );
-              })}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </details>
+                    </li>
+                  );
+                });
+              })()}
             </ul>
           </section>
         ) : null}

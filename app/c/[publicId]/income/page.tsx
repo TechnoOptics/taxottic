@@ -146,25 +146,90 @@ export default async function IncomePage({ params }: { params: Params }) {
               {formatCents(total)}
             </div>
           </div>
-          <ul className="mt-4 grid gap-2">
-            {rows && rows.length > 0 ? (
-              rows.map((r) => (
-                <IncomeRow
-                  key={r.id}
-                  row={r}
-                  companyId={company.id}
-                  taxYear={taxYear}
-                  currentMonth={currentMonth}
-                  updateAction={updateIncome}
-                  deleteAction={deleteIncome}
-                />
-              ))
-            ) : (
-              // Empty state with import + bank CTAs. Round-2 audit
-              // Section 6: the prior dead-end empty state didn't tell
-              // the user where to go next. Point at both real paths
-              // for backfilling a year's worth of income at once.
-              <li className="py-10 text-center">
+          {/* Group by month — same accordion pattern as Expenses /
+              Banks. Current month auto-expands; prior months fold
+              away with their month total + count in the summary. */}
+          {rows && rows.length > 0 ? (
+            <ul className="mt-4 grid gap-2">
+              {(() => {
+                const buckets = new Map<number, typeof rows>();
+                for (const r of rows) {
+                  const arr = buckets.get(r.month) ?? [];
+                  arr.push(r);
+                  buckets.set(r.month, arr);
+                }
+                return Array.from(buckets.entries()).map(
+                  ([month, monthRows]) => {
+                    const monthTotal = monthRows.reduce(
+                      (a, r) => a + r.amount_cents,
+                      0,
+                    );
+                    const isCurrent = month === currentMonth;
+                    return (
+                      <li key={month}>
+                        <details
+                          open={isCurrent}
+                          className="group rounded-xl border border-forest-100 bg-white overflow-hidden"
+                        >
+                          <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-cream/40 list-none">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <svg
+                                className="size-4 text-forest-700 transition-transform group-open:rotate-90 shrink-0"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M7 5l6 5-6 5"
+                                />
+                              </svg>
+                              <span className="display text-base text-forest-900 truncate">
+                                {MONTH_LABELS[month - 1]}
+                                {isCurrent ? (
+                                  <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
+                                    This month
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="text-xs text-ink-muted">
+                                · {monthRows.length}{" "}
+                                {monthRows.length === 1 ? "entry" : "entries"}
+                              </span>
+                            </div>
+                            <div className="display text-base text-forest-900 shrink-0">
+                              {formatCents(monthTotal)}
+                            </div>
+                          </summary>
+                          <ul className="px-3 sm:px-4 pb-3 grid gap-2 border-t border-forest-100">
+                            {monthRows.map((r) => (
+                              <IncomeRow
+                                key={r.id}
+                                row={r}
+                                companyId={company.id}
+                                taxYear={taxYear}
+                                currentMonth={currentMonth}
+                                updateAction={updateIncome}
+                                deleteAction={deleteIncome}
+                              />
+                            ))}
+                          </ul>
+                        </details>
+                      </li>
+                    );
+                  },
+                );
+              })()}
+            </ul>
+          ) : (
+            // Empty state with import + bank CTAs. Round-2 audit
+            // Section 6: the prior dead-end empty state didn't tell
+            // the user where to go next. Point at both real paths
+            // for backfilling a year's worth of income at once.
+            <div className="mt-4 py-10 text-center">
                 <div className="text-sm text-ink-muted">
                   No income entries yet for {taxYear}.
                 </div>
@@ -187,9 +252,8 @@ export default async function IncomePage({ params }: { params: Params }) {
                     Connect a bank
                   </Link>
                 </div>
-              </li>
-            )}
-          </ul>
+            </div>
+          )}
         </div>
       </section>
     </main>
