@@ -159,7 +159,7 @@ export function UserMenu({
               zIndex: 9999,
               maxWidth: "calc(100vw - 16px)",
             }}
-            className="w-72 card p-2 shadow-2xl"
+            className="w-72 card card-opaque p-2 shadow-2xl"
           >
             <div className="px-3 py-2.5 border-b border-forest-100">
               <div className="text-sm font-medium text-forest-900 truncate">
