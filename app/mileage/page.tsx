@@ -131,7 +131,7 @@ export default async function MileagePage({
               <AutoTrackToggle companyId={company.id} />
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               {Object.entries(RANGES).map(([k, v]) => (
                 <Link
                   key={k}
@@ -146,6 +146,20 @@ export default async function MileagePage({
                   {v.label}
                 </Link>
               ))}
+              {/* Cross-link to the dedicated business-trips
+                  breadcrumb dashboard. Keep this here even when
+                  there are zero business trips so a returning
+                  driver can land on the YTD view in one tap. */}
+              <Link
+                href="/mileage/business?range=ytd"
+                className="ml-1 text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-emerald-500"
+                />
+                Business breadcrumbs →
+              </Link>
             </div>
 
             <div className="mt-6 grid sm:grid-cols-3 gap-3">
