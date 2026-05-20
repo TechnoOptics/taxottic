@@ -78,6 +78,14 @@ export function buildAuthorizeUrl(state: string): string {
     scope: "read_write",
     state,
     redirect_uri: stripeOAuthRedirectUri(),
+    // Default ("account picker") locks users into whatever Stripe
+    // account their browser is signed into and only offers "Use this
+    // one" or "Open a new account" — no way to pick a DIFFERENT
+    // existing Stripe they own. `stripe_landing=login` puts them on
+    // the sign-in screen first, so they can authorise any existing
+    // Stripe (current session or another). They can still create a
+    // new account from there if they want.
+    stripe_landing: "login",
   });
   return `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
 }
