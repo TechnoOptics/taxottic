@@ -73,6 +73,13 @@ export default async function FirmBanksPage({
       "id, provider, institution_name, institution_logo_url, status, last_synced_at, last_error, created_at, accounts:bank_accounts(id, name, official_name, account_type, account_subtype, mask, current_balance_cents, iso_currency_code, is_excluded)",
     )
     .eq("company_id", engagement.company.id)
+    // Mirror the consumer banks page (/c/[publicId]/banks): a
+    // disconnected connection lives in the recycle bin and must not
+    // count as a live link from the firm view either. Without this
+    // filter a "1 connection / 1 account" line lingered on the firm
+    // page after the owner had already disconnected the bank on the
+    // consumer side.
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
   type ConnRow = {
     id: string;
