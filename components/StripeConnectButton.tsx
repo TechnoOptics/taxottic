@@ -60,6 +60,22 @@ export function StripeConnectButton({ companyId, className }: Props) {
       >
         {busy ? "Redirecting…" : "Connect Stripe"}
       </button>
+      {/* Stripe caches its own browser session across tabs. When that
+          happens its OAuth consent page auto-binds to whatever Stripe
+          account you're signed in as and offers only "Use this one"
+          or "Open new account" — no way to pick a different existing
+          Stripe. The only reliable workaround is to sign out of
+          Stripe first; this link opens Stripe's logout in a new tab
+          so the next "Connect Stripe" click starts from a clean
+          session. */}
+      <a
+        href="https://dashboard.stripe.com/logout"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block mt-1.5 text-[11px] text-ink-muted hover:text-forest-900 underline-offset-2 hover:underline"
+      >
+        Want a different Stripe account? Sign out of Stripe first ↗
+      </a>
       {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}
     </div>
   );
