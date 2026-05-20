@@ -4,7 +4,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteAccountTransactions } from "@/app/c/[publicId]/import/actions";
 
 export type DeletableTx = {
   id: string;
@@ -14,25 +13,37 @@ export type DeletableTx = {
 };
 
 /**
- * Manager-only "Edit transactions" affordance for the Recent
- * transactions list on /c/[publicId]/banks. Clicking Edit pops a
- * modal showing the same transactions with checkboxes + Select all,
- * a "Type 'delete' to confirm" textbox, and a destructive button
- * that's disabled until both (a) at least one row is selected AND
- * (b) the user types `delete` verbatim. The server action re-checks
- * both rules.
+ * "Edit transactions" affordance for a Recent-transactions list.
+ * Clicking Edit pops a modal showing the same transactions with
+ * checkboxes + Select all, a "Type 'delete' to confirm" textbox, and
+ * a destructive button that's disabled until both (a) at least one
+ * row is selected AND (b) the user types `delete` verbatim. The
+ * server action re-checks both rules.
  *
- * Defense-in-depth:
- *   - This UI's `disabled` is the friendly guard.
- *   - The server action validates manager role, company ownership of
- *     every id, and the literal "delete" confirmation string — so
- *     curl bypasses don't get through.
+ * The actual delete is performed by the `action` server function
+ * passed in by the parent — that way the consumer page authenticates
+ * via company_members (manager/owner role) and the firm-side page
+ * authenticates via firm_engagements access, each enforcing its own
+ * scope server-side.
+ *
+ * Form payload posted to `action`:
+ *   confirm   - the typed string (server requires exactly "delete")
+ *   tx_ids[]  - selected ids
+ *   + whatever scoping fields the parent provided via `hiddenFields`
+ *     (e.g. company_id on the consumer page, engagement_id on firm)
+ *
+ * Defense-in-depth: the UI's `disabled` is the friendly guard; the
+ * server action does the real validation (role, ownership, literal
+ * "delete" string) so curl bypasses can't slip through.
  */
 export function TransactionsBulkDeleter({
-  companyId,
+  action,
+  hiddenFields,
   transactions,
 }: {
-  companyId: string;
+  action: (formData: FormData) => Promise<unknown>;
+  /** Scoping ids (company_id / engagement_id / etc.) sent on every submit. */
+  hiddenFields: Record<string, string>;
   transactions: DeletableTx[];
 }) {
   const [open, setOpen] = useState(false);
@@ -74,10 +85,10 @@ export function TransactionsBulkDeleter({
     startTransition(async () => {
       try {
         const fd = new FormData();
-        fd.set("company_id", companyId);
+        for (const [k, v] of Object.entries(hiddenFields)) fd.set(k, v);
         fd.set("confirm", typed.trim().toLowerCase());
         for (const id of selected) fd.append("tx_ids", id);
-        await deleteAccountTransactions(fd);
+        await action(fd);
         close();
         router.refresh();
       } catch (e: any) {

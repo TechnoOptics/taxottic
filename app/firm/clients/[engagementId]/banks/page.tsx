@@ -4,6 +4,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { formatCents } from "@/lib/tax/forecast";
+import { TransactionsBulkDeleter } from "@/components/banking/TransactionsBulkDeleter";
+import { deleteAccountTransactionsForEngagement } from "./actions";
 
 // Tier 2 #5: Firm-side Plaid bank-feed viewer.
 //
@@ -269,11 +271,24 @@ export default async function FirmBanksPage({
 
         {transactions.length > 0 ? (
           <section className="mt-8">
-            <div className="flex items-end justify-between">
+            <div className="flex items-end justify-between gap-3 flex-wrap">
               <h2 className="display text-xl text-forest-900">
                 Recent transactions
               </h2>
-              <span className="text-xs text-ink-muted">Last 50</span>
+              <div className="flex items-center gap-4">
+                <TransactionsBulkDeleter
+                  action={deleteAccountTransactionsForEngagement}
+                  hiddenFields={{ engagement_id: engagementId }}
+                  transactions={transactions.map((t) => ({
+                    id: t.id,
+                    merchant:
+                      t.merchant_name ?? t.description ?? "Transaction",
+                    date: t.posted_date,
+                    amountCents: t.amount_cents,
+                  }))}
+                />
+                <span className="text-xs text-ink-muted">Last 50</span>
+              </div>
             </div>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-sm">
