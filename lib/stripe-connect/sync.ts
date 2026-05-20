@@ -81,10 +81,19 @@ export async function syncStripeConnection(
 
   const { data: conn } = await admin
     .from("bank_connections")
-    .select("id, external_item_id, cursor, company_id")
+    .select("id, external_item_id, cursor, company_id, deleted_at")
     .eq("id", connectionId)
     .maybeSingle();
   if (!conn) throw new Error("Stripe connection not found");
+  // Refuse to sync a soft-deleted connection. Without this guard a
+  // stray sync click (or a cron) after Disconnect re-set
+  // status="active" on the row, leaving a zombie connection that the
+  // consumer page hid (deleted_at filter) but other surfaces still
+  // counted. The disconnect is the canonical signal of intent —
+  // honour it across every sync pathway.
+  if (conn.deleted_at) {
+    return { added: 0, skipped: true };
+  }
   const stripeUserId = conn.external_item_id as string | null;
   if (!stripeUserId) {
     throw new Error("Stripe connection missing external_item_id (acct_…)");
