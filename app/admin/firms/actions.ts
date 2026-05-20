@@ -140,6 +140,106 @@ export async function approveFirmRequest(formData: FormData) {
   revalidatePath(`/admin/firms`);
 }
 
+/**
+ * Provision a firm directly, without going through the public access
+ * request → approve flow. Super-admin only. Same end-state as
+ * approveFirmRequest (active firm + owner invitation + welcome email
+ * via Supabase OTP), but accepts the firm details inline so the
+ * operator doesn't have to file a request to themselves first.
+ *
+ * Form fields:
+ *   firm_name         (required)
+ *   contact_email     (required)
+ *   contact_full_name (optional)
+ *   slug              (optional — auto-derived from firm_name otherwise)
+ */
+export async function createFirmDirect(formData: FormData) {
+  await requireSuperAdmin();
+  const admin = createServiceClient();
+
+  const firmName = String(formData.get("firm_name") ?? "").trim();
+  const contactEmail = String(formData.get("contact_email") ?? "")
+    .trim()
+    .toLowerCase();
+  const contactName =
+    String(formData.get("contact_full_name") ?? "").trim() || null;
+  const manualSlugRaw = String(formData.get("slug") ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!firmName) throw new Error("Firm name is required.");
+  // Minimal email shape check — Supabase + RLS catch the rest.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+    throw new Error("A valid contact email is required.");
+  }
+  if (manualSlugRaw && !isValidSlugFormat(manualSlugRaw)) {
+    throw new Error(
+      "Slug must be 3-32 chars, lowercase alphanumeric + hyphens, no reserved words (admin, hq, www, etc.).",
+    );
+  }
+  const slug = await pickAvailableSlug(
+    admin,
+    firmName,
+    manualSlugRaw || undefined,
+  );
+
+  const { data: firm, error: firmError } = await admin
+    .from("firms")
+    .insert({
+      name: firmName,
+      slug,
+      email: contactEmail,
+      status: "active",
+      tier: "starter",
+    })
+    .select("id, public_id, slug")
+    .single();
+  if (firmError || !firm) {
+    throw new Error(firmError?.message ?? "Insert failed");
+  }
+
+  const token = invitationToken();
+  const { error: invErr } = await admin.from("firm_invitations").insert({
+    firm_id: firm.id,
+    email: contactEmail,
+    full_name: contactName,
+    role: "owner",
+    token,
+  });
+  if (invErr) throw new Error(invErr.message);
+
+  const sendResult = await sendFirmInviteMagicLink(admin, {
+    email: contactEmail,
+    invitePath: `/invite/${token}`,
+    destinationOrigin: enterpriseSiteOrigin(),
+  });
+  if (!sendResult.ok) {
+    console.error(
+      `[firm-invite] (direct) email send FAILED for "${firmName}" (${contactEmail}): ${sendResult.reason}. Manual fallback URL: ${sendResult.inviteUrl}`,
+    );
+  } else {
+    console.log(
+      `[firm-invite] (direct) welcome email sent to ${contactEmail} for "${firmName}" -> ${sendResult.inviteUrl}`,
+    );
+  }
+
+  await logFirmActivity({
+    client: admin,
+    firmId: firm.id,
+    kind: "firm.member_invited",
+    summary: `Firm provisioned directly at ${slug}.taxottic.com — owner invitation sent to ${contactEmail}.`,
+    payload: {
+      direct: true,
+      slug,
+      owner_email: contactEmail,
+      owner_name: contactName,
+    },
+    actorSide: "system",
+  });
+
+  revalidatePath(`/admin/firms`);
+}
+
 export async function rejectFirmRequest(formData: FormData) {
   await requireSuperAdmin();
   const admin = createServiceClient();
