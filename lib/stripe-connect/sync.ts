@@ -64,6 +64,8 @@ export async function syncStripeConnection(
 ): Promise<{
   added: number;
   skipped?: boolean;
+  appliedIncome?: number;
+  appliedExpense?: number;
 }> {
   // Monthly throttle, same as Plaid. Forecasting is monthly; a
   // tighter cadence wastes API budget for no user benefit.
@@ -81,7 +83,7 @@ export async function syncStripeConnection(
 
   const { data: conn } = await admin
     .from("bank_connections")
-    .select("id, external_item_id, cursor, company_id, deleted_at")
+    .select("id, external_item_id, cursor, company_id, deleted_at, created_by")
     .eq("id", connectionId)
     .maybeSingle();
   if (!conn) throw new Error("Stripe connection not found");
@@ -99,6 +101,7 @@ export async function syncStripeConnection(
     throw new Error("Stripe connection missing external_item_id (acct_…)");
   }
   const companyId = conn.company_id as string;
+  const userId = (conn.created_by as string | null) ?? null;
   let cursor = (conn.cursor as string | null) ?? null;
 
   const stripe = getStripeForAccount(stripeUserId);
@@ -144,6 +147,17 @@ export async function syncStripeConnection(
   let lastSeen: string | null = cursor;
 
   for (let pageIdx = 0; pageIdx < MAX_PAGES; pageIdx++) {
+    type ExpandedSource = {
+      // Common shape across charge / payment / refund:
+      description?: string | null;
+      billing_details?: {
+        name?: string | null;
+        email?: string | null;
+      } | null;
+      statement_descriptor?: string | null;
+      customer?: string | null;
+      metadata?: Record<string, string> | null;
+    } | null;
     type BalanceTx = {
       id: string;
       amount: number;
@@ -153,7 +167,11 @@ export async function syncStripeConnection(
       net: number;
       fee: number;
       created: number;
-      source?: string | null;
+      // With `expand: ["data.source"]` Stripe inflates this from a
+      // bare id string into the full source object (charge, payment,
+      // refund, etc.). Tax allocation needs the description + the
+      // customer/billing details, not just "Stripe charge".
+      source?: ExpandedSource | string | null;
     };
     type ListResp = {
       data: BalanceTx[];
@@ -163,7 +181,11 @@ export async function syncStripeConnection(
       stripe as unknown as {
         balanceTransactions: {
           list: (
-            params: { limit: number; starting_after?: string },
+            params: {
+              limit: number;
+              starting_after?: string;
+              expand?: string[];
+            },
             opts: { stripeAccount: string },
           ) => Promise<ListResp>;
         };
@@ -171,6 +193,7 @@ export async function syncStripeConnection(
     ).balanceTransactions.list(
       {
         limit: PAGE,
+        expand: ["data.source"],
         ...(lastSeen ? { starting_after: lastSeen } : {}),
       },
       { stripeAccount: stripeUserId },
@@ -198,14 +221,22 @@ export async function syncStripeConnection(
         const signed = isExpense
           ? Math.abs(t.amount)
           : -Math.abs(t.amount);
+        // Pull the underlying charge/payment/refund object so the
+        // description shows WHO this was rather than the bare
+        // "Stripe charge". Falls back gracefully when source isn't
+        // expanded (e.g. balance-only adjustments).
+        const src =
+          t.source && typeof t.source === "object"
+            ? (t.source as ExpandedSource)
+            : null;
         return {
           account_id: bankAccountId,
           external_transaction_id: t.id,
           posted_date: postedDate,
           amount_cents: signed,
           iso_currency_code: (t.currency ?? "usd").toUpperCase(),
-          merchant_name: "Stripe",
-          description: t.description ?? `Stripe ${t.type}`,
+          merchant_name: src?.billing_details?.name ?? "Stripe",
+          description: enrichedDescription(t, src),
           payment_channel: "online",
           category_path: [stripeCategoryLabel(t.type)],
           personal_finance_category: stripeCategoryLabel(t.type),
@@ -232,6 +263,22 @@ export async function syncStripeConnection(
     if (!list.has_more) break;
   }
 
+  // Auto-apply pass — bring Stripe into parity with the Plaid sync.
+  // Without this, charge/payment rows sit in account_transactions
+  // forever with user_action=null and the user's income page +
+  // forecast show NOTHING. Mirror the Plaid pattern: for every
+  // still-pending Stripe row under this connection, insert a
+  // monthly_income / monthly_expenses row and flip user_action to
+  // "applied". Refunds + adjustments stay pending for human review.
+  const autoApplied = userId
+    ? await autoApplyPendingStripe({
+        admin,
+        bankAccountId,
+        companyId,
+        userId,
+      })
+    : { income: 0, expense: 0 };
+
   // Persist new cursor + last_synced_at so the next pass picks up
   // where we stopped and the throttle ticks.
   await admin
@@ -249,7 +296,159 @@ export async function syncStripeConnection(
   // the route handler so we stay framework-agnostic.)
   void companyId;
 
-  return { added };
+  return {
+    added,
+    appliedIncome: autoApplied.income,
+    appliedExpense: autoApplied.expense,
+  };
+}
+
+/**
+ * Build a human-useful description for a Stripe balance_transaction,
+ * preferring fields from its expanded source (the underlying charge
+ * / payment / refund) over the bare "Stripe charge" label. This is
+ * what shows up on the Recent transactions list AND what Bella's
+ * matcher looks at, so the merchant/customer string matters for
+ * deduction allocation, not just UX.
+ */
+function enrichedDescription(
+  t: { type: string; description?: string | null },
+  src: {
+    description?: string | null;
+    billing_details?: { name?: string | null; email?: string | null } | null;
+    statement_descriptor?: string | null;
+  } | null,
+): string {
+  const head = `Stripe ${t.type}`;
+  if (src) {
+    if (src.description && src.description.trim()) {
+      return `${head} · ${src.description.trim()}`;
+    }
+    if (src.billing_details?.name && src.billing_details.name.trim()) {
+      return `${head} · ${src.billing_details.name.trim()}`;
+    }
+    if (src.billing_details?.email && src.billing_details.email.trim()) {
+      return `${head} · ${src.billing_details.email.trim()}`;
+    }
+    if (
+      src.statement_descriptor &&
+      src.statement_descriptor.trim()
+    ) {
+      return `${head} · ${src.statement_descriptor.trim()}`;
+    }
+  }
+  if (t.description && t.description.trim()) {
+    return `${head} · ${t.description.trim()}`;
+  }
+  return head;
+}
+
+/**
+ * After a sync writes raw balance_transactions into
+ * account_transactions, this pass routes them into the same
+ * monthly_income / monthly_expenses tables the Plaid sync feeds —
+ * so the income page and the forecast actually reflect the data.
+ *
+ * Mapping (mirrors lib/plaid/sync.ts's auto-apply behaviour):
+ *   type=charge | payment   (inflow)   → monthly_income (source="sales")
+ *   type=stripe_fee         (outflow)  → monthly_expenses (code T048 — "Stripe fees")
+ *   type=refund | adjustment / other   → leave pending for human review
+ *
+ * We only touch rows still in user_action='pending', so re-runs are
+ * idempotent. Includes existing pending rows from older syncs, not
+ * just freshly-inserted ones — that means a single sync click after
+ * deploying this feature back-fills everything that was sitting
+ * un-applied.
+ */
+async function autoApplyPendingStripe(args: {
+  admin: SupabaseClient;
+  bankAccountId: string;
+  companyId: string;
+  userId: string;
+}): Promise<{ income: number; expense: number }> {
+  const { admin, bankAccountId, companyId, userId } = args;
+
+  const { data: pending } = await admin
+    .from("account_transactions")
+    .select("id, posted_date, amount_cents, raw_payload")
+    .eq("account_id", bankAccountId)
+    .eq("user_action", "pending")
+    .limit(500);
+
+  let income = 0;
+  let expense = 0;
+
+  for (const tx of pending ?? []) {
+    const raw = (tx.raw_payload ?? {}) as Record<string, unknown>;
+    const type = String(raw.type ?? "");
+    const cents = tx.amount_cents as number;
+    const posted = new Date(String(tx.posted_date ?? ""));
+    if (Number.isNaN(posted.getTime())) continue;
+    const taxYear = posted.getUTCFullYear();
+    const month = posted.getUTCMonth() + 1;
+
+    // Inflow → income. account_transactions.amount_cents uses
+    // negative=inflow (positive=expense) per the Plaid convention.
+    if ((type === "charge" || type === "payment") && cents < 0) {
+      const { data: row } = await admin
+        .from("monthly_income")
+        .insert({
+          company_id: companyId,
+          user_id: userId,
+          tax_year: taxYear,
+          month,
+          amount_cents: Math.abs(cents),
+          source: "sales",
+          notes: "Auto-imported from Stripe",
+        })
+        .select("id")
+        .maybeSingle();
+      if (row) {
+        await admin
+          .from("account_transactions")
+          .update({
+            user_action: "applied",
+            applied_to_income_id: row.id,
+            applied_at: new Date().toISOString(),
+            applied_by: userId,
+          })
+          .eq("id", tx.id);
+        income++;
+      }
+    } else if (type === "stripe_fee" && cents > 0) {
+      // Outflow → expense. T048 is the Stripe-fees deduction code
+      // in lib/deductions/master.ts (Website/SaaS/digital tools).
+      const { data: row } = await admin
+        .from("monthly_expenses")
+        .insert({
+          company_id: companyId,
+          user_id: userId,
+          tax_year: taxYear,
+          month,
+          amount_cents: cents,
+          category_code: "T048",
+          notes: "Auto-imported from Stripe",
+        })
+        .select("id")
+        .maybeSingle();
+      if (row) {
+        await admin
+          .from("account_transactions")
+          .update({
+            user_action: "applied",
+            applied_to_expense_id: row.id,
+            applied_at: new Date().toISOString(),
+            applied_by: userId,
+          })
+          .eq("id", tx.id);
+        expense++;
+      }
+    }
+    // refund / adjustment / application_fee / etc. → keep pending so
+    // the user can categorise them in the Recent transactions UI.
+  }
+
+  return { income, expense };
 }
 
 /**
