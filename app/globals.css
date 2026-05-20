@@ -886,6 +886,15 @@ main, footer, nav {
      equivalent so text remains readable. */
   html[data-theme="dark"] .bg-cream         { background-color: rgba(29, 40, 67, 0.55) !important; }
   html[data-theme="dark"] .bg-white         { background-color: rgba(29, 40, 67, 0.55) !important; }
+  /* Tailwind state-prefixed variants generate a separate class
+     each — `.hover\:bg-cream:hover` is a distinct selector from
+     `.bg-cream`. The plain override above doesn't catch it, which
+     left the new LeftRail's hover state rendering as a bright
+     cream rectangle on the dark dashboard (May 20 weekly polish).
+     Mirror the override for the hover/focus variants we actually
+     use so the dark theme is consistent everywhere. */
+  html[data-theme="dark"] .hover\:bg-cream:hover { background-color: rgba(29, 40, 67, 0.55) !important; }
+  html[data-theme="dark"] .focus\:bg-cream:focus { background-color: rgba(29, 40, 67, 0.55) !important; }
   /* Tailwind opacity-modified white backgrounds (`bg-white/40`,
      `bg-white/60`, `bg-white/70`, `bg-white/80`) bypass the plain
      `.bg-white` override because Tailwind generates a separate class
