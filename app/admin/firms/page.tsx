@@ -3,7 +3,11 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { deriveSlugCandidate } from "@/lib/firm/slug";
-import { approveFirmRequest, rejectFirmRequest } from "./actions";
+import {
+  approveFirmRequest,
+  createFirmDirect,
+  rejectFirmRequest,
+} from "./actions";
 
 function suggestSlug(firmName: string): string {
   return deriveSlugCandidate(firmName) || "smithcpa";
@@ -59,6 +63,79 @@ export default async function AdminFirmsPage() {
             ← All admin
           </Link>
         </div>
+
+        {/* Provision a firm directly (no public request needed). */}
+        <section className="mt-8 card p-6">
+          <h2 className="display text-xl text-forest-900">
+            Provision firm directly
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            Skip the public request form — creates the firm, sends the
+            owner an invitation magic link, and the slug becomes the
+            firm&apos;s subdomain.
+          </p>
+          <form
+            action={createFirmDirect}
+            className="mt-4 grid gap-3 sm:grid-cols-2"
+          >
+            <label className="grid gap-1.5 sm:col-span-2">
+              <span className="text-sm font-medium text-forest-800">
+                Firm name
+              </span>
+              <input
+                name="firm_name"
+                type="text"
+                required
+                maxLength={120}
+                className="input"
+                placeholder="Smith CPA"
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium text-forest-800">
+                Owner email
+              </span>
+              <input
+                name="contact_email"
+                type="email"
+                required
+                className="input"
+                placeholder="owner@example.com"
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium text-forest-800">
+                Owner full name (optional)
+              </span>
+              <input
+                name="contact_full_name"
+                type="text"
+                maxLength={120}
+                className="input"
+                placeholder="Jane Smith"
+              />
+            </label>
+            <label className="grid gap-1.5 sm:col-span-2">
+              <span className="text-sm font-medium text-forest-800">
+                Slug (optional — defaults to a unique slug derived from
+                the firm name)
+              </span>
+              <input
+                name="slug"
+                type="text"
+                pattern="[a-z0-9][a-z0-9-]{1,30}[a-z0-9]"
+                title="3-32 chars, lowercase, alphanumeric + hyphens"
+                className="input"
+                placeholder="smithcpa"
+              />
+            </label>
+            <div className="sm:col-span-2">
+              <button className="btn-primary">
+                Provision firm + invite owner
+              </button>
+            </div>
+          </form>
+        </section>
 
         {/* Pending access requests */}
         <section className="mt-8">
