@@ -68,6 +68,20 @@ export function loadGoogleMaps(): Promise<GoogleMapsApi> {
       s.id = "gmaps-js";
       s.async = true;
       s.defer = true;
+      // The site-wide Referrer-Policy is `strict-origin-when-cross-
+      // origin` (next.config.ts), which on a cross-origin request to
+      // Google sends ONLY the bare origin as the Referer header — no
+      // path. Google Cloud's website restrictions match against the
+      // Referer, so the whitelist entry needs to be `https://
+      // taxottic.com` (and the `*.` subdomain variant), not just
+      // `https://taxottic.com/*`. We standardise here by explicitly
+      // pinning the script's referrerPolicy to "origin" so the
+      // request always sends the origin (regardless of the document
+      // policy), which is the format both the docs and our Cloud
+      // restrictions are now configured for. Without this pin, a
+      // future Referrer-Policy change anywhere in the app could
+      // silently break the Maps load.
+      s.referrerPolicy = "origin";
       // geometry — encodePath() for the mileage breadcrumb polylines.
       // places  — the Autocomplete widget on the business address.
       // Both ship in one script load; pulling `places` here is what
