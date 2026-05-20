@@ -102,7 +102,7 @@ export async function syncStripeConnection(
   }
   const companyId = conn.company_id as string;
   const userId = (conn.created_by as string | null) ?? null;
-  let cursor = (conn.cursor as string | null) ?? null;
+  const cursor = (conn.cursor as string | null) ?? null;
 
   const stripe = getStripeForAccount(stripeUserId);
 
@@ -358,16 +358,30 @@ function enrichedDescription(
  * monthly_income / monthly_expenses tables the Plaid sync feeds —
  * so the income page and the forecast actually reflect the data.
  *
- * Mapping (mirrors lib/plaid/sync.ts's auto-apply behaviour):
- *   type=charge | payment   (inflow)   → monthly_income (source="sales")
- *   type=stripe_fee         (outflow)  → monthly_expenses (code T048 — "Stripe fees")
- *   type=refund | adjustment / other   → leave pending for human review
+ * Classification follows the user's rule:
+ *   +  inflow (charge / payment)              → monthly_income (source="sales")
+ *   -  withdrawal (payout/transfer)           → SKIPPED upstream in SKIP_TYPES
+ *   -  refund                                 → leave pending for human review
+ *   -  anything else (stripe_fee, application_fee, chargeback, network_cost,
+ *      tax, adjustment, etc.)                 → monthly_expenses, code mapped
+ *
+ * Catch-all "other_business" handles unknown Stripe outflow types so
+ * the forecast reflects them; the notes carry the original Stripe
+ * type so the user can refine in the Recent transactions UI.
  *
  * We only touch rows still in user_action='pending', so re-runs are
  * idempotent. Includes existing pending rows from older syncs, not
  * just freshly-inserted ones — that means a single sync click after
  * deploying this feature back-fills everything that was sitting
  * un-applied.
+ *
+ * NOTE: monthly_expenses.category_code is FK-constrained to
+ * deduction_categories(code). The valid codes are the Schedule-C
+ * buckets seeded in 20260428000005_seed_deduction_categories.sql
+ * ("bank_fees", "taxes_licenses", "other_business", etc.) — NOT the
+ * T-codes from lib/deductions/master.ts. An earlier version of this
+ * function wrote "T048" and the FK silently rejected every row, so
+ * expenses never showed up. Keep this mapping aligned with the seed.
  */
 async function autoApplyPendingStripe(args: {
   admin: SupabaseClient;
@@ -379,7 +393,7 @@ async function autoApplyPendingStripe(args: {
 
   const { data: pending } = await admin
     .from("account_transactions")
-    .select("id, posted_date, amount_cents, raw_payload")
+    .select("id, posted_date, amount_cents, description, raw_payload")
     .eq("account_id", bankAccountId)
     .eq("user_action", "pending")
     .limit(500);
@@ -396,9 +410,23 @@ async function autoApplyPendingStripe(args: {
     const taxYear = posted.getUTCFullYear();
     const month = posted.getUTCMonth() + 1;
 
+    // Pull the (already-expanded) source object out of raw_payload so
+    // notes can record who paid / what was sold without a second API
+    // round-trip. Falls back to whatever we stored in description.
+    const src = extractSource(raw);
+
+    // Refunds stay pending: the user wants to decide whether they
+    // erase the matched charge (cleaner books) or stand alone as a
+    // discount expense. We never auto-apply them.
+    if (type === "refund" || type === "payment_refund") continue;
+
     // Inflow → income. account_transactions.amount_cents uses
     // negative=inflow (positive=expense) per the Plaid convention.
-    if ((type === "charge" || type === "payment") && cents < 0) {
+    if (cents < 0) {
+      // Only treat known revenue-bearing types as income. An unknown
+      // inflow type (e.g. adjustment with positive amount) is left
+      // pending so the user can confirm it's actually revenue.
+      if (type !== "charge" && type !== "payment") continue;
       const { data: row } = await admin
         .from("monthly_income")
         .insert({
@@ -408,7 +436,10 @@ async function autoApplyPendingStripe(args: {
           month,
           amount_cents: Math.abs(cents),
           source: "sales",
-          notes: "Auto-imported from Stripe",
+          notes: buildIncomeNote({
+            description: tx.description as string | null,
+            src,
+          }),
         })
         .select("id")
         .maybeSingle();
@@ -424,9 +455,14 @@ async function autoApplyPendingStripe(args: {
           .eq("id", tx.id);
         income++;
       }
-    } else if (type === "stripe_fee" && cents > 0) {
-      // Outflow → expense. T048 is the Stripe-fees deduction code
-      // in lib/deductions/master.ts (Website/SaaS/digital tools).
+      continue;
+    }
+
+    // cents > 0 here — outflow. Per the user's classification rule,
+    // any non-refund, non-withdrawal outflow is an expense. Map to
+    // the best-matching Schedule-C bucket.
+    if (cents > 0) {
+      const code = stripeExpenseCode(type);
       const { data: row } = await admin
         .from("monthly_expenses")
         .insert({
@@ -435,8 +471,12 @@ async function autoApplyPendingStripe(args: {
           tax_year: taxYear,
           month,
           amount_cents: cents,
-          category_code: "T048",
-          notes: "Auto-imported from Stripe",
+          category_code: code,
+          notes: buildExpenseNote({
+            type,
+            description: tx.description as string | null,
+            src,
+          }),
         })
         .select("id")
         .maybeSingle();
@@ -453,11 +493,107 @@ async function autoApplyPendingStripe(args: {
         expense++;
       }
     }
-    // refund / adjustment / application_fee / etc. → keep pending so
-    // the user can categorise them in the Recent transactions UI.
   }
 
   return { income, expense };
+}
+
+/**
+ * Map a Stripe balance_transaction.type to a Schedule-C deduction
+ * code that's actually present in public.deduction_categories. Stays
+ * conservative: known Stripe-fee shapes go to "bank_fees", tax goes
+ * to "taxes_licenses", and unknown outflow types fall through to
+ * "other_business" so the forecast still reflects them. Note: do NOT
+ * return T-codes here — those aren't in the FK target table.
+ */
+function stripeExpenseCode(type: string): string {
+  switch (type) {
+    case "stripe_fee":
+    case "application_fee":
+    case "application_fee_refund":
+    case "chargeback":
+    case "chargeback_fee":
+    case "dispute":
+    case "dispute_fee":
+    case "network_cost":
+      return "bank_fees";
+    case "tax":
+      // Sales tax remitted through Stripe is a deductible business
+      // tax payment. Schedule C line 23.
+      return "taxes_licenses";
+    default:
+      // adjustment / connect_collection_transfer / issuing_* / etc.
+      // The note carries the original type so the user can refine.
+      return "other_business";
+  }
+}
+
+/**
+ * Pull the inflated `source` (charge / payment / refund) off a raw
+ * balance_transaction payload, if Stripe expanded it. Returns null
+ * for the bare-id case so callers can fall back cleanly.
+ */
+function extractSource(
+  raw: Record<string, unknown>,
+): {
+  description?: string | null;
+  statement_descriptor?: string | null;
+  billing_details?: { name?: string | null; email?: string | null } | null;
+  metadata?: Record<string, string> | null;
+} | null {
+  const s = raw.source;
+  if (!s || typeof s !== "object") return null;
+  return s as ReturnType<typeof extractSource>;
+}
+
+/**
+ * Build a human-readable note for a monthly_income row coming from
+ * Stripe. The note has to tell the user WHO paid (so they can audit
+ * a Schedule C line back to a real customer) and WHAT for (so the
+ * detection of services vs sales income is reviewable later). Falls
+ * through gracefully when the source wasn't expanded.
+ */
+function buildIncomeNote(args: {
+  description: string | null;
+  src: ReturnType<typeof extractSource>;
+}): string {
+  const { description, src } = args;
+  const parts: string[] = ["Stripe charge"];
+  const who =
+    src?.billing_details?.name?.trim() ||
+    src?.billing_details?.email?.trim() ||
+    null;
+  if (who) parts.push(`from ${who}`);
+  const what =
+    src?.description?.trim() ||
+    src?.statement_descriptor?.trim() ||
+    (description && !description.startsWith("Stripe ")
+      ? description.trim()
+      : null);
+  if (what) parts.push(`— ${what}`);
+  return parts.join(" ");
+}
+
+/**
+ * Build a human-readable note for a monthly_expenses row. Carries
+ * the underlying Stripe type so the user can spot misallocations
+ * (e.g. an "adjustment" lumped into other_business) and recategorise.
+ */
+function buildExpenseNote(args: {
+  type: string;
+  description: string | null;
+  src: ReturnType<typeof extractSource>;
+}): string {
+  const { type, description, src } = args;
+  const parts: string[] = [`Stripe ${type}`];
+  const what =
+    src?.description?.trim() ||
+    src?.statement_descriptor?.trim() ||
+    (description && !description.startsWith("Stripe ")
+      ? description.trim()
+      : null);
+  if (what) parts.push(`— ${what}`);
+  return parts.join(" ");
 }
 
 /**
