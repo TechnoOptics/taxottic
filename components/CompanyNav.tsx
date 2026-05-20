@@ -3,56 +3,118 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+/**
+ * The 5 user-goal groups. Legacy section keys still get passed by
+ * detail pages (`active="income"`, `active="expenses"`, etc.) and we
+ * map them down to one of these five so the right tab lights up.
+ */
+type TabKey =
+  | "forecast"
+  | "money-in"
+  | "money-out"
+  | "setup"
+  | "talk";
+
+/**
+ * Every section key the codebase passes today. Most of these are
+ * historic - the old IA had 12 top tabs (`income`, `expenses`, etc.).
+ * They're still accepted so each detail page keeps lighting up the
+ * correct group tab.
+ */
+type LegacyKey =
+  | "income"
+  | "expenses"
+  | "deductions"
+  | "mileage"
+  | "banks"
+  | "sales-tax"
+  | "import"
+  | "profile"
+  | "team"
+  | "chat"
+  | "preparer";
+
 type CompanyNavProps = {
   publicId: string;
-  active:
-    | "forecast"
-    | "income"
-    | "expenses"
-    | "deductions"
-    | "banks"
-    | "sales-tax"
-    | "import"
-    | "profile"
-    | "team"
-    | "chat"
-    | "preparer"
-    | "mileage";
+  active: TabKey | LegacyKey;
 };
 
-// `absolute` entries link to a global route (not /c/<id>/...). Mileage
-// is an employee-wide dashboard, so it lives at /mileage.
-const TABS = [
-  { key: "forecast", label: "Forecast", path: "forecast" },
-  { key: "income", label: "Income", path: "income" },
-  { key: "expenses", label: "Expenses", path: "expenses" },
-  { key: "deductions", label: "Deductions", path: "deductions" },
-  { key: "mileage", label: "Mileage", path: "/mileage", absolute: true },
-  { key: "banks", label: "Banks", path: "banks" },
-  { key: "sales-tax", label: "Sales tax", path: "sales-tax" },
-  { key: "import", label: "Import", path: "import" },
-  { key: "profile", label: "Profile", path: "profile" },
-  { key: "team", label: "Team", path: "manage" },
-  { key: "chat", label: "Chat", path: "chat" },
-  { key: "preparer", label: "Tax preparer", path: "preparer" },
-] as const;
+/**
+ * Maps every accepted `active` key down to its group tab so legacy
+ * detail pages don't need to change to keep lighting the right tab.
+ */
+const LEGACY_TO_GROUP: Record<LegacyKey, TabKey> = {
+  income: "money-in",
+  expenses: "money-out",
+  deductions: "money-out",
+  mileage: "money-out",
+  "sales-tax": "money-out",
+  banks: "setup",
+  import: "setup",
+  profile: "setup",
+  team: "setup",
+  chat: "talk",
+  preparer: "talk",
+};
 
-function hrefFor(publicId: string, t: (typeof TABS)[number]): string {
-  return "absolute" in t && t.absolute ? t.path : `/c/${publicId}/${t.path}`;
+/**
+ * The 5 visible tabs. Each one routes to a hub page that lives at
+ * /c/<id>/<path>; the hubs gather every related sub-tool as cards
+ * on a single scrollable page so users never hit "tabs within tabs."
+ */
+const TABS: { key: TabKey; label: string; path: string; subtitle: string }[] = [
+  {
+    key: "forecast",
+    label: "Forecast",
+    path: "forecast",
+    subtitle: "Tax + savings",
+  },
+  {
+    key: "money-in",
+    label: "Money in",
+    path: "money-in",
+    subtitle: "Income",
+  },
+  {
+    key: "money-out",
+    label: "Money out",
+    path: "money-out",
+    subtitle: "Expenses, mileage, sales tax, deductions",
+  },
+  {
+    key: "setup",
+    label: "Setup",
+    path: "setup",
+    subtitle: "Profile, team, banks, imports",
+  },
+  { key: "talk", label: "Talk", path: "talk", subtitle: "Chat + tax preparer" },
+];
+
+function resolveGroup(active: TabKey | LegacyKey): TabKey {
+  return (LEGACY_TO_GROUP as Record<string, TabKey>)[active] ?? (active as TabKey);
 }
 
 /**
- * Company sub-navigation.
+ * Top-level case (company) sub-navigation, restyled v2.
  *
- * Desktop (sm+): the familiar single row of tabs that wraps if needed.
- * Mobile (<sm): the 12 tabs are collapsed behind a "Sections" button
- * that opens a left slide-out drawer — tap the scrim, press Escape, or
- * swipe the drawer left to dismiss. This stops the tab block from
- * eating half the screen in a multi-row wrap on a phone.
+ * Down from 12 to 5 group tabs after a user complaint that the old
+ * strip felt like a maze. Detail pages (Income, Expenses, Mileage,
+ * Sales tax, Deductions, Banks, Import, Profile, Team, Chat, Tax
+ * preparer) still exist at their original URLs and still pass their
+ * own `active="..."` key - we just translate it to the correct
+ * group so the visible 5-tab strip lights up the parent tab. Tab
+ * clicks always go to the hub page (`/c/<id>/<group-path>`); the
+ * hubs render every sub-tool as a card so the user never has to
+ * dig.
+ *
+ * Desktop (sm+): a single horizontal row of 5 tabs. Mobile (<sm):
+ * the row is collapsed behind a "Sections" button that opens a
+ * left slide-out drawer.
  */
 export function CompanyNav({ publicId, active }: CompanyNavProps) {
   const [open, setOpen] = useState(false);
-  const current = TABS.find((t) => t.key === active);
+  const group = resolveGroup(active);
+  const current = TABS.find((t) => t.key === group);
 
   // Lock body scroll + close on Escape while the drawer is open.
   useEffect(() => {
@@ -105,17 +167,17 @@ export function CompanyNav({ publicId, active }: CompanyNavProps) {
         <span aria-hidden="true" className="text-ink-soft">▾</span>
       </button>
 
-      {/* Desktop: the classic tab row */}
+      {/* Desktop: 5-tab strip */}
       <ul className="hidden sm:flex flex-wrap gap-x-1 gap-y-0.5">
         {TABS.map((t) => {
-          const isActive = t.key === active;
+          const isActive = t.key === group;
           return (
             <li key={t.key}>
               <Link
-                href={hrefFor(publicId, t)}
+                href={`/c/${publicId}/${t.path}`}
                 aria-current={isActive ? "page" : undefined}
                 className={[
-                  "relative inline-flex h-11 items-center px-2.5 sm:px-4",
+                  "relative inline-flex h-11 items-center px-3 sm:px-5",
                   "text-sm tracking-wide -mb-px transition-colors",
                   isActive
                     ? "text-forest-900 font-medium"
@@ -184,15 +246,15 @@ export function CompanyNav({ publicId, active }: CompanyNavProps) {
             </div>
             <ul className="flex-1 overflow-y-auto py-2">
               {TABS.map((t) => {
-                const isActive = t.key === active;
+                const isActive = t.key === group;
                 return (
                   <li key={t.key}>
                     <Link
-                      href={hrefFor(publicId, t)}
+                      href={`/c/${publicId}/${t.path}`}
                       onClick={() => setOpen(false)}
                       aria-current={isActive ? "page" : undefined}
                       className={[
-                        "flex items-center gap-3 px-5 py-3 text-[15px]",
+                        "flex items-start gap-3 px-5 py-3 text-[15px]",
                         isActive
                           ? "text-forest-900 font-semibold bg-gold-400/10"
                           : "text-ink-soft hover:bg-forest-50 dark:hover:bg-forest-800",
@@ -201,11 +263,16 @@ export function CompanyNav({ publicId, active }: CompanyNavProps) {
                       <span
                         aria-hidden="true"
                         className={[
-                          "h-5 w-[3px] rounded-full",
+                          "mt-1 h-5 w-[3px] rounded-full",
                           isActive ? "bg-gold-500" : "bg-transparent",
                         ].join(" ")}
                       />
-                      {t.label}
+                      <span className="flex-1">
+                        <span className="block">{t.label}</span>
+                        <span className="block text-[12px] text-ink-soft/80 mt-0.5">
+                          {t.subtitle}
+                        </span>
+                      </span>
                     </Link>
                   </li>
                 );
