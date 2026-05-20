@@ -2,9 +2,6 @@ package com.taxottic.wear
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.graphics.Bitmap
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,13 +21,14 @@ import java.net.URL
  * Account pairing + direct server pull for the watch.
  *
  * The user picked "server pull with the phone Data-Layer bridge as
- * fallback" and a short-lived single-use QR code. Flow:
+ * fallback" and a short-lived single-use code. Flow:
  *
  *   1. No stored token → POST /api/watch/pair/start, get a deviceId
- *      + a ~120s code. We surface a QR (a /watch/link?code=… URL the
- *      signed-in phone opens) and poll /api/watch/pair/poll.
- *   2. Phone scans + redeems → poll returns the 256-bit token once.
- *      We persist it (app-private prefs) and stop showing the QR.
+ *      + a ~120s 6-digit code. We render the code BIG on the
+ *      watch face and poll /api/watch/pair/poll.
+ *   2. User types the code into Phone → Settings → Devices →
+ *      Pair watch → poll returns the 256-bit token exactly once.
+ *      We persist it (app-private prefs) and stop showing the code.
  *   3. Paired → GET /api/watch/snapshot with `Authorization: Bearer`
  *      on a cadence, feeding the SAME WatchData snapshot the Data
  *      Layer feeds. If we're offline the Data-Layer push still works,
@@ -47,8 +45,11 @@ object PairManager {
 
     sealed interface State {
         data object Booting : State
-        /** Show this QR until the phone redeems it. */
-        data class NeedsPair(val qrPayload: String, val code: String) : State
+        /**
+         * Show this 6-digit code until the phone redeems it. There is
+         * no QR any more; pairing is a typed code in Phone Settings.
+         */
+        data class NeedsPair(val code: String) : State
         data object Paired : State
     }
 
@@ -100,10 +101,7 @@ object PairManager {
                 continue
             }
             p.edit().putString(K_DEVICE, deviceId).apply()
-            _state.value = State.NeedsPair(
-                qrPayload = "$BASE/watch/link?code=$code",
-                code = code,
-            )
+            _state.value = State.NeedsPair(code = code)
             val deadline = System.currentTimeMillis() + ttl * 1000L
             while (currentCoroutineContext().isActive &&
                 System.currentTimeMillis() < deadline
@@ -189,21 +187,4 @@ object PairManager {
         }
     }
 
-    /** Render a payload as a QR Bitmap (encoder only — the phone
-     *  scans). Black modules on white for camera contrast. */
-    fun qrBitmap(payload: String, sizePx: Int): Bitmap? = runCatching {
-        val matrix = QRCodeWriter().encode(
-            payload, BarcodeFormat.QR_CODE, sizePx, sizePx,
-        )
-        val bmp = Bitmap.createBitmap(
-            sizePx, sizePx, Bitmap.Config.ARGB_8888,
-        )
-        for (x in 0 until sizePx) for (y in 0 until sizePx) {
-            bmp.setPixel(
-                x, y,
-                if (matrix[x, y]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt(),
-            )
-        }
-        bmp
-    }.getOrNull()
 }
