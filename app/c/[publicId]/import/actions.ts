@@ -1036,3 +1036,93 @@ function parseDate(raw: string): string | null {
   }
   return null;
 }
+
+/**
+ * Bulk-delete account_transactions for the current company. Manager-
+ * only; the UI gates on isManager and this re-checks server-side.
+ * Every id is validated against the join
+ *   account_transactions → bank_accounts → bank_connections.company_id
+ * so a manager can't accidentally (or maliciously) pass an id that
+ * doesn't belong to their company.
+ *
+ * Confirmation: the form must include `confirm="delete"` (verbatim,
+ * matches the UI's typed-delete affordance). Anything else throws.
+ *
+ * Cascades: account_transactions has children (apply records, etc.)
+ * via the existing FK graph; if a child FK doesn't cascade the
+ * DELETE errors loudly and the transaction rolls back. No half-state.
+ */
+export async function deleteAccountTransactions(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const companyId = String(formData.get("company_id") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim().toLowerCase();
+  const txIds = formData.getAll("tx_ids").map((v) => String(v));
+
+  if (!companyId) throw new Error("Missing company_id.");
+  if (confirm !== "delete") {
+    throw new Error('Confirmation text must be exactly "delete".');
+  }
+  if (txIds.length === 0) {
+    throw new Error("No transactions selected.");
+  }
+
+  // Manager-only — same role required to disconnect a bank.
+  const { data: membership } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (
+    !membership ||
+    (membership.role !== "manager" && membership.role !== "owner")
+  ) {
+    throw new Error("Only the company manager can delete transactions.");
+  }
+
+  // Validate every id belongs to a bank_connection of THIS company.
+  // The inner-join filter (!inner) makes PostgREST return only rows
+  // whose join chain resolves, so we can't accept stray ids.
+  const { data: owned, error: selErr } = await admin
+    .from("account_transactions")
+    .select(
+      "id, account:bank_accounts!inner(connection:bank_connections!inner(company_id))",
+    )
+    .in("id", txIds);
+  if (selErr) throw new Error(selErr.message);
+  const ownedIds = (owned ?? [])
+    .filter((row) => {
+      const acct = (row as unknown as {
+        account: { connection: { company_id: string } };
+      }).account;
+      return acct?.connection?.company_id === companyId;
+    })
+    .map((r) => r.id as string);
+
+  if (ownedIds.length === 0) {
+    throw new Error("None of the selected transactions belong to this company.");
+  }
+
+  const { error: delErr, count } = await admin
+    .from("account_transactions")
+    .delete({ count: "exact" })
+    .in("id", ownedIds);
+  if (delErr) {
+    throw new Error(
+      `Delete failed (likely a child FK without ON DELETE CASCADE): ${delErr.message}`,
+    );
+  }
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  if (company?.public_id) {
+    revalidatePath(`/c/${company.public_id}/banks`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+  }
+
+  // Surface the count for the client toast.
+  return { deleted: count ?? ownedIds.length };
+}

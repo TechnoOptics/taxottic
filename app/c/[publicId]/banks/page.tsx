@@ -12,6 +12,7 @@ import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
 import { disconnectBank } from "@/app/actions/recycle-bin";
+import { TransactionsBulkDeleter } from "@/components/banking/TransactionsBulkDeleter";
 
 type Params = Promise<{ publicId: string }>;
 type SearchParams = Promise<{
@@ -475,12 +476,26 @@ export default async function BanksPage({
                   source link to verify before tax day.
                 </p>
               </div>
-              <Link
-                href={`/c/${publicId}/deductions`}
-                className="text-xs text-forest-700 hover:text-forest-900 underline underline-offset-2"
-              >
-                Browse all deductions →
-              </Link>
+              <div className="flex items-center gap-4">
+                {isManager ? (
+                  <TransactionsBulkDeleter
+                    companyId={company.id}
+                    transactions={txs.map((t) => ({
+                      id: t.id,
+                      merchant:
+                        t.merchant_name ?? t.description ?? "Transaction",
+                      date: t.posted_date,
+                      amountCents: t.amount_cents,
+                    }))}
+                  />
+                ) : null}
+                <Link
+                  href={`/c/${publicId}/deductions`}
+                  className="text-xs text-forest-700 hover:text-forest-900 underline underline-offset-2"
+                >
+                  Browse all deductions →
+                </Link>
+              </div>
             </div>
             <ul className="mt-3 grid gap-2">
               {txs.map((t) => {
