@@ -156,7 +156,7 @@ function DeductionRow({
             href={deduction.source}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[11px] text-forest-700 hover:text-forest-900 underline underline-offset-2"
+            className="text-[11px] text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"
           >
             IRS source ↗
           </a>

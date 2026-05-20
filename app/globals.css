@@ -40,6 +40,11 @@
   --color-gold-500: #c4a25d;
   --color-gold-600: #a78540;
   --color-gold-700: #8a661f;
+  /* Darker shades reserved for body text on light backgrounds where
+     the lighter gold (500/600) doesn't pass AA contrast. Used for
+     things like IRS-publication reference links. */
+  --color-gold-800: #6b4f17;
+  --color-gold-900: #4f3b10;
 
   --color-cream: #fbf7e9;
   --color-paper: #ffffff;
