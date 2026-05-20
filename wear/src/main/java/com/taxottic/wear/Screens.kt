@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
@@ -30,10 +29,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -242,54 +239,50 @@ private fun Wordmark() {
 }
 
 /** Shown when the watch isn't linked and nothing is arriving over
- *  the phone bridge: a QR the signed-in Taxottic phone app scans to
- *  bind this watch to the account. The QR encodes a /watch/link?code
- *  URL (single-use, ~120s); the short code is shown too as a fallback. */
+ *  the phone bridge: a big brushed-gold 6-digit code the user types
+ *  into Phone → Settings → Devices → Pair watch. Single-use, ~120s. */
 @Composable
 private fun PairScreen(state: PairManager.State.NeedsPair) {
-    val sizePx = with(LocalDensity.current) { 116.dp.roundToPx() }
-    val bmp = remember(state.qrPayload, sizePx) {
-        PairManager.qrBitmap(state.qrPayload, sizePx)
+    // Split the 6 digits into two triples so the number stays
+    // readable on a 41 mm dial even at the largest font size. Falls
+    // back to the raw code if (somehow) it isn't six digits.
+    val pretty = remember(state.code) {
+        if (state.code.length == 6) "${state.code.substring(0, 3)} ${state.code.substring(3)}"
+        else state.code
     }
     Column(
-        Modifier.fillMaxSize().padding(20.dp),
+        Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Wordmark()
         Spacer(Modifier.height(10.dp))
-        if (bmp != null) {
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Brand.cream)
-                    .padding(6.dp),
-            ) {
-                Image(
-                    bitmap = bmp.asImageBitmap(),
-                    contentDescription = "Pairing QR code",
-                    modifier = Modifier.size(116.dp),
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Scan in the Taxottic\napp on your phone",
-                color = Brand.cream, fontSize = 11.sp,
-                textAlign = TextAlign.Center, maxLines = 2,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                state.code,
-                color = Brand.gold, fontSize = 13.sp,
-                letterSpacing = 2.sp, fontWeight = FontWeight.Bold,
-            )
-        } else {
-            Text(
-                "Preparing pairing…",
-                color = Brand.creamMuted, fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-            )
-        }
+        Text(
+            "Pair watch".uppercase(),
+            color = Brand.gold,
+            fontSize = 10.sp,
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(8.dp))
+        // The showpiece: brushed-gold 6-digit code, big enough to
+        // read at arm's length.
+        Text(
+            pretty,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 4.sp,
+            style = TextStyle(brush = Brand.brushedGold),
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Enter on your phone\nSettings → Devices",
+            color = Brand.cream,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
     }
 }
 

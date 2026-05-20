@@ -4,6 +4,7 @@ import {
   mintWatchToken,
   mintPairCode,
   hashPairCode,
+  normalizePairCode,
   safeHexEqual,
 } from "./pair-crypto";
 
@@ -24,12 +25,29 @@ describe("watch pair-crypto", () => {
     expect(mintWatchToken().token).not.toBe(token);
   });
 
-  it("mintPairCode: 8 chars from the unambiguous alphabet, hash matches", () => {
+  it("mintPairCode: 6 digits, leading-zero preserved, hash matches", () => {
     const { code, codeHash } = mintPairCode();
-    expect(code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/);
-    expect(code).not.toMatch(/[0O1IL]/);
+    // Exactly six numeric characters.
+    expect(code).toMatch(/^\d{6}$/);
+    // codeHash is the SHA-256 of the plaintext code.
     expect(codeHash).toBe(hashPairCode(code));
     expect(hashPairCode(code)).toBe(sha256Hex(code));
+
+    // Sanity-check that the zero-padding logic preserves the
+    // leading-zero case (otherwise "012345" and "12345" would
+    // collapse to the same row). Run a small batch and confirm
+    // every result is six digits.
+    for (let i = 0; i < 64; i++) {
+      expect(mintPairCode().code).toMatch(/^\d{6}$/);
+    }
+  });
+
+  it("normalizePairCode strips non-digits", () => {
+    expect(normalizePairCode("012-345")).toBe("012345");
+    expect(normalizePairCode("012 345")).toBe("012345");
+    expect(normalizePairCode(" 0 1 2 3 4 5 ")).toBe("012345");
+    expect(normalizePairCode("012abc345")).toBe("012345");
+    expect(normalizePairCode("")).toBe("");
   });
 
   it("safeHexEqual: true only for identical equal-length digests", () => {

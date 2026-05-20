@@ -53,7 +53,4 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     // Background pairing/poll/snapshot-pull off the main thread.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    // QR encoding for the "scan to pair" screen (encoder only — no
-    // scanner; the phone does the scanning).
-    implementation("com.google.zxing:core:3.5.3")
 }

@@ -78,6 +78,35 @@ const PLATFORM_LANDING: Record<"user" | "enterprise" | "hq", string> = {
 };
 
 /**
+ * Revoke a paired watch. Soft-delete via revoked_at + null out the
+ * token_hash so the bearer is dead immediately (snapshot calls hit
+ * the auth lookup that ignores revoked rows). Service-role here
+ * because watch_devices RLS is policy-less by design; we re-check
+ * ownership server-side instead.
+ */
+export async function revokeWatchDevice(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const deviceId = String(formData.get("deviceId") ?? "").trim();
+  if (!deviceId) return;
+  // Confirm the device belongs to this user before we touch it.
+  const { data: row } = await admin
+    .from("watch_devices")
+    .select("id, user_id")
+    .eq("id", deviceId)
+    .maybeSingle();
+  if (!row || row.user_id !== user.id) return;
+  await admin
+    .from("watch_devices")
+    .update({
+      revoked_at: new Date().toISOString(),
+      token_hash: null,
+      pending_token: null,
+    })
+    .eq("id", deviceId);
+  revalidatePath("/settings");
+}
+
+/**
  * Switch the active platform mode for the current user (super-admins
  * only). Saves the selection on profiles.active_platform and
  * redirects (cross-subdomain in production) to the platform's
