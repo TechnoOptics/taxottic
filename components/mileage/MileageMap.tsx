@@ -111,7 +111,16 @@ export function MileageMap({
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setState(e instanceof MapsKeyMissingError ? "no-key" : "error");
+        // `instanceof MapsKeyMissingError` can be FALSE across module
+        // boundaries in production bundles (two copies of the class,
+        // identity mismatch), even when the rejection IS that error.
+        // Fall back to checking `.name` so the friendly "Map not
+        // configured" panel still wins when the key is genuinely
+        // absent.
+        const err = e as { name?: string };
+        const isKeyMissing =
+          e instanceof MapsKeyMissingError || err?.name === "MapsKeyMissingError";
+        setState(isKeyMissing ? "no-key" : "error");
       });
 
     return () => {
