@@ -145,6 +145,12 @@ export async function syncStripeConnection(
   const MAX_PAGES = 5;
   let added = 0;
   let lastSeen: string | null = cursor;
+  // Only import transactions from the current calendar year — anything
+  // older would never roll into THIS year's forecast and is pure noise
+  // in the review queue. The cutoff slides automatically each Jan 1.
+  const yearStartUnix = Math.floor(
+    Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000,
+  );
 
   for (let pageIdx = 0; pageIdx < MAX_PAGES; pageIdx++) {
     type ExpandedSource = {
@@ -185,6 +191,7 @@ export async function syncStripeConnection(
               limit: number;
               starting_after?: string;
               expand?: string[];
+              created?: { gte?: number };
             },
             opts: { stripeAccount: string },
           ) => Promise<ListResp>;
@@ -194,6 +201,8 @@ export async function syncStripeConnection(
       {
         limit: PAGE,
         expand: ["data.source"],
+        // Server-side cutoff at Jan 1 (UTC) of the current year.
+        created: { gte: yearStartUnix },
         ...(lastSeen ? { starting_after: lastSeen } : {}),
       },
       { stripeAccount: stripeUserId },

@@ -349,6 +349,16 @@ async function upsertTx(
   accountMap: Map<string, string>,
 ): Promise<number> {
   let n = 0;
+  // Plaid /transactions/sync streams everything historical Plaid has
+  // for the item; we only want the current calendar year. Anything
+  // older won't roll into THIS year's forecast and just clutters the
+  // review queue. Auto-slides on Jan 1 of each year.
+  //
+  // Plaid's t.date is "yyyy-mm-dd" (ISO date-only) so lexicographic
+  // comparison is correct here. We do this client-side because
+  // /transactions/sync doesn't accept a start_date — the date window
+  // is implicit in the cursor.
+  const yearStartIso = `${new Date().getUTCFullYear()}-01-01`;
   // Plaid returns positive amount for outflow; we store cents with
   // the same sign convention so income flows are negative. Keep this
   // consistent because the suggestion engine assumes it.
@@ -356,6 +366,8 @@ async function upsertTx(
     .map((t) => {
       const accountId = accountMap.get(t.account_id);
       if (!accountId) return null;
+      // Skip anything dated before Jan 1 of the current year.
+      if (typeof t.date === "string" && t.date < yearStartIso) return null;
       return {
         account_id: accountId,
         external_transaction_id: t.transaction_id,
