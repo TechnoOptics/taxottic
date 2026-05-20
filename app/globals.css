@@ -810,6 +810,13 @@ main, footer, nav {
     border-color: rgba(213, 187, 126, 0.55);
     background: rgba(29, 40, 67, 0.78);
   }
+  /* Opaque variant — for floating menus (UserMenu dropdown, etc.)
+     where the page beneath would otherwise bleed through the 62%
+     alpha and make the menu hard to read. Light mode already uses
+     #ffffff, so only the dark override matters. */
+  html[data-theme="dark"] .card.card-opaque {
+    background: #1d2843;
+  }
 
   /* Inputs / selects / textareas */
   html[data-theme="dark"] .input {
