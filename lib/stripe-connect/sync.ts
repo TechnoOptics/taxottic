@@ -33,6 +33,19 @@ import { getStripeForAccount } from "./client";
  *                                   income would double-count.
  *   type = 'adjustment' / etc.   -> recorded but flagged for review.
  */
+// Internal Stripe accounting events that don't represent real
+// economic activity for the user. Every type here is a movement
+// inside Stripe's books (or between Stripe and the user's bank) —
+// importing them either double-counts revenue or creates
+// equal-and-opposite noise pairs in the review queue.
+//
+// The *_minimum_balance_hold / *_release pair is what tripped the
+// May 2026 "why so many duplicates" report: Stripe parks part of
+// the balance overnight as a buffer and releases it the next day,
+// so every hold has a matching release at the exact same magnitude.
+// Net effect on revenue: zero. Tax effect: zero. Importing them
+// just polluted the review queue with fake "Schedule C expense"
+// rows + matching "inflow" rows. Skip.
 const SKIP_TYPES = new Set([
   "payout",
   "transfer",
@@ -40,6 +53,8 @@ const SKIP_TYPES = new Set([
   "topup_reversal",
   "payout_failure",
   "payout_cancel",
+  "payout_minimum_balance_hold",
+  "payout_minimum_balance_release",
 ]);
 
 export async function syncStripeConnection(
