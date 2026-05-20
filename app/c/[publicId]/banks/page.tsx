@@ -13,7 +13,10 @@ import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
 import { disconnectBank } from "@/app/actions/recycle-bin";
 import { TransactionsBulkDeleter } from "@/components/banking/TransactionsBulkDeleter";
-import { deleteAccountTransactions } from "@/app/c/[publicId]/import/actions";
+import {
+  deleteAccountTransactions,
+  setAccountExcluded,
+} from "@/app/c/[publicId]/import/actions";
 
 type Params = Promise<{ publicId: string }>;
 type SearchParams = Promise<{
@@ -255,24 +258,27 @@ export default async function BanksPage({
             <Stat
               label="Connections"
               value={conns.length}
+              href="#connections"
               hint={
                 conns.length === 0
                   ? "No banks connected yet"
-                  : `${conns.filter((c) => c.status === "active").length} active`
+                  : `${conns.filter((c) => c.status === "active").length} active · edit`
               }
             />
             <Stat
               label="Accounts"
               value={accts.length}
-              hint={`${accts.filter((a) => !a.is_excluded).length} included`}
+              href="#connections"
+              hint={`${accts.filter((a) => !a.is_excluded).length} included · edit`}
             />
             <Stat
               label="Pending review"
               value={pendingTxCount ?? 0}
               tone={(pendingTxCount ?? 0) > 0 ? "accent" : undefined}
+              href="#transactions"
               hint={
                 appliedTxCount
-                  ? `${appliedTxCount} already applied`
+                  ? `${appliedTxCount} already applied · edit`
                   : "Transactions land here for one-tap categorization"
               }
             />
@@ -293,7 +299,7 @@ export default async function BanksPage({
 
         {/* Existing connections */}
         {conns.length > 0 ? (
-          <section className="mt-6">
+          <section id="connections" className="mt-6 scroll-mt-24">
             <h2 className="display text-xl text-forest-900">
               Connected banks
             </h2>
@@ -430,13 +436,55 @@ export default async function BanksPage({
                                   {a.is_excluded ? " · excluded" : ""}
                                 </div>
                               </div>
-                              <div className="text-sm text-forest-900 tabular-nums">
-                                {a.current_balance_cents != null
-                                  ? new Intl.NumberFormat("en-US", {
-                                      style: "currency",
-                                      currency: "USD",
-                                    }).format(a.current_balance_cents / 100)
-                                  : "-"}
+                              <div className="flex items-center gap-3">
+                                <div className="text-sm text-forest-900 tabular-nums">
+                                  {a.current_balance_cents != null
+                                    ? new Intl.NumberFormat("en-US", {
+                                        style: "currency",
+                                        currency: "USD",
+                                      }).format(a.current_balance_cents / 100)
+                                    : "-"}
+                                </div>
+                                {/* Include/Exclude toggle — flips
+                                    bank_accounts.is_excluded. Excluded
+                                    accounts stay in the list but their
+                                    transactions are filtered out of
+                                    forecast / deductions. */}
+                                {isManager ? (
+                                  <form action={setAccountExcluded}>
+                                    <input
+                                      type="hidden"
+                                      name="account_id"
+                                      value={a.id}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="company_id"
+                                      value={company.id}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="excluded"
+                                      value={a.is_excluded ? "false" : "true"}
+                                    />
+                                    <button
+                                      type="submit"
+                                      className={
+                                        "text-[11px] uppercase tracking-[0.15em] underline underline-offset-2 " +
+                                        (a.is_excluded
+                                          ? "text-gold-700 hover:text-forest-900"
+                                          : "text-forest-700 hover:text-red-700")
+                                      }
+                                      title={
+                                        a.is_excluded
+                                          ? "Re-include this account in forecast / deductions"
+                                          : "Exclude this account from forecast / deductions"
+                                      }
+                                    >
+                                      {a.is_excluded ? "Include" : "Exclude"}
+                                    </button>
+                                  </form>
+                                ) : null}
                               </div>
                             </li>
                           ))}
@@ -466,7 +514,7 @@ export default async function BanksPage({
             link so users see WHICH specific deduction is being claimed,
             not just the broad Schedule C bucket. */}
         {txs.length > 0 ? (
-          <section className="mt-8">
+          <section id="transactions" className="mt-8 scroll-mt-24">
             <div className="flex items-end justify-between flex-wrap gap-3">
               <div>
                 <h2 className="display text-xl text-forest-900">
@@ -628,21 +676,26 @@ function Stat({
   value,
   hint,
   tone,
+  href,
 }: {
   label: string;
   value: number;
   hint?: string;
   tone?: "accent";
+  /** Make the tile a click target that jumps to a section on the
+   *  page. Hash-only anchors smooth-scroll without a navigation. */
+  href?: string;
 }) {
-  return (
-    <div
-      className={
-        "rounded-xl p-4 " +
-        (tone === "accent"
-          ? "bg-forest-800 text-cream"
-          : "bg-white border border-forest-100")
-      }
-    >
+  const base =
+    "rounded-xl p-4 block " +
+    (tone === "accent"
+      ? "bg-forest-800 text-cream"
+      : "bg-white border border-forest-100");
+  const interactive = href
+    ? " transition-shadow hover:shadow-md hover:border-forest-300 focus:outline-none focus:ring-2 focus:ring-gold-500"
+    : "";
+  const inner = (
+    <>
       <div
         className={
           "text-[10px] uppercase tracking-[0.2em] " +
@@ -669,8 +722,16 @@ function Stat({
           {hint}
         </div>
       ) : null}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <a href={href} className={base + interactive}>
+        {inner}
+      </a>
+    );
+  }
+  return <div className={base}>{inner}</div>;
 }
 
 function RoadmapStep({
