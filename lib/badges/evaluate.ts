@@ -7,10 +7,17 @@ import { BADGES } from "./catalog";
  * any badge they qualify for that they don't already have. Idempotent thanks
  * to the (user_id, badge_code) unique constraint.
  *
- * Returns the codes that were JUST awarded on this run so the caller can
- * trigger a celebration UI. On any subsequent render the badges already
- * exist and the returned array is empty - which is exactly the
- * once-and-only-once trigger we need.
+ * Returns the codes that should pop the celebration overlay ONCE:
+ *   1. Insert any newly-earned badges (no-op if already present).
+ *   2. UPDATE … SET celebrated_at = now() WHERE celebrated_at IS NULL
+ *      RETURNING badge_code — atomically claim the celebration window.
+ *
+ * The celebrated_at column was added in
+ * 20260520000001_badges_celebrated_at. Before that, the contract relied
+ * on "newly inserted = newly celebrated" — which silently re-fired on
+ * every dashboard render if the insert ever raced or returned cached
+ * existence in an unexpected order. The explicit flag makes the
+ * one-shot semantics atomic and survives reload mid-celebration.
  *
  * Cheap enough to call on every dashboard render. We can move to event-driven
  * awards once volume justifies it.
@@ -103,27 +110,37 @@ export async function evaluateBadges(
     .filter((e) => !have.has(e.badge_code))
     .map((e) => ({ user_id: userId, badge_code: e.badge_code }));
 
-  if (toInsert.length === 0) return [];
-
-  // Best-effort: if the insert fails (e.g., RLS quirk in server-action /
-  // page-render context), don't crash the dashboard render. Return the
-  // codes we attempted so the UI can celebrate even if the insert
-  // raced.
-  try {
-    await supabase.from("badges").insert(toInsert);
-    // Push the award (Phase 3 producer). notify() is idempotent
-    // (notification_log dedupe) and a clean no-op until APNs/FCM
-    // creds exist, so awaiting here is safe + cheap; toInsert is
-    // non-empty only the once a badge is first earned.
-    for (const b of toInsert) {
-      await notify(userId, {
-        kind: "badge_awarded",
-        badgeLabel: BADGES[b.badge_code]?.title ?? b.badge_code,
-        badgeCode: b.badge_code,
-      });
+  // Phase 1 — insert any newly-earned badges. Best-effort: if the
+  // insert fails (RLS quirk in a page-render context, transient DB
+  // error, etc.) we still want to claim+return whatever's
+  // uncelebrated below, so don't bail out here.
+  if (toInsert.length > 0) {
+    try {
+      await supabase.from("badges").insert(toInsert);
+      for (const b of toInsert) {
+        await notify(userId, {
+          kind: "badge_awarded",
+          badgeLabel: BADGES[b.badge_code]?.title ?? b.badge_code,
+          badgeCode: b.badge_code,
+        });
+      }
+    } catch {
+      // ignore — atomic claim below is the source of truth
     }
-  } catch {
-    // ignore
   }
-  return toInsert.map((b) => b.badge_code);
+
+  // Phase 2 — atomically claim the celebration window. PostgREST's
+  // update().select() returns the rows it just touched, so we get
+  // exactly the codes that transitioned from "uncelebrated" to
+  // "celebrated" on THIS call. Concurrent renders racing the same
+  // user only see the codes their UPDATE actually touched (the
+  // other one finds celebrated_at IS NOT NULL and skips). That's
+  // the one-shot semantics the dashboard depends on.
+  const { data: claimed } = await supabase
+    .from("badges")
+    .update({ celebrated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .is("celebrated_at", null)
+    .select("badge_code");
+  return (claimed ?? []).map((b) => b.badge_code as string);
 }

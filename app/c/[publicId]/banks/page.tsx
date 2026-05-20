@@ -601,7 +601,7 @@ export default async function BanksPage({
                             href={master.source}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="underline hover:text-forest-900"
+                            className="text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"
                           >
                             IRS source ↗
                           </a>
