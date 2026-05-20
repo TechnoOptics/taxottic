@@ -231,18 +231,26 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
   // the existing globals.css overrides. The previous `bg-paper/95`
   // didn't flip in dark mode, leaving a stark white block on the
   // navy page (May 20 regression report).
+  //
+  // `!fixed` (Tailwind's important modifier) is REQUIRED because the
+  // `.card` class in globals.css sets `position: relative` which
+  // beats Tailwind's `fixed` utility on equal specificity (`.card`
+  // is defined AFTER the utilities layer). Without the !, the rail
+  // ended up in-flow and pushed the dashboard content ~570px down.
   const railClass =
     mode === "rail"
       ? // The fixed rail is collapsed (64px showing icons). It
         // expands to 224px on hover OR while reordering is on.
         // Position: fixed keeps it pinned to the viewport without
         // affecting layout of existing pages.
-        "card card-opaque fixed left-2 z-40 !rounded-2xl !p-2 " +
+        "card card-opaque !fixed left-2 z-40 !rounded-2xl !p-2 " +
         "hidden lg:flex flex-col transition-all duration-200 " +
         (reordering ? "w-56" : "w-16 hover:w-56")
       : // Sheet mode (mobile drawer) — full-width content panel
         // inside a backdrop. Parent controls the open state +
         // backdrop click. card-opaque so it survives dark theme.
+        // `.card` already sets position: relative, which is fine
+        // for this mode — no !important needed.
         "card card-opaque relative w-72 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
   // Top offset for the rail: header is 3.25rem + safe-top. We start
