@@ -58,10 +58,16 @@ export function stripeOAuthRedirectUri(): string {
  * callback handler must verify the state cookie matches before
  * exchanging the code, otherwise we accept attacker-supplied codes.
  *
- * `scope=read_only` is intentional — we never need to charge or move
- * money on behalf of the user. Read-only also means a user who
- * authorizes us can't be tricked into giving us write access to their
- * Stripe account.
+ * Scope: `read_write`. We previously asked for `read_only`, but
+ * Stripe deprecated read-only for platforms created after their 2024
+ * Connect changes — the authorize endpoint now responds:
+ *   "Please use the `read_write` scope, or contact support … to use
+ *    read-only connections."
+ * Our code only ever READS the connected account (balanceTransactions
+ * list / charges read), so runtime behaviour is unchanged; the broader
+ * scope is purely to satisfy Stripe's new platform default. If we
+ * later want true read-only, the path is to contact Stripe support
+ * and revert this line.
  */
 export function buildAuthorizeUrl(state: string): string {
   const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
@@ -69,7 +75,7 @@ export function buildAuthorizeUrl(state: string): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: clientId,
-    scope: "read_only",
+    scope: "read_write",
     state,
     redirect_uri: stripeOAuthRedirectUri(),
   });
