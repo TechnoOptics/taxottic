@@ -2,6 +2,9 @@ import { Wordmark } from "./Wordmark";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { DarkThemeMount } from "./DarkThemeMount";
+import { LeftRail } from "./LeftRail";
+import { LeftRailMobile } from "./LeftRailMobile";
+import { SmartSearch } from "./SmartSearch";
 import { createClient } from "@/lib/supabase/server";
 import { recordGdprConsent } from "@/app/actions/consent";
 import { submitFeedback } from "@/app/actions/feedback";
@@ -119,8 +122,24 @@ export async function AppHeader({
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        <div className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 h-[3.25rem] flex items-center justify-between gap-3 relative">
+        <div className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 h-[3.25rem] flex items-center gap-3 relative">
+          {/* Consumer surface only: hamburger that opens the same
+              left rail in a sheet on < lg widths. Admin / HQ host
+              still renders only the wordmark + UserMenu pair. */}
+          {homeHref !== "/" ? <LeftRailMobile /> : null}
           <Wordmark href={homeHref} size="sm" tone="cream" />
+          {/* Smart search powered by Bella. Centered between the
+              wordmark and the user menu on lg+ screens; on smaller
+              widths it drops below into a second header row so the
+              top bar isn't crammed. Bella is feature-gated, so we
+              only mount it when the user actually has it. */}
+          {homeHref !== "/" && bellaEnabled ? (
+            <div className="hidden lg:flex flex-1 justify-center">
+              <SmartSearch companyPublicId={bellaCompanyId} />
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
           <UserMenu
             email={email ?? null}
             fullName={fullName}
@@ -132,17 +151,35 @@ export async function AppHeader({
             submitFeedbackAction={submitFeedback}
           />
         </div>
+        {/* Second row for the search bar on < lg widths. Keeps the
+            search prominent on phones without cramming it into the
+            top row alongside the hamburger + wordmark + avatar. */}
+        {homeHref !== "/" && bellaEnabled ? (
+          <div className="lg:hidden max-w-6xl mx-auto px-4 sm:px-6 pb-2">
+            <SmartSearch companyPublicId={bellaCompanyId} />
+          </div>
+        ) : null}
       </header>
-      {/* Spacer: exactly the fixed header's height (safe-area inset +
-          the 3.25rem row) so page content starts below it on every
-          screen. */}
+      {/* Spacer: matches the fixed header's height. On lg+ the
+          header is 3.25rem (one row). On `< lg` widths where the
+          search bar is visible we add ~2.5rem for the second row.
+          The CSS variable below switches at the same breakpoint via
+          a media query in globals.css → tracking the variable
+          here would force a client effect; cheaper to use the
+          tailwind `lg:` prefix on the spacer itself. */}
       <div
         aria-hidden="true"
-        style={{
-          height:
-            "calc(var(--app-safe-top, env(safe-area-inset-top, 0px)) + 3.25rem)",
-        }}
+        className={
+          homeHref !== "/" && bellaEnabled
+            ? "h-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+5.75rem)] lg:h-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+3.25rem)]"
+            : "h-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+3.25rem)]"
+        }
       />
+      {/* Desktop left rail. Hidden on `< lg` widths (LeftRailMobile
+          handles those via the hamburger). Consumer surfaces only —
+          admin / HQ host doesn't get it because the rail's items
+          don't apply. */}
+      {homeHref !== "/" ? <LeftRail mode="rail" /> : null}
       {/* Flip <html data-theme="dark"> for the duration of any
           authenticated page render. Public marketing routes don't
           mount <AppHeader> so they stay light by default. See
