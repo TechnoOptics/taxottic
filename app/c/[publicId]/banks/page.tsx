@@ -260,16 +260,27 @@ export default async function BanksPage({
               value={conns.length}
               href="#connections"
               hint={
+                // A CONNECTION is one bank/Stripe link as a whole
+                // (e.g., "Chase" or "Stripe acct_…"). One connection
+                // can hold several accounts under it.
                 conns.length === 0
-                  ? "No banks connected yet"
-                  : `${conns.filter((c) => c.status === "active").length} active · edit`
+                  ? "Banks or Stripe linked. None yet — click to add."
+                  : `Banks/Stripe linked · ${conns.filter((c) => c.status === "active").length} active · click to edit`
               }
             />
             <Stat
               label="Accounts"
               value={accts.length}
               href="#connections"
-              hint={`${accts.filter((a) => !a.is_excluded).length} included · edit`}
+              hint={
+                // An ACCOUNT is one card/checking/Stripe-balance
+                // INSIDE a connection. Excluding an account leaves
+                // it visible but stops its transactions counting in
+                // the forecast.
+                accts.length === 0
+                  ? "Cards/accounts inside each connection. None yet."
+                  : `Cards/accounts inside · ${accts.filter((a) => !a.is_excluded).length} included · click to edit`
+              }
             />
             <Stat
               label="Pending review"
@@ -277,9 +288,11 @@ export default async function BanksPage({
               tone={(pendingTxCount ?? 0) > 0 ? "accent" : undefined}
               href="#transactions"
               hint={
-                appliedTxCount
-                  ? `${appliedTxCount} already applied · edit`
-                  : "Transactions land here for one-tap categorization"
+                (pendingTxCount ?? 0) > 0
+                  ? `Transactions awaiting one-tap categorization · click to edit`
+                  : appliedTxCount
+                    ? `Nothing waiting · ${appliedTxCount} already applied`
+                    : "Transactions land here for one-tap categorization"
               }
             />
           </div>

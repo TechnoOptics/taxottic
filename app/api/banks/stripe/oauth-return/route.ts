@@ -143,6 +143,13 @@ export async function GET(req: NextRequest) {
   // bank_connection_secrets bypass RLS - the access token is
   // strictly server-side.
   const admin = createServiceClient();
+  // When the SAME Stripe account is re-linked after a previous
+  // Disconnect, this UPSERT lands on the existing row by
+  // external_item_id. We MUST clear every "in the recycle bin" /
+  // "previous sync state" field so the reconnect actually behaves
+  // like a fresh one — otherwise the row stays soft-deleted
+  // (post-#148 the sync correctly refuses it) and/or resumes from a
+  // stale `cursor`, so the user sees nothing import.
   const { data: connection, error: connErr } = await admin
     .from("bank_connections")
     .upsert(
@@ -155,6 +162,12 @@ export async function GET(req: NextRequest) {
         institution_name: "Stripe",
         institution_logo_url: null,
         status: "pending",
+        // Resurrect a previously-disconnected row + clear its sync
+        // state so the upcoming sync starts from the newest events.
+        deleted_at: null,
+        cursor: null,
+        last_synced_at: null,
+        last_error: null,
       },
       { onConflict: "external_item_id" },
     )
