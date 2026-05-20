@@ -2,10 +2,12 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { DeductionExplorer } from "@/components/DeductionExplorer";
+import { HomeOfficeQuickApply } from "@/components/HomeOfficeQuickApply";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { MASTER_DEDUCTIONS } from "@/lib/deductions/master";
 import { appliesToCompany } from "@/lib/deductions/applicability";
 import type { CompanyEntityType } from "@/lib/deductions/types";
+import { applyHomeOffice, unapplyHomeOffice } from "./actions";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -23,7 +25,7 @@ const SUPPORTED_ENTITIES = new Set<CompanyEntityType>([
 
 export default async function DeductionsPage({ params }: { params: Params }) {
   const { publicId } = await params;
-  const { user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
 
   // Coerce the company's stored entity_type string into our typed union;
   // anything we don't recognize yet falls back to null so applicability
@@ -32,6 +34,21 @@ export default async function DeductionsPage({ params }: { params: Params }) {
     company.entity_type && SUPPORTED_ENTITIES.has(company.entity_type as CompanyEntityType)
       ? (company.entity_type as CompanyEntityType)
       : null;
+
+  // What's already claimed this year? Drives the "Suggested
+  // deductions" rail at the top: a Home Office tile that shows
+  // "Apply" → modal → applied state with the sqft on file. Pattern
+  // extends to Vehicle (V015) and any future big-ticket claim.
+  const taxYear = new Date().getUTCFullYear();
+  const { data: profile } = await supabase
+    .from("business_profiles")
+    .select("has_home_office, home_office_sqft, home_total_sqft")
+    .eq("company_id", company.id)
+    .eq("tax_year", taxYear)
+    .maybeSingle();
+  const homeOfficeApplied = Boolean(profile?.has_home_office);
+  const homeOfficeSqft = (profile?.home_office_sqft as number | null) ?? null;
+  const homeTotalSqft = (profile?.home_total_sqft as number | null) ?? null;
 
   // The xlsx ships an "industry" hint per row; we don't yet capture industry
   // tags on the company profile, so the gate falls open. When we add tags
@@ -89,6 +106,34 @@ export default async function DeductionsPage({ params }: { params: Params }) {
             specific items inside. Search across every name and note. Each
             item links to the IRS source so you can verify before claiming.
           </p>
+        </section>
+
+        {/* Suggested deductions — quick-apply tiles for the
+            big-ticket claims that users miss most. Each tile is
+            self-contained (button → modal → server action) and the
+            applied state is sticky across reloads. */}
+        <section className="mt-6">
+          <div className="text-xs uppercase tracking-[0.2em] text-gold-700 font-medium">
+            Suggested deductions
+          </div>
+          <h2 className="display mt-1 text-xl text-forest-900">
+            Apply with one click
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft max-w-2xl leading-relaxed">
+            Most tax-year-{taxYear} forecasts move the most when one of
+            these is on. Fill the details once; the forecast updates
+            instantly.
+          </p>
+          <div className="mt-4 grid sm:grid-cols-2 gap-3">
+            <HomeOfficeQuickApply
+              publicId={publicId}
+              applied={homeOfficeApplied}
+              initialSqft={homeOfficeSqft}
+              initialTotalSqft={homeTotalSqft}
+              applyAction={applyHomeOffice}
+              unapplyAction={unapplyHomeOffice}
+            />
+          </div>
         </section>
 
         <DeductionExplorer
