@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FeedbackModal } from "./FeedbackModal";
+import { ThemeToggle } from "./ThemeToggle";
 
 type Platform = "user" | "enterprise" | "hq";
 
@@ -174,6 +175,10 @@ export function UserMenu({
                 </div>
               ) : null}
             </div>
+
+            {/* Theme toggle — Light / Dark. Persisted in localStorage;
+                DarkThemeMount picks up the change without a reload. */}
+            <ThemeToggle />
 
             {/* Platform switcher (super-admins only). Each option is a
                 single-button form posting to setActivePlatform with the
