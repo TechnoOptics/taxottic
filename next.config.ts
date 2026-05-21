@@ -63,11 +63,24 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.plaid.com https://cdn.plaid.cloud https://js.stripe.com https://*.vercel-insights.com",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
-      "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.stripe.com https://*.plaid.com https://cdn.plaid.com https://cdn.plaid.cloud https://*.vercel-insights.com",
+      // Google Maps additions (May 2026):
+      //   script-src   needs maps.googleapis.com (the Maps JS loader)
+      //   img-src      needs maps.gstatic.com + maps.googleapis.com
+      //                (map tiles, satellite imagery, Static Maps thumbs)
+      //   connect-src  needs maps.googleapis.com + maps.gstatic.com
+      //                (XHR for Places autocomplete results, tile metadata)
+      // Without these the browser blocks the Maps script BEFORE the
+      // request reaches Google — the network panel surfaces it as a
+      // generic 503, which sent us on a long debug detour through
+      // referrer restrictions, billing, and SW caches before we
+      // grep'd this header and saw the missing entries. Don't
+      // wildcard-google: list only the Maps subdomains the loader
+      // actually hits.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.plaid.com https://cdn.plaid.cloud https://js.stripe.com https://*.vercel-insights.com https://maps.googleapis.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://maps.gstatic.com https://maps.googleapis.com https://streetviewpixels-pa.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.stripe.com https://*.plaid.com https://cdn.plaid.com https://cdn.plaid.cloud https://*.vercel-insights.com https://maps.googleapis.com https://maps.gstatic.com",
       "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://*.plaid.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
