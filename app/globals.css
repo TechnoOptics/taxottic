@@ -270,6 +270,53 @@ html[data-theme="dark"] body {
   color: #fbf7e9;
 }
 
+/* Modern thin scrollbars site-wide. Default browser scrollbars (chunky
+   square buttons, grey thumb) read as dated — the user specifically
+   flagged them. Replace with a thin gold-tinted thumb on transparent
+   track. Works in:
+     - Firefox: scrollbar-width / scrollbar-color (CSS standard)
+     - WebKit (Chrome/Edge/Safari, Capacitor WebView): ::-webkit-scrollbar
+   On dark theme we shift the thumb to a cream tint so it reads as
+   "warm light on dark" instead of disappearing into the navy. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(213, 187, 126, 0.30) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(213, 187, 126, 0.28);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(213, 187, 126, 0.55);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-button {
+  display: none;
+}
+html[data-theme="dark"] * {
+  scrollbar-color: rgba(251, 247, 233, 0.22) transparent;
+}
+html[data-theme="dark"] *::-webkit-scrollbar-thumb {
+  background: rgba(251, 247, 233, 0.22);
+  background-clip: content-box;
+}
+html[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(251, 247, 233, 0.40);
+  background-clip: content-box;
+}
+
 /* Google Places Autocomplete dropdown (`.pac-container`).
    - Append target is <body>, so it inherits no app styling.
    - z-index needs to beat fixed headers (z-30) and the mobile rail
