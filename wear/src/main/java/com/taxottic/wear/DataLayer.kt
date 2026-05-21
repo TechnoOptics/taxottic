@@ -8,9 +8,15 @@ import android.os.Build
 import android.util.Base64
 import android.util.Log
 import com.google.android.gms.wearable.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Wear ↔ phone over the Wearable Data Layer — the Wear OS counterpart
@@ -40,7 +46,15 @@ object WatchData : DataClient.OnDataChangedListener {
     private const val ACTION_PATH = "/watch/action"
     private const val RELAY_SNAP = "com.taxottic.wear.TWB_SNAP"
     private const val TAG = "TWBRelay"
+    /** Twin of PairManager.BASE. Kept duplicated rather than imported
+     *  so an accidental refactor that hides PairManager can't silently
+     *  break the HTTPS action path — both surfaces remain explicit. */
+    private const val ACTION_URL = "https://taxottic.com/api/watch/action"
     private val json = Json { ignoreUnknownKeys = true }
+    /** IO scope for the HTTPS action POST. Independent of the Wearable
+     *  bridge — the two transports fire in parallel and the server is
+     *  idempotent (writes are keyed by row id; last write wins). */
+    private val httpScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _snapshot = MutableStateFlow(WatchSnapshot.EMPTY)
     val snapshot: StateFlow<WatchSnapshot> = _snapshot
@@ -129,15 +143,55 @@ object WatchData : DataClient.OnDataChangedListener {
         Log.i(TAG, "relay receiver registered (debug.twb.relay=1)")
     }
 
-    /** Fire-and-forget to every connected node (the phone). */
+    /** Fire-and-forget to every connected node (the phone) AND, in
+     *  parallel, POST the same payload to /api/watch/action with the
+     *  watch's bearer token. The Data Layer arm only works while the
+     *  phone bridge is foreground/connected; the HTTPS arm works
+     *  whenever the watch has Wi-Fi/LTE. Server writes are idempotent
+     *  by row id so a double-delivery is harmless — what we get is
+     *  resilience: the swipe always lands somewhere. The "open" /
+     *  mileage / autoApply types are accepted but no-op'd on the
+     *  server (they intrinsically need the phone). */
     private fun send(payload: String) {
         if (relayEnabled()) Log.i(TAG, "ACT $payload")
         val ctx = appContext ?: return
+        // GMS Wearable bridge — preferred when present.
         Wearable.getNodeClient(ctx).connectedNodes.addOnSuccessListener { nodes ->
             nodes.forEach { n ->
                 Wearable.getMessageClient(ctx)
                     .sendMessage(n.id, ACTION_PATH, payload.toByteArray())
             }
+        }
+        // HTTPS fallback — independent of the phone bridge.
+        val token = PairManager.currentToken() ?: return
+        httpScope.launch { postAction(token, payload) }
+    }
+
+    /** Tiny HTTP POST — no OkHttp dep, same shape as PairManager's
+     *  httpRaw. Every failure is swallowed; we never surface an error
+     *  to the user from the action send (the wrist UX already moved
+     *  the card off the deck optimistically). */
+    private fun postAction(token: String, payload: String) {
+        var conn: HttpURLConnection? = null
+        try {
+            conn = (URL(ACTION_URL).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                doOutput = true
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+            conn.outputStream.use { it.write(payload.toByteArray()) }
+            // Drain the body so Android can reuse the connection.
+            val stream = if (conn.responseCode in 200..299) conn.inputStream
+            else conn.errorStream
+            stream?.use { it.bufferedReader().readText() }
+        } catch (_: Throwable) {
+            /* swallow */
+        } finally {
+            conn?.disconnect()
         }
     }
 

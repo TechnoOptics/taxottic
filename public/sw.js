@@ -37,7 +37,16 @@
 // shims + inline edit on income & expense rows + confirm-on-Remove.
 // Markup changes warrant a cache flush so the v11 clients pick up
 // the new server HTML on next visit.
-const CACHE_VERSION = "v12";
+// v13 (May 2026 Round-6): brand refresh — the new chart-arrow icon
+// shipped with the SAME urls as the old marks (icon-mark.svg,
+// icon-mark-cream.svg, favicon-*.png, icon-*.png). Cache-first SW
+// kept serving the OLD bytes for every returning visitor, so the
+// loading screen and PWA icon never updated. Bumping the version
+// drops `taxottic-runtime-v12` in activate() and forces the next
+// fetch of every brand asset to hit the network, picking up the new
+// PNG-in-SVG wrappers from public/brand/. Pure cache-bust; SW logic
+// is unchanged.
+const CACHE_VERSION = "v13";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

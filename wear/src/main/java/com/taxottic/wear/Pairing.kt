@@ -72,6 +72,13 @@ object PairManager {
         loop = null
     }
 
+    /** The bearer token PairManager persisted after the user redeemed
+     *  the 6-digit code, or null if the watch isn't paired yet. Used
+     *  by DataLayer.send() to POST actions over HTTPS as a redundant
+     *  channel to the GMS Wearable bridge — the swipe lands on the
+     *  server even with no phone nearby. */
+    fun currentToken(): String? = prefs?.getString(K_TOKEN, null)
+
     private suspend fun run() {
         val p = prefs ?: return
         var token = p.getString(K_TOKEN, null)
