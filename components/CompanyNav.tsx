@@ -25,6 +25,7 @@ type LegacyKey =
   | "income"
   | "expenses"
   | "deductions"
+  | "my-deductions"
   | "mileage"
   | "banks"
   | "sales-tax"
@@ -47,6 +48,7 @@ const LEGACY_TO_GROUP: Record<LegacyKey, TabKey> = {
   income: "money-in",
   expenses: "money-out",
   deductions: "money-out",
+  "my-deductions": "money-out",
   mileage: "money-out",
   "sales-tax": "money-out",
   banks: "setup",

@@ -108,6 +108,23 @@ export default async function DeductionsPage({ params }: { params: Params }) {
           </p>
         </section>
 
+        {/* Cross-link to the canonical "what I've claimed" view. Lives
+            HERE because the explorer is the natural place to land
+            after applying something — users want a single click to
+            see "ok now where's my running tally?" */}
+        <div className="mt-6">
+          <a
+            href={`/c/${publicId}/my-deductions`}
+            className="inline-flex items-center gap-2 text-xs px-3 h-8 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400"
+          >
+            <span
+              aria-hidden="true"
+              className="size-1.5 rounded-full bg-emerald-500"
+            />
+            My deductions · running total →
+          </a>
+        </div>
+
         {/* Suggested deductions — quick-apply tiles for the
             big-ticket claims that users miss most. Each tile is
             self-contained (button → modal → server action) and the
