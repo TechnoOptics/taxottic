@@ -142,8 +142,13 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
         {/* Year-to-date roll-up so the user sees the headline number
             without scrolling. Pure sum across expenses + sales tax;
             mileage is a separate non-dollar metric so we surface it
-            in its own card below. */}
-        <div className="card mt-6 p-6 bg-gradient-to-br from-gold-50/60 to-cream">
+            in its own card below.
+            (May 2026) Dropped `bg-gradient-to-br from-gold-50/60 to-cream`
+            — every authenticated page renders in dark theme, and the
+            cream gradient + cream-flipped text was rendering as
+            "cream on cream" → unreadable. .card already has a proper
+            dark surface; let it do its job. */}
+        <div className="card mt-6 p-6">
           <p className="text-[11px] uppercase tracking-[0.28em] text-gold-700">
             {taxYear} totals
           </p>
