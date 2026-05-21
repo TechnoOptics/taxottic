@@ -44,12 +44,15 @@ export async function AppHeader({
   let avatarUrl: string | null = null;
   let needsConsent = false;
   let bellaEnabled = false;
+  let showSmartSearch = false;
   let isSuperAdmin = false;
   let currentPlatform: "user" | "enterprise" | "hq" = "user";
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, avatar_url, gdpr_consented_at, active_platform")
+      .select(
+        "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search",
+      )
       .eq("id", user.id)
       .maybeSingle();
     fullName = profile?.full_name ?? null;
@@ -65,6 +68,11 @@ export async function AppHeader({
     }
     const { gates } = await getActiveFeatureGates(supabase, user.id);
     bellaEnabled = gates.bella;
+    // Smart search is OFF by default; the user opts in from
+    // /settings → Header. Treat null/undefined as false too, so a
+    // fresh install or a row created before the column existed
+    // doesn't silently render the search input.
+    showSmartSearch = profile?.show_smart_search === true;
     // Resolve super-admin via the seeded helper so the menu only
     // shows the portal switcher to users who can actually use it.
     // Non-super-admins won't see the section at all - it's not
@@ -128,12 +136,15 @@ export async function AppHeader({
               still renders only the wordmark + UserMenu pair. */}
           {homeHref !== "/" ? <LeftRailMobile /> : null}
           <Wordmark href={homeHref} size="sm" tone="cream" />
-          {/* Smart search powered by Bella. Centered between the
-              wordmark and the user menu on lg+ screens; on smaller
-              widths it drops below into a second header row so the
-              top bar isn't crammed. Bella is feature-gated, so we
-              only mount it when the user actually has it. */}
-          {homeHref !== "/" && bellaEnabled ? (
+          {/* Smart search powered by Bella. OPT-IN per user via
+              /settings (profile.show_smart_search). When on, it
+              sits centered between the wordmark and the user menu
+              on lg+ screens; on `< lg` widths it's hidden from the
+              header entirely so the mobile top bar stays uncluttered
+              — the user can still hit the search from the full Bella
+              chat page. Default off keeps the header light for users
+              who don't use Bella daily. */}
+          {homeHref !== "/" && bellaEnabled && showSmartSearch ? (
             <div className="hidden lg:flex flex-1 justify-center">
               <SmartSearch companyPublicId={bellaCompanyId} />
             </div>
@@ -151,29 +162,20 @@ export async function AppHeader({
             submitFeedbackAction={submitFeedback}
           />
         </div>
-        {/* Second row for the search bar on < lg widths. Keeps the
-            search prominent on phones without cramming it into the
-            top row alongside the hamburger + wordmark + avatar. */}
-        {homeHref !== "/" && bellaEnabled ? (
-          <div className="lg:hidden max-w-6xl mx-auto px-4 sm:px-6 pb-2">
-            <SmartSearch companyPublicId={bellaCompanyId} />
-          </div>
-        ) : null}
       </header>
-      {/* Spacer: matches the fixed header's height. On lg+ the
-          header is 3.25rem (one row). On `< lg` widths where the
-          search bar is visible we add ~2.5rem for the second row.
-          The CSS variable below switches at the same breakpoint via
-          a media query in globals.css → tracking the variable
-          here would force a client effect; cheaper to use the
-          tailwind `lg:` prefix on the spacer itself. */}
+      {/* Spacer matches the fixed header's height (safe-area inset
+          + the 3.25rem single row). The header is now always a
+          single row at every width — smart search is opt-in and
+          only renders on lg+ when enabled, so there's never a
+          mobile second-row search that needs extra spacer height
+          (that mismatch was the May 2026 "header overlaps body"
+          report). */}
       <div
         aria-hidden="true"
-        className={
-          homeHref !== "/" && bellaEnabled
-            ? "h-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+5.75rem)] lg:h-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+3.25rem)]"
-            : "h-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+3.25rem)]"
-        }
+        style={{
+          height:
+            "calc(var(--app-safe-top, env(safe-area-inset-top, 0px)) + 3.25rem)",
+        }}
       />
       {/* Desktop left rail. Hidden on `< lg` widths (LeftRailMobile
           handles those via the hamburger). Consumer surfaces only —

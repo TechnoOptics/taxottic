@@ -775,7 +775,13 @@ export default async function ForecastPage({ params }: { params: Params }) {
           href={`/c/${publicId}/savings-goals`}
           className="block mt-6 card card-hover p-6 sm:p-7 border-gold-300/60"
         >
-          <div className="flex items-start gap-3 flex-wrap">
+          {/* Layout: stack vertically on mobile so the body copy uses
+              the full card width; switch to row at sm+ so the CTA
+              link sits in the right gutter. The earlier
+              flex-row-with-wrap default left the body in a very
+              narrow column on phones because the link sibling held
+              its full intrinsic width on the same row. */}
+          <div className="flex flex-col sm:flex-row sm:items-start gap-3">
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
                 Goals · Detailed how-to
@@ -791,7 +797,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 expenses; they&apos;re strategies that absorb your tax bill.
               </p>
             </div>
-            <span className="text-forest-700 font-medium">
+            <span className="text-forest-700 font-medium shrink-0">
               View playbook &rarr;
             </span>
           </div>
