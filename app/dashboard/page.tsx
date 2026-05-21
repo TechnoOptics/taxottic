@@ -586,7 +586,17 @@ export default async function DashboardPage() {
                     {r.body}
                   </div>
                 </div>
-                <span className="text-ink-muted text-sm shrink-0">→</span>
+                {/* "Navigate" arrow at the right edge of the content
+                    row. Hide it when the card also has a dismiss (X)
+                    button — the X sits absolute top-right and the
+                    arrow at the middle-right edge were visually
+                    colliding in the same corner. The whole card is
+                    still clickable via the overlay <Link> above, so
+                    the visual nav hint is redundant when there's
+                    already an X. */}
+                {r.dismissAction ? null : (
+                  <span className="text-ink-muted text-sm shrink-0">→</span>
+                )}
                 {r.dismissAction === "overdue-reminders" ? (
                   <form
                     action={dismissAllOverdueReminders}
