@@ -79,7 +79,7 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
           <h3 className="text-xs uppercase tracking-[0.2em] text-gold-700">
             Captured ({captured.length})
           </h3>
-          <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start">
             {captured.map((it) => (
               <ScorecardTile
                 key={it.code}
@@ -98,7 +98,7 @@ export function DeductionScorecard({ publicId, scorecard }: Props) {
           <h3 className="text-xs uppercase tracking-[0.2em] text-gold-700">
             Still on the table ({remaining.length})
           </h3>
-          <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start">
             {remaining.map((it) => (
               <ScorecardTile
                 key={it.code}
