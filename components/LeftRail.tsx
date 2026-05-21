@@ -255,22 +255,28 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
         // for this mode — no !important needed.
         "card card-opaque relative w-72 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
-  // Position: anchored to the top of the content column so the rail's
-  // first item lines up with the page's first eyebrow ("YOUR
-  // WORKSPACE", "MILEAGE · BUSINESS TRIPS", etc.). The mid-viewport
-  // floating position read as "too low" — the rail's top item was
-  // appearing below the page headline. Top-anchor at
-  //   safe-top + header (3.25rem) + content top padding (2.5rem)
-  // matches the eyebrow line in the content column, so the rail and
-  // the page content read as one horizontal row. Mobile uses
-  // LeftRailMobile (floating tab) and never hits this code path, so
-  // the previous mobile-overlap concern doesn't apply here.
+  // Position: anchored to the TOP of the viewport so the rail's first
+  // item sits in the same horizontal row as the TAXOTTIC wordmark in
+  // the header. The header content shifts right of the rail (via
+  // lg:pl-60 in AppHeader) so they don't overlap horizontally; the
+  // rail's z-40 sits above the header's z-30 so the rail's card
+  // visually punches through the header strip on the left.
+  //
+  // Previous iterations: top:50% (centered) read as "too low" — the
+  // first item was below the page headline. safe-top + 5.75rem was
+  // still misaligned with the wordmark by ~50px. Top-anchor at
+  // safe-top + 0.5rem lines up the rail's first item with the
+  // wordmark in the header.
+  //
+  // Mobile (< lg) uses LeftRailMobile (floating tab) and never hits
+  // this code path; the wordmark stays in the header on mobile so
+  // the top-bar still reads as branded.
   const railStyle =
     mode === "rail"
       ? {
-          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 5.75rem)",
+          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 0.5rem)",
           maxHeight:
-            "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 7rem)",
+            "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 1.5rem)",
         }
       : undefined;
 
