@@ -138,7 +138,17 @@ export async function AppHeader({
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        <div className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 h-[3.25rem] flex items-center gap-3 relative">
+        {/* Header content row. On lg+ the LeftRail occupies the
+            first 232px (left-2 + w-56) of the viewport, so we
+            left-pad the row by 15rem (240px = rail width + 8px gap)
+            so the wordmark sits cleanly to the right of the rail
+            instead of being hidden behind it. The rail is at z-40
+            and the header is z-30, so without this pad the rail's
+            card would draw on top of the wordmark. On < lg the rail
+            is hidden (LeftRailMobile is a floating tab) so pl-0
+            keeps the header content full-width with the wordmark at
+            the left edge as before. */}
+        <div className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 lg:pl-60 h-[3.25rem] flex items-center gap-3 relative">
           {/* Consumer surface only: hamburger that opens the same
               left rail in a sheet on < lg widths. Admin / HQ host
               still renders only the wordmark + UserMenu pair. */}
