@@ -118,6 +118,29 @@ async function _loadCompanyByPublicId(publicId: string) {
     }
   }
 
+  // Companion-app contract: the watch must reflect whichever company
+  // the user is currently looking at on the phone. We piggyback on
+  // every /c/[publicId]/* render to write the company onto
+  // profiles.active_company_id, which /api/watch/snapshot then
+  // honours when picking which company to compute the dial for.
+  //
+  // Only set it when the viewer is an ACTUAL member (membership is
+  // non-null). A super-admin reading another tenant's data must not
+  // hijack the user's own active company — the read is informational,
+  // not a navigation event.
+  //
+  // Fire-and-forget: a stale value just means the watch shows the
+  // previous company until the next render. We don't await the
+  // update either — it must not block the page render. Service-role
+  // because profiles.update isn't RLS-permissive for the same user.
+  if (membership) {
+    const admin = createServiceClient();
+    void admin
+      .from("profiles")
+      .update({ active_company_id: company.id })
+      .eq("id", user.id);
+  }
+
   return {
     supabase,
     user,

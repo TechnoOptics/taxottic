@@ -64,7 +64,25 @@ export async function GET(req: NextRequest) {
     const companies = viaSession
       ? await getMyCompanies()
       : await getCompaniesForUserId(uid);
-    companyId = companies[0]?.company.id ?? null;
+    // Companion-app contract: follow whichever company the user is
+    // looking at on the phone (set by /c/[publicId] page renders).
+    // Falls back to companies[0] when the user has never opened a
+    // per-company page in this session or the active company was
+    // soft-deleted (FK clears to null).
+    const { data: profileRow } = await admin
+      .from("profiles")
+      .select("active_company_id")
+      .eq("id", uid)
+      .maybeSingle();
+    const active = (profileRow as { active_company_id: string | null } | null)
+      ?.active_company_id ?? null;
+    // Validate the active company is still one the user belongs to —
+    // a stale value from before they were removed from a company
+    // shouldn't leak that company's numbers to the wrist.
+    const belongs = active
+      ? companies.some((c) => c.company.id === active)
+      : false;
+    companyId = belongs ? active : companies[0]?.company.id ?? null;
     if (companyId) {
       readinessScore = (await computeReadiness(admin, companyId, taxYear))
         .score;
