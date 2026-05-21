@@ -270,6 +270,19 @@ html[data-theme="dark"] body {
   color: #fbf7e9;
 }
 
+/* Now that the desktop LeftRail is ALWAYS expanded (224px), the
+   centered max-w-6xl content column on every page would overlap
+   the rail at viewports below ~1600px. Push the content area
+   right of the rail on lg+ so the rail never crops the headline.
+   Marketing routes (which don't mount DarkThemeMount) keep their
+   full-width centered layout — we gate on data-theme="dark" since
+   that's the proxy for "authenticated page with the rail". */
+@media (min-width: 1024px) {
+  html[data-theme="dark"] main {
+    padding-left: 15rem;
+  }
+}
+
 /* Modern thin scrollbars site-wide. Default browser scrollbars (chunky
    square buttons, grey thumb) read as dated — the user specifically
    flagged them. Replace with a thin gold-tinted thumb on transparent
