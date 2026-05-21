@@ -239,13 +239,15 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
   // ended up in-flow and pushed the dashboard content ~570px down.
   const railClass =
     mode === "rail"
-      ? // The fixed rail is collapsed (64px showing icons). It
-        // expands to 224px on hover OR while reordering is on.
-        // Position: fixed keeps it pinned to the viewport without
-        // affecting layout of existing pages.
+      ? // The fixed rail is now ALWAYS expanded at 224px (was
+        // collapsed-icons-with-hover-expand). User feedback: the
+        // hover-to-reveal felt fiddly and labels are the whole
+        // point of nav. The desktop rail has plenty of horizontal
+        // room next to a max-w-6xl centered content column, so
+        // staying open costs nothing and removes a click.
+        // Position: fixed keeps it pinned without affecting layout.
         "card card-opaque !fixed left-2 z-40 !rounded-2xl !p-2 " +
-        "hidden lg:flex flex-col transition-all duration-200 " +
-        (reordering ? "w-56" : "w-16 hover:w-56")
+        "hidden lg:flex flex-col w-56"
       : // Sheet mode (mobile drawer) — full-width content panel
         // inside a backdrop. Parent controls the open state +
         // backdrop click. card-opaque so it survives dark theme.
@@ -294,19 +296,12 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
                 <span className="shrink-0 text-forest-700 group-hover/item:text-forest-900">
                   {item.icon}
                 </span>
-                <span
-                  className={
-                    "min-w-0 truncate " +
-                    // On the desktop rail, the label hides until the
-                    // rail expands (sibling has :hover or .reordering).
-                    // Sheet mode shows labels unconditionally.
-                    (mode === "rail"
-                      ? reordering
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity"
-                      : "")
-                  }
-                >
+                <span className="min-w-0 truncate">
+                  {/* Labels are always visible now (rail is
+                      always-expanded). Previously the rail
+                      collapsed-with-hover-reveal so labels were
+                      opacity-0 until hover. Always-open removes
+                      that gate. */}
                   {item.label}
                 </span>
               </Link>
@@ -390,10 +385,7 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
         <button
           type="button"
           onClick={() => setReordering(true)}
-          className={
-            "rounded-lg px-3 py-2 text-xs text-forest-700 hover:bg-cream flex items-center gap-2 " +
-            (mode === "rail" ? "group-hover:justify-start justify-center" : "")
-          }
+          className="rounded-lg px-3 py-2 text-xs text-forest-700 hover:bg-cream flex items-center gap-2 justify-start"
           title="Reorder menu items"
         >
           <svg
