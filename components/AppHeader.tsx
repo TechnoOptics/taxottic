@@ -121,11 +121,19 @@ export async function AppHeader({
       <header
         className="app-header fixed top-0 left-0 right-0 z-30"
         style={{
-          // iOS: env(safe-area-inset-top) clears the notch. Android:
-          // CapacitorNativeInit sets --app-safe-top:0 (the OS already
-          // reserves the status-bar strip via the edge-to-edge
-          // opt-out), so it sits tight under the status bar.
-          paddingTop: "var(--app-safe-top, env(safe-area-inset-top, 0px))",
+          // Safe-area handling — pick the LARGER of the Capacitor
+          // override (--app-safe-top, set by CapacitorNativeInit per
+          // OS) and the platform env() inset. Previously the var()
+          // default-shadowing meant a Capacitor app that set
+          // --app-safe-top:0 (edge-to-edge opt-out path) would NEVER
+          // fall through to env(), so devices where the opt-out
+          // misbehaves (some Android OEM skins, foldables with
+          // dynamic status bars) had the header slip under the system
+          // strip. max() gives whichever signal is larger, so the
+          // header always clears the OS chrome regardless of which
+          // path is reporting accurate insets.
+          paddingTop:
+            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
           paddingLeft: "env(safe-area-inset-left, 0px)",
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
@@ -174,7 +182,7 @@ export async function AppHeader({
         aria-hidden="true"
         style={{
           height:
-            "calc(var(--app-safe-top, env(safe-area-inset-top, 0px)) + 3.25rem)",
+            "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 3.25rem)",
         }}
       />
       {/* Desktop left rail. Hidden on `< lg` widths (LeftRailMobile
