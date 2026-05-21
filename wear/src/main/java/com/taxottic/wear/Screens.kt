@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
@@ -32,12 +33,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
+import com.taxottic.wear.R
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.cos
@@ -210,18 +214,21 @@ private fun Eyebrow(text: String) = Text(
     letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold,
 )
 
-/** The maker's signature — like the brand name under 12 o'clock on
- *  a fine watch dial: tracked brushed-gold wordmark + the house gold
- *  flourish (dot · bar · dot, same motif as the app icon). */
+/** The maker's signature under 12 o'clock — now the brand mark image
+ *  (chart-with-arrow on transparent), sized for a wrist. Replaced the
+ *  literal "TAXOTTIC" text per demo brief: the watch wears its icon,
+ *  not its name. The mark sits on the same navy gradient the
+ *  GemstoneBackground renders, so it reads as the maker's signet on
+ *  the dial. The gold flourish below it is retained as a quiet
+ *  ornament so the brand mark doesn't float in empty space. */
 @Composable
 private fun Wordmark() {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            "TAXOTTIC",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 4.5.sp,
-            style = TextStyle(brush = Brand.brushedGold),
+        Image(
+            painter = painterResource(R.drawable.ic_brand_mark),
+            contentDescription = "Taxottic",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(32.dp),
         )
         Spacer(Modifier.height(3.dp))
         Row(
@@ -230,7 +237,7 @@ private fun Wordmark() {
         ) {
             Box(Modifier.size(3.dp).clip(RoundedCornerShape(50))
                 .background(Brand.goldDeep))
-            Box(Modifier.width(34.dp).height(2.dp)
+            Box(Modifier.width(28.dp).height(2.dp)
                 .clip(RoundedCornerShape(50)).background(Brand.gold))
             Box(Modifier.size(3.dp).clip(RoundedCornerShape(50))
                 .background(Brand.goldDeep))
@@ -293,19 +300,21 @@ private fun HeroScreen(s: WatchSnapshot, onCapture: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.widthIn(max = 168.dp),
     ) {
-        Wordmark()
-        Spacer(Modifier.height(8.dp))
-        // The showpiece is now the LIVE FORECAST (tax-readiness was
-        // removed). A brushed-gold net figure inside a thin gold ring
-        // that fills with the effective rate — the deeper breakdown
-        // is still one swipe away on the Forecast page.
+        // Hero layout (post May-2026 demo feedback):
+        //   • BRAND MARK centered inside the gold rate-ring (it used
+        //     to sit above the ring with text inside; the mark is now
+        //     the maker's signet right in the dial),
+        //   • FORECAST NUMBER below the ring as the headline figure.
+        // The ring still fills with the effective tax rate so the
+        // gauge metaphor reads the same; the mark just replaces the
+        // dollar amount that used to live inside it.
         Box(contentAlignment = Alignment.Center) {
             val ratePct = (f?.effectiveRatePct ?: 0)
             val ring by animateFloatAsState(
                 (ratePct / 100f).coerceIn(0f, 1f), tween(1000),
                 label = "gauge",
             )
-            Canvas(Modifier.size(108.dp)) {
+            Canvas(Modifier.size(112.dp)) {
                 val st = 7.dp.toPx()
                 drawArc(
                     color = Brand.gold.copy(alpha = 0.14f),
@@ -320,44 +329,51 @@ private fun HeroScreen(s: WatchSnapshot, onCapture: () -> Unit) {
                     style = Stroke(st, cap = StrokeCap.Round),
                 )
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (f == null) {
-                    Text("forecast", color = Brand.creamMuted,
-                        fontSize = 10.sp, letterSpacing = 1.5.sp)
-                    Text("—", fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        style = TextStyle(brush = Brand.brushedGold))
-                    Text("syncs from phone", color = Brand.creamMuted,
-                        fontSize = 9.sp)
-                } else {
-                    Text(if (f.netCents >= 0) "you'll owe" else "refund",
-                        color = Brand.creamMuted, fontSize = 10.sp,
-                        letterSpacing = 1.5.sp)
-                    Text(abs(f.netCents).usd0(), fontSize = 25.sp,
-                        fontWeight = FontWeight.Bold,
-                        style = TextStyle(brush = Brand.brushedGold))
-                    Text("${f.effectiveRatePct}% eff. rate",
-                        color = Brand.gold, fontSize = 9.sp)
-                }
-            }
+            // Brand mark sized to sit comfortably inside the ring
+            // with a quiet halo of dial showing around it.
+            Image(
+                painter = painterResource(R.drawable.ic_brand_mark),
+                contentDescription = "Taxottic",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(64.dp),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        // The forecast headline now lives BELOW the ring.
+        if (f == null) {
+            Text("forecast", color = Brand.creamMuted,
+                fontSize = 10.sp, letterSpacing = 1.5.sp)
+            Text("—", fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                style = TextStyle(brush = Brand.brushedGold))
+            Text("syncs from phone", color = Brand.creamMuted,
+                fontSize = 9.sp)
+        } else {
+            Text(if (f.netCents >= 0) "you'll owe" else "refund",
+                color = Brand.creamMuted, fontSize = 10.sp,
+                letterSpacing = 1.5.sp)
+            Text(abs(f.netCents).usd0(), fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                style = TextStyle(brush = Brand.brushedGold))
+            Text("${f.effectiveRatePct}% eff. rate",
+                color = Brand.gold, fontSize = 9.sp)
         }
         Spacer(Modifier.height(6.dp))
-        Text(s.ytdDeductionCents.usd0(), fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            style = TextStyle(brush = Brand.brushedGold))
-        // Was a single overflowing line clipped by the round bezel
-        // (the "white cut-out" text). Center + wrap inside the
-        // width-capped column so it never gets sliced.
-        Text("deductions · ≈${s.estimatedTaxSavedCents.usd0()} saved",
+        // Deductions roll-up trimmed to a single muted line so the
+        // headline stays the showpiece. The full breakdown is one
+        // swipe away on the Forecast page.
+        Text(
+            "${s.ytdDeductionCents.usd0()} deductions · ≈${s.estimatedTaxSavedCents.usd0()} saved",
             color = Brand.creamMuted, fontSize = 10.sp,
-            textAlign = TextAlign.Center, maxLines = 2)
-        Spacer(Modifier.height(8.dp))
+            textAlign = TextAlign.Center, maxLines = 2,
+        )
+        Spacer(Modifier.height(6.dp))
         CompactChip(
             onClick = onCapture,
             colors = ChipDefaults.chipColors(
                 backgroundColor = Brand.gold, contentColor = Brand.ink950
             ),
-            label = { Text("＋ Capture expense", fontSize = 12.sp,
+            label = { Text("＋ Capture expense", fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold) },
         )
     }
