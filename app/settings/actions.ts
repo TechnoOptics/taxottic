@@ -103,7 +103,11 @@ export async function revokeWatchDevice(formData: FormData) {
       pending_token: null,
     })
     .eq("id", deviceId);
+  // Pairing UI moved to /settings/security (May 2026); /settings
+  // still has a "find it under Security" shim, so revalidate both
+  // so the count + list stay fresh wherever the user lands next.
   revalidatePath("/settings");
+  revalidatePath("/settings/security");
 }
 
 /**

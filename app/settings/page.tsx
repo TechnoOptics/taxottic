@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
-import { WatchPairForm } from "@/components/WatchPairForm";
 import {
-  revokeWatchDevice,
   setActivePlatform,
   setShowSmartSearch,
 } from "./actions";
@@ -35,23 +33,11 @@ export default async function SettingsPage() {
 
   const current = (profile?.active_platform as string | null) ?? "user";
   const showSmartSearch = profile?.show_smart_search === true;
-
-  // Paired watches. RLS on watch_devices is policyless by design
-  // (token-bearer auth + service-role writes only), so we read via
-  // the service client and explicitly scope by user_id. Newest first;
-  // already-revoked rows are filtered out.
-  const { data: watches } = await admin
-    .from("watch_devices")
-    .select("id, label, created_at, last_seen_at")
-    .eq("user_id", user.id)
-    .is("revoked_at", null)
-    .order("created_at", { ascending: false });
-  const pairedWatches = (watches ?? []) as Array<{
-    id: string;
-    label: string | null;
-    created_at: string;
-    last_seen_at: string | null;
-  }>;
+  // Note: watch pairing + paired-devices list moved to
+  // /settings/security (May 2026). It sits with passkeys + 2FA under
+  // "Sign-in and devices" — that's where users intuitively look for
+  // device-linked credentials, and it kept this page focused on
+  // platform + display preferences.
 
   return (
     <main id="main" className="min-h-screen">
@@ -185,57 +171,19 @@ export default async function SettingsPage() {
             Devices
           </div>
           <h2 className="display mt-1 text-xl text-forest-900">
-            Pair your watch
+            Pair a watch
           </h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-            Open the Taxottic app on your Wear OS watch. It shows a
-            six-digit code — type it below to link the watch to your
-            account. Codes expire in about two minutes.
+            Watch pairing now lives under{" "}
+            <Link
+              href="/settings/security"
+              className="text-gold-700 underline underline-offset-2 hover:text-gold-600"
+            >
+              Security → Sign-in and devices
+            </Link>
+            . You&apos;ll see your paired watches and the six-digit pairing
+            form there.
           </p>
-          <div className="mt-5">
-            <WatchPairForm />
-          </div>
-
-          {pairedWatches.length > 0 ? (
-            <div className="mt-7 border-t border-forest-100 pt-5">
-              <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-                Paired
-              </div>
-              <ul className="mt-3 grid gap-2">
-                {pairedWatches.map((w) => {
-                  const lastSeen = w.last_seen_at
-                    ? new Date(w.last_seen_at).toLocaleString()
-                    : null;
-                  return (
-                    <li
-                      key={w.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-forest-100 bg-white px-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-sm text-forest-900 font-medium truncate">
-                          {w.label ?? "Wear OS watch"}
-                        </div>
-                        <div className="text-xs text-ink-muted mt-0.5">
-                          {lastSeen
-                            ? `Last seen ${lastSeen}`
-                            : `Paired ${new Date(w.created_at).toLocaleDateString()}`}
-                        </div>
-                      </div>
-                      <form action={revokeWatchDevice}>
-                        <input type="hidden" name="deviceId" value={w.id} />
-                        <button
-                          type="submit"
-                          className="text-xs text-red-700 hover:underline underline-offset-2"
-                        >
-                          Unpair
-                        </button>
-                      </form>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
         </section>
 
         <section className="card mt-6 p-6 sm:p-7">
