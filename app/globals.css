@@ -269,6 +269,51 @@ html[data-theme="dark"] body {
   background-color: #121a2a;
   color: #fbf7e9;
 }
+
+/* Google Places Autocomplete dropdown (`.pac-container`).
+   - Append target is <body>, so it inherits no app styling.
+   - z-index needs to beat fixed headers (z-30) and the mobile rail
+     drawer (z-60); 9999 is what Google's own docs recommend.
+   - Pointer-events must NOT be intercepted (was tripping when a
+     parent dialog with pointer-events:none leaked through).
+   - Dark-mode skin so it doesn't read as white-on-dark when the
+     authenticated app shell is in dark theme. The dropdown is
+     appended outside the data-theme="dark" root, so we style it
+     globally (light by default; dark when the html is dark via the
+     attribute selector). */
+.pac-container {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  font-family: inherit;
+}
+.pac-item {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.pac-item:hover,
+.pac-item-selected {
+  background: #fbf7e9;
+}
+html[data-theme="dark"] .pac-container {
+  background: #1d2843;
+  border-color: rgba(213, 187, 126, 0.22);
+  color: #fbf7e9;
+}
+html[data-theme="dark"] .pac-item {
+  color: #fbf7e9;
+  border-top-color: rgba(213, 187, 126, 0.08);
+}
+html[data-theme="dark"] .pac-item:hover,
+html[data-theme="dark"] .pac-item-selected {
+  background: #243150;
+}
+html[data-theme="dark"] .pac-item-query,
+html[data-theme="dark"] .pac-matched {
+  color: #f2d896;
+}
 html[data-theme="dark"] body::before {
   /* Dim the gold pool slightly on dark so it reads as "warm depth"
      not "spotlight." Matches Advottic's dark-mode value. */

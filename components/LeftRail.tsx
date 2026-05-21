@@ -253,15 +253,20 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
         // for this mode — no !important needed.
         "card card-opaque relative w-72 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
-  // Top offset for the rail: header is 3.25rem + safe-top. We start
-  // the rail just below it so it never overlaps the wordmark / search.
-  // Bottom offset gives breathing room above safe-bottom.
+  // Position: vertically centered on the left edge (was top-anchored
+  // just below the header). The user feedback was that the rail
+  // crowded the top of the viewport and "overlay the status bar +
+  // header" on mobile — moving it to mid-left lets it float as a
+  // proper rail with the brand mark + header completely unobstructed
+  // above. maxHeight still respects safe-bottom + an extra hint so
+  // the rail never grows tall enough to bump back into the header.
   const railStyle =
     mode === "rail"
       ? {
-          top: "calc(var(--app-safe-top, env(safe-area-inset-top, 0px)) + 3.75rem)",
+          top: "50%",
+          transform: "translateY(-50%)",
           maxHeight:
-            "calc(100vh - var(--app-safe-top, env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 4.5rem)",
+            "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 7rem)",
         }
       : undefined;
 
