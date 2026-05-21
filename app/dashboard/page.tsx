@@ -868,7 +868,10 @@ export default async function DashboardPage() {
               href={`/c/${companies[0].company.public_id}/savings-goals`}
               className="block card card-hover p-6 sm:p-7 border-gold-300/60"
             >
-              <div className="flex items-start gap-3 flex-wrap">
+              {/* Stack vertically on mobile (the body needs the full
+                  card width; otherwise the CTA pins to the right and
+                  squeezes the description into a narrow column). */}
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
                     Tax-savings playbook
@@ -883,7 +886,7 @@ export default async function DashboardPage() {
                     business expenses.
                   </p>
                 </div>
-                <span className="text-forest-700 font-medium">
+                <span className="text-forest-700 font-medium shrink-0">
                   View playbook &rarr;
                 </span>
               </div>

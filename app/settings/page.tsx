@@ -2,7 +2,11 @@ import Link from "next/link";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { WatchPairForm } from "@/components/WatchPairForm";
-import { revokeWatchDevice, setActivePlatform } from "./actions";
+import {
+  revokeWatchDevice,
+  setActivePlatform,
+  setShowSmartSearch,
+} from "./actions";
 
 const PLATFORM_DESCRIPTION: Record<string, { label: string; body: string }> = {
   user: {
@@ -25,11 +29,12 @@ export default async function SettingsPage() {
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("active_platform, full_name")
+    .select("active_platform, full_name, show_smart_search")
     .eq("id", user.id)
     .maybeSingle();
 
   const current = (profile?.active_platform as string | null) ?? "user";
+  const showSmartSearch = profile?.show_smart_search === true;
 
   // Paired watches. RLS on watch_devices is policyless by design
   // (token-bearer auth + service-role writes only), so we read via
@@ -121,6 +126,44 @@ export default async function SettingsPage() {
         ) : null}
 
         <section className="card mt-8 p-6 sm:p-7">
+          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+            Header
+          </div>
+          <h2 className="display mt-1 text-xl text-forest-900">
+            Smart search bar
+          </h2>
+          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+            A Bella-powered search input pinned to the top of every page
+            — ask anything about your business, deductions, or
+            forecast and get an answer with citations. Off by default
+            for a quieter header; flip it on when you want it.
+          </p>
+          <form action={setShowSmartSearch} className="mt-4 grid gap-3">
+            <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                name="show_smart_search"
+                defaultChecked={showSmartSearch}
+                className="size-4 accent-forest-700"
+              />
+              <span className="text-sm text-forest-800">
+                Show the smart search bar in the header
+              </span>
+            </label>
+            <p className="text-xs text-ink-muted">
+              Visible on desktop widths (≥ 1024 px). On phones the
+              header stays uncluttered either way — open Bella from
+              the full chat page instead.
+            </p>
+            <div>
+              <button type="submit" className="btn-primary text-sm">
+                Save
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="card mt-6 p-6 sm:p-7">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
             Security
           </div>

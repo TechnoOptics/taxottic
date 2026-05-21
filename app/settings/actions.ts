@@ -107,6 +107,22 @@ export async function revokeWatchDevice(formData: FormData) {
 }
 
 /**
+ * Toggle the Bella smart-search bar in the header. Default is off
+ * (cleaner header for users who don't use Bella daily); flipping
+ * this on adds the search input on lg+ widths.
+ */
+export async function setShowSmartSearch(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const next = String(formData.get("show_smart_search") ?? "") === "on";
+  await admin
+    .from("profiles")
+    .update({ show_smart_search: next })
+    .eq("id", user.id);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
+/**
  * Switch the active platform mode for the current user (super-admins
  * only). Saves the selection on profiles.active_platform and
  * redirects (cross-subdomain in production) to the platform's
