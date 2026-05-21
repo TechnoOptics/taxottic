@@ -160,6 +160,18 @@ export default async function MileagePage({
                 />
                 Business breadcrumbs →
               </Link>
+              {/* New (May 2026): saved places. Adding a "work" place
+                  here means every future trip that touches it
+                  auto-classifies as business — the auto-deduct hook
+                  the user asked for. Surface it next to the
+                  breadcrumb link so the discovery path is obvious. */}
+              <Link
+                href="/mileage/places"
+                className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
+              >
+                <span aria-hidden="true">📍</span>
+                Saved places →
+              </Link>
             </div>
 
             <div className="mt-6 grid sm:grid-cols-3 gap-3">
