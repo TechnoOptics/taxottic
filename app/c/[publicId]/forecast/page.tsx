@@ -232,6 +232,41 @@ export default async function ForecastPage({ params }: { params: Params }) {
       (capturedByCode.get(r.category_code) ?? 0) + deductible,
     );
   }
+  // Profile-level "yes, I'm claiming this" flags should also count
+  // as captured on the scorecard, even when there's no
+  // monthly_expenses row tied to the deduction. Otherwise the user
+  // applies Home Office via the Quick Apply modal (or sets Vehicle
+  // in Profile), business_profiles.has_home_office / has_vehicle
+  // flips true, the forecast pipeline ALREADY includes the
+  // deduction — but the scorecard tile stays empty because nothing
+  // landed in capturedByCode. That's the "I applied Home Office,
+  // why isn't it checked?" report.
+  //
+  // Use the simplified-method floor for Home Office ($5/sqft, cap
+  // 300 sqft → max $1,500/yr) so the captured amount is the same
+  // figure we already surface on /my-deductions. For Vehicle we
+  // mark captured if EITHER the profile flag is set OR there's any
+  // classified-business mileage on file — both are real "yes I'm
+  // claiming car/truck" signals.
+  if (businessProfile?.has_home_office) {
+    const existing = capturedByCode.get("home_office") ?? 0;
+    if (existing === 0) {
+      const sqft = Math.min(
+        (businessProfile.home_office_sqft as number | null) ?? 0,
+        300,
+      );
+      // Sentinel of 1 cent if sqft is 0/null — the binary
+      // "captured?" check is what drives the tile state.
+      capturedByCode.set("home_office", Math.max(sqft * 5 * 100, 1));
+    }
+  }
+  if (businessProfile?.has_vehicle) {
+    const existing = capturedByCode.get("car_truck") ?? 0;
+    if (existing === 0) {
+      capturedByCode.set("car_truck", 1);
+    }
+  }
+
   const { data: categoryRows } = await supabase
     .from("deduction_categories")
     .select(
