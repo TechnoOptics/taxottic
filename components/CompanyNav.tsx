@@ -12,6 +12,7 @@ type TabKey =
   | "forecast"
   | "money-in"
   | "money-out"
+  | "deductions"
   | "setup"
   | "talk";
 
@@ -20,11 +21,17 @@ type TabKey =
  * historic - the old IA had 12 top tabs (`income`, `expenses`, etc.).
  * They're still accepted so each detail page keeps lighting up the
  * correct group tab.
+ *
+ * (May 2026) "deductions" graduated from a legacy mapping into a
+ * first-class TabKey — users got "Money out" highlighted while on
+ * the Deductions / My deductions surfaces, which read as wrong
+ * because the page title said something else. The strip now has a
+ * dedicated Deductions tab; "my-deductions" stays a legacy key that
+ * maps INTO this new group instead of money-out.
  */
 type LegacyKey =
   | "income"
   | "expenses"
-  | "deductions"
   | "my-deductions"
   | "mileage"
   | "banks"
@@ -47,8 +54,7 @@ type CompanyNavProps = {
 const LEGACY_TO_GROUP: Record<LegacyKey, TabKey> = {
   income: "money-in",
   expenses: "money-out",
-  deductions: "money-out",
-  "my-deductions": "money-out",
+  "my-deductions": "deductions",
   mileage: "money-out",
   "sales-tax": "money-out",
   banks: "setup",
@@ -81,7 +87,13 @@ const TABS: { key: TabKey; label: string; path: string; subtitle: string }[] = [
     key: "money-out",
     label: "Money out",
     path: "money-out",
-    subtitle: "Expenses, mileage, sales tax, deductions",
+    subtitle: "Expenses, mileage, sales tax",
+  },
+  {
+    key: "deductions",
+    label: "Deductions",
+    path: "my-deductions",
+    subtitle: "Schedule C + Home Office claims",
   },
   {
     key: "setup",
