@@ -284,7 +284,11 @@ private fun PairScreen(state: PairManager.State.NeedsPair) {
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            "Enter on your phone\nSettings → Devices",
+            // Updated May 2026: pair form moved under Settings →
+            // Security → Sign-in and devices. The watch instruction
+            // now matches that path so a first-time user lands in
+            // the right place.
+            "Enter on your phone\nSettings → Security",
             color = Brand.cream,
             fontSize = 11.sp,
             textAlign = TextAlign.Center,
