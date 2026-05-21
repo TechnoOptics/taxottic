@@ -86,8 +86,22 @@ export function loadGoogleMaps(): Promise<GoogleMapsApi> {
       // places  — the Autocomplete widget on the business address.
       // Both ship in one script load; pulling `places` here is what
       // makes <AddressAutocomplete> light up (no extra request).
+      //
+      // Cache-buster (`&t=…`) is critical: Maps API responses ship
+      // with `Cache-Control: public, max-age=1800` — including the
+      // ERROR responses. We hit this in production: while the key
+      // was misconfigured (referrer didn't match), Google returned
+      // 503 with that 30-minute cache header, so every subsequent
+      // page load — long after we fixed the referrer config — kept
+      // serving the cached 503 from disk. The browser's `<script>`-
+      // tag cache is harder to bust than fetch(); a unique query
+      // param per page-load forces a fresh GET. The Maps script
+      // itself isn't billed per load, so this costs nothing.
+      const cacheBuster = Date.now().toString(36);
       s.src =
-        "https://maps.googleapis.com/maps/api/js?v=quarterly&libraries=geometry,places&key=" +
+        "https://maps.googleapis.com/maps/api/js?v=quarterly&libraries=geometry,places&t=" +
+        cacheBuster +
+        "&key=" +
         encodeURIComponent(key);
       s.onload = () => {
         if (window.google?.maps) resolve(window.google.maps);
