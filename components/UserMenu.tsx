@@ -159,6 +159,14 @@ export function UserMenu({
               right: Math.max(anchor.right, 8),
               zIndex: 9999,
               maxWidth: "calc(100vw - 16px)",
+              // Cap the dropdown to the viewport so the long menu
+              // (account header + portal switcher + theme toggle +
+              // feedback + sign-out + Bella) stays usable on short
+              // screens (laptops in stage-presenter mode, foldables,
+              // phones in landscape). Without the cap the bottom
+              // items slid off the screen with no way to reach them.
+              maxHeight: "calc(100vh - " + anchor.top + "px - 16px)",
+              overflowY: "auto",
             }}
             className="w-72 card card-opaque p-2 shadow-2xl"
           >

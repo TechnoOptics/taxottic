@@ -255,18 +255,20 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
         // for this mode — no !important needed.
         "card card-opaque relative w-72 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
-  // Position: vertically centered on the left edge (was top-anchored
-  // just below the header). The user feedback was that the rail
-  // crowded the top of the viewport and "overlay the status bar +
-  // header" on mobile — moving it to mid-left lets it float as a
-  // proper rail with the brand mark + header completely unobstructed
-  // above. maxHeight still respects safe-bottom + an extra hint so
-  // the rail never grows tall enough to bump back into the header.
+  // Position: anchored to the top of the content column so the rail's
+  // first item lines up with the page's first eyebrow ("YOUR
+  // WORKSPACE", "MILEAGE · BUSINESS TRIPS", etc.). The mid-viewport
+  // floating position read as "too low" — the rail's top item was
+  // appearing below the page headline. Top-anchor at
+  //   safe-top + header (3.25rem) + content top padding (2.5rem)
+  // matches the eyebrow line in the content column, so the rail and
+  // the page content read as one horizontal row. Mobile uses
+  // LeftRailMobile (floating tab) and never hits this code path, so
+  // the previous mobile-overlap concern doesn't apply here.
   const railStyle =
     mode === "rail"
       ? {
-          top: "50%",
-          transform: "translateY(-50%)",
+          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 5.75rem)",
           maxHeight:
             "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 7rem)",
         }
