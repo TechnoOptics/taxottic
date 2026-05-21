@@ -32,6 +32,7 @@ import {
   eligibleDeductions,
 } from "@/lib/deductions/eligibility";
 import { deductibleAmountForCategory } from "@/lib/tax/net-business-income";
+import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
 import {
   combineMonthly,
   expandRowToMonthly,
@@ -238,16 +239,14 @@ export default async function ForecastPage({ params }: { params: Params }) {
   // applies Home Office via the Quick Apply modal (or sets Vehicle
   // in Profile), business_profiles.has_home_office / has_vehicle
   // flips true, the forecast pipeline ALREADY includes the
-  // deduction — but the scorecard tile stays empty because nothing
-  // landed in capturedByCode. That's the "I applied Home Office,
-  // why isn't it checked?" report.
+  // deduction — but the scorecard tile stayed empty because
+  // nothing landed in capturedByCode.
   //
-  // Use the simplified-method floor for Home Office ($5/sqft, cap
-  // 300 sqft → max $1,500/yr) so the captured amount is the same
-  // figure we already surface on /my-deductions. For Vehicle we
-  // mark captured if EITHER the profile flag is set OR there's any
-  // classified-business mileage on file — both are real "yes I'm
-  // claiming car/truck" signals.
+  // Home Office: simplified-method floor ($5/sqft, cap 300 sqft →
+  // max $1,500/yr). Same figure /my-deductions surfaces. Sentinel
+  // of 1¢ only if sqft is genuinely 0/null AND has_home_office is
+  // true — keep the binary "captured?" honest in the degenerate
+  // case.
   if (businessProfile?.has_home_office) {
     const existing = capturedByCode.get("home_office") ?? 0;
     if (existing === 0) {
@@ -255,15 +254,46 @@ export default async function ForecastPage({ params }: { params: Params }) {
         (businessProfile.home_office_sqft as number | null) ?? 0,
         300,
       );
-      // Sentinel of 1 cent if sqft is 0/null — the binary
-      // "captured?" check is what drives the tile state.
       capturedByCode.set("home_office", Math.max(sqft * 5 * 100, 1));
     }
   }
+  // Vehicle / car_truck: the EARLIER version of this fix planted a
+  // 1¢ sentinel any time has_vehicle was true. That ticked the
+  // tile as captured even when the user had zero classified-
+  // business mileage AND zero monthly_expenses on car_truck —
+  // i.e., the deduction had genuinely captured $0. The user
+  // rightly flagged this ("how can it be awarded when it has a
+  // zero for car / truck expense?").
+  //
+  // Use the real value instead: roll up classified-business
+  // mileage_trips → IRS-rate cents, plus the user's manual
+  // vehicle_business_miles fallback if no tracker data exists.
+  // The tile only ticks when this is > $0. If they're on the
+  // actual-expenses method (vehicle_method='actual'), the manual-
+  // miles fallback can't be the right number anyway, so don't
+  // synthesize anything from has_vehicle alone.
   if (businessProfile?.has_vehicle) {
-    const existing = capturedByCode.get("car_truck") ?? 0;
-    if (existing === 0) {
-      capturedByCode.set("car_truck", 1);
+    const { data: tripRows } = await supabase
+      .from("mileage_trips")
+      .select("deduction_cents")
+      .eq("company_id", company.id)
+      .eq("classification", "business")
+      .eq("tax_year", taxYear);
+    const trackedCents = (tripRows ?? []).reduce(
+      (a, r) => a + Number((r as { deduction_cents: number }).deduction_cents || 0),
+      0,
+    );
+    const manualMiles =
+      (businessProfile.vehicle_business_miles as number | null) ?? 0;
+    const isStandard = businessProfile.vehicle_method !== "actual";
+    const manualCents =
+      isStandard && manualMiles > 0
+        ? businessMileageDeductionCents(manualMiles, taxYear)
+        : 0;
+    const carTruckCents = Math.max(trackedCents, manualCents);
+    if (carTruckCents > 0) {
+      const existing = capturedByCode.get("car_truck") ?? 0;
+      if (existing === 0) capturedByCode.set("car_truck", carTruckCents);
     }
   }
 
