@@ -70,8 +70,12 @@ export default async function MoneyInHub({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="money-in" />
         </div>
 
-        {/* Year-to-date summary */}
-        <div className="card mt-6 p-6 bg-gradient-to-br from-gold-50/60 to-cream">
+        {/* Year-to-date summary.
+            (May 2026) Removed `bg-gradient-to-br from-gold-50/60 to-cream`
+            — the cream gradient + dark-mode cream-flipped text was
+            rendering as cream-on-cream. .card's dark surface handles
+            this cleanly. Mirror change to money-out page. */}
+        <div className="card mt-6 p-6">
           <div className="flex items-baseline justify-between gap-4 flex-wrap">
             <div>
               <p className="text-[11px] uppercase tracking-[0.28em] text-gold-700">
