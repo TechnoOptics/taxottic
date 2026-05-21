@@ -64,6 +64,25 @@ object PairManager {
         if (loop?.isActive == true) return
         prefs = context.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Demo / offline-screenshot bypass. When `debug.twb.fakepair`
+        // is set to "1" via `adb shell setprop`, skip the network
+        // handshake entirely and render a fixed 6-digit code so the
+        // Pair screen can be demonstrated on an emulator or on a
+        // watch that has no internet (Wear OS battery management
+        // sometimes locks Wi-Fi data off-wrist). Inert in production:
+        // the prop is unset on real devices and the runCatching
+        // swallow returns false, so the normal handshake loop runs
+        // unchanged. Mirrors the existing `debug.twb.relay` pattern
+        // in DataLayer.kt.
+        val fake = runCatching {
+            Class.forName("android.os.SystemProperties")
+                .getMethod("get", String::class.java)
+                .invoke(null, "debug.twb.fakepair") == "1"
+        }.getOrDefault(false)
+        if (fake) {
+            _state.value = State.NeedsPair(code = "428193")
+            return
+        }
         loop = scope.launch { run() }
     }
 
