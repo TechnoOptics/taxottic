@@ -90,6 +90,13 @@ export const trackerDiag = {
   importOk: false as boolean,
   startFn: false as boolean,
   lastError: null as string | null,
+  // Last result from startMileageTracking() — set when the native
+  // bg.start() promise settles. Surfaced in the UI diag so we can
+  // see the actual native return path without DevTools.
+  startResult: "untouched" as string,
+  startError: "" as string,
+  cbHits: 0 as number,
+  cbLastError: "" as string,
 };
 
 async function guard(): Promise<BackgroundGeolocationPlugin | null> {
@@ -217,23 +224,17 @@ export async function startMileageTracking(
   }
   loadPersistedBuffer();
 
-  // Fire-and-forget start(). On the Galaxy Z Fold5 (and likely
-  // other Samsung WebViews), bg.start()'s returned promise hangs
-  // until the foreground service is fully up AND the first GPS
-  // fix arrives, which can take 10+ seconds. Awaiting it leaves
-  // the toggle in a permanent "loading" state with no user
-  // feedback. We flip the tracking flag optimistically and let
-  // the callback handle errors — if NOT_AUTHORIZED comes back,
-  // stopMileageTracking() resets the flag. UX: toggle responds
-  // instantly; foreground-service notification appears within a
-  // few seconds when the OS gets the service up.
+  // Fire-and-forget start(). Promise rejection / callback errors
+  // are captured into trackerDiag so the UI's diag line shows the
+  // exact native return path without DevTools.
+  trackerDiag.startResult = "calling";
+  trackerDiag.startError = "";
+  trackerDiag.cbHits = 0;
+  trackerDiag.cbLastError = "";
   try {
     bg
       .start(
         {
-          // Presence of backgroundMessage is what enables background
-          // delivery; on Android it is the persistent-notification text
-          // the OS requires for a location foreground service.
           backgroundMessage:
             "Logging your drive for the mileage deduction. Tap to open.",
           backgroundTitle: "Taxottic mileage",
@@ -242,9 +243,10 @@ export async function startMileageTracking(
           distanceFilter: DISTANCE_FILTER_M,
         },
         (location, error) => {
+          trackerDiag.cbHits++;
           if (error) {
-            // NOT_AUTHORIZED → the user denied/revoked location. Stop
-            // cleanly and drop the preference so we don't nag forever.
+            trackerDiag.cbLastError =
+              String(error.code ?? "") + ":" + String(error.message ?? "");
             if (error.code === "NOT_AUTHORIZED")
               void stopMileageTracking();
             return;
@@ -258,10 +260,14 @@ export async function startMileageTracking(
           if (buffer.length >= FLUSH_AT_POINTS) void flush();
         },
       )
-      .catch(() => {
-        // start() threw — the plugin reported an error before
-        // even registering the callback. Stop cleanly so the next
-        // tap can retry from a clean state.
+      .then(() => {
+        trackerDiag.startResult = "resolved";
+      })
+      .catch((e) => {
+        trackerDiag.startResult = "rejected";
+        trackerDiag.startError = String(
+          (e && (e.message || e.code)) || e || "unknown",
+        ).slice(0, 80);
         tracking = false;
         try {
           window.localStorage.setItem(LS_ENABLED, "0");

@@ -197,13 +197,15 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           call, so as soon as getMileageTrackingState resolves —
           even after the 5s timeout — these fields reflect what the
           native shim saw. Removable once toggle is verified. */}
-      <p className="mt-1 text-[10px] text-ink-muted font-mono opacity-70">
+      <p className="mt-1 text-[10px] text-ink-muted font-mono opacity-70 break-all">
         diag: ready={String(ready)} sup={String(supported)} en={String(enabled)}
         {" "}native={String(trackerDiag.native)} plug={String(
           trackerDiag.pluginAvailable,
         )} imp={String(trackerDiag.importOk)} start={String(
           trackerDiag.startFn,
-        )}
+        )} call={trackerDiag.startResult} cbs={trackerDiag.cbHits}
+        {trackerDiag.startError ? ` startErr=${trackerDiag.startError}` : ""}
+        {trackerDiag.cbLastError ? ` cbErr=${trackerDiag.cbLastError}` : ""}
         {trackerDiag.lastError ? ` err=${trackerDiag.lastError.slice(0, 40)}` : ""}
       </p>
       {error ? (

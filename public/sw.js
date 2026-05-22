@@ -81,7 +81,10 @@
 // and fires the native start/stop in the background. Bumping
 // the SW invalidates the v18 chunks so the new
 // non-blocking onToggle reaches the WebView.
-const CACHE_VERSION = "v19";
+// v20 (May 2026): pairs with the start()/callback diagnostic
+// breadcrumb additions so we can finally see what bg.start()
+// returns on Samsung WebViews.
+const CACHE_VERSION = "v20";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
