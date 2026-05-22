@@ -76,7 +76,12 @@
 // v18 (May 2026): pairs with the mobile-sheet w-56 + UserMenu
 // centered-on-viewport changes. Bumping ensures the new CSS
 // classes + style positioning reach the WebView.
-const CACHE_VERSION = "v18";
+// v19 (May 2026): pairs with the toggle's optimistic-flip
+// refactor. The toggle now flips visually IMMEDIATELY on tap
+// and fires the native start/stop in the background. Bumping
+// the SW invalidates the v18 chunks so the new
+// non-blocking onToggle reaches the WebView.
+const CACHE_VERSION = "v19";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
