@@ -343,6 +343,60 @@ export function UserMenu({
             ) : null}
 
             <div className="border-t border-forest-100 pt-1.5">
+              {/* Refresh app — always-available escape hatch when the
+                  WebView (Capacitor) or PWA is serving stale cached
+                  content. Unregisters all service workers, deletes
+                  every cache, then force-reloads from network. Users
+                  on the phone app reported "I can't see the latest
+                  changes" because a normal Vercel deploy doesn't
+                  always bump the SW version → the in-app "New
+                  version" toast never fires. This button is the
+                  fallback they can hit any time. */}
+              <button
+                type="button"
+                onClick={async () => {
+                  setOpen(false);
+                  try {
+                    if (
+                      typeof navigator !== "undefined" &&
+                      "serviceWorker" in navigator
+                    ) {
+                      const regs = await navigator.serviceWorker.getRegistrations();
+                      await Promise.all(regs.map((r) => r.unregister()));
+                    }
+                    if (typeof caches !== "undefined") {
+                      const keys = await caches.keys();
+                      await Promise.all(keys.map((k) => caches.delete(k)));
+                    }
+                  } catch {
+                    /* best-effort; reload below either way */
+                  }
+                  // Cache-bust the reload so the WebView's own
+                  // network cache also discards the entry. The query
+                  // string is dropped by the router on the next nav.
+                  const sep = window.location.href.includes("?") ? "&" : "?";
+                  window.location.href =
+                    window.location.href + sep + "_refresh=" + Date.now();
+                }}
+                className="w-full text-left rounded-lg px-3 py-2 text-sm text-forest-800 hover:bg-cream flex items-center gap-2"
+                title="Clear cached content and load the latest version"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 10 a7 7 0 0 1 12-5 L17 7 M17 3 L17 7 L13 7" />
+                  <path d="M17 10 a7 7 0 0 1 -12 5 L3 13 M3 17 L3 13 L7 13" />
+                </svg>
+                Refresh app
+              </button>
               {/* Switch accounts — clears the current session AND tells the
                   login page to force Google/Microsoft's account picker (via
                   ?force_picker=1, which the login page translates into
