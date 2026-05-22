@@ -68,7 +68,12 @@
 // dynamic import to a synchronous Capacitor availability check.
 // Without bumping the SW, v15 keeps cache-first-serving the
 // pre-#199 chunks and the toggle stays hung. Pure cache-bust.
-const CACHE_VERSION = "v16";
+// v17 (May 2026): pairs with the fire-and-forget bg.start() fix
+// in native-tracker.ts. The previous awaited start() hung until
+// the foreground service was fully up + first GPS fix arrived,
+// leaving the toggle in a permanent "loading" state. v17 forces
+// fresh chunks so the new fire-and-forget code reaches the WebView.
+const CACHE_VERSION = "v17";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
