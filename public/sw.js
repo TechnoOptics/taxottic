@@ -84,7 +84,9 @@
 // v20 (May 2026): pairs with the start()/callback diagnostic
 // breadcrumb additions so we can finally see what bg.start()
 // returns on Samsung WebViews.
-const CACHE_VERSION = "v20";
+// v21: auto-kick startMileageTracking on mount if persisted=true
+// so we can finally observe the native call's actual return.
+const CACHE_VERSION = "v21";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
