@@ -88,7 +88,10 @@
 // so we can finally observe the native call's actual return.
 // v22: trace startMileageTracking entry/exit at every branch so
 // call=untouched gets replaced with call=entered/no_bg/already_tracking/calling/...
-const CACHE_VERSION = "v22";
+// v23: don't await guard() in startMileageTracking, use cached
+// plugin ref. Warm the @capgo import on mount so the cache is
+// populated before any tap.
+const CACHE_VERSION = "v23";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

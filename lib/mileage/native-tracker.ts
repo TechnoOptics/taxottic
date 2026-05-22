@@ -212,10 +212,15 @@ export async function startMileageTracking(
   forCompanyId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   trackerDiag.startResult = "entered";
-  const bg = await guard();
+  // Use the cached plugin reference if available (set by a prior
+  // guard() call). If not cached, kick off guard() once and bail —
+  // the next tap will succeed. Avoids `await guard()` blocking
+  // forever if a concurrent invocation is still mid-flight.
+  let bg = plugin;
   if (!bg) {
-    trackerDiag.startResult = "no_bg";
-    return { ok: false, error: "unavailable" };
+    trackerDiag.startResult = "warming";
+    void guard().catch(() => {});
+    return { ok: false, error: "warming" };
   }
   if (tracking) {
     trackerDiag.startResult = "already_tracking";

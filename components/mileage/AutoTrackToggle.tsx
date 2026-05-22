@@ -63,16 +63,23 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           /* private mode */
         }
         setReady(true);
-        // Auto-kick: if the user previously enabled tracking but
-        // the native service isn't actually running (cold launch,
-        // killed process, etc.), fire startMileageTracking now so
-        // the foreground service comes up. Without this, en=true
-        // can persist in localStorage forever while the native
-        // side never actually tracks.
+        // Eagerly warm the @capgo plugin chunk so subsequent
+        // startMileageTracking calls see a cached `plugin` ref
+        // and don't have to await the (sometimes-hanging) dynamic
+        // import. Fire-and-forget; if it fails the toggle handles
+        // a "warming" state on the next tap.
+        if (isSupported) {
+          void import("@capgo/background-geolocation").catch(() => {});
+        }
         if (isSupported && persisted) {
-          startMileageTracking(companyId).catch(() => {
-            /* swallow — error captured in trackerDiag */
-          });
+          // Retry the auto-kick after the warm-up has a chance to
+          // populate the cached plugin ref. 1.5s is enough on
+          // Samsung in practice; the first attempt returns
+          // "warming" and the retry hits the cached path.
+          const retry = setTimeout(() => {
+            startMileageTracking(companyId).catch(() => {});
+          }, 1500);
+          return () => clearTimeout(retry);
         }
       })
       .catch(() => {
