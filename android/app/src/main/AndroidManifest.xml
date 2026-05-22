@@ -67,14 +67,27 @@
 
     <!-- Background mileage capture (@capgo/background-geolocation).
          Continuous drive logging runs as a foreground service with a
-         persistent notification (the allowed pattern) so we do NOT
-         request ACCESS_BACKGROUND_LOCATION — that is only needed for
-         geofencing, which we don't use, and avoids the heightened
-         Play review for background location. FOREGROUND_SERVICE_LOCATION
-         is the typed permission Android 14+ (API 34) requires for a
-         location-type foreground service. -->
+         persistent notification. On Samsung (and other aggressive
+         OEMs) the foreground service alone isn't enough — the OS
+         throttles location updates to once-every-many-minutes
+         unless ACCESS_BACKGROUND_LOCATION is granted. Without it,
+         drives get truncated or skipped entirely when the user
+         pockets their phone. Play review adds a heightened bar for
+         this permission; the disclaimer paragraph on /mileage
+         covers the use case (mileage deduction only). Updated
+         May 2026 after the Galaxy Z Fold5 demo confirmed the
+         foreground-only approach wasn't actually working.
+
+         FOREGROUND_SERVICE_LOCATION is the typed permission
+         Android 14+ (API 34) requires for a location-type
+         foreground service. ACTIVITY_RECOGNITION lets the plugin
+         tell driving apart from walking/cycling/stationary, so
+         trips < 200 m at walking pace are filtered before they
+         even reach the segmenter. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 </manifest>
