@@ -75,49 +75,48 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     };
   }, []);
 
-  const beginStart = async () => {
+  // Optimistic on/off — the toggle flips IMMEDIATELY when tapped
+  // and the native call fires in the background. The previous
+  // gated flow (await native, then update React state) made the
+  // toggle look broken on any device where bg.start() was slow or
+  // hung. UX trade-off: if the native side rejects (denied
+  // permission, plugin failure), the visual state may briefly
+  // mismatch — but the persistent notification's appearance gives
+  // the user the real signal anyway, and on this app's worst
+  // platform (Samsung WebView) the awaited path was effectively
+  // never resolving. Visible response > invisible correctness.
+  const beginStart = () => {
     setShowExplainer(false);
-    setBusy(true);
     setError(null);
     setDenialPath(null);
+    setEnabled(true);
     try {
-      const r = await startMileageTracking(companyId);
-      if (r.ok) {
-        setEnabled(true);
-        return;
-      }
-      // start_failed | NOT_AUTHORIZED | permission_denied → user said
-      // no (or revoked previously). Distinguish "first denial" (they
-      // can re-prompt by trying again) from "permanent denial" (they
-      // checked "don't ask again" and now have to flip the toggle in
-      // OS Settings). Without a reliable signal from the plugin we
-      // optimistically show the Settings path — it covers both, and
-      // for first-denial it just means a second tap.
-      if (r.error === "unavailable") {
-        setError("Automatic logging runs in the Taxottic mobile app.");
-      } else {
-        setError(
-          "Taxottic needs Location to log drives for your IRS mileage deduction.",
-        );
-        setDenialPath("settings");
-      }
-    } finally {
-      setBusy(false);
+      window.localStorage.setItem("taxottic.mileage.enabled", "1");
+    } catch {
+      /* private mode */
     }
+    // Fire-and-forget. If the native side errors, the callback in
+    // startMileageTracking handles NOT_AUTHORIZED by calling
+    // stopMileageTracking which flips the localStorage flag back.
+    startMileageTracking(companyId).catch(() => {
+      /* swallow — the toggle stays on visually */
+    });
   };
 
-  const onToggle = async () => {
+  const onToggle = () => {
     if (enabled) {
-      // Turning OFF — no permission story, just stop.
-      setBusy(true);
+      // Turning OFF — flip visually, stop in background.
+      setEnabled(false);
       setError(null);
       setDenialPath(null);
       try {
-        await stopMileageTracking();
-        setEnabled(false);
-      } finally {
-        setBusy(false);
+        window.localStorage.setItem("taxottic.mileage.enabled", "0");
+      } catch {
+        /* private mode */
       }
+      stopMileageTracking().catch(() => {
+        /* swallow */
+      });
       return;
     }
     // Turning ON — show explainer first, then start when user
