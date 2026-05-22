@@ -7,6 +7,8 @@ import {
   getMileageTrackingState,
 } from "@/lib/mileage/native-tracker";
 
+type DenialPath = "settings" | "retry";
+
 /**
  * The user-facing on/off for automatic drive logging. Renders on
  * every platform: on the native app it actually arms the background
@@ -20,7 +22,15 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [denialPath, setDenialPath] = useState<DenialPath | null>(null);
   const [ready, setReady] = useState(false);
+  // When the user wants to enable, show an explainer modal BEFORE
+  // we call into the native plugin. The OS permission dialog comes
+  // up cold otherwise, with no context about why Taxottic is asking.
+  // The explainer is dismissable — pressing "Continue" arms the
+  // actual start (which triggers the OS dialog); "Cancel" leaves
+  // the toggle off.
+  const [showExplainer, setShowExplainer] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,27 +45,76 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     };
   }, []);
 
-  const onToggle = async () => {
+  const beginStart = async () => {
+    setShowExplainer(false);
     setBusy(true);
     setError(null);
+    setDenialPath(null);
     try {
-      if (enabled) {
-        await stopMileageTracking();
-        setEnabled(false);
+      const r = await startMileageTracking(companyId);
+      if (r.ok) {
+        setEnabled(true);
+        return;
+      }
+      // start_failed | NOT_AUTHORIZED | permission_denied → user said
+      // no (or revoked previously). Distinguish "first denial" (they
+      // can re-prompt by trying again) from "permanent denial" (they
+      // checked "don't ask again" and now have to flip the toggle in
+      // OS Settings). Without a reliable signal from the plugin we
+      // optimistically show the Settings path — it covers both, and
+      // for first-denial it just means a second tap.
+      if (r.error === "unavailable") {
+        setError("Automatic logging runs in the Taxottic mobile app.");
       } else {
-        const r = await startMileageTracking(companyId);
-        if (r.ok) {
-          setEnabled(true);
-        } else {
-          setError(
-            r.error === "unavailable"
-              ? "Automatic logging runs in the Taxottic mobile app."
-              : "Couldn't start tracking. Check Location permission in Settings.",
-          );
-        }
+        setError(
+          "Taxottic needs Location to log drives for your IRS mileage deduction.",
+        );
+        setDenialPath("settings");
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onToggle = async () => {
+    if (enabled) {
+      // Turning OFF — no permission story, just stop.
+      setBusy(true);
+      setError(null);
+      setDenialPath(null);
+      try {
+        await stopMileageTracking();
+        setEnabled(false);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    // Turning ON — show explainer first, then start when user
+    // confirms.
+    setShowExplainer(true);
+  };
+
+  const openAppSettings = () => {
+    // Best-effort: launch the OS app-settings via a deep link. On
+    // Capacitor we can use the native @capacitor/app's openSettings()
+    // but it's not always available across versions; the
+    // package:com.taxottic.app deep link works on Android, the
+    // "app-settings:" URI on iOS. Try in order; if all fail leave a
+    // plain instruction.
+    if (typeof window === "undefined") return;
+    try {
+      // Android intent — Capacitor's WebView understands intent: URIs.
+      window.location.href =
+        "intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;package=com.taxottic.app;end";
+      return;
+    } catch {
+      /* fall through */
+    }
+    try {
+      window.location.href = "app-settings:";
+    } catch {
+      /* nothing else we can do */
     }
   };
 
@@ -103,7 +162,106 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
         </p>
       ) : null}
       {error ? (
-        <p className="mt-2 text-[11px] text-red-700">{error}</p>
+        <div className="mt-2 text-[11px] text-red-700">
+          {error}
+          {denialPath === "settings" ? (
+            <button
+              type="button"
+              onClick={openAppSettings}
+              className="ml-2 underline underline-offset-2 hover:no-underline"
+            >
+              Open app settings
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {/* Explainer modal — appears between the toggle tap and the
+          native OS permission dialog. Without it, users see a cold
+          system prompt with no context about why Taxottic is asking
+          for Location. */}
+      {showExplainer ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Enable mileage tracking"
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center"
+        >
+          <div
+            className="absolute inset-0 bg-forest-900/60 backdrop-blur-sm"
+            onClick={() => setShowExplainer(false)}
+          />
+          <div
+            className="relative card card-opaque w-full max-w-md m-4 p-6 sm:p-7"
+            style={{
+              paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
+            }}
+          >
+            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+              Location access
+            </div>
+            <h3 className="display mt-1 text-xl text-forest-900">
+              Log every business drive automatically
+            </h3>
+            <p className="mt-3 text-sm text-ink-soft leading-relaxed">
+              Taxottic uses your phone&apos;s Location to detect when you
+              start and stop driving, so the mileage deduction lands in
+              your Schedule C without you having to remember.
+            </p>
+            <ul className="mt-3 grid gap-2 text-[12.5px] text-ink-soft leading-relaxed">
+              <li className="flex gap-2">
+                <span aria-hidden="true" className="text-gold-700">
+                  ✓
+                </span>
+                <span>
+                  Location is used only to compute the deduction —{" "}
+                  <span className="font-medium text-forest-900">
+                    never sold, never shared.
+                  </span>
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span aria-hidden="true" className="text-gold-700">
+                  ✓
+                </span>
+                <span>
+                  You can turn it off any time from this screen, no data
+                  retained.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span aria-hidden="true" className="text-gold-700">
+                  ✓
+                </span>
+                <span>
+                  Drives still need a one-tap business/personal call from
+                  the wrist or the phone deck.
+                </span>
+              </li>
+            </ul>
+            <p className="mt-4 text-[11px] text-ink-muted">
+              Your phone will ask for permission next. Pick &quot;While
+              using the app&quot; (or &quot;Allow all the time&quot; for
+              background drives).
+            </p>
+            <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowExplainer(false)}
+                className="btn-ghost text-sm"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                onClick={beginStart}
+                className="btn-primary text-sm"
+                autoFocus
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
