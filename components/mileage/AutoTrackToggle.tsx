@@ -5,6 +5,7 @@ import {
   startMileageTracking,
   stopMileageTracking,
   getMileageTrackingState,
+  trackerDiag,
 } from "@/lib/mileage/native-tracker";
 
 type DenialPath = "settings" | "retry";
@@ -156,10 +157,22 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
         </button>
       </div>
       {!supported && ready ? (
-        <p className="mt-2 text-[11px] text-ink-muted">
-          Automatic logging runs in the Taxottic mobile app. On the web
-          you can add drives manually below.
-        </p>
+        <>
+          <p className="mt-2 text-[11px] text-ink-muted">
+            Automatic logging runs in the Taxottic mobile app. On the web
+            you can add drives manually below.
+          </p>
+          {/* Temporary diagnostic crumb to debug "toggle disabled on
+              phone" reports — shows which of guard()'s checks failed.
+              Remove once the toggle is verified working. */}
+          <p className="mt-1 text-[10px] text-ink-muted font-mono opacity-60">
+            diag: native={String(trackerDiag.native)} plugin={String(
+              trackerDiag.pluginAvailable,
+            )} import={String(trackerDiag.importOk)} start={String(
+              trackerDiag.startFn,
+            )}{trackerDiag.lastError ? ` err=${trackerDiag.lastError.slice(0, 40)}` : ""}
+          </p>
+        </>
       ) : null}
       {error ? (
         <div className="mt-2 text-[11px] text-red-700">

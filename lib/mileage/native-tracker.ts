@@ -80,29 +80,46 @@ let flushTimer: ReturnType<typeof setInterval> | null = null;
 let flushing = false;
 let companyId = "";
 
+/** Debug breadcrumb of what guard() saw. Surfaced in the toggle's
+ *  disabled state so we can diagnose "toggle disabled" reports
+ *  without needing the host to run Chrome DevTools against the
+ *  WebView. Updated synchronously inside guard() on every call. */
+export const trackerDiag = {
+  native: false as boolean,
+  pluginAvailable: false as boolean,
+  importOk: false as boolean,
+  startFn: false as boolean,
+  lastError: null as string | null,
+};
+
 async function guard(): Promise<BackgroundGeolocationPlugin | null> {
   if (typeof window === "undefined") return null;
   try {
     const { Capacitor } = await import("@capacitor/core");
-    if (
-      !Capacitor.isNativePlatform() ||
-      !Capacitor.isPluginAvailable("BackgroundGeolocation")
-    ) {
+    trackerDiag.native = Capacitor.isNativePlatform();
+    trackerDiag.pluginAvailable = Capacitor.isPluginAvailable(
+      "BackgroundGeolocation",
+    );
+    if (!trackerDiag.native || !trackerDiag.pluginAvailable) {
       return null;
     }
-  } catch {
+  } catch (e) {
+    trackerDiag.lastError = `capacitor import: ${String(e)}`;
     return null;
   }
   if (!plugin) {
     try {
       const mod = await import("@capgo/background-geolocation");
+      trackerDiag.importOk = true;
       const bg = mod.BackgroundGeolocation as unknown as
         | BackgroundGeolocationPlugin
         | undefined;
+      trackerDiag.startFn = !!bg && typeof bg.start === "function";
       if (!bg || typeof bg.start !== "function") return null;
       plugin = bg;
-    } catch {
+    } catch (e) {
       // Package not in this bundle / native side absent — clean no-op.
+      trackerDiag.lastError = `capgo import: ${String(e)}`;
       return null;
     }
   }
