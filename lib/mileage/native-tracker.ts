@@ -211,9 +211,16 @@ function toPoint(p: {
 export async function startMileageTracking(
   forCompanyId: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  trackerDiag.startResult = "entered";
   const bg = await guard();
-  if (!bg) return { ok: false, error: "unavailable" };
-  if (tracking) return { ok: true };
+  if (!bg) {
+    trackerDiag.startResult = "no_bg";
+    return { ok: false, error: "unavailable" };
+  }
+  if (tracking) {
+    trackerDiag.startResult = "already_tracking";
+    return { ok: true };
+  }
 
   companyId = forCompanyId;
   try {
