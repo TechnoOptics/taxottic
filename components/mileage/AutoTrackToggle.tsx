@@ -35,29 +35,60 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    // Race the native init against a 5s safety timeout. On real
-    // devices the plugin init has been observed to hang silently
-    // (no resolve, no throw) when the SW serves a half-fresh
-    // chunk graph. Without the race, the toggle stays disabled
-    // forever with no UI signal. After timeout we degrade to the
-    // "not supported" branch which surfaces the diag line so we
-    // can see what the underlying check returned.
+    let pollHandle: ReturnType<typeof setTimeout> | null = null;
+
+    const applyState = (s: { supported: boolean; enabled: boolean }) => {
+      if (cancelled) return;
+      setSupported(s.supported);
+      setEnabled(s.enabled);
+      setReady(true);
+    };
+
+    // Race the native init against a 15s safety timeout. On the
+    // Galaxy Z Fold5 demo the @capgo/background-geolocation chunk
+    // took longer than 5s to fetch on a fresh-install WebView
+    // (no SW cache yet); the timeout would win, set supported=
+    // false, and the toggle stayed greyed out even though the
+    // plugin had loaded successfully. 15s covers slow-first-load
+    // on aggressive OEMs.
     Promise.race([
       getMileageTrackingState(),
       new Promise<{ supported: boolean; enabled: boolean }>((resolve) =>
         setTimeout(
           () => resolve({ supported: false, enabled: false }),
-          5000,
+          15000,
         ),
       ),
     ]).then((s) => {
-      if (cancelled) return;
-      setSupported(s.supported);
-      setEnabled(s.enabled);
-      setReady(true);
+      applyState(s);
+      // If the race lost (supported still false), the chunk import
+      // may still be in flight. Poll every 3s for up to 30s — once
+      // guard()'s plugin reference is cached, subsequent calls
+      // resolve immediately and the toggle self-heals.
+      if (s.supported) return;
+      let attempts = 0;
+      const tick = () => {
+        if (cancelled || attempts >= 10) return;
+        attempts++;
+        getMileageTrackingState()
+          .then((next) => {
+            if (cancelled) return;
+            if (next.supported) {
+              applyState(next);
+              return;
+            }
+            pollHandle = setTimeout(tick, 3000);
+          })
+          .catch(() => {
+            pollHandle = setTimeout(tick, 3000);
+          });
+      };
+      pollHandle = setTimeout(tick, 3000);
     });
+
     return () => {
       cancelled = true;
+      if (pollHandle) clearTimeout(pollHandle);
     };
   }, []);
 
