@@ -91,7 +91,17 @@ export function LeftRailMobile() {
             role="dialog"
             aria-modal="true"
             aria-label="Main menu"
-            className="fixed inset-0 z-[60] flex"
+            // Push the dialog down by safe-top + header height (3.25rem).
+            // Without this offset the sheet covered the OS status bar
+            // AND the Taxottic header, which read as "the app
+            // disappeared." Now the sheet only covers the area BELOW
+            // the header, so the wordmark + safe-area chrome stay
+            // visible while the menu is open — matches every
+            // production iOS/Android drawer pattern.
+            className="fixed inset-x-0 bottom-0 z-[60] flex"
+            style={{
+              top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 3.25rem)",
+            }}
           >
             <div
               className="absolute inset-0 bg-forest-900/50 backdrop-blur-sm"
