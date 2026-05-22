@@ -86,7 +86,9 @@
 // returns on Samsung WebViews.
 // v21: auto-kick startMileageTracking on mount if persisted=true
 // so we can finally observe the native call's actual return.
-const CACHE_VERSION = "v21";
+// v22: trace startMileageTracking entry/exit at every branch so
+// call=untouched gets replaced with call=entered/no_bg/already_tracking/calling/...
+const CACHE_VERSION = "v22";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
