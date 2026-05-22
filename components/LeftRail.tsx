@@ -248,12 +248,13 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
         // Position: fixed keeps it pinned without affecting layout.
         "card card-opaque !fixed left-2 z-40 !rounded-2xl !p-2 " +
         "hidden lg:flex flex-col w-56"
-      : // Sheet mode (mobile drawer) — full-width content panel
-        // inside a backdrop. Parent controls the open state +
-        // backdrop click. card-opaque so it survives dark theme.
-        // `.card` already sets position: relative, which is fine
-        // for this mode — no !important needed.
-        "card card-opaque relative w-72 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
+      : // Sheet mode (mobile drawer). w-56 (224px) matches the
+        // desktop rail width and fits every menu label
+        // ("Billing & plan" is the longest at ~14 chars). The
+        // previous w-72 (288px) felt oversized for the short
+        // label set — felt like a panel rather than a menu.
+        // max-w-[85vw] keeps it from overrunning on tiny screens.
+        "card card-opaque relative w-56 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
   // Position: anchored to the TOP of the viewport so the rail's first
   // item sits in the same horizontal row as the TAXOTTIC wordmark in

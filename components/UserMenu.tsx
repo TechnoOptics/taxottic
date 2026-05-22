@@ -154,18 +154,21 @@ export function UserMenu({
             // page heading). max-w guarantees we never overflow the
             // viewport on narrow / foldable devices.
             style={{
+              // Centered on the viewport (was anchored to the
+              // avatar's bounds). On mobile the anchor-to-header
+              // position read as awkwardly tied to the corner and
+              // hard to reach with a thumb. Centered with a
+              // translate puts the menu in the user's natural
+              // gaze area regardless of screen size. The anchor
+              // value is no longer consumed positionally but is
+              // still required upstream as a "menu is open" gate.
               position: "fixed",
-              top: anchor.top,
-              right: Math.max(anchor.right, 8),
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
               zIndex: 9999,
               maxWidth: "calc(100vw - 16px)",
-              // Cap the dropdown to the viewport so the long menu
-              // (account header + portal switcher + theme toggle +
-              // feedback + sign-out + Bella) stays usable on short
-              // screens (laptops in stage-presenter mode, foldables,
-              // phones in landscape). Without the cap the bottom
-              // items slid off the screen with no way to reach them.
-              maxHeight: "calc(100vh - " + anchor.top + "px - 16px)",
+              maxHeight: "calc(100vh - 32px)",
               overflowY: "auto",
             }}
             className="w-72 card card-opaque p-2 shadow-2xl"
