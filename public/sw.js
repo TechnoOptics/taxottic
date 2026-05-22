@@ -46,7 +46,16 @@
 // fetch of every brand asset to hit the network, picking up the new
 // PNG-in-SVG wrappers from public/brand/. Pure cache-bust; SW logic
 // is unchanged.
-const CACHE_VERSION = "v13";
+// v14 (May 2026 Round-7): user reported the phone WebView wasn't
+// picking up the dozen merged PRs (rail polish, mileage explainer,
+// crash fix, etc). The PRs landed without an SW version bump, so
+// the "New version available" toast never fired and the runtime
+// cache kept serving the previous HTML. Bumping forces the
+// activate() handler to drop taxottic-runtime-v13, the
+// updatefound listener fires, the user sees the Refresh toast,
+// taps it, and lands on the latest build. Pure cache-bust; same
+// pattern as v13.
+const CACHE_VERSION = "v14";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
