@@ -63,7 +63,12 @@
 // logic unchanged. No way around this until we move static
 // assets to a content-hashed CDN path (then SW caching becomes
 // safe-by-default because URLs rotate).
-const CACHE_VERSION = "v15";
+// v16 (May 2026 Round-7 last bump): pairs with PR #199 which
+// switches AutoTrackToggle's init from awaiting the @capgo
+// dynamic import to a synchronous Capacitor availability check.
+// Without bumping the SW, v15 keeps cache-first-serving the
+// pre-#199 chunks and the toggle stays hung. Pure cache-bust.
+const CACHE_VERSION = "v16";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
