@@ -55,7 +55,15 @@
 // updatefound listener fires, the user sees the Refresh toast,
 // taps it, and lands on the latest build. Pure cache-bust; same
 // pattern as v13.
-const CACHE_VERSION = "v14";
+// v15 (May 2026 Round-7 follow-up): the v14 cache was holding on
+// to the chunk graph from PR #194 so the toggle-init timeout
+// fix in PR #197 wasn't reaching the Galaxy Z Fold5 WebView even
+// after deploy. Bump to force activate() to drop the v14 cache
+// and pull fresh chunks on the next nav. Pure cache-bust; SW
+// logic unchanged. No way around this until we move static
+// assets to a content-hashed CDN path (then SW caching becomes
+// safe-by-default because URLs rotate).
+const CACHE_VERSION = "v15";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
