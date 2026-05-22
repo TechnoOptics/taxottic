@@ -54,18 +54,28 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           Capacitor.isNativePlatform() &&
           Capacitor.isPluginAvailable("BackgroundGeolocation");
         setSupported(isSupported);
+        let persisted = false;
         try {
-          const persisted =
+          persisted =
             window.localStorage.getItem("taxottic.mileage.enabled") === "1";
           setEnabled(persisted);
         } catch {
           /* private mode */
         }
         setReady(true);
+        // Auto-kick: if the user previously enabled tracking but
+        // the native service isn't actually running (cold launch,
+        // killed process, etc.), fire startMileageTracking now so
+        // the foreground service comes up. Without this, en=true
+        // can persist in localStorage forever while the native
+        // side never actually tracks.
+        if (isSupported && persisted) {
+          startMileageTracking(companyId).catch(() => {
+            /* swallow — error captured in trackerDiag */
+          });
+        }
       })
       .catch(() => {
-        // No Capacitor (pure web) — toggle stays disabled with the
-        // "use the mobile app" disclaimer underneath.
         if (cancelled) return;
         setSupported(false);
         setReady(true);
