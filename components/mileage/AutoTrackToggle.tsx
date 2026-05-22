@@ -35,60 +35,43 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    let pollHandle: ReturnType<typeof setTimeout> | null = null;
-
-    const applyState = (s: { supported: boolean; enabled: boolean }) => {
-      if (cancelled) return;
-      setSupported(s.supported);
-      setEnabled(s.enabled);
-      setReady(true);
-    };
-
-    // Race the native init against a 15s safety timeout. On the
-    // Galaxy Z Fold5 demo the @capgo/background-geolocation chunk
-    // took longer than 5s to fetch on a fresh-install WebView
-    // (no SW cache yet); the timeout would win, set supported=
-    // false, and the toggle stayed greyed out even though the
-    // plugin had loaded successfully. 15s covers slow-first-load
-    // on aggressive OEMs.
-    Promise.race([
-      getMileageTrackingState(),
-      new Promise<{ supported: boolean; enabled: boolean }>((resolve) =>
-        setTimeout(
-          () => resolve({ supported: false, enabled: false }),
-          15000,
-        ),
-      ),
-    ]).then((s) => {
-      applyState(s);
-      // If the race lost (supported still false), the chunk import
-      // may still be in flight. Poll every 3s for up to 30s — once
-      // guard()'s plugin reference is cached, subsequent calls
-      // resolve immediately and the toggle self-heals.
-      if (s.supported) return;
-      let attempts = 0;
-      const tick = () => {
-        if (cancelled || attempts >= 10) return;
-        attempts++;
-        getMileageTrackingState()
-          .then((next) => {
-            if (cancelled) return;
-            if (next.supported) {
-              applyState(next);
-              return;
-            }
-            pollHandle = setTimeout(tick, 3000);
-          })
-          .catch(() => {
-            pollHandle = setTimeout(tick, 3000);
-          });
-      };
-      pollHandle = setTimeout(tick, 3000);
-    });
-
+    // Lightweight init: just check Capacitor availability + plugin
+    // registration (both synchronous once @capacitor/core is in the
+    // chunk graph). DO NOT pre-load the @capgo/background-geolocation
+    // chunk here — that import has been observed to hang silently
+    // on Samsung WebViews after a fresh install, blocking the
+    // toggle from ever becoming interactive. We lazy-load it inside
+    // start() instead, where any failure is visible to the user.
+    //
+    // localStorage gives us the persisted "on/off" preference from
+    // the last session — we don't need to ask the native side what
+    // it thinks; the foreground service either resumed (re-armed on
+    // launch via resumeMileageTrackingIfEnabled) or didn't.
+    import("@capacitor/core")
+      .then(({ Capacitor }) => {
+        if (cancelled) return;
+        const isSupported =
+          Capacitor.isNativePlatform() &&
+          Capacitor.isPluginAvailable("BackgroundGeolocation");
+        setSupported(isSupported);
+        try {
+          const persisted =
+            window.localStorage.getItem("taxottic.mileage.enabled") === "1";
+          setEnabled(persisted);
+        } catch {
+          /* private mode */
+        }
+        setReady(true);
+      })
+      .catch(() => {
+        // No Capacitor (pure web) — toggle stays disabled with the
+        // "use the mobile app" disclaimer underneath.
+        if (cancelled) return;
+        setSupported(false);
+        setReady(true);
+      });
     return () => {
       cancelled = true;
-      if (pollHandle) clearTimeout(pollHandle);
     };
   }, []);
 
