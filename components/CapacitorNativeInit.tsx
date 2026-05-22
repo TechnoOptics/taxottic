@@ -175,7 +175,24 @@ export function CapacitorNativeInit() {
           if (receive === "prompt" || receive === "prompt-with-rationale") {
             receive = (await PushNotifications.requestPermissions()).receive;
           }
-          if (receive === "granted") {
+          // CRITICAL: register() on Android calls into FirebaseMessaging
+          // which throws IllegalStateException ON THE NATIVE THREAD if
+          // google-services.json hasn't been installed. The native
+          // throw is NOT caught by this JS try/catch — it propagates
+          // up through the Capacitor plugin worker and crashes the
+          // entire app process before the WebView finishes loading.
+          // Diagnosed on emulator-5554 May 22, 2026.
+          //
+          // Gate on a build-time flag so we only call register() once
+          // Firebase is actually wired up (google-services.json in
+          // android/app/, GoogleService-Info.plist for iOS, env var
+          // flipped). The other PushNotifications APIs (listeners,
+          // checkPermissions) don't touch Firebase so they're safe to
+          // keep running unconditionally — they're just no-ops without
+          // a registered token.
+          const pushEnabled =
+            process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1";
+          if (receive === "granted" && pushEnabled) {
             await PushNotifications.register();
           }
         } catch {
