@@ -35,7 +35,22 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    getMileageTrackingState().then((s) => {
+    // Race the native init against a 5s safety timeout. On real
+    // devices the plugin init has been observed to hang silently
+    // (no resolve, no throw) when the SW serves a half-fresh
+    // chunk graph. Without the race, the toggle stays disabled
+    // forever with no UI signal. After timeout we degrade to the
+    // "not supported" branch which surfaces the diag line so we
+    // can see what the underlying check returned.
+    Promise.race([
+      getMileageTrackingState(),
+      new Promise<{ supported: boolean; enabled: boolean }>((resolve) =>
+        setTimeout(
+          () => resolve({ supported: false, enabled: false }),
+          5000,
+        ),
+      ),
+    ]).then((s) => {
       if (cancelled) return;
       setSupported(s.supported);
       setEnabled(s.enabled);
@@ -157,23 +172,27 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
         </button>
       </div>
       {!supported && ready ? (
-        <>
-          <p className="mt-2 text-[11px] text-ink-muted">
-            Automatic logging runs in the Taxottic mobile app. On the web
-            you can add drives manually below.
-          </p>
-          {/* Temporary diagnostic crumb to debug "toggle disabled on
-              phone" reports — shows which of guard()'s checks failed.
-              Remove once the toggle is verified working. */}
-          <p className="mt-1 text-[10px] text-ink-muted font-mono opacity-60">
-            diag: native={String(trackerDiag.native)} plugin={String(
-              trackerDiag.pluginAvailable,
-            )} import={String(trackerDiag.importOk)} start={String(
-              trackerDiag.startFn,
-            )}{trackerDiag.lastError ? ` err=${trackerDiag.lastError.slice(0, 40)}` : ""}
-          </p>
-        </>
+        <p className="mt-2 text-[11px] text-ink-muted">
+          Automatic logging runs in the Taxottic mobile app. On the web
+          you can add drives manually below.
+        </p>
       ) : null}
+      {/* Diagnostic crumb — ALWAYS rendered (not just when
+          supported=false) so we can read state even if React's
+          ready=false branch was hiding the previous gated version.
+          The trackerDiag object is updated by guard() on every
+          call, so as soon as getMileageTrackingState resolves —
+          even after the 5s timeout — these fields reflect what the
+          native shim saw. Removable once toggle is verified. */}
+      <p className="mt-1 text-[10px] text-ink-muted font-mono opacity-70">
+        diag: ready={String(ready)} sup={String(supported)} en={String(enabled)}
+        {" "}native={String(trackerDiag.native)} plug={String(
+          trackerDiag.pluginAvailable,
+        )} imp={String(trackerDiag.importOk)} start={String(
+          trackerDiag.startFn,
+        )}
+        {trackerDiag.lastError ? ` err=${trackerDiag.lastError.slice(0, 40)}` : ""}
+      </p>
       {error ? (
         <div className="mt-2 text-[11px] text-red-700">
           {error}
