@@ -73,7 +73,10 @@
 // the foreground service was fully up + first GPS fix arrived,
 // leaving the toggle in a permanent "loading" state. v17 forces
 // fresh chunks so the new fire-and-forget code reaches the WebView.
-const CACHE_VERSION = "v17";
+// v18 (May 2026): pairs with the mobile-sheet w-56 + UserMenu
+// centered-on-viewport changes. Bumping ensures the new CSS
+// classes + style positioning reach the WebView.
+const CACHE_VERSION = "v18";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
