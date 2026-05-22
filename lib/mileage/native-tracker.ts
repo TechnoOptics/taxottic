@@ -217,35 +217,58 @@ export async function startMileageTracking(
   }
   loadPersistedBuffer();
 
+  // Fire-and-forget start(). On the Galaxy Z Fold5 (and likely
+  // other Samsung WebViews), bg.start()'s returned promise hangs
+  // until the foreground service is fully up AND the first GPS
+  // fix arrives, which can take 10+ seconds. Awaiting it leaves
+  // the toggle in a permanent "loading" state with no user
+  // feedback. We flip the tracking flag optimistically and let
+  // the callback handle errors — if NOT_AUTHORIZED comes back,
+  // stopMileageTracking() resets the flag. UX: toggle responds
+  // instantly; foreground-service notification appears within a
+  // few seconds when the OS gets the service up.
   try {
-    await bg.start(
-      {
-        // Presence of backgroundMessage is what enables background
-        // delivery; on Android it is the persistent-notification text
-        // the OS requires for a location foreground service.
-        backgroundMessage:
-          "Logging your drive for the mileage deduction. Tap to open.",
-        backgroundTitle: "Taxottic mileage",
-        requestPermissions: true,
-        stale: false,
-        distanceFilter: DISTANCE_FILTER_M,
-      },
-      (location, error) => {
-        if (error) {
-          // NOT_AUTHORIZED → the user denied/revoked location. Stop
-          // cleanly and drop the preference so we don't nag forever.
-          if (error.code === "NOT_AUTHORIZED") void stopMileageTracking();
-          return;
+    bg
+      .start(
+        {
+          // Presence of backgroundMessage is what enables background
+          // delivery; on Android it is the persistent-notification text
+          // the OS requires for a location foreground service.
+          backgroundMessage:
+            "Logging your drive for the mileage deduction. Tap to open.",
+          backgroundTitle: "Taxottic mileage",
+          requestPermissions: true,
+          stale: false,
+          distanceFilter: DISTANCE_FILTER_M,
+        },
+        (location, error) => {
+          if (error) {
+            // NOT_AUTHORIZED → the user denied/revoked location. Stop
+            // cleanly and drop the preference so we don't nag forever.
+            if (error.code === "NOT_AUTHORIZED")
+              void stopMileageTracking();
+            return;
+          }
+          if (!location) return;
+          const pt = toPoint(location);
+          if (!pt) return;
+          buffer.push(pt);
+          if (buffer.length > MAX_BUFFER) buffer = buffer.slice(-MAX_BUFFER);
+          persistBuffer();
+          if (buffer.length >= FLUSH_AT_POINTS) void flush();
+        },
+      )
+      .catch(() => {
+        // start() threw — the plugin reported an error before
+        // even registering the callback. Stop cleanly so the next
+        // tap can retry from a clean state.
+        tracking = false;
+        try {
+          window.localStorage.setItem(LS_ENABLED, "0");
+        } catch {
+          /* private mode */
         }
-        if (!location) return;
-        const pt = toPoint(location);
-        if (!pt) return;
-        buffer.push(pt);
-        if (buffer.length > MAX_BUFFER) buffer = buffer.slice(-MAX_BUFFER);
-        persistBuffer();
-        if (buffer.length >= FLUSH_AT_POINTS) void flush();
-      },
-    );
+      });
     tracking = true;
   } catch (e) {
     tracking = false;
