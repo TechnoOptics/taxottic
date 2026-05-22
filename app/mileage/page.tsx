@@ -172,6 +172,18 @@ export default async function MileagePage({
                 <span aria-hidden="true">📍</span>
                 Saved places →
               </Link>
+              {/* New (May 2026): per-user schedule. Lets the driver
+                  configure which days + hours auto-tracking is
+                  allowed to run (always / weekdays / custom). The
+                  toggle on this page still has the kill switch; the
+                  schedule just bounds when auto-resume kicks in. */}
+              <Link
+                href="/mileage/schedule"
+                className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
+              >
+                <span aria-hidden="true">⏰</span>
+                Schedule →
+              </Link>
             </div>
 
             <div className="mt-6 grid sm:grid-cols-3 gap-3">

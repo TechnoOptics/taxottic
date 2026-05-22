@@ -91,7 +91,9 @@
 // v23: don't await guard() in startMileageTracking, use cached
 // plugin ref. Warm the @capgo import on mount so the cache is
 // populated before any tap.
-const CACHE_VERSION = "v23";
+// v24: new /mileage/schedule page + ScheduleForm component +
+// profiles.mileage_schedule JSONB column.
+const CACHE_VERSION = "v24";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
