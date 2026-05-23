@@ -116,7 +116,15 @@
 // flip, force-dynamic'd money-out, and polished /mileage stats +
 // mobile trip rows. Bump so phone WebViews drop v28 HTML and
 // pull the corrected markup on next nav.
-const CACHE_VERSION = "v29";
+// v30: LeftRail is now FLOATING below the header — moved its
+// top anchor from safe-top + 0.5rem (which lined it up with the
+// TAXOTTIC wordmark in the header strip) to safe-top + 9rem,
+// which lines the first menu item up with the company-name row
+// ("Techno Optics LLC · this week") that sits below the H1 on
+// authenticated pages. Pure CSS — no JS or markup change — but
+// bumping the SW so existing clients drop the v29 HTML cache
+// and pick up the new rail position on next nav.
+const CACHE_VERSION = "v30";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
