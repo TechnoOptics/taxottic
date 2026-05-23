@@ -99,7 +99,9 @@
 // recent mileage_points) + persisted autoApplyBusiness so the
 // watch toggles stop flipping back. Also: vibrate + auto-nav on
 // the wear app when a new pending trip lands.
-const CACHE_VERSION = "v26";
+// v27: wear auto-nav + vibrate fix (use `received` flag instead
+// of seen.isEmpty so an empty-then-full sequence still buzzes).
+const CACHE_VERSION = "v27";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
