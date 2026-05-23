@@ -326,6 +326,43 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Server-derived "is tracking actually running right now?" so the
+  // watch's Auto-track toggle reflects reality after the next sync.
+  // Heuristic: any mileage_points captured in the last 5 minutes →
+  // the phone's foreground service is alive. Avoids a separate
+  // mirror column + extra POST from the phone on every start/stop.
+  let trackingActive = false;
+  try {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data: recentPing } = await admin
+      .from("mileage_points")
+      .select("captured_at")
+      .gte("captured_at", fiveMinAgo)
+      .eq("driver_user_id", uid)
+      .limit(1)
+      .maybeSingle();
+    trackingActive = !!recentPing;
+  } catch {
+    /* no points yet — leave false */
+  }
+
+  // Server-mirrored auto-apply-business preference. Stored alongside
+  // the user's schedule on profiles.mileage_schedule JSONB. Watch's
+  // toggle reads from here so the watch + phone agree.
+  let autoApplyBusiness = false;
+  try {
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("mileage_schedule")
+      .eq("id", uid)
+      .maybeSingle();
+    const sched =
+      (prof?.mileage_schedule as { autoApplyBusiness?: boolean } | null) ?? null;
+    autoApplyBusiness = sched?.autoApplyBusiness === true;
+  } catch {
+    /* profile row missing in dev — default to off */
+  }
+
   try {
     return NextResponse.json(
       buildWatchSnapshot({
@@ -341,6 +378,8 @@ export async function GET(req: NextRequest) {
         latestBadgeCode,
         newBadgeCode,
         companyId,
+        trackingActive,
+        autoApplyBusiness,
         reward,
       }),
     );

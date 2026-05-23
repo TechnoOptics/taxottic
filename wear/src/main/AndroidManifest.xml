@@ -5,6 +5,10 @@
 
     <uses-feature android:name="android.hardware.type.watch" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Haptic feedback when a new pending confirmation lands.
+         Watch app fires a double-pulse so the user notices the
+         swipe deck without having to look. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Direct server pull + the QR pairing handshake (LTE/Wi-Fi
          watches, or tethered through the phone). Falls back to the
          Data Layer when offline. -->

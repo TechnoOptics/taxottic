@@ -87,6 +87,38 @@ fun WearApp(
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
 
+    // Auto-navigate to the Confirm page (and double-vibrate) when a
+    // NEW pending trip / expense arrives in the snapshot. The
+    // remembered-set keeps the buzz one-shot per id; subsequent
+    // syncs that re-deliver the same ids don't re-buzz.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val seen = remember { mutableStateOf(setOf<String>()) }
+    LaunchedEffect(snapshot.confirmations) {
+        val ids = snapshot.confirmations.map { it.id }.toSet()
+        val newIds = ids - seen.value
+        if (newIds.isNotEmpty() && seen.value.isNotEmpty()) {
+            // Two short pulses with a tiny gap — "you have a card
+            // waiting" without being startling.
+            runCatching {
+                val v = ctx.getSystemService(android.os.Vibrator::class.java)
+                @Suppress("DEPRECATION")
+                v?.vibrate(
+                    android.os.VibrationEffect.createWaveform(
+                        longArrayOf(0, 90, 120, 90), -1,
+                    ),
+                )
+            }
+            // Jump to Confirm page so the user sees the swipe deck
+            // straight away. They can swipe back to Hero after.
+            runCatching {
+                scope.launch {
+                    pager.animateScrollToPage(2)
+                }
+            }
+        }
+        seen.value = ids
+    }
+
     val pageProg = (pager.currentPage + pager.currentPageOffsetFraction) /
         (pageCount - 1).coerceAtLeast(1)
     val targetBezel = pageProg.coerceIn(0f, 1f)

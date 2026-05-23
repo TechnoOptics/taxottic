@@ -38,6 +38,15 @@ export type SnapshotInput = {
     targetCents: number;
   }>;
   deductions: WatchDeduction[];
+  /** Server-derived "is the phone tracking right now?" — true when
+   *  the user has emitted a GPS point in the last 5 minutes. Lets
+   *  the watch's Auto-track toggle survive snapshot-pull overrides
+   *  instead of flipping back to off after each 60s sync. */
+  trackingActive?: boolean;
+  /** Server-mirrored from profiles.mileage_schedule.autoApplyBusiness.
+   *  Auto-applies "business" classification to qualifying trips
+   *  without user confirmation when on. */
+  autoApplyBusiness?: boolean;
   forecast: WatchSnapshot["forecast"];
   latestBadgeCode: string | null;
   newBadgeCode: string | null;
@@ -151,6 +160,8 @@ export function buildWatchSnapshot(input: SnapshotInput): WatchSnapshot {
     0,
     Math.round(input.todayDeductionCents),
   );
+  snap.mileage.trackingActive = input.trackingActive === true;
+  snap.mileage.autoApplyBusiness = input.autoApplyBusiness === true;
 
   if (input.forecast) snap.forecast = input.forecast;
 
