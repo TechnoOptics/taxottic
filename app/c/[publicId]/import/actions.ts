@@ -25,19 +25,46 @@ import {
  * Heuristic: looks like a credit-card payment from another account, not
  * a real charge. Used to skip rows on a credit import that would
  * otherwise inflate expenses.
+ *
+ * Real-world descriptions we've seen (May 2026 issuer audit):
+ *   "MOBILE PAYMENT - THANK YOU"        Discover, Amex
+ *   "PAYMENT - THANK YOU"               Amex
+ *   "AUTOPAY PAYMENT"                   Chase
+ *   "ONLINE PAYMENT, THANK YOU"         Capital One
+ *   "AUTO PAYMENT - THANK YOU"          Citi
+ *   "PAYMENT RECEIVED - THANK YOU"      Wells Fargo
+ *
+ * All variants share "payment" + a thanks/auto cue. The pattern below
+ * matches singular AND plural "payment(s)" with either a dash, a comma,
+ * or nothing between it and the "thank" / "received" keyword, plus
+ * autopay-y phrases. Plural broke the prior regex (was only catching
+ * "payment - thank you" singular) which is why the user's Discover
+ * "MOBILE PAYMENTS - THANK YOU" row sailed straight through into the
+ * expense queue.
  */
 function looksLikeCardPayment(description: string | null): boolean {
   if (!description) return false;
   const d = description.toLowerCase();
-  return (
+  // Universal positive matches.
+  if (
     d.includes("autopay") ||
     d.includes("auto pay") ||
-    d.includes("payment received") ||
-    d.includes("payment - thank you") ||
-    d.includes("payment thank you") ||
     /\bpymt\b/.test(d) ||
-    (d.includes("payment") && d.includes("from")) ||
     d.includes("ach payment")
+  ) {
+    return true;
+  }
+  // "payment(s)" + (thank you | received | from | -) in any order.
+  const hasPaymentWord = /\bpayments?\b/.test(d);
+  if (!hasPaymentWord) return false;
+  return (
+    d.includes("thank you") ||
+    d.includes("received") ||
+    d.includes(" from ") ||
+    // "mobile payment(s)" is a card-payment idiom on Discover / Amex
+    // even without an explicit "thank you" suffix.
+    /\bmobile payments?\b/.test(d) ||
+    /\bonline payments?\b/.test(d)
   );
 }
 
@@ -352,13 +379,21 @@ export async function applyTransactions(formData: FormData) {
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
 
-    // Credit-card imports: every row becomes an expense regardless of
-    // the sign on the original CSV. Card-payment-back rows (where the
-    // user paid down the card from another account) are skipped via a
-    // description-pattern heuristic — they're transfers, not biz
-    // expenses, and double-counting them inflates the deduction.
+    // Credit-card sign convention (audited against Discover/Amex/Chase
+    // export on May 23 2026):
+    //   POSITIVE amount → real charge → becomes an expense.
+    //   NEGATIVE amount → refund OR card payment from another account.
+    //     - Card-payment-back rows match looksLikeCardPayment → skip;
+    //       they're inter-account transfers, never deductible.
+    //     - Everything else negative is a refund → also skip from
+    //       auto-apply. A refund offsets an earlier charge that was
+    //       already booked; auto-booking it as either a positive expense
+    //       (the prior abs() bug — inflated deductions) or a negative
+    //       expense (would surface as an income tile, also wrong) gets
+    //       it wrong either way. Leave for user review.
     if (isCredit) {
       if (looksLikeCardPayment(tx.description)) continue;
+      if (tx.amount_cents < 0) continue; // refund — surface for review
       expenseInserts.push({
         company_id: companyId,
         user_id: user.id,
@@ -752,6 +787,15 @@ async function runBellaCategorize(args: {
 
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
+
+    // Credit-card refund (negative amount on a credit account that
+    // isn't a card-payment-back) → don't auto-book. Same rationale as
+    // applyTransactions above: refunds offset an earlier charge and
+    // need user judgement to either re-categorize the original or
+    // mark the pair as a wash. Auto-applying a negative as either a
+    // positive expense (inflates deduction) or a negative income
+    // (phantom revenue) is wrong both ways.
+    if (isCredit && tx.amount_cents < 0) continue;
 
     if (d.kind === "expense" && d.code) {
       expenseInserts.push({

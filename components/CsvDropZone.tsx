@@ -133,7 +133,8 @@ export function CsvDropZone({ companyId, action }: Props) {
     <div className="grid gap-4">
       <label className="grid gap-2">
         <span className="text-sm font-medium text-forest-800">
-          What kind of account is this?
+          What kind of account is this?{" "}
+          <span className="text-rose-700">*</span>
         </span>
         <select
           name="account_type"
@@ -142,21 +143,48 @@ export function CsvDropZone({ companyId, action }: Props) {
           onChange={(e) => setAccountType(e.target.value)}
           className="input"
         >
-          <option value="business_checking">Business checking</option>
-          <option value="business_savings">Business savings</option>
-          <option value="checking">Personal checking</option>
-          <option value="savings">Personal savings</option>
+          <option value="business_checking">
+            Business checking — negative amounts are expenses
+          </option>
+          <option value="business_savings">
+            Business savings — negative amounts are expenses
+          </option>
+          <option value="checking">
+            Personal checking — negative amounts are expenses
+          </option>
+          <option value="savings">
+            Personal savings — negative amounts are expenses
+          </option>
           <option value="credit">
-            Credit card (every row counted as an expense)
+            Credit card — positive amounts are charges
           </option>
           <option value="other">Other</option>
         </select>
-        <span className="text-[11px] text-ink-muted">
-          Picking <strong>Credit card</strong> tells us to treat every
-          imported row as a business expense — issuers don&apos;t agree
-          on charge-vs-payment signs, so we use absolute value and skip
-          obvious card payments.
-        </span>
+        {/* Be explicit about the credit-card sign convention because
+            picking the wrong type silently inflates the deduction —
+            checking-mode treats negatives as expenses, credit-mode
+            treats positives as expenses. Got bit by this on the
+            user's "activity (2).csv" upload May 23 2026 where a card
+            statement was uploaded as "business_checking" and the
+            $8,924 MOBILE PAYMENT - THANK YOU row would have applied
+            as an expense. */}
+        {accountType === "credit" ? (
+          <span className="text-[11px] text-ink-muted leading-relaxed">
+            <strong>Credit card:</strong> positive amounts are charges
+            (real expenses). Negative amounts are refunds — held back
+            for your review. &quot;Mobile payments&quot; / &quot;Payment - Thank
+            you&quot; rows are your balance being paid from another
+            account; we skip those automatically.
+          </span>
+        ) : (
+          <span className="text-[11px] text-ink-muted leading-relaxed">
+            <strong>Checking / savings:</strong> negative amounts are
+            expenses (money out), positive amounts are income. If
+            you&apos;re importing a credit-card statement, pick
+            &quot;Credit card&quot; instead — the sign convention is
+            inverted.
+          </span>
+        )}
       </label>
 
       <div
