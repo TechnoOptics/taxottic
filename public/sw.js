@@ -101,7 +101,12 @@
 // the wear app when a new pending trip lands.
 // v27: wear auto-nav + vibrate fix (use `received` flag instead
 // of seen.isEmpty so an empty-then-full sequence still buzzes).
-const CACHE_VERSION = "v27";
+// v28: phone-side swipe-to-classify deck. New route
+// /mileage/classify (server component + ClassifyDeck client
+// component) + pending-trip banner on /mileage. Markup change on
+// /mileage so the v27 cache would serve stale HTML without the
+// banner; bump forces fresh fetch.
+const CACHE_VERSION = "v28";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

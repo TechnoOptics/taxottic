@@ -131,6 +131,42 @@ export default async function MileagePage({
               <AutoTrackToggle companyId={company.id} />
             </div>
 
+            {/* Pending-classification banner. Mirrors the watch's
+                Confirm tab for users without a watch. Big amber CTA
+                links to the phone-side swipe deck at
+                /mileage/classify. Hidden when nothing is pending. */}
+            {unclassifiedCount > 0 ? (
+              <Link
+                href="/mileage/classify"
+                className="mt-4 block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-400"
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="grid place-items-center size-9 rounded-full bg-amber-500 text-white text-lg"
+                  >
+                    ⚡
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="display text-sm text-amber-900">
+                      {unclassifiedCount === 1
+                        ? "1 drive needs a quick call"
+                        : `${unclassifiedCount} drives need a quick call`}
+                    </div>
+                    <div className="text-xs text-amber-800 mt-0.5">
+                      Tap to swipe business / personal →
+                    </div>
+                  </div>
+                  <span
+                    aria-hidden="true"
+                    className="text-amber-900 text-sm"
+                  >
+                    →
+                  </span>
+                </div>
+              </Link>
+            ) : null}
+
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {Object.entries(RANGES).map(([k, v]) => (
                 <Link
