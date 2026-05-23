@@ -93,7 +93,9 @@
 // populated before any tap.
 // v24: new /mileage/schedule page + ScheduleForm component +
 // profiles.mileage_schedule JSONB column.
-const CACHE_VERSION = "v24";
+// v25: eco mode added to /mileage/schedule + native tracker reads
+// localStorage eco flag to pick distanceFilter and stale options.
+const CACHE_VERSION = "v25";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

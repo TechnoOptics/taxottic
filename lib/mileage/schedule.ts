@@ -29,10 +29,18 @@ export type Window = {
   to: string;
 };
 
-export type MileageSchedule =
+export type MileageSchedule = (
   | { mode: "always" }
   | { mode: "weekdays"; from: string; to: string }
-  | { mode: "custom"; windows: Record<DayKey, Window[]> };
+  | { mode: "custom"; windows: Record<DayKey, Window[]> }
+) & {
+  /** Eco mode: increase the GPS distance filter from 25 m to
+   *  100 m and accept stale (cached) fixes. Result: roughly 4×
+   *  fewer GPS wake-ups → noticeably less battery. Trips still
+   *  log, just with slightly less polyline detail at the start
+   *  and end. Off by default to preserve fidelity for new users. */
+  eco?: boolean;
+};
 
 /** Default to "always" when the user hasn't picked a schedule yet
  *  but has visited the schedule page. Tracker treats null as

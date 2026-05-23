@@ -22,6 +22,7 @@ function validHm(hm: unknown): hm is string {
 export async function setMileageSchedule(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
   const mode = String(formData.get("mode") ?? "always");
+  const eco = formData.get("eco") === "on";
 
   let schedule: MileageSchedule;
 
@@ -52,6 +53,11 @@ export async function setMileageSchedule(formData: FormData) {
     // Unknown mode → safe default.
     schedule = { mode: "always" };
   }
+
+  // Carry the eco bit on the same JSONB so we have one source of
+  // truth for tracker preferences (mode + eco). Native side reads
+  // both fields on start().
+  schedule.eco = eco;
 
   await admin
     .from("profiles")
