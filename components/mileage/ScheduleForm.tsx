@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   DayKey,
   MileageSchedule,
@@ -18,6 +18,20 @@ type Props = {
   initial: MileageSchedule | null;
   action: (formData: FormData) => void;
 };
+
+/** Mirror the eco bit to localStorage so the native tracker's
+ *  start() call (which runs without a server round-trip) reads
+ *  the right distanceFilter immediately on the next launch. */
+function mirrorEcoToLocalStorage(eco: boolean) {
+  try {
+    window.localStorage.setItem(
+      "taxottic.mileage.eco",
+      eco ? "1" : "0",
+    );
+  } catch {
+    /* private mode — server still has the source of truth */
+  }
+}
 
 /** Three-mode schedule editor.
  *
@@ -67,6 +81,13 @@ export function ScheduleForm({ initial, action }: Props) {
       return { ...prev, [d]: [{ ...current, ...patch }] };
     });
   };
+
+  // On mount, write the persisted eco bit to localStorage so the
+  // tracker picks it up on the very next launch even if the user
+  // never changed it.
+  useEffect(() => {
+    mirrorEcoToLocalStorage(initial?.eco === true);
+  }, [initial?.eco]);
 
   return (
     <form action={action} className="grid gap-5">
@@ -184,6 +205,35 @@ export function ScheduleForm({ initial, action }: Props) {
           </ul>
         </div>
       ) : null}
+
+      {/* Eco mode — orthogonal to the day/time schedule. Pumps
+          the GPS distanceFilter from 25 m to 100 m and accepts
+          stale fixes from the OS-fused provider. The trip starts
+          / ends a hair less precise but the phone uses a fraction
+          of the battery. Recommend for drivers who park often. */}
+      <div className="card-opaque p-4 rounded-xl flex items-start gap-3 mt-2">
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            name="eco"
+            defaultChecked={initial?.eco === true}
+            onChange={(e) => mirrorEcoToLocalStorage(e.target.checked)}
+            className="mt-1 size-4 accent-forest-700"
+          />
+          <div>
+            <div className="display text-base text-forest-900">
+              Eco mode 🌱
+            </div>
+            <p className="text-xs text-ink-soft mt-1 leading-relaxed">
+              Sample location less often (100 m vs 25 m) and reuse
+              cached fixes from the OS when fresh. Roughly 4× less
+              battery. Trip polylines lose a little detail at the
+              very start and end of each drive — the total miles
+              and deduction are unchanged.
+            </p>
+          </div>
+        </label>
+      </div>
 
       <div className="flex items-center justify-between gap-3 pt-2">
         <button type="submit" className="btn-primary text-sm">

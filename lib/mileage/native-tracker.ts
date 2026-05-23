@@ -59,11 +59,25 @@ type BackgroundGeolocationPlugin = {
 const LS_ENABLED = "taxottic.mileage.enabled";
 const LS_COMPANY = "taxottic.mileage.companyId";
 const LS_BUFFER = "taxottic.mileage.buffer";
+/** Eco mode bit, mirrored to localStorage by the schedule page so
+ *  the native tracker can read it without a server round-trip on
+ *  start(). "1" enables eco; anything else (including missing) is
+ *  the default full-fidelity mode. */
+const LS_ECO = "taxottic.mileage.eco";
 
 // Battery vs. fidelity. The segmentation core tolerates sparse points
 // (it derives speed/dwell from gaps), so a 25 m filter is plenty for
 // trip detection and keeps the GPS duty cycle low.
-const DISTANCE_FILTER_M = 25;
+//
+// Eco mode bumps this to 100 m (only emit a fix when the user has
+// actually moved 100 m). On a Samsung the OS-fused provider sleeps
+// the GPS sensor between fixes — net effect is roughly 4× less
+// power. Trip polylines look the same to the eye; only the very
+// first and very last points lose a little precision (matters for
+// "start at exactly the office" auto-classify, not for the
+// distance + deduction figures).
+const DISTANCE_FILTER_M_DEFAULT = 25;
+const DISTANCE_FILTER_M_ECO = 100;
 // Flush when either threshold trips. Frequent enough that a force-kill
 // loses little; the server de-dupes re-posted batches.
 const FLUSH_AT_POINTS = 40;
@@ -243,6 +257,18 @@ export async function startMileageTracking(
   trackerDiag.startError = "";
   trackerDiag.cbHits = 0;
   trackerDiag.cbLastError = "";
+  // Eco mode: bigger distanceFilter + accept stale (cached) fixes.
+  // localStorage flag is mirrored by /mileage/schedule when the
+  // user saves; default is full-fidelity tracking.
+  let eco = false;
+  try {
+    eco = window.localStorage.getItem(LS_ECO) === "1";
+  } catch {
+    /* private mode — default to full fidelity */
+  }
+  const distanceFilter = eco
+    ? DISTANCE_FILTER_M_ECO
+    : DISTANCE_FILTER_M_DEFAULT;
   try {
     bg
       .start(
@@ -251,8 +277,11 @@ export async function startMileageTracking(
             "Logging your drive for the mileage deduction. Tap to open.",
           backgroundTitle: "Taxottic mileage",
           requestPermissions: true,
-          stale: false,
-          distanceFilter: DISTANCE_FILTER_M,
+          // eco accepts a cached fix from the OS-fused provider
+          // if it's recent enough; full mode forces a fresh GPS
+          // sample. Stale-OK is the bigger battery win on Samsung.
+          stale: eco,
+          distanceFilter,
         },
         (location, error) => {
           trackerDiag.cbHits++;
