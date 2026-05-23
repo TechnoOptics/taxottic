@@ -40,6 +40,15 @@ export async function addMileagePlace(
   const kindRaw = String(formData.get("kind") ?? "other");
   const address = String(formData.get("address") ?? "").trim();
   const radiusRaw = Number(formData.get("radius_m") ?? DEFAULT_RADIUS_M);
+  // Hidden inputs populated by AddressAutocomplete when the user
+  // picked a suggestion (geometry came back from Places). If
+  // present we skip geocodeAddress entirely — saves a network
+  // round-trip AND avoids "not_found" when the typed text was
+  // ambiguous. Manual typers fall through to the server geocode.
+  const pickedLatRaw = String(formData.get("picked_lat") ?? "");
+  const pickedLngRaw = String(formData.get("picked_lng") ?? "");
+  const pickedLat = pickedLatRaw ? Number(pickedLatRaw) : NaN;
+  const pickedLng = pickedLngRaw ? Number(pickedLngRaw) : NaN;
 
   if (!label) return { ok: false, error: "Give the place a name." };
   if (!address) return { ok: false, error: "Add an address." };
@@ -51,17 +60,36 @@ export async function addMileagePlace(
     Math.min(MAX_RADIUS_M, Number.isFinite(radiusRaw) ? radiusRaw : DEFAULT_RADIUS_M),
   );
 
-  const geo = await geocodeAddress(address);
-  if (!geo.ok) {
-    const msg =
-      geo.error.code === "no_key"
-        ? "Address lookup isn't configured yet (server missing Maps key)."
-        : geo.error.code === "not_found"
-          ? "Couldn't find that address. Try a more specific one."
-          : geo.error.code === "rate_limited"
-            ? "Address lookup is busy. Wait a moment and try again."
-            : "Address lookup failed. Check your connection.";
-    return { ok: false, error: msg };
+  let lat: number;
+  let lng: number;
+  if (Number.isFinite(pickedLat) && Number.isFinite(pickedLng)) {
+    // Trust-but-clamp: lat in [-90,90], lng in [-180,180]. Anyone
+    // forging a form post can't escape those bounds.
+    if (
+      pickedLat < -90 ||
+      pickedLat > 90 ||
+      pickedLng < -180 ||
+      pickedLng > 180
+    ) {
+      return { ok: false, error: "Invalid coordinates from picker." };
+    }
+    lat = pickedLat;
+    lng = pickedLng;
+  } else {
+    const geo = await geocodeAddress(address);
+    if (!geo.ok) {
+      const msg =
+        geo.error.code === "no_key"
+          ? "Address lookup isn't configured yet (server missing Maps key)."
+          : geo.error.code === "not_found"
+            ? "Couldn't find that address. Try a more specific one — include city and state."
+            : geo.error.code === "rate_limited"
+              ? "Address lookup is busy. Wait a moment and try again."
+              : "Address lookup failed. Check your connection.";
+      return { ok: false, error: msg };
+    }
+    lat = geo.result.lat;
+    lng = geo.result.lng;
   }
 
   const { error: insertErr } = await admin.from("mileage_places").insert({
@@ -69,8 +97,8 @@ export async function addMileagePlace(
     created_by: user.id,
     kind: kindRaw,
     label,
-    lat: geo.result.lat,
-    lng: geo.result.lng,
+    lat,
+    lng,
     radius_m,
   });
   if (insertErr) {
