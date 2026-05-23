@@ -222,21 +222,41 @@ export default async function MileagePage({
               </Link>
             </div>
 
-            <div className="mt-6 grid sm:grid-cols-3 gap-3">
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
               <Stat
                 label="Business miles"
                 value={fmtMiles(businessMiles)}
+                tone={businessMiles > 0 ? "good" : "neutral"}
               />
               <Stat
                 label="Mileage deduction"
                 value={fmtUsd(deductionCents)}
                 tone="good"
               />
-              <Stat
-                label="Need review"
-                value={String(unclassifiedCount)}
-                tone={unclassifiedCount > 0 ? "warn" : "neutral"}
-              />
+              {/* Same "needs review" count, but when it's > 0 we wrap
+                  it in a Link to the swipe deck so the stat itself is
+                  the tap target (mirroring the amber banner above —
+                  some users tap the stat instead of the banner). */}
+              {unclassifiedCount > 0 ? (
+                <Link
+                  href="/mileage/classify"
+                  className="col-span-2 sm:col-span-1 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                >
+                  <Stat
+                    label="Need review"
+                    value={String(unclassifiedCount)}
+                    tone="warn"
+                    caption="Tap to classify →"
+                  />
+                </Link>
+              ) : (
+                <Stat
+                  label="Need review"
+                  value="0"
+                  tone="neutral"
+                  caption="All caught up"
+                />
+              )}
             </div>
 
             <div className="mt-6">
@@ -257,7 +277,7 @@ export default async function MileagePage({
                 {trips.map((t) => (
                   <li
                     key={t.id}
-                    className="card p-4 grid sm:grid-cols-[1fr_auto] gap-3 items-center"
+                    className="card p-4 flex flex-col sm:grid sm:grid-cols-[1fr_auto] gap-3 sm:items-center"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <TripThumbnail
@@ -274,9 +294,26 @@ export default async function MileagePage({
                         }
                       />
                       <div className="min-w-0">
-                        <div className="text-sm text-forest-900">
-                          {new Date(t.started_at).toLocaleString()} —{" "}
-                          {new Date(t.ended_at).toLocaleTimeString()}
+                        {/* Short date on mobile, long on sm+. The old
+                            "5/22/2026, 11:11:25 PM — 11:41:25 PM" form
+                            was clipping the buttons off the right edge
+                            on phone. */}
+                        <div className="text-sm text-forest-900 truncate">
+                          <span className="sm:hidden">
+                            {new Date(t.started_at).toLocaleDateString(
+                              undefined,
+                              { month: "short", day: "numeric" },
+                            )}
+                            {" · "}
+                            {new Date(t.started_at).toLocaleTimeString(
+                              undefined,
+                              { hour: "numeric", minute: "2-digit" },
+                            )}
+                          </span>
+                          <span className="hidden sm:inline">
+                            {new Date(t.started_at).toLocaleString()} —{" "}
+                            {new Date(t.ended_at).toLocaleTimeString()}
+                          </span>
                         </div>
                         <div className="text-xs text-ink-muted mt-0.5">
                           {fmtMiles(Number(t.distance_miles))} mi ·{" "}
@@ -286,11 +323,11 @@ export default async function MileagePage({
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 sm:justify-end">
                       {(
                         ["business", "personal", "unclassified"] as const
                       ).map((c) => (
-                        <form action={reclassifyTrip} key={c}>
+                        <form action={reclassifyTrip} key={c} className="flex-1 sm:flex-initial">
                           <input
                             type="hidden"
                             name="trip_id"
@@ -303,7 +340,7 @@ export default async function MileagePage({
                           />
                           <button
                             className={
-                              "text-[11px] px-2.5 h-8 rounded-full border " +
+                              "w-full text-[11px] px-2.5 h-9 sm:h-8 rounded-full border " +
                               (t.classification === c
                                 ? "bg-forest-900 text-cream border-forest-900"
                                 : "border-forest-200 text-forest-800 hover:border-gold-300")
@@ -337,10 +374,12 @@ function Stat({
   label,
   value,
   tone = "neutral",
+  caption,
 }: {
   label: string;
   value: string;
   tone?: "neutral" | "good" | "warn";
+  caption?: string;
 }) {
   const dot =
     tone === "good"
@@ -351,13 +390,16 @@ function Stat({
   return (
     <article className="card p-4 flex items-center gap-3">
       <span aria-hidden="true" className={"size-2.5 rounded-full " + dot} />
-      <div>
+      <div className="min-w-0">
         <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
           {label}
         </div>
         <div className="display text-2xl text-forest-900 tabular-nums mt-0.5">
           {value}
         </div>
+        {caption ? (
+          <div className="text-[11px] text-ink-muted mt-0.5">{caption}</div>
+        ) : null}
       </div>
     </article>
   );

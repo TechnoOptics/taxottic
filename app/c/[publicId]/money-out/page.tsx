@@ -4,6 +4,13 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 
+// Force-dynamic so a freshly classified mileage trip (or new
+// expense) shows up the next time the user lands here, instead of
+// being served from a stale RSC cache. Every aggregation on this
+// page is per-request and small (sums + counts), so the cost is
+// negligible.
+export const dynamic = "force-dynamic";
+
 type Params = Promise<{ publicId: string }>;
 
 /**
@@ -28,9 +35,14 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
         .select("amount_cents")
         .eq("company_id", company.id)
         .eq("tax_year", taxYear),
+      // The column is `distance_miles`, not `miles`. The bad alias
+      // made PostgREST return an error, mileageResp.data fell back
+      // to null, and the "Miles driven" tile was hard-coded to 0
+      // no matter how many business trips were classified. Same
+      // typo bit the reducer below — fixed there too.
       supabase
         .from("mileage_trips")
-        .select("miles, deduction_cents")
+        .select("distance_miles, deduction_cents")
         .eq("company_id", company.id)
         .eq("classification", "business")
         .eq("tax_year", taxYear),
@@ -55,7 +67,7 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
   );
   const expenseCount = (expensesResp.data ?? []).length;
   const milesTotal = (mileageResp.data ?? []).reduce(
-    (a, r) => a + Number(r.miles ?? 0),
+    (a, r) => a + Number(r.distance_miles ?? 0),
     0,
   );
   const mileageCount = (mileageResp.data ?? []).length;

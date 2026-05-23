@@ -34,5 +34,14 @@ export async function reclassifyTrip(formData: FormData) {
     );
   }
 
+  // Mirror the broader fan-out used by /mileage/classify so a flip
+  // here updates every aggregator (money-out tile, my-deductions
+  // YTD, forecast scorecard, savings goals) and not just /mileage.
   revalidatePath("/mileage");
+  revalidatePath("/mileage/classify");
+  revalidatePath("/mileage/business");
+  revalidatePath("/c/[publicId]/money-out", "page");
+  revalidatePath("/c/[publicId]/my-deductions", "page");
+  revalidatePath("/c/[publicId]/forecast", "page");
+  revalidatePath("/c/[publicId]/savings-goals", "page");
 }
