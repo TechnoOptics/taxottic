@@ -46,13 +46,19 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
       .order("description"),
     supabase
       .from("deduction_categories")
-      .select("code, label")
-      .in("scope", ["business", "both"])
+      // 'transfer' joins the picker so a user can label inter-account
+      // moves (currently just credit_card_payment). They're sorted to
+      // the bottom by display_order. applyTransactions routes them via
+      // ignored=true instead of inserting an expense, so they never
+      // inflate the deduction.
+      .select("code, label, scope")
+      .in("scope", ["business", "both", "transfer"])
       .order("display_order"),
   ]);
 
   const cats =
-    (categories as { code: string; label: string }[] | null) ?? [];
+    (categories as { code: string; label: string; scope: string }[] | null) ??
+    [];
 
   // For credit-card imports every non-ignored, non-zero row is an
   // expense. For other accounts we keep the conventional debit (out)
