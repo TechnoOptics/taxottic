@@ -256,18 +256,29 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
         // max-w-[85vw] keeps it from overrunning on tiny screens.
         "card card-opaque relative w-56 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
-  // Position: anchored to the TOP of the viewport so the rail's first
-  // item sits in the same horizontal row as the TAXOTTIC wordmark in
-  // the header. The header content shifts right of the rail (via
-  // lg:pl-60 in AppHeader) so they don't overlap horizontally; the
-  // rail's z-40 sits above the header's z-30 so the rail's card
-  // visually punches through the header strip on the left.
+  // Position: FLOATING below the header strip, lined up with the
+  // page's COMPANY-NAME row (the "Techno Optics LLC · this week"
+  // line that sits below the H1 on most authenticated pages). The
+  // rail is intentionally decoupled from the header now — feedback
+  // (May 23 2026) was that anchoring it to the header made it read
+  // as "part of" the header strip; the user wants a free-floating
+  // panel that sits next to the content.
   //
-  // Previous iterations: top:50% (centered) read as "too low" — the
-  // first item was below the page headline. safe-top + 5.75rem was
-  // still misaligned with the wordmark by ~50px. Top-anchor at
-  // safe-top + 0.5rem lines up the rail's first item with the
-  // wordmark in the header.
+  // Math: header is 3.25rem (52px) tall. The default page section
+  // uses `py-6 sm:py-10` (24-40px) padding, then a breadcrumb row
+  // (~16px) + mt-2 (8px) + H1 (~44px) + mt-2 (8px) before the
+  // company-name line. So the company name sits roughly at
+  // safe-top + ~9rem. Anchoring the rail's first item there lines
+  // up the topmost menu link visually with that line.
+  //
+  // (Earlier iterations:
+  //   safe-top + 0.5rem → aligned with TAXOTTIC wordmark (May 22)
+  //   safe-top + 5.75rem → misaligned with wordmark by ~50px
+  //   top:50% → "too low", H1 was above the first item.
+  //  Today's pass moves DELIBERATELY away from wordmark alignment
+  //  toward content alignment — the wordmark is now on its own
+  //  row in the header strip and the rail lives in the content
+  //  flow visually.)
   //
   // Mobile (< lg) uses LeftRailMobile (floating tab) and never hits
   // this code path; the wordmark stays in the header on mobile so
@@ -275,9 +286,9 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
   const railStyle =
     mode === "rail"
       ? {
-          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 0.5rem)",
+          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 9rem)",
           maxHeight:
-            "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 1.5rem)",
+            "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 11rem)",
         }
       : undefined;
 
