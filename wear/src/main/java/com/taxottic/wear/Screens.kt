@@ -91,12 +91,18 @@ fun WearApp(
     // NEW pending trip / expense arrives in the snapshot. The
     // remembered-set keeps the buzz one-shot per id; subsequent
     // syncs that re-deliver the same ids don't re-buzz.
+    //
+    // `received` is a separate flag (not derived from seen.isEmpty)
+    // so a sequence "first snap is empty, second snap has the
+    // trip" still buzzes. With the old isEmpty gate we'd skip
+    // because seen was still empty when the second snap arrived.
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val seen = remember { mutableStateOf(setOf<String>()) }
+    val received = remember { mutableStateOf(false) }
     LaunchedEffect(snapshot.confirmations) {
         val ids = snapshot.confirmations.map { it.id }.toSet()
         val newIds = ids - seen.value
-        if (newIds.isNotEmpty() && seen.value.isNotEmpty()) {
+        if (newIds.isNotEmpty() && received.value) {
             // Two short pulses with a tiny gap — "you have a card
             // waiting" without being startling.
             runCatching {
@@ -117,6 +123,7 @@ fun WearApp(
             }
         }
         seen.value = ids
+        received.value = true
     }
 
     val pageProg = (pager.currentPage + pager.currentPageOffsetFraction) /
