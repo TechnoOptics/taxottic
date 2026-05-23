@@ -1,0 +1,321 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { TripThumbnail } from "@/components/maps/TripThumbnail";
+
+/**
+ * Phone-first trip list. Replaces the old "3 pill buttons per row,
+ * server timezone, no delete, no grouping" rendering on /mileage.
+ *
+ * Why client-side:
+ *   1. Dates must render in the user's local timezone. Server is UTC;
+ *      `new Date(iso).toLocaleString()` on the server uses Vercel's
+ *      UTC clock and the user complained that "the time zone is wrong".
+ *      A Client Component runs `toLocaleString()` in the browser, so
+ *      times read in the user's local zone.
+ *   2. The classification control is a segmented (radio) UI now: only
+ *      ONE option can be visually active. The old design used three
+ *      independent submit buttons that all looked equally pressable,
+ *      so users tapped each in turn and felt like both were
+ *      "selected." A radio role + visual mutex fixes the affordance.
+ *   3. Delete needs a confirm; useTransition + a server action keeps
+ *      the UX snappy without a route refresh.
+ *
+ * Grouping:
+ *   Today
+ *   Yesterday
+ *   This week (last 7 days, excluding today + yesterday)
+ *   This month (last 30 days, excluding this week)
+ *   Earlier
+ *
+ * Computed client-side off the started_at ISO so it respects the
+ * user's local day boundary, not UTC midnight.
+ */
+
+export type TripRow = {
+  id: string;
+  startedAtISO: string;
+  endedAtISO: string;
+  distanceMiles: number;
+  classification: "business" | "personal" | "unclassified";
+  deductionCents: number;
+  points: { lat: number; lng: number; captured_at: string }[];
+};
+
+type Props = {
+  trips: TripRow[];
+  reclassify: (formData: FormData) => Promise<void>;
+  deleteTrip: (formData: FormData) => Promise<void>;
+};
+
+type Bucket = {
+  key: string;
+  label: string;
+  trips: TripRow[];
+};
+
+function fmtMiles(m: number) {
+  return m.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+function fmtUsd(cents: number) {
+  return (cents / 100).toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+  });
+}
+
+/** Local-day key like "2026-05-23" in the browser's timezone. */
+function localDayKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function groupTrips(trips: TripRow[]): Bucket[] {
+  const now = new Date();
+  const today = localDayKey(now);
+  const yesterday = localDayKey(new Date(now.getTime() - 86_400_000));
+  const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
+  const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
+
+  const buckets: Record<string, TripRow[]> = {
+    today: [],
+    yesterday: [],
+    week: [],
+    month: [],
+    earlier: [],
+  };
+
+  for (const t of trips) {
+    const d = new Date(t.startedAtISO);
+    const key = localDayKey(d);
+    if (key === today) buckets.today.push(t);
+    else if (key === yesterday) buckets.yesterday.push(t);
+    else if (d >= weekAgo) buckets.week.push(t);
+    else if (d >= monthAgo) buckets.month.push(t);
+    else buckets.earlier.push(t);
+  }
+
+  return [
+    { key: "today", label: "Today", trips: buckets.today },
+    { key: "yesterday", label: "Yesterday", trips: buckets.yesterday },
+    { key: "week", label: "Earlier this week", trips: buckets.week },
+    { key: "month", label: "Earlier this month", trips: buckets.month },
+    { key: "earlier", label: "Older", trips: buckets.earlier },
+  ].filter((b) => b.trips.length > 0);
+}
+
+export function TripList({ trips, reclassify, deleteTrip }: Props) {
+  if (trips.length === 0) {
+    return (
+      <p className="mt-3 text-sm text-ink-muted">
+        No drives recorded in this window. The phone logs a trip
+        automatically when you drive and then stop for 5+ minutes.
+      </p>
+    );
+  }
+
+  const buckets = groupTrips(trips);
+
+  return (
+    <div className="mt-3 grid gap-6">
+      {buckets.map((bucket) => (
+        <section key={bucket.key}>
+          <h3 className="text-[11px] uppercase tracking-[0.22em] text-gold-700">
+            {bucket.label}
+            <span className="ml-2 text-ink-muted normal-case tracking-normal">
+              {bucket.trips.length}{" "}
+              {bucket.trips.length === 1 ? "drive" : "drives"}
+            </span>
+          </h3>
+          <ul className="mt-2 grid gap-2">
+            {bucket.trips.map((t) => (
+              <TripCard
+                key={t.id}
+                trip={t}
+                reclassify={reclassify}
+                deleteTrip={deleteTrip}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function TripCard({
+  trip,
+  reclassify,
+  deleteTrip,
+}: {
+  trip: TripRow;
+  reclassify: (fd: FormData) => Promise<void>;
+  deleteTrip: (fd: FormData) => Promise<void>;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const start = new Date(trip.startedAtISO);
+  const end = new Date(trip.endedAtISO);
+
+  const dateLabel = start.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const timeLabel = `${start.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  })} → ${end.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+
+  const doReclassify = (c: "business" | "personal" | "unclassified") => {
+    // Optimistic-ish: no local optimistic state because the server
+    // action revalidates the page; useTransition keeps the UI from
+    // freezing while it round-trips.
+    if (c === trip.classification) return;
+    const fd = new FormData();
+    fd.set("trip_id", trip.id);
+    fd.set("classification", c);
+    startTransition(() => {
+      void reclassify(fd);
+    });
+  };
+
+  const doDelete = () => {
+    const fd = new FormData();
+    fd.set("trip_id", trip.id);
+    startTransition(() => {
+      void deleteTrip(fd);
+    });
+  };
+
+  return (
+    <li
+      className={
+        "card p-3 sm:p-4 grid gap-3 " +
+        (pending ? "opacity-60" : "")
+      }
+      aria-busy={pending}
+    >
+      <div className="flex items-start gap-3 min-w-0">
+        <TripThumbnail
+          points={[...trip.points]
+            .sort((a, b) =>
+              a.captured_at < b.captured_at ? -1 : 1,
+            )
+            .map((p) => ({ lat: p.lat, lng: p.lng }))}
+          classification={
+            trip.classification === "business" ||
+            trip.classification === "personal"
+              ? trip.classification
+              : "unclassified"
+          }
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm text-forest-900 truncate">
+            {dateLabel}{" "}
+            <span className="text-ink-muted">· {timeLabel}</span>
+          </div>
+          <div className="text-xs text-ink-muted mt-0.5">
+            {fmtMiles(Number(trip.distanceMiles))} mi
+            {trip.classification === "business"
+              ? ` · ${fmtUsd(Number(trip.deductionCents))} deduction`
+              : ""}
+          </div>
+        </div>
+        {/* Delete affordance. Two-tap with confirm — destructive
+            actions should never be one click on a touch device. */}
+        {confirmingDelete ? (
+          <div className="flex gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={doDelete}
+              disabled={pending}
+              className="text-[11px] px-2.5 h-8 rounded-full bg-rose-600 text-white font-medium disabled:opacity-60"
+            >
+              Delete?
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={pending}
+              className="text-[11px] px-2.5 h-8 rounded-full border border-forest-200 text-forest-800 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            disabled={pending}
+            aria-label="Delete trip"
+            className="shrink-0 size-8 grid place-items-center rounded-full text-ink-muted hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              className="size-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 7h12M8 7V4h4v3M6 7l1 11h6l1-11M9 10v5M11 10v5" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Segmented classification control. role=radiogroup so the
+          affordance reads as "choose one" and not as "tap-each-
+          independently" — the user feedback was that the old three
+          buttons looked like all of them could be selected at once.
+          Only one tab is `aria-checked` at any time, and the bg
+          fill makes the choice unambiguous. */}
+      <div
+        role="radiogroup"
+        aria-label="Classify trip"
+        className="grid grid-cols-3 rounded-full bg-forest-50 p-1 gap-1"
+      >
+        {(
+          [
+            { key: "business", label: "Business" },
+            { key: "personal", label: "Personal" },
+            { key: "unclassified", label: "Review" },
+          ] as const
+        ).map((opt) => {
+          const active = trip.classification === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => doReclassify(opt.key)}
+              disabled={pending}
+              className={
+                "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
+                (active
+                  ? opt.key === "business"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : opt.key === "personal"
+                      ? "bg-amber-500 text-white shadow-sm"
+                      : "bg-forest-900 text-cream shadow-sm"
+                  : "text-forest-800 hover:bg-cream")
+              }
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </li>
+  );
+}
