@@ -137,7 +137,14 @@
 // — green/amber/red dot + diagnostic checklist when red. New
 // ManualLogTrip form for backfilling drives the tracker
 // missed. SW bump so v30 clients pull the new markup.
-const CACHE_VERSION = "v31";
+// v32: /mileage/places — fixing "Add a place." Single-field
+// AddressAutocomplete now writes the FULL formatted address on
+// pick (was dropping city/state/zip), and AddPlaceForm carries
+// the picked lat/lng in hidden inputs that the server action
+// consumes to skip geocode entirely. New HIDDEN INPUTS need the
+// fresh HTML to be wired up, so v31 clients have to drop their
+// cached /mileage/places HTML — that's the reason for this bump.
+const CACHE_VERSION = "v32";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

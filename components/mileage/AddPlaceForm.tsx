@@ -99,17 +99,28 @@ export function AddPlaceForm({
         >
           Address
         </label>
-        {/* AddressAutocomplete is a drop-in for a plain input: it
-            forwards the typed/picked address as `name="address"` to
-            the server action. Falls back to a plain text input if
-            Places JS isn't available. */}
+        {/* AddressAutocomplete: SINGLE-field mode (no cityInputName
+            passed) → picking a suggestion now writes the FULL
+            formatted address into the input (was previously dropping
+            city/state/zip), and stashes the picked lat/lng into the
+            hidden inputs below so the server skips the geocode
+            round-trip + can't return "not_found". Manual typing
+            still works — falls through to server-side geocode. */}
         <AddressAutocomplete
           name="address"
           placeholder="123 Main St, City, ST"
           className="mt-1 w-full rounded-xl border border-forest-100 bg-white px-3 py-2 text-sm text-forest-900 focus:outline-none focus:border-gold-300 focus:ring-1 focus:ring-gold-200"
+          latInputName="picked_lat"
+          lngInputName="picked_lng"
         />
+        {/* Hidden carriers for the picked geometry. Server action
+            prefers these when present, falls back to geocoding the
+            raw address when the user typed instead of picked. */}
+        <input type="hidden" name="picked_lat" defaultValue="" />
+        <input type="hidden" name="picked_lng" defaultValue="" />
         <p className="mt-1 text-[11px] text-ink-muted">
-          We&apos;ll geocode the address to a pin and a 120 m geofence.
+          Pick a suggestion to drop a pin instantly, or type any
+          address and we&apos;ll geocode it.
         </p>
       </div>
 
