@@ -113,12 +113,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, did: "clarify_expense" });
   }
 
-  // mileage / autoApply / open are phone-side actions (start GPS,
-  // flip a local pref, foreground a route). They have no server
-  // counterpart; 200 so the watch's parallel POST is a harmless no-op
-  // and we can rely on the Data Layer to deliver them when the phone
-  // is up.
-  if (type === "mileage" || type === "autoApply" || type === "open") {
+  // autoApply: persist the new value on profiles.mileage_schedule
+  // so the next snapshot pull returns the correct toggle state
+  // (otherwise the watch flips the toggle back after 60s when the
+  // server's default false overrides the optimistic UI). Body:
+  // { type: "autoApply", value: "on" | "off" }
+  if (type === "autoApply") {
+    const rawValue = (body as { value?: string }).value;
+    const next = String(rawValue ?? "") === "on";
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("mileage_schedule")
+      .eq("id", uid)
+      .maybeSingle();
+    const current =
+      (prof?.mileage_schedule as Record<string, unknown> | null) ?? {
+        mode: "always",
+      };
+    await admin
+      .from("profiles")
+      .update({ mileage_schedule: { ...current, autoApplyBusiness: next } })
+      .eq("id", uid);
+    return NextResponse.json({ ok: true, did: "auto_apply_persisted" });
+  }
+
+  // mileage / open are phone-side actions (start GPS, foreground a
+  // route) — the server can't start the phone's foreground service
+  // by itself. 200 so the watch's parallel POST is a harmless no-op
+  // and the Data Layer delivers when the phone is up.
+  if (type === "mileage" || type === "open") {
     return NextResponse.json({ ok: true, did: "noop_phone_side" });
   }
 

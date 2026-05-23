@@ -95,7 +95,11 @@
 // profiles.mileage_schedule JSONB column.
 // v25: eco mode added to /mileage/schedule + native tracker reads
 // localStorage eco flag to pick distanceFilter and stale options.
-const CACHE_VERSION = "v25";
+// v26: snapshot now returns real trackingActive (derived from
+// recent mileage_points) + persisted autoApplyBusiness so the
+// watch toggles stop flipping back. Also: vibrate + auto-nav on
+// the wear app when a new pending trip lands.
+const CACHE_VERSION = "v26";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
