@@ -3,8 +3,13 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { MileageMap, type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
-import { TripThumbnail } from "@/components/maps/TripThumbnail";
-import { reclassifyTrip } from "./actions";
+import { TrackerStatus } from "@/components/mileage/TrackerStatus";
+import { TripList, type TripRow } from "@/components/mileage/TripList";
+import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
+import { reclassifyTrip, deleteTrip, addManualTrip } from "./actions";
+
+// TripThumbnail is no longer imported at this layer — the new
+// TripList client component imports it directly per-row.
 
 // Employee mileage dashboard. Their own driving trails for a
 // chosen window, colour-coded business/personal, with the IRS
@@ -49,7 +54,7 @@ export default async function MileagePage({
   const memberships = await getMyCompanies();
   const company = memberships[0]?.company ?? null;
 
-  type TripRow = {
+  type ServerTripRow = {
     id: string;
     started_at: string;
     ended_at: string;
@@ -60,8 +65,10 @@ export default async function MileagePage({
     mileage_points: { lat: number; lng: number; captured_at: string }[];
   };
 
-  let trips: TripRow[] = [];
+  let trips: ServerTripRow[] = [];
   let places: MapPlace[] = [];
+  let lastPointISO: string | null = null;
+  let lastTripISO: string | null = null;
   if (company) {
     const { data: tripData } = await admin
       .from("mileage_trips")
@@ -73,13 +80,38 @@ export default async function MileagePage({
       .gte("started_at", sinceIso)
       .order("started_at", { ascending: false })
       .limit(500);
-    trips = (tripData ?? []) as unknown as TripRow[];
+    trips = (tripData ?? []) as unknown as ServerTripRow[];
 
     const { data: placeData } = await admin
       .from("mileage_places")
       .select("id, kind, label, lat, lng")
       .eq("company_id", company.id);
     places = (placeData ?? []) as unknown as MapPlace[];
+
+    // Tracker-status diagnostic — most recent GPS point ingested by
+    // THIS user, across any company they belong to. mileage_points
+    // doesn't have driver_user_id; join through the trip. Using a
+    // single 1-row fetch so the page render cost is constant
+    // regardless of how many points exist.
+    const { data: lastPoint } = await admin
+      .from("mileage_points")
+      .select("captured_at, trip:mileage_trips!inner(driver_user_id)")
+      .eq("trip.driver_user_id", user.id)
+      .order("captured_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    lastPointISO =
+      (lastPoint as { captured_at?: string } | null)?.captured_at ?? null;
+
+    const { data: lastTrip } = await admin
+      .from("mileage_trips")
+      .select("started_at")
+      .eq("driver_user_id", user.id)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    lastTripISO =
+      (lastTrip as { started_at?: string } | null)?.started_at ?? null;
   }
 
   const businessMiles = trips
@@ -130,6 +162,15 @@ export default async function MileagePage({
             <div className="mt-4">
               <AutoTrackToggle companyId={company.id} />
             </div>
+
+            {/* "Is the tracker actually running?" — the diagnostic
+                strip the user asked for after their first real
+                drive-day produced zero GPS points. Green when active,
+                red with a checklist + manual-log pointer when not. */}
+            <TrackerStatus
+              lastPointISO={lastPointISO}
+              lastTripISO={lastTripISO}
+            />
 
             {/* Pending-classification banner. Mirrors the watch's
                 Confirm tab for users without a watch. Big amber CTA
@@ -266,95 +307,30 @@ export default async function MileagePage({
             <h2 className="display text-xl text-forest-900 mt-8">
               Trips
             </h2>
-            {trips.length === 0 ? (
-              <p className="mt-2 text-sm text-ink-muted">
-                No drives recorded in this window. The phone logs a
-                trip automatically when you drive and then stop for
-                5+ minutes.
-              </p>
-            ) : (
-              <ul className="mt-3 grid gap-2">
-                {trips.map((t) => (
-                  <li
-                    key={t.id}
-                    className="card p-4 flex flex-col sm:grid sm:grid-cols-[1fr_auto] gap-3 sm:items-center"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <TripThumbnail
-                        points={[...t.mileage_points]
-                          .sort((a, b) =>
-                            a.captured_at < b.captured_at ? -1 : 1,
-                          )
-                          .map((p) => ({ lat: p.lat, lng: p.lng }))}
-                        classification={
-                          t.classification === "business" ||
-                          t.classification === "personal"
-                            ? t.classification
-                            : "unclassified"
-                        }
-                      />
-                      <div className="min-w-0">
-                        {/* Short date on mobile, long on sm+. The old
-                            "5/22/2026, 11:11:25 PM — 11:41:25 PM" form
-                            was clipping the buttons off the right edge
-                            on phone. */}
-                        <div className="text-sm text-forest-900 truncate">
-                          <span className="sm:hidden">
-                            {new Date(t.started_at).toLocaleDateString(
-                              undefined,
-                              { month: "short", day: "numeric" },
-                            )}
-                            {" · "}
-                            {new Date(t.started_at).toLocaleTimeString(
-                              undefined,
-                              { hour: "numeric", minute: "2-digit" },
-                            )}
-                          </span>
-                          <span className="hidden sm:inline">
-                            {new Date(t.started_at).toLocaleString()} —{" "}
-                            {new Date(t.ended_at).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <div className="text-xs text-ink-muted mt-0.5">
-                          {fmtMiles(Number(t.distance_miles))} mi ·{" "}
-                          {t.classification === "business"
-                            ? `${fmtUsd(Number(t.deduction_cents))} deduction`
-                            : t.classification}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5 sm:justify-end">
-                      {(
-                        ["business", "personal", "unclassified"] as const
-                      ).map((c) => (
-                        <form action={reclassifyTrip} key={c} className="flex-1 sm:flex-initial">
-                          <input
-                            type="hidden"
-                            name="trip_id"
-                            value={t.id}
-                          />
-                          <input
-                            type="hidden"
-                            name="classification"
-                            value={c}
-                          />
-                          <button
-                            className={
-                              "w-full text-[11px] px-2.5 h-9 sm:h-8 rounded-full border " +
-                              (t.classification === c
-                                ? "bg-forest-900 text-cream border-forest-900"
-                                : "border-forest-200 text-forest-800 hover:border-gold-300")
-                            }
-                          >
-                            {c === "unclassified" ? "review" : c}
-                          </button>
-                        </form>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* Grouped, timezone-aware trip list with segmented
+                (mutex) classification + delete. Replaces the old
+                "3 independent buttons that looked equally pressable"
+                row. Renders client-side so dates use the user's
+                local timezone instead of Vercel's UTC. */}
+            <TripList
+              trips={trips.map<TripRow>((t) => ({
+                id: t.id,
+                startedAtISO: t.started_at,
+                endedAtISO: t.ended_at,
+                distanceMiles: Number(t.distance_miles),
+                classification: t.classification,
+                deductionCents: Number(t.deduction_cents),
+                points: t.mileage_points,
+              }))}
+              reclassify={reclassifyTrip}
+              deleteTrip={deleteTrip}
+            />
+
+            {/* Manual backfill entry — collapsed by default. The user
+                ALWAYS has a way to log a drive even if the tracker
+                missed it (the realistic scenario, given GPS background
+                capture on Android is best-effort). */}
+            <ManualLogTrip action={addManualTrip} />
 
             <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
               Deduction uses the IRS standard mileage rate for the

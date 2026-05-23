@@ -124,7 +124,20 @@
 // authenticated pages. Pure CSS — no JS or markup change — but
 // bumping the SW so existing clients drop the v29 HTML cache
 // and pick up the new rail position on next nav.
-const CACHE_VERSION = "v30";
+// v31: mileage UX rebuild after the first real-drive day. The
+// trip list is now a CLIENT component (TripList.tsx) so dates
+// render in the user's local timezone instead of Vercel UTC.
+// Classification is a SEGMENTED radiogroup (only one option
+// visually active at a time) replacing the three pressable
+// pills that read as multi-select. Each row has a delete
+// button (with confirm). Trips are GROUPED into Today /
+// Yesterday / This week / This month / Older. New
+// TrackerStatus strip surfaces "is the tracker actually
+// running" with the most recent ingested GPS point timestamp
+// — green/amber/red dot + diagnostic checklist when red. New
+// ManualLogTrip form for backfilling drives the tracker
+// missed. SW bump so v30 clients pull the new markup.
+const CACHE_VERSION = "v31";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
