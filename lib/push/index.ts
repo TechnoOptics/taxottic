@@ -16,6 +16,12 @@ export type { PushEvent } from "./payloads";
  * Safe to call from a server action / route after the underlying
  * write commits. Never throws — a notification failure must not fail
  * the business operation that triggered it.
+ *
+ * Logs a structured `[push]` line on every call so docs/PUSH_NOTIFICATIONS_SETUP.md
+ * verification ("watch Vercel logs after a drive") has something to
+ * point at. The NoopProvider path (no creds) logs delivered=0 too,
+ * which is the answer to "did my producer even fire?" without
+ * needing to add a debug endpoint.
  */
 export async function notify(
   userId: string,
@@ -23,8 +29,15 @@ export async function notify(
 ): Promise<SendResult> {
   try {
     const store = createSupabasePushStore(createServiceClient());
-    return await sendToUser(store, resolveProvider(), userId, event);
-  } catch {
+    const result = await sendToUser(store, resolveProvider(), userId, event);
+    console.log(
+      `[push] ${event.kind} user=${userId} sent=${result.sent} delivered=${result.delivered} revoked=${result.revoked}`,
+    );
+    return result;
+  } catch (err) {
+    console.log(
+      `[push] ${event.kind} user=${userId} error=${(err as Error)?.message ?? "unknown"}`,
+    );
     return { sent: false, delivered: 0, revoked: 0 };
   }
 }
