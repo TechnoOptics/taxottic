@@ -82,3 +82,11 @@ android/app/release/
 *.aab
 *.apk
 .claude-pr-body.md
+
+# Push-notification credentials — these grant send access to your
+# users' devices, so they MUST NEVER be committed. The runbook
+# (docs/PUSH_NOTIFICATIONS_SETUP.md) walks through dropping them
+# into the build at sideload time and into Vercel as runtime secrets.
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+ios/App/App/AuthKey_*.p8
