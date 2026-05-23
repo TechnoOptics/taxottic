@@ -106,7 +106,17 @@
 // component) + pending-trip banner on /mileage. Markup change on
 // /mileage so the v27 cache would serve stale HTML without the
 // banner; bump forces fresh fetch.
-const CACHE_VERSION = "v28";
+// v29: mileage cross-page propagation fix. /c/{id}/money-out had
+// `.select("miles, deduction_cents")` against mileage_trips —
+// wrong column (it's distance_miles), so PostgREST errored out
+// and the "Miles driven" tile was permanently zero no matter how
+// many trips got classified business. Fixed the column + the
+// reducer, broadened revalidatePath fan-out from both classify
+// actions so my-deductions + forecast + savings-goals refresh on
+// flip, force-dynamic'd money-out, and polished /mileage stats +
+// mobile trip rows. Bump so phone WebViews drop v28 HTML and
+// pull the corrected markup on next nav.
+const CACHE_VERSION = "v29";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
