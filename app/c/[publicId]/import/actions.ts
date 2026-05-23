@@ -353,6 +353,37 @@ export async function applyTransactions(formData: FormData) {
     return;
   }
 
+  // Identify any transfer-scoped categories among the chosen codes
+  // (currently just credit_card_payment). Rows tagged with these
+  // are inter-account moves — they are NEVER deductions, so we
+  // tag them ignored=true instead of inserting into monthly_expenses.
+  const chosenCodes = Array.from(
+    new Set(
+      applicable.map((t) => t.applied_category_code).filter(Boolean),
+    ),
+  ) as string[];
+  let transferCodes = new Set<string>();
+  if (chosenCodes.length > 0) {
+    const { data: catScopes } = await admin
+      .from("deduction_categories")
+      .select("code, scope")
+      .in("code", chosenCodes);
+    transferCodes = new Set(
+      (catScopes ?? [])
+        .filter((c) => (c as { scope?: string }).scope === "transfer")
+        .map((c) => (c as { code: string }).code),
+    );
+  }
+  const transferIds = applicable
+    .filter((t) => transferCodes.has(t.applied_category_code!))
+    .map((t) => t.id);
+  if (transferIds.length > 0) {
+    await admin
+      .from("bank_transactions")
+      .update({ ignored: true })
+      .in("id", transferIds);
+  }
+
   const now = new Date();
   const taxYear = now.getUTCFullYear();
   const currentMonth = now.getUTCMonth() + 1;
@@ -369,6 +400,8 @@ export async function applyTransactions(formData: FormData) {
   const txUpdates: { id: string }[] = [];
 
   for (const tx of applicable) {
+    // Transfers already handled above — skip the expense-insert loop.
+    if (transferCodes.has(tx.applied_category_code!)) continue;
     if (!tx.posted_at) continue;
     const posted = new Date(tx.posted_at + "T00:00:00Z");
     const txYear = posted.getUTCFullYear();
@@ -598,14 +631,45 @@ async function runBellaCategorize(args: {
   const { data: txs } = await admin
     .from("bank_transactions")
     .select(
-      "id, description, amount_cents, posted_at, raw_category, applied_expense_id, applied_income_id, ignored",
+      "id, description, amount_cents, posted_at, raw_category, applied_category_code, applied_expense_id, applied_income_id, ignored",
     )
     .eq("import_id", importId)
     .eq("company_id", companyId);
 
+  // Pre-tag obvious credit-card-payment rows BEFORE Bella sees them.
+  // On a credit import, looksLikeCardPayment matches "MOBILE PAYMENT -
+  // THANK YOU" / "AUTOPAY" / etc — these are inter-account transfers,
+  // not deductions. Tagging them with applied_category_code =
+  // credit_card_payment + ignored=true removes them from the review
+  // queue cleanly and keeps Bella from spending tokens classifying
+  // rows we already know about. Only touches rows that haven't been
+  // categorized or applied yet, so it's idempotent across re-runs.
+  if (isCredit && txs) {
+    const cardPaymentIds = txs
+      .filter(
+        (t) =>
+          !t.ignored &&
+          !t.applied_expense_id &&
+          !t.applied_income_id &&
+          !t.applied_category_code &&
+          looksLikeCardPayment(t.description),
+      )
+      .map((t) => t.id);
+    if (cardPaymentIds.length > 0) {
+      await admin
+        .from("bank_transactions")
+        .update({
+          applied_category_code: "credit_card_payment",
+          ignored: true,
+        })
+        .in("id", cardPaymentIds);
+    }
+  }
+
   // Already-applied rows skip — we don't want to double-charge.
-  // Also drop credit-card payment rows up-front to avoid wasting
-  // tokens classifying them.
+  // Card-payment rows we just tagged above are now ignored=true, so
+  // the existing filter naturally excludes them; the redundant
+  // looksLikeCardPayment guard stays as defense-in-depth.
   const candidates = (txs ?? []).filter(
     (t) =>
       !t.ignored &&
