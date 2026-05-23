@@ -188,14 +188,26 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           disabled={busy || !ready || (!supported && !enabled)}
           className={
             "shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full " +
-            "transition-colors disabled:opacity-50 disabled:cursor-not-allowed " +
-            (enabled ? "bg-forest-900" : "bg-forest-200")
+            "transition-all duration-200 ring-1 ring-inset shadow-sm " +
+            "disabled:opacity-50 disabled:cursor-not-allowed " +
+            (enabled
+              ? // ON — brand gold gradient. gold-300 → gold-500 reads
+                // as warm and premium, with gold-600 ring for the
+                // edge definition. Matches the CompanyNav and FAB
+                // gold accents elsewhere on the page.
+                "bg-gradient-to-r from-gold-300 to-gold-500 ring-gold-600"
+              : // OFF — red so it's immediately obvious the tracker
+                // isn't running. User feedback: when drives went
+                // unlogged on real-drive day, the previous gray-on-
+                // gray off-state read as "neutral / fine" rather than
+                // "you're not capturing anything right now."
+                "bg-gradient-to-r from-rose-400 to-rose-600 ring-rose-700")
           }
         >
           <span
             className={
-              "inline-block h-5 w-5 transform rounded-full bg-cream " +
-              "transition-transform " +
+              "inline-block h-5 w-5 transform rounded-full bg-white shadow " +
+              "transition-transform duration-200 " +
               (enabled ? "translate-x-5" : "translate-x-0.5")
             }
           />
