@@ -55,7 +55,12 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
       // the bottom by display_order. applyTransactions routes them via
       // ignored=true instead of inserting an expense, so they never
       // inflate the deduction.
-      .select("code, label, scope, schedule_c_line")
+      // Also pull irc_section + irs_pub so the TxRow can show the
+      // citation next to each detected category — user feedback:
+      // "give the relevant IRC."
+      .select(
+        "code, label, scope, schedule_c_line, irc_section, irs_pub, irs_url",
+      )
       .in("scope", ["business", "both", "transfer"])
       .order("display_order"),
   ]);
@@ -66,6 +71,9 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
       label: string;
       scope: string;
       schedule_c_line: string | null;
+      irc_section: string | null;
+      irs_pub: string | null;
+      irs_url: string | null;
     }[] | null) ?? [];
   // Build the option list once with schedule_c_line surfaced as the
   // small hint label on the right edge of each combobox row.
@@ -75,6 +83,29 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
     hint: c.schedule_c_line,
     scope: c.scope,
   }));
+  // Lookup so the TxRow can render the IRC / Pub citation next to
+  // the chosen category without re-fetching.
+  const catById = new Map<
+    string,
+    {
+      label: string;
+      scope: string;
+      schedule_c_line: string | null;
+      irc_section: string | null;
+      irs_pub: string | null;
+      irs_url: string | null;
+    }
+  >();
+  for (const c of cats) {
+    catById.set(c.code, {
+      label: c.label,
+      scope: c.scope,
+      schedule_c_line: c.schedule_c_line,
+      irc_section: c.irc_section,
+      irs_pub: c.irs_pub,
+      irs_url: c.irs_url,
+    });
+  }
 
   // Most-used category codes for THIS company — used to bubble
   // already-frequent picks to the top of the searchable list (and
@@ -114,6 +145,63 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
   const pendingApply = debits.filter(
     (t) => t.applied_category_code && !t.applied_expense_id,
   );
+
+  // Bella detection rollup — shown at the top of the review section
+  // so the user can see at a glance "Bella tagged X, you tagged Y,
+  // these N are still untouched." Computed from in-memory debits
+  // (already loaded above) — no extra round-trip.
+  const stats = {
+    total: debits.length,
+    appliedAsExpense: debits.filter((t) => t.applied_expense_id).length,
+    bellaSuggested: debits.filter(
+      (t) =>
+        t.suggested_category_code &&
+        !t.applied_category_code &&
+        !t.applied_expense_id,
+    ).length,
+    userTagged: debits.filter(
+      (t) => t.applied_category_code && !t.applied_expense_id,
+    ).length,
+    untouched: debits.filter(
+      (t) =>
+        !t.suggested_category_code &&
+        !t.applied_category_code &&
+        !t.applied_expense_id,
+    ).length,
+  };
+
+  // Group debits by calendar month (posted_at "YYYY-MM-DD" → "YYYY-MM").
+  // Keeps the review legible on multi-month statements (Amex, year-end
+  // dumps) which the user reported as "please group imported csv
+  // into months." Rows without a posted_at fall into "No date" at
+  // the end of the list so they're never silently dropped.
+  type Debit = (typeof debits)[number];
+  const monthMap = new Map<string, Debit[]>();
+  for (const t of debits) {
+    const key = t.posted_at ? t.posted_at.slice(0, 7) : "unknown";
+    const arr = monthMap.get(key) ?? [];
+    arr.push(t);
+    monthMap.set(key, arr);
+  }
+  const debitGroups = Array.from(monthMap.entries())
+    .sort((a, b) => {
+      if (a[0] === "unknown") return 1;
+      if (b[0] === "unknown") return -1;
+      return b[0].localeCompare(a[0]); // newest month first
+    })
+    .map(([key, rows]) => ({
+      key,
+      label:
+        key === "unknown"
+          ? "No date"
+          : new Date(key + "-15T00:00:00Z").toLocaleString(undefined, {
+              month: "long",
+              year: "numeric",
+              timeZone: "UTC",
+            }),
+      rows,
+      totalCents: rows.reduce((a, r) => a + Math.abs(r.amount_cents), 0),
+    }));
 
   return (
     <main id="main" className="min-h-screen">
@@ -204,28 +292,82 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
           </form>
         ) : null}
 
+        {/* Bella detection rollup — surfaces "what did the model see"
+            and "what was applied" without making the user count rows
+            manually. The deduction IRC / Pub citation for each picked
+            category appears next to the row below. */}
+        <section className="mt-6 card p-5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                Bella&apos;s pass over this import
+              </div>
+              <div className="display text-lg text-forest-900 mt-1">
+                {stats.total} expense candidates
+              </div>
+            </div>
+            <div className="text-[11px] text-ink-muted leading-relaxed text-right">
+              {stats.appliedAsExpense > 0 ? (
+                <span className="block text-emerald-700">
+                  ✓ {stats.appliedAsExpense} already booked as expenses
+                </span>
+              ) : null}
+              {stats.userTagged > 0 ? (
+                <span className="block text-forest-800">
+                  • {stats.userTagged} tagged, ready to apply
+                </span>
+              ) : null}
+              {stats.bellaSuggested > 0 ? (
+                <span className="block text-gold-800">
+                  ⚡ {stats.bellaSuggested} pre-tagged by Bella for review
+                </span>
+              ) : null}
+              {stats.untouched > 0 ? (
+                <span className="block text-rose-800">
+                  ? {stats.untouched} still untouched
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </section>
+
         <section className="mt-6 card p-6">
           <h2 className="display text-xl text-forest-900">
             Expense candidates ({debits.length})
           </h2>
-          <ul className="mt-4 grid gap-2">
-            {debits.length === 0 ? (
-              <li className="text-sm text-ink-muted py-4">
-                No debit transactions in this file.
-              </li>
-            ) : (
-              debits.map((t) => (
-                <TxRow
-                  key={t.id}
-                  tx={t}
-                  importId={importId}
-                  companyId={company.id}
-                  cats={catOptions}
-                  frequentCodes={frequentCodes}
-                />
-              ))
-            )}
-          </ul>
+          {debits.length === 0 ? (
+            <p className="mt-4 text-sm text-ink-muted">
+              No debit transactions in this file.
+            </p>
+          ) : (
+            <div className="mt-4 grid gap-6">
+              {debitGroups.map((g) => (
+                <div key={g.key}>
+                  <h3 className="text-[11px] uppercase tracking-[0.22em] text-gold-700 flex items-baseline gap-2">
+                    <span>{g.label}</span>
+                    <span className="text-ink-muted normal-case tracking-normal">
+                      {g.rows.length}{" "}
+                      {g.rows.length === 1 ? "row" : "rows"} ·{" "}
+                      {formatCents(g.totalCents)}
+                    </span>
+                  </h3>
+                  <ul className="mt-2 grid gap-2">
+                    {g.rows.map((t) => (
+                      <TxRow
+                        key={t.id}
+                        tx={t}
+                        importId={importId}
+                        companyId={company.id}
+                        cats={catOptions}
+                        frequentCodes={frequentCodes}
+                        catById={catById}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {credits.length > 0 ? (
@@ -289,6 +431,20 @@ type TxRowProps = {
   companyId: string;
   cats: CategoryOption[];
   frequentCodes: string[];
+  /** Lookup keyed by category code → full row including the IRC /
+   *  Pub citations. Lets the row render "Sec 162 · Pub 535" next to
+   *  the picked category without re-fetching. */
+  catById: Map<
+    string,
+    {
+      label: string;
+      scope: string;
+      schedule_c_line: string | null;
+      irc_section: string | null;
+      irs_pub: string | null;
+      irs_url: string | null;
+    }
+  >;
 };
 
 function prettyAccountType(t: string | null | undefined): string {
@@ -310,11 +466,32 @@ function prettyAccountType(t: string | null | undefined): string {
   }
 }
 
-function TxRow({ tx, importId, companyId, cats, frequentCodes }: TxRowProps) {
+function TxRow({
+  tx,
+  importId,
+  companyId,
+  cats,
+  frequentCodes,
+  catById,
+}: TxRowProps) {
   const isApplied = !!tx.applied_expense_id;
   const selected =
     tx.applied_category_code ?? tx.suggested_category_code ?? "";
   const label = cats.find((c) => c.code === selected)?.label;
+  // Citation strip — show Schedule C line, IRC §, and IRS Pub for
+  // the chosen category. Skipped for transfer-scoped picks (those
+  // aren't deductions). User feedback explicitly asked for "the
+  // relevant IRC."
+  const cat = selected ? catById.get(selected) ?? null : null;
+  const isTransfer = cat?.scope === "transfer";
+  const citationParts: string[] = [];
+  if (cat && !isTransfer) {
+    if (cat.schedule_c_line) citationParts.push(`Sched C ${cat.schedule_c_line}`);
+    if (cat.irc_section) citationParts.push(`IRC §${cat.irc_section}`);
+    if (cat.irs_pub) citationParts.push(cat.irs_pub);
+  }
+  const wasBellaSuggested =
+    !!tx.suggested_category_code && !tx.applied_category_code && !isApplied;
   // The first 1-3 words of the description make a clean default for
   // the rule pattern — vendor names typically lead the line.
   const defaultPattern = (tx.description ?? "")
@@ -336,6 +513,49 @@ function TxRow({ tx, importId, companyId, cats, frequentCodes }: TxRowProps) {
           {formatCents(tx.amount_cents)}
         </div>
       </div>
+
+      {/* Bella detection chip + IRC citation. Shown above the
+          picker so the user reads "what Bella thinks this is +
+          which Schedule C line + which IRC §" before clicking
+          anything. Skipped for transfer-scoped picks (those
+          aren't deductions). */}
+      {selected && cat ? (
+        <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px]">
+          {wasBellaSuggested ? (
+            <span className="inline-flex items-center gap-1 text-gold-800 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5">
+              <span aria-hidden="true">⚡</span>
+              <span>Bella suggested</span>
+            </span>
+          ) : null}
+          {isTransfer ? (
+            <span className="uppercase tracking-[0.18em] text-ink-muted">
+              transfer · not a deduction
+            </span>
+          ) : citationParts.length > 0 ? (
+            <span className="text-ink-soft">
+              {citationParts.map((p, i) => (
+                <span key={p}>
+                  {i > 0 ? " · " : ""}
+                  {p}
+                </span>
+              ))}
+              {cat.irs_url ? (
+                <>
+                  {" · "}
+                  <a
+                    href={cat.irs_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                  >
+                    irs.gov ↗
+                  </a>
+                </>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {isApplied ? (

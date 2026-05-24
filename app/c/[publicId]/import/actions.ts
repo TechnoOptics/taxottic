@@ -592,6 +592,19 @@ export async function bellaAutoApply(formData: FormData) {
       throw new Error(msg);
     },
   });
+  // The action HAS to revalidate or the user clicks "Re-run Bella"
+  // and sees no change — the categorize pass updated
+  // bank_transactions but the page's RSC cache holds the old rows.
+  // Reported as "rerun bella not working" on May 23 2026.
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .maybeSingle();
+  if (company) {
+    revalidatePath(`/c/${company.public_id}/import/${importId}`);
+    revalidatePath(`/c/${company.public_id}/import`);
+  }
 }
 
 /**
