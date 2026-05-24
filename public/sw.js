@@ -173,7 +173,18 @@
 // irs.gov, (5) mobile floating menu now anchors to the header
 // row centerline instead of viewport middle so it lines up with
 // the wordmark.
-const CACHE_VERSION = "v35";
+// v36: credit-card row coloring (user: "if something has a
+// negative sign on it when dealing with a credit card the
+// amount should be green ... a debit acts like a credit and a
+// credit acts like a debit"). Negative-on-credit now renders
+// green with a + sign because that's cash returning to the user.
+// Also: picker filter now includes 'personal' so charity / SALT
+// / volunteer-mileage are tag-able from a credit-card statement,
+// and applyTransactions routes personal-scoped picks via
+// ignored=true (same path as transfer-scoped) so they label the
+// row without inflating Schedule C. Two new categories shipped:
+// sponsorship (IRC §162) and volunteer_mileage (IRC §170(j)).
+const CACHE_VERSION = "v36";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

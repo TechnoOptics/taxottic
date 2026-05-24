@@ -353,27 +353,41 @@ export async function applyTransactions(formData: FormData) {
     return;
   }
 
-  // Identify any transfer-scoped categories among the chosen codes
-  // (currently just credit_card_payment). Rows tagged with these
-  // are inter-account moves — they are NEVER deductions, so we
-  // tag them ignored=true instead of inserting into monthly_expenses.
+  // Identify any non-Schedule-C scoped categories among the chosen
+  // codes. Two scopes never book to monthly_expenses:
+  //   transfer — inter-account moves (credit_card_payment etc.)
+  //   personal — Schedule A items (charity, mortgage interest,
+  //              SALT, volunteer mileage). Surfaced in the picker
+  //              so users can tag personal rows that show up on a
+  //              business credit-card statement, but they don't
+  //              belong on Schedule C.
+  // Both route via ignored=true so the row stays labelled +
+  // categorized but doesn't inflate the business deduction.
   const chosenCodes = Array.from(
     new Set(
       applicable.map((t) => t.applied_category_code).filter(Boolean),
     ),
   ) as string[];
-  let transferCodes = new Set<string>();
+  let nonBusinessCodes = new Set<string>();
   if (chosenCodes.length > 0) {
     const { data: catScopes } = await admin
       .from("deduction_categories")
       .select("code, scope")
       .in("code", chosenCodes);
-    transferCodes = new Set(
+    nonBusinessCodes = new Set(
       (catScopes ?? [])
-        .filter((c) => (c as { scope?: string }).scope === "transfer")
+        .filter(
+          (c) =>
+            (c as { scope?: string }).scope === "transfer" ||
+            (c as { scope?: string }).scope === "personal",
+        )
         .map((c) => (c as { code: string }).code),
     );
   }
+  // Renamed for clarity; existing loop reference still uses
+  // transferCodes — keep an alias so we don't break the rest of
+  // the function in one edit.
+  const transferCodes = nonBusinessCodes;
   const transferIds = applicable
     .filter((t) => transferCodes.has(t.applied_category_code!))
     .map((t) => t.id);

@@ -50,18 +50,18 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
       .order("description"),
     supabase
       .from("deduction_categories")
-      // 'transfer' joins the picker so a user can label inter-account
-      // moves (currently just credit_card_payment). They're sorted to
-      // the bottom by display_order. applyTransactions routes them via
-      // ignored=true instead of inserting an expense, so they never
-      // inflate the deduction.
-      // Also pull irc_section + irs_pub so the TxRow can show the
-      // citation next to each detected category — user feedback:
-      // "give the relevant IRC."
+      // Now includes 'personal' so charity / SALT / mortgage-interest
+      // / volunteer-mileage are tag-able from a credit-card import
+      // (those rows are often mixed in with business charges on the
+      // same card). applyTransactions routes personal AND transfer
+      // picks via ignored=true so they never inflate the Schedule C
+      // deduction — they're labels, not bookings.
+      // Pull irc_section + irs_pub so the TxRow can show the
+      // citation next to each detected category.
       .select(
         "code, label, scope, schedule_c_line, irc_section, irs_pub, irs_url",
       )
-      .in("scope", ["business", "both", "transfer"])
+      .in("scope", ["business", "both", "transfer", "personal"])
       .order("display_order"),
   ]);
 
@@ -361,6 +361,7 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                         cats={catOptions}
                         frequentCodes={frequentCodes}
                         catById={catById}
+                        isCredit={isCredit}
                       />
                     ))}
                   </ul>
@@ -431,6 +432,13 @@ type TxRowProps = {
   companyId: string;
   cats: CategoryOption[];
   frequentCodes: string[];
+  /** Credit-card flag — flips the amount display: on a card, a
+   *  NEGATIVE CSV row is money coming back (refund or balance
+   *  payment from another account). User feedback: "if something
+   *  has a negative sign on it, when dealing with a credit card,
+   *  the amount should be green ... a debit acts like a credit
+   *  and a credit acts like a debit." */
+  isCredit?: boolean;
   /** Lookup keyed by category code → full row including the IRC /
    *  Pub citations. Lets the row render "Sec 162 · Pub 535" next to
    *  the picked category without re-fetching. */
@@ -473,6 +481,7 @@ function TxRow({
   cats,
   frequentCodes,
   catById,
+  isCredit,
 }: TxRowProps) {
   const isApplied = !!tx.applied_expense_id;
   const selected =
@@ -509,9 +518,27 @@ function TxRow({
             {tx.raw_category ? ` - ${tx.raw_category}` : ""}
           </div>
         </div>
-        <div className="text-red-800 tabular-nums font-medium shrink-0">
-          {formatCents(tx.amount_cents)}
-        </div>
+        {/* Amount display, sign-aware for credit cards.
+            Credit-card sign convention is INVERTED vs checking:
+              negative on the CSV = money coming BACK to the user
+              (refund, payment-back from another account) → GREEN +
+              positive on the CSV = real charge, money OUT → RED.
+            Checking/savings keep the conventional red for outflows. */}
+        {(() => {
+          const isMoneyBack = !!isCredit && tx.amount_cents < 0;
+          if (isMoneyBack) {
+            return (
+              <div className="text-emerald-700 tabular-nums font-medium shrink-0">
+                +{formatCents(Math.abs(tx.amount_cents))}
+              </div>
+            );
+          }
+          return (
+            <div className="text-rose-800 tabular-nums font-medium shrink-0">
+              {formatCents(tx.amount_cents)}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Bella detection chip + IRC citation. Shown above the
