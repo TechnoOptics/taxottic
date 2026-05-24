@@ -1083,6 +1083,8 @@ export async function teachBella(formData: FormData) {
   const categoryCode = categoryCodeRaw || null;
   const companyIdRaw = String(formData.get("company_id") ?? "").trim();
   const companyId = companyIdRaw || null;
+  const importIdRaw = String(formData.get("import_id") ?? "").trim();
+  const importId = importIdRaw || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   if (!pattern) throw new Error("Pattern is required");
@@ -1119,6 +1121,66 @@ export async function teachBella(formData: FormData) {
     notes,
   });
 
+  // Retro-apply: pre-tag every OTHER row in the current import that
+  // matches the new rule. User feedback (May 23 2026): "the system
+  // should be intelligent and run ahead and auto set the others
+  // that are from the same merchant and expense type." Without this,
+  // a 100-row statement with 12 Lowe's charges makes the user retype
+  // "Lowe's → Supplies" 12 times. The user still reads each row
+  // (we don't apply expenses to monthly_expenses — that needs the
+  // Apply button), we just stamp applied_category_code + ignored
+  // so the review queue collapses to one decision per merchant.
+  if (importId && companyId) {
+    // Confirm the import belongs to this company so a forged
+    // import_id from another tenant can't be touched.
+    const { data: imp } = await admin
+      .from("bank_imports")
+      .select("id")
+      .eq("id", importId)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    if (imp) {
+      const { data: candidates } = await admin
+        .from("bank_transactions")
+        .select("id, description, applied_category_code, ignored")
+        .eq("import_id", importId)
+        .eq("company_id", companyId)
+        .eq("ignored", false)
+        .is("applied_expense_id", null)
+        .is("applied_income_id", null);
+
+      const matching = (candidates ?? []).filter((t) => {
+        if (t.applied_category_code) return false; // already tagged
+        const haystack = (t.description ?? "").toLowerCase();
+        const needle = pattern.toLowerCase();
+        if (patternType === "exact") return haystack.trim() === needle;
+        if (patternType === "starts_with") return haystack.startsWith(needle);
+        return haystack.includes(needle); // contains
+      });
+
+      if (matching.length > 0) {
+        const ids = matching.map((m) => m.id);
+        const update: Record<string, unknown> = {};
+        if (kind === "expense" || kind === "income") {
+          update.applied_category_code = categoryCode;
+        } else if (kind === "ignore") {
+          update.ignored = true;
+        } else if (kind === "transfer") {
+          // Transfer = labelled but not booked. Mirror the
+          // pre-tag we do for MOBILE PAYMENT - THANK YOU.
+          update.applied_category_code = categoryCode;
+          update.ignored = true;
+        }
+        if (Object.keys(update).length > 0) {
+          await admin
+            .from("bank_transactions")
+            .update(update)
+            .in("id", ids);
+        }
+      }
+    }
+  }
+
   if (companyId) {
     const { data: company } = await admin
       .from("companies")
@@ -1127,6 +1189,9 @@ export async function teachBella(formData: FormData) {
       .single();
     if (company) {
       revalidatePath(`/c/${company.public_id}/import`);
+      if (importId) {
+        revalidatePath(`/c/${company.public_id}/import/${importId}`);
+      }
     }
   }
 }
