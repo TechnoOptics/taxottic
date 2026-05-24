@@ -381,6 +381,11 @@ function TxRow({ tx, importId, companyId, cats, frequentCodes }: TxRowProps) {
           className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs"
         >
           <input type="hidden" name="company_id" value={companyId} />
+          {/* Scope the retro-apply to THIS import. teachBella looks
+              up all other matching rows in the same batch and pre-
+              tags them so the user doesn't have to repeat the
+              training for every duplicate. */}
+          <input type="hidden" name="import_id" value={importId} />
           <label className="grid gap-1">
             <span className="text-ink-muted">Match (case-insensitive)</span>
             <input
