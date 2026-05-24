@@ -184,7 +184,19 @@
 // ignored=true (same path as transfer-scoped) so they label the
 // row without inflating Schedule C. Two new categories shipped:
 // sponsorship (IRC §162) and volunteer_mileage (IRC §170(j)).
-const CACHE_VERSION = "v36";
+// v37: optimistic slide-off on categorize/ignore (user: "Once
+// an item has been allocated or skipped/ignored, please slide
+// it off the list ... so the user feels like they are making
+// progress going down the list"). TxRow extracted to a Client
+// Component that animates out (opacity + translateX + max-height
+// collapse over 350ms) BEFORE the server action fires — the
+// page revalidates the row gone right after the animation
+// completes. Page splits debits into Active (untouched) and
+// Tagged (categorized but not yet booked) piles so the active
+// list visibly shrinks. Tagged pile lives in a collapsed
+// details below in case the user wants to review picks before
+// hitting Apply.
+const CACHE_VERSION = "v37";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
