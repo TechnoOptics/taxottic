@@ -14,6 +14,10 @@ import {
 } from "../actions";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
+import {
+  CategoryCombobox,
+  type CategoryOption,
+} from "@/components/CategoryCombobox";
 
 type Params = Promise<{ publicId: string; importId: string }>;
 
@@ -51,14 +55,50 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
       // the bottom by display_order. applyTransactions routes them via
       // ignored=true instead of inserting an expense, so they never
       // inflate the deduction.
-      .select("code, label, scope")
+      .select("code, label, scope, schedule_c_line")
       .in("scope", ["business", "both", "transfer"])
       .order("display_order"),
   ]);
 
   const cats =
-    (categories as { code: string; label: string; scope: string }[] | null) ??
-    [];
+    (categories as {
+      code: string;
+      label: string;
+      scope: string;
+      schedule_c_line: string | null;
+    }[] | null) ?? [];
+  // Build the option list once with schedule_c_line surfaced as the
+  // small hint label on the right edge of each combobox row.
+  const catOptions: CategoryOption[] = cats.map((c) => ({
+    code: c.code,
+    label: c.label,
+    hint: c.schedule_c_line,
+    scope: c.scope,
+  }));
+
+  // Most-used category codes for THIS company — used to bubble
+  // already-frequent picks to the top of the searchable list (and
+  // gold-star them when the query is empty). Cheap query: a single
+  // GROUP BY + ORDER BY count desc + LIMIT 8. Limit 6 months back so
+  // an old habit doesn't permanently anchor the order.
+  // eslint-disable-next-line react-hooks/purity -- server component, evaluated per-request
+  const sixMoAgo = new Date(Date.now() - 180 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const { data: freqRows } = await supabase
+    .from("monthly_expenses")
+    .select("category_code")
+    .eq("company_id", company.id)
+    .gte("created_at", sixMoAgo);
+  const freqCounts = new Map<string, number>();
+  for (const r of (freqRows ?? []) as { category_code: string | null }[]) {
+    if (!r.category_code) continue;
+    freqCounts.set(r.category_code, (freqCounts.get(r.category_code) ?? 0) + 1);
+  }
+  const frequentCodes = Array.from(freqCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([code]) => code);
 
   // For credit-card imports every non-ignored, non-zero row is an
   // expense. For other accounts we keep the conventional debit (out)
@@ -180,7 +220,8 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                   tx={t}
                   importId={importId}
                   companyId={company.id}
-                  cats={cats}
+                  cats={catOptions}
+                  frequentCodes={frequentCodes}
                 />
               ))
             )}
@@ -246,7 +287,8 @@ type TxRowProps = {
   };
   importId: string;
   companyId: string;
-  cats: { code: string; label: string }[];
+  cats: CategoryOption[];
+  frequentCodes: string[];
 };
 
 function prettyAccountType(t: string | null | undefined): string {
@@ -268,7 +310,7 @@ function prettyAccountType(t: string | null | undefined): string {
   }
 }
 
-function TxRow({ tx, importId, companyId, cats }: TxRowProps) {
+function TxRow({ tx, importId, companyId, cats, frequentCodes }: TxRowProps) {
   const isApplied = !!tx.applied_expense_id;
   const selected =
     tx.applied_category_code ?? tx.suggested_category_code ?? "";
@@ -305,18 +347,16 @@ function TxRow({ tx, importId, companyId, cats }: TxRowProps) {
             <form action={setTxCategory} className="flex-1 min-w-0">
               <input type="hidden" name="id" value={tx.id} />
               <input type="hidden" name="import_id" value={importId} />
-              <select
+              {/* Searchable combobox — type to filter the full list,
+                  or open and scroll. Auto-submits the form when a
+                  pick is made, matching the prior native-select UX. */}
+              <CategoryCombobox
                 name="category_code"
                 defaultValue={selected}
-                className="input"
-              >
-                <option value="">Skip / not deductible</option>
-                {cats.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                options={cats}
+                frequentCodes={frequentCodes}
+                placeholder="Pick a category…"
+              />
               <button className="hidden">Save</button>
             </form>
             <form action={ignoreTx}>
@@ -370,18 +410,18 @@ function TxRow({ tx, importId, companyId, cats }: TxRowProps) {
           </label>
           <label className="grid gap-1">
             <span className="text-ink-muted">Category</span>
-            <select
+            {/* Same searchable combobox in the Teach Bella form. We
+                don't auto-submit here because the form has more
+                fields the user still needs to set. */}
+            <CategoryCombobox
               name="category_code"
               defaultValue={selected}
-              className="input"
-            >
-              <option value="">— pick one —</option>
-              {cats.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+              options={cats}
+              frequentCodes={frequentCodes}
+              placeholder="— pick one —"
+              autoSubmit={false}
+              emptyLabel="— pick one —"
+            />
           </label>
           <div className="sm:col-span-2 flex items-center gap-3">
             <button className="btn-ghost text-xs">Save rule</button>
