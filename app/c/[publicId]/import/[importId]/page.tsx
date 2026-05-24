@@ -14,10 +14,8 @@ import {
 } from "../actions";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
-import {
-  CategoryCombobox,
-  type CategoryOption,
-} from "@/components/CategoryCombobox";
+import { type CategoryOption } from "@/components/CategoryCombobox";
+import { TxRow } from "@/components/import/TxRow";
 
 type Params = Promise<{ publicId: string; importId: string }>;
 
@@ -170,14 +168,31 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
     ).length,
   };
 
-  // Group debits by calendar month (posted_at "YYYY-MM-DD" → "YYYY-MM").
-  // Keeps the review legible on multi-month statements (Amex, year-end
-  // dumps) which the user reported as "please group imported csv
-  // into months." Rows without a posted_at fall into "No date" at
-  // the end of the list so they're never silently dropped.
+  // Split debits into "active" (untouched, awaiting user decision)
+  // and "tagged" (already categorized but not yet booked into
+  // monthly_expenses). The slide-off animation in TxRow moves a row
+  // from the active pile into the tagged pile after a categorize, OR
+  // out of the rendered list entirely after an Ignore. User
+  // feedback: "Once an item has been allocated or skipped/ignored,
+  // please slide it off the list ... so the user feels like they
+  // are making progress going down the list."
   type Debit = (typeof debits)[number];
-  const monthMap = new Map<string, Debit[]>();
+  const activeDebits: Debit[] = [];
+  const taggedDebits: Debit[] = [];
   for (const t of debits) {
+    if (t.applied_expense_id || t.applied_category_code) {
+      taggedDebits.push(t);
+    } else {
+      activeDebits.push(t);
+    }
+  }
+
+  // Group ACTIVE debits by calendar month (posted_at "YYYY-MM-DD" →
+  // "YYYY-MM"). Keeps the review legible on multi-month statements.
+  // Rows without a posted_at fall into "No date" at the end so
+  // they're never silently dropped.
+  const monthMap = new Map<string, Debit[]>();
+  for (const t of activeDebits) {
     const key = t.posted_at ? t.posted_at.slice(0, 7) : "unknown";
     const arr = monthMap.get(key) ?? [];
     arr.push(t);
@@ -332,12 +347,33 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
         </section>
 
         <section className="mt-6 card p-6">
-          <h2 className="display text-xl text-forest-900">
-            Expense candidates ({debits.length})
-          </h2>
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <h2 className="display text-xl text-forest-900">
+              {activeDebits.length === 0
+                ? debits.length === 0
+                  ? "No expense candidates"
+                  : "All caught up — every row sorted"
+                : `Expense candidates (${activeDebits.length})`}
+            </h2>
+            {/* Sneak peek of progress: shrinks as the user works. */}
+            {debits.length > 0 ? (
+              <span className="text-[11px] text-ink-muted">
+                {debits.length - activeDebits.length} of {debits.length}{" "}
+                sorted
+              </span>
+            ) : null}
+          </div>
           {debits.length === 0 ? (
             <p className="mt-4 text-sm text-ink-muted">
               No debit transactions in this file.
+            </p>
+          ) : activeDebits.length === 0 ? (
+            <p className="mt-4 text-sm text-ink-soft">
+              Every row has been categorized or skipped. Click{" "}
+              <span className="font-medium text-forest-900">
+                Apply manually selected
+              </span>{" "}
+              above to book the tagged ones into your monthly expenses.
             </p>
           ) : (
             <div className="mt-4 grid gap-6">
@@ -362,6 +398,9 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                         frequentCodes={frequentCodes}
                         catById={catById}
                         isCredit={isCredit}
+                        setTxCategory={setTxCategory}
+                        ignoreTx={ignoreTx}
+                        teachBella={teachBella}
                       />
                     ))}
                   </ul>
@@ -370,6 +409,49 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
             </div>
           )}
         </section>
+
+        {/* Tagged-but-not-applied pile — collapsed by default. Users
+            picked a category here, the slide-off pulled the row out
+            of the Active list, and now it lives here until they hit
+            Apply. Open the details to review/change picks before
+            committing. */}
+        {taggedDebits.length > 0 ? (
+          <section className="mt-6 card p-5">
+            <details>
+              <summary className="cursor-pointer select-none flex items-baseline justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                    Sorted, awaiting Apply
+                  </div>
+                  <div className="display text-base text-forest-900 mt-1">
+                    {taggedDebits.length}{" "}
+                    {taggedDebits.length === 1 ? "row" : "rows"} tagged
+                  </div>
+                </div>
+                <span className="text-xs text-ink-muted">
+                  Click to review / change picks
+                </span>
+              </summary>
+              <ul className="mt-4 grid gap-2">
+                {taggedDebits.map((t) => (
+                  <TxRow
+                    key={t.id}
+                    tx={t}
+                    importId={importId}
+                    companyId={company.id}
+                    cats={catOptions}
+                    frequentCodes={frequentCodes}
+                    catById={catById}
+                    isCredit={isCredit}
+                    setTxCategory={setTxCategory}
+                    ignoreTx={ignoreTx}
+                    teachBella={teachBella}
+                  />
+                ))}
+              </ul>
+            </details>
+          </section>
+        ) : null}
 
         {credits.length > 0 ? (
           <section className="mt-6 card p-6">
@@ -416,45 +498,6 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
   );
 }
 
-type TxRowProps = {
-  tx: {
-    id: string;
-    description: string;
-    amount_cents: number;
-    posted_at: string | null;
-    raw_category: string | null;
-    suggested_category_code: string | null;
-    applied_category_code: string | null;
-    applied_expense_id: string | null;
-    ignored: boolean;
-  };
-  importId: string;
-  companyId: string;
-  cats: CategoryOption[];
-  frequentCodes: string[];
-  /** Credit-card flag — flips the amount display: on a card, a
-   *  NEGATIVE CSV row is money coming back (refund or balance
-   *  payment from another account). User feedback: "if something
-   *  has a negative sign on it, when dealing with a credit card,
-   *  the amount should be green ... a debit acts like a credit
-   *  and a credit acts like a debit." */
-  isCredit?: boolean;
-  /** Lookup keyed by category code → full row including the IRC /
-   *  Pub citations. Lets the row render "Sec 162 · Pub 535" next to
-   *  the picked category without re-fetching. */
-  catById: Map<
-    string,
-    {
-      label: string;
-      scope: string;
-      schedule_c_line: string | null;
-      irc_section: string | null;
-      irs_pub: string | null;
-      irs_url: string | null;
-    }
-  >;
-};
-
 function prettyAccountType(t: string | null | undefined): string {
   switch (t) {
     case "business_checking":
@@ -474,216 +517,3 @@ function prettyAccountType(t: string | null | undefined): string {
   }
 }
 
-function TxRow({
-  tx,
-  importId,
-  companyId,
-  cats,
-  frequentCodes,
-  catById,
-  isCredit,
-}: TxRowProps) {
-  const isApplied = !!tx.applied_expense_id;
-  const selected =
-    tx.applied_category_code ?? tx.suggested_category_code ?? "";
-  const label = cats.find((c) => c.code === selected)?.label;
-  // Citation strip — show Schedule C line, IRC §, and IRS Pub for
-  // the chosen category. Skipped for transfer-scoped picks (those
-  // aren't deductions). User feedback explicitly asked for "the
-  // relevant IRC."
-  const cat = selected ? catById.get(selected) ?? null : null;
-  const isTransfer = cat?.scope === "transfer";
-  const citationParts: string[] = [];
-  if (cat && !isTransfer) {
-    if (cat.schedule_c_line) citationParts.push(`Sched C ${cat.schedule_c_line}`);
-    if (cat.irc_section) citationParts.push(`IRC §${cat.irc_section}`);
-    if (cat.irs_pub) citationParts.push(cat.irs_pub);
-  }
-  const wasBellaSuggested =
-    !!tx.suggested_category_code && !tx.applied_category_code && !isApplied;
-  // The first 1-3 words of the description make a clean default for
-  // the rule pattern — vendor names typically lead the line.
-  const defaultPattern = (tx.description ?? "")
-    .split(/\s+/)
-    .slice(0, 3)
-    .join(" ")
-    .slice(0, 80);
-  return (
-    <li className="rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm">
-      <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap">
-        <div className="min-w-0 flex-1">
-          <div className="text-forest-900 truncate">{tx.description}</div>
-          <div className="text-xs text-ink-muted mt-0.5">
-            {tx.posted_at ?? "-"}
-            {tx.raw_category ? ` - ${tx.raw_category}` : ""}
-          </div>
-        </div>
-        {/* Amount display, sign-aware for credit cards.
-            Credit-card sign convention is INVERTED vs checking:
-              negative on the CSV = money coming BACK to the user
-              (refund, payment-back from another account) → GREEN +
-              positive on the CSV = real charge, money OUT → RED.
-            Checking/savings keep the conventional red for outflows. */}
-        {(() => {
-          const isMoneyBack = !!isCredit && tx.amount_cents < 0;
-          if (isMoneyBack) {
-            return (
-              <div className="text-emerald-700 tabular-nums font-medium shrink-0">
-                +{formatCents(Math.abs(tx.amount_cents))}
-              </div>
-            );
-          }
-          return (
-            <div className="text-rose-800 tabular-nums font-medium shrink-0">
-              {formatCents(tx.amount_cents)}
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* Bella detection chip + IRC citation. Shown above the
-          picker so the user reads "what Bella thinks this is +
-          which Schedule C line + which IRC §" before clicking
-          anything. Skipped for transfer-scoped picks (those
-          aren't deductions). */}
-      {selected && cat ? (
-        <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px]">
-          {wasBellaSuggested ? (
-            <span className="inline-flex items-center gap-1 text-gold-800 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5">
-              <span aria-hidden="true">⚡</span>
-              <span>Bella suggested</span>
-            </span>
-          ) : null}
-          {isTransfer ? (
-            <span className="uppercase tracking-[0.18em] text-ink-muted">
-              transfer · not a deduction
-            </span>
-          ) : citationParts.length > 0 ? (
-            <span className="text-ink-soft">
-              {citationParts.map((p, i) => (
-                <span key={p}>
-                  {i > 0 ? " · " : ""}
-                  {p}
-                </span>
-              ))}
-              {cat.irs_url ? (
-                <>
-                  {" · "}
-                  <a
-                    href={cat.irs_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
-                  >
-                    irs.gov ↗
-                  </a>
-                </>
-              ) : null}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {isApplied ? (
-          <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
-            Applied as {label}
-          </span>
-        ) : (
-          <>
-            <form action={setTxCategory} className="flex-1 min-w-0">
-              <input type="hidden" name="id" value={tx.id} />
-              <input type="hidden" name="import_id" value={importId} />
-              {/* Searchable combobox — type to filter the full list,
-                  or open and scroll. Auto-submits the form when a
-                  pick is made, matching the prior native-select UX. */}
-              <CategoryCombobox
-                name="category_code"
-                defaultValue={selected}
-                options={cats}
-                frequentCodes={frequentCodes}
-                placeholder="Pick a category…"
-              />
-              <button className="hidden">Save</button>
-            </form>
-            <form action={ignoreTx}>
-              <input type="hidden" name="id" value={tx.id} />
-              <input type="hidden" name="import_id" value={importId} />
-              <button className="text-xs text-ink-muted hover:text-red-700 px-2 py-2">
-                Ignore
-              </button>
-            </form>
-          </>
-        )}
-      </div>
-
-      {/* Teach Bella — collapsed by default, opens an inline form so
-          the user can save a rule that fires on every future import. */}
-      <details className="mt-2">
-        <summary className="text-[11px] text-forest-700 hover:text-forest-900 cursor-pointer select-none inline-flex items-center gap-1">
-          <span aria-hidden="true">✦</span> Teach Bella this vendor
-        </summary>
-        <form
-          action={teachBella}
-          className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs"
-        >
-          <input type="hidden" name="company_id" value={companyId} />
-          {/* Scope the retro-apply to THIS import. teachBella looks
-              up all other matching rows in the same batch and pre-
-              tags them so the user doesn't have to repeat the
-              training for every duplicate. */}
-          <input type="hidden" name="import_id" value={importId} />
-          <label className="grid gap-1">
-            <span className="text-ink-muted">Match (case-insensitive)</span>
-            <input
-              name="pattern"
-              type="text"
-              defaultValue={defaultPattern}
-              className="input"
-              required
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-ink-muted">Match type</span>
-            <select name="pattern_type" defaultValue="contains" className="input">
-              <option value="contains">Contains</option>
-              <option value="starts_with">Starts with</option>
-              <option value="exact">Exact</option>
-            </select>
-          </label>
-          <label className="grid gap-1">
-            <span className="text-ink-muted">Treat as</span>
-            <select name="kind" defaultValue="expense" className="input">
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-              <option value="ignore">Ignore (not deductible)</option>
-              <option value="transfer">Transfer (between accounts)</option>
-            </select>
-          </label>
-          <label className="grid gap-1">
-            <span className="text-ink-muted">Category</span>
-            {/* Same searchable combobox in the Teach Bella form. We
-                don't auto-submit here because the form has more
-                fields the user still needs to set. */}
-            <CategoryCombobox
-              name="category_code"
-              defaultValue={selected}
-              options={cats}
-              frequentCodes={frequentCodes}
-              placeholder="— pick one —"
-              autoSubmit={false}
-              emptyLabel="— pick one —"
-            />
-          </label>
-          <div className="sm:col-span-2 flex items-center gap-3">
-            <button className="btn-ghost text-xs">Save rule</button>
-            <span className="text-[11px] text-ink-muted">
-              Applies to future imports for this company. Re-teaching the same
-              pattern updates the existing rule.
-            </span>
-          </div>
-        </form>
-      </details>
-    </li>
-  );
-}
