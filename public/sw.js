@@ -160,7 +160,20 @@
 // real estate. Pure layout — no JS or data change — but the
 // markup is in every consumer page, so v33 clients need to drop
 // their cached HTML on next nav.
-const CACHE_VERSION = "v34";
+// v35: bunch of import-review fixes after the user reported (1)
+// re-run Bella didn't refresh the page (missing revalidatePath),
+// (2) the app crashed with "page could not load" — no error
+// boundary, so added app/error.tsx so future throws surface
+// inline instead of dumping Next's default crash page, (3)
+// please group imported csv into months — debits now group by
+// posted_at month with subtotals per month, (4) Bella should
+// show what was detected and the relevant IRC — new "Bella's
+// pass" summary card at the top + per-row citation strip
+// showing Sched C line, IRC §, IRS Pub, and a link out to
+// irs.gov, (5) mobile floating menu now anchors to the header
+// row centerline instead of viewport middle so it lines up with
+// the wordmark.
+const CACHE_VERSION = "v35";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

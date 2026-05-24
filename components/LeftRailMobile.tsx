@@ -33,6 +33,7 @@ export function LeftRailMobile() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: createPortal needs document, which only exists post-mount
     setMounted(true);
   }, []);
 
@@ -122,17 +123,23 @@ export function LeftRailMobile() {
         onClick={() => setOpen(true)}
         aria-label="Open menu"
         aria-expanded={open}
-        // Floating tab on the middle-left edge. Half-pill shape that
-        // hangs off the screen edge so the user sees "there's
-        // something to grab here" but it doesn't crowd the layout.
+        // Floating tab anchored to the HEADER ROW, vertically centered
+        // within the brand strip so it sits in line with the TAXOTTIC
+        // wordmark. The middle-left position (pre-May 23 2026) looked
+        // disconnected from the header on phone-sized viewports. New
+        // position uses calc(safe-top + header-half) so a notch /
+        // dynamic island still gets respected.
         // `lg:hidden` keeps it out of the way when the desktop rail
         // is showing. z-50 sits above the header (z-30) but below
         // the sheet (z-60) when open.
+        style={{
+          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + (var(--app-header-h, 3.25rem) / 2))",
+        }}
         className="
-          lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-50
-          h-16 w-6 rounded-r-2xl
+          lg:hidden fixed left-0 -translate-y-1/2 z-50
+          h-10 w-6 rounded-r-2xl
           bg-forest-900 text-cream
-          shadow-[0_8px_24px_rgba(0,0,0,0.25)]
+          shadow-[0_4px_16px_rgba(0,0,0,0.25)]
           flex items-center justify-center
           active:bg-forest-800 transition-colors
         "
