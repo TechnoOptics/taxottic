@@ -20,6 +20,7 @@ import {
   type RuleKind,
   type RulePatternType,
 } from "@/lib/csv/categorization-rules";
+import { findRefundPairs, type NettableTx } from "@/lib/csv/net-refunds";
 
 /**
  * Heuristic: looks like a credit-card payment from another account, not
@@ -986,6 +987,33 @@ async function runBellaCategorize(args: {
       status: totalApplied > 0 ? "applied" : "reviewing",
     })
     .eq("id", importId);
+
+  // Refund / charge auto-netting. User feedback: "if a user bought
+  // 10 items and returned 2, bella would see that ... only apply the
+  // difference or cancel them out completely and mark it as refunded."
+  // v1 nets EXACT amount pairs from the same merchant within a 120-
+  // day window. Partial returns stay in the candidates list (item-
+  // level data isn't on the bank statement). Touches only rows that
+  // are still untouched — anything the user already tagged stays
+  // alone.
+  const { data: pairTxs } = await admin
+    .from("bank_transactions")
+    .select(
+      "id, description, amount_cents, posted_at, applied_category_code, applied_expense_id, applied_income_id, ignored",
+    )
+    .eq("import_id", importId)
+    .eq("company_id", companyId);
+  const pairs = findRefundPairs((pairTxs ?? []) as NettableTx[]);
+  if (pairs.length > 0) {
+    const allIds = pairs.flatMap((p) => [p.chargeId, p.refundId]);
+    await admin
+      .from("bank_transactions")
+      .update({
+        ignored: true,
+        applied_category_code: "refunded",
+      })
+      .in("id", allIds);
+  }
 
   // Re-evaluate badges so any newly-earned medals show up on the
   // user's next dashboard hit. Uses the cookie-auth supabase client

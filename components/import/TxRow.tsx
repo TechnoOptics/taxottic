@@ -97,6 +97,11 @@ export function TxRow({
   const label = cats.find((c) => c.code === selected)?.label;
   const cat = selected ? catById.get(selected) ?? null : null;
   const isTransfer = cat?.scope === "transfer";
+  // 'refunded' category = an auto-netted pair found by the
+  // findRefundPairs pass. We render a different prominent badge for
+  // these so the user can see "this isn't an expense — it pairs
+  // with another row to net zero."
+  const isRefundPair = tx.applied_category_code === "refunded";
   const citationParts: string[] = [];
   if (cat && !isTransfer) {
     if (cat.schedule_c_line)
@@ -131,12 +136,21 @@ export function TxRow({
     <li
       data-leaving={phase === "leaving"}
       className={
-        "rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm " +
-        // Transition: opacity + slide-right + max-height collapse so
-        // the row both fades AND the list visually shrinks. The
-        // overflow:hidden on data-leaving=true is critical or the
-        // collapsing max-height would show clipping artefacts mid-
-        // animation.
+        // Base shell + responsive grid.
+        "relative rounded-lg border bg-white/70 px-4 py-3 text-sm " +
+        "min-w-0 " + // critical: lets flex children truncate cleanly across browsers (Opera/Safari were overflowing)
+        // Left accent bar — bumps Bella-suggested rows into the
+        // user's attention. Implemented as a 3px-thick left border
+        // that color-swaps based on row state. The user reported
+        // "Ask Bella suggested looks on the items, it is not
+        // visible" — making the entire LEFT edge gold pulls the
+        // eye in a way a 11px chip never can.
+        (wasBellaSuggested
+          ? "border-l-[3px] border-l-gold-500 border-y-forest-100 border-r-forest-100 shadow-[0_0_0_1px_var(--color-gold-200)] "
+          : isRefundPair
+            ? "border-l-[3px] border-l-emerald-500 border-y-forest-100 border-r-forest-100 "
+            : "border-forest-100 ") +
+        // Slide-off transition (categorize/ignore animation).
         "transition-all duration-[350ms] ease-out " +
         "data-[leaving=true]:opacity-0 " +
         "data-[leaving=true]:translate-x-12 " +
@@ -146,9 +160,16 @@ export function TxRow({
         "data-[leaving=true]:overflow-hidden"
       }
     >
-      <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap">
-        <div className="min-w-0 flex-1">
-          <div className="text-forest-900 truncate">{tx.description}</div>
+      <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap min-w-0">
+        <div className="min-w-0 flex-1 max-w-full overflow-hidden">
+          {/* break-words lets the description wrap on a hyphen / mid-
+              token when the row is narrow (Opera in particular was
+              clipping with no wrap on the truncate above). On wider
+              viewports the row stays single-line because the parent
+              is flex-nowrap. */}
+          <div className="text-forest-900 break-words sm:truncate">
+            {tx.description}
+          </div>
           <div className="text-xs text-ink-muted mt-0.5">
             {tx.posted_at ?? "-"}
             {tx.raw_category ? ` - ${tx.raw_category}` : ""}
@@ -172,14 +193,25 @@ export function TxRow({
       </div>
 
       {selected && cat ? (
-        <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px]">
+        <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
           {wasBellaSuggested ? (
-            <span className="inline-flex items-center gap-1 text-gold-800 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5">
-              <span aria-hidden="true">⚡</span>
-              <span>Bella suggested</span>
+            // Bigger, higher-contrast chip. Was 11px / gold-50 bg /
+            // gold-200 border (essentially gold-on-cream, very low
+            // contrast — user reported "not visible"). Now: white
+            // text on saturated gold-600 background, with a small
+            // ✦ icon + bold label, so the chip is visually the
+            // loudest element in the row.
+            <span className="inline-flex items-center gap-1.5 text-white bg-gold-600 rounded-full px-2.5 py-1 font-semibold shadow-sm">
+              <span aria-hidden="true">✦</span>
+              <span>Bella suggests: {label}</span>
             </span>
           ) : null}
-          {isTransfer ? (
+          {isRefundPair ? (
+            <span className="inline-flex items-center gap-1.5 text-white bg-emerald-600 rounded-full px-2.5 py-1 font-semibold shadow-sm">
+              <span aria-hidden="true">↺</span>
+              <span>Netted refund · paired with charge</span>
+            </span>
+          ) : isTransfer ? (
             <span className="uppercase tracking-[0.18em] text-ink-muted">
               transfer · not a deduction
             </span>
