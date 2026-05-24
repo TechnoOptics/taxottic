@@ -196,7 +196,21 @@
 // list visibly shrinks. Tagged pile lives in a collapsed
 // details below in case the user wants to review picks before
 // hitting Apply.
-const CACHE_VERSION = "v37";
+// v38: auto-net refund/charge pairs (user: "if a user bought 10
+// items and returned 2, bella would see that and based on the
+// timeline, merchant id and number, only apply the difference or
+// cancel them out completely and mark it as refunded"). Exact-
+// amount + first-3-tokens merchant match + 120-day window. Both
+// sides marked ignored + applied_category_code='refunded'. New
+// 'refunded' transfer-scoped category drives a distinct emerald
+// "↺ Netted refund" badge in TxRow. Also: louder "Bella
+// suggests: <label>" chip on white-on-gold600 (was nearly
+// invisible at gold-800-on-gold-50). Left accent bar (3px gold
+// or emerald) on Bella-suggested / refund-netted rows so they
+// pop in the active list. Defensive layout: row now wraps
+// gracefully on narrow Opera viewports (break-words on mobile,
+// truncate on sm+). v37 clients flush their HTML cache.
+const CACHE_VERSION = "v38";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
