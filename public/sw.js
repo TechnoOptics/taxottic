@@ -144,7 +144,13 @@
 // consumes to skip geocode entirely. New HIDDEN INPUTS need the
 // fresh HTML to be wired up, so v31 clients have to drop their
 // cached /mileage/places HTML — that's the reason for this bump.
-const CACHE_VERSION = "v32";
+// v33: import review page — 12 new Schedule C categories (state
+// & gov fees, COGS, postage/shipping, phone/internet,
+// parking/tolls, merchant fees, dues/subs, equipment purchase,
+// business gifts, bad debts, pension, bookkeeping) + searchable
+// CategoryCombobox replacing the plain <select>. Markup change
+// on the review page so v32-cached HTML needs to drop.
+const CACHE_VERSION = "v33";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
