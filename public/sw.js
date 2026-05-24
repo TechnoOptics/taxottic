@@ -150,7 +150,17 @@
 // business gifts, bad debts, pension, bookkeeping) + searchable
 // CategoryCombobox replacing the plain <select>. Markup change
 // on the review page so v32-cached HTML needs to drop.
-const CACHE_VERSION = "v33";
+// v34: desktop scaling pass after the user reported "everything
+// is so small" on a wide monitor. AppHeader height bumps to h-14
+// on lg and h-16 on xl; max-w-6xl bumps to max-w-7xl on xl and
+// uncapped on 2xl. LeftRail width bumps w-56 → xl:w-60 → 2xl:w-64
+// with the header's lg:pl-60 / xl:pl-64 / 2xl:pl-72 padding
+// mirror. Page containers across consumer surfaces step
+// progressively wider on xl + 2xl so a 1920px+ monitor uses the
+// real estate. Pure layout — no JS or data change — but the
+// markup is in every consumer page, so v33 clients need to drop
+// their cached HTML on next nav.
+const CACHE_VERSION = "v34";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

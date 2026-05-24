@@ -169,7 +169,7 @@ export default async function ConversationPage({
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+      <section className="max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
           {company.public_id} <span className="text-gold-700">·</span> Team chat
         </div>

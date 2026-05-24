@@ -148,7 +148,19 @@ export async function AppHeader({
             is hidden (LeftRailMobile is a floating tab) so pl-0
             keeps the header content full-width with the wordmark at
             the left edge as before. */}
-        <div className="app-header-row max-w-6xl mx-auto px-4 sm:px-6 lg:pl-60 h-[3.25rem] flex items-center gap-3 relative">
+        {/* Header content row scales with the viewport.
+            Width:     max-w-6xl (1152px) on small/medium,
+                       max-w-7xl (1280px) on xl, no cap on 2xl so a
+                       27" monitor uses the whole viewport instead
+                       of stranding 600px of empty side margin.
+            Height:    h-[3.25rem] (52px) on phone — touch ergonomics
+                       are fine there; bumps to h-14 (56px) on lg
+                       and h-16 (64px) on xl so the brand strip
+                       reads at a desktop scale.
+            Left pad:  lg:pl-60 / xl:pl-64 / 2xl:pl-72 matches the
+                       LeftRail's width steps so the wordmark stays
+                       clear of the rail at every breakpoint. */}
+        <div className="app-header-row max-w-6xl xl:max-w-7xl 2xl:max-w-none mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 h-[3.25rem] lg:h-14 xl:h-16 flex items-center gap-3 relative">
           {/* Consumer surface only: hamburger that opens the same
               left rail in a sheet on < lg widths. Admin / HQ host
               still renders only the wordmark + UserMenu pair. */}
@@ -188,11 +200,17 @@ export async function AppHeader({
           mobile second-row search that needs extra spacer height
           (that mismatch was the May 2026 "header overlaps body"
           report). */}
+      {/* Spacer must match the header's actual rendered height at
+          each breakpoint or content slips under the fixed header.
+          The header is h-[3.25rem] on small, lg:h-14 (56px), and
+          xl:h-16 (64px). The CSS var --app-header-h is set globally
+          via a small media-query block in globals.css so we don't
+          have to duplicate the breakpoint math in every consumer. */}
       <div
         aria-hidden="true"
         style={{
           height:
-            "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 3.25rem)",
+            "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem))",
         }}
       />
       {/* Desktop left rail. Hidden on `< lg` widths (LeftRailMobile

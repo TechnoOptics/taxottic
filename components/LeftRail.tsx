@@ -179,6 +179,7 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
           for (const k of DEFAULT_ORDER) {
             if (!known.includes(k)) known.push(k);
           }
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: localStorage isn't available during SSR so this MUST be a post-mount effect
           setOrder(known);
         }
       }
@@ -246,8 +247,18 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
         // room next to a max-w-6xl centered content column, so
         // staying open costs nothing and removes a click.
         // Position: fixed keeps it pinned without affecting layout.
+        // Rail width steps with viewport:
+        //   lg:  w-56 (224px) — same as before, plenty for the 16-char
+        //                       longest label "Billing & plan"
+        //   xl:  w-60 (240px) — slightly more generous on 1280px+
+        //   2xl: w-64 (256px) — proportional to the 1920px+ desktops
+        //                       that triggered the "everything is so
+        //                       small" feedback
+        // AppHeader's lg:pl-60 / xl:pl-64 / 2xl:pl-72 padding mirrors
+        // these steps so the wordmark stays clear of the rail at every
+        // breakpoint.
         "card card-opaque !fixed left-2 z-40 !rounded-2xl !p-2 " +
-        "hidden lg:flex flex-col w-56"
+        "hidden lg:flex flex-col w-56 xl:w-60 2xl:w-64"
       : // Sheet mode (mobile drawer). w-56 (224px) matches the
         // desktop rail width and fits every menu label
         // ("Billing & plan" is the longest at ~14 chars). The
