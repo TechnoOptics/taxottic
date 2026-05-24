@@ -58,7 +58,7 @@ export default async function BanksPage({
     return (
       <main id="main" className="min-h-screen">
         <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-        <section className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+        <section className="max-w-3xl xl:max-w-5xl 2xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 py-10">
           <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
             {company.public_id} <span className="text-gold-700">·</span> Banks
           </div>
@@ -172,7 +172,7 @@ export default async function BanksPage({
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+      <section className="max-w-4xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 py-10">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
           {company.public_id} <span className="text-gold-700">·</span> Banks
         </div>
