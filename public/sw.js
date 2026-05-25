@@ -210,7 +210,16 @@
 // pop in the active list. Defensive layout: row now wraps
 // gracefully on narrow Opera viewports (break-words on mobile,
 // truncate on sm+). v37 clients flush their HTML cache.
-const CACHE_VERSION = "v38";
+// v39: real desktop layout fix. The v34 pass added rail-clearing
+// pl-60/64/72 to the AppHeader but I forgot to add the same
+// padding to the PAGE SECTIONS — so on lg+ the content was
+// centered in the full viewport instead of in the post-rail
+// viewport, leaving a giant empty gap between the rail and the
+// H1. Fixed: every consumer page section now matches the header
+// padding pattern. Pure CSS — but every consumer page is in the
+// markup so v38 clients must drop their cached HTML for the new
+// classes to take effect.
+const CACHE_VERSION = "v39";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
