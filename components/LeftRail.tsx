@@ -5,135 +5,61 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 /**
- * Fixed left rail with the consumer-app navigation items.
+ * Fixed left rail with a company-aware navigation tree.
  *
- * Surfaces what used to live inside the top-right user-menu dropdown
- * as a persistent rounded panel anchored to the left edge of the
- * viewport. On lg+ screens the rail is always visible; on smaller
- * screens it's hidden and the AppHeader's hamburger opens it as a
- * sheet (rendered with the same component, mode="sheet").
+ * Information architecture (May 25 2026 restructure):
  *
- * Layout strategy: position: fixed; left: 8px. The rail floats in
- * the natural side margin on standard desktop widths (max-w-Xxl
- * content is centered, leaving ~200px+ on either side at 1280px+),
- * so existing page layouts don't need any new padding. The rail is
- * 64 px wide collapsed → expands to 224 px on hover (showing labels)
- * and stays expanded while a reorder mode is active.
+ *   Dashboard                         ← top-level
+ *   Companies ▾                       ← collapsible switcher
+ *     • Company A
+ *     • Company B
+ *     + New company
+ *   ──────────────────                ← separator (only when a company is active)
+ *   [COMPANY NAME]                    ← active company header
+ *   Forecast                          ← per-company surface
+ *   Income
+ *   Expenses
+ *   Mileage
+ *   Import
+ *   Deductions
+ *   Chat
+ *   Settings                          ← (was "Setup")
  *
- * Reorder: the user can click "Reorder" to enter edit mode, then
- * tap the up/down arrows on any item to nudge it. We picked simple
- * arrow controls instead of HTML5 drag-and-drop because DnD breaks
- * on touch devices and the rail has to work on the phone. Order
- * persists to localStorage under taxottic.nav_order so it survives
- * reload without a DB round-trip.
+ * Previously the rail mixed user-level surfaces (Tax profile, Goals,
+ * Reminders, Billing, Security, Your data, Recycle bin) into the same
+ * top-level list. Those have moved entirely into the profile-icon
+ * dropdown (UserMenu) because they're either account-wide or
+ * configuration-grade — not the daily-workflow stuff the sidebar
+ * should optimize for.
+ *
+ * Mileage stays in the per-company list even though its URL is
+ * /mileage (top-level). The page reads the user's active company
+ * internally; the link lives in the per-company group because the
+ * user thinks of mileage as "per business" cognitively.
+ *
+ * "Settings is the new setup" — the old /c/[publicId]/setup route is
+ * unchanged at the URL layer, only the label is renamed. Renaming the
+ * route would have broken bookmarks + every redirect that already
+ * encodes /setup.
  */
 
-const DEFAULT_ORDER: ItemKey[] = [
-  "dashboard",
-  "mileage",
-  "tax_profile",
-  "goals",
-  "reminders",
-  "billing",
-  "security",
-  "your_data",
-  "recycle_bin",
-];
-
-type ItemKey =
-  | "dashboard"
-  | "mileage"
-  | "tax_profile"
-  | "goals"
-  | "reminders"
-  | "billing"
-  | "security"
-  | "your_data"
-  | "recycle_bin";
-
-type ItemDef = {
-  key: ItemKey;
-  label: string;
-  href: string;
-  icon: ReactNode;
-};
-
-const ITEMS: Record<ItemKey, ItemDef> = {
-  dashboard: {
-    key: "dashboard",
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: (
-      <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />
-    ),
-  },
-  mileage: {
-    key: "mileage",
-    label: "Mileage",
-    href: "/mileage",
-    // Steering wheel-ish: car silhouette + a wheel below.
-    icon: (
-      <Path d="M5 13l1.5-4.5A2 2 0 018.4 7h7.2a2 2 0 011.9 1.5L19 13M3 13h18v3a2 2 0 01-2 2h-1a2 2 0 01-2-2H8a2 2 0 01-2 2H5a2 2 0 01-2-2v-3zM7 16h.01M17 16h.01" />
-    ),
-  },
-  tax_profile: {
-    key: "tax_profile",
-    label: "Tax profile",
-    href: "/onboarding/tax-profile?next=/dashboard",
-    icon: <Path d="M12 12a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 0114 0" />,
-  },
-  goals: {
-    key: "goals",
-    label: "Goals",
-    href: "/goals",
-    icon: <Path d="M12 2a10 10 0 100 20 10 10 0 000-20zM12 7v5l3 2" />,
-  },
-  reminders: {
-    key: "reminders",
-    label: "Reminders",
-    href: "/reminders",
-    icon: <Path d="M6 8a6 6 0 1112 0v5l2 3H4l2-3V8zm4 11a2 2 0 004 0" />,
-  },
-  billing: {
-    key: "billing",
-    label: "Billing & plan",
-    href: "/billing",
-    icon: <Path d="M3 7h18v10H3zM3 11h18M7 15h3" />,
-  },
-  security: {
-    key: "security",
-    label: "Security",
-    href: "/settings/security",
-    icon: (
-      <Path d="M12 3l8 3v5c0 5-4 9-8 10-4-1-8-5-8-10V6l8-3z" />
-    ),
-  },
-  your_data: {
-    key: "your_data",
-    label: "Your data",
-    href: "/settings/data",
-    icon: (
-      <Path d="M4 7c0-2 4-3 8-3s8 1 8 3-4 3-8 3-8-1-8-3zm0 5c0 2 4 3 8 3s8-1 8-3M4 7v10c0 2 4 3 8 3s8-1 8-3V7" />
-    ),
-  },
-  recycle_bin: {
-    key: "recycle_bin",
-    label: "Recycle bin",
-    href: "/settings/recycle-bin",
-    icon: (
-      <Path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5" />
-    ),
-  },
+type Company = {
+  publicId: string;
+  name: string;
 };
 
 type Mode = "rail" | "sheet";
+
 type Props = {
   /** "rail" pins to the viewport edge (lg+ default). "sheet" renders
-   *  as a full-width drawer (mobile + tablet, opened via hamburger). */
+   *  as a full-width drawer (mobile + tablet, opened via the FAB). */
   mode?: Mode;
   /** Sheet only: called when the user picks an item / taps the
    *  backdrop / hits Escape so the parent can close the drawer. */
   onDismiss?: () => void;
+  /** Companies the user is a member of, used to populate the switcher.
+   *  Server-fetched in AppHeader so first paint already has the list. */
+  companies?: Company[];
 };
 
 function Path({ d }: { d: string }) {
@@ -153,316 +79,328 @@ function Path({ d }: { d: string }) {
   );
 }
 
-const ORDER_KEY = "taxottic.nav_order";
+// Per-company entries. `path` is appended to /c/{publicId}/<path>.
+// `icon` is the inline SVG. Order here is the user-visible order.
+const COMPANY_ITEMS: {
+  key: string;
+  label: string;
+  path: string;
+  icon: ReactNode;
+}[] = [
+  {
+    key: "forecast",
+    label: "Forecast",
+    path: "forecast",
+    icon: <Path d="M3 18l5-6 4 4 7-9M14 7h6v6" />,
+  },
+  {
+    key: "income",
+    label: "Income",
+    path: "income",
+    icon: <Path d="M12 3v14m0 0l-4-4m4 4l4-4M4 21h16" />,
+  },
+  {
+    key: "expenses",
+    label: "Expenses",
+    path: "expenses",
+    icon: <Path d="M12 21V7m0 0l-4 4m4-4l4 4M4 3h16" />,
+  },
+  {
+    key: "mileage",
+    // Mileage is top-level (/mileage) for now; the page picks the
+    // active company internally. See file header.
+    label: "Mileage",
+    path: "__mileage_top_level__",
+    icon: (
+      <Path d="M5 13l1.5-4.5A2 2 0 018.4 7h7.2a2 2 0 011.9 1.5L19 13M3 13h18v3a2 2 0 01-2 2h-1a2 2 0 01-2-2H8a2 2 0 01-2 2H5a2 2 0 01-2-2v-3z" />
+    ),
+  },
+  {
+    key: "import",
+    label: "Import",
+    path: "import",
+    icon: <Path d="M4 17v3h16v-3M12 3v12m0 0l-4-4m4 4l4-4" />,
+  },
+  {
+    key: "deductions",
+    label: "Deductions",
+    path: "my-deductions",
+    icon: <Path d="M6 4h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1zM14 4v5h5M9 13h6M9 17h6" />,
+  },
+  {
+    key: "chat",
+    label: "Chat",
+    path: "chat",
+    icon: (
+      <Path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-4 4v-4H6a2 2 0 01-2-2V6z" />
+    ),
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    // Route name unchanged — only the label was renamed from "Setup".
+    path: "setup",
+    icon: (
+      <Path d="M12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zm0-6.5l1.5 2.5 2.8.6.6 2.8L19 10l-1.1 1.1.6 2.8-2.8.6L14.5 17H12l-1.5-2.5-2.8-.6-.6-2.8L5.5 10l1.1-1.1-.6-2.8 2.8-.6L10.5 3H12z" />
+    ),
+  },
+];
 
-export function LeftRail({ mode = "rail", onDismiss }: Props) {
+function extractActivePublicId(pathname: string | null): string | null {
+  if (!pathname) return null;
+  const m = pathname.match(/^\/c\/([^/]+)/);
+  return m ? m[1] : null;
+}
+
+const LAST_COMPANY_KEY = "taxottic.last_company_public_id";
+
+export function LeftRail({
+  mode = "rail",
+  onDismiss,
+  companies = [],
+}: Props) {
   const pathname = usePathname();
-  const [order, setOrder] = useState<ItemKey[]>(DEFAULT_ORDER);
-  const [hydrated, setHydrated] = useState(false);
-  const [reordering, setReordering] = useState(false);
+  const urlPublicId = extractActivePublicId(pathname);
 
-  // Hydrate from localStorage AFTER mount so SSR + first client
-  // render both produce the default order — avoids hydration
-  // mismatch warnings.
+  // Resolve the "effective" active company. If the URL is a /c/[publicId]
+  // route, that wins. Otherwise we fall back to the last-visited company
+  // from localStorage so adjacent top-level pages (e.g., /mileage,
+  // /goals) keep the company section visible. /dashboard intentionally
+  // hides the company section even if there's a last-visited — that's
+  // the user's "blank slate" view.
+  const [lastPublicId, setLastPublicId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(ORDER_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          const known = parsed.filter((k): k is ItemKey =>
-            typeof k === "string" && k in ITEMS,
-          );
-          // Append any new defaults the user hasn't seen yet (e.g.,
-          // we add a new menu item in a later release) so they don't
-          // silently disappear after a code update.
-          for (const k of DEFAULT_ORDER) {
-            if (!known.includes(k)) known.push(k);
-          }
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: localStorage isn't available during SSR so this MUST be a post-mount effect
-          setOrder(known);
-        }
+      const raw = window.localStorage.getItem(LAST_COMPANY_KEY);
+      if (raw && typeof raw === "string") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: localStorage isn't available during SSR
+        setLastPublicId(raw);
       }
     } catch {
-      /* corrupt JSON / Safari private mode → fall back to default */
+      /* private mode / corrupt → ignore */
     }
     setHydrated(true);
   }, []);
-
-  function persist(next: ItemKey[]) {
-    setOrder(next);
+  useEffect(() => {
+    if (!urlPublicId) return;
     try {
-      window.localStorage.setItem(ORDER_KEY, JSON.stringify(next));
+      window.localStorage.setItem(LAST_COMPANY_KEY, urlPublicId);
     } catch {
-      /* QuotaExceeded / private mode — non-fatal */
+      /* private mode / quota → ignore */
     }
-  }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing latest URL companyId into local state
+    setLastPublicId(urlPublicId);
+  }, [urlPublicId]);
 
-  function move(key: ItemKey, dir: -1 | 1) {
-    const idx = order.indexOf(key);
-    if (idx < 0) return;
-    const target = idx + dir;
-    if (target < 0 || target >= order.length) return;
-    const next = [...order];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    persist(next);
-  }
+  const onDashboard = pathname === "/dashboard";
+  const effectivePublicId =
+    urlPublicId ?? (onDashboard ? null : lastPublicId);
 
-  function resetOrder() {
-    persist([...DEFAULT_ORDER]);
-  }
+  const activeCompany =
+    effectivePublicId == null
+      ? null
+      : companies.find((c) => c.publicId === effectivePublicId) ?? null;
+
+  // Switcher open by default if NO active company, closed if one is
+  // selected (the user already knows which company they're on).
+  const hasActiveCompany = activeCompany != null;
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derive from effective state once mounted
+    setSwitcherOpen(!hasActiveCompany);
+  }, [hasActiveCompany]);
 
   function isActive(href: string) {
     if (!pathname) return false;
-    // Strip query string from href before comparing — pathname
-    // never contains one.
     const target = href.split("?")[0];
     if (target === pathname) return true;
-    // "/settings" is an ancestor of "/settings/security"; don't
-    // light up Security when the user is on /settings.
     return target !== "/" && pathname.startsWith(target + "/");
+  }
+
+  function companyHref(path: string): string {
+    if (path === "__mileage_top_level__") return "/mileage";
+    if (!effectivePublicId) return "#";
+    return `/c/${effectivePublicId}/${path}`;
   }
 
   const baseLink =
     "group/item flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors";
 
-  // Expand-on-hover on the desktop rail; sheet mode is always wide.
-  // `card card-opaque` gives us the right surface in BOTH themes —
-  // white in light mode, forest-800 in dark mode — automatically via
-  // the existing globals.css overrides. The previous `bg-paper/95`
-  // didn't flip in dark mode, leaving a stark white block on the
-  // navy page (May 20 regression report).
-  //
-  // `!fixed` (Tailwind's important modifier) is REQUIRED because the
-  // `.card` class in globals.css sets `position: relative` which
-  // beats Tailwind's `fixed` utility on equal specificity (`.card`
-  // is defined AFTER the utilities layer). Without the !, the rail
-  // ended up in-flow and pushed the dashboard content ~570px down.
+  // ---- styling parity with the prior flush sidebar ----
   const railClass =
     mode === "rail"
-      ? // True sidebar: flush LEFT edge of viewport, FULL HEIGHT
-        // from below the header to the bottom safe-area. No more
-        // floating-card look (the previous `card card-opaque
-        // !rounded-2xl left-2` made the rail read as a popup
-        // detached from the layout — May 25 feedback: "fix the
-        // positioning of the floating menu"). Now: a flat panel
-        // anchored to the viewport edge, right-edge rounded so
-        // there's still a soft visual seam into the content area.
-        // No shadow on the left because there's nothing to its
-        // left to drop a shadow onto.
-        "fixed left-0 z-40 hidden lg:flex flex-col " +
+      ? "fixed left-0 z-40 hidden lg:flex flex-col " +
         "w-56 xl:w-60 2xl:w-64 " +
         "bg-paper/95 dark:bg-forest-800/95 " +
         "border-r border-forest-100 dark:border-forest-700 " +
         "rounded-r-2xl shadow-[2px_0_12px_rgba(18,26,42,0.06)] " +
         "px-2 pt-3 pb-3"
-      : // Sheet mode (mobile drawer). w-56 (224px) matches the
-        // desktop rail width and fits every menu label
-        // ("Billing & plan" is the longest at ~14 chars). The
-        // previous w-72 (288px) felt oversized for the short
-        // label set — felt like a panel rather than a menu.
-        // max-w-[85vw] keeps it from overrunning on tiny screens.
-        "card card-opaque relative w-56 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
+      : "card card-opaque relative w-64 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
-  // Position: FLOATING below the header strip, lined up with the
-  // page's COMPANY-NAME row (the "Techno Optics LLC · this week"
-  // line that sits below the H1 on most authenticated pages). The
-  // rail is intentionally decoupled from the header now — feedback
-  // (May 23 2026) was that anchoring it to the header made it read
-  // as "part of" the header strip; the user wants a free-floating
-  // panel that sits next to the content.
-  //
-  // Math: header is 3.25rem (52px) tall. The default page section
-  // uses `py-6 sm:py-10` (24-40px) padding, then a breadcrumb row
-  // (~16px) + mt-2 (8px) + H1 (~44px) + mt-2 (8px) before the
-  // company-name line. So the company name sits roughly at
-  // safe-top + ~9rem. Anchoring the rail's first item there lines
-  // up the topmost menu link visually with that line.
-  //
-  // (Earlier iterations:
-  //   safe-top + 0.5rem → aligned with TAXOTTIC wordmark (May 22)
-  //   safe-top + 5.75rem → misaligned with wordmark by ~50px
-  //   top:50% → "too low", H1 was above the first item.
-  //  Today's pass moves DELIBERATELY away from wordmark alignment
-  //  toward content alignment — the wordmark is now on its own
-  //  row in the header strip and the rail lives in the content
-  //  flow visually.)
-  //
-  // Mobile (< lg) uses LeftRailMobile (floating tab) and never hits
-  // this code path; the wordmark stays in the header on mobile so
-  // the top-bar still reads as branded.
   const railStyle =
     mode === "rail"
       ? {
-          // Sidebar runs from just under the header to the bottom
-          // safe-area. No more mid-page floating start. The brand
-          // strip up top stays clean; everything below it on the
-          // left edge belongs to the rail.
           top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem))",
           bottom: "var(--safe-bottom, 0px)",
         }
       : undefined;
 
-  const list = (
-    <ul className="grid gap-1 flex-1 overflow-y-auto" role="navigation">
-      {order.map((key) => {
-        const item = ITEMS[key];
-        const active = isActive(item.href);
-        return (
-          <li key={key}>
-            <div className="flex items-stretch gap-1">
-              <Link
-                href={item.href}
-                onClick={onDismiss}
-                aria-current={active ? "page" : undefined}
-                className={
-                  baseLink +
-                  " flex-1 min-w-0 " +
-                  (active
-                    ? "bg-cream text-forest-900 ring-1 ring-gold-200"
-                    : "text-forest-800 hover:bg-cream")
-                }
-                title={mode === "rail" ? item.label : undefined}
-              >
-                <span className="shrink-0 text-forest-700 group-hover/item:text-forest-900">
-                  {item.icon}
-                </span>
-                <span className="min-w-0 truncate">
-                  {/* Labels are always visible now (rail is
-                      always-expanded). Previously the rail
-                      collapsed-with-hover-reveal so labels were
-                      opacity-0 until hover. Always-open removes
-                      that gate. */}
-                  {item.label}
-                </span>
-              </Link>
-              {reordering ? (
-                <div className="flex flex-col gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => move(key, -1)}
-                    disabled={order.indexOf(key) === 0}
-                    aria-label={`Move ${item.label} up`}
-                    className="size-5 rounded-md border border-forest-100 text-forest-700 hover:bg-cream disabled:opacity-30 disabled:cursor-not-allowed grid place-items-center"
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      width="12"
-                      height="12"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M6 12l4-4 4 4"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => move(key, 1)}
-                    disabled={order.indexOf(key) === order.length - 1}
-                    aria-label={`Move ${item.label} down`}
-                    className="size-5 rounded-md border border-forest-100 text-forest-700 hover:bg-cream disabled:opacity-30 disabled:cursor-not-allowed grid place-items-center"
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      width="12"
-                      height="12"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M6 8l4 4 4-4"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  // ---- top section: Dashboard + Companies switcher ----
+  const topSection = (
+    <div className="grid gap-1">
+      <Link
+        href="/dashboard"
+        onClick={onDismiss}
+        aria-current={onDashboard ? "page" : undefined}
+        className={
+          baseLink +
+          (onDashboard
+            ? " bg-cream text-forest-900 ring-1 ring-gold-200"
+            : " text-forest-800 hover:bg-cream")
+        }
+      >
+        <span className="shrink-0 text-forest-700 group-hover/item:text-forest-900">
+          <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />
+        </span>
+        <span>Dashboard</span>
+      </Link>
 
-  const footer = (
-    <div className="border-t border-forest-100 mt-2 pt-2 grid gap-1">
-      {reordering ? (
-        <>
-          <button
-            type="button"
-            onClick={resetOrder}
-            className="text-[11px] text-ink-muted hover:text-forest-900 underline underline-offset-2 px-2 py-1 text-left"
-          >
-            Reset to default
-          </button>
-          <button
-            type="button"
-            onClick={() => setReordering(false)}
-            className="btn-primary text-xs h-8"
-          >
-            Done
-          </button>
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setReordering(true)}
-          className="rounded-lg px-3 py-2 text-xs text-forest-700 hover:bg-cream flex items-center gap-2 justify-start"
-          title="Reorder menu items"
+      <button
+        type="button"
+        onClick={() => setSwitcherOpen((o) => !o)}
+        aria-expanded={switcherOpen}
+        aria-controls="leftrail-company-switcher"
+        className={
+          baseLink +
+          " w-full justify-between text-forest-800 hover:bg-cream"
+        }
+      >
+        <span className="flex items-center gap-3 min-w-0">
+          <span className="shrink-0 text-forest-700">
+            <Path d="M4 21h16V8l-8-5-8 5v13zM10 21v-6h4v6" />
+          </span>
+          <span className="min-w-0 truncate">Companies</span>
+        </span>
+        <span
+          aria-hidden="true"
+          className={
+            "shrink-0 text-ink-soft transition-transform " +
+            (switcherOpen ? "rotate-180" : "")
+          }
         >
-          <svg
-            viewBox="0 0 20 20"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            aria-hidden="true"
-            className="shrink-0"
-          >
-            <path strokeLinecap="round" d="M3 6h14M3 10h14M3 14h14" />
+          <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 5l3 3 3-3" />
           </svg>
-          {mode === "rail" ? (
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-              Reorder
-            </span>
+        </span>
+      </button>
+
+      {switcherOpen ? (
+        <ul
+          id="leftrail-company-switcher"
+          className="grid gap-0.5 ml-3 pl-3 border-l border-forest-100/70 dark:border-forest-700"
+        >
+          {companies.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-ink-muted">
+              No companies yet.
+            </li>
           ) : (
-            <span>Reorder menu</span>
+            companies.map((c) => {
+              const isCurrent = c.publicId === effectivePublicId;
+              return (
+                <li key={c.publicId}>
+                  <Link
+                    href={`/c/${c.publicId}/forecast`}
+                    onClick={onDismiss}
+                    aria-current={isCurrent ? "true" : undefined}
+                    className={
+                      "block rounded-lg px-3 py-1.5 text-[13px] truncate " +
+                      (isCurrent
+                        ? "bg-cream text-forest-900 font-medium"
+                        : "text-forest-800 hover:bg-cream")
+                    }
+                    title={c.name}
+                  >
+                    {c.name}
+                  </Link>
+                </li>
+              );
+            })
           )}
-        </button>
-      )}
+          <li>
+            <Link
+              href="/companies/new"
+              onClick={onDismiss}
+              className="block rounded-lg px-3 py-1.5 text-[12px] text-ink-soft hover:bg-cream hover:text-forest-900"
+            >
+              + New company
+            </Link>
+          </li>
+        </ul>
+      ) : null}
     </div>
   );
 
-  // Suppress hydration mismatch warning since the localStorage read
-  // happens post-mount and re-renders with the persisted order.
+  // ---- per-company section ----
+  const companySection =
+    activeCompany == null ? null : (
+      <div className="mt-3 grid gap-1">
+        {/* Company name as section header. Gold-tinted caps so it
+            reads as a label, not a clickable link. Truncates on
+            long names — full name in the title attribute for hover. */}
+        <div
+          className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium truncate"
+          title={activeCompany.name}
+        >
+          {activeCompany.name}
+        </div>
+        <ul className="grid gap-1" role="navigation">
+          {COMPANY_ITEMS.map((item) => {
+            const href = companyHref(item.path);
+            const active = isActive(href);
+            return (
+              <li key={item.key}>
+                <Link
+                  href={href}
+                  onClick={onDismiss}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    baseLink +
+                    (active
+                      ? " bg-cream text-forest-900 ring-1 ring-gold-200"
+                      : " text-forest-800 hover:bg-cream")
+                  }
+                  title={mode === "rail" ? item.label : undefined}
+                >
+                  <span className="shrink-0 text-forest-700 group-hover/item:text-forest-900">
+                    {item.icon}
+                  </span>
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+
   return (
     <nav
-      className={railClass + " group"}
+      className={railClass + " group overflow-y-auto"}
       style={railStyle}
       aria-label="Main menu"
       suppressHydrationWarning
     >
+      {topSection}
       {hydrated || mode === "sheet" ? (
         <>
-          {list}
-          {footer}
+          {/* Separator only when there IS a company section below */}
+          {activeCompany ? (
+            <div className="my-2 border-t border-forest-100/70 dark:border-forest-700" />
+          ) : null}
+          {companySection}
         </>
-      ) : (
-        // SSR placeholder so the rail's geometry doesn't pop during
-        // hydration. Renders the default order without the reorder
-        // affordance; effectively invisible on the first paint.
-        list
-      )}
+      ) : null}
     </nav>
   );
 }

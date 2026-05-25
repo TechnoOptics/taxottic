@@ -120,7 +120,7 @@ export default async function SetupHub({ params }: { params: Params }) {
           {company.public_id} <span className="text-gold-700">·</span>{" "}
           Tax year {taxYear}
         </div>
-        <h1 className="display mt-2 text-3xl text-forest-900">Setup</h1>
+        <h1 className="display mt-2 text-3xl text-forest-900">Settings</h1>
         <p className="mt-2 text-sm text-ink-soft max-w-xl">
           One-time configuration for this company. Set this up first
           and the rest of Taxottic just works.

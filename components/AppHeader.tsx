@@ -10,6 +10,7 @@ import { recordGdprConsent } from "@/app/actions/consent";
 import { submitFeedback } from "@/app/actions/feedback";
 import { setActivePlatform } from "@/app/settings/actions";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
+import { getMyCompanies } from "@/lib/auth";
 
 type AppHeaderProps = {
   email?: string;
@@ -80,6 +81,18 @@ export async function AppHeader({
     const { data: sa } = await supabase.rpc("is_super_admin");
     isSuperAdmin = Boolean(sa);
   }
+
+  // Fetch the user's companies for the LeftRail switcher. On admin /
+  // HQ surfaces the rail isn't rendered, so we skip the round trip
+  // entirely. Otherwise this is a single PostgREST query that joins
+  // company_members → companies, scoped by RLS + explicit user filter.
+  const companies =
+    homeHref === "/"
+      ? []
+      : (await getMyCompanies()).map((m) => ({
+          publicId: m.company.public_id,
+          name: m.company.name,
+        }));
 
   return (
     <>
@@ -176,7 +189,7 @@ export async function AppHeader({
           {/* Consumer surface only: hamburger that opens the same
               left rail in a sheet on < lg widths. Admin / HQ host
               still renders only the wordmark + UserMenu pair. */}
-          {homeHref !== "/" ? <LeftRailMobile /> : null}
+          {homeHref !== "/" ? <LeftRailMobile companies={companies} /> : null}
           <Wordmark href={homeHref} size="sm" tone="cream" />
           {/* Smart search powered by Bella. OPT-IN per user via
               /settings (profile.show_smart_search). When on, it
@@ -229,7 +242,7 @@ export async function AppHeader({
           handles those via the hamburger). Consumer surfaces only —
           admin / HQ host doesn't get it because the rail's items
           don't apply. */}
-      {homeHref !== "/" ? <LeftRail mode="rail" /> : null}
+      {homeHref !== "/" ? <LeftRail mode="rail" companies={companies} /> : null}
       {/* Flip <html data-theme="dark"> for the duration of any
           authenticated page render. Public marketing routes don't
           mount <AppHeader> so they stay light by default. See
