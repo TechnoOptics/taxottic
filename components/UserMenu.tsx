@@ -88,6 +88,7 @@ export function UserMenu({
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: createPortal needs document, only available post-mount
     setMounted(true);
   }, []);
 
@@ -154,18 +155,17 @@ export function UserMenu({
             // page heading). max-w guarantees we never overflow the
             // viewport on narrow / foldable devices.
             style={{
-              // Centered on the viewport (was anchored to the
-              // avatar's bounds). On mobile the anchor-to-header
-              // position read as awkwardly tied to the corner and
-              // hard to reach with a thumb. Centered with a
-              // translate puts the menu in the user's natural
-              // gaze area regardless of screen size. The anchor
-              // value is no longer consumed positionally but is
-              // still required upstream as a "menu is open" gate.
+              // Anchored under the avatar button on lg+ (the user's
+              // visual expectation: dropdown drops down from where it
+              // was clicked). On phone (<sm) we still center because
+              // a corner-anchored sheet is awkward to reach with a
+              // thumb — but on desktop the previous "centered on
+              // viewport" treatment was straight-up weird ("opens in
+              // the middle of the screen" — May 25 feedback). anchor
+              // already carries the button rect; just use it.
               position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
+              top: anchor.top,
+              right: anchor.right,
               zIndex: 9999,
               maxWidth: "calc(100vw - 16px)",
               maxHeight: "calc(100vh - 32px)",
