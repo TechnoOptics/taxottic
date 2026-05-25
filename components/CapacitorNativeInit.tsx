@@ -205,12 +205,34 @@ export function CapacitorNativeInit() {
       // resume on launch is required. The helper self-guards on the
       // plugin being present and also drains any points a killed-mid-
       // drive session left buffered.
+      //
+      // ALSO listen for App resume events. Android (esp. Samsung
+      // OneUI's "Sleeping apps" + Battery Optimization defaults)
+      // kills the @capgo foreground service silently while the app
+      // is backgrounded. When the user opens the app again, the
+      // plugin's tracking session is dead but our flag still says
+      // "on" — we need to call start() again. resumeMileage handles
+      // both that AND the "no-op if already running" case (tracking
+      // boolean in native-tracker.ts gates the second call).
       if (!cancelled) {
         try {
           const { resumeMileageTrackingIfEnabled } = await import(
             "@/lib/mileage/native-tracker"
           );
           await resumeMileageTrackingIfEnabled();
+          try {
+            const { App } = await import("@capacitor/app");
+            App.addListener("appStateChange", (state) => {
+              if (state.isActive) {
+                void resumeMileageTrackingIfEnabled().catch(() => {});
+              }
+            });
+            App.addListener("resume", () => {
+              void resumeMileageTrackingIfEnabled().catch(() => {});
+            });
+          } catch {
+            /* @capacitor/app missing in this binary — best-effort */
+          }
         } catch {
           /* plugin absent in this binary — no-op */
         }
