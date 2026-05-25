@@ -240,25 +240,22 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
   // ended up in-flow and pushed the dashboard content ~570px down.
   const railClass =
     mode === "rail"
-      ? // The fixed rail is now ALWAYS expanded at 224px (was
-        // collapsed-icons-with-hover-expand). User feedback: the
-        // hover-to-reveal felt fiddly and labels are the whole
-        // point of nav. The desktop rail has plenty of horizontal
-        // room next to a max-w-6xl centered content column, so
-        // staying open costs nothing and removes a click.
-        // Position: fixed keeps it pinned without affecting layout.
-        // Rail width steps with viewport:
-        //   lg:  w-56 (224px) — same as before, plenty for the 16-char
-        //                       longest label "Billing & plan"
-        //   xl:  w-60 (240px) — slightly more generous on 1280px+
-        //   2xl: w-64 (256px) — proportional to the 1920px+ desktops
-        //                       that triggered the "everything is so
-        //                       small" feedback
-        // AppHeader's lg:pl-60 / xl:pl-64 / 2xl:pl-72 padding mirrors
-        // these steps so the wordmark stays clear of the rail at every
-        // breakpoint.
-        "card card-opaque !fixed left-2 z-40 !rounded-2xl !p-2 " +
-        "hidden lg:flex flex-col w-56 xl:w-60 2xl:w-64"
+      ? // True sidebar: flush LEFT edge of viewport, FULL HEIGHT
+        // from below the header to the bottom safe-area. No more
+        // floating-card look (the previous `card card-opaque
+        // !rounded-2xl left-2` made the rail read as a popup
+        // detached from the layout — May 25 feedback: "fix the
+        // positioning of the floating menu"). Now: a flat panel
+        // anchored to the viewport edge, right-edge rounded so
+        // there's still a soft visual seam into the content area.
+        // No shadow on the left because there's nothing to its
+        // left to drop a shadow onto.
+        "fixed left-0 z-40 hidden lg:flex flex-col " +
+        "w-56 xl:w-60 2xl:w-64 " +
+        "bg-paper/95 dark:bg-forest-800/95 " +
+        "border-r border-forest-100 dark:border-forest-700 " +
+        "rounded-r-2xl shadow-[2px_0_12px_rgba(18,26,42,0.06)] " +
+        "px-2 pt-3 pb-3"
       : // Sheet mode (mobile drawer). w-56 (224px) matches the
         // desktop rail width and fits every menu label
         // ("Billing & plan" is the longest at ~14 chars). The
@@ -297,9 +294,12 @@ export function LeftRail({ mode = "rail", onDismiss }: Props) {
   const railStyle =
     mode === "rail"
       ? {
-          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 9rem)",
-          maxHeight:
-            "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - var(--safe-bottom) - 11rem)",
+          // Sidebar runs from just under the header to the bottom
+          // safe-area. No more mid-page floating start. The brand
+          // strip up top stays clean; everything below it on the
+          // left edge belongs to the rail.
+          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem))",
+          bottom: "var(--safe-bottom, 0px)",
         }
       : undefined;
 
