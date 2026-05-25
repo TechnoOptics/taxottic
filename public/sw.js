@@ -319,7 +319,15 @@
 // instead of one long alphabetical run. applyTransactions also
 // routes credit-scope picks through ignored=true (alongside
 // transfer + personal) so credits never inflate Schedule C.
-const CACHE_VERSION = "v44";
+// v45: REAL layout fix after looking at the user's ultrawide via
+// computer-use. Even after refreshing to v44, content still capped
+// at ~30% of the viewport. Diagnosis: Tailwind sorts variant
+// utilities by breakpoint width — so `xl:max-w-6xl` and
+// `2xl:max-w-7xl` got emitted AFTER `lg:max-w-none` in the CSS
+// output and won on wide monitors. lg:max-w-none was effectively
+// dead code. Bulk-stripped the xl/2xl max-w override pairs from
+// every consumer page. Now lg:max-w-none wins everywhere ≥ lg.
+const CACHE_VERSION = "v45";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

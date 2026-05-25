@@ -381,7 +381,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
             <CompanyLogo
@@ -912,8 +912,12 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </div>
         ) : null}
 
-        {/* Tax-prep confidence section: export PDF + find a CPA near you */}
-        <section className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Tax-prep confidence section: export PDF + find a CPA near you.
+            2 cols at lg (laptop); 3-col arrangement isn't a win because
+            FindCpaCard's result list needs the vertical room. Keep 2
+            but bump the gap so on ultrawide they breathe instead of
+            looking like a marooned twosome in a sea of empty space. */}
+        <section className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 xl:gap-6 2xl:gap-8">
           <div className="card p-6 sm:p-7">
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
               Year-end export
