@@ -291,7 +291,35 @@
 //      sm:grid-cols-2 xl:grid-cols-3 so the now-wider canvas
 //      gets used: Home Office / Vehicle / future major
 //      deductions lay out 3-across on a monitor.
-const CACHE_VERSION = "v43";
+// v44: deduction catalog expansion (user: "I believe there are
+// so many that we are not showing our clients that need to be
+// here ... we can group them by category but we need to give
+// them all"). Three migrations applied:
+//   20260525000002 — added display_group column +
+//     deduction_scope.credit enum value. Backfilled
+//     display_group on every existing row.
+//   20260525000003 — ~40 new categories: insurance variants
+//     (workers comp, liability, vehicle insurance, employee
+//     group health), payroll (processing fees, FUTA/SUTA),
+//     travel (lodging, per-diem meals, conference fees),
+//     vehicle actual-method (fuel, repairs, lease), facility
+//     (cleaning, security, trash, snow/landscaping, storage,
+//     coworking), education (CE/CPE, certifications,
+//     industry journals), startup (startup §195 + org §248),
+//     web hosting + cloud storage, Schedule A (charity
+//     non-cash, medical mileage, dental/vision, LTC,
+//     mortgage points, property tax, IRA, educator), and 8
+//     federal tax credits (Child Tax, Dependent Care, EITC,
+//     Saver's, AOC, LLC, Residential Energy, Foreign Tax).
+// Each carries IRC §, IRS Pub, and irs.gov URL.
+//
+// CategoryCombobox now renders section headers ("Insurance",
+// "Vehicle", "Federal tax credits", etc.) between groups when
+// no query is active — so scanning 80+ categories is grouped
+// instead of one long alphabetical run. applyTransactions also
+// routes credit-scope picks through ignored=true (alongside
+// transfer + personal) so credits never inflate Schedule C.
+const CACHE_VERSION = "v44";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

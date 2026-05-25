@@ -380,7 +380,13 @@ export async function applyTransactions(formData: FormData) {
         .filter(
           (c) =>
             (c as { scope?: string }).scope === "transfer" ||
-            (c as { scope?: string }).scope === "personal",
+            (c as { scope?: string }).scope === "personal" ||
+            // 'credit' scope is federal tax credits (Child Tax,
+            // EITC, Residential Energy, etc.). They reduce TAX
+            // dollar-for-dollar — not income — so they never
+            // belong on Schedule C / monthly_expenses. Same
+            // ignored=true route as transfers + Schedule A items.
+            (c as { scope?: string }).scope === "credit",
         )
         .map((c) => (c as { code: string }).code),
     );

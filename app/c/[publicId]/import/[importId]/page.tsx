@@ -57,9 +57,9 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
       // Pull irc_section + irs_pub so the TxRow can show the
       // citation next to each detected category.
       .select(
-        "code, label, scope, schedule_c_line, irc_section, irs_pub, irs_url",
+        "code, label, scope, schedule_c_line, irc_section, irs_pub, irs_url, display_group",
       )
-      .in("scope", ["business", "both", "transfer", "personal"])
+      .in("scope", ["business", "both", "transfer", "personal", "credit"])
       .order("display_order"),
   ]);
 
@@ -72,14 +72,17 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
       irc_section: string | null;
       irs_pub: string | null;
       irs_url: string | null;
+      display_group: string | null;
     }[] | null) ?? [];
-  // Build the option list once with schedule_c_line surfaced as the
-  // small hint label on the right edge of each combobox row.
+  // Build the option list. hint = Schedule C line for the per-row
+  // strip on the right of the dropdown; group = display_group so
+  // the combobox renders section headers when no query is active.
   const catOptions: CategoryOption[] = cats.map((c) => ({
     code: c.code,
     label: c.label,
     hint: c.schedule_c_line,
     scope: c.scope,
+    group: c.display_group,
   }));
   // Lookup so the TxRow can render the IRC / Pub citation next to
   // the chosen category without re-fetching.

@@ -43,6 +43,10 @@ export type CategoryOption = {
   /** scope === "transfer" gets a small subdued treatment so users see
    *  it's a labelling category, not a deduction. */
   scope?: string | null;
+  /** Bucket name from deduction_categories.display_group. When the
+   *  dropdown is open with no query, options group under headers
+   *  matching this string. Falls back to "Other" when missing. */
+  group?: string | null;
 };
 
 type Props = {
@@ -127,6 +131,23 @@ export function CategoryCombobox({
     });
     return list;
   }, [options, query, freqSet]);
+
+  // When NOT searching, group the visible options under display_group
+  // headers (Insurance / Vehicle / Travel-meals-gifts / …) so the
+  // user can scan 80+ categories without losing the thread.
+  // When searching, flatten — group headers in a search context
+  // hurt more than help.
+  const grouped = useMemo(() => {
+    if (query) return null;
+    const map = new Map<string, CategoryOption[]>();
+    for (const o of visible) {
+      const g = o.group ?? "Other";
+      const arr = map.get(g) ?? [];
+      arr.push(o);
+      map.set(g, arr);
+    }
+    return Array.from(map.entries());
+  }, [visible, query]);
 
   // `highlight` is clamped at every read site (see effectiveHighlight
   // below) rather than via an effect — calling setState in a useEffect
@@ -267,18 +288,90 @@ export function CategoryCombobox({
               <li className="px-3 py-3 text-sm text-ink-muted">
                 No categories match &ldquo;{query}&rdquo;
               </li>
+            ) : grouped ? (
+              // Grouped view (no query): render section headers
+              // between groups so users can scan ~80 categories by
+              // bucket. Each item retains its own visible-index for
+              // keyboard-highlight purposes — we maintain a running
+              // counter across groups.
+              (() => {
+                let idx = -1;
+                return grouped.map(([groupName, opts]) => (
+                  <li key={groupName}>
+                    <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-[0.22em] text-gold-700 font-medium">
+                      {groupName}
+                    </div>
+                    <ul>
+                      {opts.map((o) => {
+                        idx++;
+                        const i = idx;
+                        const active = i === effectiveHighlight;
+                        const isTransfer = o.scope === "transfer";
+                        const isCredit = o.scope === "credit";
+                        return (
+                          <li key={o.code}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={value === o.code}
+                              onMouseDown={(e) => e.preventDefault()}
+                              // eslint-disable-next-line react-hooks/refs -- pick fires via click, not during render
+                              onClick={() => pick(o.code)}
+                              onMouseEnter={() => setHighlight(i)}
+                              className={
+                                "w-full text-left px-3 py-2 text-sm flex items-center gap-2 " +
+                                (active
+                                  ? "bg-cream text-forest-900"
+                                  : "text-forest-800 hover:bg-cream/70")
+                              }
+                            >
+                              <span className="flex-1 truncate">
+                                {o.label}
+                                {isTransfer ? (
+                                  <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+                                    transfer · not a deduction
+                                  </span>
+                                ) : isCredit ? (
+                                  <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                                    tax credit
+                                  </span>
+                                ) : null}
+                              </span>
+                              {o.hint ? (
+                                <span className="text-[10px] uppercase tracking-[0.18em] text-ink-muted shrink-0">
+                                  {o.hint}
+                                </span>
+                              ) : null}
+                              {freqSet.has(o.code) ? (
+                                <span
+                                  aria-hidden="true"
+                                  title="Frequently used"
+                                  className="text-gold-600 text-[12px]"
+                                >
+                                  ★
+                                </span>
+                              ) : null}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </li>
+                ));
+              })()
             ) : (
+              // Search view (query active): flat list, no group
+              // headers. Faster to scan when filtering.
               visible.map((o, i) => {
                 const active = i === effectiveHighlight;
                 const isTransfer = o.scope === "transfer";
+                const isCredit = o.scope === "credit";
                 return (
                   <li key={o.code}>
                     <button
                       type="button"
                       role="option"
                       aria-selected={value === o.code}
-                      // mousedown fires before blur, so we don't close
-                      // the listbox before the click registers
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => pick(o.code)}
                       onMouseEnter={() => setHighlight(i)}
@@ -295,6 +388,10 @@ export function CategoryCombobox({
                           <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-ink-muted">
                             transfer · not a deduction
                           </span>
+                        ) : isCredit ? (
+                          <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                            tax credit
+                          </span>
                         ) : null}
                       </span>
                       {o.hint ? (
@@ -302,7 +399,7 @@ export function CategoryCombobox({
                           {o.hint}
                         </span>
                       ) : null}
-                      {freqSet.has(o.code) && !query ? (
+                      {freqSet.has(o.code) ? (
                         <span
                           aria-hidden="true"
                           title="Frequently used"
