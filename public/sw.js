@@ -346,7 +346,13 @@
 // bottom-left FAB so it stops overlaying the header. Labels:
 // Money in → Income, Money out → Expenses, Talk → Chat, Setup →
 // Settings (routes unchanged).
-const CACHE_VERSION = "v47";
+// v48: Sticky-rail fix. Discovered via Chrome MCP that the sidebar
+// scrolled away with the page because globals.css has an UNLAYERED
+// `nav { position: relative }` rule that beats Tailwind's `.fixed`
+// regardless of specificity. Added `!fixed` (Tailwind important
+// modifier) on the rail className so the rail genuinely stays pinned
+// to the viewport at every scroll position.
+const CACHE_VERSION = "v48";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

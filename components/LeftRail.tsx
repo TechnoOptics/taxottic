@@ -228,9 +228,19 @@ export function LeftRail({
     "group/item flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors";
 
   // ---- styling parity with the prior flush sidebar ----
+  //
+  // `!fixed` (Tailwind's important modifier) is REQUIRED here because
+  // globals.css has an UNLAYERED rule `main, footer, nav { position:
+  // relative; z-index: 1 }` that wins over `@layer utilities`
+  // regardless of specificity. Without the !, the rail ends up
+  // position: relative — in-flow — and scrolls AWAY with the page
+  // instead of staying pinned. (Discovered 2026-05-25 via Chrome MCP:
+  // the rail rendered correctly at scrollY=0 then disappeared the
+  // moment the user scrolled.) The same trick is documented for the
+  // app header on lines 436-444 of globals.css.
   const railClass =
     mode === "rail"
-      ? "fixed left-0 z-40 hidden lg:flex flex-col " +
+      ? "!fixed left-0 z-40 hidden lg:flex flex-col " +
         "w-56 xl:w-60 2xl:w-64 " +
         "bg-paper/95 dark:bg-forest-800/95 " +
         "border-r border-forest-100 dark:border-forest-700 " +
