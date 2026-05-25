@@ -262,7 +262,18 @@
 // the toggle card whether their device is reaching the server.
 // Ingest route now console.logs every request — Vercel runtime
 // logs will finally show what's happening.
-const CACHE_VERSION = "v41";
+// v42: layout pass — drop content centering on lg+. User: "I do
+// not like how it looks. With the menu all the way to the
+// left." Root cause: on lg+ the rail sat at left-2 but content
+// was mx-auto centered with a max-w, so on a wide monitor the
+// content centered in the FULL viewport while the rail was
+// pinned to the viewport's left edge → huge empty gap between
+// them. Now: on lg+ every page section adds `lg:max-w-none
+// lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16` which (a) drops the
+// max-w cap, (b) removes the mx-auto centering, (c) adds
+// breathing room on the right. Content now fills the post-
+// rail area instead of floating in a centered island.
+const CACHE_VERSION = "v42";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
