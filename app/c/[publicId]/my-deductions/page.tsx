@@ -198,7 +198,7 @@ export default async function MyDeductionsPage({
           <h2 className="display mt-1 text-xl text-forest-900">
             Big-ticket deductions
           </h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {/* Home Office */}
             <article
               className={

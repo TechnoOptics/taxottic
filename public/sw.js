@@ -273,7 +273,25 @@
 // max-w cap, (b) removes the mx-auto centering, (c) adds
 // breathing room on the right. Content now fills the post-
 // rail area instead of floating in a centered island.
-const CACHE_VERSION = "v42";
+// v43: three concrete UI/UX fixes after the user's "drive a
+// thorough audit" feedback —
+//  (1) UserMenu dropdown was position:fixed top:50% left:50%
+//      (center-screen) which felt completely disconnected from
+//      the avatar that triggered it. Now anchors below the
+//      button (top: rect.bottom+8, right: viewport-right-edge).
+//  (2) AppHeader was max-w-6xl xl:max-w-7xl 2xl:max-w-none
+//      mx-auto, which on lg+ centered the row inside a capped
+//      box — leaving empty space to the LEFT of the wordmark
+//      AND to the RIGHT of the user menu. Now: lg:max-w-none
+//      lg:mx-0 lg:pr-6, so the row spans edge-to-edge with the
+//      rail-clearing lg:pl-N already there. Wordmark sits flush
+//      next to the rail, user menu sits flush near the right
+//      edge.
+//  (3) my-deductions tile grid bumped from sm:grid-cols-2 →
+//      sm:grid-cols-2 xl:grid-cols-3 so the now-wider canvas
+//      gets used: Home Office / Vehicle / future major
+//      deductions lay out 3-across on a monitor.
+const CACHE_VERSION = "v43";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

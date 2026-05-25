@@ -160,7 +160,19 @@ export async function AppHeader({
             Left pad:  lg:pl-60 / xl:pl-64 / 2xl:pl-72 matches the
                        LeftRail's width steps so the wordmark stays
                        clear of the rail at every breakpoint. */}
-        <div className="app-header-row max-w-6xl xl:max-w-7xl 2xl:max-w-none mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 h-[3.25rem] lg:h-14 xl:h-16 flex items-center gap-3 relative">
+        {/* Full-bleed header on lg+. User feedback (May 25 2026):
+            "the profile icon is all the way to the right if the
+            taxottic logo does not start left." The previous
+            max-w + mx-auto centered the header content in a box,
+            so on a wide monitor the wordmark sat with empty space
+            to its LEFT and the user menu sat with empty space to
+            its RIGHT — visually disconnected from the actual
+            viewport edges. Now: drop max-w + mx-auto entirely on
+            lg+; the row spans edge-to-edge with lg:pl-N for rail
+            clearance and a small lg:pr-N for the user-menu
+            breathing room. Mobile stays max-w/mx-auto because the
+            mobile sheet menu hamburger has its own anchor logic. */}
+        <div className="app-header-row max-w-6xl mx-auto lg:max-w-none lg:mx-0 px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:pr-6 h-[3.25rem] lg:h-14 xl:h-16 flex items-center gap-3 relative">
           {/* Consumer surface only: hamburger that opens the same
               left rail in a sheet on < lg widths. Admin / HQ host
               still renders only the wordmark + UserMenu pair. */}
