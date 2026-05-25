@@ -14,23 +14,35 @@ export const dynamic = "force-dynamic";
 
 // POST /api/mileage/ingest
 //
-// The native background-geolocation layer (Phase 4) streams raw GPS
-// points here. ALL intelligence is server-side + already unit-
-// tested (segmentTrips / suggestClassification / tripDeduction),
-// so this route is just: authenticate → validate → segment →
-// classify → persist with the IRS deduction precomputed.
+// THE BIG REWRITE (May 25 2026). The old contract was:
+//   1. Receive a batch of points.
+//   2. Run segmentTrips() on the batch.
+//   3. Insert any closed trips.
+//   4. Return ok + tripsCreated.
 //
-// Auth/write model: validate the user via the session, then WRITE
-// with the service-role client scoping every row by the validated
-// driver_user_id (the codebase's standard pattern — @supabase/ssr
-// cookies don't reach PostgREST in route handlers, so RLS WITH
-// CHECK on a session client would fail).
+// That contract silently dropped EVERY user's drives. The
+// segmenter needs a 5-min stationary dwell (or 8-min capture gap)
+// to close a trip. The device's @capgo plugin flushes every 2 min
+// during a drive. So every batch was mid-drive — continuous
+// movement, no closing pause — segmentTrips returned 0 trips, we
+// returned ok with tripsCreated=0, the device cleared its local
+// buffer, and the points were lost. Zero rows in mileage_points
+// or mileage_trips across the entire DB, ever, was the proof.
 //
-// Scope note (documented, intentional): this segments the SUBMITTED
-// batch. A drive split across two upload batches yields two trips
-// at the seam; cross-batch stitching is the Phase-2.5 refinement
-// noted in docs/MILEAGE_TRACKER_SPEC.md. Re-posting the same batch
-// is de-duped on (company, driver, started_at, ended_at).
+// New contract:
+//   1. Persist every incoming point to mileage_points_raw (staging).
+//   2. Pull ALL still-unconsumed staging rows for this user+company
+//      (the last 24h to bound query cost).
+//   3. Run segmentTrips() over the union (sorted by captured_at).
+//   4. For each CLOSED trip the segmenter returns, insert into
+//      mileage_trips, copy the points into mileage_points, and mark
+//      the contributing staging rows consumed.
+//   5. Points that belong to an OPEN (still-moving) trip stay in
+//      staging for the next batch. Nothing is dropped.
+//
+// Console-logs the entire flow so Vercel runtime logs finally show
+// what's happening — the old route had zero logging, which is why
+// this bug went undiagnosed.
 
 type Body = {
   companyId?: string;
@@ -56,6 +68,7 @@ export async function POST(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
+    console.log("[ingest] 401 — no session");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -63,32 +76,28 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as Body;
   } catch {
+    console.log("[ingest] 400 — invalid_json");
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
   const companyId = String(body.companyId ?? "").trim();
   const rawPoints = Array.isArray(body.points) ? body.points : [];
   if (!companyId) {
+    console.log("[ingest] 400 — missing_company user=" + user.id);
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
   const points = rawPoints
     .filter(isFinitePoint)
     .sort((a, b) => a.ts - b.ts);
-  if (points.length < 2) {
-    return NextResponse.json(
-      { ok: true, tripsCreated: 0, businessMiles: 0, deductionCents: 0 },
-      { status: 200 },
-    );
-  }
-  // Reject absurd payloads early (a runaway client / abuse).
   if (points.length > 50_000) {
+    console.log(
+      "[ingest] 413 — too_many_points user=" + user.id + " n=" + points.length,
+    );
     return NextResponse.json({ error: "too_many_points" }, { status: 413 });
   }
 
   const admin = createServiceClient();
 
-  // The signed-in user must be a member of the company they're
-  // logging mileage for.
   const { data: membership } = await admin
     .from("company_members")
     .select("company_id")
@@ -96,10 +105,80 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user.id)
     .maybeSingle();
   if (!membership) {
+    console.log(
+      "[ingest] 403 — not_a_member user=" + user.id + " company=" + companyId,
+    );
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  // Known geofenced places for business/personal suggestion.
+  // 1. Stage the incoming points. Even a 1-point batch lands so we
+  // never silently drop. Skip if the array is empty (the device
+  // can still call us to drain its buffer + see the segmentation
+  // catch up to any already-staged data).
+  if (points.length > 0) {
+    const stagingRows = points.map((p) => ({
+      driver_user_id: user.id,
+      company_id: companyId,
+      captured_at: new Date(p.ts).toISOString(),
+      lat: p.lat,
+      lng: p.lng,
+      speed_mps: p.speedMps ?? null,
+      accuracy_m: p.accuracyM ?? null,
+    }));
+    const { error: stageErr } = await admin
+      .from("mileage_points_raw")
+      .insert(stagingRows);
+    if (stageErr) {
+      console.error("[ingest] stage insert failed", stageErr.message);
+      return NextResponse.json(
+        { error: "stage_failed", detail: stageErr.message },
+        { status: 500 },
+      );
+    }
+  }
+
+  // 2. Pull the user's unconsumed staging pool (last 24h bound so a
+  // single query never blows up). 50k row hard cap matches the
+  // hard reject above. Sorted asc by captured_at so the segmenter
+  // sees a chronological stream.
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+  const { data: pendingRows, error: pendingErr } = await admin
+    .from("mileage_points_raw")
+    .select("id, captured_at, lat, lng, speed_mps, accuracy_m")
+    .eq("driver_user_id", user.id)
+    .eq("company_id", companyId)
+    .is("consumed_at", null)
+    .gte("captured_at", dayAgo)
+    .order("captured_at", { ascending: true })
+    .limit(50_000);
+  if (pendingErr) {
+    console.error("[ingest] pending fetch failed", pendingErr.message);
+    return NextResponse.json(
+      { error: "pending_failed", detail: pendingErr.message },
+      { status: 500 },
+    );
+  }
+  const pending = pendingRows ?? [];
+
+  // Convert staging rows → GpsPoint for the segmenter. Keep a
+  // side-map id→raw row so we can mark them consumed after a trip
+  // is materialised.
+  type StagingRow = (typeof pending)[number];
+  type PointWithRaw = GpsPoint & { __raw: StagingRow };
+  const allPoints: PointWithRaw[] = pending.map((r) => ({
+    lat: r.lat as number,
+    lng: r.lng as number,
+    ts: Date.parse(r.captured_at as string),
+    speedMps: (r.speed_mps as number | null) ?? undefined,
+    accuracyM: (r.accuracy_m as number | null) ?? undefined,
+    __raw: r,
+  }));
+
+  console.log(
+    `[ingest] user=${user.id} company=${companyId} incoming=${points.length} staging_pool=${allPoints.length}`,
+  );
+
+  // 3. Known places for auto-classification.
   const { data: placeRows } = await admin
     .from("mileage_places")
     .select("id, kind, lat, lng, radius_m")
@@ -112,17 +191,32 @@ export async function POST(req: NextRequest) {
     radiusM: (p.radius_m as number) ?? 120,
   }));
 
-  const trips = segmentTrips(points);
+  // 4. Segment across the full staging pool.
+  const trips = segmentTrips(
+    allPoints.map((p) => ({
+      lat: p.lat,
+      lng: p.lng,
+      ts: p.ts,
+      speedMps: p.speedMps,
+      accuracyM: p.accuracyM,
+    })),
+  );
 
   let tripsCreated = 0;
   let businessMiles = 0;
   let deductionCents = 0;
 
+  // 5. Materialise closed trips. For each trip the segmenter returns
+  // we find the matching subset of staging rows by timestamp range
+  // (segmentTrips preserves order, so startTs..endTs covers exactly
+  // the contributing fixes).
   for (const trip of trips) {
     const startedAt = new Date(trip.startTs).toISOString();
     const endedAt = new Date(trip.endTs).toISOString();
 
-    // Idempotent: skip if this exact drive was already ingested.
+    // De-dupe re-posted batches: if a trip with this exact range
+    // exists for this driver, skip + still mark the staging rows
+    // consumed so they don't pile up.
     const { data: dupe } = await admin
       .from("mileage_trips")
       .select("id")
@@ -131,7 +225,24 @@ export async function POST(req: NextRequest) {
       .eq("started_at", startedAt)
       .eq("ended_at", endedAt)
       .maybeSingle();
-    if (dupe) continue;
+
+    const contributingRaw = allPoints.filter(
+      (p) => p.ts >= trip.startTs && p.ts <= trip.endTs,
+    );
+
+    if (dupe) {
+      const ids = contributingRaw.map((p) => (p.__raw as { id: string }).id);
+      if (ids.length > 0) {
+        await admin
+          .from("mileage_points_raw")
+          .update({
+            consumed_at: new Date().toISOString(),
+            consumed_trip_id: dupe.id,
+          })
+          .in("id", ids);
+      }
+      continue;
+    }
 
     const classification = suggestClassification(trip, places);
     const taxYear = new Date(trip.startTs).getUTCFullYear();
@@ -156,9 +267,7 @@ export async function POST(req: NextRequest) {
       .select("id")
       .single();
     if (tripErr || !inserted) {
-      // Don't fail the whole batch for one bad trip; the device
-      // can safely retry (idempotency guard above protects us).
-      console.error("[mileage/ingest] trip insert failed", tripErr?.message);
+      console.error("[ingest] trip insert failed", tripErr?.message);
       continue;
     }
 
@@ -175,8 +284,20 @@ export async function POST(req: NextRequest) {
         .from("mileage_points")
         .insert(pointRows);
       if (ptErr) {
-        console.error("[mileage/ingest] points insert failed", ptErr.message);
+        console.error("[ingest] points insert failed", ptErr.message);
       }
+    }
+
+    // Mark the contributing staging rows consumed.
+    const ids = contributingRaw.map((p) => (p.__raw as { id: string }).id);
+    if (ids.length > 0) {
+      await admin
+        .from("mileage_points_raw")
+        .update({
+          consumed_at: new Date().toISOString(),
+          consumed_trip_id: inserted.id,
+        })
+        .in("id", ids);
     }
 
     tripsCreated++;
@@ -184,9 +305,6 @@ export async function POST(req: NextRequest) {
       businessMiles += trip.distanceMiles;
       deductionCents += dCents;
     } else if (classification === "unclassified") {
-      // Phase-3 producer: a drive we couldn't auto-classify → ask.
-      // Idempotent (notification_log dedupe on the trip id) and a
-      // no-op until push creds exist; never throws.
       await notify(user.id, {
         kind: "trip_classify",
         tripId: inserted.id,
@@ -194,10 +312,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const stagingRemaining = allPoints.length - trips.reduce((sum, t) => {
+    return (
+      sum +
+      allPoints.filter((p) => p.ts >= t.startTs && p.ts <= t.endTs).length
+    );
+  }, 0);
+
+  console.log(
+    `[ingest] done user=${user.id} trips=${tripsCreated} biz_mi=${businessMiles.toFixed(2)} ded_$=${(deductionCents / 100).toFixed(2)} staging_left=${stagingRemaining}`,
+  );
+
   return NextResponse.json({
     ok: true,
     tripsCreated,
     businessMiles: Number(businessMiles.toFixed(3)),
     deductionCents,
+    stagingPoolSize: allPoints.length,
+    stagingRemaining,
   });
 }

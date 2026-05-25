@@ -111,6 +111,14 @@ export const trackerDiag = {
   startError: "" as string,
   cbHits: 0 as number,
   cbLastError: "" as string,
+  // Last flush round-trip — populated by flush() so the toggle UI
+  // can show "the device IS reaching the server" or "the device
+  // sent 40 points and got 401 back" without DevTools.
+  flushCount: 0 as number,
+  flushLastStatus: 0 as number,
+  flushLastResult: "" as string,
+  flushLastTripsCreated: 0 as number,
+  flushLastStagingLeft: 0 as number,
 };
 
 async function guard(): Promise<BackgroundGeolocationPlugin | null> {
@@ -170,8 +178,9 @@ function loadPersistedBuffer() {
  *  on failure (retry next tick); drops only what the server accepted. */
 async function flush(): Promise<void> {
   if (flushing) return;
-  if (!companyId || buffer.length < 2) return;
+  if (!companyId || buffer.length < 1) return; // ≥1 so a 1-point ping reaches the server too
   flushing = true;
+  trackerDiag.flushCount++;
   const batch = buffer.slice(0, MAX_BUFFER);
   try {
     const res = await fetch("/api/mileage/ingest", {
@@ -181,12 +190,44 @@ async function flush(): Promise<void> {
       body: JSON.stringify({ companyId, points: batch }),
       keepalive: true,
     });
+    trackerDiag.flushLastStatus = res.status;
+    let bodyJson: unknown = null;
+    try {
+      bodyJson = await res.clone().json();
+    } catch {
+      /* not JSON — leave as null */
+    }
     if (res.ok) {
+      // Server staged everything; drop locally so we don't re-send
+      // the same points. The server's staging table is authoritative
+      // for "did this point land" — we trust the 2xx.
       buffer = buffer.slice(batch.length);
       persistBuffer();
+      const j = bodyJson as
+        | {
+            tripsCreated?: number;
+            stagingRemaining?: number;
+          }
+        | null;
+      trackerDiag.flushLastTripsCreated = j?.tripsCreated ?? 0;
+      trackerDiag.flushLastStagingLeft = j?.stagingRemaining ?? 0;
+      trackerDiag.flushLastResult = `ok trips=${j?.tripsCreated ?? 0} left=${j?.stagingRemaining ?? 0}`;
+    } else {
+      // KEEP the batch on non-2xx so we retry next tick. Surface the
+      // status + first ~40 chars of the body so the UI diag line can
+      // show "401 unauthorized" instead of silently failing forever
+      // (the bug we shipped for months before May 25).
+      const errBody = bodyJson
+        ? JSON.stringify(bodyJson).slice(0, 60)
+        : (await res.clone().text().catch(() => "")).slice(0, 60);
+      trackerDiag.flushLastResult = `${res.status} ${errBody}`;
     }
-  } catch {
-    /* offline / transient — keep the batch for the next flush */
+  } catch (e) {
+    // Offline / transient — keep the batch. Surface the error type
+    // (TypeError = network unreachable; AbortError = timed out).
+    trackerDiag.flushLastResult = `network: ${
+      e instanceof Error ? e.name + ":" + e.message.slice(0, 40) : "unknown"
+    }`;
   } finally {
     flushing = false;
   }
@@ -230,7 +271,7 @@ export async function startMileageTracking(
   // guard() call). If not cached, kick off guard() once and bail —
   // the next tap will succeed. Avoids `await guard()` blocking
   // forever if a concurrent invocation is still mid-flight.
-  let bg = plugin;
+  const bg = plugin;
   if (!bg) {
     trackerDiag.startResult = "warming";
     void guard().catch(() => {});
