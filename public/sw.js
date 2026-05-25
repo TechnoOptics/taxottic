@@ -219,7 +219,23 @@
 // padding pattern. Pure CSS — but every consumer page is in the
 // markup so v38 clients must drop their cached HTML for the new
 // classes to take effect.
-const CACHE_VERSION = "v39";
+// v40: mileage tracker reliability. User: "I drove around the
+// whole day today and nothing was logged. This is now getting
+// annoying." Two parts:
+//   (1) CapacitorNativeInit now listens for App resume +
+//       appStateChange events and re-arms tracking on every
+//       foreground. Android (Samsung especially) silently kills
+//       the @capgo foreground service when the app backgrounds;
+//       resume-on-foreground catches that case so opening the
+//       app after a drive auto-restarts the tracker.
+//   (2) New /mileage/diagnose self-test page with a Client
+//       component that walks every step of the plugin's start
+//       path live — native shell, plugin registered, JS import,
+//       start() resolution, callbacks firing, first fix lat/lng.
+//       Each step lights up green/red so the user can screenshot
+//       the exact failure mode on their phone.
+// SW bump because new page markup ships.
+const CACHE_VERSION = "v40";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

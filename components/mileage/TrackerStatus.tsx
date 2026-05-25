@@ -162,6 +162,17 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
                 </li>
               ) : null}
               <li>
+                <strong>Self-test:</strong>{" "}
+                <a
+                  href="/mileage/diagnose"
+                  className="underline underline-offset-2 text-forest-900"
+                >
+                  Open /mileage/diagnose
+                </a>{" "}
+                — one tap, runs the GPS plugin live, shows exactly
+                which step fails on YOUR device. Screenshot and send.
+              </li>
+              <li>
                 Or use <strong>“Log it manually”</strong> below to
                 backfill the drive — same deduction either way.
               </li>
