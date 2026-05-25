@@ -235,7 +235,34 @@
 //       Each step lights up green/red so the user can screenshot
 //       the exact failure mode on their phone.
 // SW bump because new page markup ships.
-const CACHE_VERSION = "v40";
+// v41: THE BIG ONE. User: "the toggle is on... and I can see the
+// location icon on my status bar of my phone so where is the
+// disconnect?" Diagnosis: every batch the device flushed mid-
+// drive was continuous-movement-with-no-stop. The segmenter
+// needs a 5-min stationary dwell to CLOSE a trip; it found
+// none; returned 0 trips; the ingest route returned ok with
+// tripsCreated=0; the device cleared its local buffer; the
+// points were lost. Zero rows in mileage_points / mileage_trips
+// across the ENTIRE database, ever, was the smoking gun.
+//
+// Fix: new staging table `mileage_points_raw` (migration
+// 20260525000001). Every incoming point lands in staging
+// immediately. The ingest route runs segmentation across the
+// UNION of (new batch + all unconsumed staging rows for this
+// user, last 24h). When a trip closes (real pause finally
+// detected), it materialises into mileage_trips +
+// mileage_points and marks the contributing staging rows
+// consumed. Mid-drive points stay in staging for the next
+// batch. Nothing is dropped silently anymore.
+//
+// Also: flush() now keeps the batch on non-2xx (was clearing
+// even on 401/403), logs the response into trackerDiag, and
+// the AutoTrackToggle diag line shows
+// `flush#N last=ok trips=K left=M` so the user can see from
+// the toggle card whether their device is reaching the server.
+// Ingest route now console.logs every request — Vercel runtime
+// logs will finally show what's happening.
+const CACHE_VERSION = "v41";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

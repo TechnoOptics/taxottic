@@ -233,6 +233,10 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
         )} imp={String(trackerDiag.importOk)} start={String(
           trackerDiag.startFn,
         )} call={trackerDiag.startResult} cbs={trackerDiag.cbHits}
+        {" "}flush#{trackerDiag.flushCount}
+        {trackerDiag.flushLastResult
+          ? ` last=${trackerDiag.flushLastResult}`
+          : ""}
         {trackerDiag.startError ? ` startErr=${trackerDiag.startError}` : ""}
         {trackerDiag.cbLastError ? ` cbErr=${trackerDiag.cbLastError}` : ""}
         {trackerDiag.lastError ? ` err=${trackerDiag.lastError.slice(0, 40)}` : ""}
