@@ -327,7 +327,15 @@
 // output and won on wide monitors. lg:max-w-none was effectively
 // dead code. Bulk-stripped the xl/2xl max-w override pairs from
 // every consumer page. Now lg:max-w-none wins everywhere ≥ lg.
-const CACHE_VERSION = "v45";
+// v46: LeftRail looks like a real sidebar now. Was a rounded card
+// floating at left-2 starting at safe-top+9rem — read as a popup
+// detached from the layout. New treatment: position fixed to the
+// LEFT EDGE of the viewport, full-height from just under the
+// header to the bottom safe-area, flat bg-paper/95 + border-r
+// instead of the card shadow + rounded-all-sides. Only the RIGHT
+// edge stays rounded (rounded-r-2xl) so there's a soft visual
+// seam into the content area.
+const CACHE_VERSION = "v46";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
