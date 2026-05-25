@@ -58,7 +58,7 @@ export default async function BanksPage({
     return (
       <main id="main" className="min-h-screen">
         <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-        <section className="max-w-3xl xl:max-w-5xl 2xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 py-10">
+        <section className="max-w-3xl xl:max-w-5xl 2xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
           <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
             {company.public_id} <span className="text-gold-700">·</span> Banks
           </div>
@@ -172,7 +172,7 @@ export default async function BanksPage({
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
-      <section className="max-w-4xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 py-10">
+      <section className="max-w-4xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
           {company.public_id} <span className="text-gold-700">·</span> Banks
         </div>
