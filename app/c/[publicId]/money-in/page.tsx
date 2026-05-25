@@ -57,7 +57,7 @@ export default async function MoneyInHub({ params }: { params: Params }) {
           {company.public_id} <span className="text-gold-700">·</span>{" "}
           Tax year {taxYear}
         </div>
-        <h1 className="display mt-2 text-3xl text-forest-900">Money in</h1>
+        <h1 className="display mt-2 text-3xl text-forest-900">Income</h1>
         <p className="mt-2 text-sm text-ink-soft max-w-xl">
           Everything coming in this year. Log new entries or open the
           full editor for past months.

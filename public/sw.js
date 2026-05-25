@@ -335,7 +335,18 @@
 // instead of the card shadow + rounded-all-sides. Only the RIGHT
 // edge stays rounded (rounded-r-2xl) so there's a soft visual
 // seam into the content area.
-const CACHE_VERSION = "v46";
+// v47: IA restructure. LeftRail now company-aware: Dashboard +
+// Companies switcher at top, separator, [Company name] header +
+// Forecast / Income / Expenses / Mileage / Import / Deductions /
+// Chat / Settings underneath. User-level items (Tax profile,
+// Goals, Reminders, Billing, Security, Your data, Recycle bin)
+// moved entirely into the profile-icon dropdown. CompanyNav 5-tab
+// strip neutralized (returns null) — the rail is now the only
+// navigation. Mobile menu opener moved from a header-row tab to a
+// bottom-left FAB so it stops overlaying the header. Labels:
+// Money in → Income, Money out → Expenses, Talk → Chat, Setup →
+// Settings (routes unchanged).
+const CACHE_VERSION = "v47";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

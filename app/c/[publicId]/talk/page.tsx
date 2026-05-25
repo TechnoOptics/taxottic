@@ -87,7 +87,7 @@ export default async function TalkHub({ params }: { params: Params }) {
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
           {company.public_id}
         </div>
-        <h1 className="display mt-2 text-3xl text-forest-900">Talk</h1>
+        <h1 className="display mt-2 text-3xl text-forest-900">Chat</h1>
         <p className="mt-2 text-sm text-ink-soft max-w-xl">
           People who help with this company. Your team for day-to-day
           coordination, your tax preparer for the heavy filing season.

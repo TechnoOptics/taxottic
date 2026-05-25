@@ -4,31 +4,32 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LeftRail } from "./LeftRail";
 
+type Company = { publicId: string; name: string };
+
 /**
  * Mobile/tablet entry point for the left-rail menu.
  *
- * The desktop rail (LeftRail mode="rail") is `hidden lg:flex`, so on
- * narrow screens we surface the same content behind a FLOATING TAB
- * on the middle-left edge of the viewport — not a header button.
- * The header used to host a hamburger, but user feedback was that
- * a top-of-viewport menu overlaid the status bar + header itself.
- * Anchoring to the middle-left keeps the OS chrome + header
- * unobstructed and matches the "swipe from the side" mental model
- * users expect on phones.
+ * (May 25 2026 redesign) The opener is now a BOTTOM-LEFT FAB. The
+ * previous middle-left tab anchored to the header row read as if it
+ * was "on" the brand strip — user feedback "the menu opener is
+ * overlaying the header". A bottom-left FAB sits in thumb territory,
+ * never touches the header, and matches the mental model of a
+ * standard mobile "open menu" affordance.
  *
  * Interactions:
- *   - Tap the tab → opens a portal-mounted sheet (same LeftRail
- *     mode="sheet" as before).
- *   - Swipe right from anywhere on the left edge (12px hit zone) →
+ *   - Tap the FAB → opens a portal-mounted sheet (LeftRail
+ *     mode="sheet"). The sheet renders below the header so the
+ *     wordmark + safe-area chrome stay visible.
+ *   - Swipe right from anywhere on the left edge (12 px hit zone) →
  *     opens the sheet. Tracks deltaX over touchstart/touchmove so a
- *     ~30px rightward swipe is the open gesture; a tap-equivalent
- *     short swipe (< 6px) is treated as a tap to keep it
- *     accessible.
+ *     ≥ 30 px rightward swipe is the open gesture; a tap-equivalent
+ *     short swipe is ignored to avoid false opens during scroll.
  *   - Inside the sheet, tap the backdrop or hit Escape to close.
  *
- * Tab is `lg:hidden` so it never appears next to the desktop rail.
+ * `lg:hidden` keeps the FAB out of the way when the desktop rail is
+ * showing.
  */
-export function LeftRailMobile() {
+export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -47,9 +48,9 @@ export function LeftRailMobile() {
   }, [open]);
 
   // Edge-swipe detection: 12px hit zone on the left edge. We track
-  // touchstart x and follow the next move; ≥ 30px rightward delta
-  // opens the menu. Listeners attach to <body> so the user can
-  // start the swipe anywhere on the left edge, not just on the tab.
+  // touchstart x and follow the next move; ≥ 30 px rightward delta
+  // opens the menu. Listeners attach to <body> so the user can start
+  // the swipe anywhere on the left edge, not just on the FAB.
   const startRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -65,8 +66,6 @@ export function LeftRailMobile() {
       if (!t) return;
       const dx = t.clientX - startRef.current.x;
       const dy = Math.abs(t.clientY - startRef.current.y);
-      // Horizontal swipe gate (dx > 30, dy < dx) so vertical scroll
-      // never accidentally opens the menu.
       if (dx > 30 && dy < dx) {
         startRef.current = null;
         setOpen(true);
@@ -92,13 +91,9 @@ export function LeftRailMobile() {
             role="dialog"
             aria-modal="true"
             aria-label="Main menu"
-            // Push the dialog down by safe-top + header height (3.25rem).
-            // Without this offset the sheet covered the OS status bar
-            // AND the Taxottic header, which read as "the app
-            // disappeared." Now the sheet only covers the area BELOW
-            // the header, so the wordmark + safe-area chrome stay
-            // visible while the menu is open — matches every
-            // production iOS/Android drawer pattern.
+            // Push the dialog down by safe-top + header height (3.25rem)
+            // so the wordmark + OS chrome stay visible while the menu
+            // is open.
             className="fixed inset-x-0 bottom-0 z-[60] flex"
             style={{
               top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 3.25rem)",
@@ -109,7 +104,11 @@ export function LeftRailMobile() {
               onClick={() => setOpen(false)}
             />
             <div className="relative h-full">
-              <LeftRail mode="sheet" onDismiss={() => setOpen(false)} />
+              <LeftRail
+                mode="sheet"
+                onDismiss={() => setOpen(false)}
+                companies={companies}
+              />
             </div>
           </div>,
           document.body,
@@ -123,40 +122,41 @@ export function LeftRailMobile() {
         onClick={() => setOpen(true)}
         aria-label="Open menu"
         aria-expanded={open}
-        // Floating tab anchored to the HEADER ROW, vertically centered
-        // within the brand strip so it sits in line with the TAXOTTIC
-        // wordmark. The middle-left position (pre-May 23 2026) looked
-        // disconnected from the header on phone-sized viewports. New
-        // position uses calc(safe-top + header-half) so a notch /
-        // dynamic island still gets respected.
-        // `lg:hidden` keeps it out of the way when the desktop rail
-        // is showing. z-50 sits above the header (z-30) but below
-        // the sheet (z-60) when open.
+        // Bottom-left FAB. Sits above the safe-bottom inset (gesture
+        // bar on Android, home-indicator on iOS) so it never gets
+        // covered. 56 px square is the standard FAB size — large
+        // enough for a thumb tap, small enough to not crowd content.
+        // z-50 sits above the header (z-30) but below the sheet
+        // (z-60) when open.
         style={{
-          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + (var(--app-header-h, 3.25rem) / 2))",
+          bottom:
+            "calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 1rem)",
+          left:
+            "calc(max(env(safe-area-inset-left, 0px), 0px) + 1rem)",
         }}
         className="
-          lg:hidden fixed left-0 -translate-y-1/2 z-50
-          h-10 w-6 rounded-r-2xl
+          lg:hidden fixed z-50
+          h-14 w-14 rounded-full
           bg-forest-900 text-cream
-          shadow-[0_4px_16px_rgba(0,0,0,0.25)]
+          shadow-[0_8px_24px_rgba(0,0,0,0.35)]
           flex items-center justify-center
-          active:bg-forest-800 transition-colors
+          active:bg-forest-800 active:scale-95
+          transition-transform
         "
       >
-        {/* Three-dot grab handle: lightweight visual cue that this
-            is the "more" affordance, while keeping the tab thin
-            enough to never feel intrusive. */}
+        {/* Hamburger icon — bigger and more recognizable than the
+            previous 3-dot grab handle. */}
         <svg
-          viewBox="0 0 6 14"
-          width="6"
-          height="14"
-          fill="currentColor"
+          viewBox="0 0 24 24"
+          width="24"
+          height="24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
           aria-hidden="true"
         >
-          <circle cx="3" cy="2" r="1.2" />
-          <circle cx="3" cy="7" r="1.2" />
-          <circle cx="3" cy="12" r="1.2" />
+          <path d="M4 7h16M4 12h16M4 17h16" />
         </svg>
       </button>
       {drawer}

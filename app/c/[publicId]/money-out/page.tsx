@@ -138,7 +138,7 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
           {company.public_id} <span className="text-gold-700">·</span>{" "}
           Tax year {taxYear}
         </div>
-        <h1 className="display mt-2 text-3xl text-forest-900">Money out</h1>
+        <h1 className="display mt-2 text-3xl text-forest-900">Expenses</h1>
         <p className="mt-2 text-sm text-ink-soft max-w-xl">
           Everything that reduces your taxable income, in one place:
           expenses, mileage, sales tax, and the deduction catalog.
