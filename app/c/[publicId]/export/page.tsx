@@ -118,7 +118,7 @@ export default async function ExportPage({
 
   return (
     <main className="export-page bg-white text-forest-900 min-h-screen">
-      <div className="max-w-4xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 sm:px-10 py-8 sm:py-12">
+      <div className="max-w-4xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 sm:px-10 py-8 sm:py-12">
         {/* Top toolbar - hidden on print */}
         <div className="no-print mb-8 flex items-center justify-between gap-3 flex-wrap">
           <Link
