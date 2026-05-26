@@ -373,7 +373,19 @@
 //      previous cadence meant a 5-min drive ended before any points
 //      ever hit the server, so the in-progress trip was never
 //      materialized.
-const CACHE_VERSION = "v50";
+// v51: Defer tail-close in segmentation when the user is still
+// driving. SW v50 introduced 30s heartbeats while tracking — combined
+// with the segmenter's "always close whatever's open at end of
+// stream" logic, every heartbeat materialized the in-progress trip
+// as a fragment, then subsequent points (after those fragments were
+// marked consumed) became their own fragments. A 10-min drive
+// produced ~20 tiny trips. Fix: segmentTrips now accepts
+// `closeOpenAtEnd` (default true, preserves test semantics); the
+// ingest endpoint passes `false` when the most recent staged point
+// is < STATIONARY_DWELL_MS (5 min) old. While driving, the tail
+// stays in staging; when the user parks and the heartbeats see a
+// stale tail, the close fires and one continuous trip materializes.
+const CACHE_VERSION = "v51";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
