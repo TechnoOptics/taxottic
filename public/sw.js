@@ -394,7 +394,15 @@
 // 0 or null falls through to haversine-derived speed (which is
 // accurate at rest AND in motion). Without this fix, every drive
 // on the user's phone would be silently lost.
-const CACHE_VERSION = "v52";
+// v53: Toggle cold-start race recovery. Real-device diag showed
+// plug=true imp=true start=true (plugin loaded) BUT
+// call=unsupported err=guard_timeout — guardWithTimeout's 5s timeout
+// fired before guard() finished caching the plugin ref. Fix: after
+// the timeout, re-check the module-level plugin cache; if guard()
+// won the race, use it. Also bumped GUARD_TIMEOUT_MS 5s → 10s. Net
+// effect: a slow first cold-start now succeeds on the first tap
+// instead of needing two.
+const CACHE_VERSION = "v53";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
