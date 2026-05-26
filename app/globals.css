@@ -906,6 +906,25 @@ main, footer, nav {
     50% { background-position: 100% 0%; }
   }
 
+  /* Mobile menu slide-up from the bottom-left FAB. The panel is
+     transform-origin: bottom-left so the scale-up grows OUT of the
+     FAB instead of from its center. Pair with a quick fadeIn on
+     the backdrop so the dim and the panel feel coupled. */
+  @keyframes slideUpFromCorner {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   /* ==========================================================================
      Dark theme component overrides
      Applied when html[data-theme="dark"] is set (by DarkThemeMount
