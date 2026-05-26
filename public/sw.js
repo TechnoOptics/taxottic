@@ -358,7 +358,22 @@
 // anchors to the bottom-left FAB position and scales/slides up from
 // there, sized to its content (no longer claims the full viewport).
 // Backdrop dims everything above.
-const CACHE_VERSION = "v49";
+// v50: Mileage capture rebuild. Three coupled fixes:
+//  (1) startMileageTracking now AWAITS the plugin import (capped at
+//      5s) on first tap so the very first toggle actually starts the
+//      tracker instead of returning "warming" and going silent.
+//  (2) AutoTrackToggle subscribes to a new onTrackerStartSettle hook
+//      so a bg.start() rejection flips the toggle back off and
+//      surfaces a real error — previously the toggle stayed visually
+//      ON while LS_ENABLED was silently written to "0", which the
+//      user only discovered on next reload.
+//  (3) flush() runs every 30 s (was 120 s) AND fires a HEARTBEAT
+//      (empty points) while tracking is active so the server keeps
+//      re-segmenting the staging pool when the user has parked. The
+//      previous cadence meant a 5-min drive ended before any points
+//      ever hit the server, so the in-progress trip was never
+//      materialized.
+const CACHE_VERSION = "v50";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
