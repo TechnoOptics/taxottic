@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import {
   startMileageTracking,
   stopMileageTracking,
-  getMileageTrackingState,
   trackerDiag,
+  onTrackerStartSettle,
 } from "@/lib/mileage/native-tracker";
 
 type DenialPath = "settings" | "retry";
@@ -92,17 +92,32 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     };
   }, []);
 
+  // Subscribe to the tracker's start-settle callback so the toggle
+  // can flip BACK OFF if the native bg.start() rejects after the
+  // optimistic flip. Previously this rejection was silent — toggle
+  // looked ON forever; user only learned on reload that localStorage
+  // had been written to "0".
+  useEffect(() => {
+    return onTrackerStartSettle((result) => {
+      if (!result.ok) {
+        setEnabled(false);
+        setError(
+          result.error === "guard_timeout"
+            ? "Tracker is still loading. Try again in a few seconds."
+            : result.error === "unsupported"
+              ? "Tracking isn't available on this device."
+              : `Couldn't start: ${result.error ?? "unknown error"}`,
+        );
+      }
+    });
+  }, []);
+
   // Optimistic on/off — the toggle flips IMMEDIATELY when tapped
-  // and the native call fires in the background. The previous
-  // gated flow (await native, then update React state) made the
-  // toggle look broken on any device where bg.start() was slow or
-  // hung. UX trade-off: if the native side rejects (denied
-  // permission, plugin failure), the visual state may briefly
-  // mismatch — but the persistent notification's appearance gives
-  // the user the real signal anyway, and on this app's worst
-  // platform (Samsung WebView) the awaited path was effectively
-  // never resolving. Visible response > invisible correctness.
-  const beginStart = () => {
+  // and the native call fires in the background. If the native side
+  // rejects, onTrackerStartSettle (above) flips us back off and
+  // surfaces a real error message. So the visible-response-without-
+  // invisible-failure trade-off is reconciled.
+  const beginStart = async () => {
     setShowExplainer(false);
     setError(null);
     setDenialPath(null);
@@ -112,12 +127,38 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     } catch {
       /* private mode */
     }
-    // Fire-and-forget. If the native side errors, the callback in
-    // startMileageTracking handles NOT_AUTHORIZED by calling
-    // stopMileageTracking which flips the localStorage flag back.
-    startMileageTracking(companyId).catch(() => {
-      /* swallow — the toggle stays on visually */
-    });
+    // Await the start result so we can surface SYNCHRONOUS failures
+    // (cold-start race, guard timeout, plugin missing) immediately.
+    // Asynchronous failures (bg.start() promise rejection) come back
+    // via onTrackerStartSettle.
+    try {
+      const result = await startMileageTracking(companyId);
+      if (!result.ok) {
+        setEnabled(false);
+        try {
+          window.localStorage.setItem("taxottic.mileage.enabled", "0");
+        } catch {
+          /* private mode */
+        }
+        setError(
+          result.error === "guard_timeout"
+            ? "Tracker took too long to load. Try again."
+            : result.error === "unsupported"
+              ? "Tracking isn't available on this device."
+              : `Couldn't start: ${result.error ?? "unknown"}`,
+        );
+      }
+    } catch (e) {
+      setEnabled(false);
+      try {
+        window.localStorage.setItem("taxottic.mileage.enabled", "0");
+      } catch {
+        /* private mode */
+      }
+      setError(
+        `Couldn't start: ${e instanceof Error ? e.message : "unknown"}`,
+      );
+    }
   };
 
   const onToggle = () => {

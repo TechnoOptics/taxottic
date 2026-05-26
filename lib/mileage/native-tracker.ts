@@ -80,8 +80,23 @@ const DISTANCE_FILTER_M_DEFAULT = 25;
 const DISTANCE_FILTER_M_ECO = 100;
 // Flush when either threshold trips. Frequent enough that a force-kill
 // loses little; the server de-dupes re-posted batches.
+//
+// (May 25 2026 rebuild) FLUSH_EVERY_MS dropped from 120_000 (2 min) to
+// 30_000 (30 s) so a real drive's points hit the server WHILE the
+// drive is happening — the previous cadence meant a 4-minute drive
+// finished before the device ever called ingest, so nothing got
+// staged and the "tail-close at end of stream" trick that
+// materializes in-progress trips never ran. 30 s also keeps the
+// staging→trip latency tight enough for an on-device demo: user
+// parks, opens /mileage, sees the trip within a minute.
 const FLUSH_AT_POINTS = 40;
-const FLUSH_EVERY_MS = 120_000;
+const FLUSH_EVERY_MS = 30_000;
+/** Guard() timeout. The very first guard() call has to dynamic-import
+ *  @capgo/background-geolocation, which has been observed to hang on
+ *  Samsung WebViews after a fresh install. Capping the await keeps
+ *  startMileageTracking from blocking forever; subsequent calls hit
+ *  the cached `plugin` ref and don't pay this. */
+const GUARD_TIMEOUT_MS = 5_000;
 // Hard cap so a stuck network can't grow localStorage unbounded.
 const MAX_BUFFER = 5_000;
 
@@ -93,6 +108,18 @@ let buffer: GpsPoint[] = [];
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 let flushing = false;
 let companyId = "";
+
+/** Listeners notified when bg.start() settles (resolves OR rejects).
+ *  AutoTrackToggle subscribes so the UI can flip back off if the
+ *  native call fails AFTER the optimistic React flip. */
+type StartListener = (result: { ok: boolean; error?: string }) => void;
+const startListeners = new Set<StartListener>();
+export function onTrackerStartSettle(cb: StartListener): () => void {
+  startListeners.add(cb);
+  return () => {
+    startListeners.delete(cb);
+  };
+}
 
 /** Debug breadcrumb of what guard() saw. Surfaced in the toggle's
  *  disabled state so we can diagnose "toggle disabled" reports
@@ -120,6 +147,22 @@ export const trackerDiag = {
   flushLastTripsCreated: 0 as number,
   flushLastStagingLeft: 0 as number,
 };
+
+/** Race guard() against a timeout so the very first call doesn't
+ *  hang forever if the dynamic import is slow. After the first
+ *  resolution the `plugin` module-level ref is cached and subsequent
+ *  guards return immediately. */
+async function guardWithTimeout(): Promise<BackgroundGeolocationPlugin | null> {
+  return Promise.race<BackgroundGeolocationPlugin | null>([
+    guard(),
+    new Promise<null>((resolve) =>
+      setTimeout(() => {
+        trackerDiag.lastError = "guard_timeout";
+        resolve(null);
+      }, GUARD_TIMEOUT_MS),
+    ),
+  ]);
+}
 
 async function guard(): Promise<BackgroundGeolocationPlugin | null> {
   if (typeof window === "undefined") return null;
@@ -175,10 +218,23 @@ function loadPersistedBuffer() {
 }
 
 /** POST buffered points to the Phase-2 ingestion route. Keeps points
- *  on failure (retry next tick); drops only what the server accepted. */
+ *  on failure (retry next tick); drops only what the server accepted.
+ *
+ *  Heartbeat mode: when tracking is active but the buffer is empty
+ *  (user parked, plugin emitting nothing), we STILL call the server
+ *  every flushTimer tick. The server re-segments the user's staging
+ *  pool on every request, so an empty heartbeat is what materializes
+ *  the "user has been parked for 5 min" trip closure. Without the
+ *  heartbeat, parking → no new points → no flush → no segmentation
+ *  → no trip ever materializes.
+ */
 async function flush(): Promise<void> {
   if (flushing) return;
-  if (!companyId || buffer.length < 1) return; // ≥1 so a 1-point ping reaches the server too
+  if (!companyId) return;
+  // Allow heartbeat (buffer.length === 0) WHILE tracking is active so
+  // the server keeps re-segmenting staging. If we're not tracking and
+  // the buffer is empty, nothing to do.
+  if (buffer.length < 1 && !tracking) return;
   flushing = true;
   trackerDiag.flushCount++;
   const batch = buffer.slice(0, MAX_BUFFER);
@@ -267,15 +323,19 @@ export async function startMileageTracking(
   forCompanyId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   trackerDiag.startResult = "entered";
-  // Use the cached plugin reference if available (set by a prior
-  // guard() call). If not cached, kick off guard() once and bail —
-  // the next tap will succeed. Avoids `await guard()` blocking
-  // forever if a concurrent invocation is still mid-flight.
-  const bg = plugin;
+  // Prefer the cached plugin; if not yet loaded, AWAIT guardWithTimeout
+  // so the first tap actually starts tracking instead of silently
+  // returning "warming" and requiring a second tap. Capped at
+  // GUARD_TIMEOUT_MS so a stuck dynamic import doesn't block forever.
+  // (Previously this returned "warming" immediately and queued
+  // guard() — user feedback "toggle won't enable" traced back to that
+  // path because beginStart() fire-and-forgets the result.)
+  const bg = plugin ?? (await guardWithTimeout());
   if (!bg) {
-    trackerDiag.startResult = "warming";
-    void guard().catch(() => {});
-    return { ok: false, error: "warming" };
+    trackerDiag.startResult = plugin === null && trackerDiag.lastError === "guard_timeout"
+      ? "guard_timeout"
+      : "unsupported";
+    return { ok: false, error: trackerDiag.startResult };
   }
   if (tracking) {
     trackerDiag.startResult = "already_tracking";
@@ -344,6 +404,13 @@ export async function startMileageTracking(
       )
       .then(() => {
         trackerDiag.startResult = "resolved";
+        for (const cb of startListeners) {
+          try {
+            cb({ ok: true });
+          } catch {
+            /* listener threw — keep going */
+          }
+        }
       })
       .catch((e) => {
         trackerDiag.startResult = "rejected";
@@ -355,6 +422,17 @@ export async function startMileageTracking(
           window.localStorage.setItem(LS_ENABLED, "0");
         } catch {
           /* private mode */
+        }
+        // Notify any React listeners so the toggle UI flips back off.
+        // Without this, the toggle stayed visually ON forever after a
+        // native rejection — user only discovered the failure on next
+        // reload (when localStorage was read fresh as "0").
+        for (const cb of startListeners) {
+          try {
+            cb({ ok: false, error: trackerDiag.startError });
+          } catch {
+            /* listener threw — keep going */
+          }
         }
       });
     tracking = true;
