@@ -36,9 +36,34 @@ describe("buildPayload", () => {
         threadId: "th1",
         messageId: "m1",
       },
+      {
+        kind: "trip_logged",
+        tripId: "t1",
+        classification: "business",
+      },
     ] as PushEvent[]) {
       expect(buildPayload(e).category).toBeUndefined();
     }
+  });
+
+  it("trip_logged wording switches on classification + stable dedupe", () => {
+    const biz = buildPayload({
+      kind: "trip_logged",
+      tripId: "t1",
+      classification: "business",
+    });
+    expect(biz.body).toMatch(/business/i);
+    expect(biz.body).not.toMatch(/\$|\d{2,}/); // privacy: no $, no miles
+    expect(biz.dedupeKey).toBe("trip_logged:t1");
+    expect(biz.data.classification).toBe("business");
+
+    const personal = buildPayload({
+      kind: "trip_logged",
+      tripId: "t2",
+      classification: "personal",
+    });
+    expect(personal.body).toMatch(/personal/i);
+    expect(personal.dedupeKey).toBe("trip_logged:t2");
   });
 
   it("dedupe keys are unique per logical event", () => {
@@ -59,6 +84,8 @@ describe("buildPayload", () => {
   it("privacy: no $ amounts in any notification body", () => {
     const events: PushEvent[] = [
       { kind: "trip_classify", tripId: "t" },
+      { kind: "trip_logged", tripId: "t", classification: "business" },
+      { kind: "trip_logged", tripId: "t", classification: "personal" },
       { kind: "clarify", subject: "meal", refId: "r" },
       { kind: "expense_applied", refId: "r" },
       { kind: "goal_met", goalLabel: "Q3 set-aside", goalId: "g" },

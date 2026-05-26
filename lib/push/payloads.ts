@@ -9,6 +9,20 @@
 
 export type PushEvent =
   | { kind: "trip_classify"; tripId: string }
+  /**
+   * "Trip logged" — fires for every materialized trip that the
+   * segmenter already auto-classified business or personal (the
+   * remaining case is `trip_classify`, which asks the user). Body
+   * follows the same no-detail privacy rule: "Drive logged" + no
+   * miles, no dollar amount, no place names visible on the lock
+   * screen. The opener of the notification deep-links to /mileage
+   * via the data payload.
+   */
+  | {
+      kind: "trip_logged";
+      tripId: string;
+      classification: "business" | "personal";
+    }
   | {
       kind: "clarify";
       subject: "meal" | "expense" | "trip";
@@ -46,6 +60,20 @@ export function buildPayload(e: PushEvent): PushPayload {
         category: "TRIP_CLASSIFY",
         data: { kind: e.kind, tripId: e.tripId },
         dedupeKey: `trip_classify:${e.tripId}`,
+      };
+    case "trip_logged":
+      return {
+        title: "Drive logged",
+        body:
+          e.classification === "business"
+            ? "A business drive was added to your books."
+            : "A personal drive was logged.",
+        data: {
+          kind: e.kind,
+          tripId: e.tripId,
+          classification: e.classification,
+        },
+        dedupeKey: `trip_logged:${e.tripId}`,
       };
     case "clarify":
       return {

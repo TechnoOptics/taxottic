@@ -320,10 +320,22 @@ export async function POST(req: NextRequest) {
     if (classification === "business") {
       businessMiles += trip.distanceMiles;
       deductionCents += dCents;
-    } else if (classification === "unclassified") {
+    }
+    // Push for EVERY materialized trip so the phone (+ watch via the
+    // wear data layer) gets an immediate lock-screen ping. Unclassified
+    // trips use the existing `trip_classify` event (interactive
+    // category lets the watch attach Business/Personal swipe actions);
+    // already-classified trips use the lighter `trip_logged` event so
+    // the user knows the deduction landed without having to act.
+    // Both are deduped via notification_log on tripId so a
+    // re-segmentation pass can't double-push.
+    if (classification === "unclassified") {
+      await notify(user.id, { kind: "trip_classify", tripId: inserted.id });
+    } else {
       await notify(user.id, {
-        kind: "trip_classify",
+        kind: "trip_logged",
         tripId: inserted.id,
+        classification,
       });
     }
   }
