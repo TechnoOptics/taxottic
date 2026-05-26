@@ -93,10 +93,27 @@ export function haversineMeters(a: LatLng, b: LatLng): number {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** Speed (m/s) implied by two consecutive points. Device-reported
- *  speed wins when present and non-negative. */
+/** Speed (m/s) implied by two consecutive points.
+ *
+ *  IMPORTANT (2026-05-26 forensic finding): the Android @capgo plugin
+ *  has been observed to report `speed: 0` for every fix even during
+ *  real driving. Production staging captured 195 fixes across 6 hours
+ *  with `speed_mps = 0` for 190/195 of them — but the user was
+ *  actually parked the whole time, so we couldn't tell which way the
+ *  bug cut. The risk for the upcoming real drive: if the plugin
+ *  reports 0 during movement, the previous version's `cur.speedMps
+ *  >= 0` check returned 0 immediately and the haversine fallback was
+ *  bypassed → segmenter never opens a trip → drive is lost.
+ *
+ *  New behavior: ONLY trust device speed when it's > 0. A device
+ *  reporting exactly 0 is treated as "no speed information available"
+ *  and we fall back to haversine-derived speed (which is genuinely 0
+ *  if the user is stationary and genuinely high if they're moving).
+ *  Both branches agree at rest, but the haversine branch is the only
+ *  one that survives a buggy device reporting 0 during movement.
+ */
 function segmentSpeedMps(prev: GpsPoint, cur: GpsPoint): number {
-  if (typeof cur.speedMps === "number" && cur.speedMps >= 0) {
+  if (typeof cur.speedMps === "number" && cur.speedMps > 0) {
     return cur.speedMps;
   }
   const dtSec = (cur.ts - prev.ts) / 1000;

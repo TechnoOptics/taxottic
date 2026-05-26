@@ -385,7 +385,16 @@
 // is < STATIONARY_DWELL_MS (5 min) old. While driving, the tail
 // stays in staging; when the user parks and the heartbeats see a
 // stale tail, the close fires and one continuous trip materializes.
-const CACHE_VERSION = "v51";
+// v52: CRITICAL pre-drive fix. Forensic on production staging
+// (195 unconsumed points, zero materialized trips) revealed the
+// Android @capgo plugin reports `speed: 0` on every fix. The
+// segmenter's `cur.speedMps >= 0` check trusted that 0 and never
+// fell back to haversine, so no segment ever opened. Now: device
+// speed > 0 wins (trust the device when it has a real reading);
+// 0 or null falls through to haversine-derived speed (which is
+// accurate at rest AND in motion). Without this fix, every drive
+// on the user's phone would be silently lost.
+const CACHE_VERSION = "v52";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
