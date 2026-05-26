@@ -91,19 +91,38 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
             role="dialog"
             aria-modal="true"
             aria-label="Main menu"
-            // Push the dialog down by safe-top + header height (3.25rem)
-            // so the wordmark + OS chrome stay visible while the menu
-            // is open.
-            className="fixed inset-x-0 bottom-0 z-[60] flex"
-            style={{
-              top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 3.25rem)",
-            }}
+            // Full-viewport overlay so the dimmed backdrop covers
+            // EVERYTHING, but the menu itself is anchored to the
+            // bottom-left corner (above the FAB) and grows upward.
+            // User feedback (May 25 2026): "make the menu open from
+            // the bottom left corner of the screen not the top" —
+            // the previous full-width-from-below-header sheet read
+            // as "the whole app got replaced by a menu", which was
+            // disorienting.
+            className="fixed inset-0 z-[60]"
           >
             <div
-              className="absolute inset-0 bg-forest-900/50 backdrop-blur-sm"
+              className="absolute inset-0 bg-forest-900/50 backdrop-blur-sm animate-[fadeIn_.15s_ease]"
               onClick={() => setOpen(false)}
             />
-            <div className="relative h-full">
+            {/* Menu panel anchored to bottom-left, above the FAB.
+                Height capped to leave room for the header + safe-top
+                + the FAB itself, so the panel never overlaps the FAB
+                or the brand strip. Width is content-driven via
+                LeftRail's sheet mode (~w-64) and capped at 85vw on
+                phones. Slides up from the FAB with a small spring. */}
+            <div
+              className="absolute origin-bottom-left animate-[slideUpFromCorner_.22s_cubic-bezier(.2,.8,.2,1)]"
+              style={{
+                bottom:
+                  "calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 5rem)",
+                left:
+                  "calc(max(env(safe-area-inset-left, 0px), 0px) + 1rem)",
+                maxHeight:
+                  "calc(100vh - max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) - 3.25rem - 6rem)",
+                maxWidth: "calc(100vw - 2rem)",
+              }}
+            >
               <LeftRail
                 mode="sheet"
                 onDismiss={() => setOpen(false)}

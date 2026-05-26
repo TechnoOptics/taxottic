@@ -352,7 +352,13 @@
 // regardless of specificity. Added `!fixed` (Tailwind important
 // modifier) on the rail className so the rail genuinely stays pinned
 // to the viewport at every scroll position.
-const CACHE_VERSION = "v48";
+// v49: Mobile menu opens FROM THE BOTTOM-LEFT FAB. The previous
+// drawer covered the entire area below the header which read as
+// "the whole app disappeared into a menu." New treatment: the panel
+// anchors to the bottom-left FAB position and scales/slides up from
+// there, sized to its content (no longer claims the full viewport).
+// Backdrop dims everything above.
+const CACHE_VERSION = "v49";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
