@@ -135,6 +135,31 @@ describe("segmentTrips — the business's logical flow", () => {
     expect(segmentTrips(points)).toHaveLength(0);
   });
 
+  it("IGNORES device speed=0 when haversine reveals real movement (Android plugin bug)", () => {
+    // Production forensic 2026-05-26: Android @capgo plugin reports
+    // speed_mps=0 on every fix even during real driving. The previous
+    // `cur.speedMps >= 0` check returned 0 immediately and the
+    // haversine fallback was bypassed → trip never opened. This test
+    // proves the fix: a stream of points moving 100 m every 10 s
+    // (10 m/s — clearly driving) but each tagged `speedMps: 0` MUST
+    // still be detected as a drive.
+    const points: GpsPoint[] = [];
+    let t = 0;
+    for (let i = 0; i <= 30; i++) {
+      points.push(pt(i * 100, t, { speedMps: 0 }));
+      t += 10 * SEC;
+    }
+    const arrivalNorth = 30 * 100;
+    // Park 6 minutes so the trip closes.
+    for (let i = 0; i < 13; i++) {
+      points.push(pt(arrivalNorth + (i % 2), t, { speedMps: 0 }));
+      t += 30 * SEC;
+    }
+    const trips = segmentTrips(points);
+    expect(trips).toHaveLength(1);
+    expect(trips[0].distanceMiles).toBeGreaterThan(1.7); // ~3 km ≈ 1.86 mi
+  });
+
   it("DRIVING_SPEED_MPS is vehicular (above sustained human run)", () => {
     expect(DRIVING_SPEED_MPS).toBeGreaterThan(6); // > elite marathon pace
     expect(DRIVING_SPEED_MPS).toBeLessThan(15); // still catches slow city driving
