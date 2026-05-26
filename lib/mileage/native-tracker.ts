@@ -95,8 +95,15 @@ const FLUSH_EVERY_MS = 30_000;
  *  @capgo/background-geolocation, which has been observed to hang on
  *  Samsung WebViews after a fresh install. Capping the await keeps
  *  startMileageTracking from blocking forever; subsequent calls hit
- *  the cached `plugin` ref and don't pay this. */
-const GUARD_TIMEOUT_MS = 5_000;
+ *  the cached `plugin` ref and don't pay this.
+ *
+ *  Bumped from 5 s → 10 s after a real-device 2026-05-26 incident
+ *  where guard() finished at ~5–6 s on a cold start but
+ *  guardWithTimeout had already returned null at the 5 s mark.
+ *  Combined with the race-recovery fallback in startMileageTracking,
+ *  this gives the first tap a much better chance to succeed without
+ *  the user having to tap twice. */
+const GUARD_TIMEOUT_MS = 10_000;
 // Hard cap so a stuck network can't grow localStorage unbounded.
 const MAX_BUFFER = 5_000;
 
@@ -327,14 +334,27 @@ export async function startMileageTracking(
   // so the first tap actually starts tracking instead of silently
   // returning "warming" and requiring a second tap. Capped at
   // GUARD_TIMEOUT_MS so a stuck dynamic import doesn't block forever.
-  // (Previously this returned "warming" immediately and queued
-  // guard() — user feedback "toggle won't enable" traced back to that
-  // path because beginStart() fire-and-forgets the result.)
-  const bg = plugin ?? (await guardWithTimeout());
+  //
+  // RACE RECOVERY (2026-05-26): a real-device diag line showed
+  // `plug=true imp=true start=true call=unsupported err=guard_timeout`.
+  // guardWithTimeout's 5s timeout fired BEFORE guard() finished, so
+  // `bg` was null at the await boundary — but guard() finished a few
+  // hundred ms later and cached `plugin = bg`. The previous error
+  // branch then read a stale `plugin === null` and reported unsupported.
+  // Fix: after the await, re-check the module-level `plugin` cache.
+  // If guard() finished during our timeout window, grab it now and
+  // continue normally. Saves the user from having to tap the toggle
+  // twice on a slow first cold-start.
+  let bg = plugin ?? (await guardWithTimeout());
+  if (!bg && plugin) {
+    // guard() raced past the timeout — use the cached ref.
+    bg = plugin;
+  }
   if (!bg) {
-    trackerDiag.startResult = plugin === null && trackerDiag.lastError === "guard_timeout"
-      ? "guard_timeout"
-      : "unsupported";
+    trackerDiag.startResult =
+      trackerDiag.lastError === "guard_timeout"
+        ? "guard_timeout"
+        : "unsupported";
     return { ok: false, error: trackerDiag.startResult };
   }
   if (tracking) {
