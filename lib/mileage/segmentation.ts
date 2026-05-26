@@ -118,8 +118,26 @@ function totalMeters(points: GpsPoint[]): number {
  * Points MUST be sorted ascending by `ts`. Out-of-order or
  * duplicate-timestamp points are tolerated (treated as zero-dt) but
  * the caller should sort first for correctness.
+ *
+ * Options:
+ *   closeOpenAtEnd — when true (the default, matches the original
+ *     behavior), any trip still open after the last point is
+ *     force-closed and emitted. Used in test scenarios and when the
+ *     caller is sure the stream is "complete". Set to FALSE when
+ *     segmenting a still-growing live stream (e.g., a 30s heartbeat
+ *     during an active drive) — without this, the same in-progress
+ *     trip gets emitted on every heartbeat, then re-emitted as a
+ *     fragment as new points arrive, producing N tiny pieces instead
+ *     of one continuous trip. The ingest endpoint should pass `false`
+ *     while the user is still moving (last point is fresh) and `true`
+ *     once the last point is old enough to indicate the user has
+ *     parked.
  */
-export function segmentTrips(points: GpsPoint[]): Trip[] {
+export function segmentTrips(
+  points: GpsPoint[],
+  options: { closeOpenAtEnd?: boolean } = {},
+): Trip[] {
+  const { closeOpenAtEnd = true } = options;
   const trips: Trip[] = [];
   if (points.length < 2) return trips;
 
@@ -207,7 +225,13 @@ export function segmentTrips(points: GpsPoint[]): Trip[] {
 
   // Stream ended with a trip still open (e.g., live tracking, or
   // the destination dwell never reached 5 min before data ran out).
-  closeTrip(points.length - 1);
+  // The caller decides whether to materialize the tail (see options
+  // doc above): a 30s heartbeat during a live drive passes
+  // `closeOpenAtEnd: false` so the in-progress trip stays in staging;
+  // a parked-≥5min heartbeat passes `true` so the trip finally lands.
+  if (closeOpenAtEnd) {
+    closeTrip(points.length - 1);
+  }
   return trips;
 }
 

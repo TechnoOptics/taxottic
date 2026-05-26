@@ -139,6 +139,51 @@ describe("segmentTrips — the business's logical flow", () => {
     expect(DRIVING_SPEED_MPS).toBeGreaterThan(6); // > elite marathon pace
     expect(DRIVING_SPEED_MPS).toBeLessThan(15); // still catches slow city driving
   });
+
+  it("closeOpenAtEnd:false leaves the tail trip in staging (no fragmentation during a live drive)", () => {
+    // 30 hops at 10 m/s — a single ongoing drive that never paused.
+    // The default behavior would emit one tail-closed trip; with
+    // closeOpenAtEnd:false the trip is deferred so a heartbeat ingest
+    // during the drive doesn't materialize a fragment that subsequent
+    // points then have to extend (and that the device thinks is
+    // already consumed).
+    const points: GpsPoint[] = [];
+    let t = 0;
+    for (let i = 0; i <= 30; i++) {
+      points.push(pt(i * 100, t));
+      t += 10 * SEC;
+    }
+    expect(segmentTrips(points, { closeOpenAtEnd: false })).toHaveLength(0);
+    // Same input WITH the tail close emits the trip as before.
+    expect(segmentTrips(points)).toHaveLength(1);
+  });
+
+  it("closeOpenAtEnd:false still emits trips that closed via dwell mid-stream", () => {
+    // Drive A → 6-min stop → Drive B (still in progress). Drive A
+    // closes via the dwell test BEFORE the end of the stream, so it
+    // emits regardless of closeOpenAtEnd. Drive B is the tail; with
+    // closeOpenAtEnd:false it's deferred.
+    const points: GpsPoint[] = [];
+    let t = 0;
+    let north = 0;
+    for (let i = 0; i < 20; i++) {
+      points.push(pt(north, t));
+      north += 100;
+      t += 10 * SEC;
+    }
+    for (let i = 0; i < 13; i++) {
+      points.push(pt(north, t));
+      t += 30 * SEC;
+    }
+    for (let i = 0; i < 20; i++) {
+      points.push(pt(north, t));
+      north += 100;
+      t += 10 * SEC;
+    }
+    const trips = segmentTrips(points, { closeOpenAtEnd: false });
+    expect(trips).toHaveLength(1); // only Drive A (closed via dwell)
+    expect(segmentTrips(points)).toHaveLength(2); // tail close gives both
+  });
 });
 
 describe("suggestClassification", () => {

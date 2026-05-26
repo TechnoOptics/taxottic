@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   segmentTrips,
   suggestClassification,
+  STATIONARY_DWELL_MS,
   type GpsPoint,
   type Place,
 } from "@/lib/mileage/segmentation";
@@ -192,6 +193,20 @@ export async function POST(req: NextRequest) {
   }));
 
   // 4. Segment across the full staging pool.
+  //
+  // closeOpenAtEnd is the user-is-parked test. If the most recent
+  // staged point is OLDER than STATIONARY_DWELL_MS (5 min), the user
+  // has stopped — fire the tail-close so the in-progress trip
+  // materializes. If the most recent point is fresh, the user is
+  // still driving — leave the trip open in staging and let the next
+  // heartbeat (which arrives every 30 s while tracking is active) be
+  // the one that finally closes it. Without this guard, every
+  // heartbeat fragments a real drive into ~20 tiny trips.
+  const lastPointAgeMs =
+    allPoints.length > 0
+      ? Date.now() - allPoints[allPoints.length - 1].ts
+      : Infinity;
+  const closeOpenAtEnd = lastPointAgeMs >= STATIONARY_DWELL_MS;
   const trips = segmentTrips(
     allPoints.map((p) => ({
       lat: p.lat,
@@ -200,6 +215,7 @@ export async function POST(req: NextRequest) {
       speedMps: p.speedMps,
       accuracyM: p.accuracyM,
     })),
+    { closeOpenAtEnd },
   );
 
   let tripsCreated = 0;
