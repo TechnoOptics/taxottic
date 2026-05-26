@@ -1,6 +1,7 @@
 import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { PasskeyRegisterButton } from "@/components/PasskeyRegisterButton";
+import { TestPushButton } from "@/components/TestPushButton";
 import { WatchPairForm } from "@/components/WatchPairForm";
 import { deletePasskey } from "./actions";
 import { revokeWatchDevice } from "../actions";
@@ -154,6 +155,31 @@ export default async function SecuritySettingsPage() {
               </ul>
             </div>
           ) : null}
+        </div>
+
+        {/* Push notifications self-test — fires the existing notify()
+            pipeline for the current user and returns a structured
+            diagnostic ("no providers configured", "no tokens
+            registered", or "delivered ok"). Lives here under
+            Sign-in & devices so the user can verify their FCM/APNs
+            setup AFTER provisioning Vercel env vars without needing
+            to take a real drive. The button text + result UI are
+            entirely client-rendered (see components/TestPushButton).
+        */}
+        <div className="card mt-6 p-6">
+          <h2 className="display text-xl text-forest-900">
+            Push notifications
+          </h2>
+          <p className="mt-2 text-sm text-ink-soft">
+            Send a test push to this account so you can verify
+            notifications are wired before taking a real drive. The
+            response tells you exactly what&apos;s missing — APNs/FCM
+            credentials in Vercel, an unregistered device, or a
+            successful delivery.
+          </p>
+          <div className="mt-4">
+            <TestPushButton />
+          </div>
         </div>
 
         <p className="mt-8 text-[11px] leading-relaxed text-ink-muted">
