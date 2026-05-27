@@ -402,7 +402,18 @@
 // won the race, use it. Also bumped GUARD_TIMEOUT_MS 5s → 10s. Net
 // effect: a slow first cold-start now succeeds on the first tap
 // instead of needing two.
-const CACHE_VERSION = "v53";
+// v54: CRITICAL drive-killer fix. Real-world drive: tracker showed
+// call=already_tracking + cbErr=ALREADY_STARTED + cbs=1, server
+// received zero new points across the entire drive. Root cause:
+// @capgo plugin's foreground service survived a WebView reload. New
+// JS called bg.start(); plugin returned ALREADY_STARTED but DID NOT
+// register the new callback. The orphaned old callback (in dead JS
+// context) was the sole listener — every GPS fix during the drive
+// went to /dev/null. Fix: startMileageTracking now ALWAYS calls
+// `await bg.stop()` before `bg.start()` to nuke any orphan service
+// before registering our fresh subscription. The pre-stop is wrapped
+// in try/catch because "nothing to stop" is the common case.
+const CACHE_VERSION = "v54";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

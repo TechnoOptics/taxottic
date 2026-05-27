@@ -371,6 +371,29 @@ export async function startMileageTracking(
   }
   loadPersistedBuffer();
 
+  // CRITICAL (2026-05-26): always call bg.stop() before bg.start() to
+  // kill any orphaned foreground service from a previous WebView
+  // session.
+  //
+  // Real-world failure: user drove, server received zero points across
+  // the entire drive. Diag showed cbErr=ALREADY_STARTED. Root cause:
+  // when Android kills the JS process but the @capgo foreground
+  // service survives (which it does — that's the whole point of a
+  // foreground service), the NEXT JS run's bg.start() returns the
+  // ALREADY_STARTED error AND DOES NOT REGISTER THE NEW LOCATION
+  // CALLBACK. The orphaned old callback (in dead JS context) stays
+  // the only listener, so every fix during the drive went to /dev/null.
+  //
+  // Pre-stopping forces the native side to tear down the orphaned
+  // service so the subsequent start() builds a fresh subscription
+  // with our live callback. The stop is wrapped in try/catch because
+  // "no session running" is the common case and shouldn't error.
+  try {
+    await bg.stop();
+  } catch {
+    /* no prior session — fine */
+  }
+
   // Fire-and-forget start(). Promise rejection / callback errors
   // are captured into trackerDiag so the UI's diag line shows the
   // exact native return path without DevTools.
