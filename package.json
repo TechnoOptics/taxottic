@@ -17,7 +17,8 @@
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:ui": "playwright test --ui",
-    "audits:monthly": "node scripts/audits/run-monthly.mjs"
+    "audits:monthly": "node scripts/audits/run-monthly.mjs",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
@@ -62,6 +63,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "marked": "^18.0.3",
+    "patch-package": "^8.0.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5",
