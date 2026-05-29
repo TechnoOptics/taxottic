@@ -1,0 +1,45 @@
+diff --git a/node_modules/@capgo/background-geolocation/android/src/main/java/com/capgo/capacitor_background_geolocation/BackgroundGeolocationService.java b/node_modules/@capgo/background-geolocation/android/src/main/java/com/capgo/capacitor_background_geolocation/BackgroundGeolocationService.java
+index f9b70f4..5ce86b4 100644
+--- a/node_modules/@capgo/background-geolocation/android/src/main/java/com/capgo/capacitor_background_geolocation/BackgroundGeolocationService.java
++++ b/node_modules/@capgo/background-geolocation/android/src/main/java/com/capgo/capacitor_background_geolocation/BackgroundGeolocationService.java
+@@ -54,19 +54,29 @@ public class BackgroundGeolocationService extends Service {
+         return binder;
+     }
+ 
+-    // Some devices allow a foreground service to outlive the application's main
+-    // activity, leading to nasty crashes as reported in issue #59. If we learn
+-    // that the application has been killed, all watchers are stopped and the
+-    // service is terminated immediately.
++    // TAXOTTIC PATCH (2026-05-28): keep the foreground service ALIVE
++    // when the Capacitor Activity unbinds (i.e., when the user
++    // backgrounds the app to drive). The upstream behavior tore down
++    // location updates AND the service on every onUnbind, which
++    // defeated the purpose of a "background" geolocation plugin —
++    // every drive that didn't keep the app on screen was lost.
++    //
++    // The original author cited a crash from issue #59 where the
++    // service outlived its parent process. Modern Android handles
++    // this correctly: onTaskRemoved or onDestroy fire when the
++    // process is truly going away, and we release everything there.
++    // onUnbind firing during normal backgrounding is NOT a teardown
++    // signal — it's just "the Activity is paused, not dying."
++    //
++    // Net effect: the user closes the app / locks the phone, the
++    // foreground service stays up with its persistent notification,
++    // GPS keeps streaming, drives keep getting captured. The
++    // explicit bg.stop() from JS still works (it routes through
++    // ACTION_STOP in onStartCommand which DOES tear everything
++    // down).
+     @Override
+     public boolean onUnbind(Intent intent) {
+-        if (client != null && locationCallback != null) {
+-            client.removeUpdates(locationCallback);
+-        }
+-        releaseMediaPlayer();
+-        releaseWakeLock();
+-        stopWatchdog();
+-        stopSelf();
++        // intentionally a no-op besides the contract return.
+         return false;
+     }
+ 
