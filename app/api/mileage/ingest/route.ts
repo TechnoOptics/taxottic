@@ -48,6 +48,11 @@ export const dynamic = "force-dynamic";
 type Body = {
   companyId?: string;
   points?: GpsPoint[];
+  // Set by the client when the user toggles tracking OFF (the final
+  // flush in stopMileageTracking). Forces the tail-close below so an
+  // in-progress trip materializes the instant the user stops, instead
+  // of being stranded open forever. See the closeOpenAtEnd comment.
+  sessionEnded?: boolean;
 };
 
 function isFinitePoint(p: unknown): p is GpsPoint {
@@ -82,6 +87,7 @@ export async function POST(req: NextRequest) {
   }
 
   const companyId = String(body.companyId ?? "").trim();
+  const sessionEnded = body.sessionEnded === true;
   const rawPoints = Array.isArray(body.points) ? body.points : [];
   if (!companyId) {
     console.log("[ingest] 400 — missing_company user=" + user.id);
@@ -176,7 +182,7 @@ export async function POST(req: NextRequest) {
   }));
 
   console.log(
-    `[ingest] user=${user.id} company=${companyId} incoming=${points.length} staging_pool=${allPoints.length}`,
+    `[ingest] user=${user.id} company=${companyId} incoming=${points.length} staging_pool=${allPoints.length} sessionEnded=${sessionEnded}`,
   );
 
   // 3. Known places for auto-classification.
@@ -202,11 +208,22 @@ export async function POST(req: NextRequest) {
   // heartbeat (which arrives every 30 s while tracking is active) be
   // the one that finally closes it. Without this guard, every
   // heartbeat fragments a real drive into ~20 tiny trips.
+  //
+  // sessionEnded short-circuits the age test (2026-05-30): when the
+  // user toggles tracking OFF, stopMileageTracking sends one final
+  // flush with sessionEnded:true. The last point is FRESH at that
+  // moment (they just stopped), so the age test alone would leave the
+  // trip open — and because the flush timer is now cleared, no later
+  // heartbeat ever arrives to close it. The drive sat stranded open
+  // in staging forever (confirmed in prod: a clean 1.2 km drive
+  // captured fine but never became a trip). Toggling off is an
+  // explicit "I'm done" — force the tail-close.
   const lastPointAgeMs =
     allPoints.length > 0
       ? Date.now() - allPoints[allPoints.length - 1].ts
       : Infinity;
-  const closeOpenAtEnd = lastPointAgeMs >= STATIONARY_DWELL_MS;
+  const closeOpenAtEnd =
+    sessionEnded || lastPointAgeMs >= STATIONARY_DWELL_MS;
   const trips = segmentTrips(
     allPoints.map((p) => ({
       lat: p.lat,

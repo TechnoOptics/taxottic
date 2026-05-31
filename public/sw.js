@@ -413,7 +413,19 @@
 // `await bg.stop()` before `bg.start()` to nuke any orphan service
 // before registering our fresh subscription. The pre-stop is wrapped
 // in try/catch because "nothing to stop" is the common case.
-const CACHE_VERSION = "v54";
+// v55: CRITICAL last-mile fix. On-device proof finally arrived — a
+// clean 1.2 km drive (41 points, 0→22 m/s, 3.8 m accuracy) was
+// captured end-to-end while the app was backgrounded (the v54 +
+// @capgo onUnbind patch worked). But ZERO trips materialized: the
+// drive ended without a 5-min stationary dwell, so the segment
+// stayed OPEN, and stopMileageTracking's final flush sent no
+// "session ended" signal — the server kept closeOpenAtEnd=false and
+// the flush timer was already cleared, so no later heartbeat ever
+// closed it. The drive sat stranded open in staging forever. Fix:
+// the stop-tracking flush now posts { sessionEnded: true }, and the
+// ingest route force-closes the in-progress trip when it sees that
+// flag. Toggling off = "I'm done" = materialize the drive now.
+const CACHE_VERSION = "v55";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

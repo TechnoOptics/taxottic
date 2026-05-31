@@ -235,13 +235,19 @@ function loadPersistedBuffer() {
  *  heartbeat, parking → no new points → no flush → no segmentation
  *  → no trip ever materializes.
  */
-async function flush(): Promise<void> {
+async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
+  const sessionEnded = opts?.sessionEnded === true;
   if (flushing) return;
   if (!companyId) return;
   // Allow heartbeat (buffer.length === 0) WHILE tracking is active so
   // the server keeps re-segmenting staging. If we're not tracking and
-  // the buffer is empty, nothing to do.
-  if (buffer.length < 1 && !tracking) return;
+  // the buffer is empty, nothing to do — UNLESS this is the
+  // session-end flush, which must reach the server even with an empty
+  // buffer so the server force-closes the in-progress trip (see the
+  // sessionEnded handling in /api/mileage/ingest). Without this
+  // override, toggling off after a drive whose last points already
+  // flushed would never close the trip — it would sit open forever.
+  if (buffer.length < 1 && !tracking && !sessionEnded) return;
   flushing = true;
   trackerDiag.flushCount++;
   const batch = buffer.slice(0, MAX_BUFFER);
@@ -250,7 +256,7 @@ async function flush(): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ companyId, points: batch }),
+      body: JSON.stringify({ companyId, points: batch, sessionEnded }),
       keepalive: true,
     });
     trackerDiag.flushLastStatus = res.status;
@@ -513,7 +519,12 @@ export async function stopMileageTracking(): Promise<void> {
     }
   }
   tracking = false;
-  await flush(); // best-effort final upload
+  // Final upload tagged sessionEnded so the server force-closes any
+  // in-progress trip immediately (the user explicitly stopped). This
+  // is the only thing that materializes a drive that ended without a
+  // 5-min stationary dwell — i.e. nearly every real drive, where you
+  // park and immediately toggle off.
+  await flush({ sessionEnded: true }); // best-effort final upload
 }
 
 /**
