@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/tax/forecast";
 import { RecurrencePicker } from "@/components/RecurrencePicker";
 import { addIncome, deleteIncome, updateIncome } from "./actions";
 import { IncomeRow } from "@/components/IncomeRow";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 
 const INCOME_SOURCES = [
   { value: "sales", label: "Product sales" },
@@ -79,23 +80,27 @@ export default async function IncomePage({ params }: { params: Params }) {
             <input type="hidden" name="tax_year" value={taxYear} />
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-forest-800">Month</span>
-              <select name="month" className="input" defaultValue={currentMonth}>
-                {MONTH_LABELS.slice(0, currentMonth).map((m, i) => (
-                  <option key={i} value={i + 1}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+              <SelectMenu
+                name="month"
+                ariaLabel="Month"
+                defaultValue={String(currentMonth)}
+                options={MONTH_LABELS.slice(0, currentMonth).map((m, i) => ({
+                  value: String(i + 1),
+                  label: m,
+                }))}
+              />
             </label>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-forest-800">Source</span>
-              <select name="source" className="input" defaultValue="sales">
-                {INCOME_SOURCES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+              <SelectMenu
+                name="source"
+                ariaLabel="Income source"
+                defaultValue="sales"
+                options={INCOME_SOURCES.map((s) => ({
+                  value: s.value,
+                  label: s.label,
+                }))}
+              />
             </label>
             <div className="sm:col-span-2">
               <RecurrencePicker />

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 
 /**
  * Phone-first trip list. Replaces the old "3 pill buttons per row,
@@ -193,6 +194,7 @@ function TripCard({
 }) {
   const [pending, startTransition] = useTransition();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const moveFormRef = useRef<HTMLFormElement | null>(null);
 
   // First + last GPS fix = the drive's start / end, for reverse-geocoded
   // place labels ("Shakopee, MN → Mounds View, MN").
@@ -402,30 +404,23 @@ function TripCard({
           deduction is unchanged (rate-based). Auto-submits on change. */}
       {companies.length > 1 ? (
         <form
+          ref={moveFormRef}
           action={moveTripCompany}
           className="flex items-center gap-2 -mt-1"
         >
           <input type="hidden" name="trip_id" value={trip.id} />
-          <label
-            htmlFor={`co-${trip.id}`}
-            className="text-[11px] uppercase tracking-[0.16em] text-gold-700 shrink-0"
-          >
+          <span className="text-[11px] uppercase tracking-[0.16em] text-gold-700 shrink-0">
             Business
-          </label>
-          <select
-            id={`co-${trip.id}`}
+          </span>
+          <SelectMenu
             name="company_id"
+            ariaLabel="Move this drive to a different business"
             defaultValue={trip.companyId}
-            onChange={(e) => e.currentTarget.form?.requestSubmit()}
             disabled={pending}
-            className="flex-1 min-w-0 h-9 rounded-full border border-forest-200 bg-white px-3 text-xs text-forest-800 disabled:opacity-60"
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            className="flex-1 min-w-0"
+            options={companies.map((c) => ({ value: c.id, label: c.name }))}
+            onValueChange={() => moveFormRef.current?.requestSubmit()}
+          />
         </form>
       ) : null}
     </li>

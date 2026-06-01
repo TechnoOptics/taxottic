@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { formatCents } from "@/lib/tax/forecast";
 import { addGoal, deleteGoal, recordSaved } from "./actions";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 
 const GOAL_TYPES = [
   { value: "tax_savings_total", label: "Total tax savings target" },
@@ -58,13 +59,15 @@ export default async function GoalsPage() {
             </label>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-forest-800">Type</span>
-              <select name="goal_type" className="input" defaultValue="tax_savings_total">
-                {GOAL_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+              <SelectMenu
+                name="goal_type"
+                ariaLabel="Goal type"
+                defaultValue="tax_savings_total"
+                options={GOAL_TYPES.map((t) => ({
+                  value: t.value,
+                  label: t.label,
+                }))}
+              />
             </label>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-forest-800">
@@ -89,20 +92,21 @@ export default async function GoalsPage() {
               <span className="text-sm font-medium text-forest-800">
                 Apply to (optional)
               </span>
-              <select name="company_id" className="input" defaultValue="">
-                <option value="">Personal</option>
-                {(companies ?? []).map((m) => {
-                  const c = m.company as unknown as {
-                    id: string;
-                    name: string;
-                  };
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  );
-                })}
-              </select>
+              <SelectMenu
+                name="company_id"
+                ariaLabel="Apply goal to"
+                defaultValue=""
+                options={[
+                  { value: "", label: "Personal" },
+                  ...(companies ?? []).map((m) => {
+                    const c = m.company as unknown as {
+                      id: string;
+                      name: string;
+                    };
+                    return { value: c.id, label: c.name };
+                  }),
+                ]}
+              />
             </label>
             <div className="sm:col-span-2">
               <button className="btn-primary w-full sm:w-auto">Add goal</button>

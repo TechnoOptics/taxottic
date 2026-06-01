@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 import { AddressAutocomplete } from "@/components/maps/AddressAutocomplete";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 
 type Props = {
   companyId: string;
@@ -149,16 +150,17 @@ export function BusinessProfileForm({
         </legend>
         <label className="grid gap-1.5">
           <span className="text-sm font-medium text-forest-800">Method</span>
-          <select
+          <SelectMenu
             name="vehicle_method"
-            className="input"
+            ariaLabel="Vehicle deduction method"
             disabled={!isManager}
             defaultValue={initial.vehicleMethod ?? ""}
-          >
-            <option value="">Not applicable</option>
-            <option value="standard">Standard mileage</option>
-            <option value="actual">Actual expenses</option>
-          </select>
+            options={[
+              { value: "", label: "Not applicable" },
+              { value: "standard", label: "Standard mileage" },
+              { value: "actual", label: "Actual expenses" },
+            ]}
+          />
         </label>
         <label className="grid gap-1.5">
           <span className="text-sm font-medium text-forest-800">
