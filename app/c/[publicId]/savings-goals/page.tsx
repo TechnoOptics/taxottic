@@ -181,9 +181,11 @@ export default async function SavingsGoalsPage({
   // figure. resolveAutoMileageCents lets the GPS tracker's classified-
   // business trips (an IRS-grade log) override the manual estimate,
   // gated by the standard-vs-actual-expense election — see that helper.
+  // Null/unset method defaults to standard; only an explicit "actual"
+  // election opts out (matches company-forecast + the forecast page).
   const onStandardVehicle =
     !!businessProfile?.has_vehicle &&
-    businessProfile?.vehicle_method === "standard";
+    businessProfile?.vehicle_method !== "actual";
   const manualMileageProjected = onStandardVehicle
     ? computeMileageDeductionCents({
         ytdMiles: businessProfile?.vehicle_business_miles ?? 0,
