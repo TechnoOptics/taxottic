@@ -467,7 +467,12 @@
 // one company, each drive shows a "Business" picker to move it to the
 // right one (server action moveTripCompany; auth = driver/manager of
 // source + member of target). Hidden for single-company users.
-const CACHE_VERSION = "v61";
+// v62: Dark-mode dropdown fix. The app never declared a color-scheme, so
+// on a phone in dark mode the Android WebView painted every native
+// <select> popup SOLID BLACK — tapping the vehicle-method picker (or any
+// dropdown) blanked the screen until you pressed Back. Pin html to
+// color-scheme:light so native dropdowns render as readable lists.
+const CACHE_VERSION = "v62";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
