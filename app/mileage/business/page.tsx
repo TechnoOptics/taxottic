@@ -7,6 +7,7 @@ import {
   type MapPlace,
 } from "@/components/mileage/MileageMap";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
+import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 
 // Business-trips dashboard — the breadcrumb map of every drive
 // classified as "business". Same data model as the parent /mileage
@@ -267,6 +268,13 @@ export default async function BusinessTripsPage({
                 {trips.map((t) => {
                   const start = placeLabel(t.start_place_id);
                   const end = placeLabel(t.end_place_id);
+                  const pts = (pointsByTrip.get(t.id) ?? [])
+                    .slice()
+                    .sort((a, b) =>
+                      a.captured_at < b.captured_at ? -1 : 1,
+                    );
+                  const startPt = pts[0];
+                  const endPt = pts[pts.length - 1];
                   return (
                     <li
                       key={t.id}
@@ -282,19 +290,20 @@ export default async function BusinessTripsPage({
                         classification="business"
                       />
                       <div className="min-w-0">
-                        <div className="text-sm text-forest-900 truncate">
-                          {start && end ? (
-                            <>
-                              <span className="font-medium">{start}</span>{" "}
-                              <span className="text-ink-muted">→</span>{" "}
-                              <span className="font-medium">{end}</span>
-                            </>
-                          ) : (
-                            <span>
-                              {fmtMiles(Number(t.distance_miles))} mi drive
-                            </span>
-                          )}
-                        </div>
+                        {startPt && endPt ? (
+                          <TripEndpoints
+                            startLat={startPt.lat}
+                            startLng={startPt.lng}
+                            endLat={endPt.lat}
+                            endLng={endPt.lng}
+                            savedStart={start}
+                            savedEnd={end}
+                          />
+                        ) : (
+                          <div className="text-sm text-forest-900 truncate">
+                            {fmtMiles(Number(t.distance_miles))} mi drive
+                          </div>
+                        )}
                         <div className="text-xs text-ink-muted mt-0.5">
                           {new Date(t.started_at).toLocaleDateString(
                             undefined,
