@@ -7,6 +7,7 @@ import { type FilingStatus } from "@/lib/tax/constants-2025";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 import { formatCents } from "@/lib/tax/forecast";
 import { saveTaxProfile } from "./actions";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 
 const FILING_STATUSES: { value: FilingStatus; label: string }[] = [
   { value: "single", label: "Single" },
@@ -156,36 +157,32 @@ export default async function TaxProfilePage({
             title="Filing status"
             sub="How you'll file your federal return."
           >
-            <select
+            <SelectMenu
               name="filing_status"
               required
-              className="input"
+              ariaLabel="Filing status"
               defaultValue={startingFilingStatus}
-            >
-              {FILING_STATUSES.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
+              options={FILING_STATUSES.map((f) => ({
+                value: f.value,
+                label: f.label,
+              }))}
+            />
           </Section>
 
           <Section
             title="State of residence"
             sub="Used for the state-tax estimate."
           >
-            <select
+            <SelectMenu
               name="state_code"
-              className="input"
+              ariaLabel="State of residence"
+              placeholder="Select state"
               defaultValue={existing?.state_code ?? ""}
-            >
-              <option value="">Select state</option>
-              {US_STATES.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "Select state" },
+                ...US_STATES.map((s) => ({ value: s.code, label: s.name })),
+              ]}
+            />
           </Section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

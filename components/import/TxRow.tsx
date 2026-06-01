@@ -5,6 +5,7 @@ import {
   CategoryCombobox,
   type CategoryOption,
 } from "@/components/CategoryCombobox";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 import { formatCents } from "@/lib/tax/forecast";
 
 /**
@@ -296,24 +297,30 @@ export function TxRow({
           </label>
           <label className="grid gap-1">
             <span className="text-ink-muted">Match type</span>
-            <select
+            <SelectMenu
               name="pattern_type"
+              ariaLabel="Match type"
               defaultValue="contains"
-              className="input"
-            >
-              <option value="contains">Contains</option>
-              <option value="starts_with">Starts with</option>
-              <option value="exact">Exact</option>
-            </select>
+              options={[
+                { value: "contains", label: "Contains" },
+                { value: "starts_with", label: "Starts with" },
+                { value: "exact", label: "Exact" },
+              ]}
+            />
           </label>
           <label className="grid gap-1">
             <span className="text-ink-muted">Treat as</span>
-            <select name="kind" defaultValue="expense" className="input">
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-              <option value="ignore">Ignore (not deductible)</option>
-              <option value="transfer">Transfer (between accounts)</option>
-            </select>
+            <SelectMenu
+              name="kind"
+              ariaLabel="Treat as"
+              defaultValue="expense"
+              options={[
+                { value: "expense", label: "Expense" },
+                { value: "income", label: "Income" },
+                { value: "ignore", label: "Ignore (not deductible)" },
+                { value: "transfer", label: "Transfer (between accounts)" },
+              ]}
+            />
           </label>
           <label className="grid gap-1">
             <span className="text-ink-muted">Category</span>

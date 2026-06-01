@@ -472,7 +472,13 @@
 // <select> popup SOLID BLACK — tapping the vehicle-method picker (or any
 // dropdown) blanked the screen until you pressed Back. Pin html to
 // color-scheme:light so native dropdowns render as readable lists.
-const CACHE_VERSION = "v62";
+// v63: Custom in-app dropdown (SelectMenu). Replaces native <select>
+// popups (still rough/dim even with color-scheme:light) with a crisp,
+// on-brand in-DOM menu — no OS popup at all. Rolled across the core
+// consumer forms: business-profile vehicle method, trip business
+// picker, income (month/source), goals (type/company), tax-profile
+// (filing status/state), and import row (match type / treat-as).
+const CACHE_VERSION = "v63";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
