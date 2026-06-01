@@ -46,6 +46,14 @@ type Props = {
   trips: TripRow[];
   reclassify: (formData: FormData) => Promise<void>;
   deleteTrip: (formData: FormData) => Promise<void>;
+  /** Load this trip's route onto the shared map + scroll/focus there.
+   *  Owned by the parent (MileageReview) so only ONE trip is ever in
+   *  review at a time. */
+  onReview: (tripId: string) => void;
+  /** The trip currently being reviewed on the map, if any. Used to
+   *  light up that row's Review pill. null = overview (no single trip
+   *  focused). */
+  reviewingId: string | null;
 };
 
 type Bucket = {
@@ -106,7 +114,13 @@ function groupTrips(trips: TripRow[]): Bucket[] {
   ].filter((b) => b.trips.length > 0);
 }
 
-export function TripList({ trips, reclassify, deleteTrip }: Props) {
+export function TripList({
+  trips,
+  reclassify,
+  deleteTrip,
+  onReview,
+  reviewingId,
+}: Props) {
   if (trips.length === 0) {
     return (
       <p className="mt-3 text-sm text-ink-muted">
@@ -136,6 +150,8 @@ export function TripList({ trips, reclassify, deleteTrip }: Props) {
                 trip={t}
                 reclassify={reclassify}
                 deleteTrip={deleteTrip}
+                onReview={onReview}
+                reviewing={reviewingId === t.id}
               />
             ))}
           </ul>
@@ -149,10 +165,14 @@ function TripCard({
   trip,
   reclassify,
   deleteTrip,
+  onReview,
+  reviewing,
 }: {
   trip: TripRow;
   reclassify: (fd: FormData) => Promise<void>;
   deleteTrip: (fd: FormData) => Promise<void>;
+  onReview: (tripId: string) => void;
+  reviewing: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -273,48 +293,74 @@ function TripCard({
         )}
       </div>
 
-      {/* Segmented classification control. role=radiogroup so the
-          affordance reads as "choose one" and not as "tap-each-
-          independently" — the user feedback was that the old three
-          buttons looked like all of them could be selected at once.
-          Only one tab is `aria-checked` at any time, and the bg
-          fill makes the choice unambiguous. */}
-      <div
-        role="radiogroup"
-        aria-label="Classify trip"
-        className="grid grid-cols-3 rounded-full bg-forest-50 p-1 gap-1"
-      >
-        {(
-          [
-            { key: "business", label: "Business" },
-            { key: "personal", label: "Personal" },
-            { key: "unclassified", label: "Review" },
-          ] as const
-        ).map((opt) => {
-          const active = trip.classification === opt.key;
-          return (
-            <button
-              key={opt.key}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => doReclassify(opt.key)}
-              disabled={pending}
-              className={
-                "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
-                (active
-                  ? opt.key === "business"
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : opt.key === "personal"
-                      ? "bg-amber-500 text-white shadow-sm"
-                      : "bg-forest-900 text-cream shadow-sm"
-                  : "text-forest-800 hover:bg-cream")
-              }
-            >
-              {opt.label}
-            </button>
-          );
-        })}
+      {/* Classification + review controls.
+          - Business / Personal are toggles that fill in ONLY when that
+            is the trip's actual classification. An unclassified drive
+            shows NOTHING selected (the ask: the pill must never be
+            pre-selected). Tapping one sets the classification.
+          - "Review" is NOT a classification — it's an action that loads
+            this trip's route onto the shared map and scrolls there. It
+            fills in only while THIS trip is the one being reviewed, and
+            only one trip can be in review at a time (the parent owns
+            reviewingId), so it can't read as "pre-selected" either. */}
+      <div className="grid grid-cols-3 rounded-full bg-forest-50 p-1 gap-1">
+        <button
+          type="button"
+          aria-pressed={trip.classification === "business"}
+          aria-label="Mark this trip business"
+          onClick={() => doReclassify("business")}
+          disabled={pending}
+          className={
+            "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
+            (trip.classification === "business"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "text-forest-800 hover:bg-cream")
+          }
+        >
+          Business
+        </button>
+        <button
+          type="button"
+          aria-pressed={trip.classification === "personal"}
+          aria-label="Mark this trip personal"
+          onClick={() => doReclassify("personal")}
+          disabled={pending}
+          className={
+            "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
+            (trip.classification === "personal"
+              ? "bg-amber-500 text-white shadow-sm"
+              : "text-forest-800 hover:bg-cream")
+          }
+        >
+          Personal
+        </button>
+        <button
+          type="button"
+          aria-pressed={reviewing}
+          aria-label="Review this trip on the map"
+          onClick={() => onReview(trip.id)}
+          className={
+            "h-9 text-xs font-medium rounded-full transition-colors inline-flex items-center justify-center gap-1 " +
+            (reviewing
+              ? "bg-forest-900 text-cream shadow-sm"
+              : "text-forest-800 hover:bg-cream")
+          }
+        >
+          <svg
+            viewBox="0 0 20 20"
+            className="size-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10 2.5c-3.3 0-6 2.6-6 5.9 0 4.2 6 9.1 6 9.1s6-4.9 6-9.1c0-3.3-2.7-5.9-6-5.9Z" />
+            <circle cx="10" cy="8.2" r="2" />
+          </svg>
+          {reviewing ? "Reviewing" : "Review"}
+        </button>
       </div>
     </li>
   );

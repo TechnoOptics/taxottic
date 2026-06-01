@@ -162,10 +162,15 @@ export function MileageMap({
   trips,
   places,
   height = 420,
+  focusMode = false,
 }: {
   trips: MapTrip[];
   places: MapPlace[];
   height?: number;
+  /** When reviewing a single trip we relax the gamified zoom floor so
+   *  the whole route fits regardless of its length/classification, and
+   *  hide the "unlock" nudge (irrelevant when looking at one drive). */
+  focusMode?: boolean;
 }) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<
@@ -187,8 +192,8 @@ export function MileageMap({
     }
     return max;
   })();
-  const minZoom = unlockedMinZoom(longestBusinessMiles);
-  const unlockHint = nextUnlockHint(longestBusinessMiles);
+  const minZoom = focusMode ? 3 : unlockedMinZoom(longestBusinessMiles);
+  const unlockHint = focusMode ? null : nextUnlockHint(longestBusinessMiles);
 
   useEffect(() => {
     let cancelled = false;

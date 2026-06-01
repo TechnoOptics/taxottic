@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
-import { MileageMap, type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
+import { type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
 import { TrackerStatus } from "@/components/mileage/TrackerStatus";
-import { TripList, type TripRow } from "@/components/mileage/TripList";
+import { type TripRow } from "@/components/mileage/TripList";
+import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { reclassifyTrip, deleteTrip, addManualTrip } from "./actions";
 
@@ -300,20 +301,17 @@ export default async function MileagePage({
               )}
             </div>
 
-            <div className="mt-6">
-              <MileageMap trips={mapTrips} places={places} />
-            </div>
-
-            <h2 className="display text-xl text-forest-900 mt-8">
-              Trips
-            </h2>
-            {/* Grouped, timezone-aware trip list with segmented
-                (mutex) classification + delete. Replaces the old
-                "3 independent buttons that looked equally pressable"
-                row. Renders client-side so dates use the user's
-                local timezone instead of Vercel's UTC. */}
-            <TripList
-              trips={trips.map<TripRow>((t) => ({
+            {/* Map + trip list share one client owner so "Review" on a
+                trip focuses that single drive on the map and only ONE
+                trip is ever in review at a time. Default (no focus) is
+                the range overview where all drives plot together. The
+                list is grouped + timezone-aware (local, not Vercel UTC);
+                Business/Personal are exact-match toggles that show
+                nothing selected for an unclassified drive. */}
+            <MileageReview
+              mapTrips={mapTrips}
+              places={places}
+              tripRows={trips.map<TripRow>((t) => ({
                 id: t.id,
                 startedAtISO: t.started_at,
                 endedAtISO: t.ended_at,

@@ -443,7 +443,14 @@
 //       Fixed: drop keepalive + cap each POST to 800 points; a backlog
 //       drains over successive ticks. Durability is covered by the
 //       localStorage-persisted buffer + retry.
-const CACHE_VERSION = "v56";
+// v57: Trip review UX. The Business/Personal/Review pill no longer
+// pre-selects anything (Business/Personal fill only on exact match, so
+// an unclassified drive shows nothing selected). "Review" is now an
+// action, not a classification: it loads that one drive's route onto
+// the map and scrolls/focuses there, and only ONE trip can be in review
+// at a time (the range overview is the sole multi-trip view). Bump so
+// the new /mileage bundle is picked up on refresh.
+const CACHE_VERSION = "v57";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
