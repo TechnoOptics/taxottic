@@ -463,7 +463,11 @@
 // tracking mileage is rewarded. Also: the forecast now counts tracked
 // mileage when vehicle_method is unset (server fix), so the deduction
 // moves the projection.
-const CACHE_VERSION = "v60";
+// v61: Multi-business trip routing. When the user belongs to more than
+// one company, each drive shows a "Business" picker to move it to the
+// right one (server action moveTripCompany; auth = driver/manager of
+// source + member of target). Hidden for single-company users.
+const CACHE_VERSION = "v61";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

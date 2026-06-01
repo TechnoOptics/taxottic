@@ -32,12 +32,16 @@ export function MileageReview({
   tripRows,
   reclassify,
   deleteTrip,
+  companies,
+  moveTripCompany,
 }: {
   mapTrips: MapTrip[];
   places: MapPlace[];
   tripRows: TripRow[];
   reclassify: (formData: FormData) => Promise<void>;
   deleteTrip: (formData: FormData) => Promise<void>;
+  companies: { id: string; name: string }[];
+  moveTripCompany: (formData: FormData) => Promise<void>;
 }) {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +115,8 @@ export function MileageReview({
         deleteTrip={deleteTrip}
         onReview={onReview}
         reviewingId={focusedId}
+        companies={companies}
+        moveTripCompany={moveTripCompany}
       />
     </>
   );

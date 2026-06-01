@@ -48,6 +48,68 @@ export async function reclassifyTrip(formData: FormData) {
 }
 
 /**
+ * Move a trip to a DIFFERENT business (company). For users who belong
+ * to more than one company and need to route a drive to the right one
+ * (the tracker captures to whichever company was active at the time).
+ *
+ * Auth: the caller must be the driver OR a manager of the trip's
+ * CURRENT company, AND a member of the TARGET company — you can't shove
+ * a drive into a business you don't belong to. The IRS deduction is
+ * rate-based and company-independent, so only company_id changes; the
+ * classification, distance, and deduction carry over untouched.
+ */
+export async function moveTripCompany(formData: FormData) {
+  const { user, admin } = await requireUserWithAdmin();
+  const tripId = String(formData.get("trip_id") ?? "");
+  const targetCompanyId = String(formData.get("company_id") ?? "");
+  if (!tripId || !targetCompanyId) return;
+
+  const { data: trip } = await admin
+    .from("mileage_trips")
+    .select("driver_user_id, company_id")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (!trip) throw new Error("Trip not found.");
+  if (trip.company_id === targetCompanyId) return; // no-op
+
+  // Authorized on the SOURCE: driver, or a manager of the source company.
+  let authorized = trip.driver_user_id === user.id;
+  if (!authorized) {
+    const { data: srcMem } = await admin
+      .from("company_members")
+      .select("role")
+      .eq("company_id", trip.company_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    authorized = srcMem?.role === "manager";
+  }
+  if (!authorized) throw new Error("You can't move this trip.");
+
+  // Must be a member of the TARGET company.
+  const { data: dstMem } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("company_id", targetCompanyId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!dstMem) throw new Error("You're not a member of that business.");
+
+  const { error } = await admin
+    .from("mileage_trips")
+    .update({ company_id: targetCompanyId })
+    .eq("id", tripId);
+  if (error) throw new Error("Couldn't move the trip. Please try again.");
+
+  revalidatePath("/mileage");
+  revalidatePath("/mileage/classify");
+  revalidatePath("/mileage/business");
+  revalidatePath("/c/[publicId]/money-out", "page");
+  revalidatePath("/c/[publicId]/my-deductions", "page");
+  revalidatePath("/c/[publicId]/forecast", "page");
+  revalidatePath("/c/[publicId]/savings-goals", "page");
+}
+
+/**
  * Permanently delete a trip + its mileage_points. Allowed for the
  * driver or a manager of the trip's company. Points cascade on
  * trip delete (FK ON DELETE CASCADE in the migration), so this is

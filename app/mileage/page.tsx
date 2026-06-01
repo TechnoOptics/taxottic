@@ -7,7 +7,12 @@ import { TrackerStatus } from "@/components/mileage/TrackerStatus";
 import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
-import { reclassifyTrip, deleteTrip, addManualTrip } from "./actions";
+import {
+  reclassifyTrip,
+  deleteTrip,
+  addManualTrip,
+  moveTripCompany,
+} from "./actions";
 
 // TripThumbnail is no longer imported at this layer — the new
 // TripList client component imports it directly per-row.
@@ -342,9 +347,15 @@ export default async function MileagePage({
                 classification: t.classification,
                 deductionCents: Number(t.deduction_cents),
                 points: pointsByTrip.get(t.id) ?? [],
+                companyId: company.id,
               }))}
               reclassify={reclassifyTrip}
               deleteTrip={deleteTrip}
+              companies={memberships.map((m) => ({
+                id: m.company.id,
+                name: m.company.name,
+              }))}
+              moveTripCompany={moveTripCompany}
             />
 
             {/* Manual backfill entry — collapsed by default. The user
