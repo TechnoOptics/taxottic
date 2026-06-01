@@ -42,6 +42,10 @@ export type SuggestionInput = {
   hasVehicle: boolean | null;
   vehicleBusinessMiles: number | null;
   vehicleMethod: "standard" | "actual" | null;
+  // Days since the most recent BUSINESS mileage_trip (null/undefined =
+  // none ever logged). Drives the "log your miles" nudge's recency gate
+  // so a driver who's actively tracking doesn't get nagged.
+  daysSinceLastBusinessMile?: number | null;
   hasHomeOffice: boolean | null;
   homeOfficeSqft: number | null;
   // Tax profile flags.
@@ -156,10 +160,23 @@ export function buildYearEndSuggestions(
     });
   }
 
+  // Only nudge to log miles when the driver has actually LAPSED: no
+  // tracked business drive in the last 7 days AND no substantial manual
+  // figure on file. A recently-tracked drive (or a real manual number)
+  // means they're already logging, so the reminder just nags — the tile
+  // kept showing even after the user logged miles today because the old
+  // check only looked at the manual `vehicle_business_miles` field and
+  // ignored tracked trips entirely.
+  const hasRecentTrackedMileage =
+    input.daysSinceLastBusinessMile != null &&
+    input.daysSinceLastBusinessMile < 7;
+  const hasManualMileage =
+    !!input.vehicleBusinessMiles && input.vehicleBusinessMiles >= 100;
   if (
     input.hasVehicle &&
     input.vehicleMethod === "standard" &&
-    (!input.vehicleBusinessMiles || input.vehicleBusinessMiles < 100)
+    !hasRecentTrackedMileage &&
+    !hasManualMileage
   ) {
     out.push({
       id: "log_mileage",
