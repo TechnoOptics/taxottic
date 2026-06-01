@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { formatCents } from "@/lib/tax/forecast";
 import { addExpense, deleteExpense, updateExpense } from "./actions";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
@@ -49,7 +50,19 @@ export default async function ExpensesPage({ params }: { params: Params }) {
       .order("display_order"),
   ]);
 
-  const total = (rows ?? []).reduce((a, r) => a + r.amount_cents, 0);
+  const expensesTotal = (rows ?? []).reduce((a, r) => a + r.amount_cents, 0);
+
+  // Tracked business mileage, rolled up per month, so a logged drive
+  // shows as a deduction line in the month it happened — the user
+  // expected to see "mileage expensed to this month" here, not only on
+  // the Mileage page. The YTD total now includes it.
+  const mileage = await getBusinessMileageSummary(
+    supabase,
+    company.id,
+    taxYear,
+  );
+  const total = expensesTotal + mileage.ytdCents;
+  const hasAny = (rows?.length ?? 0) > 0 || mileage.byMonth.length > 0;
 
   return (
     <main id="main" className="min-h-screen">
@@ -143,97 +156,131 @@ export default async function ExpensesPage({ params }: { params: Params }) {
             default; the others fold away. <details> is native HTML
             so this stays a server component (no client JS shipped).
           */}
-          {rows && rows.length > 0 ? (
+          {hasAny ? (
             <ul className="mt-4 grid gap-2">
               {(() => {
-                // Sort already guarantees month DESC; just bucket.
-                const buckets = new Map<number, typeof rows>();
-                for (const r of rows) {
+                const exRows = rows ?? [];
+                const buckets = new Map<number, typeof exRows>();
+                for (const r of exRows) {
                   const arr = buckets.get(r.month) ?? [];
                   arr.push(r);
                   buckets.set(r.month, arr);
                 }
-                return Array.from(buckets.entries()).map(
-                  ([month, monthRows]) => {
-                    const monthTotal = monthRows.reduce(
-                      (a, r) => a + r.amount_cents,
-                      0,
-                    );
-                    const isCurrent = month === currentMonth;
-                    return (
-                      <li key={month}>
-                        <details
-                          open={isCurrent}
-                          className="group rounded-xl border border-forest-100 bg-white overflow-hidden"
-                        >
-                          <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-cream/40 list-none">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <svg
-                                className="size-4 text-forest-700 transition-transform group-open:rotate-90 shrink-0"
-                                viewBox="0 0 20 20"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                aria-hidden="true"
+                // Union of months that have expenses with months that
+                // have tracked mileage, newest first — so a month with
+                // ONLY a drive still shows up.
+                const months = Array.from(
+                  new Set<number>([
+                    ...buckets.keys(),
+                    ...mileage.monthMap.keys(),
+                  ]),
+                ).sort((a, b) => b - a);
+                return months.map((month) => {
+                  const monthRows = buckets.get(month) ?? [];
+                  const mm = mileage.monthMap.get(month) ?? null;
+                  const monthTotal =
+                    monthRows.reduce((a, r) => a + r.amount_cents, 0) +
+                    (mm?.cents ?? 0);
+                  const isCurrent = month === currentMonth;
+                  const itemCount = monthRows.length + (mm ? 1 : 0);
+                  return (
+                    <li key={month}>
+                      <details
+                        open={isCurrent}
+                        className="group rounded-xl border border-forest-100 bg-white overflow-hidden"
+                      >
+                        <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-cream/40 list-none">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <svg
+                              className="size-4 text-forest-700 transition-transform group-open:rotate-90 shrink-0"
+                              viewBox="0 0 20 20"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M7 5l6 5-6 5"
+                              />
+                            </svg>
+                            <span className="display text-base text-forest-900 truncate">
+                              {MONTH_LABELS[month - 1]}
+                              {isCurrent ? (
+                                <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
+                                  This month
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="text-xs text-ink-muted">
+                              · {itemCount} {itemCount === 1 ? "item" : "items"}
+                            </span>
+                          </div>
+                          <div className="display text-base text-forest-900 shrink-0">
+                            {formatCents(monthTotal)}
+                          </div>
+                        </summary>
+                        <ul className="px-3 sm:px-4 pb-3 grid gap-2 border-t border-forest-100">
+                          {mm ? (
+                            <li>
+                              <Link
+                                href="/mileage"
+                                className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border border-dashed border-gold-200 bg-gold-50/50 hover:bg-gold-50"
                               >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M7 5l6 5-6 5"
-                                />
-                              </svg>
-                              <span className="display text-base text-forest-900 truncate">
-                                {MONTH_LABELS[month - 1]}
-                                {isCurrent ? (
-                                  <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
-                                    This month
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <span aria-hidden="true">🧭</span>
+                                  <span className="text-sm text-forest-900 font-medium">
+                                    Mileage
                                   </span>
-                                ) : null}
-                              </span>
-                              <span className="text-xs text-ink-muted">
-                                · {monthRows.length}{" "}
-                                {monthRows.length === 1 ? "expense" : "expenses"}
-                              </span>
-                            </div>
-                            <div className="display text-base text-forest-900 shrink-0">
-                              {formatCents(monthTotal)}
-                            </div>
-                          </summary>
-                          <ul className="px-3 sm:px-4 pb-3 grid gap-2 border-t border-forest-100">
-                            {monthRows.map((r) => {
-                              const cat = r.category as unknown as {
-                                label: string;
-                                is_meal: boolean;
-                              } | null;
-                              return (
-                                <ExpenseRow
-                                  key={r.id}
-                                  row={{
-                                    id: r.id,
-                                    month: r.month,
-                                    amount_cents: r.amount_cents,
-                                    category_code: r.category_code,
-                                    recurrence: r.recurrence,
-                                    notes: r.notes,
-                                    category: cat,
-                                  }}
-                                  companyId={company.id}
-                                  taxYear={taxYear}
-                                  currentMonth={currentMonth}
-                                  categories={
-                                    (categories as CategoryRow[] | null) ?? []
-                                  }
-                                  updateAction={updateExpense}
-                                  deleteAction={deleteExpense}
-                                />
-                              );
-                            })}
-                          </ul>
-                        </details>
-                      </li>
-                    );
-                  },
-                );
+                                  <span className="text-xs text-ink-muted truncate">
+                                    ·{" "}
+                                    {mm.miles.toLocaleString(undefined, {
+                                      maximumFractionDigits: 1,
+                                    })}{" "}
+                                    mi · {mm.trips}{" "}
+                                    {mm.trips === 1 ? "drive" : "drives"}
+                                  </span>
+                                </span>
+                                <span className="display text-sm text-emerald-700 tabular-nums shrink-0">
+                                  {formatCents(mm.cents)}
+                                </span>
+                              </Link>
+                            </li>
+                          ) : null}
+                          {monthRows.map((r) => {
+                            const cat = r.category as unknown as {
+                              label: string;
+                              is_meal: boolean;
+                            } | null;
+                            return (
+                              <ExpenseRow
+                                key={r.id}
+                                row={{
+                                  id: r.id,
+                                  month: r.month,
+                                  amount_cents: r.amount_cents,
+                                  category_code: r.category_code,
+                                  recurrence: r.recurrence,
+                                  notes: r.notes,
+                                  category: cat,
+                                }}
+                                companyId={company.id}
+                                taxYear={taxYear}
+                                currentMonth={currentMonth}
+                                categories={
+                                  (categories as CategoryRow[] | null) ?? []
+                                }
+                                updateAction={updateExpense}
+                                deleteAction={deleteExpense}
+                              />
+                            );
+                          })}
+                        </ul>
+                      </details>
+                    </li>
+                  );
+                });
               })()}
             </ul>
           ) : (
