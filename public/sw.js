@@ -425,7 +425,25 @@
 // the stop-tracking flush now posts { sessionEnded: true }, and the
 // ingest route force-closes the in-progress trip when it sees that
 // flag. Toggling off = "I'm done" = materialize the drive now.
-const CACHE_VERSION = "v55";
+// v56: TWO confirmed drive-killers, found via live DevTools forensics on
+// the user's actual Galaxy Z Fold5 (every prior "fix" was validated on
+// the emulator; the real phone had NEVER sent a single point).
+//   (1) bg.start(opts, cb).then().catch() — on Android, start() with a
+//       callback is NOT a thenable; calling .then() throws
+//       "BackgroundGeolocation.then() is not implemented on android",
+//       which tripped the rejection path and flipped tracking OFF +
+//       wrote enabled="0" the instant tracking began. Fixed: fire-and-
+//       forget start(); report success optimistically; only observe a
+//       promise off-native (web shim).
+//   (2) flush used fetch({keepalive:true}) — keepalive caps the body at
+//       64 KB, so once the buffer passed ~700 points EVERY flush threw
+//       "TypeError: Failed to fetch" and the buffer pegged at 5000 with
+//       ZERO points reaching the server (proven: a tiny POST returned
+//       200, the 179 KB body threw with keepalive, succeeded without).
+//       Fixed: drop keepalive + cap each POST to 800 points; a backlog
+//       drains over successive ticks. Durability is covered by the
+//       localStorage-persisted buffer + retry.
+const CACHE_VERSION = "v56";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

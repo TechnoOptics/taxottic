@@ -91,6 +91,19 @@ const DISTANCE_FILTER_M_ECO = 100;
 // parks, opens /mileage, sees the trip within a minute.
 const FLUSH_AT_POINTS = 40;
 const FLUSH_EVERY_MS = 30_000;
+/** Max points sent per flush. CRITICAL (2026-06-01 on-device forensics):
+ *  the flush fetch used `keepalive: true`, which the browser caps at a
+ *  64 KB total request body. Once the buffer grew past ~700 points
+ *  (~64 KB of JSON) EVERY flush threw `TypeError: Failed to fetch`, the
+ *  batch was kept, and the buffer pegged at MAX_BUFFER (5000) on the
+ *  user's phone with ZERO points ever reaching the server — proven on
+ *  a Galaxy Z Fold5: a small POST returned 200, the same 179 KB body
+ *  with keepalive threw, without keepalive returned normally. Fix is
+ *  two-fold: drop keepalive (durability is already covered by the
+ *  localStorage-persisted buffer + retry), and cap each POST to a sane
+ *  size so a large backlog drains in steady chunks instead of one
+ *  oversized request. 800 points ≈ 70 KB, comfortably small. */
+const FLUSH_BATCH_MAX = 800;
 /** Guard() timeout. The very first guard() call has to dynamic-import
  *  @capgo/background-geolocation, which has been observed to hang on
  *  Samsung WebViews after a fresh install. Capping the await keeps
@@ -250,14 +263,16 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
   if (buffer.length < 1 && !tracking && !sessionEnded) return;
   flushing = true;
   trackerDiag.flushCount++;
-  const batch = buffer.slice(0, MAX_BUFFER);
+  // Cap the batch (see FLUSH_BATCH_MAX). NEVER use keepalive here: its
+  // 64 KB body limit silently breaks every flush once the buffer is
+  // non-trivial. A large backlog drains over successive ticks.
+  const batch = buffer.slice(0, FLUSH_BATCH_MAX);
   try {
     const res = await fetch("/api/mileage/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ companyId, points: batch, sessionEnded }),
-      keepalive: true,
     });
     trackerDiag.flushLastStatus = res.status;
     let bodyJson: unknown = null;
@@ -420,48 +435,67 @@ export async function startMileageTracking(
     ? DISTANCE_FILTER_M_ECO
     : DISTANCE_FILTER_M_DEFAULT;
   try {
-    bg
-      .start(
-        {
-          backgroundMessage:
-            "Logging your drive for the mileage deduction. Tap to open.",
-          backgroundTitle: "Taxottic mileage",
-          requestPermissions: true,
-          // eco accepts a cached fix from the OS-fused provider
-          // if it's recent enough; full mode forces a fresh GPS
-          // sample. Stale-OK is the bigger battery win on Samsung.
-          stale: eco,
-          distanceFilter,
-        },
-        (location, error) => {
-          trackerDiag.cbHits++;
-          if (error) {
-            trackerDiag.cbLastError =
-              String(error.code ?? "") + ":" + String(error.message ?? "");
-            if (error.code === "NOT_AUTHORIZED")
-              void stopMileageTracking();
-            return;
-          }
-          if (!location) return;
-          const pt = toPoint(location);
-          if (!pt) return;
-          buffer.push(pt);
-          if (buffer.length > MAX_BUFFER) buffer = buffer.slice(-MAX_BUFFER);
-          persistBuffer();
-          if (buffer.length >= FLUSH_AT_POINTS) void flush();
-        },
-      )
-      .then(() => {
-        trackerDiag.startResult = "resolved";
-        for (const cb of startListeners) {
-          try {
-            cb({ ok: true });
-          } catch {
-            /* listener threw — keep going */
-          }
+    // CRITICAL (2026-06-01 on-device forensics, Galaxy Z Fold5):
+    // bg.start(options, callback) is a CALLBACK method, not a Promise
+    // method, on Android. Its return value is NOT a thenable — calling
+    // `.then()` on it proxies to a native method literally named "then"
+    // that doesn't exist, throwing
+    //   `"BackgroundGeolocation.then()" is not implemented on android`.
+    // The old `.start(...).then(...).catch(...)` chain therefore tripped
+    // the rejection path on EVERY start — flipping tracking off and
+    // writing LS_ENABLED="0" the instant tracking began, even though the
+    // native foreground service was alive and delivering GPS fixes. So:
+    // fire start() and DON'T chain. Success is reported optimistically
+    // (the call returned without throwing); real failures arrive through
+    // the callback's `error` arg (e.g. NOT_AUTHORIZED → stop). The web
+    // shim DOES return a genuine Promise, so we observe that for late
+    // rejections ONLY off-native (guarded by trackerDiag.native).
+    const startRet = bg.start(
+      {
+        backgroundMessage:
+          "Logging your drive for the mileage deduction. Tap to open.",
+        backgroundTitle: "Taxottic mileage",
+        requestPermissions: true,
+        // eco accepts a cached fix from the OS-fused provider
+        // if it's recent enough; full mode forces a fresh GPS
+        // sample. Stale-OK is the bigger battery win on Samsung.
+        stale: eco,
+        distanceFilter,
+      },
+      (location, error) => {
+        trackerDiag.cbHits++;
+        if (error) {
+          trackerDiag.cbLastError =
+            String(error.code ?? "") + ":" + String(error.message ?? "");
+          if (error.code === "NOT_AUTHORIZED") void stopMileageTracking();
+          return;
         }
-      })
-      .catch((e) => {
+        if (!location) return;
+        const pt = toPoint(location);
+        if (!pt) return;
+        buffer.push(pt);
+        if (buffer.length > MAX_BUFFER) buffer = buffer.slice(-MAX_BUFFER);
+        persistBuffer();
+        if (buffer.length >= FLUSH_AT_POINTS) void flush();
+      },
+    );
+    tracking = true;
+    trackerDiag.startResult = "resolved";
+    for (const cb of startListeners) {
+      try {
+        cb({ ok: true });
+      } catch {
+        /* listener threw — keep going */
+      }
+    }
+    // Web shim only (NEVER touch .then on the native bridge): surface a
+    // late start rejection so the browser toggle flips back off.
+    if (
+      !trackerDiag.native &&
+      startRet &&
+      typeof (startRet as Promise<void>).then === "function"
+    ) {
+      void Promise.resolve(startRet).catch((e) => {
         trackerDiag.startResult = "rejected";
         trackerDiag.startError = String(
           (e && (e.message || e.code)) || e || "unknown",
@@ -472,10 +506,6 @@ export async function startMileageTracking(
         } catch {
           /* private mode */
         }
-        // Notify any React listeners so the toggle UI flips back off.
-        // Without this, the toggle stayed visually ON forever after a
-        // native rejection — user only discovered the failure on next
-        // reload (when localStorage was read fresh as "0").
         for (const cb of startListeners) {
           try {
             cb({ ok: false, error: trackerDiag.startError });
@@ -484,7 +514,7 @@ export async function startMileageTracking(
           }
         }
       });
-    tracking = true;
+    }
   } catch (e) {
     tracking = false;
     return {
