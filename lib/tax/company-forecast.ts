@@ -235,9 +235,17 @@ export function buildCompanyForecast(
     ) + totalOfMonthly(recurringBizExpenseMonthly);
 
   // Auto-deductions from business profile.
+  //
+  // Standard mileage is the DEFAULT method, so treat a null/unset
+  // vehicle_method as standard — only an explicit "actual" election
+  // (deducting real car costs instead of per-mile) opts out. The old
+  // `=== "standard"` check silently dropped tracked mileage for every
+  // profile that had has_vehicle=true but never picked a method, so
+  // logged drives never moved the forecast. Matches the `!== "actual"`
+  // test the forecast page already uses.
   const onStandardVehicle =
     !!businessProfile?.has_vehicle &&
-    businessProfile?.vehicle_method === "standard";
+    businessProfile?.vehicle_method !== "actual";
   const manualMileageProjected = onStandardVehicle
     ? computeMileageDeductionCents({
         ytdMiles: businessProfile?.vehicle_business_miles ?? 0,
