@@ -144,28 +144,53 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 2. Pull the user's unconsumed staging pool (last 24h bound so a
-  // single query never blows up). 50k row hard cap matches the
-  // hard reject above. Sorted asc by captured_at so the segmenter
-  // sees a chronological stream.
+  // 2. Pull the user's unconsumed staging pool (last 24h bound), sorted
+  // asc by captured_at so the segmenter sees a chronological stream.
+  //
+  // PAGINATE (2026-06-01): PostgREST caps ANY single response at its
+  // max-rows (1000 on this project), so `.limit(50_000)` silently
+  // returned only the first 1000 fixes. A drive longer than ~1000
+  // points (≈ a 20-min+ drive) was therefore truncated, and successive
+  // segmentation passes split one real drive into fragments at the
+  // 1000-point boundary (confirmed on-device: a 38-min drive came out
+  // as two trips split at an exact page edge). Page through with
+  // .range() until a short page signals the end, up to a 50k hard cap.
   const dayAgo = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-  const { data: pendingRows, error: pendingErr } = await admin
-    .from("mileage_points_raw")
-    .select("id, captured_at, lat, lng, speed_mps, accuracy_m")
-    .eq("driver_user_id", user.id)
-    .eq("company_id", companyId)
-    .is("consumed_at", null)
-    .gte("captured_at", dayAgo)
-    .order("captured_at", { ascending: true })
-    .limit(50_000);
-  if (pendingErr) {
-    console.error("[ingest] pending fetch failed", pendingErr.message);
+  const PAGE_SIZE = 1000;
+  const MAX_POOL = 50_000;
+  const fetchPage = (from: number) =>
+    admin
+      .from("mileage_points_raw")
+      .select("id, captured_at, lat, lng, speed_mps, accuracy_m")
+      .eq("driver_user_id", user.id)
+      .eq("company_id", companyId)
+      .is("consumed_at", null)
+      .gte("captured_at", dayAgo)
+      .order("captured_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+  const firstPage = await fetchPage(0);
+  if (firstPage.error) {
+    console.error("[ingest] pending fetch failed", firstPage.error.message);
     return NextResponse.json(
-      { error: "pending_failed", detail: pendingErr.message },
+      { error: "pending_failed", detail: firstPage.error.message },
       { status: 500 },
     );
   }
-  const pending = pendingRows ?? [];
+  const pending = firstPage.data ?? [];
+  while (
+    pending.length > 0 &&
+    pending.length % PAGE_SIZE === 0 &&
+    pending.length < MAX_POOL
+  ) {
+    const next = await fetchPage(pending.length);
+    if (next.error) {
+      console.error("[ingest] pending page fetch failed", next.error.message);
+      break;
+    }
+    const rows = next.data ?? [];
+    pending.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
 
   // Convert staging rows → GpsPoint for the segmenter. Keep a
   // side-map id→raw row so we can mark them consumed after a trip
