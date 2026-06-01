@@ -263,6 +263,7 @@ export default async function DashboardPage() {
     { data: overdueReminders },
     { data: activeGoals },
     { data: badges },
+    { data: mileageTripRows },
     readinessByCompany,
   ] = await Promise.all([
     supabase
@@ -290,6 +291,14 @@ export default async function DashboardPage() {
       .select("badge_code, awarded_at")
       .eq("user_id", user.id)
       .order("awarded_at", { ascending: false }),
+    // Tracked business drives across ALL the user's companies (keyed on
+    // driver_user_id) for the at-a-glance mileage tile below.
+    admin
+      .from("mileage_trips")
+      .select("started_at, distance_miles, deduction_cents")
+      .eq("driver_user_id", user.id)
+      .eq("classification", "business")
+      .eq("tax_year", taxYear),
     Promise.all(
       companies.map(async (m) => {
         const r = await computeReadiness(admin, m.company_id, taxYear);
@@ -532,6 +541,30 @@ export default async function DashboardPage() {
   }
   const trial = await getTrialState(supabase, user.id);
 
+  // Mileage at-a-glance — YTD + this-month business drives across all of
+  // the user's companies, so the deduction is visible on the dashboard,
+  // not buried in /mileage.
+  const curMonthNum = new Date().getUTCMonth() + 1;
+  let mileageYtdCents = 0;
+  let mileageYtdMiles = 0;
+  let mileageMonthCents = 0;
+  let mileageMonthMiles = 0;
+  for (const t of (mileageTripRows ?? []) as Array<{
+    started_at: string;
+    distance_miles: number | null;
+    deduction_cents: number | null;
+  }>) {
+    const cents = Number(t.deduction_cents ?? 0);
+    const miles = Number(t.distance_miles ?? 0);
+    mileageYtdCents += cents;
+    mileageYtdMiles += miles;
+    if (new Date(t.started_at).getUTCMonth() + 1 === curMonthNum) {
+      mileageMonthCents += cents;
+      mileageMonthMiles += miles;
+    }
+  }
+  const hasMileage = mileageYtdMiles > 0;
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -625,6 +658,41 @@ export default async function DashboardPage() {
                 ) : null}
               </div>
             ))}
+          </section>
+        ) : null}
+
+        {/* Mileage deduction at-a-glance — visible on the dashboard
+            instead of buried in /mileage. Hidden until there's at least
+            one tracked business drive. */}
+        {hasMileage ? (
+          <section className="mt-6">
+            <Link href="/mileage" className="block card card-hover p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                    Mileage deduction
+                  </div>
+                  <div className="display mt-1 text-2xl text-forest-900 tabular-nums">
+                    {formatCents(mileageYtdCents)}{" "}
+                    <span className="text-sm text-ink-muted font-normal">
+                      YTD
+                    </span>
+                  </div>
+                  <div className="text-xs text-ink-muted mt-0.5">
+                    {mileageYtdMiles.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}{" "}
+                    business mi this year
+                    {mileageMonthMiles > 0
+                      ? ` · ${formatCents(mileageMonthCents)} this month`
+                      : ""}
+                  </div>
+                </div>
+                <span className="text-forest-700 font-medium shrink-0">
+                  Drive log &rarr;
+                </span>
+              </div>
+            </Link>
           </section>
         ) : null}
 
