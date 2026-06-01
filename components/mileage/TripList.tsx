@@ -41,6 +41,8 @@ export type TripRow = {
   classification: "business" | "personal" | "unclassified";
   deductionCents: number;
   points: { lat: number; lng: number; captured_at: string }[];
+  /** Which company/business this drive currently belongs to. */
+  companyId: string;
 };
 
 type Props = {
@@ -55,6 +57,12 @@ type Props = {
    *  light up that row's Review pill. null = overview (no single trip
    *  focused). */
   reviewingId: string | null;
+  /** All businesses the user belongs to. When there's more than one, a
+   *  per-trip "Business" picker appears so a drive can be routed to the
+   *  right company. With a single company the picker is hidden. */
+  companies: { id: string; name: string }[];
+  /** Reassign a trip to a different company (server action). */
+  moveTripCompany: (formData: FormData) => Promise<void>;
 };
 
 type Bucket = {
@@ -121,6 +129,8 @@ export function TripList({
   deleteTrip,
   onReview,
   reviewingId,
+  companies,
+  moveTripCompany,
 }: Props) {
   if (trips.length === 0) {
     return (
@@ -153,6 +163,8 @@ export function TripList({
                 deleteTrip={deleteTrip}
                 onReview={onReview}
                 reviewing={reviewingId === t.id}
+                companies={companies}
+                moveTripCompany={moveTripCompany}
               />
             ))}
           </ul>
@@ -168,12 +180,16 @@ function TripCard({
   deleteTrip,
   onReview,
   reviewing,
+  companies,
+  moveTripCompany,
 }: {
   trip: TripRow;
   reclassify: (fd: FormData) => Promise<void>;
   deleteTrip: (fd: FormData) => Promise<void>;
   onReview: (tripId: string) => void;
   reviewing: boolean;
+  companies: { id: string; name: string }[];
+  moveTripCompany: (fd: FormData) => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -380,6 +396,38 @@ function TripCard({
           {reviewing ? "Reviewing" : "Review"}
         </button>
       </div>
+
+      {/* Business picker — only when the user belongs to more than one
+          company. Routes this drive to the right business; the IRS
+          deduction is unchanged (rate-based). Auto-submits on change. */}
+      {companies.length > 1 ? (
+        <form
+          action={moveTripCompany}
+          className="flex items-center gap-2 -mt-1"
+        >
+          <input type="hidden" name="trip_id" value={trip.id} />
+          <label
+            htmlFor={`co-${trip.id}`}
+            className="text-[11px] uppercase tracking-[0.16em] text-gold-700 shrink-0"
+          >
+            Business
+          </label>
+          <select
+            id={`co-${trip.id}`}
+            name="company_id"
+            defaultValue={trip.companyId}
+            onChange={(e) => e.currentTarget.form?.requestSubmit()}
+            disabled={pending}
+            className="flex-1 min-w-0 h-9 rounded-full border border-forest-200 bg-white px-3 text-xs text-forest-800 disabled:opacity-60"
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </form>
+      ) : null}
     </li>
   );
 }
