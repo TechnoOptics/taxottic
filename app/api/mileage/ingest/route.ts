@@ -239,6 +239,33 @@ export async function POST(req: NextRequest) {
   let businessMiles = 0;
   let deductionCents = 0;
 
+  // Consume every still-unconsumed staging row inside a trip's time
+  // window, BY RANGE. CRITICAL (2026-06-01 on-device forensics): the
+  // old code consumed via `.in("id", [hundreds of uuids])`, which builds
+  // a multi-KB query URL that PostgREST silently truncates/rejects — so
+  // a real ~700-point drive's rows were never marked consumed, and every
+  // 30 s heartbeat re-segmented them into a brand-new duplicate trip (the
+  // user saw the same drive 9+ times before we caught it). A range
+  // update is one bounded statement that always covers the whole trip.
+  const consumeRange = async (
+    startedAtIso: string,
+    endedAtIso: string,
+    tripId: string,
+  ) => {
+    const { error } = await admin
+      .from("mileage_points_raw")
+      .update({
+        consumed_at: new Date().toISOString(),
+        consumed_trip_id: tripId,
+      })
+      .eq("driver_user_id", user.id)
+      .eq("company_id", companyId)
+      .is("consumed_at", null)
+      .gte("captured_at", startedAtIso)
+      .lte("captured_at", endedAtIso);
+    if (error) console.error("[ingest] consume range failed", error.message);
+  };
+
   // 5. Materialise closed trips. For each trip the segmenter returns
   // we find the matching subset of staging rows by timestamp range
   // (segmentTrips preserves order, so startTs..endTs covers exactly
@@ -247,34 +274,43 @@ export async function POST(req: NextRequest) {
     const startedAt = new Date(trip.startTs).toISOString();
     const endedAt = new Date(trip.endTs).toISOString();
 
-    // De-dupe re-posted batches: if a trip with this exact range
-    // exists for this driver, skip + still mark the staging rows
-    // consumed so they don't pile up.
-    const { data: dupe } = await admin
+    // De-dupe by OVERLAP, not exact range. A single drive can be
+    // re-segmented across several flush batches with end times a few
+    // seconds apart; matching only the exact (start, end) let those
+    // through as duplicates (the user saw one drive as 9+ rows). Instead:
+    // find any existing trip whose time range overlaps this one. If an
+    // existing overlap is at least as complete (>= distance), treat this
+    // as a re-post — consume the points to it and skip. If the new trip
+    // is MORE complete, delete the stale overlapping fragment(s) (cascade
+    // clears their polyline points) and insert the fuller one below.
+    const { data: overlaps } = await admin
       .from("mileage_trips")
-      .select("id")
+      .select("id, distance_miles")
       .eq("company_id", companyId)
       .eq("driver_user_id", user.id)
-      .eq("started_at", startedAt)
-      .eq("ended_at", endedAt)
-      .maybeSingle();
+      .lte("started_at", endedAt)
+      .gte("ended_at", startedAt);
 
-    const contributingRaw = allPoints.filter(
-      (p) => p.ts >= trip.startTs && p.ts <= trip.endTs,
-    );
-
-    if (dupe) {
-      const ids = contributingRaw.map((p) => (p.__raw as { id: string }).id);
-      if (ids.length > 0) {
-        await admin
-          .from("mileage_points_raw")
-          .update({
-            consumed_at: new Date().toISOString(),
-            consumed_trip_id: dupe.id,
-          })
-          .in("id", ids);
+    if (overlaps && overlaps.length > 0) {
+      const maxMiles = Math.max(
+        ...overlaps.map((o) => Number(o.distance_miles) || 0),
+      );
+      if (trip.distanceMiles <= maxMiles + 0.005) {
+        const keeper = overlaps.reduce((a, b) =>
+          (Number(a.distance_miles) || 0) >= (Number(b.distance_miles) || 0)
+            ? a
+            : b,
+        );
+        await consumeRange(startedAt, endedAt, keeper.id as string);
+        continue;
       }
-      continue;
+      await admin
+        .from("mileage_trips")
+        .delete()
+        .in(
+          "id",
+          overlaps.map((o) => o.id as string),
+        );
     }
 
     const classification = suggestClassification(trip, places);
@@ -321,17 +357,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Mark the contributing staging rows consumed.
-    const ids = contributingRaw.map((p) => (p.__raw as { id: string }).id);
-    if (ids.length > 0) {
-      await admin
-        .from("mileage_points_raw")
-        .update({
-          consumed_at: new Date().toISOString(),
-          consumed_trip_id: inserted.id,
-        })
-        .in("id", ids);
-    }
+    // Mark the contributing staging rows consumed (by range — see
+    // consumeRange; never by a giant `.in(...)` id list).
+    await consumeRange(startedAt, endedAt, inserted.id);
 
     tripsCreated++;
     if (classification === "business") {
