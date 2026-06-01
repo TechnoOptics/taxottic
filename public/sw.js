@@ -458,7 +458,12 @@
 // v59: Review toggle. Tapping "Review" on the drive that's already in
 // review now returns to the all-drives overview (it toggles); tapping
 // it on a different drive switches focus to that one.
-const CACHE_VERSION = "v59";
+// v60: "First drive logged" badge. A logged BUSINESS trip now earns its
+// own achievement (distinct from the "vehicle" profile-flag badge), so
+// tracking mileage is rewarded. Also: the forecast now counts tracked
+// mileage when vehicle_method is unset (server fix), so the deduction
+// moves the projection.
+const CACHE_VERSION = "v60";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

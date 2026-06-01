@@ -41,6 +41,7 @@ export async function evaluateBadges(
     { count: bellaConvos },
     { data: businessProfiles },
     { count: invitesCount },
+    { count: bizTripCount },
   ] = await Promise.all([
     supabase.from("badges").select("badge_code").eq("user_id", userId),
     supabase.from("company_members").select("company_id").eq("user_id", userId),
@@ -82,6 +83,14 @@ export async function evaluateBadges(
       .from("invitations")
       .select("*", { count: "exact", head: true })
       .eq("invited_by", userId),
+    // A logged BUSINESS drive — the actual mileage-deduction milestone,
+    // distinct from the "vehicle" badge which only checks the profile
+    // flag. Keyed on driver_user_id (mileage_trips has no user_id).
+    supabase
+      .from("mileage_trips")
+      .select("*", { count: "exact", head: true })
+      .eq("driver_user_id", userId)
+      .eq("classification", "business"),
   ]);
 
   const have = new Set((existing ?? []).map((b) => b.badge_code));
@@ -103,6 +112,7 @@ export async function evaluateBadges(
     earned.push({ badge_code: "home_office" });
   if ((businessProfiles ?? []).some((b) => b.has_vehicle))
     earned.push({ badge_code: "vehicle" });
+  if ((bizTripCount ?? 0) > 0) earned.push({ badge_code: "first_drive" });
 
   if ((invitesCount ?? 0) > 0) earned.push({ badge_code: "team_grower" });
 

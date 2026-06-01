@@ -82,6 +82,14 @@ export const BADGES: Record<string, Badge> = {
     icon: "🚗",
     tier: "silver",
   },
+  first_drive: {
+    code: "first_drive",
+    title: "First drive logged",
+    description:
+      "Logged a business drive — it counts toward your mileage deduction.",
+    icon: "🧭",
+    tier: "silver",
+  },
   team_grower: {
     code: "team_grower",
     title: "Team grower",
