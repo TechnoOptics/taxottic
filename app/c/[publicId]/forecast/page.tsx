@@ -101,17 +101,35 @@ export default async function ForecastPage({ params }: { params: Params }) {
   const admin = createServiceClient();
   const { data: bizTripRows } = await admin
     .from("mileage_trips")
-    .select("deduction_cents")
+    .select("deduction_cents, started_at")
     .eq("company_id", company.id)
     .eq("classification", "business")
     .eq("tax_year", taxYear);
   const trackedTrips = (bizTripRows ?? []) as unknown as {
     deduction_cents: number;
+    started_at: string;
   }[];
   const trackedYtdMileageCents = trackedTrips.reduce(
     (a, t) => a + Number(t.deduction_cents ?? 0),
     0,
   );
+  // Days since the most recent business drive — drives the "log your
+  // miles" nudge's recency gate (hide it while they're actively
+  // tracking; only resurface after a 7-day lapse). null = none logged.
+  // ISO timestamps sort chronologically, so a string max gives the most
+  // recent business trip without a Date.parse. new Date(...) matches the
+  // page's existing time pattern (see taxYear/currentMonth above).
+  const lastBizTripIso = trackedTrips.reduce<string | null>(
+    (max, t) => (max == null || t.started_at > max ? t.started_at : max),
+    null,
+  );
+  const daysSinceLastBusinessMile =
+    lastBizTripIso == null
+      ? null
+      : Math.floor(
+          (new Date().getTime() - new Date(lastBizTripIso).getTime()) /
+            86_400_000,
+        );
 
   // The entire YTD/projected assembly + the two forecast() runs now
   // live in lib/tax/company-forecast.ts so the watch glance computes
@@ -367,6 +385,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
     vehicleMethod:
       (businessProfile?.vehicle_method as "standard" | "actual" | null) ??
       null,
+    daysSinceLastBusinessMile,
     hasHomeOffice: businessProfile?.has_home_office ?? null,
     homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
     itemize: taxProfile.itemize,
