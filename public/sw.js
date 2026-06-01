@@ -455,7 +455,10 @@
 // reverse-geocoded client-side via the already-loaded Google Maps key
 // and cached in localStorage (one lookup per distinct place). Saved
 // places (e.g. "Office") win over the geocoded address when known.
-const CACHE_VERSION = "v58";
+// v59: Review toggle. Tapping "Review" on the drive that's already in
+// review now returns to the all-drives overview (it toggles); tapping
+// it on a different drive switches focus to that one.
+const CACHE_VERSION = "v59";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
