@@ -40,6 +40,8 @@ const HOW_TO_EARN: Record<string, string> = {
     "Mark home-office in your business profile and capture utilities or office expenses.",
   vehicle:
     "Mark a business vehicle in your profile and capture car/truck expenses.",
+  first_drive:
+    "Log a business drive — track one with the app or add it by hand on the Mileage page.",
   team_grower: "Invite at least one teammate to a company you manage.",
 };
 
