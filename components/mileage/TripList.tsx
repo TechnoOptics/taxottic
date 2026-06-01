@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
+import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 
 /**
  * Phone-first trip list. Replaces the old "3 pill buttons per row,
@@ -177,6 +178,14 @@ function TripCard({
   const [pending, startTransition] = useTransition();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // First + last GPS fix = the drive's start / end, for reverse-geocoded
+  // place labels ("Shakopee, MN → Mounds View, MN").
+  const sortedPts = [...trip.points].sort((a, b) =>
+    a.captured_at < b.captured_at ? -1 : 1,
+  );
+  const startPt = sortedPts[0];
+  const endPt = sortedPts[sortedPts.length - 1];
+
   const start = new Date(trip.startedAtISO);
   const end = new Date(trip.endedAtISO);
 
@@ -247,6 +256,15 @@ function TripCard({
               ? ` · ${fmtUsd(Number(trip.deductionCents))} deduction`
               : ""}
           </div>
+          {startPt && endPt ? (
+            <TripEndpoints
+              startLat={startPt.lat}
+              startLng={startPt.lng}
+              endLat={endPt.lat}
+              endLng={endPt.lng}
+              className="mt-1"
+            />
+          ) : null}
         </div>
         {/* Delete affordance. Two-tap with confirm — destructive
             actions should never be one click on a touch device. */}

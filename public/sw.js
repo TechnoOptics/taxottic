@@ -450,7 +450,12 @@
 // the map and scrolls/focuses there, and only ONE trip can be in review
 // at a time (the range overview is the sole multi-trip view). Bump so
 // the new /mileage bundle is picked up on refresh.
-const CACHE_VERSION = "v57";
+// v58: Trip location labels. Each drive now shows its start → end place
+// ("Shakopee, MN 55379 → Mounds View, MN 55112") for a report-ready log,
+// reverse-geocoded client-side via the already-loaded Google Maps key
+// and cached in localStorage (one lookup per distinct place). Saved
+// places (e.g. "Office") win over the geocoded address when known.
+const CACHE_VERSION = "v58";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
