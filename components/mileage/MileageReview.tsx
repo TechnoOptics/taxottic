@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MileageMap,
   type MapTrip,
@@ -48,18 +48,23 @@ export function MileageReview({
   // Review mode shows just the one drive; overview shows them all.
   const shownTrips = focusedTrip ? [focusedTrip] : mapTrips;
 
+  // Toggle: tapping Review on the trip that's already in review takes
+  // you BACK to the all-drives overview. Tapping it on a different trip
+  // switches the focus to that one. (Only one trip in review at a time.)
   const onReview = useCallback((tripId: string) => {
-    setFocusedId(tripId);
-    // Move screen focus to the map and scroll it into view so the user
-    // is looking at the route they just asked to review. rAF lets the
-    // focused-trip render commit first.
-    requestAnimationFrame(() => {
-      const el = mapWrapRef.current;
-      if (!el) return;
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-      el.focus({ preventScroll: true });
-    });
+    setFocusedId((prev) => (prev === tripId ? null : tripId));
   }, []);
+
+  // When a trip becomes the focused one, move screen focus to the map
+  // and scroll it into view so the user is looking at the route they
+  // asked to review. Runs after the focused-trip render commits.
+  useEffect(() => {
+    if (!focusedId) return;
+    const el = mapWrapRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.focus({ preventScroll: true });
+  }, [focusedId]);
 
   const focusedRow = focusedId
     ? (tripRows.find((t) => t.id === focusedId) ?? null)
