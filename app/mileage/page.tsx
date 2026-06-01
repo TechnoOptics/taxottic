@@ -63,18 +63,25 @@ export default async function MileagePage({
     classification: "business" | "personal" | "unclassified";
     tax_year: number;
     deduction_cents: number;
-    mileage_points: { lat: number; lng: number; captured_at: string }[];
   };
+  type Pt = { lat: number; lng: number; captured_at: string };
 
   let trips: ServerTripRow[] = [];
   let places: MapPlace[] = [];
   let lastPointISO: string | null = null;
   let lastTripISO: string | null = null;
+  // Route polylines, keyed by trip id. Fetched via the
+  // mileage_trip_polylines RPC, NOT an embedded mileage_points(...) join:
+  // PostgREST caps embedded arrays at 1000 rows, which truncated long
+  // drives mid-route (a 35.8 mi drive drew only its first ~19 mi). The
+  // RPC returns a bounded, evenly-strided sample that still reaches each
+  // route's true start + end.
+  const pointsByTrip = new Map<string, Pt[]>();
   if (company) {
     const { data: tripData } = await admin
       .from("mileage_trips")
       .select(
-        "id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, mileage_points(lat, lng, captured_at)",
+        "id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents",
       )
       .eq("company_id", company.id)
       .eq("driver_user_id", user.id)
@@ -82,6 +89,21 @@ export default async function MileagePage({
       .order("started_at", { ascending: false })
       .limit(500);
     trips = (tripData ?? []) as unknown as ServerTripRow[];
+
+    if (trips.length > 0) {
+      const { data: polyRows } = await admin.rpc("mileage_trip_polylines", {
+        p_trip_ids: trips.map((t) => t.id),
+        p_max: 250,
+      });
+      for (const r of (polyRows ?? []) as ({ trip_id: string } & Pt)[]) {
+        const arr = pointsByTrip.get(r.trip_id);
+        if (arr) arr.push({ lat: r.lat, lng: r.lng, captured_at: r.captured_at });
+        else
+          pointsByTrip.set(r.trip_id, [
+            { lat: r.lat, lng: r.lng, captured_at: r.captured_at },
+          ]);
+      }
+    }
 
     const { data: placeData } = await admin
       .from("mileage_places")
@@ -128,7 +150,8 @@ export default async function MileagePage({
   const mapTrips: MapTrip[] = trips.map((t) => ({
     id: t.id,
     classification: t.classification,
-    points: [...t.mileage_points]
+    points: (pointsByTrip.get(t.id) ?? [])
+      .slice()
       .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
       .map((p) => ({ lat: p.lat, lng: p.lng })),
   }));
@@ -318,7 +341,7 @@ export default async function MileagePage({
                 distanceMiles: Number(t.distance_miles),
                 classification: t.classification,
                 deductionCents: Number(t.deduction_cents),
-                points: t.mileage_points,
+                points: pointsByTrip.get(t.id) ?? [],
               }))}
               reclassify={reclassifyTrip}
               deleteTrip={deleteTrip}
