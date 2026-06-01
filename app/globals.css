@@ -19,6 +19,19 @@
   font-display: swap;
 }
 
+/* Force native UA controls — <select> dropdown popups, date/time pickers,
+   scrollbars — to render with a LIGHT color-scheme. Without this, on a
+   device in dark mode the Android WebView paints every native <select>
+   popup SOLID BLACK: tapping any dropdown (e.g. the vehicle-method picker
+   on the business profile) blanked the whole screen to black until you
+   pressed Back. Reproduced + verified the fix on a Galaxy Z Fold5. The
+   app's own dark theme is custom-CSS-driven (html[data-theme="dark"]) and
+   never relied on color-scheme, so pinning light here only changes
+   UA-default rendering — every dropdown becomes a normal, readable list. */
+html {
+  color-scheme: light;
+}
+
 @theme inline {
   --color-forest-50: #eef1f6;
   --color-forest-100: #d6dded;
