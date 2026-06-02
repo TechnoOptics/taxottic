@@ -218,6 +218,35 @@ async function guard(): Promise<BackgroundGeolocationPlugin | null> {
   return plugin;
 }
 
+/**
+ * Stop the native watcher WITHOUT awaiting on Android.
+ *
+ * On Android the @capgo plugin's stop() — like start() — is callback-
+ * style: its return is the Capacitor plugin proxy, NOT a real promise.
+ * `await bg.stop()` therefore accesses `.then` on that proxy, which
+ * Capacitor forwards to a native method literally named "then" (which
+ * doesn't exist), throwing
+ *   `"BackgroundGeolocation.then()" is not implemented on android`.
+ * That surfaced as an uncaught exception on EVERY page load
+ * (resume → start → stop) even though the call site try/caught it. So:
+ * fire stop() WITHOUT touching `.then` on native (the call still
+ * performs the stop), then give the native side a beat to tear the
+ * orphaned foreground service down before the caller proceeds. The web
+ * shim returns a genuine promise, so await it there.
+ */
+async function stopBgSafely(bg: BackgroundGeolocationPlugin): Promise<void> {
+  try {
+    if (trackerDiag.native) {
+      bg.stop();
+      await new Promise((r) => setTimeout(r, 150));
+    } else {
+      await (bg.stop() as unknown as Promise<void>);
+    }
+  } catch {
+    /* no active session / already stopped — fine */
+  }
+}
+
 function persistBuffer() {
   try {
     window.localStorage.setItem(LS_BUFFER, JSON.stringify(buffer));
@@ -407,13 +436,10 @@ export async function startMileageTracking(
   //
   // Pre-stopping forces the native side to tear down the orphaned
   // service so the subsequent start() builds a fresh subscription
-  // with our live callback. The stop is wrapped in try/catch because
-  // "no session running" is the common case and shouldn't error.
-  try {
-    await bg.stop();
-  } catch {
-    /* no prior session — fine */
-  }
+  // with our live callback. stopBgSafely never awaits `.then` on the
+  // native proxy (see its doc) so it can't throw the
+  // "BackgroundGeolocation.then()" error this used to spew on launch.
+  await stopBgSafely(bg);
 
   // Fire-and-forget start(). Promise rejection / callback errors
   // are captured into trackerDiag so the UI's diag line shows the
@@ -542,11 +568,7 @@ export async function stopMileageTracking(): Promise<void> {
   }
   const bg = await guard();
   if (bg && tracking) {
-    try {
-      await bg.stop();
-    } catch {
-      /* already stopped */
-    }
+    await stopBgSafely(bg);
   }
   tracking = false;
   // Final upload tagged sessionEnded so the server force-closes any

@@ -488,7 +488,17 @@
 // show the friendly company name ("Techno Optics LLC · Tax year 2026");
 // pages whose H1 is already the company name drop the identifier and
 // keep just the page label ("Banks", "Team") to avoid repeating it.
-const CACHE_VERSION = "v66";
+// v67: Interaction fixes from on-device QA. (1) Killed the uncaught
+// "BackgroundGeolocation.then() is not implemented" exception that
+// fired on every page load — bg.stop() is callback-style on Android,
+// so awaiting it tripped the .then proxy (same root cause as start);
+// now fired without awaiting `.then` on native. (2) Dashboard "dismiss
+// overdue reminders" X actually dismisses now — the server-action
+// <form> in the Server Component was submitting as a plain POST with no
+// Next-Action header (action never ran); moved to a client component
+// that invokes the action directly. (3) Removed a stray NUL byte from
+// the dashboard source.
+const CACHE_VERSION = "v67";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

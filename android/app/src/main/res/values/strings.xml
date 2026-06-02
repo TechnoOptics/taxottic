@@ -6,7 +6,12 @@
     <string name="custom_url_scheme">com.taxottic.app</string>
     <!-- @capgo/background-geolocation: the channel name shown when the
          user presses & holds the persistent mileage-tracking
-         notification. Icon intentionally left unset so the plugin
-         falls back to the app launcher icon (no extra drawable). -->
+         notification. -->
     <string name="capacitor_background_geolocation_notification_channel_name">Taxottic mileage tracking</string>
+    <!-- Notification SMALL icon. Without this the plugin defaults to
+         mipmap/ic_launcher (the full navy+gold tile), which renders as
+         a colored badge WITH a background in the status bar — unlike
+         standard apps. Point it at the transparent white "T" silhouette
+         so the status-bar glyph is clean and background-less. -->
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_stat_taxottic</string>
 </resources>
