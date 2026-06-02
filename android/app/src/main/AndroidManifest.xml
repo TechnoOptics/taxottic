@@ -44,6 +44,17 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Push (FCM) notification small icon. Without this,
+             @capacitor/push-notifications uses the full launcher tile as
+             the status-bar icon (a colored badge with a background). Use
+             the same transparent white "T" silhouette as the mileage
+             foreground-service notification so every Taxottic
+             notification shows a clean, background-less glyph like a
+             standard app. Only consumed when FCM is configured. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_taxottic" />
     </application>
 
     <!-- Permissions -->
