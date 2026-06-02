@@ -57,6 +57,11 @@ export type ExpenseRowProps = {
     is_meal: boolean;
     is_typically_recurring: boolean;
   }[];
+  // Who entered this expense (monthly_expenses.user_id → display name).
+  // Only set by the parent when the company has multiple members and the
+  // list isn't already filtered to a single person, so a solo operator
+  // never sees a redundant "added by me" tag.
+  addedByLabel?: string | null;
   updateAction: (formData: FormData) => Promise<void>;
   deleteAction: (formData: FormData) => Promise<void>;
 };
@@ -67,6 +72,7 @@ export function ExpenseRow({
   taxYear,
   currentMonth,
   categories,
+  addedByLabel,
   updateAction,
   deleteAction,
 }: ExpenseRowProps) {
@@ -178,6 +184,23 @@ export function ExpenseRow({
         </div>
         {row.notes ? (
           <div className="text-xs text-ink-muted truncate">{row.notes}</div>
+        ) : null}
+        {addedByLabel ? (
+          <div className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.12em] text-forest-700">
+            <svg
+              viewBox="0 0 16 16"
+              width="11"
+              height="11"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="5" r="3" />
+              <path strokeLinecap="round" d="M2.5 14c0-3 2.5-4.5 5.5-4.5S13.5 11 13.5 14" />
+            </svg>
+            {addedByLabel}
+          </div>
         ) : null}
       </div>
       <div className="text-forest-900 font-medium tabular-nums">

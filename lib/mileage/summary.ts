@@ -35,13 +35,21 @@ export async function getBusinessMileageSummary(
   supabase: SupabaseClient,
   companyId: string,
   taxYear: number,
+  // Optional per-driver scope. When the Expenses list is filtered to a
+  // single employee, the mileage rollup is filtered to that employee's
+  // drives too (mileage_trips.driver_user_id) so the page's totals stay
+  // internally consistent. Omit (or pass null) for the company-wide
+  // rollup the Dashboard / My Deductions use.
+  driverUserId?: string | null,
 ): Promise<MileageSummary> {
-  const { data } = await supabase
+  let query = supabase
     .from("mileage_trips")
     .select("started_at, distance_miles, deduction_cents")
     .eq("company_id", companyId)
     .eq("classification", "business")
     .eq("tax_year", taxYear);
+  if (driverUserId) query = query.eq("driver_user_id", driverUserId);
+  const { data } = await query;
 
   const rows = (data ?? []) as Array<{
     started_at: string;

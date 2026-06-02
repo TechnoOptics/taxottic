@@ -8,6 +8,7 @@ import { addExpense, deleteExpense, updateExpense } from "./actions";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
 import { ExpenseRow } from "@/components/ExpenseRow";
 import { ReceiptUploader } from "@/components/ReceiptUploader";
+import { EmployeeFilter } from "@/components/EmployeeFilter";
 
 const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
@@ -15,6 +16,7 @@ const MONTH_LABELS = [
 ];
 
 type Params = Promise<{ publicId: string }>;
+type SearchParams = Promise<{ emp?: string }>;
 
 type CategoryRow = {
   code: string;
@@ -25,22 +27,59 @@ type CategoryRow = {
   is_typically_recurring: boolean;
 };
 
-export default async function ExpensesPage({ params }: { params: Params }) {
+export default async function ExpensesPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: SearchParams;
+}) {
   const { publicId } = await params;
+  const { emp: empRaw = "" } = await searchParams;
   const { supabase, user, company } = await loadCompanyByPublicId(publicId);
   const taxYear = new Date().getUTCFullYear();
   const currentMonth = new Date().getUTCMonth() + 1;
 
+  // Team roster for the per-employee filter. Members can already read
+  // every company expense (RLS: "member read"), so this filter is a
+  // view convenience — it only renders when there are ≥2 members. Names
+  // come from profiles (full_name, falling back to email).
+  const { data: memberRows } = await supabase
+    .from("company_members")
+    .select("user_id, profile:profiles(full_name, email)")
+    .eq("company_id", company.id);
+  const members = (memberRows ?? [])
+    .map((m) => {
+      const p = m.profile as unknown as {
+        full_name: string | null;
+        email: string | null;
+      } | null;
+      const name = (p?.full_name?.trim() || p?.email || "Member").trim();
+      return {
+        userId: m.user_id as string,
+        label: m.user_id === user.id ? `${name} · you` : name,
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const memberMap = new Map(members.map((m) => [m.userId, m.label]));
+  const multiMember = members.length >= 2;
+  // Only honour ?emp= when it names a real member; an unknown id falls
+  // back to "everyone" rather than silently showing zero rows.
+  const emp = memberMap.has(empRaw) ? empRaw : "";
+
+  let expQuery = supabase
+    .from("monthly_expenses")
+    .select(
+      "id, month, amount_cents, category_code, recurrence, notes, created_at, user_id, category:deduction_categories(label, is_meal)",
+    )
+    .eq("company_id", company.id)
+    .eq("tax_year", taxYear)
+    .order("month", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (emp) expQuery = expQuery.eq("user_id", emp);
+
   const [{ data: rows }, { data: categories }] = await Promise.all([
-    supabase
-      .from("monthly_expenses")
-      .select(
-        "id, month, amount_cents, category_code, recurrence, notes, created_at, category:deduction_categories(label, is_meal)",
-      )
-      .eq("company_id", company.id)
-      .eq("tax_year", taxYear)
-      .order("month", { ascending: false })
-      .order("created_at", { ascending: false }),
+    expQuery,
     supabase
       .from("deduction_categories")
       .select(
@@ -55,11 +94,14 @@ export default async function ExpensesPage({ params }: { params: Params }) {
   // Tracked business mileage, rolled up per month, so a logged drive
   // shows as a deduction line in the month it happened — the user
   // expected to see "mileage expensed to this month" here, not only on
-  // the Mileage page. The YTD total now includes it.
+  // the Mileage page. The YTD total now includes it. When the list is
+  // filtered to one employee, the mileage rollup is scoped to that
+  // driver too so the totals stay internally consistent.
   const mileage = await getBusinessMileageSummary(
     supabase,
     company.id,
     taxYear,
+    emp || null,
   );
   const total = expensesTotal + mileage.ytdCents;
   const hasAny = (rows?.length ?? 0) > 0 || mileage.byMonth.length > 0;
@@ -148,6 +190,14 @@ export default async function ExpensesPage({ params }: { params: Params }) {
               {formatCents(total)}
             </div>
           </div>
+          {/* Per-employee filter — only for companies with a team. Picking
+              a person scopes both the expense rows AND the mileage rollup
+              to them via ?emp=. */}
+          {multiMember ? (
+            <div className="mt-3">
+              <EmployeeFilter members={members} current={emp} />
+            </div>
+          ) : null}
           {/*
             Group by month. The list used to be flat 12 months × N rows
             deep — overwhelming for an active business. Each month
@@ -271,6 +321,11 @@ export default async function ExpensesPage({ params }: { params: Params }) {
                                 categories={
                                   (categories as CategoryRow[] | null) ?? []
                                 }
+                                addedByLabel={
+                                  multiMember && !emp
+                                    ? memberMap.get(r.user_id) ?? null
+                                    : null
+                                }
                                 updateAction={updateExpense}
                                 deleteAction={deleteExpense}
                               />
@@ -292,28 +347,47 @@ export default async function ExpensesPage({ params }: { params: Params }) {
             // import lives one tab over. Both routes are first-class;
             // we just had to point at them.
             <div className="mt-4 py-10 text-center">
-              <div className="text-sm text-ink-muted">
-                No expenses entered yet for {taxYear}.
-              </div>
-              <p className="mt-3 text-xs text-ink-soft max-w-md mx-auto leading-relaxed">
-                Add one with the form above to see your forecast
-                tighten, or paste a year of expenses in one shot
-                from your bank or accountant&apos;s CSV.
-              </p>
-              <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-2">
-                <Link
-                  href={`/c/${publicId}/import`}
-                  className="btn-ghost text-xs px-3 h-9"
-                >
-                  Import a CSV →
-                </Link>
-                <Link
-                  href={`/c/${publicId}/banks`}
-                  className="btn-ghost text-xs px-3 h-9"
-                >
-                  Connect a bank
-                </Link>
-              </div>
+              {emp ? (
+                <>
+                  <div className="text-sm text-ink-muted">
+                    No expenses or business drives for{" "}
+                    {memberMap.get(emp)} in {taxYear}.
+                  </div>
+                  <div className="mt-4">
+                    <Link
+                      href={`/c/${publicId}/expenses`}
+                      className="btn-ghost text-xs px-3 h-9"
+                    >
+                      ← Show all team members
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm text-ink-muted">
+                    No expenses entered yet for {taxYear}.
+                  </div>
+                  <p className="mt-3 text-xs text-ink-soft max-w-md mx-auto leading-relaxed">
+                    Add one with the form above to see your forecast
+                    tighten, or paste a year of expenses in one shot
+                    from your bank or accountant&apos;s CSV.
+                  </p>
+                  <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-2">
+                    <Link
+                      href={`/c/${publicId}/import`}
+                      className="btn-ghost text-xs px-3 h-9"
+                    >
+                      Import a CSV →
+                    </Link>
+                    <Link
+                      href={`/c/${publicId}/banks`}
+                      className="btn-ghost text-xs px-3 h-9"
+                    >
+                      Connect a bank
+                    </Link>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import { TrackerStatus } from "@/components/mileage/TrackerStatus";
 import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
+import { DriverPicker } from "@/components/mileage/DriverPicker";
 import {
   reclassifyTrip,
   deleteTrip,
@@ -26,7 +27,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type SP = Promise<{ range?: string }>;
+type SP = Promise<{ range?: string; driver?: string }>;
 
 const RANGES: Record<string, { label: string; days: number }> = {
   day: { label: "Today", days: 1 },
@@ -51,7 +52,7 @@ export default async function MileagePage({
   searchParams: SP;
 }) {
   const { user, admin } = await requireUserWithAdmin();
-  const { range = "week" } = await searchParams;
+  const { range = "week", driver: driverParam = "" } = await searchParams;
   const rangeCfg = RANGES[range] ?? RANGES.week;
   const sinceIso = new Date(
     new Date().getTime() - rangeCfg.days * 86_400_000,
@@ -59,6 +60,44 @@ export default async function MileagePage({
 
   const memberships = await getMyCompanies();
   const company = memberships[0]?.company ?? null;
+  const isManager = memberships[0]?.role === "manager";
+
+  // Driver switcher (managers only). A manager can review any teammate's
+  // drive log; the trip query + stats + map all re-scope to the chosen
+  // driver. Drivers = the company's members (names from profiles). Self
+  // is labelled "· you" and is the default. Members that never drove are
+  // still listed (picking them just shows an empty log).
+  let drivers: { userId: string; label: string }[] = [];
+  if (company && isManager) {
+    const { data: memberRows } = await admin
+      .from("company_members")
+      .select("user_id, profile:profiles(full_name, email)")
+      .eq("company_id", company.id);
+    drivers = (memberRows ?? [])
+      .map((m) => {
+        const p = m.profile as unknown as {
+          full_name: string | null;
+          email: string | null;
+        } | null;
+        const name = (p?.full_name?.trim() || p?.email || "Member").trim();
+        return {
+          userId: m.user_id as string,
+          label: m.user_id === user.id ? `${name} · you` : name,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+  const driverIds = new Set(drivers.map((d) => d.userId));
+  // Only honour ?driver= for managers, and only for a real co-member.
+  // Everyone else (and any bad id) is pinned to their own drives.
+  const viewingDriverId =
+    isManager && driverParam && driverIds.has(driverParam)
+      ? driverParam
+      : user.id;
+  const viewingSelf = viewingDriverId === user.id;
+  const viewingDriverLabel =
+    drivers.find((d) => d.userId === viewingDriverId)?.label ?? null;
+  const showDriverPicker = isManager && drivers.length >= 2;
 
   type ServerTripRow = {
     id: string;
@@ -89,7 +128,7 @@ export default async function MileagePage({
         "id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents",
       )
       .eq("company_id", company.id)
-      .eq("driver_user_id", user.id)
+      .eq("driver_user_id", viewingDriverId)
       .gte("started_at", sinceIso)
       .order("started_at", { ascending: false })
       .limit(500);
@@ -120,26 +159,31 @@ export default async function MileagePage({
     // THIS user, across any company they belong to. mileage_points
     // doesn't have driver_user_id; join through the trip. Using a
     // single 1-row fetch so the page render cost is constant
-    // regardless of how many points exist.
-    const { data: lastPoint } = await admin
-      .from("mileage_points")
-      .select("captured_at, trip:mileage_trips!inner(driver_user_id)")
-      .eq("trip.driver_user_id", user.id)
-      .order("captured_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    lastPointISO =
-      (lastPoint as { captured_at?: string } | null)?.captured_at ?? null;
+    // regardless of how many points exist. Only computed for the
+    // self view — "is YOUR tracker running" is meaningless when a
+    // manager is reviewing another driver's log (TrackerStatus is
+    // hidden in that case).
+    if (viewingSelf) {
+      const { data: lastPoint } = await admin
+        .from("mileage_points")
+        .select("captured_at, trip:mileage_trips!inner(driver_user_id)")
+        .eq("trip.driver_user_id", user.id)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastPointISO =
+        (lastPoint as { captured_at?: string } | null)?.captured_at ?? null;
 
-    const { data: lastTrip } = await admin
-      .from("mileage_trips")
-      .select("started_at")
-      .eq("driver_user_id", user.id)
-      .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    lastTripISO =
-      (lastTrip as { started_at?: string } | null)?.started_at ?? null;
+      const { data: lastTrip } = await admin
+        .from("mileage_trips")
+        .select("started_at")
+        .eq("driver_user_id", user.id)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastTripISO =
+        (lastTrip as { started_at?: string } | null)?.started_at ?? null;
+    }
   }
 
   const businessMiles = trips
@@ -188,24 +232,57 @@ export default async function MileagePage({
               {company.name} · {rangeCfg.label.toLowerCase()}
             </div>
 
-            <div className="mt-4">
-              <AutoTrackToggle companyId={company.id} />
-            </div>
+            {/* Manager-only driver switcher. Re-scopes the whole page to
+                a chosen teammate's drives. */}
+            {showDriverPicker ? (
+              <div className="mt-4">
+                <DriverPicker
+                  selfUserId={user.id}
+                  drivers={drivers}
+                  current={viewingDriverId}
+                />
+              </div>
+            ) : null}
+
+            {!viewingSelf ? (
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
+                <span aria-hidden="true">👁️</span>
+                <span>
+                  Reviewing{" "}
+                  <span className="font-medium">
+                    {viewingDriverLabel ?? "a teammate"}
+                  </span>
+                  &apos;s drives. You can re-classify or remove trips; their
+                  own tracking controls stay on their device.
+                </span>
+              </div>
+            ) : null}
+
+            {/* Auto-track toggle + tracker diagnostics are self-only —
+                you can't flip another driver's phone tracker. */}
+            {viewingSelf ? (
+              <div className="mt-4">
+                <AutoTrackToggle companyId={company.id} />
+              </div>
+            ) : null}
 
             {/* "Is the tracker actually running?" — the diagnostic
                 strip the user asked for after their first real
                 drive-day produced zero GPS points. Green when active,
                 red with a checklist + manual-log pointer when not. */}
-            <TrackerStatus
-              lastPointISO={lastPointISO}
-              lastTripISO={lastTripISO}
-            />
+            {viewingSelf ? (
+              <TrackerStatus
+                lastPointISO={lastPointISO}
+                lastTripISO={lastTripISO}
+              />
+            ) : null}
 
             {/* Pending-classification banner. Mirrors the watch's
                 Confirm tab for users without a watch. Big amber CTA
                 links to the phone-side swipe deck at
-                /mileage/classify. Hidden when nothing is pending. */}
-            {unclassifiedCount > 0 ? (
+                /mileage/classify. Hidden when nothing is pending, and
+                when reviewing another driver (that deck is your own). */}
+            {viewingSelf && unclassifiedCount > 0 ? (
               <Link
                 href="/mileage/classify"
                 className="mt-4 block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-400"
@@ -307,7 +384,7 @@ export default async function MileagePage({
                   it in a Link to the swipe deck so the stat itself is
                   the tap target (mirroring the amber banner above —
                   some users tap the stat instead of the banner). */}
-              {unclassifiedCount > 0 ? (
+              {viewingSelf && unclassifiedCount > 0 ? (
                 <Link
                   href="/mileage/classify"
                   className="col-span-2 sm:col-span-1 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
@@ -322,9 +399,11 @@ export default async function MileagePage({
               ) : (
                 <Stat
                   label="Need review"
-                  value="0"
-                  tone="neutral"
-                  caption="All caught up"
+                  value={String(unclassifiedCount)}
+                  tone={unclassifiedCount > 0 ? "warn" : "neutral"}
+                  caption={
+                    unclassifiedCount > 0 ? "Unclassified" : "All caught up"
+                  }
                 />
               )}
             </div>
@@ -361,8 +440,10 @@ export default async function MileagePage({
             {/* Manual backfill entry — collapsed by default. The user
                 ALWAYS has a way to log a drive even if the tracker
                 missed it (the realistic scenario, given GPS background
-                capture on Android is best-effort). */}
-            <ManualLogTrip action={addManualTrip} />
+                capture on Android is best-effort). Self-only: a manual
+                trip is always logged under the current user, so it's
+                hidden when reviewing another driver. */}
+            {viewingSelf ? <ManualLogTrip action={addManualTrip} /> : null}
 
             <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
               Deduction uses the IRS standard mileage rate for the

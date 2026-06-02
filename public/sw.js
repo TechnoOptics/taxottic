@@ -478,7 +478,11 @@
 // consumer forms: business-profile vehicle method, trip business
 // picker, income (month/source), goals (type/company), tax-profile
 // (filing status/state), and import row (match type / treat-as).
-const CACHE_VERSION = "v63";
+// v64: Per-employee visibility. Expenses list gains a team-member
+// filter (?emp=) + a per-row "added by" tag; the mileage map gains a
+// manager-only driver switcher (?driver=) to review any teammate's
+// drive log. New client components (EmployeeFilter, DriverPicker).
+const CACHE_VERSION = "v64";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
