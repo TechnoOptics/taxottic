@@ -269,6 +269,12 @@ export default async function DashboardPage() {
     supabase
       .from("reminders")
       .select("id, kind, title, due_at")
+      // Explicit owner filter — belt-and-braces, same as getMyCompanies.
+      // RLS lets a super-admin read EVERY user's reminders, so without
+      // this the consumer dashboard recap showed (and counted) other
+      // people's overdue reminders for super-admin accounts — and the
+      // dismiss-X (correctly scoped to user_id) could never clear them.
+      .eq("user_id", user.id)
       .is("dismissed_at", null)
       .gte("due_at", nowIso)
       .order("due_at", { ascending: true })
@@ -276,6 +282,7 @@ export default async function DashboardPage() {
     supabase
       .from("reminders")
       .select("id, kind, title, due_at")
+      .eq("user_id", user.id)
       .is("dismissed_at", null)
       .lt("due_at", nowIso)
       .order("due_at", { ascending: true })
@@ -283,6 +290,10 @@ export default async function DashboardPage() {
     supabase
       .from("goals")
       .select("id, title, target_cents, saved_cents, status, deadline")
+      // Owner filter — same RLS-super-admin caveat as the reminders
+      // queries above; without it a super-admin's dashboard would list
+      // other users' goals.
+      .eq("user_id", user.id)
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(3),
