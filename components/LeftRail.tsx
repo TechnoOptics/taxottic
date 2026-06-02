@@ -194,8 +194,22 @@ export function LeftRail({
   }, [urlPublicId]);
 
   const onDashboard = pathname === "/dashboard";
+  // Resolve the effective active company for the nav. Priority:
+  //   1. The /c/[publicId] route in the URL.
+  //   2. The last company the user visited (localStorage).
+  //   3. The user's only company, if they have exactly one.
+  // Previously /dashboard forced this to null as a "blank slate," but
+  // that made the menu look empty/confusing on first open (just
+  // "Dashboard" + an auto-expanded company list, none of the actual
+  // nav). Showing the active company's section everywhere — including
+  // the dashboard — makes the menu feel complete and consistent. The
+  // switcher still auto-opens only when there's genuinely no active
+  // company to fall back on (multi-company users who haven't picked one
+  // yet).
+  const soleCompanyId =
+    companies.length === 1 ? companies[0].publicId : null;
   const effectivePublicId =
-    urlPublicId ?? (onDashboard ? null : lastPublicId);
+    urlPublicId ?? lastPublicId ?? soleCompanyId;
 
   const activeCompany =
     effectivePublicId == null

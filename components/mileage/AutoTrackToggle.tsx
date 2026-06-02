@@ -32,6 +32,26 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
   // actual start (which triggers the OS dialog); "Cancel" leaves
   // the toggle off.
   const [showExplainer, setShowExplainer] = useState(false);
+  // The engineering diagnostic crumb is hidden in normal use — a raw
+  // "diag: ready=true sup=true …" string in the main mileage card looks
+  // unfinished. It now renders only when explicitly opted in
+  // (localStorage taxottic.debug=1, or ?diag=1 on the URL), so the
+  // user-facing card stays clean while the crumb is one flag away for
+  // on-device debugging.
+  const [showDiag, setShowDiag] = useState(false);
+  useEffect(() => {
+    try {
+      if (
+        window.localStorage.getItem("taxottic.debug") === "1" ||
+        new URLSearchParams(window.location.search).has("diag")
+      ) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot opt-in flag read after mount
+        setShowDiag(true);
+      }
+    } catch {
+      /* private mode — keep hidden */
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -260,13 +280,10 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           you can add drives manually below.
         </p>
       ) : null}
-      {/* Diagnostic crumb — ALWAYS rendered (not just when
-          supported=false) so we can read state even if React's
-          ready=false branch was hiding the previous gated version.
-          The trackerDiag object is updated by guard() on every
-          call, so as soon as getMileageTrackingState resolves —
-          even after the 5s timeout — these fields reflect what the
-          native shim saw. Removable once toggle is verified. */}
+      {/* Diagnostic crumb — gated behind the debug flag (see showDiag
+          above). The trackerDiag object is updated by guard() on every
+          call, so these fields reflect what the native shim saw. */}
+      {showDiag ? (
       <p className="mt-1 text-[10px] text-ink-muted font-mono opacity-70 break-all">
         diag: ready={String(ready)} sup={String(supported)} en={String(enabled)}
         {" "}native={String(trackerDiag.native)} plug={String(
@@ -282,6 +299,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
         {trackerDiag.cbLastError ? ` cbErr=${trackerDiag.cbLastError}` : ""}
         {trackerDiag.lastError ? ` err=${trackerDiag.lastError.slice(0, 40)}` : ""}
       </p>
+      ) : null}
       {error ? (
         <div className="mt-2 text-[11px] text-red-700">
           {error}

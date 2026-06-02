@@ -48,18 +48,26 @@ export function ThemeToggle() {
     window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   }
 
+  // Full-width segmented control. `flex` (not inline-flex) + `flex-1`
+  // gives the two options an equal 50/50 split that fills the menu
+  // width; `whitespace-nowrap` stops "Light" wrapping to "Ligh\nt"
+  // (the global `overflow-wrap: anywhere` was breaking it inside the
+  // content-width inline-flex). Colours are chosen to read on both the
+  // light (cream) and dark (navy) menu backgrounds.
   const baseBtn =
-    "flex-1 text-sm font-medium px-2 py-1.5 rounded-md transition-colors";
-  const selected = "bg-cream text-forest-900";
-  const unselected = "text-forest-700 hover:text-forest-900";
+    "flex-1 text-center whitespace-nowrap text-sm font-medium px-3 py-1.5 rounded-md transition-colors";
+  const selected =
+    "bg-cream text-forest-900 shadow-sm dark:bg-cream dark:text-forest-900";
+  const unselected =
+    "text-forest-600 hover:text-forest-900 dark:text-cream/70 dark:hover:text-cream";
 
   return (
-    <div className="px-1 py-2 border-b border-forest-100">
+    <div className="px-1 py-2 border-b border-forest-100 dark:border-forest-700">
       <div className="px-2 pt-1 pb-2 text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
         Appearance
       </div>
       <div
-        className="mx-2 inline-flex items-stretch rounded-lg p-0.5 gap-0.5 border border-forest-100"
+        className="mx-2 flex items-stretch rounded-lg p-0.5 gap-0.5 border border-forest-200 dark:border-forest-600 bg-paper/50 dark:bg-forest-900/30"
         role="group"
         aria-label="Theme"
       >
