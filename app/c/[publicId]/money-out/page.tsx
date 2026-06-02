@@ -135,7 +135,7 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          {company.public_id} <span className="text-gold-700">·</span>{" "}
+          {company.name} <span className="text-gold-700">·</span>{" "}
           Tax year {taxYear}
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">Expenses</h1>

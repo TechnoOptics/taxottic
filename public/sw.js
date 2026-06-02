@@ -482,14 +482,13 @@
 // filter (?emp=) + a per-row "added by" tag; the mileage map gains a
 // manager-only driver switcher (?driver=) to review any teammate's
 // drive log. New client components (EmployeeFilter, DriverPicker).
-// v65: UI polish pass. (1) Status-bar backdrop — navy band behind the
-// system bar on every page so the white clock/battery icons stay
-// legible on chromeless cream pages (404/login/onboarding). (2)
-// Appearance toggle no longer wraps "Light"→"Ligh\nt" (proper
-// full-width segmented control). (3) Mobile menu shows the active
-// company's nav on the dashboard too (no more sparse first-open). (4)
-// Mileage card's raw "diag:" debug crumb hidden behind a debug flag.
-const CACHE_VERSION = "v65";
+// v66: Page-eyebrow refinement. The small uppercase kicker above each
+// company page title no longer shows the raw company public_id
+// (e.g. "CO_Z1UEUQERXT · Banks"). Pages whose H1 is the page title now
+// show the friendly company name ("Techno Optics LLC · Tax year 2026");
+// pages whose H1 is already the company name drop the identifier and
+// keep just the page label ("Banks", "Team") to avoid repeating it.
+const CACHE_VERSION = "v66";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

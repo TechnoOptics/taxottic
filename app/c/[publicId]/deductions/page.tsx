@@ -70,8 +70,6 @@ export default async function DeductionsPage({ params }: { params: Params }) {
           <div>
             <h1 className="display text-3xl text-forest-900">{company.name}</h1>
             <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
-              {company.public_id}
-              <span className="text-gold-500"> · </span>
               Deduction explorer
             </div>
           </div>

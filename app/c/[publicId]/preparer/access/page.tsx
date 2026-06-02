@@ -166,7 +166,7 @@ export default async function AccessTransparencyPage({
           ← Tax preparer
         </Link>
         <div className="mt-3 text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          {company.public_id} <span className="text-gold-700">·</span>{" "}
+          {company.name} <span className="text-gold-700">·</span>{" "}
           Access transparency
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">

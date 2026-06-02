@@ -85,7 +85,7 @@ export default async function TalkHub({ params }: { params: Params }) {
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          {company.public_id}
+          {company.name}
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">Chat</h1>
         <p className="mt-2 text-sm text-ink-soft max-w-xl">
