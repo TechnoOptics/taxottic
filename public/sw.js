@@ -498,7 +498,13 @@
 // Next-Action header (action never ran); moved to a client component
 // that invokes the action directly. (3) Removed a stray NUL byte from
 // the dashboard source.
-const CACHE_VERSION = "v67";
+// v68: Scope the dashboard reminder + goal queries to the signed-in
+// user (.eq user_id). RLS lets a super-admin read every user's rows, so
+// the consumer dashboard recap was showing OTHER people's overdue
+// reminders/goals — and the (correctly user-scoped) dismiss-X could
+// never clear them, so the card looked permanently stuck. Now the recap
+// only ever shows your own rows.
+const CACHE_VERSION = "v68";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
