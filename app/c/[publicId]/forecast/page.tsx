@@ -410,7 +410,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
             />
             <div>
               <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-                {company.public_id} <span className="text-gold-700">·</span>{" "}
                 Tax year {taxYear}
               </div>
               <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
