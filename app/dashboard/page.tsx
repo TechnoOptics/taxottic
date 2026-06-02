@@ -18,7 +18,7 @@ import { checkCompanyLimit } from "@/lib/plans/usage";
 import { completeWelcomeTour } from "@/app/actions/tour";
 import { GoalDismissButton } from "@/components/GoalDismissButton";
 import { purgeExpiredRecycleBin } from "@/app/actions/recycle-bin";
-import { dismissAllOverdueReminders } from "@/app/reminders/actions";
+import { ReminderDismissButton } from "@/components/ReminderDismissButton";
 import { ReadinessHelp } from "@/components/ReadinessHelp";
 
 export default async function DashboardPage() {
@@ -631,30 +631,9 @@ export default async function DashboardPage() {
                   <span className="text-ink-muted text-sm shrink-0">→</span>
                 )}
                 {r.dismissAction === "overdue-reminders" ? (
-                  <form
-                    action={dismissAllOverdueReminders}
-                    className="absolute right-2 top-2 z-10"
-                  >
-                    <button
-                      type="submit"
-                      aria-label="Dismiss overdue reminders"
-                      title="Dismiss — you can still open them from /reminders"
-                      className="rounded-full p-1 text-ink-muted hover:bg-cream-200 hover:text-forest-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 dark:hover:bg-forest-800"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 14 14"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M3 3 L11 11 M11 3 L3 11" />
-                      </svg>
-                    </button>
-                  </form>
+                  <div className="absolute right-2 top-2 z-10">
+                    <ReminderDismissButton />
+                  </div>
                 ) : null}
               </div>
             ))}
@@ -1079,7 +1058,7 @@ function dedupeReminders<R extends { id: string; title: string; due_at: string }
   const seen = new Set<string>();
   const out: R[] = [];
   for (const r of rows) {
-    const key = `${r.title} ${r.due_at}`;
+    const key = `${r.title}\u0000${r.due_at}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(r);
