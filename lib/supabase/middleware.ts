@@ -17,6 +17,9 @@ const PUBLIC_PATHS = [
   // account, which is what a 2026 B2B/SMB buyer expects.
   "/pricing",
   "/help",
+  // Editorial guides hub + articles — public marketing content; must
+  // not bounce anonymous readers (or crawlers) through /login.
+  "/guides",
   "/changelog",
   "/example",
   "/manifest.webmanifest",
