@@ -45,6 +45,30 @@ const GUIDES = [
     blurb:
       "Who owes them, the four due dates, how to estimate each payment, and how to avoid the underpayment penalty.",
   },
+  {
+    slug: "home-office-deduction",
+    title: "Home office deduction: who qualifies and how to calculate it",
+    blurb:
+      "The 'regular and exclusive use' test, plus the simplified ($5/sq ft) and actual-expense methods compared.",
+  },
+  {
+    slug: "1099-vs-w2",
+    title: "1099 vs W-2: how each affects your taxes",
+    blurb:
+      "Who withholds, who pays the full 15.3% self-employment tax, who can deduct expenses, and who owes quarterly estimates.",
+  },
+  {
+    slug: "first-year-freelancer-tax-checklist",
+    title: "Your first year freelancing: a tax checklist",
+    blurb:
+      "A do-this-now list: set money aside, separate your finances, track deductions, and pay quarterly so April is boring.",
+  },
+  {
+    slug: "sole-proprietor-vs-llc-vs-s-corp-taxes",
+    title: "Sole proprietor, LLC, or S-corp: how each is taxed",
+    blurb:
+      "Pass-through income, self-employment tax, and when an S-corp salary-plus-distributions setup actually saves money.",
+  },
 ];
 
 const BREADCRUMB_LD = {
