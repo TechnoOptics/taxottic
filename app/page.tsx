@@ -182,12 +182,13 @@ const SOFTWARE_APP_LD = {
 const NAV_LD = {
   "@context": "https://schema.org",
   "@type": "SiteNavigationElement",
-  name: ["Home", "Pricing", "Example", "Help", "Changelog"],
+  name: ["Home", "Pricing", "Example", "Help", "Guides", "Changelog"],
   url: [
     `${SITE_ORIGIN}/`,
     `${SITE_ORIGIN}/pricing`,
     `${SITE_ORIGIN}/example`,
     `${SITE_ORIGIN}/help`,
+    `${SITE_ORIGIN}/guides`,
     `${SITE_ORIGIN}/changelog`,
   ],
 };
@@ -1114,6 +1115,9 @@ function Footer() {
             </Link>
             <Link href="/help" className="hover:text-forest-700">
               Help
+            </Link>
+            <Link href="/guides" className="hover:text-forest-700">
+              Guides
             </Link>
             <Link href="/changelog" className="hover:text-forest-700">
               Changelog
