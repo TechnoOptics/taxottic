@@ -69,6 +69,30 @@ const GUIDES = [
     blurb:
       "Pass-through income, self-employment tax, and when an S-corp salary-plus-distributions setup actually saves money.",
   },
+  {
+    slug: "business-mileage-deduction",
+    title: "Business mileage deduction: how to track and claim it",
+    blurb:
+      "Standard mileage rate vs actual expenses, which trips count, and the contemporaneous log the IRS expects.",
+  },
+  {
+    slug: "qbi-deduction",
+    title: "The QBI deduction: a 20% break for small-business income",
+    blurb:
+      "Deduct up to 20% of qualified business income — who qualifies, the income limits, and the service-business phase-out.",
+  },
+  {
+    slug: "self-employed-health-insurance-deduction",
+    title: "The self-employed health insurance deduction",
+    blurb:
+      "Deduct premiums for you and your family — who qualifies, what counts, and why it's an adjustment, not a Schedule C expense.",
+  },
+  {
+    slug: "what-is-a-1099-k",
+    title: "What is a 1099-K? Thresholds and what to do with it",
+    blurb:
+      "Why payment apps send one, the changing threshold, and how to reconcile gross amounts (and stray personal payments).",
+  },
 ];
 
 const BREADCRUMB_LD = {

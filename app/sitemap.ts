@@ -99,6 +99,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/guides/1099-vs-w2",
     "/guides/first-year-freelancer-tax-checklist",
     "/guides/sole-proprietor-vs-llc-vs-s-corp-taxes",
+    "/guides/business-mileage-deduction",
+    "/guides/qbi-deduction",
+    "/guides/self-employed-health-insurance-deduction",
+    "/guides/what-is-a-1099-k",
   ].map((path) => ({
     url: `${baseUrl}${path}`,
     lastModified: now,
