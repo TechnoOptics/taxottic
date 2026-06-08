@@ -95,6 +95,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/guides/self-employment-tax-how-much-to-set-aside",
     "/guides/schedule-c-deductions",
     "/guides/quarterly-estimated-taxes-explained",
+    "/guides/home-office-deduction",
+    "/guides/1099-vs-w2",
+    "/guides/first-year-freelancer-tax-checklist",
+    "/guides/sole-proprietor-vs-llc-vs-s-corp-taxes",
   ].map((path) => ({
     url: `${baseUrl}${path}`,
     lastModified: now,
