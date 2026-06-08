@@ -164,12 +164,19 @@ export async function generateMetadata(): Promise<Metadata> {
         "max-video-preview": -1,
       },
     },
-    // Verification placeholder — once you wire up Search Console /
-    // Bing Webmaster Tools, add the meta tags here. Leaving keys
-    // unset means Next.js skips them (no broken empty tags).
+    // Search-engine ownership verification, driven by env so the codes
+    // live in Vercel (not the repo) and can rotate without a deploy.
+    //   NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION  → Google Search Console
+    //   NEXT_PUBLIC_BING_SITE_VERIFICATION    → Bing Webmaster Tools
+    // Each key is only emitted when its env var is set, so an unset
+    // var produces NO tag (Next.js skips undefined) — never a broken
+    // empty <meta>. To verify: add the property in Search Console /
+    // Bing, copy the token into the matching Vercel env var, redeploy.
     verification: {
-      // google: "<paste verification meta-tag content here>",
-      // other: { "msvalidate.01": "<bing verification>" },
+      google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+      other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+        ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+        : {},
     },
     category: "finance",
     keywords: [

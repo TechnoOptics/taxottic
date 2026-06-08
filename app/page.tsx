@@ -76,10 +76,26 @@ const ORGANIZATION_LD = {
   "@type": "Organization",
   "@id": `${SITE_ORIGIN}/#organization`,
   name: "Taxottic",
+  // alternateName + slogan help search engines and knowledge graphs
+  // bind the brand string to the entity and render a tagline in
+  // knowledge panels.
+  alternateName: "Taxottic Tax Forecasting",
+  slogan: "A calmer way to handle your taxes.",
   url: SITE_ORIGIN,
   logo: `${SITE_ORIGIN}/icon.png`,
   description:
     "Tax forecasting and deduction guidance for freelancers, sole proprietors, and small businesses.",
+  // knowsAbout anchors the entity's topical authority; areaServed
+  // scopes it to the US (Taxottic forecasts US federal + state tax).
+  knowsAbout: [
+    "tax forecasting",
+    "self-employment tax",
+    "quarterly estimated taxes",
+    "Schedule C deductions",
+    "Qualified Business Income deduction",
+    "freelancer and small business taxes",
+  ],
+  areaServed: { "@type": "Country", name: "United States" },
   // The parent studio. `parentOrganization` is the canonical
   // schema.org relationship; Google reads it for knowledge-panel
   // attribution.
@@ -176,6 +192,30 @@ const NAV_LD = {
   ],
 };
 
+// DefinedTerm — the closest legitimate equivalent of a "dictionary
+// entry" for a brand. It states, in machine-readable schema.org terms,
+// that "Taxottic" is a defined term meaning a specific tax-forecasting
+// product, with its pronunciation and a plain-language definition.
+// Knowledge graphs (Google, Bing) and AI crawlers read this to answer
+// "what is Taxottic?" precisely instead of guessing. A brand name
+// cannot be added to a language dictionary (Merriam-Webster / OED grow
+// only from documented public usage); this is the technical way to make
+// the term unambiguous to machines.
+const DEFINED_TERM_LD = {
+  "@context": "https://schema.org",
+  "@type": "DefinedTerm",
+  "@id": `${SITE_ORIGIN}/#taxottic-term`,
+  name: "Taxottic",
+  description:
+    "Taxottic (noun; pronounced \"tax-OT-ic\") is tax-forecasting software for self-employed people and small businesses in the United States. It connects to a user's bank, keeps a running quarterly estimated-tax forecast in step with their income, and surfaces IRS-cited deductions so freelancers, contractors, sole proprietors, and small businesses can set money aside before it's due and claim what they're legally owed. Made by Techno Optics LLC.",
+  inDefinedTermSet: {
+    "@type": "DefinedTermSet",
+    name: "Techno Optics product names",
+    publisher: { "@id": `${SITE_ORIGIN}/#organization` },
+  },
+  url: SITE_ORIGIN,
+};
+
 type Audience = "personal" | "enterprise";
 
 export default async function Home({
@@ -203,6 +243,7 @@ export default async function Home({
       <JsonLd data={WEBSITE_LD} />
       <JsonLd data={SOFTWARE_APP_LD} />
       <JsonLd data={NAV_LD} />
+      <JsonLd data={DEFINED_TERM_LD} />
 
       {/* Forest header band - visually merges into the Hero gradient below
           so the page opens with one continuous premium-green field. Same

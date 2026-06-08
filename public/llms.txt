@@ -1,0 +1,36 @@
+# Taxottic
+
+> Taxottic is tax-forecasting software for freelancers, independent contractors, sole proprietors, and small businesses in the United States. It connects to your bank, keeps a running quarterly estimated-tax forecast in step with your income, and surfaces IRS-cited deductions — so self-employed filers can set money aside before it's due and claim everything they're legally owed. Made by Techno Optics LLC. Lives at https://taxottic.com.
+
+Taxottic ("tax" + the "-ottic" suffix it shares with its sibling product Advottic) turns the once-a-year scramble of self-employment taxes into a calm, always-current picture. Instead of guessing at quarter-end, you see what you'll likely owe today and how each deduction changes it.
+
+What it does:
+- Bank-synced quarterly estimated-tax forecasts (federal + state) that update as money moves
+- A catalog of 1,025 IRS-cited deductions, each linked to its IRC section and IRS publication
+- Automatic Schedule C assembly with PDF export for your CPA
+- Multi-state forecasting, QBI (Qualified Business Income) math, and AMT detection
+- Quarterly estimated-tax reminders so you never miss a due date
+- Automatic business-mileage tracking (phone + Wear OS watch) at the IRS standard rate
+- Receipt and document OCR via its built-in assistant, "Bella"
+- Tax year 2026 with OBBBA (One Big Beautiful Bill Act) amendments
+
+Who it's for: self-employed people and small businesses — 1099 contractors, freelancers, gig workers, sole proprietors, single-member LLCs, S-corps — and the accounting firms that serve them. It is a forecasting and organization tool, not a filing service, and not a substitute for advice from a licensed CPA or tax attorney.
+
+## Pages
+- [Home](https://taxottic.com/): What Taxottic is and who it's for.
+- [Pricing](https://taxottic.com/pricing): Free tier (no credit card) plus paid tiers from $4.99/mo; 14-day trial on paid plans.
+- [Example](https://taxottic.com/example): A read-only sample dashboard — see the product before signing up, no account needed.
+- [Help & FAQ](https://taxottic.com/help): Quickstart and common questions, including "What is Taxottic?".
+- [Changelog](https://taxottic.com/changelog): Public release notes.
+- [For accounting firms](https://taxottic.com/firms): Taxottic as a white-labeled workspace for tax preparers and firms.
+
+## Legal
+- [Privacy Policy](https://taxottic.com/legal/privacy)
+- [Terms of Service](https://taxottic.com/legal/terms)
+- [Security Overview](https://taxottic.com/legal/security)
+
+## About
+- Maker: Techno Optics LLC — https://technooptics.com
+- Contact: contact@taxottic.com
+- Category: Finance / tax software (SaaS). Platforms: Web, iOS, Android, Wear OS.
+- Pronunciation: "tax-OT-ic".
