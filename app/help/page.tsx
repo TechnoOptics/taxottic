@@ -37,6 +37,30 @@ const HELP_FAQ_LD = {
   mainEntity: [
     {
       "@type": "Question",
+      name: "What is Taxottic?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Taxottic is tax-forecasting software for freelancers, contractors, sole proprietors, and small businesses in the US. It connects to your bank, keeps a running quarterly estimated-tax forecast in step with your income, and surfaces 1,025 IRS-cited deductions — so you can set money aside before it's due and claim what you're legally owed. It's a forecasting and organization tool, not a filing service, and not a substitute for a licensed CPA.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Who is Taxottic for?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Self-employed people and small businesses — 1099 contractors, freelancers, gig workers, sole proprietors, single-member LLCs, and S-corps — plus the accounting firms that serve them. If you owe quarterly estimated taxes or file a Schedule C, Taxottic is built for you.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How is Taxottic different from regular tax-filing software?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Tax-filing software helps you file once a year, after the year is over. Taxottic runs all year: it forecasts what you'll owe as you earn, tracks deductions in real time, and reminds you about quarterly estimates — so April holds no surprises. You hand the Schedule C export to your CPA or filing tool at year end.",
+      },
+    },
+    {
+      "@type": "Question",
       name: "Is there really no credit card to try?",
       acceptedAnswer: {
         "@type": "Answer",
@@ -251,6 +275,34 @@ export default function HelpPage() {
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16 grid gap-10">
+        <FaqCategory title="About Taxottic">
+          <Faq q="What is Taxottic?">
+            Taxottic is tax-forecasting software for freelancers,
+            contractors, sole proprietors, and small businesses in the US.
+            It connects to your bank, keeps a running quarterly
+            estimated-tax forecast in step with your income, and surfaces
+            1,025 IRS-cited deductions — so you can set money aside before
+            it&apos;s due and claim what you&apos;re legally owed. It&apos;s
+            a forecasting and organization tool, not a filing service, and
+            not a substitute for a licensed CPA.
+          </Faq>
+          <Faq q="Who is Taxottic for?">
+            Self-employed people and small businesses — 1099 contractors,
+            freelancers, gig workers, sole proprietors, single-member LLCs,
+            and S-corps — plus the accounting firms that serve them. If you
+            owe quarterly estimated taxes or file a Schedule C, Taxottic is
+            built for you.
+          </Faq>
+          <Faq q="How is Taxottic different from regular tax-filing software?">
+            Tax-filing software helps you file once a year, after the year
+            is over. Taxottic runs all year: it forecasts what you&apos;ll
+            owe as you earn, tracks deductions in real time, and reminds you
+            about quarterly estimates — so April holds no surprises. You
+            hand the Schedule C export to your CPA or filing tool at year
+            end.
+          </Faq>
+        </FaqCategory>
+
         <FaqCategory title="Getting started">
           <Faq q="Is there really no credit card to try?">
             Correct — the Free tier doesn&apos;t take a card. Paid tiers
