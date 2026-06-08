@@ -87,6 +87,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
+  // Editorial guides hub + articles. Real long-form content targeting
+  // high-intent search queries; high priority because this is the
+  // surface most likely to win organic traffic + AI citations.
+  const guides: MetadataRoute.Sitemap = [
+    "/guides",
+    "/guides/self-employment-tax-how-much-to-set-aside",
+    "/guides/schedule-c-deductions",
+    "/guides/quarterly-estimated-taxes-explained",
+  ].map((path) => ({
+    url: `${baseUrl}${path}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: path === "/guides" ? 0.8 : 0.7,
+  }));
+
   // Legal hub + sub-pages. These are linked from the footer and exist
   // as real documents (DPA, privacy, terms, etc.) so they deserve
   // their own sitemap entries. /legal/dmca and /legal/accessibility
@@ -109,5 +124,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
-  return [...marketing, ...legal];
+  return [...marketing, ...guides, ...legal];
 }

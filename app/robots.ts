@@ -52,48 +52,69 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     };
   }
 
+  // Shared crawl policy. The marketing surface is intentionally
+  // indexable; app routes redirect to /login when anonymous and carry
+  // per-account content, so they're disallowed (zero SEO value, wasted
+  // crawl budget).
+  const allow = [
+    "/",
+    "/pricing",
+    "/help",
+    // Editorial guides — real, indexable content written to rank for
+    // "self-employment tax", "Schedule C deductions", "quarterly
+    // estimated taxes", and to give AI assistants something to cite.
+    "/guides",
+    "/changelog",
+    "/example",
+    "/book",
+    "/firms",
+    "/legal",
+  ];
+  const disallow = [
+    "/api/",
+    "/auth/",
+    "/login",
+    "/dashboard",
+    "/settings",
+    "/billing",
+    "/onboarding/",
+    "/c/",
+    "/admin",
+    "/admin/",
+    "/personal/",
+    "/goals",
+    "/bella",
+    "/reminders",
+    "/account/",
+    "/firm",
+    // Soft-toggle query variants — canonical resolves them back to `/`,
+    // but the path-form disallow keeps crawlers from chasing arbitrary
+    // `?audience=...` URLs in pagination.
+    "/*?audience=",
+  ];
+
+  // Explicitly welcome the major AI / answer-engine crawlers on the
+  // public surface (same allow/disallow as everyone else). Taxottic
+  // WANTS these bots to read the marketing pages + guides so assistants
+  // can describe and cite the product accurately — so we name them
+  // rather than leaving it implicit under `*`.
+  const aiAgents = [
+    "GPTBot",
+    "OAI-SearchBot",
+    "ChatGPT-User",
+    "ClaudeBot",
+    "Claude-Web",
+    "anthropic-ai",
+    "PerplexityBot",
+    "Google-Extended",
+    "Applebot-Extended",
+    "CCBot",
+  ];
+
   return {
     rules: [
-      {
-        userAgent: "*",
-        allow: [
-          "/",
-          // Marketing + conversion-critical paths added in the May 2026
-          // audit fixes. Each is a real, indexable page with its own
-          // canonical, OG, and structured data.
-          "/pricing",
-          "/help",
-          "/changelog",
-          "/example",
-          "/book",
-          "/firms",
-          "/legal",
-        ],
-        disallow: [
-          // App routes — anonymous users hit /login redirects here,
-          // and the actual content is per-account. Zero SEO value.
-          "/api/",
-          "/auth/",
-          "/login",
-          "/dashboard",
-          "/settings",
-          "/billing",
-          "/onboarding/",
-          "/c/",
-          "/admin",
-          "/admin/",
-          "/personal/",
-          "/goals",
-          "/bella",
-          "/reminders",
-          "/account/",
-          "/firm",
-          // Soft-toggle query variants — canonical resolves them back
-          // to `/`, but the path-form disallow keeps crawlers from
-          // chasing arbitrary `?audience=...` URLs in pagination.
-          "/*?audience=",
-        ],
-      },
+      { userAgent: "*", allow, disallow },
+      ...aiAgents.map((userAgent) => ({ userAgent, allow, disallow })),
     ],
     sitemap: `${consumerOrigin}/sitemap.xml`,
     host: consumerOrigin,
