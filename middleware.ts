@@ -13,7 +13,10 @@ export const config = {
   // /login, so AI crawlers and search bots hit a wall instead of the
   // product summary. (robots.txt / sitemap.xml are app routes already
   // allow-listed in updateSession; llms.txt is a static public/ file.)
+  // google<hash>.html are Google Search Console site-verification files
+  // served from public/. Like llms.txt they must bypass the auth
+  // redirect so Google's verifier (unauthenticated) can fetch them.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|llms.txt|\\.well-known/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|llms.txt|google[a-z0-9]+\\.html|\\.well-known/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
