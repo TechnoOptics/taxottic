@@ -104,10 +104,16 @@ const ORGANIZATION_LD = {
     name: "Techno Optics LLC",
     url: "https://technooptics.com",
   },
-  // `sameAs` should ideally list real social-media URLs we own. We
-  // don't yet, so this is just the studio link — leaving room for
-  // Twitter / LinkedIn / GitHub as they go live.
-  sameAs: ["https://technooptics.com"],
+  // `sameAs` ties this entity to its other authoritative profiles.
+  // The Wikidata item (Q140132105) is the key one: linking site →
+  // Wikidata, when Wikidata also points back to the site (official
+  // website P856), gives Google's Knowledge Graph a strong, mutually
+  // confirmed identity for "Taxottic." Add Twitter / LinkedIn / GitHub
+  // here as those profiles go live.
+  sameAs: [
+    "https://www.wikidata.org/wiki/Q140132105",
+    "https://technooptics.com",
+  ],
   // Honest, public contact channel. Real email > generic
   // "contact form" placeholder.
   contactPoint: {
