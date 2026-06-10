@@ -6,6 +6,10 @@
       "schedule": "0 4 * * *"
     },
     {
+      "path": "/api/cron/stripe-sync",
+      "schedule": "0 5 * * 1"
+    },
+    {
       "path": "/api/cron/firm-digest",
       "schedule": "0 * * * *"
     },
