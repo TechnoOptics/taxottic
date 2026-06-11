@@ -72,6 +72,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   ];
   const disallow = [
     "/api/",
+    "/debug",
     "/auth/",
     "/login",
     "/dashboard",

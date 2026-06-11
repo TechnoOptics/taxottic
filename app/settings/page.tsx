@@ -202,6 +202,26 @@ export default async function SettingsPage() {
             </Link>
           </div>
         </section>
+
+        <section className="card mt-6 p-6 sm:p-7">
+          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+            Troubleshooting
+          </div>
+          <h2 className="display mt-1 text-xl text-forest-900">
+            Device diagnostics
+          </h2>
+          <p className="mt-2 text-sm text-ink-soft">
+            Something look misplaced on this device — content under the
+            status bar, buttons behind system controls? This page reads
+            the device&apos;s real layout numbers so support can fix it
+            precisely.
+          </p>
+          <div className="mt-4">
+            <Link href="/debug/device" className="btn-ghost text-sm">
+              Open diagnostics
+            </Link>
+          </div>
+        </section>
       </section>
     </main>
   );

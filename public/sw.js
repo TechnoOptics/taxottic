@@ -511,7 +511,14 @@
 // floors (--app-safe-top / --safe-bottom), with screen-size heuristic
 // floors for binaries that predate the plugin. All consumers already
 // take max(var, env) so the correct signal always wins.
-const CACHE_VERSION = "v69";
+// v70: /debug/device diagnostics page + Settings → Troubleshooting
+// entry. An iPhone can't be remote-inspected from a Windows dev box
+// (no ADB analogue; Safari Web Inspector is macOS-only; release
+// WKWebViews aren't inspectable since iOS 16.4), so the phone itself
+// becomes the probe: the page reads env() insets, the CSS-var
+// overrides, native SafeArea insets, real header/FAB geometry, app
+// build + SW generation into one copyable blob.
+const CACHE_VERSION = "v70";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
