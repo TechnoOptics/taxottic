@@ -46,9 +46,11 @@ export function CapacitorNativeInit() {
       if (!Capacitor?.isNativePlatform()) return;
 
       // --- StatusBar: per-platform so the header never overlaps it ---
-      // iOS: overlay the WebView and let the header's
-      //   env(safe-area-inset-top) padding clear the notch — iOS
-      //   reliably reports that inset.
+      // iOS: overlay the WebView; the header's env(safe-area-inset-top)
+      //   padding clears the notch WHEN WKWebView reports it — but that
+      //   reporting has proven flaky (June 2026: hamburger/header "lost
+      //   in the status bar"), so we ALSO measure the true insets
+      //   natively below and publish them as CSS-var floors.
       // Android: DON'T overlay. Android WebView almost always reports
       //   env(safe-area-inset-top)=0 even when drawing under the
       //   status bar, so the header rendered ON TOP of the clock /
@@ -60,9 +62,72 @@ export function CapacitorNativeInit() {
         try {
           const isAndroid = Capacitor.getPlatform() === "android";
           const { StatusBar, Style } = await import("@capacitor/status-bar");
-          await StatusBar.setOverlaysWebView({ overlay: !isAndroid });
+          // Each call gets its own guard: setOverlaysWebView is
+          // platform/version dependent (e.g. "not available on
+          // Android 15+"), and a throw here used to abort the WHOLE
+          // block — skipping setStyle and leaving dark-on-dark
+          // status-bar text. Never let one cosmetic call sink the rest.
+          await StatusBar.setOverlaysWebView({ overlay: !isAndroid }).catch(
+            () => {},
+          );
           // Style.Dark == light/WHITE content (for dark backgrounds).
-          await StatusBar.setStyle({ style: Style.Dark });
+          await StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+          if (!isAndroid) {
+            // --- iOS: measure the REAL safe-area insets natively ---
+            // The header/FAB/sheet all position off
+            // env(safe-area-inset-*), but WKWebView's env() reporting
+            // is not trustworthy in every state (contentInset "never"
+            // + overlay combinations have shipped builds where env()
+            // returned 0). Symptom: "the hamburger is lost in the
+            // status bar" — header chrome under the clock, FAB under
+            // the home indicator. Belt-and-suspenders like Android:
+            // read the exact insets from the native side
+            // (capacitor-plugin-safe-area) and publish them as CSS
+            // vars. Every consumer already takes
+            // max(var(...), env(...)), so whichever signal is real
+            // wins and a double-inset can't happen.
+            const applyInsets = (top: number, bottom: number) => {
+              document.documentElement.style.setProperty(
+                "--app-safe-top",
+                `max(env(safe-area-inset-top, 0px), ${Math.round(top)}px)`,
+              );
+              document.documentElement.style.setProperty(
+                "--safe-bottom",
+                `max(env(safe-area-inset-bottom, 0px), ${Math.round(bottom)}px)`,
+              );
+            };
+            let measured = false;
+            if (Capacitor.isPluginAvailable("SafeArea")) {
+              try {
+                const { SafeArea } = await import(
+                  "capacitor-plugin-safe-area"
+                );
+                const { insets } = await SafeArea.getSafeAreaInsets();
+                applyInsets(insets.top, insets.bottom);
+                measured = true;
+                // Rotation / Dynamic-Island changes re-report.
+                void SafeArea.addListener("safeAreaChanged", (data) => {
+                  applyInsets(data.insets.top, data.insets.bottom);
+                }).catch(() => {});
+              } catch {
+                /* plugin call failed — fall through to the floor */
+              }
+            }
+            if (!measured) {
+              // Binary predates the SafeArea plugin (or the call
+              // failed). Conservative floors so the chrome clears the
+              // system bars on every iPhone: tall narrow screens are
+              // the notch/Dynamic-Island family (~47–59pt top), classic
+              // ones need ~20pt; home indicator is 34pt where present.
+              // Overshoot lands as a few px of extra navy band —
+              // invisible against the brand background; undershoot is
+              // a button under the clock. env() still wins via max()
+              // wherever it does report.
+              const tallNotch =
+                window.screen.height >= 780 && window.screen.width < 500;
+              applyInsets(tallNotch ? 54 : 24, tallNotch ? 34 : 16);
+            }
+          }
           if (isAndroid) {
             // Match the header's TOP gradient stop so the OS-reserved
             // status-bar strip (overlay=false) blends into the header

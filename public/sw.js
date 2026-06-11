@@ -504,7 +504,14 @@
 // reminders/goals — and the (correctly user-scoped) dismiss-X could
 // never clear them, so the card looked permanently stuck. Now the recap
 // only ever shows your own rows.
-const CACHE_VERSION = "v68";
+// v69: iOS safe-area fix — hamburger FAB / header chrome were "lost in
+// the status bar" because WKWebView's env(safe-area-inset-*) reporting
+// is flaky. CapacitorNativeInit now measures the REAL insets natively
+// (capacitor-plugin-safe-area) on iOS and publishes them as CSS-var
+// floors (--app-safe-top / --safe-bottom), with screen-size heuristic
+// floors for binaries that predate the plugin. All consumers already
+// take max(var, env) so the correct signal always wins.
+const CACHE_VERSION = "v69";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
