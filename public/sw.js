@@ -518,7 +518,12 @@
 // becomes the probe: the page reads env() insets, the CSS-var
 // overrides, native SafeArea insets, real header/FAB geometry, app
 // build + SW generation into one copyable blob.
-const CACHE_VERSION = "v70";
+// v71: mileage map now shows direction of travel — forward arrowheads
+// riding each breadcrumb at a steady cadence, a green start dot, and a
+// checkered-flag end disc — so a glance answers "which way did this
+// drive go?". Plus: hand-entered (manual) trips now fire the same
+// saved-drive push as GPS-tracked ones.
+const CACHE_VERSION = "v71";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
