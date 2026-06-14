@@ -236,9 +236,62 @@ export function MileageMap({
             strokeColor: TRIP_COLOR[t.classification],
             strokeOpacity: 0.95,
             strokeWeight: 4,
+            // Direction of travel: arrowheads riding the breadcrumb at a
+            // steady cadence. Same fill as the trip colour with the dark
+            // shadow tone as outline so they read on both the navy water
+            // and the lighter road strokes.
+            icons: [
+              {
+                icon: {
+                  path: maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                  scale: 2.6,
+                  fillColor: TRIP_COLOR[t.classification],
+                  fillOpacity: 1,
+                  strokeColor: "#0d121f",
+                  strokeWeight: 1,
+                },
+                offset: "10%",
+                repeat: "96px",
+              },
+            ],
             map,
           });
           overlays.push(shadow, line);
+          // Start + end markers so a glance answers "which way did this
+          // drive go?" — green dot = where the trip began, navy/gold
+          // checkered-flag disc = where it ended. Kept deliberately small
+          // so the overview with many trips stays readable; the title
+          // tooltips disambiguate on hover/long-press.
+          const startMarker = new maps.Marker({
+            position: path[0],
+            map,
+            title: "Trip start",
+            zIndex: 5,
+            icon: {
+              path: maps.SymbolPath.CIRCLE,
+              scale: 5.5,
+              fillColor: "#34D399",
+              fillOpacity: 1,
+              strokeColor: "#0d121f",
+              strokeWeight: 2,
+            },
+          });
+          const endMarker = new maps.Marker({
+            position: path[path.length - 1],
+            map,
+            title: "Trip end",
+            zIndex: 6,
+            label: { text: "🏁", fontSize: "11px" },
+            icon: {
+              path: maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: "#121a2a",
+              fillOpacity: 1,
+              strokeColor: "#F2D896",
+              strokeWeight: 2,
+            },
+          });
+          overlays.push(startMarker, endMarker);
           path.forEach((c) => bounds.extend(c));
           plotted++;
         }

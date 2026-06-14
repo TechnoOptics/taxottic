@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { reclassifyTripCore } from "@/lib/mileage/reclassify";
 import { tripDeductionCents } from "@/lib/mileage/deduction";
+import { notify } from "@/lib/push";
 
 /**
  * Re-classify a trip (business / personal / unclassified) and
@@ -225,18 +226,36 @@ export async function addManualTrip(formData: FormData) {
     taxYear,
   );
 
-  const { error } = await admin.from("mileage_trips").insert({
-    company_id: companyId,
-    driver_user_id: user.id,
-    started_at: startedAt,
-    ended_at: endedAt,
-    distance_miles: Number(miles.toFixed(3)),
-    classification: cls,
-    tax_year: taxYear,
-    deduction_cents: deductionCents,
-    notes: "manual entry",
-  });
-  if (error) throw new Error("Couldn't save. Please try again.");
+  const { data: insertedTrip, error } = await admin
+    .from("mileage_trips")
+    .insert({
+      company_id: companyId,
+      driver_user_id: user.id,
+      started_at: startedAt,
+      ended_at: endedAt,
+      distance_miles: Number(miles.toFixed(3)),
+      classification: cls,
+      tax_year: taxYear,
+      deduction_cents: deductionCents,
+      notes: "manual entry",
+    })
+    .select("id")
+    .single();
+  if (error || !insertedTrip) {
+    throw new Error("Couldn't save. Please try again.");
+  }
+
+  // Notify the driver that a drive was saved — same contract as the
+  // GPS-tracked path in /api/mileage/ingest, so "any saved drive
+  // notifies you" holds for hand-entered trips too. notify() never
+  // throws and is idempotent (deduped on tripId), so it's safe to
+  // await before returning; a no-op when push isn't configured.
+  const tripId = insertedTrip.id as string;
+  if (cls === "unclassified") {
+    await notify(user.id, { kind: "trip_classify", tripId });
+  } else {
+    await notify(user.id, { kind: "trip_logged", tripId, classification: cls });
+  }
 
   revalidatePath("/mileage");
   revalidatePath("/mileage/classify");
