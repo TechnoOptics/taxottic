@@ -531,7 +531,11 @@
 // first cut read as ghost cards), and Tailwind's `dark:` variant now
 // follows the app's data-theme instead of the OS media query (the two
 // dark systems were fighting — e.g. the left rail vanished).
-const CACHE_VERSION = "v73";
+// v74: world-class dashboard hero — a gold readiness ring + a glanceable
+// stat band (readiness · mileage YTD · next deadline) opens the page on
+// "where do I stand", replacing the flat stack of equal cards. The lone
+// mileage tile folds into the band.
+const CACHE_VERSION = "v74";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

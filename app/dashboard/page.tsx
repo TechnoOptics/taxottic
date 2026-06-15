@@ -552,29 +552,59 @@ export default async function DashboardPage() {
   }
   const trial = await getTrialState(supabase, user.id);
 
-  // Mileage at-a-glance — YTD + this-month business drives across all of
-  // the user's companies, so the deduction is visible on the dashboard,
-  // not buried in /mileage.
-  const curMonthNum = new Date().getUTCMonth() + 1;
+  // Mileage at-a-glance — YTD business-drive deduction across all of the
+  // user's companies, surfaced in the hero stat band rather than buried
+  // in /mileage.
   let mileageYtdCents = 0;
   let mileageYtdMiles = 0;
-  let mileageMonthCents = 0;
-  let mileageMonthMiles = 0;
   for (const t of (mileageTripRows ?? []) as Array<{
     started_at: string;
     distance_miles: number | null;
     deduction_cents: number | null;
   }>) {
-    const cents = Number(t.deduction_cents ?? 0);
-    const miles = Number(t.distance_miles ?? 0);
-    mileageYtdCents += cents;
-    mileageYtdMiles += miles;
-    if (new Date(t.started_at).getUTCMonth() + 1 === curMonthNum) {
-      mileageMonthCents += cents;
-      mileageMonthMiles += miles;
-    }
+    mileageYtdCents += Number(t.deduction_cents ?? 0);
+    mileageYtdMiles += Number(t.distance_miles ?? 0);
   }
   const hasMileage = mileageYtdMiles > 0;
+
+  // ── Hero stat band ────────────────────────────────────────────────
+  // Three glanceable numbers under the greeting (readiness ring,
+  // mileage YTD, next deadline) so the dashboard opens with a real
+  // "where do I stand" snapshot instead of a stack of equal cards.
+  // companies.length is always > 0 here (the empty state early-returns
+  // above), so the readiness ring always has something to show.
+  const readinessScores = companies
+    .map((m) => readinessByCompany.get(m.company_id)?.score)
+    .filter((s): s is number => typeof s === "number");
+  const portfolioReadiness = readinessScores.length
+    ? Math.round(
+        readinessScores.reduce((a, b) => a + b, 0) / readinessScores.length,
+      )
+    : 0;
+  const readinessLabel =
+    portfolioReadiness >= 100
+      ? "Fully ready"
+      : portfolioReadiness >= 70
+        ? "On track"
+        : portfolioReadiness >= 40
+          ? "Getting there"
+          : "Just starting";
+  // Nearest upcoming deadline, in whole days, for the third stat tile.
+  const nextReminder =
+    upcomingReminders && upcomingReminders.length
+      ? [...dedupeReminders(upcomingReminders)].sort(
+          (a, b) =>
+            new Date(a.due_at).getTime() - new Date(b.due_at).getTime(),
+        )[0]
+      : null;
+  const nextDeadlineDays = nextReminder
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000,
+        ),
+      )
+    : null;
 
   return (
     <main id="main" className="min-h-screen">
@@ -591,6 +621,73 @@ export default async function DashboardPage() {
         </header>
 
         <TrialBanner trial={trial} />
+
+        {/* Hero stat band — three glanceable figures (readiness ring,
+            mileage YTD, next deadline) so the dashboard opens on "where
+            do I stand" instead of a stack of equal cards. On mobile the
+            readiness tile takes the full row with the two figures
+            beneath it; on sm+ all three form one row. */}
+        <section className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Link
+            href={`/c/${companies[0].company.public_id}/forecast`}
+            className="surface surface-hover col-span-2 p-5 flex items-center gap-4"
+          >
+            <StatRing score={portfolioReadiness} />
+            <div className="min-w-0">
+              <div className="kicker-sm">Tax readiness</div>
+              <div className="display text-2xl text-forest-900 mt-0.5">
+                {readinessLabel}
+              </div>
+              <div className="text-[13px] text-ink-muted mt-0.5">
+                {companies.length === 1
+                  ? "Your business"
+                  : `${companies.length} businesses`}
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/mileage"
+            className="surface surface-hover col-span-1 p-5 flex flex-col justify-center min-w-0"
+          >
+            <div className="kicker-sm">Mileage YTD</div>
+            <div className="display text-2xl sm:text-3xl text-forest-900 mt-1 tabular-nums">
+              {formatCents(mileageYtdCents)}
+            </div>
+            <div className="text-[13px] text-ink-muted mt-0.5 truncate">
+              {hasMileage
+                ? `${mileageYtdMiles.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })} business mi`
+                : "Track your drives"}
+            </div>
+          </Link>
+
+          <Link
+            href="/reminders"
+            className="surface surface-hover col-span-1 p-5 flex flex-col justify-center min-w-0"
+          >
+            <div className="kicker-sm">Next deadline</div>
+            <div className="display text-2xl sm:text-3xl text-forest-900 mt-1">
+              {nextDeadlineDays === null ? (
+                "—"
+              ) : nextDeadlineDays === 0 ? (
+                "Today"
+              ) : (
+                <>
+                  {nextDeadlineDays}
+                  <span className="text-base text-ink-muted font-normal">
+                    {" "}
+                    days
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="text-[13px] text-ink-muted mt-0.5 truncate">
+              {nextReminder ? nextReminder.title : "Nothing scheduled"}
+            </div>
+          </Link>
+        </section>
 
         {/* Recap: what needs attention right now.
             Cards that have a `dismissAction` render a small "X" in the
@@ -632,39 +729,6 @@ export default async function DashboardPage() {
                 ) : null}
               </div>
             ))}
-          </section>
-        ) : null}
-
-        {/* Mileage deduction at-a-glance — visible on the dashboard
-            instead of buried in /mileage. Hidden until there's at least
-            one tracked business drive. */}
-        {hasMileage ? (
-          <section className="mt-10">
-            <Link href="/mileage" className="block surface surface-hover p-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="kicker-sm">Mileage deduction</div>
-                  <div className="display mt-2 text-3xl text-forest-900 tabular-nums">
-                    {formatCents(mileageYtdCents)}{" "}
-                    <span className="text-base text-ink-muted font-normal">
-                      YTD
-                    </span>
-                  </div>
-                  <div className="text-[13px] text-ink-muted mt-1">
-                    {mileageYtdMiles.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}{" "}
-                    business mi this year
-                    {mileageMonthMiles > 0
-                      ? ` · ${formatCents(mileageMonthCents)} this month`
-                      : ""}
-                  </div>
-                </div>
-                <span className="text-gold-700 text-sm font-medium shrink-0">
-                  Drive log &rarr;
-                </span>
-              </div>
-            </Link>
           </section>
         ) : null}
 
@@ -1004,6 +1068,61 @@ export default async function DashboardPage() {
       {/* Celebrate any badges that were just awarded on this render. */}
       <MedalCelebration newlyEarnedCodes={newlyEarnedCodes} />
     </main>
+  );
+}
+
+/**
+ * Gold progress ring for the dashboard readiness stat — the visual
+ * anchor of the hero band. Pure SVG: a faint gold track with the value
+ * arc drawn over it, starting at 12 o'clock. The centre label uses
+ * fill="currentColor" + .text-forest-900 so it inherits the same
+ * theme-aware ink as the rest of the page (cream in dark mode via the
+ * globals override) instead of a hardcoded fill that vanishes on navy.
+ */
+function StatRing({ score }: { score: number }) {
+  const pct = Math.max(0, Math.min(100, Math.round(score)));
+  const r = 26;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - pct / 100);
+  return (
+    <svg
+      width="60"
+      height="60"
+      viewBox="0 0 64 64"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <circle
+        cx="32"
+        cy="32"
+        r={r}
+        fill="none"
+        stroke="rgba(213,187,126,0.18)"
+        strokeWidth="6"
+      />
+      <circle
+        cx="32"
+        cy="32"
+        r={r}
+        fill="none"
+        stroke="#c4a25d"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        transform="rotate(-90 32 32)"
+      />
+      <text
+        x="32"
+        y="37"
+        textAnchor="middle"
+        fill="currentColor"
+        className="display text-forest-900"
+        style={{ fontSize: "15px" }}
+      >
+        {pct}
+      </text>
+    </svg>
   );
 }
 
