@@ -523,7 +523,10 @@
 // checkered-flag end disc — so a glance answers "which way did this
 // drive go?". Plus: hand-entered (manual) trips now fire the same
 // saved-drive push as GPS-tracked ones.
-const CACHE_VERSION = "v71";
+// v72: dashboard calm/editorial redesign — one accent (gold), one card
+// treatment (.surface), .kicker-sm eyebrows, generous spacing. Bump so
+// installed shells pull the restyled bundle.
+const CACHE_VERSION = "v72";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

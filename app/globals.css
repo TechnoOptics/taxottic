@@ -593,6 +593,28 @@ main, footer, nav {
     box-shadow: 0 2px 4px rgba(29, 40, 67, 0.05), 0 12px 28px rgba(29, 40, 67, 0.08);
   }
 
+  /* .surface — the "calm editorial" redesign's SINGLE card treatment.
+     Flat by design: a hairline border, no gold catch-light ring, and at
+     most a whisper of shadow. This is deliberately quieter than the
+     legacy `.card` (which stacks a gold ring + a deep drop shadow). The
+     redesign separates content with whitespace, not heavy chrome. Being
+     rolled across the app screen-by-screen — dashboard first. */
+  .surface {
+    background: #ffffff;
+    border: 1px solid rgba(25, 37, 57, 0.09);
+    border-radius: 1.125rem;
+  }
+  html[data-theme="dark"] .surface {
+    background: #1d2843;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .surface-hover {
+    transition: border-color 0.2s ease;
+  }
+  .surface-hover:hover {
+    border-color: rgba(213, 187, 126, 0.55);
+  }
+
   /* Primary button: forest with subtle gold inner highlight + lift hover */
   .btn-primary {
     display: inline-flex;
