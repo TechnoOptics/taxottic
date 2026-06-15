@@ -526,7 +526,12 @@
 // v72: dashboard calm/editorial redesign — one accent (gold), one card
 // treatment (.surface), .kicker-sm eyebrows, generous spacing. Bump so
 // installed shells pull the restyled bundle.
-const CACHE_VERSION = "v72";
+// v73: redesign fixes after seeing it live — .surface now genuinely lifts
+// (soft shadow in light, lighter-navy + edge in dark; the bare-hairline
+// first cut read as ghost cards), and Tailwind's `dark:` variant now
+// follows the app's data-theme instead of the OS media query (the two
+// dark systems were fighting — e.g. the left rail vanished).
+const CACHE_VERSION = "v73";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* Make Tailwind's `dark:` variant follow the app's OWN theme switch
+   (html[data-theme="dark"], set by DarkThemeMount), NOT the OS
+   prefers-color-scheme media query (Tailwind v4's default).
+
+   Without this the app runs two independent dark-mode systems: every
+   `dark:` utility (e.g. the LeftRail's `dark:bg-forest-800`) keys off the
+   OS, while every other surface + all the text-color overrides key off
+   `data-theme`. When the OS is dark but the app is light they disagree —
+   e.g. the rail paints a dark navy background under dark navy nav text,
+   so the menu vanishes. Pointing `dark:` at `[data-theme="dark"]` unifies
+   the two: a `dark:` utility now fires exactly when the app theme is dark,
+   matching everything else. (Strictly safer — only changes the previously
+   broken OS≠app states.) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ============================================================================
    Taxottic brand tokens
    Aligned with sister brands Advottic + Techno Optics:
@@ -593,26 +608,47 @@ main, footer, nav {
     box-shadow: 0 2px 4px rgba(29, 40, 67, 0.05), 0 12px 28px rgba(29, 40, 67, 0.08);
   }
 
-  /* .surface — the "calm editorial" redesign's SINGLE card treatment.
-     Flat by design: a hairline border, no gold catch-light ring, and at
-     most a whisper of shadow. This is deliberately quieter than the
-     legacy `.card` (which stacks a gold ring + a deep drop shadow). The
-     redesign separates content with whitespace, not heavy chrome. Being
-     rolled across the app screen-by-screen — dashboard first. */
+  /* .surface — the redesign's SINGLE card treatment. Quieter than the
+     legacy `.card` (gold ring + heavy shadow), but NOT flat: a hairline
+     border PLUS a soft two-stop shadow so the card genuinely lifts off
+     the page. The first revision was a bare 9%-opacity border with no
+     shadow — on cream the white cards read as ghost rectangles and the
+     whole screen looked unfinished ("plain / cheap"). Live-tuned on the
+     real dashboard until the lift read as premium without shouting.
+     In dark mode shadows barely register on a navy field, so the card
+     is a clearly LIGHTER navy (#202d4d on the #121a2a page) carrying a
+     1px top-light border — separation comes from value + edge, not blur. */
   .surface {
     background: #ffffff;
-    border: 1px solid rgba(25, 37, 57, 0.09);
+    border: 1px solid rgba(18, 26, 42, 0.06);
     border-radius: 1.125rem;
+    box-shadow:
+      0 1px 2px rgba(18, 26, 42, 0.05),
+      0 14px 34px -18px rgba(18, 26, 42, 0.26);
   }
   html[data-theme="dark"] .surface {
-    background: #1d2843;
+    background: #202d4d;
     border-color: rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.35),
+      0 18px 44px -22px rgba(0, 0, 0, 0.55);
   }
   .surface-hover {
-    transition: border-color 0.2s ease;
+    transition:
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
   }
   .surface-hover:hover {
-    border-color: rgba(213, 187, 126, 0.55);
+    border-color: rgba(213, 187, 126, 0.6);
+    box-shadow:
+      0 2px 6px rgba(18, 26, 42, 0.07),
+      0 22px 50px -22px rgba(18, 26, 42, 0.34);
+  }
+  html[data-theme="dark"] .surface-hover:hover {
+    border-color: rgba(213, 187, 126, 0.6);
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.4),
+      0 24px 54px -24px rgba(0, 0, 0, 0.62);
   }
 
   /* Primary button: forest with subtle gold inner highlight + lift hover */
