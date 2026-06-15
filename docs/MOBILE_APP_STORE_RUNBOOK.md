@@ -2,6 +2,55 @@
 
 Operational steps for shipping the Taxottic Capacitor shell to the Apple App Store + Google Play. The code is ready; this is the human/compliance work.
 
+---
+
+## ✅ CURRENT STATUS (updated June 2026) — read this first
+
+The sections further down were written before the build pipeline and
+store accounts existed. **Most of that is now DONE.** True state +
+the short list of what actually remains to go live:
+
+**Done / working:**
+- **Builds fully automated, no Mac needed.** `ios-release.yml`
+  archives on a GitHub macOS runner → TestFlight; `android-release.yml`
+  builds the signed AAB → Play. All signing secrets set (`ANDROID_*`,
+  `ASC_*`, `IOS_TEAM_ID`, `PLAY_SERVICE_ACCOUNT`). *(The "can't build
+  iOS on Windows / provision a Mac" warning below is obsolete.)*
+- **Both store app records exist.** App Store Connect app
+  `id 6767039803` (bundle `com.taxottic.app`); Play Console app live.
+- **iOS: TestFlight build 21** to the internal group, no review.
+  **Android: Internal Testing track** receiving builds.
+- **Code production-clean (verified):** `/legal/privacy` + `/legal/terms`
+  + `/example` return 200; export compliance auto-answered
+  (`ITSAppUsesNonExemptEncryption = false`); debug routes auth-gated +
+  `noindex`; versions 1.0 (CI bumps build number per run).
+
+**Remaining to reach PUBLIC PRODUCTION (human / decision work):**
+1. **Payment-compliance decision (STEP 0) — blocks BOTH stores.**
+   Subscriptions sell on the web via Stripe. Decide External-link
+   entitlement (keep Stripe) vs in-app purchase vs view-only; the iOS
+   build + App Review notes must match. Repo recommendation: External
+   link.
+2. **Store-listing forms** (Play: Data safety, Content rating, Target
+   audience, Financial features; Apple: App Privacy labels, age
+   rating) — pre-written in `store-listing/CONTENT_PACK.md` +
+   `store-listing/PRIVACY_DATA_MAP.md`; *your* legal attestations to
+   enter.
+3. **Screenshots** for required device sizes (capture from `/example`).
+4. **Demo reviewer account** (`review@taxottic.com` + seeded data +
+   password in the App Review notes) — Apple rejects if they can't
+   sign in.
+5. **Push delivery env** (optional for launch): infra ships, but no
+   notification delivers until `FCM_SERVICE_ACCOUNT_JSON`, `APNS_*`,
+   and `NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED=1` are set in Vercel
+   (see `docs/PUSH_NOTIFICATIONS_SETUP.md`).
+6. **Promote**: Play Internal → Production; Apple → Submit for Review.
+
+Step-by-step for 2–6 is in `store-listing/OPERATOR_CHECKLIST.md`.
+Everything below this block is deeper reference, partially superseded.
+
+---
+
 > **Start here:** the build automation is DONE. Two GitHub Actions
 > workflows (`.github/workflows/ios-release.yml`,
 > `android-release.yml`) build + upload to TestFlight / Play

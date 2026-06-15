@@ -153,8 +153,8 @@ export default async function DashboardPage() {
       <main id="main" className="min-h-screen">
         <AppHeader email={user.email ?? undefined} />
         <section className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
-          <div className="card p-6 sm:p-10 text-center">
-            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+          <div className="surface p-6 sm:p-10 text-center">
+            <div className="kicker-sm">
               {isSuperAdmin ? "Operator view" : "Welcome"}
             </div>
             <h1 className="display mt-3 text-4xl text-forest-900">
@@ -579,16 +579,16 @@ export default async function DashboardPage() {
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-6 sm:py-10">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Your workspace
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
-          {greeting.head}
-        </h1>
-        <p className="mt-2 text-sm sm:text-base text-ink-soft">
-          {greeting.pleasantry}
-        </p>
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12">
+        <header>
+          <div className="kicker-sm">Tax year {taxYear}</div>
+          <h1 className="display mt-3 text-4xl sm:text-5xl text-forest-900 leading-[1.05]">
+            {greeting.head}
+          </h1>
+          <p className="mt-3 text-base text-ink-soft max-w-xl leading-relaxed">
+            {greeting.pleasantry}
+          </p>
+        </header>
 
         <TrialBanner trial={trial} />
 
@@ -602,47 +602,31 @@ export default async function DashboardPage() {
             button sits above the overlay (z-10) and stops propagation
             so clicking it doesn't also navigate. */}
         {recap.length > 0 ? (
-          <section className="mt-6 grid gap-3">
+          <section className="mt-10 grid gap-3">
             {recap.map((r, i) => (
               <div
                 key={i}
-                className={
-                  "card relative p-4 flex items-start gap-3 hover:border-gold-300 transition-colors " +
-                  (r.tone === "warn" ? "border-red-200" : "")
-                }
+                className="surface surface-hover relative p-5 flex items-start gap-3.5"
               >
                 <Link
                   href={r.href}
                   aria-label={r.title}
-                  className="absolute inset-0 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                  className="absolute inset-0 rounded-[1.125rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
                 />
-                <div
-                  className={
-                    "mt-1 size-2 rounded-full shrink-0 " +
-                    (r.tone === "warn" ? "bg-red-500" : "bg-gold-400")
-                  }
-                />
-                <div className="min-w-0 flex-1">
+                {/* One accent: every recap dot is gold. Urgency is
+                    carried by copy + sort order, not a second colour —
+                    keeps the surface calm (redesign rule). */}
+                <div className="mt-1.5 size-2 rounded-full shrink-0 bg-gold-400" />
+                <div className="min-w-0 flex-1 pr-6">
                   <div className="display text-base text-forest-900">
                     {r.title}
                   </div>
-                  <div className="text-xs text-ink-muted mt-0.5 leading-relaxed">
+                  <div className="text-[13px] text-ink-muted mt-1 leading-relaxed">
                     {r.body}
                   </div>
                 </div>
-                {/* "Navigate" arrow at the right edge of the content
-                    row. Hide it when the card also has a dismiss (X)
-                    button — the X sits absolute top-right and the
-                    arrow at the middle-right edge were visually
-                    colliding in the same corner. The whole card is
-                    still clickable via the overlay <Link> above, so
-                    the visual nav hint is redundant when there's
-                    already an X. */}
-                {r.dismissAction ? null : (
-                  <span className="text-ink-muted text-sm shrink-0">→</span>
-                )}
                 {r.dismissAction === "overdue-reminders" ? (
-                  <div className="absolute right-2 top-2 z-10">
+                  <div className="absolute right-3 top-3 z-10">
                     <ReminderDismissButton />
                   </div>
                 ) : null}
@@ -655,20 +639,18 @@ export default async function DashboardPage() {
             instead of buried in /mileage. Hidden until there's at least
             one tracked business drive. */}
         {hasMileage ? (
-          <section className="mt-6">
-            <Link href="/mileage" className="block card card-hover p-5">
+          <section className="mt-10">
+            <Link href="/mileage" className="block surface surface-hover p-6">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-                    Mileage deduction
-                  </div>
-                  <div className="display mt-1 text-2xl text-forest-900 tabular-nums">
+                  <div className="kicker-sm">Mileage deduction</div>
+                  <div className="display mt-2 text-3xl text-forest-900 tabular-nums">
                     {formatCents(mileageYtdCents)}{" "}
-                    <span className="text-sm text-ink-muted font-normal">
+                    <span className="text-base text-ink-muted font-normal">
                       YTD
                     </span>
                   </div>
-                  <div className="text-xs text-ink-muted mt-0.5">
+                  <div className="text-[13px] text-ink-muted mt-1">
                     {mileageYtdMiles.toLocaleString(undefined, {
                       maximumFractionDigits: 0,
                     })}{" "}
@@ -678,7 +660,7 @@ export default async function DashboardPage() {
                       : ""}
                   </div>
                 </div>
-                <span className="text-forest-700 font-medium shrink-0">
+                <span className="text-gold-700 text-sm font-medium shrink-0">
                   Drive log &rarr;
                 </span>
               </div>
@@ -694,78 +676,50 @@ export default async function DashboardPage() {
             once. The deeper /reminders page can still split by company
             if a power user wants the per-company view. */}
         {upcomingReminders && upcomingReminders.length > 0 ? (
-          <section className="mt-8">
-            <div className="flex items-end justify-between">
-              <h2 className="display text-xl text-forest-900">Coming up</h2>
+          <section className="mt-10">
+            <div className="flex items-center justify-between">
+              <div className="kicker-sm">Coming up</div>
               <Link
                 href="/reminders"
-                className="text-sm text-ink-soft hover:text-forest-800"
+                className="text-[13px] text-gold-700 hover:text-forest-900"
               >
                 All reminders &rarr;
               </Link>
             </div>
-            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <ul className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
               {dedupeReminders(upcomingReminders).map((r) => {
                 const dueDate = new Date(r.due_at);
                 const days = Math.max(
                   0,
                   Math.ceil((dueDate.getTime() - Date.now()) / 86_400_000),
                 );
-                // Absolute date underneath the relative pill. CPAs (P3 from
-                // the May 2026 audit) need the actual day-of-month, not
-                // just "in 248 days". Formatted with Intl.DateTimeFormat
-                // so it localizes if/when we ship i18n.
+                // Absolute date underneath the relative label. CPAs (P3
+                // from the May 2026 audit) need the actual day-of-month.
                 const absLabel = new Intl.DateTimeFormat("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
                   timeZone: "UTC",
                 }).format(dueDate);
-                // Round-2 audit Section 6 friction: at-a-glance urgency
-                // is hard to read when every card looks identical. Color
-                // the pill + left edge by how close the deadline is —
-                // overdue is already filtered to the recap, so here we
-                // only have to differentiate "this week" (amber) from
-                // "later" (neutral gold).
-                const urgencyTone =
-                  days <= 7
-                    ? {
-                        border: "border-amber-300/70 dark:border-amber-600/40",
-                        pill: "text-amber-700 dark:text-amber-200",
-                        dot: "bg-amber-500",
-                      }
-                    : days <= 30
-                      ? {
-                          border:
-                            "border-gold-300/60 dark:border-gold-600/30",
-                          pill: "text-gold-700",
-                          dot: "bg-gold-400",
-                        }
-                      : {
-                          border: "",
-                          pill: "text-ink-muted",
-                          dot: "bg-forest-300 dark:bg-forest-500",
-                        };
+                // One accent: a single calm gold dot + neutral label on
+                // every card (the old amber/gold/neutral tri-state added
+                // a competing colour). Proximity is read from the "In N
+                // days" copy, not from card colour.
                 return (
-                  <li
-                    key={r.id}
-                    className={`card p-4 ${urgencyTone.border}`}
-                  >
-                    <div
-                      className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] ${urgencyTone.pill}`}
-                    >
+                  <li key={r.id} className="surface p-5">
+                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
                       <span
                         aria-hidden="true"
-                        className={`size-1.5 rounded-full ${urgencyTone.dot}`}
+                        className="size-1.5 rounded-full bg-gold-400"
                       />
                       {days === 0
                         ? "Due today"
                         : `In ${days} day${days === 1 ? "" : "s"}`}
                     </div>
-                    <div className="display text-base text-forest-900 mt-1">
+                    <div className="display text-base text-forest-900 mt-2">
                       {r.title}
                     </div>
-                    <div className="text-[11px] text-ink-muted mt-1">
+                    <div className="text-[12px] text-ink-muted mt-1">
                       {absLabel}
                     </div>
                   </li>
@@ -776,13 +730,15 @@ export default async function DashboardPage() {
         ) : null}
 
         {/* Companies */}
-        <section className="mt-8">
+        <section className="mt-10">
           {/* flex-wrap so the "+ New company" link drops below the
               heading instead of being clipped on very narrow foldable
               cover screens (~240px) where html/body has
               overflow-x:clip. */}
-          <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
-            <h2 className="display text-xl text-forest-900">Companies</h2>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <div className="kicker-sm">
+              {companies.length === 1 ? "Your business" : "Your businesses"}
+            </div>
             {canCreateCompany ? (
               <Link
                 href="/onboarding/new-company"
@@ -801,7 +757,7 @@ export default async function DashboardPage() {
               </Link>
             )}
           </div>
-          <ul className="mt-3 grid gap-3">
+          <ul className="mt-4 grid gap-3">
             {companies.map((m) => {
               const isManager = m.role === "manager";
               const r = readinessByCompany.get(m.company_id);
@@ -833,7 +789,7 @@ export default async function DashboardPage() {
               return (
                 <li
                   key={m.company_id}
-                  className="card card-hover p-5 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  className="surface surface-hover p-6 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                   <div className="flex items-center gap-4 min-w-0 flex-1">
                     <CompanyLogo
@@ -842,7 +798,7 @@ export default async function DashboardPage() {
                       size={48}
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="display text-xl text-forest-900 truncate">
+                      <div className="display text-2xl text-forest-900 truncate">
                         {m.company.name}
                       </div>
                       {/* "Manager · added May 12, 2026" instead of the raw
@@ -883,7 +839,7 @@ export default async function DashboardPage() {
                           </span>
                         </div>
                         <div
-                          className="mt-1 h-1.5 rounded-full bg-forest-50 overflow-hidden"
+                          className="mt-2 h-2 rounded-full bg-forest-100/70 overflow-hidden"
                           role="progressbar"
                           aria-valuenow={score}
                           aria-valuemin={0}
@@ -931,30 +887,28 @@ export default async function DashboardPage() {
 
         {/* Tax-savings playbook tile — links into the company's goal page. */}
         {companies.length > 0 ? (
-          <section className="mt-8">
+          <section className="mt-10">
             <Link
               href={`/c/${companies[0].company.public_id}/savings-goals`}
-              className="block card card-hover p-6 sm:p-7 border-gold-300/60"
+              className="block surface surface-hover p-6 sm:p-8"
             >
               {/* Stack vertically on mobile (the body needs the full
                   card width; otherwise the CTA pins to the right and
                   squeezes the description into a narrow column). */}
               <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-                    Tax-savings playbook
-                  </div>
-                  <h2 className="display mt-1 text-xl text-forest-900">
+                  <div className="kicker-sm">Tax-savings playbook</div>
+                  <h2 className="display mt-2 text-2xl text-forest-900">
                     Goals to absorb your tax bill
                   </h2>
-                  <p className="mt-1 text-sm text-ink-soft leading-relaxed max-w-2xl">
+                  <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-2xl">
                     Personalized retirement, health, education, and energy
                     moves with step-by-step instructions — built from your
                     actual filing status, income, and state. None are new
                     business expenses.
                   </p>
                 </div>
-                <span className="text-forest-700 font-medium shrink-0">
+                <span className="text-sm font-medium text-gold-700 shrink-0">
                   View playbook &rarr;
                 </span>
               </div>
@@ -964,17 +918,17 @@ export default async function DashboardPage() {
 
         {/* Active goals */}
         {activeGoals && activeGoals.length > 0 ? (
-          <section className="mt-8">
-            <div className="flex items-end justify-between">
-              <h2 className="display text-xl text-forest-900">Active goals</h2>
+          <section className="mt-10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="kicker-sm">Active goals</div>
               <Link
                 href="/goals"
-                className="text-sm text-ink-soft hover:text-forest-800"
+                className="text-sm font-medium text-gold-700 hover:text-forest-900"
               >
                 All goals &rarr;
               </Link>
             </div>
-            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <ul className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
               {activeGoals.map((g) => {
                 const pct =
                   g.target_cents > 0
@@ -984,18 +938,18 @@ export default async function DashboardPage() {
                       )
                     : 0;
                 return (
-                  <li key={g.id} className="card p-4 relative">
+                  <li key={g.id} className="surface p-5 relative">
                     <div className="absolute top-2 right-2">
                       <GoalDismissButton goalId={g.id} goalTitle={g.title} />
                     </div>
-                    <div className="display text-base text-forest-900 truncate pr-6">
+                    <div className="display text-lg text-forest-900 truncate pr-6">
                       {g.title}
                     </div>
                     <div className="text-xs text-ink-muted mt-1">
                       {formatCents(g.saved_cents)} of{" "}
                       {formatCents(g.target_cents)}
                     </div>
-                    <div className="mt-3 h-1.5 rounded-full bg-forest-50 overflow-hidden">
+                    <div className="mt-3 h-2 rounded-full bg-forest-100/70 overflow-hidden">
                       <div
                         className="h-full bg-gold-400"
                         style={{ width: `${pct}%` }}
@@ -1007,17 +961,17 @@ export default async function DashboardPage() {
             </ul>
           </section>
         ) : (
-          <section className="mt-8">
-            <div className="card p-5 flex items-center justify-between gap-4">
+          <section className="mt-10">
+            <div className="surface p-6 flex items-center justify-between gap-4">
               <div>
-                <div className="display text-base text-forest-900">
+                <div className="display text-lg text-forest-900">
                   Set a goal to stay ahead.
                 </div>
-                <p className="text-xs text-ink-muted mt-1">
+                <p className="text-sm text-ink-soft mt-1">
                   Pick a tax-savings target and watch the gap close.
                 </p>
               </div>
-              <Link href="/goals" className="btn-ghost">
+              <Link href="/goals" className="btn-ghost shrink-0">
                 New goal
               </Link>
             </div>
@@ -1026,11 +980,9 @@ export default async function DashboardPage() {
 
         {/* Achievements: each medal sits in a thick metal frame; earned ones
             get an animated holographic shimmer wave. */}
-        <section className="mt-8">
-          <div className="flex items-end justify-between">
-            <h2 className="display text-xl text-forest-900">
-              Your achievements
-            </h2>
+        <section className="mt-10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="kicker-sm">Your achievements</div>
             <span className="text-xs text-ink-muted">
               {badges?.length ?? 0} earned
             </span>
