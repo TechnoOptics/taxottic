@@ -97,6 +97,14 @@ export const BADGES: Record<string, Badge> = {
     icon: "🤝",
     tier: "silver",
   },
+  philanthropist: {
+    code: "philanthropist",
+    title: "Philanthropist",
+    description:
+      "Gave to a 501(c)(3) cause that matters. Generosity is its own reward — and it's deductible.",
+    icon: "🤍",
+    tier: "gold",
+  },
 };
 
 export const TIER_STYLES: Record<Badge["tier"], string> = {

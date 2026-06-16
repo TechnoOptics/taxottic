@@ -554,7 +554,11 @@
 // section explaining 501(c)(3) gifts are a §170 Schedule A deduction
 // (why they're not on the business Expenses page) with the cash /
 // non-cash / volunteer-mileage rules.
-const CACHE_VERSION = "v78";
+// v79: log a charitable gift → earn the gold "Philanthropist" medal.
+// New charitable_donations table (personal, kept out of business
+// expenses), a log-a-gift form on the explorer, a "give back" year-end
+// to-do, and the badge awarded on the first logged donation.
+const CACHE_VERSION = "v79";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

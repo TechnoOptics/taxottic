@@ -7,7 +7,12 @@ import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { MASTER_DEDUCTIONS } from "@/lib/deductions/master";
 import { appliesToCompany } from "@/lib/deductions/applicability";
 import type { CompanyEntityType } from "@/lib/deductions/types";
-import { applyHomeOffice, unapplyHomeOffice } from "./actions";
+import { formatCents } from "@/lib/tax/forecast";
+import {
+  applyHomeOffice,
+  unapplyHomeOffice,
+  logCharitableDonation,
+} from "./actions";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -49,6 +54,19 @@ export default async function DeductionsPage({ params }: { params: Params }) {
   const homeOfficeApplied = Boolean(profile?.has_home_office);
   const homeOfficeSqft = (profile?.home_office_sqft as number | null) ?? null;
   const homeTotalSqft = (profile?.home_total_sqft as number | null) ?? null;
+
+  // Charitable giving this year (personal §170). Drives the running
+  // "given this year" tally + the earned-medal note in the section below.
+  const { data: donationRows } = await supabase
+    .from("charitable_donations")
+    .select("amount_cents")
+    .eq("user_id", user.id)
+    .eq("tax_year", taxYear);
+  const givenCents = (donationRows ?? []).reduce(
+    (a, d) => a + Number((d as { amount_cents: number }).amount_cents || 0),
+    0,
+  );
+  const hasGiven = (donationRows?.length ?? 0) > 0;
 
   // The xlsx ships an "industry" hint per row; we don't yet capture industry
   // tags on the company profile, so the gate falls open. When we add tags
@@ -237,6 +255,72 @@ export default async function DeductionsPage({ params }: { params: Params }) {
               IRS Pub 526
             </a>
           </div>
+
+          {/* Log a gift → earn the Philanthropist medal. Personal §170
+              giving, stored separately from business expenses so it never
+              touches the forecast; the badge engine awards the medal on
+              the first logged gift (pops on the next dashboard visit). */}
+          <form
+            action={logCharitableDonation}
+            className="card mt-4 p-5 grid gap-3 sm:max-w-xl"
+          >
+            <input type="hidden" name="publicId" value={publicId} />
+            <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+              Log a gift · earn the Philanthropist medal 🤍
+            </div>
+            {hasGiven ? (
+              <p className="text-sm text-forest-900">
+                You&apos;ve given{" "}
+                <span className="font-medium">{formatCents(givenCents)}</span>{" "}
+                to charity this year — thank you. The{" "}
+                <span className="font-medium">Philanthropist</span> medal is
+                yours. Log another anytime.
+              </p>
+            ) : (
+              <p className="text-xs text-ink-soft leading-relaxed">
+                Record a gift to a 501(c)(3) you believe in — it earns you the
+                gold Philanthropist medal, and counts toward your Schedule A if
+                you itemize.
+              </p>
+            )}
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="grid gap-1">
+                <span className="text-xs text-ink-soft">Amount (USD)</span>
+                <input
+                  name="amount"
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  required
+                  placeholder="100"
+                  className="input"
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs text-ink-soft">
+                  Charity (optional)
+                </span>
+                <input
+                  name="recipient"
+                  type="text"
+                  maxLength={200}
+                  placeholder="e.g. American Red Cross"
+                  className="input"
+                />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-ink-soft">
+              <input
+                name="noncash"
+                type="checkbox"
+                className="size-4 rounded border border-forest-200"
+              />
+              Non-cash gift (goods, clothing, stock)
+            </label>
+            <button type="submit" className="btn-primary text-sm w-fit">
+              Log donation
+            </button>
+          </form>
         </section>
 
         <DeductionExplorer

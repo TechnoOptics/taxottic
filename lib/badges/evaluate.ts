@@ -42,6 +42,7 @@ export async function evaluateBadges(
     { data: businessProfiles },
     { count: invitesCount },
     { count: bizTripCount },
+    { count: donationCount },
   ] = await Promise.all([
     supabase.from("badges").select("badge_code").eq("user_id", userId),
     supabase.from("company_members").select("company_id").eq("user_id", userId),
@@ -91,6 +92,12 @@ export async function evaluateBadges(
       .select("*", { count: "exact", head: true })
       .eq("driver_user_id", userId)
       .eq("classification", "business"),
+    // Any logged charitable gift → the "Philanthropist" badge. Spans all
+    // years (one act of generosity earns it for good).
+    supabase
+      .from("charitable_donations")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId),
   ]);
 
   const have = new Set((existing ?? []).map((b) => b.badge_code));
@@ -115,6 +122,8 @@ export async function evaluateBadges(
   if ((bizTripCount ?? 0) > 0) earned.push({ badge_code: "first_drive" });
 
   if ((invitesCount ?? 0) > 0) earned.push({ badge_code: "team_grower" });
+
+  if ((donationCount ?? 0) > 0) earned.push({ badge_code: "philanthropist" });
 
   const toInsert = earned
     .filter((e) => !have.has(e.badge_code))

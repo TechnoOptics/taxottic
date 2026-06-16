@@ -373,6 +373,18 @@ export default async function ForecastPage({ params }: { params: Params }) {
       monthlyForExpenses((r) => r.category_code === "self_employed_health"),
       currentMonth,
     );
+  // Charitable giving logged this year (personal §170) — drives the
+  // "give back / earn the Philanthropist medal" year-end suggestion.
+  const { data: donationRows } = await supabase
+    .from("charitable_donations")
+    .select("amount_cents")
+    .eq("user_id", user.id)
+    .eq("tax_year", taxYear);
+  const charitableGivenCents = (donationRows ?? []).reduce(
+    (a, d) => a + Number((d as { amount_cents: number }).amount_cents || 0),
+    0,
+  );
+
   const suggestions = buildYearEndSuggestions({
     result,
     filingStatus: taxProfile.filing_status as FilingStatus,
@@ -390,6 +402,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
     homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
     itemize: taxProfile.itemize,
     ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
+    charitableGivenCents,
     currentMonth,
     // Pass company creation date so suggestions can suppress
     // "missed Q1 estimate" and underpayment-shortfall framing for
