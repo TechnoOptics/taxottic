@@ -595,7 +595,12 @@
 // battery win, and it can't affect trip distance/deduction. (Ships via
 // the web bundle, so no APK rebuild.) Eco mode (100m filter) still
 // available for more.
-const CACHE_VERSION = "v87";
+// v88: Team roster fix — the Team page was rendering an empty roster and
+// mislabeling the manager as a plain "member" (a stale/auth-context render
+// returned zero member rows even though RLS allows it). The page is now
+// force-dynamic and reads the roster, invites, and per-member financials
+// through the service client behind the existing RLS company-access gate.
+const CACHE_VERSION = "v88";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

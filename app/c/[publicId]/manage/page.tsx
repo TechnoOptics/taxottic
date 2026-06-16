@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { createServiceClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { PageHeader } from "@/components/PageHeader";
@@ -15,6 +16,11 @@ import { closeCompany } from "@/app/actions/recycle-bin";
 import { CopyInviteLink } from "@/components/CopyInviteLink";
 
 type Params = Promise<{ publicId: string }>;
+
+// This page is per-user and auth-gated (roster, role chip, invites). Never
+// serve a cached render — a stale build/edge copy was showing an empty roster
+// and mislabeling the manager as a plain "member".
+export const dynamic = "force-dynamic";
 
 export default async function ManageCompanyPage({
   params,
@@ -32,14 +38,21 @@ export default async function ManageCompanyPage({
 
   if (!company) notFound();
 
-  const { data: members } = await supabase
+  // The RLS-scoped `companies` read above is the access gate: only a member,
+  // super-admin, or engaged firm reaches this point. The roster + invites are
+  // then read with the service client so the listing never silently empties
+  // out on an auth-context hiccup (the user-scoped read was returning zero
+  // rows even for the manager, leaving the Team page blank).
+  const admin = createServiceClient();
+
+  const { data: members } = await admin
     .from("company_members")
     .select(
       "user_id, role, title, joined_at, profile:profiles(public_id, email, full_name)",
     )
     .eq("company_id", company.id);
 
-  const { data: invites } = await supabase
+  const { data: invites } = await admin
     .from("invitations")
     .select(
       "id, email, role, full_name, title, created_at, expires_at, accepted_at",
@@ -67,12 +80,12 @@ export default async function ManageCompanyPage({
   }[] = [];
   if (isManager) {
     const [e, t] = await Promise.all([
-      supabase
+      admin
         .from("monthly_expenses")
         .select("user_id, amount_cents")
         .eq("company_id", company.id)
         .eq("tax_year", taxYear),
-      supabase
+      admin
         .from("mileage_trips")
         .select("driver_user_id, distance_miles, deduction_cents")
         .eq("company_id", company.id)
