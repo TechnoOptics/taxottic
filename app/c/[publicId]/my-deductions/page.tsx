@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
+import { PageHeader } from "@/components/PageHeader";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
@@ -141,18 +142,16 @@ export default async function MyDeductionsPage({
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-6 sm:py-10">
-        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          {company.name} <span className="text-gold-700">·</span> Tax year{" "}
-          {taxYear}
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
-          My deductions
-        </h1>
-        <p className="mt-2 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
-          Everything you&apos;ve claimed this year, in one place. Each one
-          shaves off taxable income — the total below is how much you&apos;ve
-          taken off the table so far.
-        </p>
+        <PageHeader
+          eyebrow={
+            <>
+              {company.name} <span className="text-gold-700">·</span> Tax year{" "}
+              {taxYear}
+            </>
+          }
+          title="My deductions"
+          subtitle="Everything you've claimed this year, in one place. Each one shaves off taxable income — the total below is how much you've taken off the table so far."
+        />
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="my-deductions" />

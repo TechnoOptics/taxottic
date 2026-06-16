@@ -571,7 +571,11 @@
 // holds the personalized "year-end moves" + quick actions. Uses the
 // width with intent instead of one long centered column; collapses to a
 // single column (panel last) below lg.
-const CACHE_VERSION = "v82";
+// v83: unified page headers — a shared <PageHeader> (kicker eyebrow +
+// serif title + optional subtitle + gold flourish) now drives Expenses,
+// My deductions, and the Mileage business-trips pages, ending the
+// eyebrow size/tracking + flourish drift between screens.
+const CACHE_VERSION = "v83";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

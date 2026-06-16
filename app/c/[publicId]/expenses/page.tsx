@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
+import { PageHeader } from "@/components/PageHeader";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { formatCents } from "@/lib/tax/forecast";
@@ -110,16 +111,15 @@ export default async function ExpensesPage({
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
-        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          {company.name} <span className="text-gold-700">·</span>{" "}
-          Tax year {taxYear}
-        </div>
-        <h1 className="display mt-2 text-3xl text-forest-900">
-          Expenses
-        </h1>
-        <div aria-hidden="true" className="gold-flourish mt-3">
-          <span />
-        </div>
+        <PageHeader
+          eyebrow={
+            <>
+              {company.name} <span className="text-gold-700">·</span> Tax year{" "}
+              {taxYear}
+            </>
+          }
+          title="Expenses"
+        />
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="expenses" />
