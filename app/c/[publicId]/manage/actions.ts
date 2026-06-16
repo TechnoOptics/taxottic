@@ -17,7 +17,20 @@ async function isManagerOf(
     .eq("user_id", userId)
     .eq("company_id", companyId)
     .maybeSingle();
-  return data?.role === "manager";
+  if (data?.role === "manager") return true;
+
+  // Safety net: the person who created the company is always treated as a
+  // manager, so the account creator can never be locked out of inviting or
+  // managing teammates — even if their membership row is somehow missing or
+  // got demoted. This is what guarantees "whoever creates the account is the
+  // account manager". (Only runs when the membership check above didn't
+  // already confirm manager, so the common path stays a single query.)
+  const { data: company } = await admin
+    .from("companies")
+    .select("created_by")
+    .eq("id", companyId)
+    .maybeSingle();
+  return company?.created_by === userId;
 }
 
 // One-shot cookie used to ferry the freshly-minted invite link back to
