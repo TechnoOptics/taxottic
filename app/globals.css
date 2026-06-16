@@ -563,49 +563,34 @@ main, footer, nav {
     color: var(--color-gold-700);
   }
 
-  /* Card: hairline border, paper background, gentle shadow plus a thin
-     gold "lit from above" highlight along the top edge. Sits as a
-     pseudo-element so the radius stays clean.
-     Sister-brand cohesion: the second shadow line (0 0 0 1px hsla
-     gold 0.35) mirrors Advottic's signature card ring. Same warm
-     "premium SaaS" feel across the family. The original gold inset
-     highlight stays for the catch-light along the top edge. */
+  /* Card: the app-wide card primitive. Calmed in June 2026 to match the
+     dashboard's `.surface` system — a hairline border + a soft two-stop
+     shadow that lifts the card off the page, and NOTHING else. The old
+     treatment stacked a gold ring (0 0 0 1px gold), an inset champagne
+     highlight, AND a `::before` gold line across the top edge of every
+     card; on a screen full of cards that read busy/heavy, not premium.
+     `.card` and `.surface` are now intentionally the same look so the
+     whole app speaks one calm visual language (most screens still write
+     `.card`; the dashboard writes `.surface`). position:relative stays
+     so absolutely-positioned children keep anchoring. */
   .card {
     position: relative;
     background: #ffffff;
-    border: 1px solid rgba(29, 40, 67, 0.08);
+    border: 1px solid rgba(18, 26, 42, 0.06);
     border-radius: 1rem;
     box-shadow:
-      0 0 0 1px hsla(42, 51%, 66%, 0.18),
-      0 1px 2px rgba(29, 40, 67, 0.04),
-      0 8px 24px -4px rgba(29, 40, 67, 0.18),
-      inset 0 1px 0 rgba(213, 187, 126, 0.14);
-  }
-  /* Soft champagne highlight catching the top of the card. */
-  .card::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 12%;
-    right: 12%;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(213, 187, 126, 0.55) 40%,
-      rgba(213, 187, 126, 0.55) 60%,
-      transparent
-    );
-    pointer-events: none;
-    border-radius: 1rem 1rem 0 0;
+      0 1px 2px rgba(18, 26, 42, 0.05),
+      0 14px 34px -18px rgba(18, 26, 42, 0.26);
   }
   .card-hover {
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   }
   .card-hover:hover {
     transform: translateY(-1px);
-    border-color: rgba(213, 187, 126, 0.5);
-    box-shadow: 0 2px 4px rgba(29, 40, 67, 0.05), 0 12px 28px rgba(29, 40, 67, 0.08);
+    border-color: rgba(213, 187, 126, 0.55);
+    box-shadow:
+      0 2px 6px rgba(18, 26, 42, 0.07),
+      0 22px 50px -22px rgba(18, 26, 42, 0.34);
   }
 
   /* .surface — the redesign's SINGLE card treatment. Quieter than the
@@ -1036,22 +1021,22 @@ main, footer, nav {
      change. Inputs/cards/buttons all flip together.
   ========================================================================== */
 
-  /* Card on dark: semi-transparent forest panel. Keep the gold ring
-     and the catch-light along the top edge so it still reads as the
-     same .card primitive — just in a darker mood. */
+  /* Card on dark: a clearly-lifted, SOLID lighter navy (#202d4d on the
+     #121a2a page) — same value-based separation `.surface` uses, with a
+     1px top-light edge. Dropped the gold ring + champagne catch-light to
+     match the calm system now used app-wide. Solid (was 62% alpha) so
+     stacked cards and text stay crisp instead of letting the page bleed
+     through. */
   html[data-theme="dark"] .card {
-    background: rgba(29, 40, 67, 0.62);
-    border-color: rgba(213, 187, 126, 0.18);
+    background: #202d4d;
+    border-color: rgba(255, 255, 255, 0.08);
     box-shadow:
-      0 0 0 1px hsla(42, 51%, 66%, 0.22),
       0 1px 2px rgba(0, 0, 0, 0.35),
-      0 12px 36px -8px rgba(0, 0, 0, 0.45),
-      inset 0 1px 0 rgba(213, 187, 126, 0.18);
+      0 18px 44px -22px rgba(0, 0, 0, 0.55);
     color: #fbf7e9;
   }
   html[data-theme="dark"] .card-hover:hover {
-    border-color: rgba(213, 187, 126, 0.55);
-    background: rgba(29, 40, 67, 0.78);
+    border-color: rgba(213, 187, 126, 0.6);
   }
   /* Opaque variant — for floating menus (UserMenu dropdown, etc.)
      where the page beneath would otherwise bleed through the 62%

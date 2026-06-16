@@ -539,7 +539,12 @@
 // business drive is its own dated line in the Expenses month accordion
 // and a per-drive list on My Deductions, instead of a single monthly
 // rollup. (Mileage stays its own deduction stream; this is presentation.)
-const CACHE_VERSION = "v75";
+// v76: calmed the app-wide `.card` primitive to match the dashboard's
+// `.surface` — dropped the gold ring, inset champagne highlight, and the
+// ::before top-edge gold line; now a hairline border + soft shadow
+// (lighter-navy in dark). One change brings every screen that uses
+// `.card` into the calm system at once.
+const CACHE_VERSION = "v76";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
