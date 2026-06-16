@@ -17,21 +17,26 @@ import type { ReactNode } from "react";
  *
  * `eyebrow` is a ReactNode so callers can pass a plain string OR a
  * breadcrumb with links (e.g. Mileage → Business trips). Flourish is on
- * by default; pass `flourish={false}` to drop it.
+ * by default; pass `flourish={false}` to drop it. Pass `logo` (e.g. a
+ * <CompanyLogo/>) for the company-branded screens (Forecast, Deduction
+ * explorer) — it sits to the left of the eyebrow/title block so those
+ * headers keep their identity while still sharing this one primitive.
  */
 export function PageHeader({
   eyebrow,
   title,
   subtitle,
   flourish = true,
+  logo,
 }: {
   eyebrow: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   flourish?: boolean;
+  logo?: ReactNode;
 }) {
-  return (
-    <header>
+  const body = (
+    <div className="min-w-0">
       <div className="kicker-sm">{eyebrow}</div>
       <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
         {title}
@@ -46,6 +51,16 @@ export function PageHeader({
           <span />
         </div>
       ) : null}
-    </header>
+    </div>
   );
+
+  if (logo) {
+    return (
+      <header className="flex items-center gap-4">
+        <div className="shrink-0">{logo}</div>
+        {body}
+      </header>
+    );
+  }
+  return <header>{body}</header>;
 }

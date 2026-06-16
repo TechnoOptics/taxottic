@@ -1,6 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { PageHeader } from "@/components/PageHeader";
 import { DeductionExplorer } from "@/components/DeductionExplorer";
 import { HomeOfficeQuickApply } from "@/components/HomeOfficeQuickApply";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
@@ -79,19 +80,17 @@ export default async function DeductionsPage({ params }: { params: Params }) {
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-6 sm:py-10">
-        <div className="flex items-center gap-4">
-          <CompanyLogo
-            src={company.logo_url}
-            name={company.name}
-            size={48}
-          />
-          <div>
-            <h1 className="display text-3xl text-forest-900">{company.name}</h1>
-            <div className="text-xs text-ink-muted mt-0.5 tracking-wide">
-              Deduction explorer
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          logo={
+            <CompanyLogo
+              src={company.logo_url}
+              name={company.name}
+              size={64}
+            />
+          }
+          eyebrow="Deduction explorer"
+          title={company.name}
+        />
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="deductions" />
