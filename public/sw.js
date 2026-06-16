@@ -558,7 +558,12 @@
 // New charitable_donations table (personal, kept out of business
 // expenses), a log-a-gift form on the explorer, a "give back" year-end
 // to-do, and the badge awarded on the first logged donation.
-const CACHE_VERSION = "v79";
+// v80: layout — cap the authenticated content column at 80rem and center
+// it in the space right of the rail on large/ultrawide screens (was
+// max-w-none, which stretched a single card to ~2,500px on a 3000px+
+// display and pushed buttons off-screen). One unlayered CSS rule; rail
+// stays attached on laptops.
+const CACHE_VERSION = "v80";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

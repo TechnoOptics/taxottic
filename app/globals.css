@@ -507,6 +507,35 @@ main, footer, nav {
   z-index: 1;
 }
 
+/* ----------------------------------------------------------------------
+   Content width cap on large screens.
+
+   Every authenticated page renders its content in a <section> directly
+   under <main>, carrying `lg:pl-60` to clear the fixed left rail plus
+   `lg:max-w-none` (a past "fill the whole canvas" choice). On an ultrawide
+   display (3000px+) that stretched a single card to ~2,500px — content
+   stranded left, buttons pushed off-screen, the whole page sprawling.
+
+   Cap it to a comfortable column and center it in the space to the RIGHT
+   of the rail: margin-left clamps to the rail clearance on laptops (so the
+   rail stays attached) and grows to center the column on very wide screens.
+   18rem matches the widest rail clearance (2xl `pl-72`) so the content
+   never tucks under the rail at any breakpoint.
+
+   Scoped to `[class~="lg:pl-60"]` so it only touches authenticated app
+   sections — marketing/landing pages (no rail) are left alone. Unlayered
+   so it wins over the Tailwind max-w-none / mx-0 / pl-* utilities (which
+   live in @layer utilities) without !important. */
+@media (min-width: 1024px) {
+  main > section[class~="lg:pl-60"] {
+    max-width: 80rem;
+    margin-left: max(18rem, calc((100vw - 80rem) / 2));
+    margin-right: auto;
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+  }
+}
+
 /* ============================================================================
    Components
 ============================================================================ */
