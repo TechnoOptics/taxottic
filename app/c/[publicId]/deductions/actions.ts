@@ -4,6 +4,47 @@ import { revalidatePath } from "next/cache";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 
 /**
+ * Log a charitable donation to a 501(c)(3). Personal §170 giving, stored
+ * at the user (donor) level in charitable_donations — deliberately NOT a
+ * business expense, so it never inflates the company forecast. The first
+ * logged gift earns the "Philanthropist" badge (awarded by
+ * lib/badges/evaluate.ts on the next dashboard render). We encourage
+ * generosity for its own sake; the deduction only helps if the donor
+ * itemizes.
+ */
+export async function logCharitableDonation(formData: FormData) {
+  const publicId = String(formData.get("publicId") ?? "");
+  if (!publicId) throw new Error("missing publicId");
+
+  const dollars = Number(formData.get("amount") ?? 0);
+  if (!Number.isFinite(dollars) || dollars <= 0) {
+    throw new Error("Enter a donation amount greater than $0.");
+  }
+  const amountCents = Math.round(dollars * 100);
+  const recipientRaw = String(formData.get("recipient") ?? "").trim();
+  const recipient = recipientRaw.length > 0 ? recipientRaw.slice(0, 200) : null;
+  // Checkbox "non-cash gift (goods / property)". Default is a cash gift.
+  const kind = formData.get("noncash") ? "noncash" : "cash";
+
+  const { supabase, user } = await loadCompanyByPublicId(publicId);
+  const taxYear = new Date().getUTCFullYear();
+
+  const { error } = await supabase.from("charitable_donations").insert({
+    user_id: user.id,
+    tax_year: taxYear,
+    amount_cents: amountCents,
+    kind,
+    recipient,
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/c/${publicId}/deductions`);
+  // The badge engine runs on the dashboard render — revalidate it so the
+  // Philanthropist medal pops next time the user lands there.
+  revalidatePath("/dashboard");
+}
+
+/**
  * Apply (or update) the Home Office deduction for the current tax
  * year. UPSERTs into business_profiles keyed on (company_id, tax_year)
  * and flips has_home_office to true. The forecast pipeline already

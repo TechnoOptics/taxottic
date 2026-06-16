@@ -51,6 +51,10 @@ export type SuggestionInput = {
   // Tax profile flags.
   itemize: boolean;
   ytdItemizedCents: number;
+  // Charitable giving logged this tax year (personal §170). 0 → nudge the
+  // user to give (and earn the Philanthropist medal); > 0 → they've
+  // already given, so the encouragement is suppressed.
+  charitableGivenCents: number;
   // Effective Jan 1 of the tax year, so suggestions know "how much of
   // the year is left." Defaults to the current month if absent.
   currentMonth: number;
@@ -267,6 +271,23 @@ export function buildYearEndSuggestions(
       title: "Push December invoices into January",
       body: `You're projecting ${formatCents(result.totalTaxCents)} in total tax this year. Cash-basis sole props can defer income by waiting to invoice (and accelerate deductions by paying expenses now) — every $1,000 you defer at your bracket saves about ${formatCents(Math.round(100_000 * result.marginalRate))} this year. Only worth it if next year looks similar or smaller.`,
       tone: "low",
+    });
+  }
+
+  // Give back. Shown until the user logs a gift this year — then it's
+  // replaced by the earned medal. Framed generosity-first (the deduction
+  // is the bonus, and only helps if they itemize) because the goal here
+  // is to encourage philanthropy, not to dress up a tax dodge.
+  if (input.charitableGivenCents === 0) {
+    out.push({
+      id: "charitable_giving",
+      title: "Give to a cause — and earn the Philanthropist medal",
+      body: "A gift to a qualified 501(c)(3) is deductible on your Schedule A if you itemize (IRC §170): cash up to 60% of AGI, plus goods and even appreciated stock. Log one to earn the gold Philanthropist medal — generosity that gives a little back.",
+      tone: "low",
+      cta: {
+        label: "Log a donation",
+        href: `/c/${input.publicId}/deductions`,
+      },
     });
   }
 
