@@ -19,7 +19,15 @@ export const config = {
   // ...and any root-level *.txt (llms.txt, robots already a route, and
   // the IndexNow key file <hex>.txt) so unauthenticated verifiers /
   // crawlers can fetch them instead of being 307'd to /login.
+  //
+  // opengraph-image / twitter-image are Next.js metadata image routes
+  // served at /opengraph-image?<hash> with NO file extension — so the
+  // extension-based image exclusions above don't catch them, and without
+  // this the auth middleware 307s the share image to /login. That makes
+  // the OG card invisible to every social unfurler, search-result rich
+  // preview, and LLM link card (they fetch unauthenticated). Excluding
+  // them here lets the share graphic actually render for crawlers.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|google[a-z0-9]+\\.html|\\.well-known/.*|[^/]+\\.txt$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|google[a-z0-9]+\\.html|\\.well-known/.*|[^/]+\\.txt$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
