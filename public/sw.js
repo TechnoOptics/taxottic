@@ -583,7 +583,13 @@
 // Connect an account" action row under the header (shared
 // ImportConnectActions) — previously these only showed in the empty
 // state. Income's header also moved onto the shared <PageHeader>.
-const CACHE_VERSION = "v85";
+// v86: Team — added "Team" to the left rail (was only reachable via a
+// forecast link), and the team roster now shows each member's YTD
+// expenses + BUSINESS mileage (managers only) with a "View expenses"
+// link. Privacy: a manager reviewing a teammate's /mileage log now only
+// sees BUSINESS drives — their personal + unclassified drives stay
+// private.
+const CACHE_VERSION = "v86";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

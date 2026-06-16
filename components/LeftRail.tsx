@@ -148,6 +148,17 @@ const COMPANY_ITEMS: {
     ),
   },
   {
+    key: "team",
+    label: "Team",
+    // Links straight to /manage (the real page); /team is only a 308
+    // redirect shim, so pointing at "manage" keeps the active-state
+    // match honest. Roster, invites, and per-member spend live there.
+    path: "manage",
+    icon: (
+      <Path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    ),
+  },
+  {
     key: "settings",
     label: "Settings",
     // Route name unchanged — only the label was renamed from "Setup".
