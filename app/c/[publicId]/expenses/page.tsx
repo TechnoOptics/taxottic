@@ -228,11 +228,17 @@ export default async function ExpensesPage({
                 return months.map((month) => {
                   const monthRows = buckets.get(month) ?? [];
                   const mm = mileage.monthMap.get(month) ?? null;
+                  // One line PER DRIVE on its own date (not a single
+                  // monthly mileage rollup) so logged miles read like
+                  // day-by-day deductions alongside the other expenses.
+                  const tripsThisMonth = mileage.trips.filter(
+                    (t) => t.month === month,
+                  );
                   const monthTotal =
                     monthRows.reduce((a, r) => a + r.amount_cents, 0) +
                     (mm?.cents ?? 0);
                   const isCurrent = month === currentMonth;
-                  const itemCount = monthRows.length + (mm ? 1 : 0);
+                  const itemCount = monthRows.length + tripsThisMonth.length;
                   return (
                     <li key={month}>
                       <details
@@ -272,32 +278,41 @@ export default async function ExpensesPage({
                           </div>
                         </summary>
                         <ul className="px-3 sm:px-4 pb-3 grid gap-2 border-t border-forest-100">
-                          {mm ? (
-                            <li>
-                              <Link
-                                href="/mileage"
-                                className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border border-dashed border-gold-200 bg-gold-50/50 hover:bg-gold-50"
-                              >
-                                <span className="flex items-center gap-2 min-w-0">
-                                  <span aria-hidden="true">🧭</span>
-                                  <span className="text-sm text-forest-900 font-medium">
-                                    Mileage
+                          {tripsThisMonth.map((t) => {
+                            const dateLabel = new Intl.DateTimeFormat(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                timeZone: "UTC",
+                              },
+                            ).format(new Date(t.startedAt));
+                            return (
+                              <li key={t.id}>
+                                <Link
+                                  href="/mileage"
+                                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border border-dashed border-gold-200 bg-gold-50/50 hover:bg-gold-50"
+                                >
+                                  <span className="flex items-center gap-2 min-w-0">
+                                    <span aria-hidden="true">🧭</span>
+                                    <span className="text-sm text-forest-900 font-medium shrink-0">
+                                      {dateLabel}
+                                    </span>
+                                    <span className="text-xs text-ink-muted truncate">
+                                      · Mileage ·{" "}
+                                      {t.miles.toLocaleString(undefined, {
+                                        maximumFractionDigits: 1,
+                                      })}{" "}
+                                      mi
+                                    </span>
                                   </span>
-                                  <span className="text-xs text-ink-muted truncate">
-                                    ·{" "}
-                                    {mm.miles.toLocaleString(undefined, {
-                                      maximumFractionDigits: 1,
-                                    })}{" "}
-                                    mi · {mm.trips}{" "}
-                                    {mm.trips === 1 ? "drive" : "drives"}
+                                  <span className="display text-sm text-emerald-700 tabular-nums shrink-0">
+                                    {formatCents(t.cents)}
                                   </span>
-                                </span>
-                                <span className="display text-sm text-emerald-700 tabular-nums shrink-0">
-                                  {formatCents(mm.cents)}
-                                </span>
-                              </Link>
-                            </li>
-                          ) : null}
+                                </Link>
+                              </li>
+                            );
+                          })}
                           {monthRows.map((r) => {
                             const cat = r.category as unknown as {
                               label: string;

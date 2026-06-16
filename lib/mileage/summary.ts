@@ -21,11 +21,24 @@ export type MileageMonth = {
   trips: number;
 };
 
+/** One business drive, for the day-by-day deduction lines. */
+export type MileageTrip = {
+  id: string;
+  /** ISO timestamp the drive started (UTC). */
+  startedAt: string;
+  /** 1-12, derived from startedAt (UTC). */
+  month: number;
+  miles: number;
+  cents: number;
+};
+
 export type MileageSummary = {
   /** Months that actually have business drives, ascending. */
   byMonth: MileageMonth[];
   /** Quick lookup month → rollup. */
   monthMap: Map<number, MileageMonth>;
+  /** Every business drive, most-recent first — for per-day lines. */
+  trips: MileageTrip[];
   ytdCents: number;
   ytdMiles: number;
   ytdTrips: number;
@@ -44,20 +57,23 @@ export async function getBusinessMileageSummary(
 ): Promise<MileageSummary> {
   let query = supabase
     .from("mileage_trips")
-    .select("started_at, distance_miles, deduction_cents")
+    .select("id, started_at, distance_miles, deduction_cents")
     .eq("company_id", companyId)
     .eq("classification", "business")
-    .eq("tax_year", taxYear);
+    .eq("tax_year", taxYear)
+    .order("started_at", { ascending: false });
   if (driverUserId) query = query.eq("driver_user_id", driverUserId);
   const { data } = await query;
 
   const rows = (data ?? []) as Array<{
+    id: string;
     started_at: string;
     distance_miles: number | null;
     deduction_cents: number | null;
   }>;
 
   const monthMap = new Map<number, MileageMonth>();
+  const trips: MileageTrip[] = [];
   let ytdCents = 0;
   let ytdMiles = 0;
   let ytdTrips = 0;
@@ -72,6 +88,7 @@ export async function getBusinessMileageSummary(
     cur.miles += miles;
     cur.trips += 1;
     monthMap.set(month, cur);
+    trips.push({ id: r.id, startedAt: r.started_at, month, miles, cents });
     ytdCents += cents;
     ytdMiles += miles;
     ytdTrips += 1;
@@ -80,5 +97,6 @@ export async function getBusinessMileageSummary(
   const byMonth = Array.from(monthMap.values()).sort(
     (a, b) => a.month - b.month,
   );
-  return { byMonth, monthMap, ytdCents, ytdMiles, ytdTrips };
+  // `trips` is already most-recent-first (query orders started_at desc).
+  return { byMonth, monthMap, trips, ytdCents, ytdMiles, ytdTrips };
 }

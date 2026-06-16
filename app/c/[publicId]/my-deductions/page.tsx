@@ -6,11 +6,6 @@ import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 
-const MONTH_LABELS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
 // "My deductions" — the canonical answer to "what have I actually
 // claimed this year and how much have I saved?" Replaces the
 // transient medal-overlay acknowledgment with a permanent home
@@ -302,40 +297,48 @@ export default async function MyDeductionsPage({
           </div>
         </section>
 
-        {/* ─── Mileage, month by month ─── */}
-        {mileage.byMonth.length > 0 ? (
+        {/* ─── Mileage, drive by drive ─── */}
+        {mileage.trips.length > 0 ? (
           <section className="mt-8">
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700 font-medium">
-              Mileage by month
+              Mileage by day
             </div>
             <h2 className="display mt-1 text-xl text-forest-900">
-              Drives, month by month
+              Every business drive
               <span className="ml-2 text-sm text-ink-muted">
                 {fmtUsdCents(trackedDeductionCents)}
               </span>
             </h2>
             <ul className="mt-3 grid gap-2">
-              {[...mileage.byMonth].reverse().map((m) => (
-                <li
-                  key={m.month}
-                  className="card p-4 flex items-center justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm text-forest-900 font-medium">
-                      {MONTH_LABELS[m.month - 1]}
+              {mileage.trips.map((t) => {
+                const dateLabel = new Intl.DateTimeFormat("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  timeZone: "UTC",
+                }).format(new Date(t.startedAt));
+                return (
+                  <li
+                    key={t.id}
+                    className="card p-4 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm text-forest-900 font-medium">
+                        {dateLabel}
+                      </div>
+                      <div className="text-[11px] text-ink-muted mt-0.5">
+                        {t.miles.toLocaleString(undefined, {
+                          maximumFractionDigits: 1,
+                        })}{" "}
+                        business mi
+                      </div>
                     </div>
-                    <div className="text-[11px] text-ink-muted mt-0.5">
-                      {m.miles.toLocaleString(undefined, {
-                        maximumFractionDigits: 1,
-                      })}{" "}
-                      business mi · {m.trips} {m.trips === 1 ? "drive" : "drives"}
+                    <div className="display text-base text-forest-900 tabular-nums shrink-0">
+                      {fmtUsdCents(t.cents)}
                     </div>
-                  </div>
-                  <div className="display text-base text-forest-900 tabular-nums shrink-0">
-                    {fmtUsdCents(m.cents)}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}
