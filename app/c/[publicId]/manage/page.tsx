@@ -45,12 +45,37 @@ export default async function ManageCompanyPage({
   // rows even for the manager, leaving the Team page blank).
   const admin = createServiceClient();
 
-  const { data: members } = await admin
+  // NOTE: company_members.user_id has NO foreign key to profiles (it points
+  // at auth.users), so PostgREST cannot resolve an embedded
+  // `profile:profiles(...)` select — that query errored and returned null,
+  // which silently blanked the entire roster (and made the manager look like
+  // a plain "member"). Fetch the member rows and their profiles separately,
+  // then stitch them together by user_id.
+  const { data: memberRows } = await admin
     .from("company_members")
-    .select(
-      "user_id, role, title, joined_at, profile:profiles(public_id, email, full_name)",
-    )
+    .select("user_id, role, title, joined_at")
     .eq("company_id", company.id);
+
+  type ProfileRow = {
+    id: string;
+    public_id: string;
+    email: string;
+    full_name: string | null;
+  };
+  const memberIds = (memberRows ?? []).map((m) => m.user_id);
+  let profileRows: ProfileRow[] = [];
+  if (memberIds.length) {
+    const { data } = await admin
+      .from("profiles")
+      .select("id, public_id, email, full_name")
+      .in("id", memberIds);
+    profileRows = (data ?? []) as ProfileRow[];
+  }
+  const profileById = new Map(profileRows.map((p) => [p.id, p]));
+  const members = (memberRows ?? []).map((m) => ({
+    ...m,
+    profile: profileById.get(m.user_id) ?? null,
+  }));
 
   const { data: invites } = await admin
     .from("invitations")
