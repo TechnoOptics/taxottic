@@ -535,7 +535,11 @@
 // stat band (readiness · mileage YTD · next deadline) opens the page on
 // "where do I stand", replacing the flat stack of equal cards. The lone
 // mileage tile folds into the band.
-const CACHE_VERSION = "v74";
+// v75: mileage now shows DAY-BY-DAY in the deduction lists — each
+// business drive is its own dated line in the Expenses month accordion
+// and a per-drive list on My Deductions, instead of a single monthly
+// rollup. (Mileage stays its own deduction stream; this is presentation.)
+const CACHE_VERSION = "v75";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
