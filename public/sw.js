@@ -548,7 +548,13 @@
 // opens THAT specific drive on the map — /mileage/business?trip=<id>
 // scopes the page to the one trip (map auto-fits to its route, list
 // shows its details) instead of dumping the user on the full mileage page.
-const CACHE_VERSION = "v77";
+// v78: Deduction explorer promoted to a main left-rail item ("Explore
+// deductions"; the existing tab renamed "My deductions"). The explorer
+// now also has a "Charitable giving & personal itemized deductions"
+// section explaining 501(c)(3) gifts are a §170 Schedule A deduction
+// (why they're not on the business Expenses page) with the cash /
+// non-cash / volunteer-mileage rules.
+const CACHE_VERSION = "v78";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

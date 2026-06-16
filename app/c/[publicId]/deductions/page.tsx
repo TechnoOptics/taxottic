@@ -151,6 +151,94 @@ export default async function DeductionsPage({ params }: { params: Params }) {
           </div>
         </section>
 
+        {/* Personal & charitable deductions. The master catalog below is
+            business (Schedule C). The deduction users most often ask
+            "where is this?" about — gifts to a 501(c)(3) — is a PERSONAL
+            Schedule A itemized deduction under §170, which is exactly why
+            it never appears on the business Expenses page. Surface it here
+            with the real rules + where to record it. */}
+        <section className="mt-8">
+          <div className="text-xs uppercase tracking-[0.2em] text-gold-700 font-medium">
+            Beyond the business · Schedule A
+          </div>
+          <h2 className="display mt-1 text-xl text-forest-900">
+            Charitable giving &amp; personal itemized deductions
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft max-w-2xl leading-relaxed">
+            Gifts to a qualified{" "}
+            <span className="font-medium text-forest-800">501(c)(3)</span>{" "}
+            charity are deductible on your personal Form 1040{" "}
+            <span className="font-medium text-forest-800">Schedule A</span>{" "}
+            when you itemize (IRC §170) — they&apos;re not a business
+            expense, which is why they don&apos;t show up on the Expenses
+            page. They only lower your tax if your total itemized
+            deductions beat the standard deduction.
+          </p>
+          <div className="mt-4 grid sm:grid-cols-3 gap-3">
+            <article className="card p-5">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                §170 · Cash
+              </div>
+              <h3 className="display mt-1 text-lg text-forest-900">
+                Cash donations
+              </h3>
+              <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                Deductible up to 60% of AGI for gifts to public charities.
+                Keep a bank record or receipt; any single gift of $250+
+                needs a written acknowledgment from the charity.
+              </p>
+            </article>
+            <article className="card p-5">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                §170 · Non-cash
+              </div>
+              <h3 className="display mt-1 text-lg text-forest-900">
+                Goods &amp; property
+              </h3>
+              <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                Clothing, equipment, even appreciated stock — deduct fair
+                market value. Over $500 total needs Form 8283; items over
+                $5,000 need a qualified appraisal.
+              </p>
+            </article>
+            <article className="card p-5">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                §170(j) · Mileage
+              </div>
+              <h3 className="display mt-1 text-lg text-forest-900">
+                Volunteer mileage
+              </h3>
+              <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                Driving for a charity is deductible at 14¢/mile (plus
+                parking and tolls). Your donated time and services
+                aren&apos;t deductible.
+              </p>
+            </article>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <a
+              href={`/onboarding/tax-profile?next=/c/${publicId}/deductions`}
+              className="btn-primary text-sm"
+            >
+              Record itemized deductions
+            </a>
+            <a
+              href={`/c/${publicId}/savings-goals`}
+              className="text-sm text-forest-700 hover:text-forest-900"
+            >
+              Charitable-bunching strategy &rarr;
+            </a>
+            <a
+              href="https://www.irs.gov/forms-pubs/about-publication-526"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-ink-muted underline underline-offset-2 hover:text-forest-700"
+            >
+              IRS Pub 526
+            </a>
+          </div>
+        </section>
+
         <DeductionExplorer
           deductions={filtered}
           totalCount={MASTER_DEDUCTIONS.length}
