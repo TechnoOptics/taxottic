@@ -443,6 +443,13 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="forecast" />
         </div>
 
+        {/* Two-column on lg+: the forecast narrative on the left, a sticky
+            "year-end moves" + quick-actions panel on the right. Below lg it
+            collapses to one column (the panel stacks at the end as a natural
+            "what to do next"). */}
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8 lg:items-start">
+          <div className="min-w-0">
+
         {/* Story hero: the human-language forecast.
             Banner copy is conditional on whether the user actually has
             data that paces (recurring rows). When everything logged is
@@ -798,9 +805,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </div>
         ) : null}
 
-        {/* Year-end suggestions: personalized moves the user can still make. */}
-        <YearEndSuggestionsCard suggestions={suggestions} />
-
         {/* Tax-savings playbook teaser → links to /savings-goals */}
         <Link
           href={`/c/${publicId}/savings-goals`}
@@ -990,27 +994,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
           />
         </section>
 
-        {/* Quick actions */}
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link href={`/c/${publicId}/income`} className="btn-ghost">
-            Add income
-          </Link>
-          <Link href={`/c/${publicId}/expenses`} className="btn-ghost">
-            Add expense
-          </Link>
-          <Link href={`/c/${publicId}/profile`} className="btn-ghost">
-            Edit business profile
-          </Link>
-          {isManager ? (
-            <Link href={`/c/${publicId}/manage`} className="btn-ghost">
-              + Invite employee
-            </Link>
-          ) : null}
-          <Link href={`/c/${publicId}/chat`} className="btn-ghost">
-            Open team chat
-          </Link>
-        </div>
-
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
           Taxottic provides tax forecasting and educational guidance. Numbers
           shown are estimates based on the IRS-published federal brackets for
@@ -1021,6 +1004,37 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
         <div className="mt-6">
           <ForecastDisclaimer variant="card" />
+        </div>
+          </div>
+
+          {/* Sticky action panel: the personalized year-end moves + the
+              per-company quick actions, always at hand while you read the
+              forecast on the left. */}
+          <aside
+            className="mt-8 lg:mt-8 lg:sticky space-y-4"
+            style={{ top: "calc(var(--app-header-h, 4rem) + 1.5rem)" }}
+          >
+            <YearEndSuggestionsCard suggestions={suggestions} />
+            <div className="flex flex-wrap gap-3">
+              <Link href={`/c/${publicId}/income`} className="btn-ghost">
+                Add income
+              </Link>
+              <Link href={`/c/${publicId}/expenses`} className="btn-ghost">
+                Add expense
+              </Link>
+              <Link href={`/c/${publicId}/profile`} className="btn-ghost">
+                Edit business profile
+              </Link>
+              {isManager ? (
+                <Link href={`/c/${publicId}/manage`} className="btn-ghost">
+                  + Invite employee
+                </Link>
+              ) : null}
+              <Link href={`/c/${publicId}/chat`} className="btn-ghost">
+                Open team chat
+              </Link>
+            </div>
+          </aside>
         </div>
       </section>
     </main>

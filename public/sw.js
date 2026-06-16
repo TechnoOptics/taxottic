@@ -566,7 +566,12 @@
 // v81: left-rail polish — company section header is now a serif monogram
 // chip (identity), and the active nav item gets a gold icon + stronger
 // gold ring + medium weight so the current page reads clearly.
-const CACHE_VERSION = "v81";
+// v82: Forecast two-column on lg+ — the narrative (hero, year-end view,
+// breakdown, chart) flows in the main column while a sticky right panel
+// holds the personalized "year-end moves" + quick actions. Uses the
+// width with intent instead of one long centered column; collapses to a
+// single column (panel last) below lg.
+const CACHE_VERSION = "v82";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
