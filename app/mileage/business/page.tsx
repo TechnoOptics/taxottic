@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { PageHeader } from "@/components/PageHeader";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import {
   MileageMap,
@@ -178,43 +179,47 @@ export default async function BusinessTripsPage({
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-6 sm:py-10">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          <Link
-            href="/mileage"
-            className="underline decoration-dotted hover:text-forest-900"
-          >
-            Mileage
-          </Link>{" "}
-          ·{" "}
-          {singleTrip ? (
+        <PageHeader
+          eyebrow={
             <>
               <Link
-                href="/mileage/business"
+                href="/mileage"
                 className="underline decoration-dotted hover:text-forest-900"
               >
-                Business trips
+                Mileage
               </Link>{" "}
-              · One drive
+              ·{" "}
+              {singleTrip ? (
+                <>
+                  <Link
+                    href="/mileage/business"
+                    className="underline decoration-dotted hover:text-forest-900"
+                  >
+                    Business trips
+                  </Link>{" "}
+                  · One drive
+                </>
+              ) : (
+                "Business trips"
+              )}
             </>
-          ) : (
-            "Business trips"
-          )}
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
-          {singleTrip ? "This business drive" : "Where the work took you"}
-        </h1>
-        <p className="mt-2 text-sm text-ink-soft max-w-2xl leading-relaxed">
-          {singleTrip ? (
-            "The drive you opened from Expenses, drawn on the map with its start, route, and end. Its mileage deduction is part of your Schedule C total."
-          ) : (
-            <>
-              Every drive you classified as{" "}
-              <span className="font-medium text-forest-800">business</span>,
-              drawn as a breadcrumb trail. The totals roll straight into
-              your Schedule C mileage deduction.
-            </>
-          )}
-        </p>
+          }
+          title={
+            singleTrip ? "This business drive" : "Where the work took you"
+          }
+          subtitle={
+            singleTrip ? (
+              "The drive you opened from Expenses, drawn on the map with its start, route, and end. Its mileage deduction is part of your Schedule C total."
+            ) : (
+              <>
+                Every drive you classified as{" "}
+                <span className="font-medium text-forest-800">business</span>,
+                drawn as a breadcrumb trail. The totals roll straight into your
+                Schedule C mileage deduction.
+              </>
+            )
+          }
+        />
 
         {!company ? (
           <p className="mt-6 text-sm text-ink-soft">
