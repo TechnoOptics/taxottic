@@ -575,7 +575,11 @@
 // serif title + optional subtitle + gold flourish) now drives Expenses,
 // My deductions, and the Mileage business-trips pages, ending the
 // eyebrow size/tracking + flourish drift between screens.
-const CACHE_VERSION = "v83";
+// v84: fold the logo-led headers (Forecast, Deduction explorer) into the
+// same <PageHeader> via an optional `logo` slot — they keep the company
+// logo but now share the identical eyebrow/title/flourish. Every content
+// screen is on one header primitive.
+const CACHE_VERSION = "v84";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
