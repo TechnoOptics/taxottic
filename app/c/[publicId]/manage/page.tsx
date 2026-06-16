@@ -32,7 +32,7 @@ export default async function ManageCompanyPage({
 
   const { data: company } = await supabase
     .from("companies")
-    .select("id, public_id, name, entity_type, state_code")
+    .select("id, public_id, name, entity_type, state_code, created_by")
     .eq("public_id", publicId)
     .single();
 
@@ -86,7 +86,10 @@ export default async function ManageCompanyPage({
     .is("accepted_at", null);
 
   const myRole = members?.find((m) => m.user_id === user.id)?.role;
-  const isManager = myRole === "manager";
+  // The account creator is always treated as the manager (safety net so the
+  // person who created the company can never be locked out of inviting
+  // teammates), mirroring the server-side gate in isManagerOf.
+  const isManager = myRole === "manager" || company.created_by === user.id;
 
   // One-shot: was an invite just created? If so, fetch the share link
   // from the cookie set by the action so we can render a copy card.

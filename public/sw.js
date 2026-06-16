@@ -605,7 +605,11 @@
 // embed: the query errored and returned null, blanking the roster regardless
 // of which client ran it. Now we fetch member rows and their profiles in two
 // queries and stitch them by user_id.
-const CACHE_VERSION = "v89";
+// v90: Team — the account creator is now always treated as the company
+// manager (a safety net in both the server invite/remove/revoke gate and the
+// /manage UI), so whoever created the company can never get locked out of
+// inviting teammates even if their membership row is ever missing or demoted.
+const CACHE_VERSION = "v90";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
