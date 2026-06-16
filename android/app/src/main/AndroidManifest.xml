@@ -91,14 +91,19 @@
 
          FOREGROUND_SERVICE_LOCATION is the typed permission
          Android 14+ (API 34) requires for a location-type
-         foreground service. ACTIVITY_RECOGNITION lets the plugin
-         tell driving apart from walking/cycling/stationary, so
-         trips < 200 m at walking pace are filtered before they
-         even reach the segmenter. -->
+         foreground service.
+
+         NOTE: we previously also declared ACTIVITY_RECOGNITION
+         (intended to tell driving apart from walking), but nothing
+         ever used it — the @capgo background-geolocation plugin
+         doesn't request it, and the eco-mode "is this a real
+         drive?" gate is done purely with the GPS distanceFilter,
+         not the Activity Recognition API. It was removed so the
+         app no longer triggers Google Play's Health-apps
+         declaration, which fires on that permission. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 </manifest>
