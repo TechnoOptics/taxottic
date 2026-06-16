@@ -122,14 +122,20 @@ export default async function MileagePage({
   // route's true start + end.
   const pointsByTrip = new Map<string, Pt[]>();
   if (company) {
-    const { data: tripData } = await admin
+    let tripQuery = admin
       .from("mileage_trips")
       .select(
         "id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents",
       )
       .eq("company_id", company.id)
       .eq("driver_user_id", viewingDriverId)
-      .gte("started_at", sinceIso)
+      .gte("started_at", sinceIso);
+    // Privacy: a manager reviewing a TEAMMATE's log only sees the drives
+    // that teammate marked BUSINESS — their personal + unclassified drives
+    // are nobody else's business. Viewing your OWN log still shows
+    // everything (you triage your own unclassified drives there).
+    if (!viewingSelf) tripQuery = tripQuery.eq("classification", "business");
+    const { data: tripData } = await tripQuery
       .order("started_at", { ascending: false })
       .limit(500);
     trips = (tripData ?? []) as unknown as ServerTripRow[];

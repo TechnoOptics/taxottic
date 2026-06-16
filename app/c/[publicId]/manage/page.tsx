@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
+import { PageHeader } from "@/components/PageHeader";
+import { formatCents } from "@/lib/tax/forecast";
 import {
   inviteMember,
   readAndClearLastInviteLink,
@@ -51,19 +54,54 @@ export default async function ManageCompanyPage({
   // from the cookie set by the action so we can render a copy card.
   const lastInviteLink = isManager ? await readAndClearLastInviteLink() : null;
 
+  // Per-member financials so the roster doubles as a "who's expensing /
+  // driving what" summary. Managers only. Mileage is BUSINESS-only — an
+  // employee's personal + unclassified drives stay private, matching the
+  // /mileage manager view.
+  const taxYear = new Date().getUTCFullYear();
+  let expRows: { user_id: string; amount_cents: number }[] = [];
+  let tripRows: {
+    driver_user_id: string;
+    distance_miles: number;
+    deduction_cents: number;
+  }[] = [];
+  if (isManager) {
+    const [e, t] = await Promise.all([
+      supabase
+        .from("monthly_expenses")
+        .select("user_id, amount_cents")
+        .eq("company_id", company.id)
+        .eq("tax_year", taxYear),
+      supabase
+        .from("mileage_trips")
+        .select("driver_user_id, distance_miles, deduction_cents")
+        .eq("company_id", company.id)
+        .eq("classification", "business")
+        .eq("tax_year", taxYear),
+    ]);
+    expRows = (e.data ?? []) as typeof expRows;
+    tripRows = (t.data ?? []) as typeof tripRows;
+  }
+  const expenseByUser = new Map<string, number>();
+  for (const r of expRows) {
+    expenseByUser.set(
+      r.user_id,
+      (expenseByUser.get(r.user_id) ?? 0) + Number(r.amount_cents || 0),
+    );
+  }
+  const mileageByUser = new Map<string, { miles: number; cents: number }>();
+  for (const r of tripRows) {
+    const cur = mileageByUser.get(r.driver_user_id) ?? { miles: 0, cents: 0 };
+    cur.miles += Number(r.distance_miles || 0);
+    cur.cents += Number(r.deduction_cents || 0);
+    mileageByUser.set(r.driver_user_id, cur);
+  }
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
-        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          Team
-        </div>
-        <h1 className="display mt-2 text-3xl text-forest-900">
-          {company.name}
-        </h1>
-        <div aria-hidden="true" className="gold-flourish mt-3">
-          <span />
-        </div>
+        <PageHeader eyebrow="Team" title={company.name} />
 
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="team" />
@@ -80,8 +118,8 @@ export default async function ManageCompanyPage({
             </h2>
             <p className="mt-2 text-sm text-ink-soft leading-relaxed">
               We saved the invitation. Send this link to your new teammate via
-              email, text, or whatever they actually open. They'll sign in with
-              the email you specified and join the team automatically.
+              email, text, or whatever they actually open. They&apos;ll sign in
+              with the email you specified and join the team automatically.
             </p>
             <CopyInviteLink url={lastInviteLink} />
           </section>
@@ -126,7 +164,7 @@ export default async function ManageCompanyPage({
             Bring someone onto the team.
           </h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-prose">
-            Tell us about your new hire. We'll generate a private welcome
+            Tell us about your new hire. We&apos;ll generate a private welcome
             link you can share. They sign in with the email you specify and
             are added to the team automatically; their job title and name
             come pre-filled.
@@ -313,35 +351,74 @@ export default async function ManageCompanyPage({
               return (
                 <li
                   key={m.user_id}
-                  className="flex items-center justify-between rounded-lg border border-forest-100 bg-white/60 px-4 py-3 text-sm"
+                  className="rounded-lg border border-forest-100 bg-white/60 px-4 py-3 text-sm"
                 >
-                  <div>
-                    <div className="font-medium text-forest-900">
-                      {profile?.full_name ?? profile?.email}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-forest-900 truncate">
+                        {profile?.full_name ?? profile?.email}
+                      </div>
+                      <div className="text-xs text-ink-muted mt-0.5">
+                        {[m.title, prettyRole(m.role), profile?.public_id]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
                     </div>
-                    <div className="text-xs text-ink-muted mt-0.5">
-                      {[
-                        m.title,
-                        prettyRole(m.role),
-                        profile?.public_id,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
+                    {isManager ? (
+                      <div className="flex items-center gap-4 shrink-0 flex-wrap">
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                            Expenses
+                          </div>
+                          <div className="text-sm text-forest-900 tabular-nums">
+                            {formatCents(expenseByUser.get(m.user_id) ?? 0)}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                            Business miles
+                          </div>
+                          <div className="text-sm text-forest-900 tabular-nums">
+                            {(
+                              mileageByUser.get(m.user_id)?.miles ?? 0
+                            ).toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}{" "}
+                            mi
+                            <span className="text-ink-muted">
+                              {" · "}
+                              {formatCents(
+                                mileageByUser.get(m.user_id)?.cents ?? 0,
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <Link
+                          href={`/c/${publicId}/expenses?emp=${m.user_id}`}
+                          className="text-xs text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2 whitespace-nowrap"
+                        >
+                          View expenses &rarr;
+                        </Link>
+                        {m.user_id !== user.id ? (
+                          <form action={removeMember}>
+                            <input
+                              type="hidden"
+                              name="company_id"
+                              value={company.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="user_id"
+                              value={m.user_id}
+                            />
+                            <button className="text-xs text-red-700 hover:text-red-900">
+                              Remove
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                  {isManager && m.user_id !== user.id ? (
-                    <form action={removeMember}>
-                      <input
-                        type="hidden"
-                        name="company_id"
-                        value={company.id}
-                      />
-                      <input type="hidden" name="user_id" value={m.user_id} />
-                      <button className="text-xs text-red-700 hover:text-red-900">
-                        Remove
-                      </button>
-                    </form>
-                  ) : null}
                 </li>
               );
             })}
