@@ -122,8 +122,20 @@ const COMPANY_ITEMS: {
     icon: <Path d="M4 17v3h16v-3M12 3v12m0 0l-4-4m4 4l4-4" />,
   },
   {
+    key: "explore",
+    label: "Explore deductions",
+    // The deduction explorer — ~1,000 IRS-sourced deductions, searchable
+    // and filtered to the company's entity type. Promoted to a top-level
+    // rail item (was only reachable via inline links from Forecast / My
+    // deductions). Compass = "explore what you can claim".
+    path: "deductions",
+    icon: (
+      <Path d="M12 3a9 9 0 100 18 9 9 0 000-18zm3.2 5.8l-2 5.4-5.4 2 2-5.4 5.4-2z" />
+    ),
+  },
+  {
     key: "deductions",
-    label: "Deductions",
+    label: "My deductions",
     path: "my-deductions",
     icon: <Path d="M6 4h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1zM14 4v5h5M9 13h6M9 17h6" />,
   },
