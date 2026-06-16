@@ -589,7 +589,13 @@
 // link. Privacy: a manager reviewing a teammate's /mileage log now only
 // sees BUSINESS drives — their personal + unclassified drives stay
 // private.
-const CACHE_VERSION = "v86";
+// v87: battery — the mileage tracker now accepts a recent cached OS-fused
+// fix (stale:true) by default instead of forcing a fresh GPS sample on
+// every trigger; per the team's own notes this is the biggest Samsung
+// battery win, and it can't affect trip distance/deduction. (Ships via
+// the web bundle, so no APK rebuild.) Eco mode (100m filter) still
+// available for more.
+const CACHE_VERSION = "v87";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
