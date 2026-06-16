@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { PageHeader } from "@/components/PageHeader";
+import { ImportConnectActions } from "@/components/ImportConnectActions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { formatCents } from "@/lib/tax/forecast";
@@ -124,6 +125,8 @@ export default async function ExpensesPage({
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="expenses" />
         </div>
+
+        <ImportConnectActions publicId={publicId} kind="expenses" />
 
         <div className="card mt-6 p-6">
           <div className="flex items-end justify-between gap-3 flex-wrap">

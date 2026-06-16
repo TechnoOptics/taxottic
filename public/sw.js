@@ -579,7 +579,11 @@
 // same <PageHeader> via an optional `logo` slot — they keep the company
 // logo but now share the identical eyebrow/title/flourish. Every content
 // screen is on one header primitive.
-const CACHE_VERSION = "v84";
+// v85: Income + Expenses each get an always-visible "Import (CSV) /
+// Connect an account" action row under the header (shared
+// ImportConnectActions) — previously these only showed in the empty
+// state. Income's header also moved onto the shared <PageHeader>.
+const CACHE_VERSION = "v85";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
