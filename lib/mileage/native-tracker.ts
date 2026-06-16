@@ -482,10 +482,16 @@ export async function startMileageTracking(
           "Logging your drive for the mileage deduction. Tap to open.",
         backgroundTitle: "Taxottic mileage",
         requestPermissions: true,
-        // eco accepts a cached fix from the OS-fused provider
-        // if it's recent enough; full mode forces a fresh GPS
-        // sample. Stale-OK is the bigger battery win on Samsung.
-        stale: eco,
+        // Accept a recent cached fix from the OS-fused provider instead
+        // of forcing a fresh GPS sample on every trigger. The team's own
+        // on-device notes call stale-OK "the bigger battery win on
+        // Samsung"; it's now ON by default (was eco-only) so the app is
+        // battery-friendly out of the box. Safe for capture: segmentation
+        // tolerates slightly-aged fixes and the trip DISTANCE + IRS
+        // deduction (derived point-to-point) are unaffected — only the
+        // exact timestamp of a fix can lag a beat. Eco mode still layers
+        // the bigger 100 m distanceFilter saving on top of this.
+        stale: true,
         distanceFilter,
       },
       (location, error) => {
