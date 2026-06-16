@@ -563,7 +563,10 @@
 // max-w-none, which stretched a single card to ~2,500px on a 3000px+
 // display and pushed buttons off-screen). One unlayered CSS rule; rail
 // stays attached on laptops.
-const CACHE_VERSION = "v80";
+// v81: left-rail polish — company section header is now a serif monogram
+// chip (identity), and the active nav item gets a gold icon + stronger
+// gold ring + medium weight so the current page reads clearly.
+const CACHE_VERSION = "v81";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

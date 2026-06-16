@@ -292,11 +292,18 @@ export function LeftRail({
         className={
           baseLink +
           (onDashboard
-            ? " bg-cream text-forest-900 ring-1 ring-gold-200"
+            ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
             : " text-forest-800 hover:bg-cream")
         }
       >
-        <span className="shrink-0 text-forest-700 group-hover/item:text-forest-900">
+        <span
+          className={
+            "shrink-0 " +
+            (onDashboard
+              ? "text-gold-600"
+              : "text-forest-700 group-hover/item:text-forest-900")
+          }
+        >
           <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />
         </span>
         <span>Dashboard</span>
@@ -381,14 +388,25 @@ export function LeftRail({
   const companySection =
     activeCompany == null ? null : (
       <div className="mt-3 grid gap-1">
-        {/* Company name as section header. Gold-tinted caps so it
-            reads as a label, not a clickable link. Truncates on
-            long names — full name in the title attribute for hover. */}
+        {/* Company identity chip as the section header: a serif monogram
+            in a navy tile (gold letter + hairline gold ring, echoing the
+            dashboard company card) next to the gold-caps name. Gives the
+            per-company section a sense of "whose books am I in" instead of
+            a bare text label. Truncates on long names; full name on hover. */}
         <div
-          className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium truncate"
+          className="flex items-center gap-2.5 px-2 pt-2 pb-1 min-w-0"
           title={activeCompany.name}
         >
-          {activeCompany.name}
+          <span
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-forest-900 text-gold-300 text-[13px] leading-none ring-1 ring-gold-300/40"
+            style={{ fontFamily: "var(--font-display)" }}
+            aria-hidden="true"
+          >
+            {activeCompany.name.charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0 truncate text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+            {activeCompany.name}
+          </span>
         </div>
         <ul className="grid gap-1" role="navigation">
           {COMPANY_ITEMS.map((item) => {
@@ -403,12 +421,19 @@ export function LeftRail({
                   className={
                     baseLink +
                     (active
-                      ? " bg-cream text-forest-900 ring-1 ring-gold-200"
+                      ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
                       : " text-forest-800 hover:bg-cream")
                   }
                   title={mode === "rail" ? item.label : undefined}
                 >
-                  <span className="shrink-0 text-forest-700 group-hover/item:text-forest-900">
+                  <span
+                    className={
+                      "shrink-0 " +
+                      (active
+                        ? "text-gold-600"
+                        : "text-forest-700 group-hover/item:text-forest-900")
+                    }
+                  >
                     {item.icon}
                   </span>
                   <span className="min-w-0 truncate">{item.label}</span>
