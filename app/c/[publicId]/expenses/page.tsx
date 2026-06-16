@@ -290,7 +290,7 @@ export default async function ExpensesPage({
                             return (
                               <li key={t.id}>
                                 <Link
-                                  href="/mileage"
+                                  href={`/mileage/business?trip=${t.id}`}
                                   className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border border-dashed border-gold-200 bg-gold-50/50 hover:bg-gold-50"
                                 >
                                   <span className="flex items-center gap-2 min-w-0">
@@ -303,7 +303,7 @@ export default async function ExpensesPage({
                                       {t.miles.toLocaleString(undefined, {
                                         maximumFractionDigits: 1,
                                       })}{" "}
-                                      mi
+                                      mi · view on map
                                     </span>
                                   </span>
                                   <span className="display text-sm text-emerald-700 tabular-nums shrink-0">

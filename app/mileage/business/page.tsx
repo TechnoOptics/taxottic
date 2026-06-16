@@ -25,7 +25,7 @@ import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 
 export const dynamic = "force-dynamic";
 
-type SP = Promise<{ range?: string }>;
+type SP = Promise<{ range?: string; trip?: string }>;
 
 const RANGES: Record<
   string,
@@ -65,7 +65,14 @@ export default async function BusinessTripsPage({
   searchParams: SP;
 }) {
   const { user, admin } = await requireUserWithAdmin();
-  const { range = "ytd" } = await searchParams;
+  const { range = "ytd", trip: tripId } = await searchParams;
+  // Single-trip focus: when the user opens a specific drive from the
+  // Expenses mileage line (?trip=<id>), scope the whole page to just
+  // that one drive — the map auto-fits to its bounds and the list shows
+  // its details. The range filter is dropped in this mode (the trip can
+  // predate any preset window). Still scoped to the caller's own drives
+  // (driver_user_id) so a guessed id can't surface someone else's trip.
+  const singleTrip = typeof tripId === "string" && tripId.length > 0;
   const rangeCfg = RANGES[range] ?? RANGES.ytd;
   const sinceIso = rangeCfg.sinceFn(new Date()).toISOString();
 
@@ -96,17 +103,20 @@ export default async function BusinessTripsPage({
     // hydrate the breadcrumbs we'll actually render — important at
     // YTD scale where a heavy-driving business can have thousands
     // of trips.
-    const { data: tripData } = await admin
+    let tripQuery = admin
       .from("mileage_trips")
       .select(
         "id, started_at, ended_at, distance_miles, classification, deduction_cents, start_place_id, end_place_id",
       )
       .eq("company_id", company.id)
       .eq("driver_user_id", user.id)
-      .eq("classification", "business")
-      .gte("started_at", sinceIso)
+      .eq("classification", "business");
+    tripQuery = singleTrip
+      ? tripQuery.eq("id", tripId)
+      : tripQuery.gte("started_at", sinceIso);
+    const { data: tripData } = await tripQuery
       .order("started_at", { ascending: false })
-      .limit(1000);
+      .limit(singleTrip ? 1 : 1000);
     trips = (tripData ?? []) as unknown as TripRow[];
 
     if (trips.length > 0) {
@@ -175,15 +185,35 @@ export default async function BusinessTripsPage({
           >
             Mileage
           </Link>{" "}
-          · Business trips
+          ·{" "}
+          {singleTrip ? (
+            <>
+              <Link
+                href="/mileage/business"
+                className="underline decoration-dotted hover:text-forest-900"
+              >
+                Business trips
+              </Link>{" "}
+              · One drive
+            </>
+          ) : (
+            "Business trips"
+          )}
         </div>
         <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
-          Where the work took you
+          {singleTrip ? "This business drive" : "Where the work took you"}
         </h1>
         <p className="mt-2 text-sm text-ink-soft max-w-2xl leading-relaxed">
-          Every drive you classified as <span className="font-medium text-forest-800">business</span>,
-          drawn as a breadcrumb trail. The totals roll straight into
-          your Schedule C mileage deduction.
+          {singleTrip ? (
+            "The drive you opened from Expenses, drawn on the map with its start, route, and end. Its mileage deduction is part of your Schedule C total."
+          ) : (
+            <>
+              Every drive you classified as{" "}
+              <span className="font-medium text-forest-800">business</span>,
+              drawn as a breadcrumb trail. The totals roll straight into
+              your Schedule C mileage deduction.
+            </>
+          )}
         </p>
 
         {!company ? (
@@ -194,25 +224,37 @@ export default async function BusinessTripsPage({
           <>
             {/* Range picker — same shape as /mileage's, plus a YTD
                 preset because the business view is the one users
-                hit for tax-year totals. */}
-            <div className="mt-6 flex flex-wrap gap-2">
-              {(Object.entries(RANGES) as [string, (typeof RANGES)[string]][]).map(
-                ([k, v]) => (
-                  <Link
-                    key={k}
-                    href={`/mileage/business?range=${k}`}
-                    className={
-                      "text-xs px-3 h-8 inline-flex items-center rounded-full border " +
-                      (k === range
-                        ? "bg-forest-900 text-cream border-forest-900"
-                        : "border-forest-200 text-forest-800 hover:border-gold-300")
-                    }
-                  >
-                    {v.label}
-                  </Link>
-                ),
-              )}
-            </div>
+                hit for tax-year totals. In single-trip mode the range
+                is irrelevant, so we swap it for a "back to all" link. */}
+            {singleTrip ? (
+              <div className="mt-6">
+                <Link
+                  href="/mileage/business"
+                  className="text-xs px-3 h-8 inline-flex items-center rounded-full border border-forest-200 text-forest-800 hover:border-gold-300"
+                >
+                  &larr; All business trips
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-6 flex flex-wrap gap-2">
+                {(Object.entries(RANGES) as [string, (typeof RANGES)[string]][]).map(
+                  ([k, v]) => (
+                    <Link
+                      key={k}
+                      href={`/mileage/business?range=${k}`}
+                      className={
+                        "text-xs px-3 h-8 inline-flex items-center rounded-full border " +
+                        (k === range
+                          ? "bg-forest-900 text-cream border-forest-900"
+                          : "border-forest-200 text-forest-800 hover:border-gold-300")
+                      }
+                    >
+                      {v.label}
+                    </Link>
+                  ),
+                )}
+              </div>
+            )}
 
             <div className="mt-6 grid sm:grid-cols-3 gap-3">
               <Stat
@@ -247,21 +289,44 @@ export default async function BusinessTripsPage({
             </h2>
             {trips.length === 0 ? (
               <div className="card mt-3 p-6 text-center">
-                <p className="text-sm text-ink-soft">
-                  No business drives in {rangeCfg.label.toLowerCase()}.
-                </p>
-                <p className="mt-2 text-xs text-ink-muted max-w-md mx-auto leading-relaxed">
-                  When the phone logs a trip and you mark it{" "}
-                  <span className="text-forest-800 font-medium">business</span>,
-                  the breadcrumb shows up here. Pop over to{" "}
-                  <Link
-                    href="/mileage"
-                    className="text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"
-                  >
-                    Mileage
-                  </Link>{" "}
-                  to triage any drives waiting for review.
-                </p>
+                {singleTrip ? (
+                  <>
+                    <p className="text-sm text-ink-soft">
+                      That drive couldn&apos;t be found.
+                    </p>
+                    <p className="mt-2 text-xs text-ink-muted max-w-md mx-auto leading-relaxed">
+                      It may have been deleted or re-classified since you
+                      logged the expense.{" "}
+                      <Link
+                        href="/mileage/business"
+                        className="text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"
+                      >
+                        See all business trips
+                      </Link>
+                      .
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-ink-soft">
+                      No business drives in {rangeCfg.label.toLowerCase()}.
+                    </p>
+                    <p className="mt-2 text-xs text-ink-muted max-w-md mx-auto leading-relaxed">
+                      When the phone logs a trip and you mark it{" "}
+                      <span className="text-forest-800 font-medium">
+                        business
+                      </span>
+                      , the breadcrumb shows up here. Pop over to{" "}
+                      <Link
+                        href="/mileage"
+                        className="text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"
+                      >
+                        Mileage
+                      </Link>{" "}
+                      to triage any drives waiting for review.
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <ul className="mt-3 grid gap-2">
