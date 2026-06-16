@@ -544,7 +544,11 @@
 // ::before top-edge gold line; now a hairline border + soft shadow
 // (lighter-navy in dark). One change brings every screen that uses
 // `.card` into the calm system at once.
-const CACHE_VERSION = "v76";
+// v77: clicking a mileage deduction line (Expenses + My Deductions) now
+// opens THAT specific drive on the map — /mileage/business?trip=<id>
+// scopes the page to the one trip (map auto-fits to its route, list
+// shows its details) instead of dumping the user on the full mileage page.
+const CACHE_VERSION = "v77";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

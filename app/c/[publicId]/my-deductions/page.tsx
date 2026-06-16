@@ -318,24 +318,26 @@ export default async function MyDeductionsPage({
                   timeZone: "UTC",
                 }).format(new Date(t.startedAt));
                 return (
-                  <li
-                    key={t.id}
-                    className="card p-4 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm text-forest-900 font-medium">
-                        {dateLabel}
+                  <li key={t.id}>
+                    <Link
+                      href={`/mileage/business?trip=${t.id}`}
+                      className="card card-hover p-4 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm text-forest-900 font-medium">
+                          {dateLabel}
+                        </div>
+                        <div className="text-[11px] text-ink-muted mt-0.5">
+                          {t.miles.toLocaleString(undefined, {
+                            maximumFractionDigits: 1,
+                          })}{" "}
+                          business mi · view on map
+                        </div>
                       </div>
-                      <div className="text-[11px] text-ink-muted mt-0.5">
-                        {t.miles.toLocaleString(undefined, {
-                          maximumFractionDigits: 1,
-                        })}{" "}
-                        business mi
+                      <div className="display text-base text-forest-900 tabular-nums shrink-0">
+                        {fmtUsdCents(t.cents)}
                       </div>
-                    </div>
-                    <div className="display text-base text-forest-900 tabular-nums shrink-0">
-                      {fmtUsdCents(t.cents)}
-                    </div>
+                    </Link>
                   </li>
                 );
               })}
