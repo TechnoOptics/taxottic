@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
+import { MobileOnly } from "@/components/MobileOnly";
 import { TrackerStatus } from "@/components/mileage/TrackerStatus";
 import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
@@ -268,7 +269,12 @@ export default async function MileagePage({
                 you can't flip another driver's phone tracker. */}
             {viewingSelf ? (
               <div className="mt-4">
-                <AutoTrackToggle companyId={company.id} />
+                <MobileOnly
+                  title="Automatic mileage tracking"
+                  description="Taxottic uses your phone's GPS to detect drives and log them in the background — this runs only in the Taxottic mobile app. On the web you can still add drives by hand below."
+                >
+                  <AutoTrackToggle companyId={company.id} />
+                </MobileOnly>
               </div>
             ) : null}
 

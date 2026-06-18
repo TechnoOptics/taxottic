@@ -609,7 +609,12 @@
 // manager (a safety net in both the server invite/remove/revoke gate and the
 // /manage UI), so whoever created the company can never get locked out of
 // inviting teammates even if their membership row is ever missing or demoted.
-const CACHE_VERSION = "v90";
+// v91: native-only gating — a reusable <MobileOnly> gate now fences genuinely
+// native capabilities to the mobile app (automatic GPS mileage tracking, watch
+// pairing); on the web those controls are replaced by a tasteful "in the
+// mobile app" card. Makes the iOS app visibly do things the website can't,
+// keeping it clear of App Store Review Guideline 4.2 (Minimum Functionality).
+const CACHE_VERSION = "v91";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

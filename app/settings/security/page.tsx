@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { PasskeyRegisterButton } from "@/components/PasskeyRegisterButton";
 import { TestPushButton } from "@/components/TestPushButton";
 import { WatchPairForm } from "@/components/WatchPairForm";
+import { MobileOnly } from "@/components/MobileOnly";
 import { deletePasskey } from "./actions";
 import { revokeWatchDevice } from "../actions";
 
@@ -112,7 +113,12 @@ export default async function SecuritySettingsPage() {
             account. Codes expire in about two minutes.
           </p>
           <div className="mt-5">
-            <WatchPairForm />
+            <MobileOnly
+              title="Pair from the Taxottic phone app"
+              description="Watch pairing happens on your phone. Open the Taxottic app on your iPhone or Android, go to Settings → Sign-in & security, and enter the six-digit code from your watch."
+            >
+              <WatchPairForm />
+            </MobileOnly>
           </div>
 
           {pairedWatches.length > 0 ? (
