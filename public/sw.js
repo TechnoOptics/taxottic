@@ -614,7 +614,13 @@
 // pairing); on the web those controls are replaced by a tasteful "in the
 // mobile app" card. Makes the iOS app visibly do things the website can't,
 // keeping it clear of App Store Review Guideline 4.2 (Minimum Functionality).
-const CACHE_VERSION = "v91";
+// v92: login — the email path now reveals a "6-digit code" field after the
+// magic link is sent (verifyOtp), so anyone who'd rather type a code than
+// open their inbox can, and — paired with a Supabase test OTP on the demo
+// account — the App Store / Play reviewer can sign in without clicking a link
+// in a mailbox they don't control (a hard requirement for review of a
+// passwordless, login-gated app).
+const CACHE_VERSION = "v92";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

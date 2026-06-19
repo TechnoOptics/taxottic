@@ -22,6 +22,23 @@ export default function LoginPage() {
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
+  // Once the magic-link email is sent we also reveal a "enter the
+  // 6-digit code" path. The Supabase magic-link email carries a code
+  // ({{ .Token }}) alongside the link, and verifyOtp accepts it. This
+  // matters for two audiences: (1) anyone who'd rather type a code than
+  // bounce to their inbox, and (2) the App Store / Play reviewer, who
+  // can't click a link delivered to a mailbox they don't control — we
+  // pair this with a Supabase test OTP on the review account so they
+  // sign in with a fixed code. See the App Review notes in App Store
+  // Connect. Tracked separately from `status` so a failed code attempt
+  // doesn't reset the "link sent" state or collide with the email
+  // field's own error styling.
+  const [linkSent, setLinkSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeStatus, setCodeStatus] = useState<"idle" | "verifying" | "error">(
+    "idle",
+  );
+  const [codeError, setCodeError] = useState<string | null>(null);
   // True when the user arrived from "Switch accounts" in the profile menu
   // (via /auth/signout?next=/login?force_picker=1). When set we (a) show a
   // "Choose an account" header so the user knows the picker will appear,
@@ -113,6 +130,31 @@ export default function LoginPage() {
       return;
     }
     setStatus("sent");
+    setLinkSent(true);
+  }
+
+  // Verify the 6-digit code from the magic-link email (or the Supabase
+  // test OTP configured for the App Review demo account). On success the
+  // Supabase client persists the session client-side, so we hard-navigate
+  // to the post-login destination the same way the /auth/callback handler
+  // would after a link click.
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    setCodeStatus("verifying");
+    setCodeError(null);
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: code.trim(),
+      type: "email",
+    });
+    if (error) {
+      setCodeError(error.message);
+      setCodeStatus("error");
+      return;
+    }
+    const url = new URL(window.location.href);
+    const next = url.searchParams.get("next") ?? "/dashboard";
+    window.location.assign(next);
   }
 
   // Use Supabase's hosted OAuth flow. Earlier we shipped an "OAuth on
@@ -380,10 +422,58 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {status === "sent" && (
-            <p className="mt-4 text-sm text-forest-700">
-              Check your inbox for the sign-in link.
-            </p>
+          {linkSent && (
+            <div className="mt-4 grid gap-3">
+              <p className="text-sm text-forest-700">
+                Check your inbox for the sign-in link — or enter the 6-digit
+                code from that email below.
+              </p>
+              <form onSubmit={verifyCode} className="grid gap-3" noValidate>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  required
+                  placeholder="6-digit code"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    if (codeStatus === "error") {
+                      setCodeStatus("idle");
+                      setCodeError(null);
+                    }
+                  }}
+                  aria-invalid={codeStatus === "error" ? true : undefined}
+                  aria-describedby={
+                    codeStatus === "error" ? "otp-code-error" : undefined
+                  }
+                  className={
+                    "input text-center tracking-[0.4em] " +
+                    (codeStatus === "error"
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                      : "")
+                  }
+                />
+                {codeStatus === "error" && codeError ? (
+                  <p
+                    id="otp-code-error"
+                    role="alert"
+                    className="text-xs text-red-700 -mt-1"
+                  >
+                    {codeError}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={codeStatus === "verifying"}
+                  className="btn-primary w-full"
+                >
+                  {codeStatus === "verifying" ? "Verifying..." : "Verify code"}
+                </button>
+              </form>
+            </div>
           )}
           {/* OAuth-callback errors still surface here (separate from the
               inline magic-link error above) since they're not tied to a
