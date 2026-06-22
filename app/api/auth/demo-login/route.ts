@@ -27,7 +27,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   const demoEmail = process.env.REVIEW_DEMO_EMAIL?.trim().toLowerCase();
-  const demoCode = process.env.REVIEW_DEMO_CODE;
+  // .trim() both: env values added via some CLIs/shell pipes pick up a
+  // trailing newline, which would otherwise make the strict compare below
+  // fail even when the configured code looks right.
+  const demoCode = process.env.REVIEW_DEMO_CODE?.trim();
   // Feature disabled unless explicitly configured.
   if (!demoEmail || !demoCode) {
     return NextResponse.json({ error: "not_enabled" }, { status: 404 });
