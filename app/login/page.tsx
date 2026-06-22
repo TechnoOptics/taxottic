@@ -39,6 +39,13 @@ export default function LoginPage() {
     "idle",
   );
   const [codeError, setCodeError] = useState<string | null>(null);
+  // Reveal the 6-digit code field on demand, independent of whether the
+  // magic-link send succeeded. Needed because some valid-format emails are
+  // rejected by the provider's deliverability check (e.g. an address whose
+  // mailbox doesn't exist) — and the App Store / Play review demo account is
+  // exactly that. The code itself is verified separately (verifyOtp, or the
+  // demo-login route), so the send succeeding isn't a prerequisite.
+  const [showCodeEntry, setShowCodeEntry] = useState(false);
   // True when the user arrived from "Switch accounts" in the profile menu
   // (via /auth/signout?next=/login?force_picker=1). When set we (a) show a
   // "Choose an account" header so the user knows the picker will appear,
@@ -442,11 +449,25 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {linkSent && (
+          {/* Always-available code entry — works even if the magic-link
+              send was rejected (e.g. a non-deliverable address like the
+              store-review demo account). The code is verified separately. */}
+          {!linkSent && !showCodeEntry ? (
+            <button
+              type="button"
+              onClick={() => setShowCodeEntry(true)}
+              className="mt-3 w-full text-center text-xs text-ink-muted hover:text-forest-900 underline underline-offset-2"
+            >
+              Have a sign-in code? Enter it
+            </button>
+          ) : null}
+
+          {(linkSent || showCodeEntry) && (
             <div className="mt-4 grid gap-3">
               <p className="text-sm text-forest-700">
-                Check your inbox for the sign-in link — or enter the 6-digit
-                code from that email below.
+                {linkSent
+                  ? "Check your inbox for the sign-in link — or enter the 6-digit code from that email below."
+                  : "Enter your 6-digit sign-in code below."}
               </p>
               <form onSubmit={verifyCode} className="grid gap-3" noValidate>
                 <input
