@@ -630,7 +630,12 @@
 // dashboard Pro upsell, UserMenu "Billing & plan", /billing + /pricing buy
 // buttons) is now hidden inside the native app via <WebOnly>. Subscriptions
 // run through Stripe on the web (not Apple IAP); the app is view+use only.
-const CACHE_VERSION = "v94";
+// v95: login — the 6-digit code field is now reachable via an "Have a
+// sign-in code? Enter it" affordance that doesn't require the magic-link
+// send to succeed. Fixes store-review sign-in: the demo account's address
+// isn't deliverable, so signInWithOtp 400s, but the code (verified by the
+// demo-login route) must still be enterable.
+const CACHE_VERSION = "v95";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
