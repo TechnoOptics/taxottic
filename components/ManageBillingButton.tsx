@@ -1,8 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useIsNativeApp } from "@/components/MobileOnly";
 
+// Hidden inside the native app (App Store Guideline 3.1.1): opening the
+// Stripe billing portal is a purchase/management control, which can't
+// appear in a non-IAP WebView app. Subscribers manage billing on the web.
 export function ManageBillingButton() {
+  const isNative = useIsNativeApp();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +26,8 @@ export function ManageBillingButton() {
       setPending(false);
     }
   }
+
+  if (isNative !== false) return null;
 
   return (
     <div>

@@ -16,6 +16,7 @@ import { getActivePlan } from "@/lib/plans/usage";
 import { getBalance, topUpRemaining } from "@/lib/plans/credits";
 import { CheckoutButton } from "@/components/CheckoutButton";
 import { ManageBillingButton } from "@/components/ManageBillingButton";
+import { WebOnly } from "@/components/WebOnly";
 import { setAutoTopUpAction } from "./actions";
 
 export default async function BillingPage({
@@ -54,6 +55,28 @@ export default async function BillingPage({
         <h1 className="display mt-2 text-3xl text-forest-900">
           {plan === "free" ? "Choose your plan" : `You're on ${planLabel(plan)}`}
         </h1>
+
+        {/* Native app (App Store Guideline 3.1.1): no in-app purchase
+            mechanism. The buy/manage controls below are already hidden on
+            native (CheckoutButton / ManageBillingButton render nothing);
+            this notice tells the user where plan changes live. */}
+        <WebOnly
+          fallback={
+            <div className="card mt-5 p-5">
+              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+                Manage on the web
+              </div>
+              <p className="mt-1.5 text-sm text-ink-soft leading-relaxed">
+                Plan changes and credits are handled at{" "}
+                <span className="font-medium text-forest-800">taxottic.com</span>{" "}
+                in your browser. Anything you buy there unlocks here
+                automatically — just sign in with the same account.
+              </p>
+            </div>
+          }
+        >
+          {null}
+        </WebOnly>
 
         {status === "success" ? (
           <p className="mt-3 text-sm text-emerald-800">

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FeedbackModal } from "./FeedbackModal";
 import { ThemeToggle } from "./ThemeToggle";
+import { WebOnly } from "./WebOnly";
 
 type Platform = "user" | "enterprise" | "hq";
 
@@ -289,9 +290,13 @@ export function UserMenu({
                   <MenuLink href="/reminders" onClick={() => setOpen(false)}>
                     Reminders
                   </MenuLink>
-                  <MenuLink href="/billing" onClick={() => setOpen(false)}>
-                    Billing &amp; plan
-                  </MenuLink>
+                  {/* 3.1.1: billing/plan management is web-only — hidden
+                      in the native app (Stripe, not Apple IAP). */}
+                  <WebOnly>
+                    <MenuLink href="/billing" onClick={() => setOpen(false)}>
+                      Billing &amp; plan
+                    </MenuLink>
+                  </WebOnly>
                   <MenuLink
                     href="/settings/security"
                     onClick={() => setOpen(false)}

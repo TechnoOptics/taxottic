@@ -20,6 +20,7 @@ import { GoalDismissButton } from "@/components/GoalDismissButton";
 import { purgeExpiredRecycleBin } from "@/app/actions/recycle-bin";
 import { ReminderDismissButton } from "@/components/ReminderDismissButton";
 import { ReadinessHelp } from "@/components/ReadinessHelp";
+import { WebOnly } from "@/components/WebOnly";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -811,14 +812,26 @@ export default async function DashboardPage() {
                 + New company
               </Link>
             ) : (
-              <Link
-                href="/billing?reason=company_limit"
-                className="text-sm text-ink-muted hover:text-forest-900 inline-flex items-center gap-1.5 whitespace-nowrap"
-                title={newCompanyTooltip}
+              // 3.1.1: the upgrade upsell links to billing — web only. In
+              // the native app, state the free-plan limit without a route
+              // to purchase.
+              <WebOnly
+                fallback={
+                  <span className="text-sm text-ink-muted inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <span aria-hidden="true">🔒</span>
+                    Free plan: 1 company
+                  </span>
+                }
               >
-                <span aria-hidden="true">🔒</span>
-                + New company (Pro)
-              </Link>
+                <Link
+                  href="/billing?reason=company_limit"
+                  className="text-sm text-ink-muted hover:text-forest-900 inline-flex items-center gap-1.5 whitespace-nowrap"
+                  title={newCompanyTooltip}
+                >
+                  <span aria-hidden="true">🔒</span>
+                  + New company (Pro)
+                </Link>
+              </WebOnly>
             )}
           </div>
           <ul className="mt-4 grid gap-3">

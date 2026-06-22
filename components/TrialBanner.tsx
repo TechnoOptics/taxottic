@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { TrialState } from "@/lib/plans/usage";
+import { WebOnly } from "@/components/WebOnly";
 
 /**
  * Top-of-page banner showing trial countdown or expired state.
@@ -11,10 +12,34 @@ import type { TrialState } from "@/lib/plans/usage";
  *             returns 'free' once trial_end passes) but seeing this
  *             explicitly cued helps them remember why their AI just
  *             stopped working.
+ *
+ * The whole banner links to /billing, so on native (App Store
+ * Guideline 3.1.1) we swap it for a plain, non-tappable status line via
+ * <WebOnly> — the user still sees their trial state, with no in-app
+ * route to a purchase.
  */
 export function TrialBanner({ trial }: { trial: TrialState }) {
   if (trial.kind === "none") return null;
 
+  const statusText =
+    trial.kind === "expired"
+      ? "Your free trial has ended."
+      : trial.daysRemaining === 1
+        ? "1 day left on your free trial."
+        : `${trial.daysRemaining} days left on your free trial.`;
+  const nativeFallback = (
+    <div className="mt-4 rounded-xl border border-forest-100 bg-cream/50 px-4 py-3 flex items-center gap-3 flex-wrap">
+      <span className="text-[10px] uppercase tracking-[0.2em] font-medium text-forest-700">
+        {trial.kind === "expired" ? "Trial ended" : "Trial active"}
+      </span>
+      <span className="text-sm text-forest-900">{statusText}</span>
+    </div>
+  );
+
+  return <WebOnly fallback={nativeFallback}>{renderBanner(trial)}</WebOnly>;
+}
+
+function renderBanner(trial: Extract<TrialState, { kind: "expired" | "active" }>) {
   if (trial.kind === "expired") {
     return (
       <Link
