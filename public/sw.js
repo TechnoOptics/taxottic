@@ -620,7 +620,12 @@
 // account — the App Store / Play reviewer can sign in without clicking a link
 // in a mailbox they don't control (a hard requirement for review of a
 // passwordless, login-gated app).
-const CACHE_VERSION = "v92";
+// v93: review sign-in — the 6-digit code field now also routes through a
+// server bypass (/api/auth/demo-login) that signs in one hardwired demo
+// account when a fixed code is presented, gated behind REVIEW_DEMO_EMAIL/
+// REVIEW_DEMO_CODE env vars (off otherwise). Lets a store reviewer reach a
+// seeded demo without inbox access; everyday users fall through to OTP.
+const CACHE_VERSION = "v93";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
