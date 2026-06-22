@@ -142,6 +142,28 @@ export default function LoginPage() {
     e.preventDefault();
     setCodeStatus("verifying");
     setCodeError(null);
+    const url = new URL(window.location.href);
+    const next = url.searchParams.get("next") ?? "/dashboard";
+
+    // App Store / Play review sign-in: a server route validates a fixed
+    // code for the single review demo account and writes the session
+    // cookies. It returns a non-2xx (404 when the feature is off, 422 for
+    // any other email/code) so everyday users fall straight through to the
+    // normal OTP verification below. See app/api/auth/demo-login/route.ts.
+    try {
+      const res = await fetch("/api/auth/demo-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: code.trim() }),
+      });
+      if (res.ok) {
+        window.location.assign(next);
+        return;
+      }
+    } catch {
+      // Network hiccup reaching the demo route — fall through to normal OTP.
+    }
+
     const { error } = await supabase.auth.verifyOtp({
       email,
       token: code.trim(),
@@ -152,8 +174,6 @@ export default function LoginPage() {
       setCodeStatus("error");
       return;
     }
-    const url = new URL(window.location.href);
-    const next = url.searchParams.get("next") ?? "/dashboard";
     window.location.assign(next);
   }
 
