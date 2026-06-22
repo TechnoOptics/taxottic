@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { WebOnly } from "@/components/WebOnly";
 import { PLAN_LIMITS, PLAN_PRICING, isUnlimited } from "@/lib/plans/limits";
 
 export const metadata = {
@@ -491,14 +492,41 @@ function TierCard({ tier, anchor }: { tier: TierKey; anchor?: string }) {
         </span>
       </div>
 
-      <Link
-        href={tier === "free" ? "/login" : `/login?next=/billing&plan=${tier}`}
-        className={
-          "mt-4 " + (isFeatured ? "btn-primary" : "btn-ghost") + " w-full text-center"
-        }
-      >
-        {tier === "free" ? "Start free" : `Choose ${tier}`}
-      </Link>
+      {tier === "free" ? (
+        // "Start free" is sign-in only (no purchase), fine everywhere.
+        <Link
+          href="/login"
+          className={
+            "mt-4 " +
+            (isFeatured ? "btn-primary" : "btn-ghost") +
+            " w-full text-center"
+          }
+        >
+          Start free
+        </Link>
+      ) : (
+        // Paid CTAs funnel to billing — web only (App Store 3.1.1). The
+        // gate is client-side, so crawlers still index the CTA (SEO); the
+        // native app shows a non-tappable note instead.
+        <WebOnly
+          fallback={
+            <span className="mt-4 block w-full text-center text-xs text-ink-muted">
+              Subscribe at taxottic.com
+            </span>
+          }
+        >
+          <Link
+            href={`/login?next=/billing&plan=${tier}`}
+            className={
+              "mt-4 " +
+              (isFeatured ? "btn-primary" : "btn-ghost") +
+              " w-full text-center"
+            }
+          >
+            Choose {tier}
+          </Link>
+        </WebOnly>
+      )}
     </article>
   );
 }

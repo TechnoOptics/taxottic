@@ -1,10 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useIsNativeApp } from "@/components/MobileOnly";
 
 /**
  * Single button for any Stripe checkout (subscription tier OR credit
  * top-up pack). The endpoint figures out which mode based on the key.
+ *
+ * Hidden entirely inside the native app (App Store Guideline 3.1.1):
+ * the app is a WebView over taxottic.com and checkout runs through
+ * Stripe, not Apple IAP, so no purchase control may appear in-app.
+ * Purchasing happens on the web.
  */
 export function CheckoutButton({
   priceKey,
@@ -15,6 +21,7 @@ export function CheckoutButton({
   label: string;
   variant?: "primary" | "ghost";
 }) {
+  const isNative = useIsNativeApp();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +44,10 @@ export function CheckoutButton({
       setPending(false);
     }
   }
+
+  // 3.1.1: render no purchase control in the native app (and nothing
+  // until the platform is known, so a buy button never flashes there).
+  if (isNative !== false) return null;
 
   return (
     <div>

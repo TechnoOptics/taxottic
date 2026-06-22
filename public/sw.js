@@ -625,7 +625,12 @@
 // account when a fixed code is presented, gated behind REVIEW_DEMO_EMAIL/
 // REVIEW_DEMO_CODE env vars (off otherwise). Lets a store reviewer reach a
 // seeded demo without inbox access; everyday users fall through to OTP.
-const CACHE_VERSION = "v93";
+// v94: App Store Guideline 3.1.1 — every purchase/upgrade/billing control
+// (CheckoutButton, ManageBillingButton, TrialBanner CTA, ProGate CTA, the
+// dashboard Pro upsell, UserMenu "Billing & plan", /billing + /pricing buy
+// buttons) is now hidden inside the native app via <WebOnly>. Subscriptions
+// run through Stripe on the web (not Apple IAP); the app is view+use only.
+const CACHE_VERSION = "v94";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

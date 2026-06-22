@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WebOnly } from "@/components/WebOnly";
 
 type Props = {
   /** What's behind the gate; appears in the headline. */
@@ -47,9 +48,22 @@ export function ProGate({ feature, pitch, perks, reason }: Props) {
         </ul>
       ) : null}
       <div className="mt-6 flex items-center gap-2 flex-wrap">
-        <Link href={href} className="btn-primary text-sm">
-          See Pro plans
-        </Link>
+        {/* 3.1.1: the upgrade CTA links to billing, so it's web-only.
+            In the native app we show a plain, non-tappable note instead
+            (no in-app route to a purchase). */}
+        <WebOnly
+          fallback={
+            <p className="text-sm text-ink-soft">
+              To upgrade to Pro, open{" "}
+              <span className="font-medium text-forest-800">taxottic.com</span>{" "}
+              in your browser.
+            </p>
+          }
+        >
+          <Link href={href} className="btn-primary text-sm">
+            See Pro plans
+          </Link>
+        </WebOnly>
         <Link
           href="/dashboard"
           className="text-sm text-ink-soft hover:text-forest-900"
