@@ -5,11 +5,11 @@
 import sharp from "sharp";
 import { readFile, mkdir } from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const RAW =
-  "C:/Users/abelm/Documents/Techno Optics LLc/taxottic/.claude/worktrees/recursing-euclid-7d10be/store-screenshots/raw-ipad";
-const OUT =
-  "C:/Users/abelm/Documents/Techno Optics LLc/taxottic/store-screenshots/ipad";
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const RAW = path.join(HERE, "raw-ipad");
+const OUT = path.join(HERE, "ipad");
 const W = 2048;
 const H = 2732;
 

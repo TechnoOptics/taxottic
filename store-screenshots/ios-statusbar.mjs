@@ -1,5 +1,7 @@
 import sharp from "sharp";
-const ROOT = "C:/Users/abelm/Documents/Techno Optics LLc/taxottic/store-screenshots";
+import path from "path";
+import { fileURLToPath } from "url";
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
 // Returns an SVG string (no outer bg) for an iOS-style status bar strip W x H.
 // time left, then cellular + wifi + battery on the right. White glyphs.

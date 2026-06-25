@@ -5,10 +5,11 @@
 import sharp from "sharp";
 import { readFile, mkdir } from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const SRC =
-  "C:/Users/abelm/Documents/Techno Optics LLc/taxottic/.claude/worktrees/recursing-euclid-7d10be/store-screenshots";
-const ROOT = "C:/Users/abelm/Documents/Techno Optics LLc/taxottic/store-screenshots";
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SRC = HERE;
+const ROOT = HERE;
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
