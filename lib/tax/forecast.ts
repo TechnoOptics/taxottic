@@ -1158,7 +1158,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   // capital gains tax). Take whichever is larger.
   const amtTotal = Math.max(0, tentativeAmt - capitalGainsTax);
   let amtAddOnCents = 0;
-  let fedTaxBeforeAmt = Math.max(0, fedTaxBeforeCredits);
+  const fedTaxBeforeAmt = Math.max(0, fedTaxBeforeCredits);
 
   // Apply Child Tax Credit + Credit for Other Dependents. Both are
   // non-refundable here (we deliberately don't model the refundable

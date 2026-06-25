@@ -105,7 +105,7 @@ export function ConversationView({
             .eq("message_id", m.id);
 
           const paths = (atts ?? []).map((a) => a.storage_path);
-          let signedMap = new Map<string, string>();
+          const signedMap = new Map<string, string>();
           if (paths.length > 0) {
             const { data: signed } = await supabase.storage
               .from("chat-attachments")

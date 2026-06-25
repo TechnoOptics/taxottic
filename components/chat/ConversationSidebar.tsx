@@ -323,7 +323,7 @@ function NewGroupDialog({
             Add members
           </span>
           <p className="text-xs text-ink-muted mt-0.5">
-            You're added automatically. Pick anyone else from your team.
+            You&apos;re added automatically. Pick anyone else from your team.
           </p>
           <ul className="mt-2 grid gap-1 max-h-64 overflow-y-auto no-scrollbar pr-1">
             {companyMembers.map((m) => {

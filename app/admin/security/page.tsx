@@ -150,7 +150,7 @@ export default async function SecurityDashboardPage() {
               </ul>
             ) : (
               <p className="mt-3 text-sm text-ink-muted">
-                No prior runs yet. Hit "Run pulse now" to seed the timeline.
+                No prior runs yet. Hit &quot;Run pulse now&quot; to seed the timeline.
               </p>
             )}
           </div>

@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
   // `auth.sessions` had a fresh row, leaving users back at /login
   // immediately after a "successful" OAuth flow. Pinning the response
   // up front + writing cookies onto it directly is the canonical fix.
-  let response = NextResponse.redirect(new URL(`${origin}${next}`));
+  const response = NextResponse.redirect(new URL(`${origin}${next}`));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

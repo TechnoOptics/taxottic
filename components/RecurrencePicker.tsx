@@ -93,7 +93,7 @@ export function RecurrencePicker({
             <option value="annual">Annually</option>
           </select>
           <span className="text-[11px] text-ink-muted leading-relaxed">
-            Enter the amount paid <strong>each period</strong>. We'll
+            Enter the amount paid <strong>each period</strong>. We&apos;ll
             extrapolate it to year-end automatically.
           </span>
         </label>

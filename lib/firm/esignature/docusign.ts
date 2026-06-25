@@ -32,7 +32,7 @@ import type {
 //   - Connect (webhook) configuration. Document via the runbook;
 //     real wiring lives in /api/webhooks/docusign in a follow-up.
 
-let cachedToken: { value: string; expiresAt: number } | null = null;
+const cachedToken: { value: string; expiresAt: number } | null = null;
 
 function envOk(): boolean {
   return Boolean(

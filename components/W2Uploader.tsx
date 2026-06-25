@@ -145,7 +145,7 @@ export function W2Uploader({ who, onApply }: Props) {
           </div>
           <p className="text-xs text-ink-muted mt-0.5 leading-relaxed max-w-md">
             Drop in a PDF, photo, or screenshot. We pull out wages,
-            withholding, and Social-Security wages so you don't have
+            withholding, and Social-Security wages so you don&apos;t have
             to type them. Review the extracted values before applying.
           </p>
         </div>

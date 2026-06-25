@@ -220,8 +220,8 @@ export default async function SalesTaxPage({
                 {formatCents(ytdIncome)}
               </strong>
               . If every taxable sale was charged{" "}
-              {stateRate?.state_name}'s base rate (
-              {baseRatePct}%), you'd have collected{" "}
+              {stateRate?.state_name}&apos;s base rate (
+              {baseRatePct}%), you&apos;d have collected{" "}
               <strong className="text-forest-900">
                 {formatCents(estimatedCollected)}
               </strong>
@@ -229,12 +229,12 @@ export default async function SalesTaxPage({
               <strong className="text-forest-900">
                 {formatCents(ytdCollected)}
               </strong>{" "}
-              you've actually marked as collected.
+              you&apos;ve actually marked as collected.
             </p>
             {ytdCollected === 0 ? (
               <p className="mt-2 text-xs text-ink-muted">
-                If sales tax doesn't apply to your business (services in a
-                state that doesn't tax services, or B2B exemptions), you can
+                If sales tax doesn&apos;t apply to your business (services in a
+                state that doesn&apos;t tax services, or B2B exemptions), you can
                 ignore this. Otherwise pop into{" "}
                 <Link
                   href={`/c/${publicId}/income`}
@@ -318,7 +318,7 @@ export default async function SalesTaxPage({
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
           Sales tax shown here uses the per-state base rate. Cities,
           counties, and special districts add their own. We surface the
-          combined "average effective" rate as a sanity check; for
+          combined &quot;average effective&quot; rate as a sanity check; for
           actual filing, look up your specific jurisdiction. This is
           forecasting, not tax advice.
         </p>

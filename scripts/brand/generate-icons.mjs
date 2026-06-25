@@ -85,7 +85,7 @@ async function write(relPath, buf) {
   const full = resolve(REPO_ROOT, relPath);
   await mkdir(dirname(full), { recursive: true });
   await writeFile(full, buf);
-  // eslint-disable-next-line no-console
+   
   console.log("  wrote", relPath, `(${(buf.length / 1024).toFixed(1)} KB)`);
 }
 

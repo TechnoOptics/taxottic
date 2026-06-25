@@ -290,7 +290,7 @@ export default async function FilingsPage({
                     className="input text-sm"
                   />
                   <span className="text-[10px] text-ink-muted">
-                    "federal" or a 2-letter state code (CA, NY, …).
+                    &quot;federal&quot; or a 2-letter state code (CA, NY, …).
                   </span>
                 </label>
               </div>

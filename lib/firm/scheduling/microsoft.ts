@@ -95,7 +95,7 @@ export const microsoftProvider: CalendarProvider = {
       if (!eventRes.ok) {
         // Don't fail outright — the meeting exists, just no
         // calendar event. Surface the warning to the caller.
-        // eslint-disable-next-line no-console
+         
         console.warn(
           `[ms-graph] meeting created but event POST failed: ${eventRes.status}`,
         );

@@ -28,7 +28,7 @@ export function RetirementSavingsTile({ result }: Props) {
   return (
     <div className="card p-6 sm:p-7 border-emerald-200/60 bg-emerald-50/40">
       <div className="text-[10px] uppercase tracking-[0.32em] text-emerald-800 font-medium">
-        Retirement — you're saving
+        Retirement — you&apos;re saving
       </div>
       <h3 className="display mt-1.5 text-2xl text-forest-900">
         {formatCents(result.retirementTaxSavingsCents)} in federal tax

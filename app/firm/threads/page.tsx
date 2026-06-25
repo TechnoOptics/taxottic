@@ -39,8 +39,8 @@ export default async function FirmThreadsPage() {
         </h1>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-xl">
           Slack-style threads scoped to your firm. Use them for
-          engagement reviews, year-end planning, or just "who has
-          the Smith K-1?" coordination.
+          engagement reviews, year-end planning, or just &quot;who has
+          the Smith K-1?&quot; coordination.
         </p>
 
         <form

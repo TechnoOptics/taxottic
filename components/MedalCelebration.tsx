@@ -143,7 +143,7 @@ export function MedalCelebration({ newlyEarnedCodes }: Props) {
             {badge.description}
           </p>
           <p className="mt-3 text-sm font-medium text-forest-800 italic">
-            "{message}"
+            &quot;{message}&quot;
           </p>
           <button
             type="button"
