@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone Node helper scripts for marketing/store screenshots —
+    // not part of the app build, so keep them out of the app lint pass.
+    "store-screenshots/**",
   ]),
 ]);
 
