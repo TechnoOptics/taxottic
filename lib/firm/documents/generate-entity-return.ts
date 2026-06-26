@@ -131,7 +131,7 @@ export async function loadEntityReturnTotals(
   const deductionsByCategory = new Map<string, number>();
   let total = 0;
   let salaries = 0;
-  let officerComp = 0;
+  const officerComp = 0;
   let section179 = 0;
   let mealsTotal = 0;
   for (const e of expenses ?? []) {

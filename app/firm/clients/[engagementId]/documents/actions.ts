@@ -172,7 +172,7 @@ export async function generateEngagementLetter(formData: FormData) {
     // If the bucket doesn't exist yet (first deploy), log the path
     // so the operator can manually create it. The row still exists
     // and a follow-up "regenerate" action re-fires the upload.
-    // eslint-disable-next-line no-console
+     
     console.error(
       `[firm-documents] storage upload failed (${uploadErr.message}). Path: ${storagePath}`,
     );
@@ -346,7 +346,7 @@ export async function generateScheduleCDraft(formData: FormData) {
       upsert: true,
     });
   if (uploadErr) {
-    // eslint-disable-next-line no-console
+     
     console.error(
       `[firm-documents] schedule-c upload failed (${uploadErr.message}). Path: ${storagePath}`,
     );

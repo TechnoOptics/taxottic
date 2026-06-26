@@ -72,7 +72,7 @@ export default async function FilerTypePage({
             <p className="mt-1 text-xs text-ink-muted">
               Pick one, or both. We&apos;ll combine the math when you
               do both — your W-2 withholding can offset SE tax owed
-              from the side, which often turns "owe" into "refund."
+              from the side, which often turns &quot;owe&quot; into &quot;refund.&quot;
             </p>
             <button
               type="submit"

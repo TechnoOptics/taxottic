@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error("[stripe-connect webhook] handler error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "handler error" },

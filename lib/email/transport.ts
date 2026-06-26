@@ -138,7 +138,7 @@ export async function sendEmail(
   // callers don't loop indefinitely. In dev this surfaces in the
   // server console; in production this should never run because
   // RESEND_API_KEY is always set.
-  // eslint-disable-next-line no-console
+   
   console.warn(
     `[email] no provider configured (RESEND_API_KEY unset). Would have sent to ${args.to}: "${args.subject}"`,
   );

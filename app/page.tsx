@@ -262,6 +262,18 @@ export default async function Home({
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
+          // Native iOS draws the WebView UNDER the status bar
+          // (capacitor.config.ts StatusBar.overlaysWebView), so without
+          // a top inset the wordmark/"Sign in" land beneath the notch /
+          // Dynamic Island. Pad by the real safe-area inset — same
+          // device-aware expression the authenticated AppHeader uses
+          // (--app-safe-top is the natively-measured floor published by
+          // CapacitorNativeInit; env() wins via max() wherever WKWebView
+          // reports it). 0 on web, so no visual change in the browser.
+          paddingTop:
+            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">

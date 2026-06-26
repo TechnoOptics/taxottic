@@ -114,7 +114,7 @@ export function PreparerPanel({
               <span className="text-forest-800 font-medium">
                 {companyName}
               </span>
-              's books only after you both confirm the engagement.
+              &apos;s books only after you both confirm the engagement.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -154,7 +154,7 @@ export function PreparerPanel({
                 <Header eng={e} />
                 {e.firm_note ? (
                   <blockquote className="mt-3 rounded-lg bg-cream/50 border-l-4 border-gold-400 px-4 py-3 text-sm text-ink-soft italic">
-                    "{e.firm_note}"
+                    &quot;{e.firm_note}&quot;
                   </blockquote>
                 ) : null}
                 {isManager ? (
@@ -222,7 +222,7 @@ export function PreparerPanel({
                       />
                       <p className="text-xs text-ink-soft mb-2">
                         Ending the engagement immediately revokes the
-                        firm's access to your books. They keep any audit
+                        firm&apos;s access to your books. They keep any audit
                         cases or notes they created on their side.
                       </p>
                       <button className="text-xs text-red-700 hover:text-red-900">
@@ -273,7 +273,7 @@ export function PreparerPanel({
             No tax preparer yet.
           </h3>
           <p className="mt-2 text-sm text-ink-soft max-w-md mx-auto leading-relaxed">
-            When you find a firm and send a request, they'll see your
+            When you find a firm and send a request, they&apos;ll see your
             engagement on their side and accept it. Once active, they get
             read-only access to your books for the agreed tax year.
           </p>

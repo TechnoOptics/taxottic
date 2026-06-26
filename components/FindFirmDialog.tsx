@@ -197,7 +197,7 @@ export function FindFirmDialog({
 
             <p className="text-[11px] text-ink-muted leading-relaxed">
               Sending this gives <strong>{selected.name}</strong> a request
-              to prepare your tax year {taxYear} return. They'll see your
+              to prepare your tax year {taxYear} return. They&apos;ll see your
               books only after they accept.
             </p>
 
@@ -230,8 +230,8 @@ export function FindFirmDialog({
             </h2>
             <p className="text-sm text-ink-soft leading-relaxed">
               Search the directory of accounting firms on Taxottic
-              Enterprise. Pick one and we'll send them a request on your
-              behalf - they'll review your engagement before getting any
+              Enterprise. Pick one and we&apos;ll send them a request on your
+              behalf - they&apos;ll review your engagement before getting any
               access to your books.
             </p>
             <input

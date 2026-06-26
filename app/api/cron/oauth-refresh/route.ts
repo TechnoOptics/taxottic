@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
       refreshed += 1;
     } catch (err) {
       failed += 1;
-      // eslint-disable-next-line no-console
+       
       console.error("[oauth-refresh] row error:", err);
     }
   }
@@ -161,7 +161,7 @@ async function refreshAccessToken(
     });
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      // eslint-disable-next-line no-console
+       
       console.warn(
         `[oauth-refresh] ${provider} refresh ${res.status}: ${txt.slice(0, 200)}`,
       );
@@ -169,7 +169,7 @@ async function refreshAccessToken(
     }
     return (await res.json()) as DecodedToken;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn(`[oauth-refresh] ${provider} threw:`, err);
     return null;
   }

@@ -71,7 +71,7 @@ export default function OpengraphImage() {
             }}
           >
             {logoSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
+               
               <img src={logoSrc} width={56} height={56} alt="" />
             ) : null}
             <span>Taxottic</span>

@@ -15,7 +15,7 @@ Repo: `https://github.com/TechnoOptics/taxottic` · package manager: **npm** · 
 |---|---|---|
 | App source, `ios/` + `android/` native projects, `capacitor.config.ts`, `package-lock.json` | ✅ yes | — |
 | `node_modules`, `.next/` | ❌ | `npm ci` |
-| `ios/App/Pods/` | ❌ | `pod install` |
+| iOS Swift Package dependencies (Capacitor SPM) | ❌ | resolved automatically by Xcode on open; `npx cap sync ios` regenerates `ios/App/CapApp-SPM/Package.swift` |
 | `android/local.properties` | ❌ | auto-created by Android Studio (do **not** copy the Windows one) |
 | `.env.local` (dev secrets) | ❌ | `vercel env pull` (preferred) — see below |
 | `.vercel` (project link) | ❌ | `vercel link` |
@@ -80,12 +80,18 @@ npm run lint && npm run typecheck   # confirm a clean checkout
 
 ```bash
 npx cap sync ios
-cd ios/App && pod install && cd ../..
-open ios/App/App.xcworkspace      # NOT the .xcodeproj
+open ios/App/App.xcodeproj   # SPM-based — no pod install, no .xcworkspace
 ```
-In Xcode: select your Team under **Signing & Capabilities**, pick a Simulator,
-press ▶. The app is a WebView pinned to `taxottic.com` (`server.url` in
-`capacitor.config.ts`), so it loads production.
+This project uses Capacitor 8's Swift Package Manager integration: there is **no
+Podfile and no `.xcworkspace`**. `npx cap sync ios` regenerates
+`ios/App/CapApp-SPM/Package.swift`, and Xcode resolves the SPM packages
+automatically when you open `App.xcodeproj` (`pod install` would just fail with
+"No Podfile found"). CocoaPods can stay installed — it's simply unused here.
+
+In Xcode: pick a **Simulator** and press ▶ — a Simulator build needs no signing
+Team. (You only need to select a Team under **Signing & Capabilities** for a
+device or App Store build.) The app is a WebView pinned to `taxottic.com`
+(`server.url` in `capacitor.config.ts`), so it loads production.
 
 **Native screenshots** (this is what unblocks the App Store rejection going forward):
 run in the Simulator, then `⌘S` (File ▸ Save Screen), or
@@ -115,7 +121,7 @@ brew install supabase/tap/supabase && supabase login
 
 ## Notes / gotchas
 
-- **Don't copy `node_modules`, `ios/App/Pods`, `.next`, or `android/local.properties`** from Windows — they're platform-specific. Regenerate them with the steps above.
+- **Don't copy `node_modules`, `.next`, or `android/local.properties`** from Windows — they're platform-specific. Regenerate them with the steps above. (iOS has no `Pods/` to copy — SPM dependencies are resolved by Xcode into DerivedData.)
 - The `.claude/` folder (and its worktrees) is gitignored and stays on the old machine — expected.
 - `store-screenshots/` holds the marketing-frame scripts; image assets there are gitignored and regenerated. See `store-screenshots/README.md`.
 - After verifying the Mac builds and runs, the Windows checkout can be archived.

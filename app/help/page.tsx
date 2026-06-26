@@ -213,6 +213,13 @@ export default function HelpPage() {
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+          // Native iOS overlays the WebView under the status bar — pad by
+          // the real safe-area inset so the wordmark clears the notch /
+          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
+          paddingTop:
+            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">

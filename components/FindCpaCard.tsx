@@ -145,7 +145,7 @@ export function FindCpaCard({ zip, stateCode, city }: Props) {
       </h2>
 
       {results && results.length > 0 ? (
-        <ul className="mt-4 grid gap-2">
+        <ul className="mt-4 grid grid-cols-1 gap-2">
           {results.slice(0, 5).map((r, i) => (
             <li
               key={i}

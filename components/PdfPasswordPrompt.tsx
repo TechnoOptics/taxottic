@@ -58,7 +58,7 @@ export function PdfPasswordPrompt({ fileName, wrongAttempt, onSubmit, onCancel }
         </h2>
         <p className="mt-1.5 text-sm text-ink-soft leading-relaxed">
           <span className="text-forest-900 font-medium">{fileName}</span> is
-          password protected. Type the password and we'll read it without
+          password protected. Type the password and we&apos;ll read it without
           you having to remove the password from your file.
         </p>
 
@@ -89,7 +89,7 @@ export function PdfPasswordPrompt({ fileName, wrongAttempt, onSubmit, onCancel }
             </div>
             {wrongAttempt ? (
               <span className="text-xs text-red-700 mt-1">
-                That password didn't work. Try again.
+                That password didn&apos;t work. Try again.
               </span>
             ) : null}
           </label>

@@ -394,7 +394,7 @@ export default async function BusinessTripsPage({
                         <div className="display text-sm text-forest-900 tabular-nums">
                           {fmtMiles(Number(t.distance_miles))} mi
                         </div>
-                        <div className="text-xs text-emerald-700 tabular-nums">
+                        <div className="text-xs text-rose-700 tabular-nums">
                           {fmtUsd(Number(t.deduction_cents))}
                         </div>
                       </div>

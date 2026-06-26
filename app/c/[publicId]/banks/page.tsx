@@ -209,11 +209,11 @@ export default async function BanksPage({
               </p>
             </div>
             {isManager ? (
-              <div className="flex flex-col gap-2 items-end">
+              <div className="flex flex-col gap-2 items-stretch w-full sm:w-56">
                 <PlaidConnectButton
                   companyPublicId={publicId}
                   companyId={company.id}
-                  className="btn-primary text-sm"
+                  className="btn-primary text-sm w-full justify-center"
                 />
                 {/* Stripe Connect (Standard OAuth) is an optional
                     bank-data import alternative to Plaid. Only show
@@ -225,7 +225,7 @@ export default async function BanksPage({
                 {isStripeConnectConfigured() ? (
                   <StripeConnectButton
                     companyId={company.id}
-                    className="btn-ghost text-xs whitespace-nowrap"
+                    className="btn-ghost text-sm w-full justify-center whitespace-nowrap"
                   />
                 ) : null}
               </div>

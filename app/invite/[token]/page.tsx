@@ -84,7 +84,7 @@ export default async function InvitePage({ params }: { params: Params }) {
   return (
     <Frame>
       <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-        You're invited
+        You&apos;re invited
       </div>
       <h1 className="display mt-2 text-3xl text-forest-900">
         {firstName

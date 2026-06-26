@@ -516,11 +516,13 @@ main, footer, nav {
    display (3000px+) that stretched a single card to ~2,500px — content
    stranded left, buttons pushed off-screen, the whole page sprawling.
 
-   Cap it to a comfortable column and center it in the space to the RIGHT
-   of the rail: margin-left clamps to the rail clearance on laptops (so the
-   rail stays attached) and grows to center the column on very wide screens.
-   18rem matches the widest rail clearance (2xl `pl-72`) so the content
-   never tucks under the rail at any breakpoint.
+   Cap it to a comfortable column and CENTER it within <main>'s content
+   box. <main> ALREADY pads-left by the rail width (the data-theme="dark"
+   rule above), so this rule must NOT re-add the rail clearance — doing so
+   double-counted it (240px main padding + a 288px margin) and left a big
+   empty gap between the rail and the content. `margin-inline: auto` centers
+   the capped column in the space to the right of the rail and recentres it
+   on ultrawide displays, without offsetting it a second time.
 
    Scoped to `[class~="lg:pl-60"]` so it only touches authenticated app
    sections — marketing/landing pages (no rail) are left alone. Unlayered
@@ -529,8 +531,7 @@ main, footer, nav {
 @media (min-width: 1024px) {
   main > section[class~="lg:pl-60"] {
     max-width: 80rem;
-    margin-left: max(18rem, calc((100vw - 80rem) / 2));
-    margin-right: auto;
+    margin-inline: auto;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
   }

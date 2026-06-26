@@ -103,7 +103,7 @@ export async function refreshStripeStatus(): Promise<void> {
 
   const live = await fetchConnectAccountStatus(row.stripe_account_id);
   if (!live.ok) {
-    // eslint-disable-next-line no-console
+     
     console.warn(`[stripe-connect] status refresh failed: ${live.reason}`);
     revalidatePath("/firm/settings/payments");
     return;

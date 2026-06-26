@@ -88,20 +88,54 @@ export default function ExamplePage() {
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+          // Native iOS overlays the WebView under the status bar — pad by
+          // the real safe-area inset so the wordmark clears the notch /
+          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
+          paddingTop:
+            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+            {/* Pricing is hidden on phones (it forced "Prici / ng" wraps on
+                narrow widths) and shown from sm+. */}
             <Link
               href="/pricing"
-              className="text-sm text-cream/80 hover:text-cream"
+              className="hidden sm:inline-block text-sm text-cream/80 hover:text-cream whitespace-nowrap"
             >
               Pricing
             </Link>
-            <Link href="/login" className="btn-primary text-sm">
+            {/* Phone: a compact avatar/account icon instead of the full
+                "Sign up free" button, which crowded the wordmark. */}
+            <Link
+              href="/login"
+              aria-label="Sign up free"
+              className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-full border border-gold-300/50 text-cream/90 transition-colors hover:border-gold-300 hover:text-cream"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M5.5 19.5c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" />
+              </svg>
+            </Link>
+            {/* sm+ : full text button */}
+            <Link
+              href="/login"
+              className="hidden sm:inline-block btn-primary text-sm whitespace-nowrap"
+            >
               Sign up free
             </Link>
           </div>

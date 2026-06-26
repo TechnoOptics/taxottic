@@ -204,14 +204,14 @@ export async function GET(req: NextRequest) {
           );
       } else {
         failed += 1;
-        // eslint-disable-next-line no-console
+         
         console.error(
           `[firm-digest] send failed for ${row.profiles.email}: ${result.reason}`,
         );
       }
     } catch (err) {
       failed += 1;
-      // eslint-disable-next-line no-console
+       
       console.error("[firm-digest] row error:", err);
     }
   }

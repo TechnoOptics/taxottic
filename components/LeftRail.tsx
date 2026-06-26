@@ -62,7 +62,10 @@ type Props = {
   companies?: Company[];
 };
 
-function Path({ d }: { d: string }) {
+// Shared icon frame — outline style, 24×24, matched to the app's UI weight.
+// Use <Icon> for multi-element glyphs (path + circle, etc.); <Path> is the
+// single-path shorthand.
+function Icon({ children }: { children: ReactNode }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -74,8 +77,16 @@ function Path({ d }: { d: string }) {
       className="size-5"
       aria-hidden="true"
     >
-      <path d={d} />
+      {children}
     </svg>
+  );
+}
+
+function Path({ d }: { d: string }) {
+  return (
+    <Icon>
+      <path d={d} />
+    </Icon>
   );
 }
 
@@ -112,7 +123,12 @@ const COMPANY_ITEMS: {
     label: "Mileage",
     path: "__mileage_top_level__",
     icon: (
-      <Path d="M5 13l1.5-4.5A2 2 0 018.4 7h7.2a2 2 0 011.9 1.5L19 13M3 13h18v3a2 2 0 01-2 2h-1a2 2 0 01-2-2H8a2 2 0 01-2 2H5a2 2 0 01-2-2v-3z" />
+      <Icon>
+        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+        <circle cx="7" cy="17" r="2" />
+        <path d="M9 17h6" />
+        <circle cx="17" cy="17" r="2" />
+      </Icon>
     ),
   },
   {
@@ -130,7 +146,10 @@ const COMPANY_ITEMS: {
     // deductions). Compass = "explore what you can claim".
     path: "deductions",
     icon: (
-      <Path d="M12 3a9 9 0 100 18 9 9 0 000-18zm3.2 5.8l-2 5.4-5.4 2 2-5.4 5.4-2z" />
+      <Icon>
+        <circle cx="12" cy="12" r="10" />
+        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88" />
+      </Icon>
     ),
   },
   {
@@ -164,7 +183,10 @@ const COMPANY_ITEMS: {
     // Route name unchanged — only the label was renamed from "Setup".
     path: "setup",
     icon: (
-      <Path d="M12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zm0-6.5l1.5 2.5 2.8.6.6 2.8L19 10l-1.1 1.1.6 2.8-2.8.6L14.5 17H12l-1.5-2.5-2.8-.6-.6-2.8L5.5 10l1.1-1.1-.6-2.8 2.8-.6L10.5 3H12z" />
+      <Icon>
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <circle cx="12" cy="12" r="3" />
+      </Icon>
     ),
   },
 ];

@@ -116,7 +116,7 @@ export async function scheduleMeeting(formData: FormData) {
           providerEventId = res.providerEventId ?? null;
           meetingUrl = res.meetingUrl ?? meetingUrl;
         } else {
-          // eslint-disable-next-line no-console
+           
           console.warn(
             `[meetings] provider auto-mint failed: ${res.reason ?? "unknown"} — falling through to manual.`,
           );

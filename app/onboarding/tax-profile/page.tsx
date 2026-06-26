@@ -97,13 +97,13 @@ export default async function TaxProfilePage({
                 Pre-fill from last year (recommended)
               </div>
               <h2 className="display mt-1 text-xl text-forest-900">
-                Drop in {taxYear - 1}'s tax docs and we'll do the rest.
+                Drop in {taxYear - 1}&apos;s tax docs and we&apos;ll do the rest.
               </h2>
               <p className="mt-2 text-sm text-ink-soft leading-relaxed">
                 Bella reads your W-2, every 1099, and your Schedule C,
                 pulls the totals, and uses them to seed your {taxYear}{" "}
                 forecast. Five minutes of upload usually beats an hour
-                of typing. Files aren't stored, only the extracted
+                of typing. Files aren&apos;t stored, only the extracted
                 numbers.
               </p>
               {priorDocsExist && !priorDocsApplied ? (
