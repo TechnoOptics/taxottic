@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripeForWebhook } from "@/lib/firm/payments/stripe-connect";
 import { logFirmActivity } from "@/lib/firm/activity";
+import { syncStripeConnection } from "@/lib/stripe-connect/sync";
 
 export const runtime = "nodejs";
 
@@ -14,6 +16,14 @@ export const runtime = "nodejs";
 //   - checkout.session.completed → mark the invoice paid.
 //   - charge.refunded → mark the invoice refunded.
 //   - payment_intent.payment_failed → mark the invoice failed.
+//
+// PLUS real-time bank-source sync (see maybeSyncStripeBank): when a
+// user has connected their OWN Stripe account as a transaction source
+// (bank_connections.provider="stripe"), Stripe delivers that account's
+// activity here with event.account=acct_…. On any event that means a
+// new balance transaction posted, we run an incremental sync NOW so the
+// connected Stripe pulls every transaction as it happens instead of
+// waiting for the weekly cron.
 //
 // Auth: Stripe signs the body with the endpoint signing secret.
 // We use stripe.webhooks.constructEvent() to verify.
@@ -49,6 +59,11 @@ export async function POST(req: NextRequest) {
 
   const admin = createServiceClient();
   try {
+    // Real-time pull for a connected Stripe bank source. Runs before
+    // the firm-invoice switch and is a no-op for events whose
+    // event.account isn't a linked bank connection.
+    await maybeSyncStripeBank(admin, event);
+
     switch (event.type) {
       case "account.updated": {
         const acct = event.data.object as Stripe.Account;
@@ -155,6 +170,66 @@ export async function POST(req: NextRequest) {
       { error: err instanceof Error ? err.message : "handler error" },
       { status: 500 },
     );
+  }
+}
+
+// Connect events that mean a new balance_transaction has posted to the
+// connected account (or is about to settle), so the bank source should
+// re-pull. Stripe has no single "balance_transaction.created" event, so
+// we trigger off the underlying objects: charges (income), refunds,
+// disputes (adjustments/fees), payouts (settlement), and balance.available
+// as a catch-all when funds move pending → available. Kept as a string
+// Set so it never fights the installed @types/stripe event-literal union.
+const BANK_SYNC_EVENTS = new Set<string>([
+  "charge.succeeded",
+  "charge.captured",
+  "charge.refunded",
+  "charge.dispute.created",
+  "charge.dispute.funds_withdrawn",
+  "payout.paid",
+  "balance.available",
+]);
+
+/**
+ * If this event belongs to a connected Stripe account that a user has
+ * linked as a transaction source, run an immediate incremental sync.
+ *
+ * force:true bypasses syncStripeConnection's monthly cost throttle —
+ * same rationale as the Plaid SYNC_UPDATES_AVAILABLE webhook: the event
+ * only fires when there's genuinely new activity, so the throttle (which
+ * exists to stop the blind weekly cron from redundant calls) must not
+ * swallow it. The cursor in syncStripeConnection makes duplicate events
+ * (e.g. charge.succeeded + a later balance.available for the same
+ * payment) cheap no-ops — zero new rows. Errors are swallowed onto the
+ * connection row so we still ack the webhook (a 500 would make Stripe
+ * retry the whole event, including the firm-invoice handling).
+ */
+async function maybeSyncStripeBank(
+  admin: SupabaseClient,
+  event: Stripe.Event,
+): Promise<void> {
+  const accountId = event.account; // acct_… of the connected source
+  if (!accountId || !BANK_SYNC_EVENTS.has(event.type)) return;
+
+  const { data: conn } = await admin
+    .from("bank_connections")
+    .select("id")
+    .eq("provider", "stripe")
+    .eq("external_item_id", accountId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!conn) return;
+
+  try {
+    await syncStripeConnection(admin, conn.id as string, { force: true });
+  } catch (err) {
+    await admin
+      .from("bank_connections")
+      .update({
+        status: "error",
+        last_error: err instanceof Error ? err.message : String(err),
+      })
+      .eq("id", conn.id as string);
   }
 }
 
