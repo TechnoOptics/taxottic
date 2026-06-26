@@ -212,7 +212,12 @@ export function MileageMap({
           styles: MAP_STYLE_TAXOTTIC,
           minZoom,
           maxZoom: 18,
-          gestureHandling: "greedy",
+          // Cooperative gestures: on mobile a ONE-finger drag scrolls the
+          // page (not the map) and TWO fingers are required to pan/zoom the
+          // map, so the map no longer hijacks the page scroll. On desktop,
+          // scroll-zoom needs ⌘/Ctrl held. ("greedy" let one finger pan the
+          // map, trapping the user mid-scroll.)
+          gestureHandling: "cooperative",
           backgroundColor: "#121a2a",
         });
         const bounds = new maps.LatLngBounds();
