@@ -281,41 +281,136 @@ export default async function ExpensesPage({
                           </div>
                         </summary>
                         <ul className="px-3 sm:px-4 pb-3 grid gap-2 border-t border-forest-100">
-                          {tripsThisMonth.map((t) => {
-                            const dateLabel = new Intl.DateTimeFormat(
-                              "en-US",
-                              {
+                          {(() => {
+                            // Roll a month's drives up by calendar day
+                            // (UTC, matching the date label). A day with
+                            // several drives collapses into a nested
+                            // <details>: the day reads as ONE line
+                            // (date · N drives · miles · total) that
+                            // expands to the individual drives, instead
+                            // of every drive listed flat. Single-drive
+                            // days stay as one flat row. The deduction
+                            // amount renders RED — it's money out
+                            // (a Schedule C deduction), so it should not
+                            // read as green/income.
+                            type Trip = (typeof tripsThisMonth)[number];
+                            const byDay = new Map<string, Trip[]>();
+                            for (const t of tripsThisMonth) {
+                              const k = new Date(t.startedAt)
+                                .toISOString()
+                                .slice(0, 10);
+                              const arr = byDay.get(k) ?? [];
+                              arr.push(t);
+                              byDay.set(k, arr);
+                            }
+                            const dayKeys = Array.from(byDay.keys()).sort(
+                              (a, b) => (a < b ? 1 : -1),
+                            );
+                            const dayLabel = (iso: string) =>
+                              new Intl.DateTimeFormat("en-US", {
                                 month: "short",
                                 day: "numeric",
                                 timeZone: "UTC",
-                              },
-                            ).format(new Date(t.startedAt));
-                            return (
-                              <li key={t.id}>
-                                <Link
-                                  href={`/mileage/business?trip=${t.id}`}
-                                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border border-dashed border-gold-200 bg-gold-50/50 hover:bg-gold-50"
-                                >
-                                  <span className="flex items-center gap-2 min-w-0">
-                                    <span aria-hidden="true">🧭</span>
-                                    <span className="text-sm text-forest-900 font-medium shrink-0">
-                                      {dateLabel}
-                                    </span>
-                                    <span className="text-xs text-ink-muted truncate">
-                                      · Mileage ·{" "}
-                                      {t.miles.toLocaleString(undefined, {
-                                        maximumFractionDigits: 1,
-                                      })}{" "}
-                                      mi · view on map
-                                    </span>
+                              }).format(new Date(iso));
+                            const timeLabel = (iso: string) =>
+                              new Intl.DateTimeFormat("en-US", {
+                                hour: "numeric",
+                                minute: "2-digit",
+                                timeZone: "UTC",
+                              }).format(new Date(iso));
+                            const fmtMi = (m: number) =>
+                              m.toLocaleString(undefined, {
+                                maximumFractionDigits: 1,
+                              });
+                            const driveRow = (t: Trip, lead: string) => (
+                              <Link
+                                href={`/mileage/business?trip=${t.id}`}
+                                className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border border-dashed border-gold-200 bg-gold-50/50 hover:bg-gold-50"
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <span aria-hidden="true">🧭</span>
+                                  <span className="text-sm text-forest-900 font-medium shrink-0">
+                                    {lead}
                                   </span>
-                                  <span className="display text-sm text-emerald-700 tabular-nums shrink-0">
-                                    {formatCents(t.cents)}
+                                  <span className="text-xs text-ink-muted truncate">
+                                    · Mileage · {fmtMi(t.miles)} mi · view on
+                                    map
                                   </span>
-                                </Link>
-                              </li>
+                                </span>
+                                <span className="display text-sm text-rose-700 tabular-nums shrink-0">
+                                  {formatCents(t.cents)}
+                                </span>
+                              </Link>
                             );
-                          })}
+                            return dayKeys.map((dk) => {
+                              const dayTrips = byDay.get(dk) ?? [];
+                              if (dayTrips.length === 1) {
+                                return (
+                                  <li key={dk}>
+                                    {driveRow(dayTrips[0], dayLabel(dk))}
+                                  </li>
+                                );
+                              }
+                              const dayMiles = dayTrips.reduce(
+                                (a, t) => a + t.miles,
+                                0,
+                              );
+                              const dayCents = dayTrips.reduce(
+                                (a, t) => a + t.cents,
+                                0,
+                              );
+                              return (
+                                <li key={dk}>
+                                  <details className="group/day rounded-lg border border-dashed border-gold-200 bg-gold-50/50 overflow-hidden">
+                                    <summary className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer select-none hover:bg-gold-50 list-none">
+                                      <span className="flex items-center gap-2 min-w-0">
+                                        <svg
+                                          className="size-4 text-forest-700 transition-transform group-open/day:rotate-90 shrink-0"
+                                          viewBox="0 0 20 20"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          aria-hidden="true"
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M7 5l6 5-6 5"
+                                          />
+                                        </svg>
+                                        <span aria-hidden="true">🧭</span>
+                                        <span className="text-sm text-forest-900 font-medium shrink-0">
+                                          {dayLabel(dk)}
+                                        </span>
+                                        <span className="text-xs text-ink-muted truncate">
+                                          · {dayTrips.length} drives ·{" "}
+                                          {fmtMi(dayMiles)} mi
+                                        </span>
+                                      </span>
+                                      <span className="display text-sm text-rose-700 tabular-nums shrink-0">
+                                        {formatCents(dayCents)}
+                                      </span>
+                                    </summary>
+                                    <ul className="px-3 pb-2 pt-1 grid gap-1.5 border-t border-gold-200/60">
+                                      {dayTrips
+                                        .slice()
+                                        .sort((a, b) =>
+                                          a.startedAt < b.startedAt ? -1 : 1,
+                                        )
+                                        .map((t) => (
+                                          <li key={t.id}>
+                                            {driveRow(
+                                              t,
+                                              timeLabel(t.startedAt),
+                                            )}
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  </details>
+                                </li>
+                              );
+                            });
+                          })()}
                           {monthRows.map((r) => {
                             const cat = r.category as unknown as {
                               label: string;
