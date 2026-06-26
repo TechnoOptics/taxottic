@@ -78,7 +78,15 @@ export async function POST(req: NextRequest) {
       code === "HISTORICAL_UPDATE")
   ) {
     try {
-      await syncPlaidConnection(admin, conn.id);
+      // force: true — this webhook fires ONLY when Plaid has new
+      // transaction data ready, so we must sync NOW and bypass the
+      // monthly cost throttle in syncPlaidConnection. That throttle
+      // exists to stop the blind DAILY CRON from making redundant
+      // calls — not to ignore real update events. Without force the
+      // throttle saw "already synced this calendar month" and skipped
+      // every mid-month webhook, so the connected bank appeared to
+      // stop pulling new transactions until the next month.
+      await syncPlaidConnection(admin, conn.id, { force: true });
     } catch (err) {
       await admin
         .from("bank_connections")
