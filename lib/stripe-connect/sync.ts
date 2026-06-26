@@ -145,6 +145,9 @@ export async function syncStripeConnection(
   const MAX_PAGES = 5;
   let added = 0;
   let lastSeen: string | null = cursor;
+  // One-shot recovery: if Stripe rejects the stored cursor, we re-list
+  // once from the year start (see the catch in the loop below).
+  let retriedWithoutCursor = false;
   // Only import transactions from the current calendar year — anything
   // older would never roll into THIS year's forecast and is pure noise
   // in the review queue. The cutoff slides automatically each Jan 1.
@@ -183,30 +186,60 @@ export async function syncStripeConnection(
       data: BalanceTx[];
       has_more: boolean;
     };
-    const list = (await (
-      stripe as unknown as {
-        balanceTransactions: {
-          list: (
-            params: {
-              limit: number;
-              starting_after?: string;
-              expand?: string[];
-              created?: { gte?: number };
-            },
-            opts: { stripeAccount: string },
-          ) => Promise<ListResp>;
+    // When paginating from a stored cursor, let `starting_after` bound
+    // the window and DON'T also send `created`. Stripe rejects the
+    // `created` + `starting_after` combination for some connected
+    // accounts with a 400, which wedged every incremental sync (cron,
+    // manual, and the realtime webhook) and left the connection stuck
+    // at status=error pulling nothing. The Jan-1 cutoff is only needed
+    // for the initial, cursor-less pull (to avoid importing last year).
+    const listParams: {
+      limit: number;
+      starting_after?: string;
+      expand?: string[];
+      created?: { gte?: number };
+    } = lastSeen
+      ? { limit: PAGE, expand: ["data.source"], starting_after: lastSeen }
+      : {
+          limit: PAGE,
+          expand: ["data.source"],
+          created: { gte: yearStartUnix },
         };
+
+    const listClient = stripe as unknown as {
+      balanceTransactions: {
+        list: (
+          params: {
+            limit: number;
+            starting_after?: string;
+            expand?: string[];
+            created?: { gte?: number };
+          },
+          opts: { stripeAccount: string },
+        ) => Promise<ListResp>;
+      };
+    };
+
+    let list: ListResp;
+    try {
+      list = (await listClient.balanceTransactions.list(listParams, {
+        stripeAccount: stripeUserId,
+      })) as ListResp;
+    } catch (err) {
+      // Safety net: if a cursor page still fails (e.g. a stale cursor
+      // Stripe can't paginate from), recover ONCE by dropping the cursor
+      // and re-listing from the year start. The UNIQUE index on
+      // external_transaction_id makes the re-list idempotent — no
+      // duplicates — so this favours correctness over a wasted call.
+      if (lastSeen && !retriedWithoutCursor) {
+        retriedWithoutCursor = true;
+        lastSeen = null;
+        added = 0;
+        pageIdx = -1; // loop's ++ takes the next iteration back to page 0
+        continue;
       }
-    ).balanceTransactions.list(
-      {
-        limit: PAGE,
-        expand: ["data.source"],
-        // Server-side cutoff at Jan 1 (UTC) of the current year.
-        created: { gte: yearStartUnix },
-        ...(lastSeen ? { starting_after: lastSeen } : {}),
-      },
-      { stripeAccount: stripeUserId },
-    )) as ListResp;
+      throw err;
+    }
 
     if (!list.data || list.data.length === 0) break;
 
