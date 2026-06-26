@@ -102,16 +102,40 @@ export default function ExamplePage() {
             <Wordmark size="md" tone="cream" />
           </Link>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-            {/* Hidden on phones — the wordmark + "Sign up free" already fill
-                the row there, and showing Pricing forced the link to wrap
-                ("Prici / ng") on narrow widths. */}
+            {/* Pricing is hidden on phones (it forced "Prici / ng" wraps on
+                narrow widths) and shown from sm+. */}
             <Link
               href="/pricing"
               className="hidden sm:inline-block text-sm text-cream/80 hover:text-cream whitespace-nowrap"
             >
               Pricing
             </Link>
-            <Link href="/login" className="btn-primary text-sm whitespace-nowrap">
+            {/* Phone: a compact avatar/account icon instead of the full
+                "Sign up free" button, which crowded the wordmark. */}
+            <Link
+              href="/login"
+              aria-label="Sign up free"
+              className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-full border border-gold-300/50 text-cream/90 transition-colors hover:border-gold-300 hover:text-cream"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M5.5 19.5c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" />
+              </svg>
+            </Link>
+            {/* sm+ : full text button */}
+            <Link
+              href="/login"
+              className="hidden sm:inline-block btn-primary text-sm whitespace-nowrap"
+            >
               Sign up free
             </Link>
           </div>
