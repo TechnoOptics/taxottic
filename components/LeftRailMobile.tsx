@@ -134,50 +134,66 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
         )
       : null;
 
+  // Portal the FAB to document.body — same as the drawer. AppHeader
+  // mounts <LeftRailMobile> INSIDE the .app-header element, and
+  // .app-header carries `backdrop-filter: blur()` for its frosted look.
+  // A filter / backdrop-filter makes that element the containing block
+  // for `position: fixed` descendants (CSS Containing Block spec), so
+  // the FAB's `bottom/left` were measured against the ~52px header
+  // instead of the viewport — it rendered stuck in the top-left status
+  // bar instead of the bottom-left corner. Mounting on <body> (no
+  // filtered ancestor) restores true viewport-fixed positioning.
+  const fab = mounted
+    ? createPortal(
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={open}
+          // Bottom-left FAB. Sits above the safe-bottom inset (gesture
+          // bar on Android, home-indicator on iOS) so it never gets
+          // covered. 56 px square is the standard FAB size — large
+          // enough for a thumb tap, small enough to not crowd content.
+          // z-50 sits above the header (z-30) but below the sheet
+          // (z-60) when open.
+          style={{
+            bottom:
+              "calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 1rem)",
+            left:
+              "calc(max(env(safe-area-inset-left, 0px), 0px) + 1rem)",
+          }}
+          className="
+            lg:hidden fixed z-50
+            h-14 w-14 rounded-full
+            bg-forest-900 text-cream
+            shadow-[0_8px_24px_rgba(0,0,0,0.35)]
+            flex items-center justify-center
+            active:bg-forest-800 active:scale-95
+            transition-transform
+          "
+        >
+          {/* Hamburger icon — bigger and more recognizable than the
+              previous 3-dot grab handle. */}
+          <svg
+            viewBox="0 0 24 24"
+            width="24"
+            height="24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>,
+        document.body,
+      )
+    : null;
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open menu"
-        aria-expanded={open}
-        // Bottom-left FAB. Sits above the safe-bottom inset (gesture
-        // bar on Android, home-indicator on iOS) so it never gets
-        // covered. 56 px square is the standard FAB size — large
-        // enough for a thumb tap, small enough to not crowd content.
-        // z-50 sits above the header (z-30) but below the sheet
-        // (z-60) when open.
-        style={{
-          bottom:
-            "calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 1rem)",
-          left:
-            "calc(max(env(safe-area-inset-left, 0px), 0px) + 1rem)",
-        }}
-        className="
-          lg:hidden fixed z-50
-          h-14 w-14 rounded-full
-          bg-forest-900 text-cream
-          shadow-[0_8px_24px_rgba(0,0,0,0.35)]
-          flex items-center justify-center
-          active:bg-forest-800 active:scale-95
-          transition-transform
-        "
-      >
-        {/* Hamburger icon — bigger and more recognizable than the
-            previous 3-dot grab handle. */}
-        <svg
-          viewBox="0 0 24 24"
-          width="24"
-          height="24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          <path d="M4 7h16M4 12h16M4 17h16" />
-        </svg>
-      </button>
+      {fab}
       {drawer}
     </>
   );
