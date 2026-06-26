@@ -101,14 +101,17 @@ export default function ExamplePage() {
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+            {/* Hidden on phones — the wordmark + "Sign up free" already fill
+                the row there, and showing Pricing forced the link to wrap
+                ("Prici / ng") on narrow widths. */}
             <Link
               href="/pricing"
-              className="text-sm text-cream/80 hover:text-cream"
+              className="hidden sm:inline-block text-sm text-cream/80 hover:text-cream whitespace-nowrap"
             >
               Pricing
             </Link>
-            <Link href="/login" className="btn-primary text-sm">
+            <Link href="/login" className="btn-primary text-sm whitespace-nowrap">
               Sign up free
             </Link>
           </div>
