@@ -1460,13 +1460,17 @@ function TaxWaterfall(props: {
 // ---------------------------------------------------------------------------
 // Brand palette: navy (forest) ↔ champagne (gold) shades, alternating for
 // adjacent-slice contrast.
+// The forecast renders on the app's dark (navy) theme, and these are raw
+// SVG fills — not Tailwind classes, so the dark-theme remap never touches
+// them — so every entry is a LIGHT champagne/periwinkle that reads on dark.
+// Gold and blue alternate for adjacent-slice contrast.
 const DONUT_COLORS = [
-  "#243150", // forest-700
-  "#c4a25d", // gold-500
-  "#41527d", // forest-500
-  "#8a661f", // gold-700
+  "#d5bb7e", // gold-400
   "#8898bd", // forest-300
   "#e0c590", // gold-300
+  "#b0bcd6", // forest-200
+  "#c4a25d", // gold-500
+  "#aab4cf", // light periwinkle
 ];
 
 function DeductionDonut({
@@ -1513,7 +1517,7 @@ function DeductionDonut({
           dominantBaseline="central"
           className="rotate-90"
           transform="rotate(90 80 80)"
-          style={{ fontSize: 15, fontWeight: 700, fill: "#192539" }}
+          style={{ fontSize: 15, fontWeight: 700, fill: "#fbf7e9" }}
         >
           {compactCents(total)}
         </text>
@@ -1675,22 +1679,22 @@ function CashFlowCurve({
 
   return (
     <div className="mt-5">
-      <svg viewBox={`0 0 ${W} ${H + 14}`} className="w-full" preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${H + 14}`} className="w-full">
         {/* set-aside area */}
         <path
           d={`${line(tax)} L${x(11).toFixed(1)},${(H - padB).toFixed(1)} L${x(0).toFixed(1)},${(H - padB).toFixed(1)} Z`}
-          fill="#c4a25d"
-          fillOpacity="0.14"
+          fill="#8898bd"
+          fillOpacity="0.16"
         />
-        <path d={line(net)} fill="none" stroke="#243150" strokeWidth="2.5" />
-        <path d={line(tax)} fill="none" stroke="#c4a25d" strokeWidth="2.5" />
+        <path d={line(net)} fill="none" stroke="#d5bb7e" strokeWidth="2" />
+        <path d={line(tax)} fill="none" stroke="#8898bd" strokeWidth="2" />
         {months.map((m, i) => (
           <text
             key={i}
             x={x(i)}
             y={H + 10}
             textAnchor="middle"
-            style={{ fontSize: 8, fill: "#52525b" }}
+            style={{ fontSize: 8, fill: "rgba(251,247,233,0.55)" }}
           >
             {m}
           </text>
@@ -1698,11 +1702,17 @@ function CashFlowCurve({
       </svg>
       <div className="flex flex-wrap gap-4 text-[11px] text-ink-muted justify-between mt-1">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-2.5 h-0.5 bg-forest-700" />
+          <span
+            className="inline-block w-2.5 h-0.5"
+            style={{ background: "#d5bb7e" }}
+          />
           Net income (cumulative) · {compactCents(net[11])}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-2.5 h-0.5 bg-gold-500" />
+          <span
+            className="inline-block w-2.5 h-0.5"
+            style={{ background: "#8898bd" }}
+          />
           Set aside for taxes · {compactCents(tax[11])}
         </span>
       </div>
