@@ -54,8 +54,11 @@ export function TripEndpoints({
     };
   }, [startLat, startLng, endLat, endLng, savedStart, savedEnd]);
 
-  const startText = savedStart || start?.short || null;
-  const endText = savedEnd || end?.short || null;
+  // Priority: the user's own saved-place name → the business/POI name
+  // from Places ("Walmart") → the bare city label. Full address stays
+  // in the title tooltip.
+  const startText = savedStart || start?.name || start?.short || null;
+  const endText = savedEnd || end?.name || end?.short || null;
 
   if (!done && !startText && !endText) {
     return (

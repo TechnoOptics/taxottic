@@ -20,14 +20,61 @@ export type PlaceLabel = {
   short: string;
   /** "3700 Molina St, Shakopee, MN 55379, USA" — full address, tooltip. */
   full: string;
+  /** Business / POI name when the endpoint is at one ("Walmart",
+   *  "Starbucks", a client's office). null for a residential street or
+   *  highway shoulder. Resolved via a nearby Places lookup; the drive
+   *  log shows this in place of the bare city when present. */
+  name?: string | null;
 };
 
-const LS_PREFIX = "taxottic.revgeo.";
+// Bumped .revgeo. → .revgeo2. so cache entries written before the
+// business-name field get re-resolved once (still one lookup per ~11 m
+// place, so the added Places cost stays bounded to distinct endpoints).
+const LS_PREFIX = "taxottic.revgeo2.";
 const mem = new Map<string, Promise<PlaceLabel | null>>();
 
 /** Round to 4 dp (~11 m) so near-identical fixes share a cache entry. */
 function cacheKey(lat: number, lng: number): string {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+/** Nearest prominent establishment to a coordinate, via the Places
+ *  library (already loaded for the breadcrumb map + address
+ *  autocomplete — no new key/script). Lets a trip endpoint read
+ *  "Walmart" instead of just "Shakopee, MN". Returns null when there's
+ *  nothing named within ~100 m (a residential street, a highway), so
+ *  the caller falls back to the city label. */
+function findNearbyName(
+  maps: any,
+  lat: number,
+  lng: number,
+): Promise<{ name: string; vicinity: string | null } | null> {
+  return new Promise((resolve) => {
+    try {
+      if (!maps.places?.PlacesService) {
+        resolve(null);
+        return;
+      }
+      const svc = new maps.places.PlacesService(document.createElement("div"));
+      svc.nearbySearch(
+        { location: { lat, lng }, radius: 100 },
+        (results: any[] | null, status: string) => {
+          const ok = status === maps.places?.PlacesServiceStatus?.OK;
+          const top = results && results[0];
+          if (ok && top?.name) {
+            resolve({
+              name: String(top.name),
+              vicinity: top.vicinity ? String(top.vicinity) : null,
+            });
+          } else {
+            resolve(null);
+          }
+        },
+      );
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 export function reverseGeocode(
@@ -94,6 +141,16 @@ export function reverseGeocode(
         );
       });
       if (label) {
+        // Enrich with a business/POI name when the endpoint sits at one
+        // (a Walmart, a client's office, a restaurant). Keep the city
+        // label as the fallback when there's nothing named here.
+        const poi = await findNearbyName(maps, lat, lng);
+        if (poi?.name) {
+          label.name = poi.name;
+          label.full = poi.vicinity
+            ? `${poi.name}, ${poi.vicinity}`
+            : `${poi.name} · ${label.full}`;
+        }
         try {
           window.localStorage.setItem(LS_PREFIX + k, JSON.stringify(label));
         } catch {
