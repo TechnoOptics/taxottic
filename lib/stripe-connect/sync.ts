@@ -199,10 +199,18 @@ export async function syncStripeConnection(
       expand?: string[];
       created?: { gte?: number };
     } = lastSeen
-      ? { limit: PAGE, expand: ["data.source"], starting_after: lastSeen }
+      ? {
+          limit: PAGE,
+          // data.source.invoice: lets us see whether a charge came from
+          // a subscription invoice (recurring revenue) vs a one-off
+          // payment, so the auto-apply can set recurrence (see
+          // subscriptionRecurrence) and the forecast projects it.
+          expand: ["data.source", "data.source.invoice"],
+          starting_after: lastSeen,
+        }
       : {
           limit: PAGE,
-          expand: ["data.source"],
+          expand: ["data.source", "data.source.invoice"],
           created: { gte: yearStartUnix },
         };
 
@@ -416,6 +424,49 @@ function enrichedDescription(
  * function wrote "T048" and the FK silently rejected every row, so
  * expenses never showed up. Keep this mapping aligned with the seed.
  */
+/**
+ * Detect whether a Stripe income charge is recurring subscription
+ * revenue, and at what cadence, from the expanded balance-transaction
+ * payload (we expand data.source.invoice for exactly this). Reads the
+ * charge's invoice → subscription link + the billing interval.
+ *
+ * Conservative on purpose: returns "one_off" unless it can read a clear
+ * weekly / monthly / quarterly interval. An annual subscription (one
+ * hit per tax year) and any unreadable shape both stay "one_off", so a
+ * mis-read can never OVER-project the forecast — the worst case is we
+ * miss a recurrence, which the user can still set by hand.
+ */
+function subscriptionRecurrence(
+  raw: Record<string, unknown>,
+): "one_off" | "weekly" | "monthly" | "quarterly" {
+  const src = raw.source;
+  if (!src || typeof src !== "object") return "one_off";
+  const inv = (src as Record<string, unknown>).invoice;
+  if (!inv || typeof inv !== "object") return "one_off";
+  const invoice = inv as Record<string, unknown>;
+  const billingReason = String(invoice.billing_reason ?? "");
+  const isSubscription =
+    Boolean(invoice.subscription) || billingReason.startsWith("subscription");
+  if (!isSubscription) return "one_off";
+  // Cadence from the first recurring line's price (or legacy plan).
+  const linesData = (invoice.lines as Record<string, unknown> | undefined)
+    ?.data;
+  const line = Array.isArray(linesData)
+    ? (linesData[0] as Record<string, unknown>)
+    : null;
+  const recurring =
+    ((line?.price as Record<string, unknown> | undefined)?.recurring as
+      | Record<string, unknown>
+      | undefined) ?? (line?.plan as Record<string, unknown> | undefined);
+  const interval = String(recurring?.interval ?? "");
+  const count = Number(recurring?.interval_count ?? 1);
+  if (interval === "week") return "weekly";
+  if (interval === "month" && count === 3) return "quarterly";
+  if (interval === "month") return "monthly";
+  // "year" (once per tax year) or unknown → leave as a single occurrence.
+  return "one_off";
+}
+
 async function autoApplyPendingStripe(args: {
   admin: SupabaseClient;
   bankAccountId: string;
@@ -469,6 +520,9 @@ async function autoApplyPendingStripe(args: {
           month,
           amount_cents: Math.abs(cents),
           source: "sales",
+          // Recurring subscription revenue → mark it so the forecast
+          // projects it across the year instead of treating it one-off.
+          recurrence: subscriptionRecurrence(raw),
           notes: buildIncomeNote({
             description: tx.description as string | null,
             src,
