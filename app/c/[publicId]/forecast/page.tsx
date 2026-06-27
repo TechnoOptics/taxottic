@@ -150,6 +150,8 @@ export default async function ForecastPage({ params }: { params: Params }) {
     recurringBizExpenseMonthly,
     recurringMealsMonthly,
     recurringAboveTheLineMonthly,
+    federalBrackets,
+    deductionBreakdown,
   } = buildCompanyForecast({
     taxYear,
     currentMonth,
@@ -767,11 +769,76 @@ export default async function ForecastPage({ params }: { params: Params }) {
             the same numbers as a side-by-side ledger.
           </p>
           <MonthlyBars income={incomeByMonth} expenses={expenseByMonth} />
+          <CashFlowCurve
+            income={incomeByMonth}
+            expenses={expenseByMonth}
+            effectiveRate={result.effectiveRate}
+          />
           <MonthlyTable
             incomeByMonth={incomeByMonth}
             expenseByMonth={expenseByMonth}
           />
         </div>
+
+        {/* Deeper analysis — waterfall, deduction mix, bracket ladder.
+            Everything here is computed by the forecast engine already. */}
+        {result.projectedIncomeCents > 0 ? (
+          <div className="mt-6 card p-5 sm:p-7">
+            <h2 className="display text-xl text-forest-900">
+              Where every dollar goes
+            </h2>
+            <p className="text-xs text-ink-muted mt-1">
+              Your projected gross income flowing down through business
+              write-offs and each layer of tax to what you actually keep.
+            </p>
+            <TaxWaterfall
+              grossCents={result.projectedIncomeCents}
+              expensesCents={result.projectedExpensesCents}
+              federalCents={result.federalIncomeTaxCents}
+              seCents={result.selfEmploymentTaxCents}
+              stateCents={result.stateTaxCents}
+              addlMedicareCents={result.additionalMedicareCents}
+              niitCents={result.niitCents}
+              amtCents={result.amtAddOnCents}
+              capGainsCents={result.capitalGainsTaxCents}
+              refundableCreditsCents={
+                result.eitcCents + result.educationCreditRefundableCents
+              }
+              totalTaxCents={result.totalTaxCents}
+            />
+          </div>
+        ) : null}
+
+        {deductionBreakdown.length > 0 ? (
+          <div className="mt-6 card p-5 sm:p-7">
+            <h2 className="display text-xl text-forest-900">
+              Where your write-offs come from
+            </h2>
+            <p className="text-xs text-ink-muted mt-1">
+              Projected full-year deductions by source — the biggest levers
+              on your taxable income, largest first.
+            </p>
+            <DeductionDonut slices={deductionBreakdown} />
+          </div>
+        ) : null}
+
+        {result.taxableIncomeCents > 0 && company.entity_type !== "c_corp" ? (
+          <div className="mt-6 card p-5 sm:p-7">
+            <h2 className="display text-xl text-forest-900">
+              Your federal tax brackets
+            </h2>
+            <p className="text-xs text-ink-muted mt-1">
+              How your projected taxable income fills the {taxYear} brackets.
+              Only income in each band is taxed at that band&rsquo;s rate —
+              that&rsquo;s the difference between your marginal and effective
+              rate.
+            </p>
+            <BracketLadder
+              brackets={federalBrackets}
+              taxableIncomeCents={result.taxableIncomeCents}
+            />
+          </div>
+        ) : null}
 
         {/* How we calculated this */}
         {result.assumptions.length > 0 ? (
@@ -1275,6 +1342,368 @@ function MonthlyBars({
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 bg-gold-400 rounded-sm" />
           Deductible expenses
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Compact money for chart axes / labels: $1.2k, $34k, $1.1M.
+function compactCents(cents: number): string {
+  const d = Math.abs(cents) / 100;
+  const sign = cents < 0 ? "-" : "";
+  if (d >= 1_000_000) return `${sign}$${(d / 1_000_000).toFixed(1)}M`;
+  if (d >= 1_000) return `${sign}$${Math.round(d / 1_000)}k`;
+  return `${sign}$${Math.round(d)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Tax waterfall — gross income cascading through write-offs + each tax layer
+// down to take-home. Each step is a floating bar; the running total carries
+// from one step's end to the next step's start.
+// ---------------------------------------------------------------------------
+type WaterfallStep = {
+  label: string;
+  delta: number; // signed: negative reduces the running total
+  kind: "income" | "expense" | "tax" | "credit" | "result";
+};
+
+function TaxWaterfall(props: {
+  grossCents: number;
+  expensesCents: number;
+  federalCents: number;
+  seCents: number;
+  stateCents: number;
+  addlMedicareCents: number;
+  niitCents: number;
+  amtCents: number;
+  capGainsCents: number;
+  refundableCreditsCents: number;
+  totalTaxCents: number;
+}) {
+  const takeHome = props.grossCents - props.expensesCents - props.totalTaxCents;
+  const allSteps: WaterfallStep[] = [
+    { label: "Gross income", delta: props.grossCents, kind: "income" },
+    { label: "Business write-offs", delta: -props.expensesCents, kind: "expense" },
+    { label: "Federal income tax", delta: -props.federalCents, kind: "tax" },
+    { label: "Self-employment tax", delta: -props.seCents, kind: "tax" },
+    { label: "State tax", delta: -props.stateCents, kind: "tax" },
+    { label: "Add'l Medicare (0.9%)", delta: -props.addlMedicareCents, kind: "tax" },
+    { label: "Net investment tax (3.8%)", delta: -props.niitCents, kind: "tax" },
+    { label: "Alternative minimum tax", delta: -props.amtCents, kind: "tax" },
+    { label: "Capital-gains tax", delta: -props.capGainsCents, kind: "tax" },
+    { label: "Refundable credits", delta: props.refundableCreditsCents, kind: "credit" },
+  ];
+  const steps = allSteps.filter((s) => s.delta !== 0);
+
+  const scale = Math.max(props.grossCents, 1);
+  const barColor: Record<WaterfallStep["kind"], string> = {
+    income: "bg-forest-700",
+    expense: "bg-gold-400",
+    tax: "bg-red-500",
+    credit: "bg-emerald-500",
+    result: "bg-forest-900",
+  };
+
+  const rows = steps.map((s, i) => {
+    const before = steps.slice(0, i).reduce((a, st) => a + st.delta, 0);
+    const after = before + s.delta;
+    const lo = Math.min(before, after);
+    const hi = Math.max(before, after);
+    return {
+      ...s,
+      leftPct: (lo / scale) * 100,
+      widthPct: Math.max(((hi - lo) / scale) * 100, 0.5),
+    };
+  });
+
+  return (
+    <div className="mt-5 grid gap-2">
+      {rows.map((r, i) => (
+        <div key={i} className="grid grid-cols-[9.5rem_1fr_5.5rem] items-center gap-2 sm:grid-cols-[12rem_1fr_6.5rem]">
+          <span className="text-xs text-ink-soft truncate">{r.label}</span>
+          <div className="relative h-5 rounded bg-forest-100">
+            <div
+              className={`absolute top-0 h-5 rounded ${barColor[r.kind]}`}
+              style={{ left: `${r.leftPct}%`, width: `${r.widthPct}%` }}
+            />
+          </div>
+          <span
+            className={`text-xs text-right tabular-nums ${
+              r.delta < 0 ? "text-red-600" : "text-forest-700"
+            }`}
+          >
+            {r.delta < 0 ? "−" : "+"}
+            {formatCents(Math.abs(r.delta))}
+          </span>
+        </div>
+      ))}
+      {/* Take-home result */}
+      <div className="grid grid-cols-[9.5rem_1fr_5.5rem] items-center gap-2 border-t border-forest-200 pt-2 mt-1 sm:grid-cols-[12rem_1fr_6.5rem]">
+        <span className="text-xs font-semibold text-forest-900">Take-home pay</span>
+        <div className="relative h-6 rounded bg-forest-100">
+          <div
+            className="absolute top-0 h-6 rounded bg-forest-900"
+            style={{ left: 0, width: `${(Math.max(takeHome, 0) / scale) * 100}%` }}
+          />
+        </div>
+        <span className="text-xs text-right font-semibold tabular-nums text-forest-900">
+          {formatCents(takeHome)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Deduction donut — SVG ring of where the write-offs come from + a legend.
+// ---------------------------------------------------------------------------
+// Brand palette: navy (forest) ↔ champagne (gold) shades, alternating for
+// adjacent-slice contrast.
+const DONUT_COLORS = [
+  "#243150", // forest-700
+  "#c4a25d", // gold-500
+  "#41527d", // forest-500
+  "#8a661f", // gold-700
+  "#8898bd", // forest-300
+  "#e0c590", // gold-300
+];
+
+function DeductionDonut({
+  slices,
+}: {
+  slices: { key: string; label: string; cents: number }[];
+}) {
+  const total = slices.reduce((a, s) => a + s.cents, 0);
+  if (total <= 0) return null;
+  const R = 60;
+  const C = 2 * Math.PI * R;
+  const fracs = slices.map((s) => s.cents / total);
+  const arcs = slices.map((s, i) => {
+    const frac = fracs[i];
+    const startFrac = fracs.slice(0, i).reduce((a, b) => a + b, 0);
+    return {
+      color: DONUT_COLORS[i % DONUT_COLORS.length],
+      dash: frac * C,
+      gap: C - frac * C,
+      offset: -startFrac * C,
+    };
+  });
+
+  return (
+    <div className="mt-5 flex flex-col sm:flex-row items-center gap-6">
+      <svg viewBox="0 0 160 160" className="w-40 h-40 shrink-0 -rotate-90">
+        {arcs.map((a, i) => (
+          <circle
+            key={i}
+            cx="80"
+            cy="80"
+            r={R}
+            fill="none"
+            stroke={a.color}
+            strokeWidth="22"
+            strokeDasharray={`${a.dash} ${a.gap}`}
+            strokeDashoffset={a.offset}
+          />
+        ))}
+        <text
+          x="80"
+          y="80"
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="rotate-90"
+          transform="rotate(90 80 80)"
+          style={{ fontSize: 15, fontWeight: 700, fill: "#192539" }}
+        >
+          {compactCents(total)}
+        </text>
+      </svg>
+      <ul className="grid gap-1.5 w-full">
+        {slices.map((s, i) => (
+          <li key={s.key} className="flex items-center gap-2 text-sm">
+            <span
+              className="inline-block w-3 h-3 rounded-sm shrink-0"
+              style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }}
+            />
+            <span className="text-ink-soft flex-1">{s.label}</span>
+            <span className="tabular-nums text-ink-muted">
+              {((s.cents / total) * 100).toFixed(0)}%
+            </span>
+            <span className="tabular-nums text-forest-800 w-20 text-right">
+              {formatCents(s.cents)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bracket ladder — how taxable income fills the federal ordinary brackets.
+// ---------------------------------------------------------------------------
+function BracketLadder({
+  brackets,
+  taxableIncomeCents,
+}: {
+  brackets: { rate: number; upTo: number | null }[];
+  taxableIncomeCents: number;
+}) {
+  // Each bracket's lower bound is the previous bracket's upper bound (the
+  // `upTo` values are cumulative). Precompute so nothing is reassigned
+  // during render.
+  const lowers = brackets.map((_, i) =>
+    i === 0 ? 0 : (brackets[i - 1].upTo ?? 0),
+  );
+  const rows = brackets.map((b, i) => {
+    const lower = lowers[i];
+    const upper = b.upTo; // cents or null
+    const width = upper == null ? null : upper - lower;
+    const filled = Math.max(
+      0,
+      Math.min(taxableIncomeCents, upper ?? Infinity) - lower,
+    );
+    const fillPct = width == null ? (filled > 0 ? 100 : 0) : (filled / width) * 100;
+    const isMarginal =
+      taxableIncomeCents > lower && (upper == null || taxableIncomeCents <= upper);
+    return {
+      rate: b.rate,
+      upper,
+      rangeLabel:
+        upper == null
+          ? `${compactCents(lower)}+`
+          : `${compactCents(lower)} – ${compactCents(upper)}`,
+      fillPct: Math.max(0, Math.min(100, fillPct)),
+      isMarginal,
+      taxedHere: filled,
+    };
+  });
+  const marginalRow = rows.find((r) => r.isMarginal);
+  const marginalNote =
+    marginalRow && marginalRow.upper != null
+      ? `${formatCents(marginalRow.upper - taxableIncomeCents)} of income left before the ${pct(
+          nextRate(brackets, marginalRow.rate),
+        )} bracket.`
+      : null;
+
+  return (
+    <div className="mt-5 grid gap-1.5">
+      {rows.map((r, i) => (
+        <div
+          key={i}
+          className={`grid grid-cols-[3rem_1fr_5rem] items-center gap-2 rounded px-1.5 py-1 ${
+            r.isMarginal ? "bg-gold-100/70 ring-1 ring-gold-300" : ""
+          }`}
+        >
+          <span
+            className={`text-xs font-semibold tabular-nums ${
+              r.isMarginal ? "text-gold-800" : "text-ink-soft"
+            }`}
+          >
+            {pct(r.rate)}
+          </span>
+          <div className="relative h-4 rounded bg-forest-100">
+            <div
+              className={`absolute top-0 left-0 h-4 rounded ${
+                r.isMarginal ? "bg-gold-500" : "bg-forest-600"
+              }`}
+              style={{ width: `${r.fillPct}%` }}
+            />
+            <span className="absolute inset-0 flex items-center pl-2 text-[10px] text-ink-muted">
+              {r.rangeLabel}
+            </span>
+          </div>
+          <span className="text-[11px] text-right tabular-nums text-ink-muted">
+            {r.taxedHere > 0 ? compactCents(r.taxedHere) : "—"}
+          </span>
+        </div>
+      ))}
+      {marginalNote ? (
+        <p className="text-xs text-gold-800 mt-2">{marginalNote}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function nextRate(
+  brackets: { rate: number }[],
+  current: number,
+): number {
+  const idx = brackets.findIndex((b) => b.rate === current);
+  return brackets[idx + 1]?.rate ?? current;
+}
+
+// ---------------------------------------------------------------------------
+// Cash-flow curve — cumulative net income vs. a running "set aside for taxes"
+// line, so quarterly bills are never a surprise.
+// ---------------------------------------------------------------------------
+function CashFlowCurve({
+  income,
+  expenses,
+  effectiveRate,
+}: {
+  income: number[];
+  expenses: number[];
+  effectiveRate: number;
+}) {
+  const W = 320;
+  const H = 120;
+  const padL = 4;
+  const padR = 4;
+  const padT = 8;
+  const padB = 8;
+
+  let cumNet = 0;
+  let cumTax = 0;
+  const net: number[] = [];
+  const tax: number[] = [];
+  for (let i = 0; i < 12; i++) {
+    cumNet += (income[i] ?? 0) - (expenses[i] ?? 0);
+    cumTax += Math.max(0, (income[i] ?? 0) - (expenses[i] ?? 0)) * effectiveRate;
+    net.push(cumNet);
+    tax.push(cumTax);
+  }
+  const peak = Math.max(...net, ...tax, 1);
+  const x = (i: number) =>
+    padL + (i / 11) * (W - padL - padR);
+  const y = (v: number) =>
+    padT + (1 - v / peak) * (H - padT - padB);
+  const line = (arr: number[]) =>
+    arr.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+
+  const months = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+  return (
+    <div className="mt-5">
+      <svg viewBox={`0 0 ${W} ${H + 14}`} className="w-full" preserveAspectRatio="none">
+        {/* set-aside area */}
+        <path
+          d={`${line(tax)} L${x(11).toFixed(1)},${(H - padB).toFixed(1)} L${x(0).toFixed(1)},${(H - padB).toFixed(1)} Z`}
+          fill="#c4a25d"
+          fillOpacity="0.14"
+        />
+        <path d={line(net)} fill="none" stroke="#243150" strokeWidth="2.5" />
+        <path d={line(tax)} fill="none" stroke="#c4a25d" strokeWidth="2.5" />
+        {months.map((m, i) => (
+          <text
+            key={i}
+            x={x(i)}
+            y={H + 10}
+            textAnchor="middle"
+            style={{ fontSize: 8, fill: "#52525b" }}
+          >
+            {m}
+          </text>
+        ))}
+      </svg>
+      <div className="flex flex-wrap gap-4 text-[11px] text-ink-muted justify-between mt-1">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-0.5 bg-forest-700" />
+          Net income (cumulative) · {compactCents(net[11])}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-0.5 bg-gold-500" />
+          Set aside for taxes · {compactCents(tax[11])}
         </span>
       </div>
     </div>
