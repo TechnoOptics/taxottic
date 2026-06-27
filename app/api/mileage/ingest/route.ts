@@ -1,57 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import {
-  segmentTrips,
-  suggestClassification,
-  STATIONARY_DWELL_MS,
-  type GpsPoint,
-  type Place,
-} from "@/lib/mileage/segmentation";
-import { tripDeductionCents } from "@/lib/mileage/deduction";
-import { notify } from "@/lib/push";
+import { type GpsPoint } from "@/lib/mileage/segmentation";
+import { finalizeUserTrips } from "@/lib/mileage/finalize";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST /api/mileage/ingest
 //
-// THE BIG REWRITE (May 25 2026). The old contract was:
-//   1. Receive a batch of points.
-//   2. Run segmentTrips() on the batch.
-//   3. Insert any closed trips.
-//   4. Return ok + tripsCreated.
-//
-// That contract silently dropped EVERY user's drives. The
-// segmenter needs a 5-min stationary dwell (or 8-min capture gap)
-// to close a trip. The device's @capgo plugin flushes every 2 min
-// during a drive. So every batch was mid-drive — continuous
-// movement, no closing pause — segmentTrips returned 0 trips, we
-// returned ok with tripsCreated=0, the device cleared its local
-// buffer, and the points were lost. Zero rows in mileage_points
-// or mileage_trips across the entire DB, ever, was the proof.
-//
-// New contract:
+// Contract (May 25 2026 rewrite):
 //   1. Persist every incoming point to mileage_points_raw (staging).
-//   2. Pull ALL still-unconsumed staging rows for this user+company
-//      (the last 24h to bound query cost).
-//   3. Run segmentTrips() over the union (sorted by captured_at).
-//   4. For each CLOSED trip the segmenter returns, insert into
-//      mileage_trips, copy the points into mileage_points, and mark
-//      the contributing staging rows consumed.
-//   5. Points that belong to an OPEN (still-moving) trip stay in
-//      staging for the next batch. Nothing is dropped.
+//   2. Hand off to finalizeUserTrips(), which pulls the still-unconsumed
+//      staging pool, runs segmentTrips() over it, and materialises any
+//      CLOSED trip into mileage_trips + mileage_points (marking the
+//      contributing staging rows consumed). Points belonging to an OPEN
+//      (still-moving) trip stay staged for the next batch — nothing is
+//      dropped.
 //
-// Console-logs the entire flow so Vercel runtime logs finally show
-// what's happening — the old route had zero logging, which is why
-// this bug went undiagnosed.
+// The segmenter needs a 5-min stationary dwell (or 8-min capture gap)
+// to close a trip. The device's @capgo plugin flushes every ~2 min
+// mid-drive, so a single batch is rarely a complete drive on its own —
+// that's why we re-segment the whole unconsumed pool every call.
+//
+// Bound: ingest segments only the last ~24h of staging (per-request
+// cost). Drives that don't close within that window are picked up by
+// the mileage-finalize CRON, which segments a wide window and closes
+// parked-but-open trips even when the device has stopped heartbeating
+// (app backgrounded/killed). See app/api/cron/mileage-finalize.
 
 type Body = {
   companyId?: string;
   points?: GpsPoint[];
   // Set by the client when the user toggles tracking OFF (the final
-  // flush in stopMileageTracking). Forces the tail-close below so an
+  // flush in stopMileageTracking). Forces the tail-close so an
   // in-progress trip materializes the instant the user stops, instead
-  // of being stranded open forever. See the closeOpenAtEnd comment.
+  // of being stranded open until the next heartbeat (which won't come,
+  // because the flush timer was just cleared).
   sessionEnded?: boolean;
 };
 
@@ -93,9 +77,7 @@ export async function POST(req: NextRequest) {
     console.log("[ingest] 400 — missing_company user=" + user.id);
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
-  const points = rawPoints
-    .filter(isFinitePoint)
-    .sort((a, b) => a.ts - b.ts);
+  const points = rawPoints.filter(isFinitePoint).sort((a, b) => a.ts - b.ts);
   if (points.length > 50_000) {
     console.log(
       "[ingest] 413 — too_many_points user=" + user.id + " n=" + points.length,
@@ -119,9 +101,8 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Stage the incoming points. Even a 1-point batch lands so we
-  // never silently drop. Skip if the array is empty (the device
-  // can still call us to drain its buffer + see the segmentation
-  // catch up to any already-staged data).
+  // never silently drop. An empty array is allowed — the device can
+  // call us purely to let the segmenter catch up to already-staged data.
   if (points.length > 0) {
     const stagingRows = points.map((p) => ({
       driver_user_id: user.id,
@@ -144,289 +125,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 2. Pull the user's unconsumed staging pool (last 24h bound), sorted
-  // asc by captured_at so the segmenter sees a chronological stream.
-  //
-  // PAGINATE (2026-06-01): PostgREST caps ANY single response at its
-  // max-rows (1000 on this project), so `.limit(50_000)` silently
-  // returned only the first 1000 fixes. A drive longer than ~1000
-  // points (≈ a 20-min+ drive) was therefore truncated, and successive
-  // segmentation passes split one real drive into fragments at the
-  // 1000-point boundary (confirmed on-device: a 38-min drive came out
-  // as two trips split at an exact page edge). Page through with
-  // .range() until a short page signals the end, up to a 50k hard cap.
-  const dayAgo = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-  const PAGE_SIZE = 1000;
-  const MAX_POOL = 50_000;
-  const fetchPage = (from: number) =>
-    admin
-      .from("mileage_points_raw")
-      .select("id, captured_at, lat, lng, speed_mps, accuracy_m")
-      .eq("driver_user_id", user.id)
-      .eq("company_id", companyId)
-      .is("consumed_at", null)
-      .gte("captured_at", dayAgo)
-      .order("captured_at", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-  const firstPage = await fetchPage(0);
-  if (firstPage.error) {
-    console.error("[ingest] pending fetch failed", firstPage.error.message);
-    return NextResponse.json(
-      { error: "pending_failed", detail: firstPage.error.message },
-      { status: 500 },
-    );
-  }
-  const pending = firstPage.data ?? [];
-  while (
-    pending.length > 0 &&
-    pending.length % PAGE_SIZE === 0 &&
-    pending.length < MAX_POOL
-  ) {
-    const next = await fetchPage(pending.length);
-    if (next.error) {
-      console.error("[ingest] pending page fetch failed", next.error.message);
-      break;
-    }
-    const rows = next.data ?? [];
-    pending.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
-  }
-
-  // Convert staging rows → GpsPoint for the segmenter. Keep a
-  // side-map id→raw row so we can mark them consumed after a trip
-  // is materialised.
-  type StagingRow = (typeof pending)[number];
-  type PointWithRaw = GpsPoint & { __raw: StagingRow };
-  const allPoints: PointWithRaw[] = pending.map((r) => ({
-    lat: r.lat as number,
-    lng: r.lng as number,
-    ts: Date.parse(r.captured_at as string),
-    speedMps: (r.speed_mps as number | null) ?? undefined,
-    accuracyM: (r.accuracy_m as number | null) ?? undefined,
-    __raw: r,
-  }));
+  // 2. Segment the unconsumed staging pool into closed trips. forceClose
+  // mirrors the client's explicit "I'm done" (sessionEnded); otherwise
+  // finalizeUserTrips closes only when the last point is >5 min old.
+  const result = await finalizeUserTrips(admin, user.id, companyId, {
+    sinceIso: new Date(Date.now() - 24 * 60 * 60_000).toISOString(),
+    forceClose: sessionEnded,
+    push: true,
+  });
 
   console.log(
-    `[ingest] user=${user.id} company=${companyId} incoming=${points.length} staging_pool=${allPoints.length} sessionEnded=${sessionEnded}`,
-  );
-
-  // 3. Known places for auto-classification.
-  const { data: placeRows } = await admin
-    .from("mileage_places")
-    .select("id, kind, lat, lng, radius_m")
-    .eq("company_id", companyId);
-  const places: Place[] = (placeRows ?? []).map((p) => ({
-    id: p.id as string,
-    kind: p.kind as Place["kind"],
-    lat: p.lat as number,
-    lng: p.lng as number,
-    radiusM: (p.radius_m as number) ?? 120,
-  }));
-
-  // 4. Segment across the full staging pool.
-  //
-  // closeOpenAtEnd is the user-is-parked test. If the most recent
-  // staged point is OLDER than STATIONARY_DWELL_MS (5 min), the user
-  // has stopped — fire the tail-close so the in-progress trip
-  // materializes. If the most recent point is fresh, the user is
-  // still driving — leave the trip open in staging and let the next
-  // heartbeat (which arrives every 30 s while tracking is active) be
-  // the one that finally closes it. Without this guard, every
-  // heartbeat fragments a real drive into ~20 tiny trips.
-  //
-  // sessionEnded short-circuits the age test (2026-05-30): when the
-  // user toggles tracking OFF, stopMileageTracking sends one final
-  // flush with sessionEnded:true. The last point is FRESH at that
-  // moment (they just stopped), so the age test alone would leave the
-  // trip open — and because the flush timer is now cleared, no later
-  // heartbeat ever arrives to close it. The drive sat stranded open
-  // in staging forever (confirmed in prod: a clean 1.2 km drive
-  // captured fine but never became a trip). Toggling off is an
-  // explicit "I'm done" — force the tail-close.
-  const lastPointAgeMs =
-    allPoints.length > 0
-      ? Date.now() - allPoints[allPoints.length - 1].ts
-      : Infinity;
-  const closeOpenAtEnd =
-    sessionEnded || lastPointAgeMs >= STATIONARY_DWELL_MS;
-  const trips = segmentTrips(
-    allPoints.map((p) => ({
-      lat: p.lat,
-      lng: p.lng,
-      ts: p.ts,
-      speedMps: p.speedMps,
-      accuracyM: p.accuracyM,
-    })),
-    { closeOpenAtEnd },
-  );
-
-  let tripsCreated = 0;
-  let businessMiles = 0;
-  let deductionCents = 0;
-
-  // Consume every still-unconsumed staging row inside a trip's time
-  // window, BY RANGE. CRITICAL (2026-06-01 on-device forensics): the
-  // old code consumed via `.in("id", [hundreds of uuids])`, which builds
-  // a multi-KB query URL that PostgREST silently truncates/rejects — so
-  // a real ~700-point drive's rows were never marked consumed, and every
-  // 30 s heartbeat re-segmented them into a brand-new duplicate trip (the
-  // user saw the same drive 9+ times before we caught it). A range
-  // update is one bounded statement that always covers the whole trip.
-  const consumeRange = async (
-    startedAtIso: string,
-    endedAtIso: string,
-    tripId: string,
-  ) => {
-    const { error } = await admin
-      .from("mileage_points_raw")
-      .update({
-        consumed_at: new Date().toISOString(),
-        consumed_trip_id: tripId,
-      })
-      .eq("driver_user_id", user.id)
-      .eq("company_id", companyId)
-      .is("consumed_at", null)
-      .gte("captured_at", startedAtIso)
-      .lte("captured_at", endedAtIso);
-    if (error) console.error("[ingest] consume range failed", error.message);
-  };
-
-  // 5. Materialise closed trips. For each trip the segmenter returns
-  // we find the matching subset of staging rows by timestamp range
-  // (segmentTrips preserves order, so startTs..endTs covers exactly
-  // the contributing fixes).
-  for (const trip of trips) {
-    const startedAt = new Date(trip.startTs).toISOString();
-    const endedAt = new Date(trip.endTs).toISOString();
-
-    // De-dupe by OVERLAP, not exact range. A single drive can be
-    // re-segmented across several flush batches with end times a few
-    // seconds apart; matching only the exact (start, end) let those
-    // through as duplicates (the user saw one drive as 9+ rows). Instead:
-    // find any existing trip whose time range overlaps this one. If an
-    // existing overlap is at least as complete (>= distance), treat this
-    // as a re-post — consume the points to it and skip. If the new trip
-    // is MORE complete, delete the stale overlapping fragment(s) (cascade
-    // clears their polyline points) and insert the fuller one below.
-    const { data: overlaps } = await admin
-      .from("mileage_trips")
-      .select("id, distance_miles")
-      .eq("company_id", companyId)
-      .eq("driver_user_id", user.id)
-      .lte("started_at", endedAt)
-      .gte("ended_at", startedAt);
-
-    if (overlaps && overlaps.length > 0) {
-      const maxMiles = Math.max(
-        ...overlaps.map((o) => Number(o.distance_miles) || 0),
-      );
-      if (trip.distanceMiles <= maxMiles + 0.005) {
-        const keeper = overlaps.reduce((a, b) =>
-          (Number(a.distance_miles) || 0) >= (Number(b.distance_miles) || 0)
-            ? a
-            : b,
-        );
-        await consumeRange(startedAt, endedAt, keeper.id as string);
-        continue;
-      }
-      await admin
-        .from("mileage_trips")
-        .delete()
-        .in(
-          "id",
-          overlaps.map((o) => o.id as string),
-        );
-    }
-
-    const classification = suggestClassification(trip, places);
-    const taxYear = new Date(trip.startTs).getUTCFullYear();
-    const dCents = tripDeductionCents(
-      { distanceMiles: trip.distanceMiles },
-      classification,
-      taxYear,
-    );
-
-    const { data: inserted, error: tripErr } = await admin
-      .from("mileage_trips")
-      .insert({
-        company_id: companyId,
-        driver_user_id: user.id,
-        started_at: startedAt,
-        ended_at: endedAt,
-        distance_miles: Number(trip.distanceMiles.toFixed(3)),
-        classification,
-        tax_year: taxYear,
-        deduction_cents: dCents,
-      })
-      .select("id")
-      .single();
-    if (tripErr || !inserted) {
-      console.error("[ingest] trip insert failed", tripErr?.message);
-      continue;
-    }
-
-    const pointRows = trip.points.map((pt) => ({
-      trip_id: inserted.id,
-      captured_at: new Date(pt.ts).toISOString(),
-      lat: pt.lat,
-      lng: pt.lng,
-      speed_mps: pt.speedMps ?? null,
-      accuracy_m: pt.accuracyM ?? null,
-    }));
-    if (pointRows.length > 0) {
-      const { error: ptErr } = await admin
-        .from("mileage_points")
-        .insert(pointRows);
-      if (ptErr) {
-        console.error("[ingest] points insert failed", ptErr.message);
-      }
-    }
-
-    // Mark the contributing staging rows consumed (by range — see
-    // consumeRange; never by a giant `.in(...)` id list).
-    await consumeRange(startedAt, endedAt, inserted.id);
-
-    tripsCreated++;
-    if (classification === "business") {
-      businessMiles += trip.distanceMiles;
-      deductionCents += dCents;
-    }
-    // Push for EVERY materialized trip so the phone (+ watch via the
-    // wear data layer) gets an immediate lock-screen ping. Unclassified
-    // trips use the existing `trip_classify` event (interactive
-    // category lets the watch attach Business/Personal swipe actions);
-    // already-classified trips use the lighter `trip_logged` event so
-    // the user knows the deduction landed without having to act.
-    // Both are deduped via notification_log on tripId so a
-    // re-segmentation pass can't double-push.
-    if (classification === "unclassified") {
-      await notify(user.id, { kind: "trip_classify", tripId: inserted.id });
-    } else {
-      await notify(user.id, {
-        kind: "trip_logged",
-        tripId: inserted.id,
-        classification,
-      });
-    }
-  }
-
-  const stagingRemaining = allPoints.length - trips.reduce((sum, t) => {
-    return (
-      sum +
-      allPoints.filter((p) => p.ts >= t.startTs && p.ts <= t.endTs).length
-    );
-  }, 0);
-
-  console.log(
-    `[ingest] done user=${user.id} trips=${tripsCreated} biz_mi=${businessMiles.toFixed(2)} ded_$=${(deductionCents / 100).toFixed(2)} staging_left=${stagingRemaining}`,
+    `[ingest] done user=${user.id} incoming=${points.length} pool=${result.poolSize} trips=${result.tripsCreated} biz_mi=${result.businessMiles.toFixed(2)} ded_$=${(result.deductionCents / 100).toFixed(2)} sessionEnded=${sessionEnded}`,
   );
 
   return NextResponse.json({
     ok: true,
-    tripsCreated,
-    businessMiles: Number(businessMiles.toFixed(3)),
-    deductionCents,
-    stagingPoolSize: allPoints.length,
-    stagingRemaining,
+    tripsCreated: result.tripsCreated,
+    businessMiles: Number(result.businessMiles.toFixed(3)),
+    deductionCents: result.deductionCents,
+    stagingPoolSize: result.poolSize,
   });
 }
