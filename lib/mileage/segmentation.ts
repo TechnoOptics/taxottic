@@ -64,8 +64,29 @@ export const DRIVING_SPEED_MPS = 8;
 /** Staying within this radius counts as "hasn't moved". */
 export const STATIONARY_RADIUS_M = 60;
 
-/** Stationary for at least this long ends the open trip. */
+/** "Parked" threshold used OUTSIDE the segmenter. The ingest/finalizer
+ *  treats a live trip as finished (and materializes it) once the most
+ *  recent staged point is at least this old — i.e. the phone has gone
+ *  quiet because the user parked. Kept short (5 min) so a finished
+ *  drive shows up promptly. This is NOT what splits a drive mid-stream;
+ *  that's TRIP_END_DWELL_MS. */
 export const STATIONARY_DWELL_MS = 5 * 60 * 1000;
+
+/** In-stream "the trip actually ended here" dwell. While segmenting a
+ *  CONTINUOUS point stream, the open trip closes only once the vehicle
+ *  has stayed within STATIONARY_RADIUS_M for at least this long. Set
+ *  well above a normal traffic stop — gridlock, a long red light, a
+ *  train crossing, a drawbridge — so sitting in traffic for several
+ *  minutes does NOT chop one drive into several. A real destination
+ *  stop lasts longer than this and still splits correctly.
+ *
+ *  Was 5 min, which mistook ~5–10 min traffic stops for arrivals and
+ *  fragmented a single drive into multiple trips (user report, Jun 2026).
+ *  Note: a genuine park where the phone then goes quiet still closes
+ *  promptly via the ingest's STATIONARY_DWELL_MS parked-test + the
+ *  closeOpenAtEnd tail-close — this longer dwell only matters while
+ *  points keep arriving (which is exactly the traffic case). */
+export const TRIP_END_DWELL_MS = 10 * 60 * 1000;
 
 /** A capture gap longer than this also ends the open trip
  *  (phone slept / GPS revoked / arrived and app killed). */
@@ -221,10 +242,11 @@ export function segmentTrips(
         current.push(cur);
       } else {
         // Within the geofence of the anchor.
-        if (cur.ts - stationaryAnchor.ts >= STATIONARY_DWELL_MS) {
-          // Dwell satisfied → the trip ended when we first
-          // settled. Trim trailing points that were just us
-          // sitting at the destination.
+        if (cur.ts - stationaryAnchor.ts >= TRIP_END_DWELL_MS) {
+          // Dwell satisfied → this was a real destination stop, not a
+          // traffic pause (TRIP_END_DWELL_MS is set above a typical
+          // jam/light). The trip ended when we first settled. Trim
+          // trailing points that were just us sitting at the destination.
           while (
             current.length > 1 &&
             current[current.length - 1].ts > stationaryAnchor.ts

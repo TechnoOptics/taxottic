@@ -53,14 +53,16 @@ describe("segmentTrips — the business's logical flow", () => {
     expect(trips).toHaveLength(1);
     expect(trips[0].distanceMiles).toBeGreaterThan(1.7); // ~3 km ≈ 1.86 mi
     expect(trips[0].distanceMiles).toBeLessThan(2.0);
-    // Trip should END at the arrival, not include the 6-min sit.
+    // One continuous trip whose endpoint is at the arrival location. (A
+    // 6-min sit is under TRIP_END_DWELL_MS, so it reads as a stop along
+    // the way; the trip still closes here via the end-of-stream tail.)
     expect(trips[0].endPoint.lat).toBeCloseTo(
       BASE_LAT + arrivalNorth / M_PER_DEG_LAT,
       4,
     );
   });
 
-  it("two drives split by a 5-min stop → two separate trips", () => {
+  it("two drives split by a 12-min destination stop → two separate trips", () => {
     const points: GpsPoint[] = [];
     let t = 0;
     let north = 0;
@@ -70,8 +72,8 @@ describe("segmentTrips — the business's logical flow", () => {
       north += 100;
       t += 10 * SEC;
     }
-    // Park 6 min.
-    for (let i = 0; i < 13; i++) {
+    // Park 12.5 min — a real destination, longer than TRIP_END_DWELL_MS.
+    for (let i = 0; i < 25; i++) {
       points.push(pt(north, t));
       t += 30 * SEC;
     }
@@ -81,13 +83,47 @@ describe("segmentTrips — the business's logical flow", () => {
       north += 100;
       t += 10 * SEC;
     }
-    // Final park 6 min so trip B closes too.
-    for (let i = 0; i < 13; i++) {
+    // Final park 12.5 min so trip B closes too.
+    for (let i = 0; i < 25; i++) {
       points.push(pt(north, t));
       t += 30 * SEC;
     }
     const trips = segmentTrips(points);
     expect(trips).toHaveLength(2);
+  });
+
+  it("a multi-minute traffic stop does NOT split one drive (the reported bug)", () => {
+    // Drive, hit traffic and sit ~6.5 min (longer than the OLD 5-min
+    // split, but under TRIP_END_DWELL_MS), then continue. Must come out
+    // as ONE continuous trip — not two fragments.
+    const points: GpsPoint[] = [];
+    let t = 0;
+    let north = 0;
+    // Drive ~2 km.
+    for (let i = 0; i < 20; i++) {
+      points.push(pt(north, t));
+      north += 100;
+      t += 10 * SEC;
+    }
+    // Stuck in traffic ~6.5 min (13 fixes @ 30 s, ±1 m jitter).
+    for (let i = 0; i < 13; i++) {
+      points.push(pt(north + (i % 2), t));
+      t += 30 * SEC;
+    }
+    // Continue ~2 km.
+    for (let i = 0; i < 20; i++) {
+      points.push(pt(north, t));
+      north += 100;
+      t += 10 * SEC;
+    }
+    // Final real park (12.5 min) so the (single) trip closes.
+    for (let i = 0; i < 25; i++) {
+      points.push(pt(north, t));
+      t += 30 * SEC;
+    }
+    const trips = segmentTrips(points);
+    expect(trips).toHaveLength(1);
+    expect(trips[0].distanceMiles).toBeGreaterThan(2.3); // ~4 km ≈ 2.49 mi
   });
 
   it("walking only (≈1.3 m/s) → no trips", () => {
@@ -184,9 +220,9 @@ describe("segmentTrips — the business's logical flow", () => {
   });
 
   it("closeOpenAtEnd:false still emits trips that closed via dwell mid-stream", () => {
-    // Drive A → 6-min stop → Drive B (still in progress). Drive A
-    // closes via the dwell test BEFORE the end of the stream, so it
-    // emits regardless of closeOpenAtEnd. Drive B is the tail; with
+    // Drive A → 12.5-min destination stop → Drive B (still in progress).
+    // Drive A closes via the dwell test BEFORE the end of the stream, so
+    // it emits regardless of closeOpenAtEnd. Drive B is the tail; with
     // closeOpenAtEnd:false it's deferred.
     const points: GpsPoint[] = [];
     let t = 0;
@@ -196,7 +232,7 @@ describe("segmentTrips — the business's logical flow", () => {
       north += 100;
       t += 10 * SEC;
     }
-    for (let i = 0; i < 13; i++) {
+    for (let i = 0; i < 25; i++) {
       points.push(pt(north, t));
       t += 30 * SEC;
     }
