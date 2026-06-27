@@ -151,7 +151,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
     recurringMealsMonthly,
     recurringAboveTheLineMonthly,
     federalBrackets,
-    deductionBreakdown,
   } = buildCompanyForecast({
     taxYear,
     currentMonth,
@@ -769,11 +768,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
             the same numbers as a side-by-side ledger.
           </p>
           <MonthlyBars income={incomeByMonth} expenses={expenseByMonth} />
-          <CashFlowCurve
-            income={incomeByMonth}
-            expenses={expenseByMonth}
-            effectiveRate={result.effectiveRate}
-          />
           <MonthlyTable
             incomeByMonth={incomeByMonth}
             expenseByMonth={expenseByMonth}
@@ -806,19 +800,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
               }
               totalTaxCents={result.totalTaxCents}
             />
-          </div>
-        ) : null}
-
-        {deductionBreakdown.length > 0 ? (
-          <div className="mt-6 card p-5 sm:p-7">
-            <h2 className="display text-xl text-forest-900">
-              Where your write-offs come from
-            </h2>
-            <p className="text-xs text-ink-muted mt-1">
-              Projected full-year deductions by source — the biggest levers
-              on your taxable income, largest first.
-            </p>
-            <DeductionDonut slices={deductionBreakdown} />
           </div>
         ) : null}
 
@@ -1456,94 +1437,6 @@ function TaxWaterfall(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Deduction donut — SVG ring of where the write-offs come from + a legend.
-// ---------------------------------------------------------------------------
-// Brand palette: navy (forest) ↔ champagne (gold) shades, alternating for
-// adjacent-slice contrast.
-// The forecast renders on the app's dark (navy) theme, and these are raw
-// SVG fills — not Tailwind classes, so the dark-theme remap never touches
-// them — so every entry is a LIGHT champagne/periwinkle that reads on dark.
-// Gold and blue alternate for adjacent-slice contrast.
-const DONUT_COLORS = [
-  "#d5bb7e", // gold-400
-  "#8898bd", // forest-300
-  "#e0c590", // gold-300
-  "#b0bcd6", // forest-200
-  "#c4a25d", // gold-500
-  "#aab4cf", // light periwinkle
-];
-
-function DeductionDonut({
-  slices,
-}: {
-  slices: { key: string; label: string; cents: number }[];
-}) {
-  const total = slices.reduce((a, s) => a + s.cents, 0);
-  if (total <= 0) return null;
-  const R = 60;
-  const C = 2 * Math.PI * R;
-  const fracs = slices.map((s) => s.cents / total);
-  const arcs = slices.map((s, i) => {
-    const frac = fracs[i];
-    const startFrac = fracs.slice(0, i).reduce((a, b) => a + b, 0);
-    return {
-      color: DONUT_COLORS[i % DONUT_COLORS.length],
-      dash: frac * C,
-      gap: C - frac * C,
-      offset: -startFrac * C,
-    };
-  });
-
-  return (
-    <div className="mt-5 flex flex-col sm:flex-row items-center gap-6">
-      <svg viewBox="0 0 160 160" className="w-40 h-40 shrink-0 -rotate-90">
-        {arcs.map((a, i) => (
-          <circle
-            key={i}
-            cx="80"
-            cy="80"
-            r={R}
-            fill="none"
-            stroke={a.color}
-            strokeWidth="22"
-            strokeDasharray={`${a.dash} ${a.gap}`}
-            strokeDashoffset={a.offset}
-          />
-        ))}
-        <text
-          x="80"
-          y="80"
-          textAnchor="middle"
-          dominantBaseline="central"
-          className="rotate-90"
-          transform="rotate(90 80 80)"
-          style={{ fontSize: 15, fontWeight: 700, fill: "#fbf7e9" }}
-        >
-          {compactCents(total)}
-        </text>
-      </svg>
-      <ul className="grid gap-1.5 w-full">
-        {slices.map((s, i) => (
-          <li key={s.key} className="flex items-center gap-2 text-sm">
-            <span
-              className="inline-block w-3 h-3 rounded-sm shrink-0"
-              style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }}
-            />
-            <span className="text-ink-soft flex-1">{s.label}</span>
-            <span className="tabular-nums text-ink-muted">
-              {((s.cents / total) * 100).toFixed(0)}%
-            </span>
-            <span className="tabular-nums text-forest-800 w-20 text-right">
-              {formatCents(s.cents)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Bracket ladder — how taxable income fills the federal ordinary brackets.
 // ---------------------------------------------------------------------------
 function BracketLadder({
@@ -1635,93 +1528,6 @@ function nextRate(
 ): number {
   const idx = brackets.findIndex((b) => b.rate === current);
   return brackets[idx + 1]?.rate ?? current;
-}
-
-// ---------------------------------------------------------------------------
-// Cash-flow curve — cumulative net income vs. a running "set aside for taxes"
-// line, so quarterly bills are never a surprise.
-// ---------------------------------------------------------------------------
-function CashFlowCurve({
-  income,
-  expenses,
-  effectiveRate,
-}: {
-  income: number[];
-  expenses: number[];
-  effectiveRate: number;
-}) {
-  const W = 320;
-  const H = 120;
-  const padL = 4;
-  const padR = 4;
-  const padT = 8;
-  const padB = 8;
-
-  // Set-aside is floored at zero: a negative effective rate (e.g. refundable
-  // credits exceeding tax) means you owe nothing to reserve, not a negative
-  // amount to "set aside."
-  const rate = Math.max(0, effectiveRate);
-  let cumNet = 0;
-  let cumTax = 0;
-  const net: number[] = [];
-  const tax: number[] = [];
-  for (let i = 0; i < 12; i++) {
-    cumNet += (income[i] ?? 0) - (expenses[i] ?? 0);
-    cumTax += Math.max(0, (income[i] ?? 0) - (expenses[i] ?? 0)) * rate;
-    net.push(cumNet);
-    tax.push(cumTax);
-  }
-  const peak = Math.max(...net, ...tax, 1);
-  const x = (i: number) =>
-    padL + (i / 11) * (W - padL - padR);
-  const y = (v: number) =>
-    padT + (1 - v / peak) * (H - padT - padB);
-  const line = (arr: number[]) =>
-    arr.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-
-  const months = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
-
-  return (
-    <div className="mt-5">
-      <svg viewBox={`0 0 ${W} ${H + 14}`} className="w-full">
-        {/* set-aside area */}
-        <path
-          d={`${line(tax)} L${x(11).toFixed(1)},${(H - padB).toFixed(1)} L${x(0).toFixed(1)},${(H - padB).toFixed(1)} Z`}
-          fill="#8898bd"
-          fillOpacity="0.16"
-        />
-        <path d={line(net)} fill="none" stroke="#d5bb7e" strokeWidth="2" />
-        <path d={line(tax)} fill="none" stroke="#8898bd" strokeWidth="2" />
-        {months.map((m, i) => (
-          <text
-            key={i}
-            x={x(i)}
-            y={H + 10}
-            textAnchor="middle"
-            style={{ fontSize: 8, fill: "rgba(251,247,233,0.55)" }}
-          >
-            {m}
-          </text>
-        ))}
-      </svg>
-      <div className="flex flex-wrap gap-4 text-[11px] text-ink-muted justify-between mt-1">
-        <span className="flex items-center gap-1.5">
-          <span
-            className="inline-block w-2.5 h-0.5"
-            style={{ background: "#d5bb7e" }}
-          />
-          Net income (cumulative) · {compactCents(net[11])}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span
-            className="inline-block w-2.5 h-0.5"
-            style={{ background: "#8898bd" }}
-          />
-          Set aside for taxes · {compactCents(tax[11])}
-        </span>
-      </div>
-    </div>
-  );
 }
 
 function pct(rate: number): string {

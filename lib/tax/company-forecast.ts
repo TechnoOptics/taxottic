@@ -117,15 +117,6 @@ export type CompanyForecast = {
    *  the UI can render the marginal-bracket ladder. Cumulative `upTo` in
    *  cents (last bracket has upTo: null). */
   federalBrackets: Bracket[];
-  /** Projected full-year deduction sources, largest-first, for the
-   *  "where your write-offs come from" breakdown. Zero buckets omitted. */
-  deductionBreakdown: DeductionSlice[];
-};
-
-export type DeductionSlice = {
-  key: string;
-  label: string;
-  cents: number;
 };
 
 function uniqueMonths(months: number[]): number {
@@ -375,30 +366,8 @@ export function buildCompanyForecast(
   const federalBrackets =
     k.FEDERAL_BRACKETS[filingStatus] ?? k.FEDERAL_BRACKETS.single;
 
-  // Where the year-end write-offs come from. These are the projected,
-  // non-overlapping deduction sources the engine sums into taxable income;
-  // we surface them so the user sees which levers matter most. Business
-  // expenses already EXCLUDE meals + above-the-line (see the filters
-  // above), and mileage / home office are auto-deductions tracked
-  // separately, so the buckets don't double-count.
-  const deductionBreakdown: DeductionSlice[] = [
-    { key: "expenses", label: "Business expenses", cents: Math.round(projBizExpenses) },
-    { key: "mileage", label: "Vehicle / mileage", cents: autoMileageProjected },
-    { key: "home_office", label: "Home office", cents: autoHomeOfficeFull },
-    { key: "meals", label: "Meals (50%)", cents: Math.round(projMeals * 0.5) },
-    {
-      key: "retirement",
-      label: "Retirement & health",
-      cents: result.retirementContributionTotalCents,
-    },
-    { key: "qbi", label: "QBI deduction (20%)", cents: result.qbiDeductionCents },
-  ]
-    .filter((s) => s.cents > 0)
-    .sort((a, b) => b.cents - a.cents);
-
   return {
     federalBrackets,
-    deductionBreakdown,
     ytdResult,
     result,
     summary,
