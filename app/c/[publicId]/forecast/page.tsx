@@ -151,6 +151,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
     recurringMealsMonthly,
     recurringAboveTheLineMonthly,
     federalBrackets,
+    deductionBreakdown,
   } = buildCompanyForecast({
     taxYear,
     currentMonth,
@@ -1043,13 +1044,26 @@ export default async function ForecastPage({ params }: { params: Params }) {
         </div>
           </div>
 
-          {/* Sticky action panel: the personalized year-end moves + the
-              per-company quick actions, always at hand while you read the
-              forecast on the left. */}
+          {/* Sticky action panel: the deduction pie chart, the personalized
+              year-end moves, and the per-company quick actions, always at
+              hand while you read the forecast on the left. On lg+ it aligns
+              with the top of the forecast and locks in place (its own scroll
+              if the content runs taller than the viewport). */}
           <aside
-            className="mt-8 lg:mt-8 lg:sticky space-y-4"
+            className="mt-8 lg:mt-0 lg:sticky lg:max-h-[calc(100vh_-_var(--app-header-h,4rem)_-_3rem)] lg:overflow-y-auto space-y-4"
             style={{ top: "calc(var(--app-header-h, 4rem) + 1.5rem)" }}
           >
+            {deductionBreakdown.length > 0 ? (
+              <div className="card p-5">
+                <h2 className="display text-base text-forest-900">
+                  Where your write-offs come from
+                </h2>
+                <p className="text-xs text-ink-muted mt-1">
+                  Projected full-year deductions by source.
+                </p>
+                <DeductionDonut slices={deductionBreakdown} />
+              </div>
+            ) : null}
             <YearEndSuggestionsCard suggestions={suggestions} />
             <div className="flex flex-wrap gap-3">
               <Link href={`/c/${publicId}/income`} className="btn-ghost">
@@ -1336,6 +1350,90 @@ function compactCents(cents: number): string {
   if (d >= 1_000_000) return `${sign}$${(d / 1_000_000).toFixed(1)}M`;
   if (d >= 1_000) return `${sign}$${Math.round(d / 1_000)}k`;
   return `${sign}$${Math.round(d)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Deduction pie — SVG ring of where the write-offs come from + a legend.
+// Lives in the (narrow, ~20rem) sidebar, so it stacks: ring on top, legend
+// below. Raw SVG fills aren't touched by the dark-theme remap, so every
+// colour is a LIGHT champagne/periwinkle that reads on the dark card.
+// ---------------------------------------------------------------------------
+const DONUT_COLORS = [
+  "#d5bb7e", // gold-400
+  "#8898bd", // forest-300
+  "#e0c590", // gold-300
+  "#b0bcd6", // forest-200
+  "#c4a25d", // gold-500
+  "#aab4cf", // light periwinkle
+];
+
+function DeductionDonut({
+  slices,
+}: {
+  slices: { key: string; label: string; cents: number }[];
+}) {
+  const total = slices.reduce((a, s) => a + s.cents, 0);
+  if (total <= 0) return null;
+  const R = 60;
+  const C = 2 * Math.PI * R;
+  const fracs = slices.map((s) => s.cents / total);
+  const arcs = slices.map((s, i) => {
+    const frac = fracs[i];
+    const startFrac = fracs.slice(0, i).reduce((a, b) => a + b, 0);
+    return {
+      color: DONUT_COLORS[i % DONUT_COLORS.length],
+      dash: frac * C,
+      gap: C - frac * C,
+      offset: -startFrac * C,
+    };
+  });
+
+  return (
+    <div className="mt-4 flex flex-col items-center gap-4">
+      <svg viewBox="0 0 160 160" className="w-32 h-32 shrink-0 -rotate-90">
+        {arcs.map((a, i) => (
+          <circle
+            key={i}
+            cx="80"
+            cy="80"
+            r={R}
+            fill="none"
+            stroke={a.color}
+            strokeWidth="22"
+            strokeDasharray={`${a.dash} ${a.gap}`}
+            strokeDashoffset={a.offset}
+          />
+        ))}
+        <text
+          x="80"
+          y="80"
+          textAnchor="middle"
+          dominantBaseline="central"
+          transform="rotate(90 80 80)"
+          style={{ fontSize: 16, fontWeight: 700, fill: "#fbf7e9" }}
+        >
+          {compactCents(total)}
+        </text>
+      </svg>
+      <ul className="grid gap-1.5 w-full">
+        {slices.map((s, i) => (
+          <li key={s.key} className="flex items-center gap-2 text-xs">
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+              style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }}
+            />
+            <span className="text-ink-soft flex-1 truncate">{s.label}</span>
+            <span className="tabular-nums text-ink-muted">
+              {((s.cents / total) * 100).toFixed(0)}%
+            </span>
+            <span className="tabular-nums text-forest-800 w-16 text-right">
+              {formatCents(s.cents)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
