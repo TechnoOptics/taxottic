@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStripeForAccount } from "./client";
-import { applyRecurringExpenseDetection } from "@/lib/banking/recurring";
+import {
+  applyRecurringExpenseDetection,
+  applyRecurringIncomeDetection,
+} from "@/lib/banking/recurring";
 
 /**
  * Pull balance_transactions for a Stripe Connect connection and write
@@ -339,6 +342,16 @@ export async function syncStripeConnection(
     new Date().getUTCFullYear(),
   );
 
+  // Subscription REVENUE syncs as one row per charge, each tagged with the
+  // invoice's billing cadence. Collapse each subscription (recurring_key) so
+  // only its latest charge projects forward — otherwise the same sub is
+  // counted once per month it has billed. Idempotent.
+  await applyRecurringIncomeDetection(
+    admin,
+    companyId,
+    new Date().getUTCFullYear(),
+  );
+
   // Persist new cursor + last_synced_at so the next pass picks up
   // where we stopped and the throttle ticks.
   await admin
@@ -477,6 +490,32 @@ function subscriptionRecurrence(
   return "one_off";
 }
 
+/**
+ * Stable identity of the subscription behind a charge, used as
+ * monthly_income.recurring_key so the forecast anchors each subscription to
+ * a single projecting row. Returns the Stripe subscription id (sub_…) when
+ * the charge came from a subscription invoice, else null. Falls back to the
+ * invoice's customer id for the rare subscription-invoice shape that omits
+ * the subscription field, so two of a customer's subscriptions still don't
+ * over-project beyond a single stream.
+ */
+function subscriptionKey(raw: Record<string, unknown>): string | null {
+  const src = raw.source;
+  if (!src || typeof src !== "object") return null;
+  const inv = (src as Record<string, unknown>).invoice;
+  if (!inv || typeof inv !== "object") return null;
+  const invoice = inv as Record<string, unknown>;
+  const sub = invoice.subscription;
+  if (typeof sub === "string" && sub) return sub;
+  if (sub && typeof sub === "object") {
+    const id = (sub as Record<string, unknown>).id;
+    if (typeof id === "string" && id) return id;
+  }
+  const customer = invoice.customer;
+  if (typeof customer === "string" && customer) return customer;
+  return null;
+}
+
 async function autoApplyPendingStripe(args: {
   admin: SupabaseClient;
   bankAccountId: string;
@@ -533,6 +572,9 @@ async function autoApplyPendingStripe(args: {
           // Recurring subscription revenue → mark it so the forecast
           // projects it across the year instead of treating it one-off.
           recurrence: subscriptionRecurrence(raw),
+          // Stable subscription identity so the anchor pass keeps only the
+          // latest charge of each subscription projecting forward.
+          recurring_key: subscriptionKey(raw),
           notes: buildIncomeNote({
             description: tx.description as string | null,
             src,

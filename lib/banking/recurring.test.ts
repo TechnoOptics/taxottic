@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   computeRecurrenceUpdates,
+  computeIncomeRecurrenceUpdates,
   type ExpenseRowForRecurrence,
+  type IncomeRowForRecurrence,
 } from "./recurring";
 
 const row = (
@@ -73,5 +75,79 @@ describe("computeRecurrenceUpdates", () => {
     expect(updates).toContainEqual({ id: "a6", recurrence: "one_off" });
     expect(updates).toContainEqual({ id: "a7", recurrence: "monthly" });
     expect(updates).toHaveLength(2);
+  });
+});
+
+const inc = (
+  id: string,
+  month: number,
+  recurring_key: string | null,
+  recurrence: string | null = "monthly",
+): IncomeRowForRecurrence => ({ id, month, recurring_key, recurrence });
+
+describe("computeIncomeRecurrenceUpdates", () => {
+  it("keeps only the latest charge of a subscription projecting forward", () => {
+    // One sub billed monthly in months 1,2,3 — all tagged monthly at sync.
+    const rows = [1, 2, 3].map((m) => inc(`c${m}`, m, "sub_A"));
+    const updates = computeIncomeRecurrenceUpdates(rows);
+    // months 1,2 demote to one_off; month 3 (anchor) already monthly.
+    expect(updates).toContainEqual({ id: "c1", recurrence: "one_off" });
+    expect(updates).toContainEqual({ id: "c2", recurrence: "one_off" });
+    expect(updates).toHaveLength(2);
+  });
+
+  it("a single charge is already its own anchor — no change", () => {
+    expect(computeIncomeRecurrenceUpdates([inc("c1", 4, "sub_A")])).toEqual([]);
+  });
+
+  it("does NOT collapse two different subs that share a plan price", () => {
+    // Two customers, same $ amount but distinct subscription ids: each is its
+    // own stream and each keeps its single charge as the monthly anchor.
+    const rows = [inc("x1", 5, "sub_A"), inc("y1", 5, "sub_B")];
+    expect(computeIncomeRecurrenceUpdates(rows)).toEqual([]);
+  });
+
+  it("anchors each of two subs independently across months", () => {
+    const a = [1, 2].map((m) => inc(`a${m}`, m, "sub_A"));
+    const b = [1, 2].map((m) => inc(`b${m}`, m, "sub_B"));
+    const updates = computeIncomeRecurrenceUpdates([...a, ...b]);
+    expect(updates).toContainEqual({ id: "a1", recurrence: "one_off" });
+    expect(updates).toContainEqual({ id: "b1", recurrence: "one_off" });
+    expect(updates).toHaveLength(2); // a2 & b2 stay monthly anchors
+  });
+
+  it("ignores income rows with no recurring_key (one-off sales)", () => {
+    const rows = [
+      inc("s1", 1, null, "one_off"),
+      inc("s2", 2, null, "one_off"),
+      inc("s3", 3, null, "one_off"),
+    ];
+    expect(computeIncomeRecurrenceUpdates(rows)).toEqual([]);
+  });
+
+  it("preserves the stream cadence (quarterly) on the anchor", () => {
+    const rows = [1, 4].map((m) => inc(`q${m}`, m, "sub_Q", "quarterly"));
+    const updates = computeIncomeRecurrenceUpdates(rows);
+    expect(updates).toEqual([{ id: "q1", recurrence: "one_off" }]);
+    // q4 already quarterly → stays the anchor, no update emitted.
+  });
+
+  it("is idempotent — re-running on anchored rows yields no changes", () => {
+    const rows = [
+      inc("c1", 1, "sub_A", "one_off"),
+      inc("c2", 2, "sub_A", "one_off"),
+      inc("c3", 3, "sub_A", "monthly"), // anchor already set
+    ];
+    expect(computeIncomeRecurrenceUpdates(rows)).toEqual([]);
+  });
+
+  it("moves the anchor to a new charge and demotes the old one", () => {
+    const rows = [
+      inc("c2", 2, "sub_A", "one_off"),
+      inc("c3", 3, "sub_A", "monthly"), // old anchor
+      inc("c4", 4, "sub_A", "monthly"), // new charge from this sync
+    ];
+    const updates = computeIncomeRecurrenceUpdates(rows);
+    expect(updates).toEqual([{ id: "c3", recurrence: "one_off" }]);
   });
 });
