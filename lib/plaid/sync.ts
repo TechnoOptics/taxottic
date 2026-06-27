@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlaidClient } from "./client";
 import { categorizeExpense, categorizeIncome } from "./categorize";
 import { decryptBankToken } from "@/lib/crypto/bankTokens";
+import { applyRecurringExpenseDetection } from "@/lib/banking/recurring";
 
 /**
  * Pull every change since the connection's stored cursor and apply
@@ -339,6 +340,15 @@ async function applyPendingTransactions(
       }
     }
   }
+
+  // Auto-detect recurring expense streams (subscriptions / SaaS) among
+  // what we just applied and mark their cadence, so the forecast projects
+  // them instead of treating each charge as one-off. Idempotent + cheap.
+  await applyRecurringExpenseDetection(
+    admin,
+    companyId,
+    new Date().getUTCFullYear(),
+  );
 
   return { applied: income + expense, applied_income: income, applied_expense: expense };
 }

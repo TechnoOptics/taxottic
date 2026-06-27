@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStripeForAccount } from "./client";
+import { applyRecurringExpenseDetection } from "@/lib/banking/recurring";
 
 /**
  * Pull balance_transactions for a Stripe Connect connection and write
@@ -328,6 +329,15 @@ export async function syncStripeConnection(
         userId,
       })
     : { income: 0, expense: 0 };
+
+  // Auto-detect recurring expense streams (subscriptions / SaaS) among
+  // what we just applied and mark their cadence, so the forecast projects
+  // them instead of treating each charge as one-off. Idempotent + cheap.
+  await applyRecurringExpenseDetection(
+    admin,
+    companyId,
+    new Date().getUTCFullYear(),
+  );
 
   // Persist new cursor + last_synced_at so the next pass picks up
   // where we stopped and the throttle ticks.
