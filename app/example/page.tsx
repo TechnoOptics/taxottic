@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
   title: "Example dashboard — see Taxottic before you sign up",
@@ -80,7 +81,18 @@ const SAMPLE_TX: SampleTx[] = [
   },
 ];
 
-export default function ExamplePage() {
+export default async function ExamplePage() {
+  // Auth-aware CTAs. The public sample never checked the session, so it
+  // showed "Sign up" + Pricing + sign-in to EVERYONE — including a
+  // logged-in user (often an existing subscriber) who lands here. Read
+  // the session once: signed-in visitors get a path back to their real
+  // dashboard instead of prospect CTAs; anonymous visitors still get
+  // the signup flow.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isAuthed = Boolean(user);
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <header
@@ -102,41 +114,17 @@ export default function ExamplePage() {
             <Wordmark size="md" tone="cream" />
           </Link>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-            {/* Pricing is hidden on phones (it forced "Prici / ng" wraps on
-                narrow widths) and shown from sm+. */}
+            {/* Single, high-contrast CTA. Gold reads clearly on the dark
+                navy header — the old btn-primary navy button blended in.
+                No Pricing link, no "free", and the label/destination flip
+                with auth so a signed-in subscriber isn't told to sign up.
+                "Sign up" / "Open dashboard" are short enough to show at
+                every width, so no separate mobile icon is needed. */}
             <Link
-              href="/pricing"
-              className="hidden sm:inline-block text-sm text-cream/80 hover:text-cream whitespace-nowrap"
+              href={isAuthed ? "/dashboard" : "/login"}
+              className="inline-flex items-center justify-center rounded-lg bg-gold-300 px-4 py-2 text-sm font-semibold text-forest-900 whitespace-nowrap transition-colors hover:bg-gold-200"
             >
-              Pricing
-            </Link>
-            {/* Phone: a compact avatar/account icon instead of the full
-                "Sign up free" button, which crowded the wordmark. */}
-            <Link
-              href="/login"
-              aria-label="Sign up free"
-              className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-full border border-gold-300/50 text-cream/90 transition-colors hover:border-gold-300 hover:text-cream"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="8" r="3.5" />
-                <path d="M5.5 19.5c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" />
-              </svg>
-            </Link>
-            {/* sm+ : full text button */}
-            <Link
-              href="/login"
-              className="hidden sm:inline-block btn-primary text-sm whitespace-nowrap"
-            >
-              Sign up free
+              {isAuthed ? "Open dashboard" : "Sign up"}
             </Link>
           </div>
         </div>
@@ -317,12 +305,20 @@ export default function ExamplePage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/login" className="btn-primary">
-              Sign up free
-            </Link>
-            <Link href="/pricing" className="btn-ghost">
-              See pricing
-            </Link>
+            {isAuthed ? (
+              <Link href="/dashboard" className="btn-primary">
+                Open your dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="btn-primary">
+                  Sign up
+                </Link>
+                <Link href="/pricing" className="btn-ghost">
+                  See pricing
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
