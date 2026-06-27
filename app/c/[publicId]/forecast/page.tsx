@@ -1657,13 +1657,17 @@ function CashFlowCurve({
   const padT = 8;
   const padB = 8;
 
+  // Set-aside is floored at zero: a negative effective rate (e.g. refundable
+  // credits exceeding tax) means you owe nothing to reserve, not a negative
+  // amount to "set aside."
+  const rate = Math.max(0, effectiveRate);
   let cumNet = 0;
   let cumTax = 0;
   const net: number[] = [];
   const tax: number[] = [];
   for (let i = 0; i < 12; i++) {
     cumNet += (income[i] ?? 0) - (expenses[i] ?? 0);
-    cumTax += Math.max(0, (income[i] ?? 0) - (expenses[i] ?? 0)) * effectiveRate;
+    cumTax += Math.max(0, (income[i] ?? 0) - (expenses[i] ?? 0)) * rate;
     net.push(cumNet);
     tax.push(cumTax);
   }
