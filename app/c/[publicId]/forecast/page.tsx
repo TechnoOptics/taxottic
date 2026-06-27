@@ -669,30 +669,66 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </div>
         </div>
 
+        {/* Where every dollar goes — kept visible directly under the
+            estimate; the clearest single overview. Everything more
+            detailed is collapsed below to keep the center uncluttered. */}
+        {result.projectedIncomeCents > 0 ? (
+          <div className="mt-6 card p-5 sm:p-7">
+            <h2 className="display text-xl text-forest-900">
+              Where every dollar goes
+            </h2>
+            <p className="text-xs text-ink-muted mt-1">
+              Your projected gross income flowing down through business
+              write-offs and each layer of tax to what you actually keep.
+            </p>
+            <TaxWaterfall
+              grossCents={result.projectedIncomeCents}
+              expensesCents={result.projectedExpensesCents}
+              federalCents={result.federalIncomeTaxCents}
+              seCents={result.selfEmploymentTaxCents}
+              stateCents={result.stateTaxCents}
+              addlMedicareCents={result.additionalMedicareCents}
+              niitCents={result.niitCents}
+              amtCents={result.amtAddOnCents}
+              capGainsCents={result.capitalGainsTaxCents}
+              refundableCreditsCents={
+                result.eitcCents + result.educationCreditRefundableCents
+              }
+              totalTaxCents={result.totalTaxCents}
+            />
+          </div>
+        ) : null}
+
+        {/* ---- Details, compressed into collapsible titled sections ---- */}
+
         {/* Benefits / recommendations strip. Each tile renders nothing
-            when the relevant value is zero, so a clean-slate filer
-            sees just the W-4 nudge (if applicable); a fully-loaded
-            tax profile sees the full set. The retirement
-            recommendation is the most actionable - we put it next to
-            the savings-tracker tile so the user sees what they've
-            already saved alongside what they could still save. */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <EitcTile result={result} />
-          <EducationCreditTile result={result} />
-          <RetirementSavingsTile result={result} />
-          <RetirementRecommendationTile result={result} />
-          <W4NudgeTile result={result} />
-        </div>
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <SaversCreditTile result={result} />
-          <AmtTile result={result} />
-          <CapitalGainsTile result={result} />
-          <ForeignExclusionTile result={result} />
-          <StudentLoanInterestTile result={result} />
-        </div>
+            when the relevant value is zero. */}
+        <Collapsible
+          title="Credits & benefits you qualify for"
+          subtitle="Refundable credits, retirement savings, and withholding nudges tailored to your numbers."
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <EitcTile result={result} />
+            <EducationCreditTile result={result} />
+            <RetirementSavingsTile result={result} />
+            <RetirementRecommendationTile result={result} />
+            <W4NudgeTile result={result} />
+          </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <SaversCreditTile result={result} />
+            <AmtTile result={result} />
+            <CapitalGainsTile result={result} />
+            <ForeignExclusionTile result={result} />
+            <StudentLoanInterestTile result={result} />
+          </div>
+        </Collapsible>
 
         {/* Breakdown */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Collapsible
+          title="Tax breakdown"
+          subtitle="Federal income tax, self-employment tax, and state — line by line."
+        >
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card title="Federal income tax">
             <BigNumber>{formatCents(result.federalIncomeTaxCents)}</BigNumber>
             <RowKV
@@ -758,77 +794,36 @@ export default async function ForecastPage({ params }: { params: Params }) {
             </p>
           </Card>
         </div>
+        </Collapsible>
 
         {/* Monthly chart + per-month grid */}
-        <div className="mt-6 card p-5 sm:p-7">
-          <h2 className="display text-xl text-forest-900">
-            Month by month
-          </h2>
-          <p className="text-xs text-ink-muted mt-1">
-            Each bar shows what you logged that month. The table below shows
-            the same numbers as a side-by-side ledger.
-          </p>
+        <Collapsible
+          title="Month by month"
+          subtitle="Each bar shows what you logged that month; the table is the same numbers as a ledger."
+        >
           <MonthlyBars income={incomeByMonth} expenses={expenseByMonth} />
           <MonthlyTable
             incomeByMonth={incomeByMonth}
             expenseByMonth={expenseByMonth}
           />
-        </div>
-
-        {/* Deeper analysis — waterfall, deduction mix, bracket ladder.
-            Everything here is computed by the forecast engine already. */}
-        {result.projectedIncomeCents > 0 ? (
-          <div className="mt-6 card p-5 sm:p-7">
-            <h2 className="display text-xl text-forest-900">
-              Where every dollar goes
-            </h2>
-            <p className="text-xs text-ink-muted mt-1">
-              Your projected gross income flowing down through business
-              write-offs and each layer of tax to what you actually keep.
-            </p>
-            <TaxWaterfall
-              grossCents={result.projectedIncomeCents}
-              expensesCents={result.projectedExpensesCents}
-              federalCents={result.federalIncomeTaxCents}
-              seCents={result.selfEmploymentTaxCents}
-              stateCents={result.stateTaxCents}
-              addlMedicareCents={result.additionalMedicareCents}
-              niitCents={result.niitCents}
-              amtCents={result.amtAddOnCents}
-              capGainsCents={result.capitalGainsTaxCents}
-              refundableCreditsCents={
-                result.eitcCents + result.educationCreditRefundableCents
-              }
-              totalTaxCents={result.totalTaxCents}
-            />
-          </div>
-        ) : null}
+        </Collapsible>
 
         {result.taxableIncomeCents > 0 && company.entity_type !== "c_corp" ? (
-          <div className="mt-6 card p-5 sm:p-7">
-            <h2 className="display text-xl text-forest-900">
-              Your federal tax brackets
-            </h2>
-            <p className="text-xs text-ink-muted mt-1">
-              How your projected taxable income fills the {taxYear} brackets.
-              Only income in each band is taxed at that band&rsquo;s rate —
-              that&rsquo;s the difference between your marginal and effective
-              rate.
-            </p>
+          <Collapsible
+            title="Your federal tax brackets"
+            subtitle={`How your projected taxable income fills the ${taxYear} brackets — only income in each band is taxed at that band's rate.`}
+          >
             <BracketLadder
               brackets={federalBrackets}
               taxableIncomeCents={result.taxableIncomeCents}
             />
-          </div>
+          </Collapsible>
         ) : null}
 
         {/* How we calculated this */}
         {result.assumptions.length > 0 ? (
-          <div className="mt-6 card p-6 border-gold-300/60">
-            <h2 className="display text-base text-forest-900">
-              How we got these numbers
-            </h2>
-            <ul className="mt-3 grid gap-2">
+          <Collapsible title="How we got these numbers">
+            <ul className="grid gap-2">
               {result.assumptions.map((a, i) => (
                 <li
                   key={i}
@@ -839,7 +834,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 </li>
               ))}
             </ul>
-          </div>
+          </Collapsible>
         ) : null}
 
         {/* Tax-savings playbook teaser → links to /savings-goals */}
@@ -885,19 +880,12 @@ export default async function ForecastPage({ params }: { params: Params }) {
             payment at worst. Pre-formation quarters now render with a
             "Pre-formation" badge and a muted explanation. */}
         {result.quarterlyEstimates.some((q) => q.amountCents > 0) ? (
-          <div className="mt-6 card p-6 sm:p-7">
-            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-              Quarterly estimates
-            </div>
-            <h2 className="display mt-1 text-xl text-forest-900">
-              Pay-as-you-go schedule
-            </h2>
-            <p className="mt-1 text-sm text-ink-soft leading-relaxed max-w-xl">
-              The IRS expects taxes throughout the year, not just on April 15.
-              W-2 withholding counts as if it were paid evenly across all
-              four quarters; the table below shows what to send for each one.
-            </p>
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Collapsible
+            kicker="Quarterly estimates"
+            title="Pay-as-you-go schedule"
+            subtitle="The IRS expects taxes throughout the year — what to send each quarter (W-2 withholding counts as paid evenly)."
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {result.quarterlyEstimates.map((q) => {
                 const companyCreatedAt = company.created_at
                   ? new Date(company.created_at)
@@ -960,17 +948,21 @@ export default async function ForecastPage({ params }: { params: Params }) {
               sending the catch-up before the next due date trims any
               underpayment penalty.
             </p>
-          </div>
+          </Collapsible>
         ) : null}
 
         {/* Deduction scorecard */}
-        <DeductionScorecard publicId={publicId} scorecard={scorecard} />
+        <Collapsible
+          title="Deduction scorecard"
+          subtitle="Which deductions you've captured and what's still on the table."
+        >
+          <DeductionScorecard publicId={publicId} scorecard={scorecard} embedded />
+        </Collapsible>
 
         {/* Hints */}
         {result.hints.length > 0 ? (
-          <div className="mt-6 card p-6 border-gold-300/60">
-            <h2 className="display text-base text-forest-900">Notes from Bella</h2>
-            <ul className="mt-3 grid gap-2">
+          <Collapsible title="Notes from Bella">
+            <ul className="grid gap-2">
               {result.hints.map((h, i) => (
                 <li
                   key={i}
@@ -981,55 +973,44 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 </li>
               ))}
             </ul>
-          </div>
+          </Collapsible>
         ) : null}
 
-        {/* Tax-prep confidence section: export PDF + find a CPA near you.
-            2 cols at lg (laptop); 3-col arrangement isn't a win because
-            FindCpaCard's result list needs the vertical room. Keep 2
-            but bump the gap so on ultrawide they breathe instead of
-            looking like a marooned twosome in a sea of empty space. */}
-        <section className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 xl:gap-6 2xl:gap-8">
-          <div className="card p-6 sm:p-7">
-            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-              Year-end export
+        {/* Tax-prep confidence section: export PDF + find a CPA near you. */}
+        <Collapsible
+          title="Work with a CPA"
+          subtitle="Hand off a clean year-end summary, or find a preparer near you."
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 xl:gap-6">
+            <div>
+              <p className="text-sm text-ink-soft leading-relaxed">
+                Use every deduction you earned this year, then hand a clean
+                year-end summary to your tax preparer with EIN, address, income,
+                expenses by Schedule C line, and IRC citations included.
+              </p>
+              <div className="mt-4 flex items-center gap-3 flex-wrap">
+                <Link
+                  href={`/c/${publicId}/export?year=${taxYear}`}
+                  className="btn-primary"
+                >
+                  Open year-end summary
+                </Link>
+                <Link
+                  href={`/c/${publicId}/profile`}
+                  className="text-sm text-forest-700 hover:text-forest-900"
+                >
+                  Add EIN + business address &rarr;
+                </Link>
+              </div>
             </div>
-            <h2 className="display mt-1 text-xl text-forest-900">
-              Walk into your CPA confident, not anxious.
-            </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              The law lets your business come first. Use every deduction you
-              earned this year, then hand a clean year-end summary to your tax
-              preparer with EIN, address, income, expenses by Schedule C line,
-              and IRC citations included.
-            </p>
-            <div className="mt-4 flex items-center gap-3 flex-wrap">
-              <Link
-                href={`/c/${publicId}/export?year=${taxYear}`}
-                className="btn-primary"
-              >
-                Open year-end summary
-              </Link>
-              <Link
-                href={`/c/${publicId}/profile`}
-                className="text-sm text-forest-700 hover:text-forest-900"
-              >
-                Add EIN + business address &rarr;
-              </Link>
-            </div>
-          </div>
 
-          <FindCpaCard
-            zip={businessProfile?.zip ?? null}
-            // Prefer the COMPANY's state — same posture as the state-
-            // tax tile (audit High #1). A Texas company should surface
-            // CPAs near Texas, not near the user's personal-profile
-            // state. Fall through to taxProfile only if the company
-            // didn't capture a state.
-            stateCode={company.state_code ?? taxProfile.state_code ?? null}
-            city={businessProfile?.city ?? null}
-          />
-        </section>
+            <FindCpaCard
+              zip={businessProfile?.zip ?? null}
+              stateCode={company.state_code ?? taxProfile.state_code ?? null}
+              city={businessProfile?.city ?? null}
+            />
+          </div>
+        </Collapsible>
 
         <p className="mt-12 text-[11px] leading-relaxed text-ink-muted max-w-2xl">
           Taxottic provides tax forecasting and educational guidance. Numbers
@@ -1268,6 +1249,48 @@ function Stat({
         {value}
       </div>
     </div>
+  );
+}
+
+// Collapsible titled section — native <details> (no client JS, works in this
+// server component). Used to compress the secondary forecast sections so the
+// center column stays uncluttered; the user expands what they want to see.
+function Collapsible({
+  title,
+  subtitle,
+  kicker,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  kicker?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="mt-4 card p-5 sm:p-6 group" open={defaultOpen}>
+      <summary className="flex items-center justify-between gap-3 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          {kicker ? (
+            <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+              {kicker}
+            </div>
+          ) : null}
+          <h2 className="display text-lg text-forest-900">{title}</h2>
+          {subtitle ? (
+            <p className="text-xs text-ink-muted mt-0.5">{subtitle}</p>
+          ) : null}
+        </div>
+        <span
+          aria-hidden
+          className="shrink-0 text-gold-700 transition-transform group-open:rotate-180"
+        >
+          ▾
+        </span>
+      </summary>
+      <div className="mt-4">{children}</div>
+    </details>
   );
 }
 

@@ -7,6 +7,10 @@ import type { MasterDeduction } from "@/lib/deductions/types";
 type Props = {
   publicId: string;
   scorecard: Scorecard;
+  // When embedded inside another titled card (e.g. a collapsible section on
+  // the forecast), drop our own card chrome + the duplicate "Deduction
+  // scorecard" kicker so it doesn't nest a card or repeat the title.
+  embedded?: boolean;
 };
 
 // Cap the number of items rendered per tile so a category with 60+
@@ -14,17 +18,23 @@ type Props = {
 // rest are one click away in the explorer.
 const ITEMS_PREVIEW = 8;
 
-export function DeductionScorecard({ publicId, scorecard }: Props) {
+export function DeductionScorecard({
+  publicId,
+  scorecard,
+  embedded = false,
+}: Props) {
   const captured = scorecard.items.filter((i) => i.captured);
   const remaining = scorecard.items.filter((i) => !i.captured);
 
   return (
-    <section className="card mt-6 p-6 sm:p-7">
+    <section className={embedded ? "" : "card mt-6 p-6 sm:p-7"}>
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-            Deduction scorecard
-          </div>
+          {embedded ? null : (
+            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+              Deduction scorecard
+            </div>
+          )}
           <h2 className="display mt-1 text-2xl text-forest-900">
             {scorecard.milestone === "legend"
               ? "Legend status. You are using your tax code."
