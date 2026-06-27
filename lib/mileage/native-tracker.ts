@@ -27,6 +27,11 @@
 // and no-ops cleanly so the /mileage page still renders.
 
 import type { GpsPoint } from "./segmentation";
+import {
+  initTripNotifications,
+  onTrackerPoint,
+  resetTripNotifications,
+} from "./trip-notifications";
 
 // Minimal contract for the slice of @capgo/background-geolocation we
 // use. Declared locally (rather than importing the package's types at
@@ -509,9 +514,15 @@ export async function startMileageTracking(
         if (buffer.length > MAX_BUFFER) buffer = buffer.slice(-MAX_BUFFER);
         persistBuffer();
         if (buffer.length >= FLUSH_AT_POINTS) void flush();
+        // Drive-lifecycle notifications run off the same live fix stream
+        // (start ping; arrival prompt + 1-min keep-going). No-op off-native.
+        onTrackerPoint(pt);
       },
     );
     tracking = true;
+    // Arm local notifications. finalize = flush(sessionEnded) so the
+    // grace-timer expiry closes the trip without stopping tracking.
+    void initTripNotifications(() => void flush({ sessionEnded: true }));
     trackerDiag.startResult = "resolved";
     for (const cb of startListeners) {
       try {
@@ -577,6 +588,7 @@ export async function stopMileageTracking(): Promise<void> {
     await stopBgSafely(bg);
   }
   tracking = false;
+  resetTripNotifications(); // clear any pending arrival prompt + timer
   // Final upload tagged sessionEnded so the server force-closes any
   // in-progress trip immediately (the user explicitly stopped). This
   // is the only thing that materializes a drive that ended without a
