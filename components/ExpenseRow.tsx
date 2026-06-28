@@ -177,7 +177,7 @@ export function ExpenseRow({
             </span>
           ) : null}
           {row.recurrence && row.recurrence !== "one_off" ? (
-            <span className="ml-2 text-[10px] uppercase tracking-wide text-forest-700 bg-forest-100 rounded px-1.5 py-0.5">
+            <span className="ml-2 text-[10px] uppercase tracking-wide text-gold-700 border border-gold-300/60 rounded px-1.5 py-0.5">
               {prettyCadence(row.recurrence)}
             </span>
           ) : null}
