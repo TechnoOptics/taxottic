@@ -8,6 +8,7 @@ import {
 } from "@/lib/tax/net-business-income";
 import { PrintActionsClient } from "@/components/PrintActionsClient";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { decryptField } from "@/lib/crypto/field-encryption";
 
 type Params = Promise<{ publicId: string }>;
 type Search = Promise<{ year?: string }>;
@@ -170,7 +171,7 @@ export default async function ExportPage({
         {/* Business details */}
         <section className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
           <Field label="Business" value={businessDisplayName} />
-          <Field label="EIN" value={bp?.ein ?? "-"} />
+          <Field label="EIN" value={decryptField(bp?.ein) ?? "-"} />
           <Field
             label="Address"
             value={
