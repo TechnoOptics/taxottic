@@ -321,7 +321,10 @@ export function LeftRail({
   const railStyle =
     mode === "rail"
       ? {
-          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem))",
+          // Add a small gap below the header so the (rounded, shadowed)
+          // rail reads as a floating panel instead of butting flush against
+          // the header bar.
+          top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem) + 0.75rem)",
           bottom: "var(--safe-bottom, 0px)",
         }
       : undefined;
