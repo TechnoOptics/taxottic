@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { checkCompanyLimit } from "@/lib/plans/usage";
+import { logCompanyActivity } from "@/lib/activity/log";
 
 export async function createCompany(formData: FormData) {
   // requireUser validates the JWT via Supabase auth - we trust user.id below.
@@ -79,6 +80,14 @@ export async function createCompany(formData: FormData) {
     .insert({ company_id: company.id, user_id: user.id, role: "manager" });
 
   if (memberError) throw new Error(memberError.message);
+
+  await logCompanyActivity(admin, {
+    companyId: company.id,
+    actorUserId: user.id,
+    kind: "company.created",
+    summary: `Created ${name}`,
+    payload: { entity_type: entityType, state_code: stateCode },
+  });
 
   redirect(`/onboarding/tax-profile?next=/c/${company.public_id}/forecast`);
 }

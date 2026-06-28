@@ -16,6 +16,7 @@ type ActivityRow = {
 // Friendly label + accent per activity kind. Unknown kinds fall back to a
 // neutral "Activity" so a future kind never renders blank.
 const KIND_META: Record<string, { label: string; tone: string }> = {
+  "company.created": { label: "Company created", tone: "text-emerald-700" },
   "income.created": { label: "Income added", tone: "text-emerald-700" },
   "income.updated": { label: "Income edited", tone: "text-forest-700" },
   "income.deleted": { label: "Income removed", tone: "text-red-700" },
@@ -25,6 +26,11 @@ const KIND_META: Record<string, { label: string; tone: string }> = {
   "profile.updated": { label: "Profile updated", tone: "text-forest-700" },
   "bank.connected": { label: "Bank connected", tone: "text-emerald-700" },
   "bank.disconnected": { label: "Bank disconnected", tone: "text-red-700" },
+  "import.applied": { label: "Import applied", tone: "text-forest-700" },
+  "mileage.added": { label: "Trip logged", tone: "text-emerald-700" },
+  "mileage.classified": { label: "Trip reclassified", tone: "text-forest-700" },
+  "mileage.deleted": { label: "Trip removed", tone: "text-red-700" },
+  "mileage.moved": { label: "Trip moved", tone: "text-forest-700" },
 };
 
 export default async function ActivityPage({ params }: { params: Params }) {

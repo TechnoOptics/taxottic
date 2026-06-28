@@ -4,6 +4,7 @@ import { getPlaidClient } from "@/lib/plaid/client";
 import { syncPlaidConnection } from "@/lib/plaid/sync";
 import { encryptBankToken } from "@/lib/crypto/bankTokens";
 import { requireFeatureGate } from "@/lib/plans/gate";
+import { logCompanyActivity } from "@/lib/activity/log";
 
 export const runtime = "nodejs";
 
@@ -109,6 +110,14 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "bank.connected",
+    summary: `Connected ${body?.institutionName ?? "a bank"} (Plaid)`,
+    payload: { provider: "plaid", institution_name: body?.institutionName ?? null },
+  });
 
   // Encrypt the access_token before persisting. The plaintext column
   // stays around (now nullable) until the cutover migration drops it;
