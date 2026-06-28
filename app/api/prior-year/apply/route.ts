@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { requireFeatureGate } from "@/lib/plans/gate";
@@ -37,6 +38,13 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  }
+
+  if (!checkRateLimit(`prioryear-apply:${user.id}`, { capacity: 10, refillPerMinute: 10 })) {
+    return NextResponse.json(
+      { error: "Too many requests — please slow down." },
+      { status: 429 },
+    );
   }
 
   // Same gate as /extract: applying prior-year totals to the forecast

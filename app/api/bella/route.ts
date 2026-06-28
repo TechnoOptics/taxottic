@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/bella/system-prompt";
 import { getActivePlan, isSuperAdmin } from "@/lib/plans/usage";
@@ -41,6 +42,15 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Per-user rate limit on this LLM endpoint — credits cap spend, but this
+  // stops rapid-fire abuse / runaway clients from hammering the model.
+  if (!checkRateLimit(`bella:${user.id}`, { capacity: 15, refillPerMinute: 15 })) {
+    return NextResponse.json(
+      { error: "Too many requests — please slow down." },
+      { status: 429 },
+    );
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
