@@ -8,6 +8,8 @@ import { DeductionScorecard } from "@/components/DeductionScorecard";
 import { FindCpaCard } from "@/components/FindCpaCard";
 import { ForecastDisclaimer } from "@/components/ForecastDisclaimer";
 import { YearEndSuggestionsCard } from "@/components/YearEndSuggestionsCard";
+import { SyncFreshness } from "@/components/SyncFreshness";
+import { relativeTime, freshnessLevel } from "@/lib/format/relative-time";
 import {
   AmtTile,
   CapitalGainsTile,
@@ -91,6 +93,23 @@ export default async function ForecastPage({ params }: { params: Params }) {
   if (!taxProfile) {
     redirect(`/onboarding/tax-profile?next=/c/${publicId}/forecast`);
   }
+
+  // Bank-sync freshness: the forecast numbers depend on synced transactions,
+  // so surface how fresh that data is (and a one-tap re-sync) right here.
+  const { data: bankConns } = await supabase
+    .from("bank_connections")
+    .select("last_synced_at")
+    .eq("company_id", company.id)
+    .is("deleted_at", null);
+  const hasConnections = (bankConns?.length ?? 0) > 0;
+  const lastSync =
+    (bankConns ?? [])
+      .map((c) => c.last_synced_at as string | null)
+      .filter((v): v is string => Boolean(v))
+      .sort()
+      .at(-1) ?? null;
+  const syncLabel = relativeTime(lastSync);
+  const syncLevel = freshnessLevel(lastSync);
 
   const currentMonth = new Date().getUTCMonth() + 1;
 
@@ -432,6 +451,17 @@ export default async function ForecastPage({ params }: { params: Params }) {
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="forecast" />
         </div>
+
+        {hasConnections ? (
+          <div className="mt-4">
+            <SyncFreshness
+              publicId={publicId}
+              label={syncLabel}
+              level={syncLevel}
+              canSync={hasConnections}
+            />
+          </div>
+        ) : null}
 
         {/* Two-column on lg+: the forecast narrative on the left, a sticky
             "year-end moves" + quick-actions panel on the right. Below lg it
