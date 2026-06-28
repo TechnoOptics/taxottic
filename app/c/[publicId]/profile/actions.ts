@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
+import { encryptField } from "@/lib/crypto/field-encryption";
 
 export async function saveBusinessProfile(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -54,7 +55,8 @@ export async function saveBusinessProfile(formData: FormData) {
     primary_industry: text("primary_industry"),
     // Tax-export details
     legal_name: text("legal_name"),
-    ein: text("ein"),
+    // EIN is sensitive — store encrypted at rest (AES-256-GCM via vault).
+    ein: encryptField(text("ein")),
     address_line1: text("address_line1"),
     address_line2: text("address_line2"),
     city: text("city"),

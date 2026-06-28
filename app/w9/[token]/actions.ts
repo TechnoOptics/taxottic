@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
+import { encryptField } from "@/lib/crypto/field-encryption";
 
 // Public W-9 submission action. Validates fields aggressively
 // before calling the SECURITY DEFINER RPC. The RPC re-enforces
@@ -64,6 +65,10 @@ export async function submitW9(formData: FormData) {
   if (tinDigits.length !== 9) {
     throw new Error("TIN must be 9 digits.");
   }
+  // Encrypt the raw 9-digit TIN before it ever leaves the app. The RPC
+  // stores this ciphertext verbatim (no digit-stripping), and the firm
+  // view decrypts it for masked display.
+  const tinEncrypted = encryptField(tinDigits);
   const signature = String(formData.get("signature_full_name") ?? "").trim();
   if (signature.length < 2) {
     throw new Error("Type your full name to sign.");
@@ -91,7 +96,7 @@ export async function submitW9(formData: FormData) {
     p_address_region: addrRegion,
     p_address_postal_code: addrPostal,
     p_tin_type: tinTypeRaw,
-    p_tin_digits: tinDigits,
+    p_tin_digits: tinEncrypted,
     p_signature_full_name: signature,
     p_signed_ip: ip,
     p_signed_ua: ua,

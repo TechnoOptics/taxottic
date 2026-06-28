@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
+import { decryptField } from "@/lib/crypto/field-encryption";
 
 // Download-my-data endpoint.
 //
@@ -179,7 +180,12 @@ export async function GET() {
         created_at: c.created_at,
         deleted_at: c.deleted_at,
         members: members ?? [],
-        business_profiles: bps ?? [],
+        // Decrypt the EIN so the user's own data export shows their real
+        // value, not the stored ciphertext.
+        business_profiles: (bps ?? []).map((bp: { ein?: string | null }) => ({
+          ...bp,
+          ein: decryptField(bp.ein),
+        })),
         monthly_income: incomeRows ?? [],
         monthly_expenses: expenseRows ?? [],
         bank_connections: conns ?? [],
