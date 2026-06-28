@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import {
   extractW2FromImage,
@@ -37,6 +38,13 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  }
+
+  if (!checkRateLimit(`w2-ocr:${user.id}`, { capacity: 12, refillPerMinute: 12 })) {
+    return NextResponse.json(
+      { error: "Too many requests — please slow down." },
+      { status: 429 },
+    );
   }
 
   // W-2 OCR is part of the personal forecasting feature, which the

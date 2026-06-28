@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   extractReceipt,
@@ -30,6 +31,13 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  }
+
+  if (!checkRateLimit(`receipt-ocr:${user.id}`, { capacity: 12, refillPerMinute: 12 })) {
+    return NextResponse.json(
+      { error: "Too many requests — please slow down." },
+      { status: 429 },
+    );
   }
 
   let formData: FormData;
