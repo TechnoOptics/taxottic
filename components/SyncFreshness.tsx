@@ -15,16 +15,16 @@ type Props = {
 
 const TONE: Record<Freshness, string> = {
   fresh: "border-forest-200 text-ink-soft",
-  stale: "border-gold-300 bg-gold-50/40 text-gold-800",
-  old: "border-amber-300 bg-amber-50/50 text-amber-900",
+  stale: "border-gold-400 text-gold-800",
+  old: "border-amber-400 text-amber-900",
   never: "border-forest-200 text-ink-soft",
 };
 
 /**
- * Slim "bank data synced X ago · Sync now" status bar. Shown wherever the
- * numbers depend on synced data (e.g. the forecast) so stale data is
- * visible and refreshable without hunting for the banks page. Turns amber
- * when the last sync is getting old.
+ * Compact "synced X ago · Sync" pill, fixed in the top-right corner just
+ * below the header. It's out of normal flow (position: fixed) so it never
+ * pushes the page content down, and sits in the right gutter clear of the
+ * sidebar. Turns amber when the last sync is getting old.
  */
 export function SyncFreshness({ publicId, label, level, canSync }: Props) {
   const router = useRouter();
@@ -64,33 +64,40 @@ export function SyncFreshness({ publicId, label, level, canSync }: Props) {
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs ${TONE[level]}`}
+      role="status"
+      title={
+        stale
+          ? "Your forecast may be behind your latest bank transactions."
+          : `Bank data synced ${label}`
+      }
+      className={`fixed right-3 z-30 flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] shadow-sm bg-paper/95 dark:bg-forest-800/95 backdrop-blur ${TONE[level]}`}
+      style={{
+        top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem) + 0.5rem)",
+      }}
     >
-      <span className="flex items-center gap-1.5">
-        <span aria-hidden>{stale ? "⚠" : "↻"}</span>
-        Bank data synced <span className="font-medium">{label}</span>
-        {stale ? " — your numbers may be behind." : ""}
+      <span aria-hidden>{stale ? "⚠" : "↻"}</span>
+      <span>
+        <span className="hidden sm:inline">Synced </span>
+        <span className="font-medium">{label}</span>
       </span>
-      <span className="flex items-center gap-3">
-        {msg ? <span className="text-forest-600">{msg}</span> : null}
-        {error ? <span className="text-red-700">{error}</span> : null}
-        {canSync ? (
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={busy}
-            className="underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
-          >
-            {busy ? "Syncing…" : "Sync now"}
-          </button>
-        ) : null}
-        <Link
-          href={`/c/${publicId}/banks`}
-          className="underline underline-offset-2 hover:opacity-80"
+      {msg ? <span className="text-forest-600">· {msg}</span> : null}
+      {error ? <span className="text-red-700">· {error}</span> : null}
+      {canSync ? (
+        <button
+          type="button"
+          onClick={syncNow}
+          disabled={busy}
+          className="underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
         >
-          Manage
-        </Link>
-      </span>
+          {busy ? "Syncing…" : "Sync"}
+        </button>
+      ) : null}
+      <Link
+        href={`/c/${publicId}/banks`}
+        className="underline underline-offset-2 hover:opacity-80"
+      >
+        Manage
+      </Link>
     </div>
   );
 }
