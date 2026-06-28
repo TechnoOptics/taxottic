@@ -918,3 +918,39 @@ describe("Multi-state apportionment (Tier 1 #4)", () => {
     ).toBe(true);
   });
 });
+
+// --------------------------------------------------------------------
+// SE health insurance deduction cap (IRC §162(l))
+// --------------------------------------------------------------------
+describe("Self-employed health insurance deduction cap", () => {
+  const common = {
+    entityType: "sole_prop" as const,
+    ytdIncomeCents: cents(60_000), // net business income = the §162(l) cap
+    ownerW2WagesCents: cents(80_000), // keeps taxable income positive
+    ownerW2SsWagesCents: cents(80_000),
+  };
+
+  it("caps the deduction at net business income", () => {
+    // Exactly at the cap vs. far above it — both must deduct only $60k, so
+    // the resulting taxable income + total tax are identical.
+    const atCap = forecast(
+      baseInput({ ...common, selfEmployedHealthInsuranceCents: cents(60_000) }),
+    );
+    const overCap = forecast(
+      baseInput({ ...common, selfEmployedHealthInsuranceCents: cents(300_000) }),
+    );
+    expect(overCap.taxableIncomeCents).toBe(atCap.taxableIncomeCents);
+    expect(overCap.totalTaxCents).toBe(atCap.totalTaxCents);
+  });
+
+  it("deducts the full premium when it is below the cap", () => {
+    // A smaller premium deducts less → higher taxable income than at-cap.
+    const small = forecast(
+      baseInput({ ...common, selfEmployedHealthInsuranceCents: cents(10_000) }),
+    );
+    const atCap = forecast(
+      baseInput({ ...common, selfEmployedHealthInsuranceCents: cents(60_000) }),
+    );
+    expect(small.taxableIncomeCents).toBeGreaterThan(atCap.taxableIncomeCents);
+  });
+});

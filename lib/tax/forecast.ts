@@ -557,14 +557,20 @@ export function forecast(input: ForecastInput): ForecastResult {
   const projectedAboveTheLineExisting = round(
     Math.max(0, input.ytdAboveTheLineCents) * projectionFactor,
   );
+  const netBiz = Math.max(0, projectedIncome - projectedExpenses);
+  // SE health insurance (IRC §162(l)) is deductible only up to the
+  // business's earnings — you can't deduct more in health premiums than
+  // the business made. Cap at net business income so a large premium on a
+  // small- or zero-profit business can't over-reduce AGI. (The assumption
+  // text already promised this cap; it just wasn't being applied.)
+  const seHealthDeductibleCents = Math.min(seHealthInsuranceCents, netBiz);
+
   // Note: studentLoanInterestUnconstrainedCents is intentionally NOT
   // added here yet - it's applied to AGI after we phase it out by AGI.
   let projectedAboveTheLine =
     projectedAboveTheLineExisting +
     structuredRetirementCents +
-    seHealthInsuranceCents;
-
-  const netBiz = Math.max(0, projectedIncome - projectedExpenses);
+    seHealthDeductibleCents;
 
   // C-Corp short-circuit: flat 21% on net business income at the entity
   // level. Owner's personal W-2 / withholding / spouse income don't apply
@@ -876,9 +882,9 @@ export function forecast(input: ForecastInput): ForecastResult {
       `Retirement contributions applied above-the-line: $${(structuredRetirementCents / 100).toLocaleString()} (Solo 401(k) + SEP-IRA + Traditional IRA + HSA).`,
     );
   }
-  if (seHealthInsuranceCents > 0) {
+  if (seHealthDeductibleCents > 0) {
     assumptions.push(
-      `Self-employed health insurance deduction applied: $${(seHealthInsuranceCents / 100).toLocaleString()} (above-the-line; limited to SE earnings).`,
+      `Self-employed health insurance deduction applied: $${(seHealthDeductibleCents / 100).toLocaleString()} (above-the-line; capped at net business income per IRC §162(l)).`,
     );
   }
   if (input.ownerW2WagesCents > 0 || effectiveSpouseIncome > 0) {
@@ -1173,7 +1179,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   });
   if (credits > 0) {
     assumptions.push(
-      "Family credits: $2,000 per qualifying child under 17 (CTC) + $500 per other dependent (ODC), phased out above the AGI threshold.",
+      `Family credits: $${(k.CHILD_TAX_CREDIT.ctcPerChildCents / 100).toLocaleString()} per qualifying child under 17 (CTC) + $${(k.CHILD_TAX_CREDIT.odcPerOtherCents / 100).toLocaleString()} per other dependent (ODC), phased out above the AGI threshold.`,
     );
   }
 
