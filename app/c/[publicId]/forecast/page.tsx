@@ -452,15 +452,14 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="forecast" />
         </div>
 
+        {/* Fixed top-right pill — out of flow so it never pushes content down. */}
         {hasConnections ? (
-          <div className="mt-4">
-            <SyncFreshness
-              publicId={publicId}
-              label={syncLabel}
-              level={syncLevel}
-              canSync={hasConnections}
-            />
-          </div>
+          <SyncFreshness
+            publicId={publicId}
+            label={syncLabel}
+            level={syncLevel}
+            canSync={hasConnections}
+          />
         ) : null}
 
         {/* Two-column on lg+: the forecast narrative on the left, a sticky
@@ -1409,15 +1408,16 @@ function compactCents(cents: number): string {
 // Deduction pie — SVG ring of where the write-offs come from + a legend.
 // Lives in the (narrow, ~20rem) sidebar, so it stacks: ring on top, legend
 // below. Raw SVG fills aren't touched by the dark-theme remap, so every
-// colour is a LIGHT champagne/periwinkle that reads on the dark card.
+// colour is a LIGHT tone that reads on the dark card. DISTINCT HUES (not
+// shades of the same two colours) so adjacent slices never look alike.
 // ---------------------------------------------------------------------------
 const DONUT_COLORS = [
-  "#d5bb7e", // gold-400
-  "#8898bd", // forest-300
-  "#e0c590", // gold-300
-  "#b0bcd6", // forest-200
-  "#c4a25d", // gold-500
-  "#aab4cf", // light periwinkle
+  "#e0c06a", // gold
+  "#6cc1d6", // teal
+  "#e2899f", // rose
+  "#92cf9a", // green
+  "#b69ae6", // lavender
+  "#eaa46a", // orange
 ];
 
 function DeductionDonut({
