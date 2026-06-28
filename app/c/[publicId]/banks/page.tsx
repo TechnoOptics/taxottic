@@ -12,6 +12,7 @@ import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
 import { disconnectBank } from "@/app/actions/recycle-bin";
+import { relativeTime, freshnessLevel } from "@/lib/format/relative-time";
 import { TransactionsBulkDeleter } from "@/components/banking/TransactionsBulkDeleter";
 import {
   deleteAccountTransactions,
@@ -352,9 +353,16 @@ export default async function BanksPage({
                             </div>
                             <div className="text-xs text-ink-muted mt-0.5">
                               {STATUS_LABEL[c.status] ?? c.status}
-                              {c.last_synced_at
-                                ? ` · last sync ${new Date(c.last_synced_at).toLocaleDateString()}`
-                                : ""}
+                              {" · synced "}
+                              <span
+                                className={
+                                  freshnessLevel(c.last_synced_at) === "old"
+                                    ? "text-amber-700"
+                                    : ""
+                                }
+                              >
+                                {relativeTime(c.last_synced_at)}
+                              </span>
                             </div>
                           </div>
                         </div>
