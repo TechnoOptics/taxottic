@@ -178,7 +178,7 @@ export function IncomeRow({
         <div className="font-medium text-forest-900">
           {MONTH_LABELS[row.month - 1]} - {prettySource(row.source)}
           {row.recurrence && row.recurrence !== "one_off" ? (
-            <span className="ml-2 text-[10px] uppercase tracking-wide text-forest-700 bg-forest-100 rounded px-1.5 py-0.5">
+            <span className="ml-2 text-[10px] uppercase tracking-wide text-gold-700 border border-gold-300/60 rounded px-1.5 py-0.5">
               {prettyCadence(row.recurrence)}
             </span>
           ) : null}
