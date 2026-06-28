@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { encryptBankToken } from "@/lib/crypto/bankTokens";
 import { exchangeOAuthCode } from "@/lib/stripe-connect/client";
 import { syncStripeConnection } from "@/lib/stripe-connect/sync";
+import { logCompanyActivity } from "@/lib/activity/log";
 
 export const runtime = "nodejs";
 
@@ -176,6 +177,14 @@ export async function GET(req: NextRequest) {
   if (connErr || !connection) {
     return fail(connErr?.message ?? "Could not save the Stripe connection.");
   }
+
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "bank.connected",
+    summary: "Connected a Stripe account",
+    payload: { provider: "stripe" },
+  });
 
   // Encrypt-then-persist. Same crypto module Plaid uses; the column
   // is named access_token but Stripe Connect access tokens look

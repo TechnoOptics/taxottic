@@ -10,6 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // one.
 
 export type CompanyActivityKind =
+  | "company.created"
   | "income.created"
   | "income.updated"
   | "income.deleted"
@@ -18,7 +19,12 @@ export type CompanyActivityKind =
   | "expense.deleted"
   | "profile.updated"
   | "bank.connected"
-  | "bank.disconnected";
+  | "bank.disconnected"
+  | "import.applied"
+  | "mileage.added"
+  | "mileage.classified"
+  | "mileage.deleted"
+  | "mileage.moved";
 
 export async function logCompanyActivity(
   admin: SupabaseClient,

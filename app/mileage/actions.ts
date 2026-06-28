@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { reclassifyTripCore } from "@/lib/mileage/reclassify";
 import { tripDeductionCents } from "@/lib/mileage/deduction";
+import { logCompanyActivity } from "@/lib/activity/log";
 import { notify } from "@/lib/push";
 
 /**
@@ -34,6 +35,22 @@ export async function reclassifyTrip(formData: FormData) {
             ? "Invalid classification."
             : "Couldn't save. Please try again.",
     );
+  }
+
+  // Log against the trip's company (re-read for the company_id + label).
+  const { data: t } = await admin
+    .from("mileage_trips")
+    .select("company_id, distance_miles")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (t?.company_id) {
+    await logCompanyActivity(admin, {
+      companyId: t.company_id,
+      actorUserId: user.id,
+      kind: "mileage.classified",
+      summary: `Reclassified a ${Number(t.distance_miles ?? 0).toFixed(1)}-mile trip as ${classification}`,
+      payload: { trip_id: tripId, classification },
+    });
   }
 
   // Mirror the broader fan-out used by /mileage/classify so a flip
@@ -101,6 +118,14 @@ export async function moveTripCompany(formData: FormData) {
     .eq("id", tripId);
   if (error) throw new Error("Couldn't move the trip. Please try again.");
 
+  await logCompanyActivity(admin, {
+    companyId: targetCompanyId,
+    actorUserId: user.id,
+    kind: "mileage.moved",
+    summary: "Moved a mileage trip into this business",
+    payload: { trip_id: tripId, from_company_id: trip.company_id },
+  });
+
   revalidatePath("/mileage");
   revalidatePath("/mileage/classify");
   revalidatePath("/mileage/business");
@@ -125,7 +150,7 @@ export async function deleteTrip(formData: FormData) {
 
   const { data: trip } = await admin
     .from("mileage_trips")
-    .select("driver_user_id, company_id")
+    .select("driver_user_id, company_id, distance_miles")
     .eq("id", tripId)
     .maybeSingle();
   if (!trip) return;
@@ -145,6 +170,14 @@ export async function deleteTrip(formData: FormData) {
   }
 
   await admin.from("mileage_trips").delete().eq("id", tripId);
+
+  await logCompanyActivity(admin, {
+    companyId: trip.company_id,
+    actorUserId: user.id,
+    kind: "mileage.deleted",
+    summary: `Deleted a ${Number(trip.distance_miles ?? 0).toFixed(1)}-mile trip`,
+    payload: { trip_id: tripId },
+  });
 
   revalidatePath("/mileage");
   revalidatePath("/mileage/classify");
@@ -256,6 +289,14 @@ export async function addManualTrip(formData: FormData) {
   } else {
     await notify(user.id, { kind: "trip_logged", tripId, classification: cls });
   }
+
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "mileage.added",
+    summary: `Logged a manual ${miles.toFixed(1)}-mile trip (${cls})`,
+    payload: { trip_id: tripId, distance_miles: miles, classification: cls },
+  });
 
   revalidatePath("/mileage");
   revalidatePath("/mileage/classify");

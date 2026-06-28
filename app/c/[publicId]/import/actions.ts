@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
+import { logCompanyActivity } from "@/lib/activity/log";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
@@ -504,6 +505,16 @@ export async function applyTransactions(formData: FormData) {
       status: "applied",
     })
     .eq("id", importId);
+
+  if (createdExpenses.length > 0) {
+    await logCompanyActivity(admin, {
+      companyId,
+      actorUserId: user.id,
+      kind: "import.applied",
+      summary: `Applied ${createdExpenses.length} transaction${createdExpenses.length === 1 ? "" : "s"} from an import`,
+      payload: { import_id: importId, count: createdExpenses.length },
+    });
+  }
 
   const { data: company } = await admin
     .from("companies")
