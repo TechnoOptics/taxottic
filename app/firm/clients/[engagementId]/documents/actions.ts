@@ -29,6 +29,7 @@ import {
   renderEntityReturnHTML,
   type EntityForm,
 } from "@/lib/firm/documents/generate-entity-return";
+import { decryptField } from "@/lib/crypto/field-encryption";
 
 // Server actions for /firm/clients/{engagementId}/documents.
 //
@@ -41,6 +42,24 @@ import {
 //     from default lists).
 
 const STORAGE_BUCKET = "firm-documents";
+
+// The EIN lives on the company's tax-year `business_profiles` row (encrypted
+// at rest with the `v1:` vault prefix) — NOT on `companies`, which has no `ein`
+// column. Resolve the profile for (company_id, tax_year) and decrypt before
+// handing the plaintext to a document renderer.
+async function loadCompanyEin(
+  admin: Awaited<ReturnType<typeof requireUserWithAdmin>>["admin"],
+  companyId: string,
+  taxYear: number,
+): Promise<string | null> {
+  const { data } = await admin
+    .from("business_profiles")
+    .select("ein")
+    .eq("company_id", companyId)
+    .eq("tax_year", taxYear)
+    .maybeSingle();
+  return decryptField(data?.ein ?? null);
+}
 
 export async function generateEngagementLetter(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -216,7 +235,7 @@ export async function generateScheduleCDraft(formData: FormData) {
   const { data: eng } = await admin
     .from("firm_engagements")
     .select(
-      "id, firm_id, company_id, tax_year, kind, company:companies!inner(id, name, legal_name, ein, entity_type, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
+      "id, firm_id, company_id, tax_year, kind, company:companies!inner(id, name, legal_name, entity_type, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
     )
     .eq("id", engagementId)
     .eq("firm_id", ctx.firm.id)
@@ -228,7 +247,6 @@ export async function generateScheduleCDraft(formData: FormData) {
         id: string;
         name: string;
         legal_name: string | null;
-        ein: string | null;
         entity_type: string | null;
         address_line_1: string | null;
         address_city: string | null;
@@ -279,6 +297,7 @@ export async function generateScheduleCDraft(formData: FormData) {
 
   // Load aggregated income + expenses.
   const data = await loadScheduleCData(admin, company.id, eng.tax_year);
+  const ein = await loadCompanyEin(admin, company.id, eng.tax_year);
 
   const { html, filename } = renderScheduleCHTML({
     firm: {
@@ -289,7 +308,7 @@ export async function generateScheduleCDraft(formData: FormData) {
     company: {
       name: company.name,
       legal_name: company.legal_name,
-      ein: company.ein,
+      ein,
       address_line_1: company.address_line_1,
       address_city: company.address_city,
       address_region: company.address_region,
@@ -520,7 +539,7 @@ export async function generateK1Drafts(formData: FormData) {
   const { data: eng } = await admin
     .from("firm_engagements")
     .select(
-      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, ein, entity_type, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
+      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, entity_type, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
     )
     .eq("id", engagementId)
     .eq("firm_id", ctx.firm.id)
@@ -532,7 +551,6 @@ export async function generateK1Drafts(formData: FormData) {
         id: string;
         name: string;
         legal_name: string | null;
-        ein: string | null;
         entity_type: string | null;
         address_line_1: string | null;
         address_city: string | null;
@@ -603,6 +621,7 @@ export async function generateK1Drafts(formData: FormData) {
   }
 
   const totals = await loadK1Data(admin, company.id, eng.tax_year);
+  const ein = await loadCompanyEin(admin, company.id, eng.tax_year);
   const created: string[] = [];
 
   for (const p of partners) {
@@ -617,7 +636,7 @@ export async function generateK1Drafts(formData: FormData) {
         company: {
           name: company.name,
           legal_name: company.legal_name,
-          ein: company.ein,
+          ein,
           address_line_1: company.address_line_1,
           address_city: company.address_city,
           address_region: company.address_region,
@@ -709,7 +728,7 @@ export async function generate1099Batch(formData: FormData) {
   const { data: eng } = await admin
     .from("firm_engagements")
     .select(
-      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, ein, address_line_1, address_city, address_region, address_postal_code, phone, deleted_at)",
+      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, address_line_1, address_city, address_region, address_postal_code, phone, deleted_at)",
     )
     .eq("id", engagementId)
     .eq("firm_id", ctx.firm.id)
@@ -721,7 +740,6 @@ export async function generate1099Batch(formData: FormData) {
         id: string;
         name: string;
         legal_name: string | null;
-        ein: string | null;
         address_line_1: string | null;
         address_city: string | null;
         address_region: string | null;
@@ -738,6 +756,8 @@ export async function generate1099Batch(formData: FormData) {
     .maybeSingle();
   if (!firmRow) throw new Error("Firm record missing.");
 
+  const ein = await loadCompanyEin(admin, company.id, eng.tax_year);
+
   const baseInput = {
     variant: variant as "1099-NEC" | "1099-MISC",
     firm: {
@@ -748,7 +768,7 @@ export async function generate1099Batch(formData: FormData) {
     payer: {
       name: company.name,
       legal_name: company.legal_name,
-      ein: company.ein,
+      ein,
       address_line_1: company.address_line_1,
       address_city: company.address_city,
       address_region: company.address_region,
@@ -1027,7 +1047,7 @@ export async function generateEntityReturnDraft(formData: FormData) {
   const { data: eng } = await admin
     .from("firm_engagements")
     .select(
-      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, ein, entity_type, state_code, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
+      "id, firm_id, company_id, tax_year, company:companies!inner(id, name, legal_name, entity_type, state_code, address_line_1, address_city, address_region, address_postal_code, deleted_at)",
     )
     .eq("id", engagementId)
     .eq("firm_id", ctx.firm.id)
@@ -1039,7 +1059,6 @@ export async function generateEntityReturnDraft(formData: FormData) {
         id: string;
         name: string;
         legal_name: string | null;
-        ein: string | null;
         entity_type: string | null;
         state_code: string | null;
         address_line_1: string | null;
@@ -1081,6 +1100,7 @@ export async function generateEntityReturnDraft(formData: FormData) {
     : 1;
 
   const totals = await loadEntityReturnTotals(admin, company.id, eng.tax_year);
+  const ein = await loadCompanyEin(admin, company.id, eng.tax_year);
 
   const { html, filename } = renderEntityReturnHTML({
     form: variant,
@@ -1092,7 +1112,7 @@ export async function generateEntityReturnDraft(formData: FormData) {
     company: {
       name: company.name,
       legal_name: company.legal_name,
-      ein: company.ein,
+      ein,
       entity_type: company.entity_type,
       incorporated_state: company.state_code,
       address_line_1: company.address_line_1,
