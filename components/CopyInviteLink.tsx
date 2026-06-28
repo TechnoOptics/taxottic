@@ -43,6 +43,7 @@ export function CopyInviteLink({ url }: { url: string }) {
         <input
           readOnly
           value={url}
+          aria-label="Invite link URL"
           onFocus={(e) => e.currentTarget.select()}
           className="input flex-1 font-mono text-xs"
         />
