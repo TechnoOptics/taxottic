@@ -76,6 +76,22 @@ export async function POST(req: NextRequest) {
     companyId = companies?.[0]?.id ?? null;
   }
 
+  // SECURITY: companyId can come straight from the request body, and every
+  // write below uses the service-role client (which bypasses RLS). Verify the
+  // caller actually belongs to this company, or they could spread their
+  // prior-year totals into ANOTHER tenant's books.
+  if (companyId) {
+    const { data: membership } = await admin
+      .from("company_members")
+      .select("user_id")
+      .eq("company_id", companyId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!membership) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  }
+
   // Pull every prior-year doc the user uploaded that hasn't been
   // applied yet.
   const { data: docs } = await supabase

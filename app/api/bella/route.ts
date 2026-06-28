@@ -124,7 +124,20 @@ export async function POST(req: NextRequest) {
       .select("id, public_id, name, entity_type")
       .eq("public_id", body.company_public_id)
       .single();
-    if (company) {
+    // SECURITY: company_public_id comes from the request body. Only attach
+    // this company's context if the caller is actually a member — otherwise a
+    // user could pass any public_id and bind a Bella conversation (written
+    // below with the service-role client, which bypasses RLS) to, and surface
+    // the name/profile of, a company they don't belong to.
+    const { data: membership } = company
+      ? await supabase
+          .from("company_members")
+          .select("user_id")
+          .eq("company_id", company.id)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : { data: null };
+    if (company && membership) {
       companyId = company.id;
       const taxYear = new Date().getUTCFullYear();
       const [{ data: bp }, { data: incomeRows }, { data: expenseRows }] =
