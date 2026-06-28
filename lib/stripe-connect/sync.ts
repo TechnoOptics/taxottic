@@ -4,6 +4,10 @@ import {
   applyRecurringExpenseDetection,
   applyRecurringIncomeDetection,
 } from "@/lib/banking/recurring";
+import {
+  claimPendingTransaction,
+  releasePendingTransaction,
+} from "@/lib/banking/claim";
 
 /**
  * Pull balance_transactions for a Stripe Connect connection and write
@@ -560,6 +564,9 @@ async function autoApplyPendingStripe(args: {
       // inflow type (e.g. adjustment with positive amount) is left
       // pending so the user can confirm it's actually revenue.
       if (type !== "charge" && type !== "payment") continue;
+      // Claim atomically before inserting (idempotency under concurrent syncs).
+      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
+        continue;
       const { data: row } = await admin
         .from("monthly_income")
         .insert({
@@ -585,14 +592,11 @@ async function autoApplyPendingStripe(args: {
       if (row) {
         await admin
           .from("account_transactions")
-          .update({
-            user_action: "applied",
-            applied_to_income_id: row.id,
-            applied_at: new Date().toISOString(),
-            applied_by: userId,
-          })
+          .update({ applied_to_income_id: row.id })
           .eq("id", tx.id);
         income++;
+      } else {
+        await releasePendingTransaction(admin, tx.id as string);
       }
       continue;
     }
@@ -602,6 +606,8 @@ async function autoApplyPendingStripe(args: {
     // the best-matching Schedule-C bucket.
     if (cents > 0) {
       const code = stripeExpenseCode(type);
+      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
+        continue;
       const { data: row } = await admin
         .from("monthly_expenses")
         .insert({
@@ -622,14 +628,11 @@ async function autoApplyPendingStripe(args: {
       if (row) {
         await admin
           .from("account_transactions")
-          .update({
-            user_action: "applied",
-            applied_to_expense_id: row.id,
-            applied_at: new Date().toISOString(),
-            applied_by: userId,
-          })
+          .update({ applied_to_expense_id: row.id })
           .eq("id", tx.id);
         expense++;
+      } else {
+        await releasePendingTransaction(admin, tx.id as string);
       }
     }
   }

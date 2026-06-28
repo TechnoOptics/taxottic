@@ -4,6 +4,10 @@ import { getPlaidClient } from "./client";
 import { categorizeExpense, categorizeIncome } from "./categorize";
 import { decryptBankToken } from "@/lib/crypto/bankTokens";
 import { applyRecurringExpenseDetection } from "@/lib/banking/recurring";
+import {
+  claimPendingTransaction,
+  releasePendingTransaction,
+} from "@/lib/banking/claim";
 
 /**
  * Pull every change since the connection's stored cursor and apply
@@ -285,6 +289,10 @@ async function applyPendingTransactions(
     if (cents > 0) {
       const code = categorizeExpense(primary);
       if (!code) continue;
+      // Claim atomically before inserting so a concurrent sync can't apply
+      // this transaction twice. Loser of the race skips.
+      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
+        continue;
       const { data: row } = await admin
         .from("monthly_expenses")
         .insert({
@@ -301,18 +309,17 @@ async function applyPendingTransactions(
       if (row) {
         await admin
           .from("account_transactions")
-          .update({
-            user_action: "applied",
-            applied_to_expense_id: row.id,
-            applied_at: new Date().toISOString(),
-            applied_by: userId,
-          })
+          .update({ applied_to_expense_id: row.id })
           .eq("id", tx.id);
         expense++;
+      } else {
+        await releasePendingTransaction(admin, tx.id as string);
       }
     } else if (cents < 0) {
       const source = categorizeIncome(primary, detailed);
       if (!source) continue;
+      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
+        continue;
       const { data: row } = await admin
         .from("monthly_income")
         .insert({
@@ -329,14 +336,11 @@ async function applyPendingTransactions(
       if (row) {
         await admin
           .from("account_transactions")
-          .update({
-            user_action: "applied",
-            applied_to_income_id: row.id,
-            applied_at: new Date().toISOString(),
-            applied_by: userId,
-          })
+          .update({ applied_to_income_id: row.id })
           .eq("id", tx.id);
         income++;
+      } else {
+        await releasePendingTransaction(admin, tx.id as string);
       }
     }
   }
