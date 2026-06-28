@@ -3,6 +3,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { BusinessProfileForm } from "@/components/BusinessProfileForm";
 import { CompanyLogoUploader } from "@/components/CompanyLogoUploader";
+import { decryptField } from "@/lib/crypto/field-encryption";
 import {
   saveBusinessProfile,
   setCompanyLogoUrl,
@@ -78,7 +79,7 @@ export default async function ProfilePage({ params }: { params: Params }) {
               homeTotalSqft: bp?.home_total_sqft ?? null,
               vehicleMethod: bp?.vehicle_method ?? null,
               vehicleBusinessMiles: bp?.vehicle_business_miles ?? null,
-              ein: bp?.ein ?? null,
+              ein: decryptField(bp?.ein) ?? null,
               legalName: bp?.legal_name ?? null,
               addressLine1: bp?.address_line1 ?? null,
               addressLine2: bp?.address_line2 ?? null,

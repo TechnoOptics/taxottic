@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
+import { decryptField } from "@/lib/crypto/field-encryption";
 import { requestW9, markW9Verified, markW9Invalid } from "./actions";
 
 type Params = Promise<{ engagementId: string }>;
@@ -133,7 +134,7 @@ export default async function W9Page({ params }: { params: Params }) {
                             <>
                               <span>·</span>
                               <span className="font-mono">
-                                TIN: {maskTin(w.tin_digits, w.tin_type)}
+                                TIN: {maskTin(decryptField(w.tin_digits), w.tin_type)}
                               </span>
                             </>
                           ) : null}
