@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { getPlaidClient } from "@/lib/plaid/client";
+import { logCompanyActivity } from "@/lib/activity/log";
 
 // Recycle-bin actions: soft-delete with a 30-day grace period, plus
 // restore and immediate purge. Companies and bank connections each get
@@ -116,6 +117,14 @@ export async function disconnectBank(formData: FormData) {
       last_error: plaidError,
     })
     .eq("id", connectionId);
+
+  await logCompanyActivity(admin, {
+    companyId: conn.company_id,
+    actorUserId: user.id,
+    kind: "bank.disconnected",
+    summary: `Disconnected a ${conn.provider} bank connection`,
+    payload: { connection_id: connectionId, provider: conn.provider },
+  });
 
   // Get the company public_id so we can revalidate the right page.
   const { data: company } = await admin
