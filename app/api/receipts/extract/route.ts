@@ -129,6 +129,12 @@ export async function POST(req: NextRequest) {
         { status: 503 },
       );
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Log the detail server-side; return a generic message so we don't leak
+    // internal/upstream error specifics to the client.
+    console.error("[receipts/extract] failed:", message);
+    return NextResponse.json(
+      { error: "Couldn't read that receipt. Please try again." },
+      { status: 500 },
+    );
   }
 }

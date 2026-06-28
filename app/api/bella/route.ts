@@ -321,8 +321,10 @@ export async function POST(req: NextRequest) {
       .trim();
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
+    // Log detail server-side; return a generic message to the client.
+    console.error("[bella] answer failed:", message);
     return NextResponse.json(
-      { error: `Bella could not answer: ${message}` },
+      { error: "Bella couldn't answer right now. Please try again." },
       { status: 502 },
     );
   }
