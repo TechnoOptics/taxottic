@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents } from "@/lib/tax/forecast";
 import { encryptField } from "@/lib/crypto/field-encryption";
+import { logCompanyActivity } from "@/lib/activity/log";
 
 export async function saveBusinessProfile(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -65,6 +66,14 @@ export async function saveBusinessProfile(formData: FormData) {
     business_email: text("business_email"),
   });
   if (error) throw new Error(error.message);
+
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "profile.updated",
+    summary: `Updated the business profile (tax year ${taxYear})`,
+    payload: { tax_year: taxYear },
+  });
 
   const { data: company } = await admin
     .from("companies")

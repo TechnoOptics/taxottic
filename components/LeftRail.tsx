@@ -178,6 +178,17 @@ const COMPANY_ITEMS: {
     ),
   },
   {
+    key: "activity",
+    label: "Activity",
+    path: "activity",
+    icon: (
+      <Icon>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </Icon>
+    ),
+  },
+  {
     key: "settings",
     label: "Settings",
     // Route name unchanged — only the label was renamed from "Setup".

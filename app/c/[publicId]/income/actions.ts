@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
-import { parseDollarsToCents } from "@/lib/tax/forecast";
+import { parseDollarsToCents, formatCents } from "@/lib/tax/forecast";
+import { logCompanyActivity } from "@/lib/activity/log";
 
 async function userBelongsToCompany(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
@@ -68,6 +69,14 @@ export async function addIncome(formData: FormData) {
   });
   if (error) throw new Error(error.message);
 
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "income.created",
+    summary: `Added ${formatCents(cents)} income (${source}), month ${month}`,
+    payload: { month, amount_cents: cents, source, recurrence },
+  });
+
   const { data: company } = await admin
     .from("companies")
     .select("public_id")
@@ -132,6 +141,14 @@ export async function updateIncome(formData: FormData) {
     .eq("user_id", user.id);
   if (error) throw new Error(error.message);
 
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "income.updated",
+    summary: `Updated an income entry to ${formatCents(cents)}, month ${month}`,
+    payload: { id, month, amount_cents: cents, source, recurrence },
+  });
+
   const { data: company } = await admin
     .from("companies")
     .select("public_id")
@@ -149,6 +166,15 @@ export async function deleteIncome(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
+  // Capture the amount before deleting so the activity log can say what
+  // was removed (the audit's "who deleted a transaction" concern).
+  const { data: existing } = await admin
+    .from("monthly_income")
+    .select("amount_cents, month")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   // Scope delete by user_id so a user can only delete their own entries.
   // Managers can delete via the admin/management UI separately.
   const { error } = await admin
@@ -157,6 +183,16 @@ export async function deleteIncome(formData: FormData) {
     .eq("id", id)
     .eq("user_id", user.id);
   if (error) throw new Error(error.message);
+
+  if (existing) {
+    await logCompanyActivity(admin, {
+      companyId,
+      actorUserId: user.id,
+      kind: "income.deleted",
+      summary: `Deleted ${formatCents(existing.amount_cents)} income, month ${existing.month}`,
+      payload: { id, ...existing },
+    });
+  }
 
   const { data: company } = await admin
     .from("companies")

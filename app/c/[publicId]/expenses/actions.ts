@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
-import { parseDollarsToCents } from "@/lib/tax/forecast";
+import { parseDollarsToCents, formatCents } from "@/lib/tax/forecast";
+import { logCompanyActivity } from "@/lib/activity/log";
 import { notify } from "@/lib/push";
 
 async function userBelongsToCompany(
@@ -92,6 +93,14 @@ export async function addExpense(formData: FormData) {
     );
   }
 
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "expense.created",
+    summary: `Added ${formatCents(cents)} expense (${categoryCode}), month ${month}`,
+    payload: { month, amount_cents: cents, category_code: categoryCode, recurrence },
+  });
+
   const { data: company } = await admin
     .from("companies")
     .select("public_id")
@@ -159,6 +168,14 @@ export async function updateExpense(formData: FormData) {
     .eq("user_id", user.id);
   if (error) throw new Error(error.message);
 
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "expense.updated",
+    summary: `Updated an expense to ${formatCents(cents)} (${categoryCode}), month ${month}`,
+    payload: { id, month, amount_cents: cents, category_code: categoryCode, recurrence },
+  });
+
   const { data: company } = await admin
     .from("companies")
     .select("public_id")
@@ -176,12 +193,30 @@ export async function deleteExpense(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
+  // Capture what's being removed for the audit trail.
+  const { data: existing } = await admin
+    .from("monthly_expenses")
+    .select("amount_cents, month, category_code")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   const { error } = await admin
     .from("monthly_expenses")
     .delete()
     .eq("id", id)
     .eq("user_id", user.id);
   if (error) throw new Error(error.message);
+
+  if (existing) {
+    await logCompanyActivity(admin, {
+      companyId,
+      actorUserId: user.id,
+      kind: "expense.deleted",
+      summary: `Deleted ${formatCents(existing.amount_cents)} expense (${existing.category_code}), month ${existing.month}`,
+      payload: { id, ...existing },
+    });
+  }
 
   const { data: company } = await admin
     .from("companies")
