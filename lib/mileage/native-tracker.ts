@@ -607,6 +607,19 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   if (!tracking) await startMileageTracking(savedCompany);
 }
 
+/** Open the OS app-settings screen so the user can flip Location to
+ *  "Always" (the only way background drive-capture works). No-ops off
+ *  native. Never awaits `.then` on the native proxy (see stopBgSafely). */
+export async function openLocationSettings(): Promise<void> {
+  const bg = await guard();
+  if (!bg) return;
+  try {
+    void bg.openSettings();
+  } catch {
+    /* not available on this build — the on-screen steps still guide the user */
+  }
+}
+
 /** Snapshot for the UI toggle. `supported` is true only on the
  *  native shell with the plugin in the running binary. */
 export async function getMileageTrackingState(): Promise<TrackingState> {
