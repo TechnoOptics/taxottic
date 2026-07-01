@@ -530,7 +530,10 @@ main, footer, nav {
    live in @layer utilities) without !important. */
 @media (min-width: 1024px) {
   main > section[class~="lg:pl-60"] {
-    max-width: 80rem;
+    /* Fill more of the screen (was 80rem/1280px — too narrow, left large
+       gaps on normal-large monitors). 90rem fills up to ~1700px viewports
+       and only caps + recentres on genuinely ultra-wide displays. */
+    max-width: 90rem;
     margin-inline: auto;
     padding-left: 2.5rem;
     padding-right: 2.5rem;

@@ -436,10 +436,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
-        {/* Anchor the content to the left nav (flush, not centered) and let
-            it fill the width, capped at 88rem so it stops stretching only on
-            ultra-wide monitors. */}
-        <div className="w-full lg:max-w-[88rem]">
         <PageHeader
           logo={
             <CompanyLogo
@@ -1074,7 +1070,6 @@ export default async function ForecastPage({ params }: { params: Params }) {
               </Link>
             </div>
           </aside>
-        </div>
         </div>
       </section>
     </main>
