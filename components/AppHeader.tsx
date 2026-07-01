@@ -96,6 +96,17 @@ export async function AppHeader({
 
   return (
     <>
+      {/* Set the theme SYNCHRONOUSLY before the page paints so the
+          rail-clearance CSS (html[data-theme] main) applies on the first
+          layout — otherwise there's a flash where the fixed rail overlaps
+          the content before DarkThemeMount's effect runs. Authenticated
+          pages only (this header renders only here). */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            "try{var t=localStorage.getItem('taxottic.theme');document.documentElement.dataset.theme=(t==='dark'?'dark':'light');}catch(e){document.documentElement.dataset.theme='light';}",
+        }}
+      />
       {/* Skip-to-main-content link. Visually hidden until focused so
           keyboard + screen-reader users can jump straight to the page
           content without tabbing through the wordmark / UserMenu /
