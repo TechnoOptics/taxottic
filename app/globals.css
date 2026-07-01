@@ -538,29 +538,21 @@ main, footer, nav {
    live in @layer utilities) without !important. */
 @media (min-width: 1024px) {
   main > section[class~="lg:pl-60"] {
-    /* Base cap for laptops (~1440–1700px viewports): 90rem ≈ 1440px fills
-       essentially the whole canvas at those sizes. The ladder below scales
-       the cap UP on larger monitors so the app keeps filling the view
-       instead of stranding empty side-margins — while still capping on true
-       ultra-wide so no single card ever sprawls to an unreadable width. */
-    max-width: 90rem;
+    /* FLUID fill. Instead of stepped caps that leave dead gaps between
+       breakpoints, the content tracks the available canvas (everything to
+       the right of the fixed rail, less a small right gutter) and fills it
+       at EVERY size — so a 1440p / 4K / 27–32" monitor uses the space
+       rather than showing a narrow centered column. `min()` holds a
+       generous ceiling (168rem ≈ 2,688px) so genuinely enormous / ultra-
+       wide displays still cap and a single card never sprawls past the
+       edge of readability; on those, margin-inline centers the column.
+       The 21rem inset = the 15rem rail clearance + a ~6rem breathing
+       gutter so content never kisses the right edge. */
+    max-width: min(168rem, calc(100vw - 21rem));
     margin-inline: auto;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
   }
-}
-/* Responsive width ladder for larger displays. Each step raises the content
-   cap so a 1440p / 4K / 27–32" monitor fills appropriately rather than
-   showing a narrow centered column. Keeps a ceiling (140rem) so ultra-wide
-   (3440px+) doesn't stretch content edge-to-edge. */
-@media (min-width: 1700px) {
-  main > section[class~="lg:pl-60"] { max-width: 104rem; }
-}
-@media (min-width: 2000px) {
-  main > section[class~="lg:pl-60"] { max-width: 120rem; }
-}
-@media (min-width: 2400px) {
-  main > section[class~="lg:pl-60"] { max-width: 140rem; }
 }
 
 /* ============================================================================
