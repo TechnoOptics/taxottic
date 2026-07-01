@@ -342,14 +342,16 @@ html[data-theme="dark"] body {
 }
 
 /* Now that the desktop LeftRail is ALWAYS expanded (224px), the
-   centered max-w-6xl content column on every page would overlap
-   the rail at viewports below ~1600px. Push the content area
-   right of the rail on lg+ so the rail never crops the headline.
-   Marketing routes (which don't mount DarkThemeMount) keep their
-   full-width centered layout — we gate on data-theme="dark" since
-   that's the proxy for "authenticated page with the rail". */
+   centered content column would overlap the rail on lg+. Push the
+   content area right of the rail so the rail never crops it.
+   Gate on `[data-theme]` being PRESENT (DarkThemeMount sets it to
+   "light" OR "dark" on every authenticated page) — NOT on the value.
+   Marketing routes don't mount DarkThemeMount, so they have no
+   data-theme attribute and keep their full-width centered layout.
+   (Previously gated on data-theme="dark"; when the default flipped to
+   light the clearance vanished and the rail overlapped the content.) */
 @media (min-width: 1024px) {
-  html[data-theme="dark"] main {
+  html[data-theme] main {
     padding-left: 15rem;
   }
 }
