@@ -436,10 +436,10 @@ export default async function ForecastPage({ params }: { params: Params }) {
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} bellaCompanyId={publicId} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-10">
-        {/* Cap + left-align the content beside the rail so it doesn't
-            stretch edge-to-edge on wide monitors (main ~768px + 20rem
-            sidebar = a balanced block). */}
-        <div className="w-full lg:max-w-[70rem]">
+        {/* Cap + CENTER the content in the area beside the rail so it
+            neither stretches edge-to-edge nor sits left-heavy with a void
+            on the right (main ~780px + 20rem sidebar, balanced margins). */}
+        <div className="w-full lg:mx-auto lg:max-w-[72rem]">
         <PageHeader
           logo={
             <CompanyLogo
