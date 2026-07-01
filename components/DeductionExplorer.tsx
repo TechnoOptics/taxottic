@@ -72,19 +72,22 @@ export function DeductionExplorer({ deductions, totalCount }: Props) {
           </p>
         </div>
       ) : (
-        // Two-up on large screens: a single full-width column left each
-        // category header as a lone title with a chevron stranded ~1,300px
-        // away. `items-start` keeps an unexpanded neighbour pinned to the top
-        // of its row when the sibling category is expanded (rather than
-        // stretching to match its height).
-        <ul className="mt-6 grid gap-3 lg:grid-cols-2 lg:items-start">
-          {grouped.map(({ category, items }) => {
+        // Two INDEPENDENT column stacks on lg+ — NOT a CSS grid. A grid forces
+        // both columns to share row heights, so expanding one category left a
+        // ~5,700px blank gap beside its collapsed neighbour and shoved every
+        // later row down. Splitting the categories into two self-contained
+        // vertical stacks means opening a category only pushes items DOWN ITS
+        // OWN column; the other side never moves. Half-split (first half left,
+        // second half right) so the columns still read in natural order when
+        // they stack into one column on mobile.
+        (() => {
+          const renderCategory = ({
+            category,
+            items,
+          }: (typeof grouped)[number]) => {
             const isOpen = isSearching || openCategories.has(category);
             return (
-              <li
-                key={category}
-                className="card overflow-hidden self-start"
-              >
+              <li key={category} className="card overflow-hidden">
                 <button
                   type="button"
                   onClick={() => toggleCategory(category)}
@@ -120,8 +123,19 @@ export function DeductionExplorer({ deductions, totalCount }: Props) {
                 ) : null}
               </li>
             );
-          })}
-        </ul>
+          };
+          const mid = Math.ceil(grouped.length / 2);
+          const columns = [grouped.slice(0, mid), grouped.slice(mid)];
+          return (
+            <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-start">
+              {columns.map((col, ci) => (
+                <ul key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
+                  {col.map(renderCategory)}
+                </ul>
+              ))}
+            </div>
+          );
+        })()
       )}
     </div>
   );
@@ -134,8 +148,16 @@ function DeductionRow({
   deduction: MasterDeduction;
   highlight: string;
 }) {
+  // The IRS publication / form the source URL points at — the "which tax
+  // reference applies" answer, surfaced as a chip on wide screens.
+  const ref = irsRef(deduction.source);
   return (
-    <div className="grid sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start">
+    // On lg+ a third middle column carries the tax details so the wide row's
+    // dead centre space is used for something useful (reference + who it
+    // applies to) instead of blank canvas. Below lg it collapses to the
+    // original compact two-column layout.
+    <div className="grid items-start gap-2 sm:gap-4 sm:grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto]">
+      {/* Description */}
       <div className="min-w-0">
         <div className="text-sm sm:text-base text-forest-900 font-medium">
           {hl(deduction.name, highlight)}
@@ -143,8 +165,10 @@ function DeductionRow({
         <div className="text-xs text-ink-muted mt-1 leading-relaxed">
           {hl(deduction.notes, highlight)}
         </div>
+        {/* Best-fit rides under the description on small/medium; on lg it
+            moves into the dedicated details column (below). */}
         {deduction.industry ? (
-          <div className="mt-1.5 text-[11px] text-forest-700">
+          <div className="mt-1.5 text-[11px] text-forest-700 lg:hidden">
             <span className="text-gold-700 uppercase tracking-wider mr-1">
               Best fit:
             </span>
@@ -152,6 +176,36 @@ function DeductionRow({
           </div>
         ) : null}
       </div>
+
+      {/* Tax details — fills the wide-screen blank space. Hidden below lg. */}
+      <div className="hidden min-w-0 text-[11px] leading-relaxed lg:flex lg:flex-col lg:gap-1.5">
+        {ref ? (
+          <div>
+            <span className="text-gold-700 uppercase tracking-wider mr-1">
+              Tax reference
+            </span>
+            <span className="font-medium text-forest-800">{ref}</span>
+          </div>
+        ) : null}
+        {deduction.applicability ? (
+          <div className="text-ink-soft">
+            <span className="text-gold-700 uppercase tracking-wider mr-1">
+              Applies to
+            </span>
+            {hl(deduction.applicability, highlight)}
+          </div>
+        ) : null}
+        {deduction.industry ? (
+          <div className="text-forest-700">
+            <span className="text-gold-700 uppercase tracking-wider mr-1">
+              Best fit
+            </span>
+            {deduction.industry}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Code + IRS source */}
       <div className="flex flex-col sm:items-end gap-1 shrink-0">
         <span className="text-[10px] uppercase tracking-[0.18em] text-forest-700 px-2 py-0.5 rounded-full bg-forest-50 border border-forest-100">
           {deduction.code}
@@ -165,6 +219,10 @@ function DeductionRow({
           >
             IRS source ↗
           </a>
+        ) : null}
+        {/* On narrow screens the tax reference has nowhere else to live. */}
+        {ref ? (
+          <span className="text-[10px] text-ink-muted lg:hidden">{ref}</span>
         ) : null}
       </div>
     </div>
@@ -198,4 +256,28 @@ function hl(text: string, q: string) {
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Turn an IRS source URL into a short, human "which reference applies" label,
+// e.g. .../publications/p15b -> "IRS Pub 15-B", /instructions/i7206 ->
+// "IRS Instr. 7206", a Schedule C link -> "Schedule C". Falls back to a
+// generic label so the chip is always meaningful. Pure string parsing — no
+// network, matches the catalog's known irs.gov URL shapes.
+function irsRef(url: string): string | null {
+  if (!url) return null;
+  const u = url.toLowerCase();
+  let m: RegExpMatchArray | null;
+  if ((m = u.match(/\/p(\d+)([a-z]?)(?:\.pdf)?(?:[/?#]|$)/))) {
+    return `IRS Pub ${m[1]}${m[2] ? "-" + m[2].toUpperCase() : ""}`;
+  }
+  if ((m = u.match(/\/i(\d+)([a-z]?)(?:[/?#]|$)/))) {
+    return `IRS Instr. ${m[1]}${m[2] ? m[2].toUpperCase() : ""}`;
+  }
+  if ((m = u.match(/publication-(\d+)/))) return `IRS Pub ${m[1]}`;
+  if (u.includes("schedule-c")) return "Schedule C";
+  if (u.includes("schedule-se")) return "Schedule SE";
+  if ((m = u.match(/form-(\d+)/))) return `Form ${m[1]}`;
+  if (u.includes("business-expense")) return "IRS business-expense guide";
+  if (u.includes("records")) return "IRS recordkeeping";
+  return "IRS guidance";
 }
