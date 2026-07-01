@@ -1330,7 +1330,7 @@ function RowKV({ label, value }: { label: string; value: string }) {
 // uses the brand's LIGHTER blue (forest-400) — on-brand and legible on the
 // dark card; expenses use brand gold.
 const BAR_INCOME = "#5e6f9c"; // forest-400 (brand blue)
-const BAR_EXPENSE = "#e0c06a";
+const BAR_EXPENSE = "#c4a25d"; // gold-500 (deeper — reads on white and dark)
 
 function MonthlyBars({
   income,
@@ -1401,12 +1401,12 @@ function compactCents(cents: number): string {
 // shades of the same two colours) so adjacent slices never look alike.
 // ---------------------------------------------------------------------------
 const DONUT_COLORS = [
-  "#e0c06a", // gold
-  "#6cc1d6", // teal
-  "#e2899f", // rose
-  "#92cf9a", // green
-  "#b69ae6", // lavender
-  "#eaa46a", // orange
+  "#c4a25d", // gold (deeper — reads on white + dark)
+  "#3f95ad", // teal
+  "#d1728d", // rose
+  "#5fae72", // green
+  "#8f6fd4", // lavender
+  "#d1893f", // orange
 ];
 
 function DeductionDonut({
@@ -1452,7 +1452,9 @@ function DeductionDonut({
           textAnchor="middle"
           dominantBaseline="central"
           transform="rotate(90 80 80)"
-          style={{ fontSize: 16, fontWeight: 700, fill: "#fbf7e9" }}
+          className="text-forest-900"
+          fill="currentColor"
+          style={{ fontSize: 16, fontWeight: 700 }}
         >
           {compactCents(total)}
         </text>

@@ -15,23 +15,23 @@ const KEY = "taxottic.theme";
 export function ThemeToggle() {
   // Render-stable initial state for SSR; corrected on mount from
   // localStorage + the live html[data-theme] attribute.
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("light");
 
   useEffect(() => {
-    let initial: "dark" | "light" = "dark";
+    let initial: "dark" | "light" = "light";
     try {
       const pref = window.localStorage.getItem(KEY);
-      if (pref === "light") initial = "light";
-      else if (pref === "dark") initial = "dark";
+      if (pref === "dark") initial = "dark";
+      else if (pref === "light") initial = "light";
       else {
         const dom =
-          document.documentElement.dataset.theme === "light"
-            ? "light"
-            : "dark";
+          document.documentElement.dataset.theme === "dark"
+            ? "dark"
+            : "light";
         initial = dom;
       }
     } catch {
-      /* private mode — keep dark */
+      /* private mode — keep light */
     }
     setTheme(initial);
   }, []);

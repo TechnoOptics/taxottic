@@ -30,11 +30,13 @@ export const THEME_CHANGE_EVENT = "taxottic-theme-change";
 export function DarkThemeMount() {
   useEffect(() => {
     const apply = () => {
-      let theme: "dark" | "light" = "dark";
+      // Default to LIGHT — the app reads cleaner / more professional on a
+      // light surface. Users who explicitly picked dark keep it.
+      let theme: "dark" | "light" = "light";
       try {
         const pref = window.localStorage.getItem(THEME_KEY);
-        if (pref === "light") theme = "light";
-        else if (pref === "dark") theme = "dark";
+        if (pref === "dark") theme = "dark";
+        else if (pref === "light") theme = "light";
       } catch {
         /* private mode — keep default */
       }
