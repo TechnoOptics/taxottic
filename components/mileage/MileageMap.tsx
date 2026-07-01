@@ -92,36 +92,11 @@ const MAP_STYLE_TAXOTTIC: Array<Record<string, unknown>> = [
     stylers: [{ color: "#56678a" }] },
 ];
 
-// Light-theme skin: a clean, de-cluttered light map (hide POI icon noise,
-// cream landscape, soft gold highways) so it reads as part of the light app
-// instead of a dark slab. Used when html[data-theme] !== "dark".
-const MAP_STYLE_LIGHT: Array<Record<string, unknown>> = [
-  { elementType: "geometry", stylers: [{ color: "#f3eede" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#4a5468" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#fbf7e9" }] },
-  { featureType: "administrative", elementType: "geometry",
-    stylers: [{ color: "#dcd4bc" }] },
-  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#e9e2cc" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dbe6cf" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road", elementType: "geometry.stroke",
-    stylers: [{ color: "#e6ddc6" }] },
-  { featureType: "road", elementType: "labels.text.fill",
-    stylers: [{ color: "#6b6552" }] },
-  { featureType: "road.highway", elementType: "geometry",
-    stylers: [{ color: "#e7d19a" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke",
-    stylers: [{ color: "#d9bd7a" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#cdd9e8" }] },
-];
-
-/** Current theme is light? (default light; only "dark" opts out.) */
-function isLightTheme(): boolean {
-  if (typeof document === "undefined") return true;
-  return document.documentElement.dataset.theme !== "dark";
-}
+// The map ALWAYS uses the dark navy/gold skin, even though the app pages
+// are now light-themed. That's deliberate: a dark dial gives the mileage
+// breadcrumb strong contrast against the light (cream/white) page surface,
+// and keeps the gold trip lines + markers legible. (An earlier light-map
+// variant read as a washed-out grey slab on the light background.)
 
 /** Haversine distance in miles between two lat/lng pairs. Used to
  *  reason about the user's "unlocked" map extent without dragging in
@@ -207,12 +182,6 @@ export function MileageMap({
   const [state, setState] = useState<
     "loading" | "ready" | "no-key" | "error"
   >("loading");
-  // Theme for the render-level colours (container bg, chips). Default light
-  // (matches SSR); corrected on mount. The map-init effect reads the theme
-  // directly.
-  const [light, setLight] = useState(true);
-  useEffect(() => setLight(isLightTheme()), []);
-
   // Gamified extent: longest single business trip in miles. Drives the
   // map's zoom-out floor (see unlockedMinZoom). Recomputed whenever the
   // trips prop changes so a fresh long drive immediately opens up more
@@ -245,7 +214,8 @@ export function MileageMap({
           clickableIcons: false,
           // Brand dial: navy/gold theme + a zoom floor that opens up
           // only as the user logs longer drives (see unlockedMinZoom).
-          styles: isLightTheme() ? MAP_STYLE_LIGHT : MAP_STYLE_TAXOTTIC,
+          // Always the dark skin so it contrasts with the light page.
+          styles: MAP_STYLE_TAXOTTIC,
           minZoom,
           maxZoom: 18,
           // Cooperative gestures: on mobile a ONE-finger drag scrolls the
@@ -254,7 +224,7 @@ export function MileageMap({
           // scroll-zoom needs ⌘/Ctrl held. ("greedy" let one finger pan the
           // map, trapping the user mid-scroll.)
           gestureHandling: "cooperative",
-          backgroundColor: isLightTheme() ? "#f3eede" : "#121a2a",
+          backgroundColor: "#121a2a",
         });
         const bounds = new maps.LatLngBounds();
         let plotted = 0;
@@ -267,7 +237,7 @@ export function MileageMap({
           // breadcrumb on top.
           const shadow = new maps.Polyline({
             path,
-            strokeColor: isLightTheme() ? "#ffffff" : "#0d121f",
+            strokeColor: "#0d121f",
             strokeOpacity: 0.7,
             strokeWeight: 6,
             map,
@@ -442,7 +412,7 @@ export function MileageMap({
       <div
         ref={divRef}
         className="rounded-2xl overflow-hidden border border-forest-100"
-        style={{ height, backgroundColor: light ? "#f3eede" : "#121a2a" }}
+        style={{ height, backgroundColor: "#121a2a" }}
         aria-label="Mileage breadcrumb map"
       />
       <div className="absolute bottom-3 left-3 card px-3 py-2 text-[11px] flex gap-3">
