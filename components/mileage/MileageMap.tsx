@@ -92,6 +92,37 @@ const MAP_STYLE_TAXOTTIC: Array<Record<string, unknown>> = [
     stylers: [{ color: "#56678a" }] },
 ];
 
+// Light-theme skin: a clean, de-cluttered light map (hide POI icon noise,
+// cream landscape, soft gold highways) so it reads as part of the light app
+// instead of a dark slab. Used when html[data-theme] !== "dark".
+const MAP_STYLE_LIGHT: Array<Record<string, unknown>> = [
+  { elementType: "geometry", stylers: [{ color: "#f3eede" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#4a5468" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#fbf7e9" }] },
+  { featureType: "administrative", elementType: "geometry",
+    stylers: [{ color: "#dcd4bc" }] },
+  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#e9e2cc" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dbe6cf" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road", elementType: "geometry.stroke",
+    stylers: [{ color: "#e6ddc6" }] },
+  { featureType: "road", elementType: "labels.text.fill",
+    stylers: [{ color: "#6b6552" }] },
+  { featureType: "road.highway", elementType: "geometry",
+    stylers: [{ color: "#e7d19a" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke",
+    stylers: [{ color: "#d9bd7a" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#cdd9e8" }] },
+];
+
+/** Current theme is light? (default light; only "dark" opts out.) */
+function isLightTheme(): boolean {
+  if (typeof document === "undefined") return true;
+  return document.documentElement.dataset.theme !== "dark";
+}
+
 /** Haversine distance in miles between two lat/lng pairs. Used to
  *  reason about the user's "unlocked" map extent without dragging in
  *  a geo library. Close enough for tier-bucketing trip lengths. */
@@ -176,6 +207,11 @@ export function MileageMap({
   const [state, setState] = useState<
     "loading" | "ready" | "no-key" | "error"
   >("loading");
+  // Theme for the render-level colours (container bg, chips). Default light
+  // (matches SSR); corrected on mount. The map-init effect reads the theme
+  // directly.
+  const [light, setLight] = useState(true);
+  useEffect(() => setLight(isLightTheme()), []);
 
   // Gamified extent: longest single business trip in miles. Drives the
   // map's zoom-out floor (see unlockedMinZoom). Recomputed whenever the
@@ -209,7 +245,7 @@ export function MileageMap({
           clickableIcons: false,
           // Brand dial: navy/gold theme + a zoom floor that opens up
           // only as the user logs longer drives (see unlockedMinZoom).
-          styles: MAP_STYLE_TAXOTTIC,
+          styles: isLightTheme() ? MAP_STYLE_LIGHT : MAP_STYLE_TAXOTTIC,
           minZoom,
           maxZoom: 18,
           // Cooperative gestures: on mobile a ONE-finger drag scrolls the
@@ -218,7 +254,7 @@ export function MileageMap({
           // scroll-zoom needs ⌘/Ctrl held. ("greedy" let one finger pan the
           // map, trapping the user mid-scroll.)
           gestureHandling: "cooperative",
-          backgroundColor: "#121a2a",
+          backgroundColor: isLightTheme() ? "#f3eede" : "#121a2a",
         });
         const bounds = new maps.LatLngBounds();
         let plotted = 0;
@@ -231,7 +267,7 @@ export function MileageMap({
           // breadcrumb on top.
           const shadow = new maps.Polyline({
             path,
-            strokeColor: "#0d121f",
+            strokeColor: isLightTheme() ? "#ffffff" : "#0d121f",
             strokeOpacity: 0.7,
             strokeWeight: 6,
             map,
@@ -406,7 +442,7 @@ export function MileageMap({
       <div
         ref={divRef}
         className="rounded-2xl overflow-hidden border border-forest-100"
-        style={{ height, backgroundColor: "#121a2a" }}
+        style={{ height, backgroundColor: light ? "#f3eede" : "#121a2a" }}
         aria-label="Mileage breadcrumb map"
       />
       <div className="absolute bottom-3 left-3 card px-3 py-2 text-[11px] flex gap-3">
@@ -438,25 +474,24 @@ export function MileageMap({
       {unlockHint && (
         <div
           className="absolute top-3 right-3 card px-3 py-2 text-[11px] leading-tight max-w-[180px]"
-          style={{ background: "rgba(18, 26, 42, 0.85)", color: "#FBF7E9" }}
           title={`Longest business drive: ${longestBusinessMiles.toFixed(1)} mi`}
         >
-          <div className="text-[10px] uppercase tracking-[0.16em] text-gold-300">
+          <div className="text-[10px] uppercase tracking-[0.16em] text-gold-700">
             Map unlocks at
           </div>
-          <div className="mt-0.5">
-            <span className="font-semibold text-gold-200">
+          <div className="mt-0.5 text-ink-soft">
+            <span className="font-semibold text-gold-700">
               {unlockHint.needMiles} mi
             </span>{" "}
-            <span className="text-cream/80">drive → {unlockHint.label}</span>
+            <span>drive → {unlockHint.label}</span>
           </div>
-          <div className="text-[10px] text-cream/60 mt-0.5">
+          <div className="text-[10px] text-ink-muted mt-0.5">
             longest so far: {longestBusinessMiles.toFixed(1)} mi
           </div>
         </div>
       )}
       {state === "loading" && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-cream/70">
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-muted">
           Loading map…
         </div>
       )}
