@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { captureReceiptPhoto } from "@/lib/capacitor/camera-capture";
 
 type Category = {
@@ -69,14 +69,39 @@ export function ReceiptUploader({
   const [submitting, setSubmitting] = useState(false);
   const webCamInputRef = useRef<HTMLInputElement | null>(null);
 
-  const reset = () => {
-    setFile(null);
-    setDraft(null);
+  // Receipt viewer: a live preview of the uploaded file so the user can
+  // eyeball the actual receipt next to Bella's extracted numbers before
+  // committing. Images render inline (click to enlarge); PDFs embed.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewKind, setPreviewKind] = useState<"image" | "pdf" | null>(null);
+  const [zoom, setZoom] = useState(false);
+
+  // Revoke the previous object URL whenever the preview changes / on unmount
+  // so we never leak blob URLs as the user swaps receipts.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  // Single entry point for "a file was chosen" — sets the file AND builds its
+  // viewer preview, so the two never drift. Everything (camera, web capture,
+  // file picker) routes through here.
+  const attach = (f: File | null) => {
     setError(null);
+    setFile(f);
+    setPreviewUrl(f ? URL.createObjectURL(f) : null);
+    setPreviewKind(f ? (f.type === "application/pdf" ? "pdf" : "image") : null);
+  };
+
+  const reset = () => {
+    attach(null);
+    setDraft(null);
     setMonth(currentMonth);
     setAmount("");
     setCategory("");
     setNotes("");
+    setZoom(false);
   };
 
   const onUpload = async (explicitFile?: File) => {
@@ -125,7 +150,7 @@ export function ReceiptUploader({
     setError(null);
     const r = await captureReceiptPhoto();
     if (r.kind === "file") {
-      setFile(r.file);
+      attach(r.file);
       await onUpload(r.file); // native capture → read immediately
     } else if (r.kind === "unavailable") {
       // Web (incl. mobile browsers): the capture-hinted input opens the
@@ -180,9 +205,8 @@ export function ReceiptUploader({
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
-                setError(null);
                 if (f) {
-                  setFile(f);
+                  attach(f);
                   void onUpload(f);
                 }
               }}
@@ -191,10 +215,7 @@ export function ReceiptUploader({
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,application/pdf"
-              onChange={(e) => {
-                setFile(e.target.files?.[0] ?? null);
-                setError(null);
-              }}
+              onChange={(e) => attach(e.target.files?.[0] ?? null)}
               className="text-sm"
             />
             <button
@@ -209,9 +230,26 @@ export function ReceiptUploader({
           {error ? (
             <p className="text-sm text-red-700">{error}</p>
           ) : null}
+          {previewUrl ? (
+            <ReceiptPreview
+              url={previewUrl}
+              kind={previewKind}
+              name={file?.name ?? "receipt"}
+              onZoom={() => setZoom(true)}
+            />
+          ) : null}
         </div>
       ) : (
-        <form onSubmit={onCommit} className="grid gap-3">
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          {previewUrl ? (
+            <ReceiptPreview
+              url={previewUrl}
+              kind={previewKind}
+              name={file?.name ?? "receipt"}
+              onZoom={() => setZoom(true)}
+            />
+          ) : null}
+          <form onSubmit={onCommit} className="grid gap-3">
           <input type="hidden" name="company_id" value={companyId} />
           <input type="hidden" name="tax_year" value={taxYear} />
           <input type="hidden" name="recurrence" value="one_off" />
@@ -331,7 +369,96 @@ export function ReceiptUploader({
               Cancel
             </button>
           </div>
-        </form>
+          </form>
+        </div>
+      )}
+
+      {/* Full-screen lightbox for image receipts — tap anywhere to close. */}
+      {zoom && previewUrl && previewKind === "image" ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-forest-950/80 p-4"
+          onClick={() => setZoom(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Receipt full size"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewUrl}
+            alt="Receipt full size"
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            onClick={() => setZoom(false)}
+            aria-label="Close"
+            className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full bg-white/90 text-lg text-forest-900 hover:bg-white"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Receipt viewer panel: shows the uploaded image (click to enlarge) or an
+// embedded PDF, framed to match the app's cards. Pure presentational — the
+// object URL + zoom state live in ReceiptUploader.
+function ReceiptPreview({
+  url,
+  kind,
+  name,
+  onZoom,
+}: {
+  url: string;
+  kind: "image" | "pdf" | null;
+  name: string;
+  onZoom: () => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-forest-100 bg-cream/40">
+      <div className="flex items-center justify-between gap-2 border-b border-forest-100 px-3 py-2">
+        <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+          Receipt
+        </span>
+        <span className="truncate text-[11px] text-ink-muted" title={name}>
+          {name}
+        </span>
+      </div>
+      {kind === "image" ? (
+        <button
+          type="button"
+          onClick={onZoom}
+          title="Click to enlarge"
+          className="group block w-full cursor-zoom-in bg-white"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt="Uploaded receipt"
+            className="mx-auto max-h-[420px] w-full object-contain transition-transform duration-200 group-hover:scale-[1.01]"
+          />
+        </button>
+      ) : (
+        <object
+          data={url}
+          type="application/pdf"
+          className="h-[420px] w-full bg-white"
+          aria-label="Uploaded receipt PDF"
+        >
+          <div className="p-4 text-xs text-ink-soft">
+            PDF preview isn&apos;t supported here.{" "}
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-forest-800"
+            >
+              Open the PDF
+            </a>
+          </div>
+        </object>
       )}
     </div>
   );

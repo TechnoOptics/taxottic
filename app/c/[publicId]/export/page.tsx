@@ -119,7 +119,10 @@ export default async function ExportPage({
 
   return (
     <main className="export-page bg-white text-forest-900 min-h-screen">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 sm:px-10 py-8 sm:py-12">
+      {/* Centered document — this page renders standalone (no app rail), so it
+          reads like a proper letter-width workpaper a CPA can print, not a
+          full-bleed app screen. */}
+      <div className="mx-auto max-w-4xl px-5 sm:px-10 py-8 sm:py-12">
         {/* Top toolbar - hidden on print */}
         <div className="no-print mb-8 flex items-center justify-between gap-3 flex-wrap">
           <Link
@@ -221,34 +224,54 @@ export default async function ExportPage({
           />
         </section>
 
-        {/* Totals. Note: "Total expenses" is the *deductible* number
-            (what flows to Schedule C and reconciles with Net Business
-            Income), not the gross. Meals are halved per IRC §274(n). A
-            separate "Logged (gross)" row makes the gap visible when it
-            differs from the deductible figure. */}
-        <section className="mt-10 grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <Big label="Gross income" value={formatCents(totalIncome)} />
-          <Big
-            label="Total deductible expenses"
-            value={formatCents(totalExpense)}
-            hint={
-              totalGrossExpense !== totalExpense
-                ? `Logged ${formatCents(totalGrossExpense)} gross; ${formatCents(
-                    totalGrossExpense - totalExpense,
-                  )} of meals is non-deductible per IRC §274(n).`
-                : undefined
-            }
-          />
-          <Big
-            label="Net business income"
-            value={formatCents(nbi.netBusinessIncomeCents)}
-            hint="Schedule C Line 31"
-          />
+        {/* Schedule C reconciliation — the tax-ready headline. Maps the
+            logged totals straight onto the Schedule C (Form 1040) lines a
+            preparer transcribes, so the handoff is transcribe-not-interpret.
+            "Total expenses" is the *deductible* figure (meals halved per IRC
+            §274(n)); the footnote surfaces the gross gap when it differs. */}
+        <section className="mt-10">
+          <div className="text-[10px] uppercase tracking-[0.25em] text-gold-700">
+            Schedule C (Form 1040) · reconciliation
+          </div>
+          <div className="mt-3 overflow-hidden rounded-2xl border border-forest-200">
+            <ReconRow
+              line="Line 1"
+              label="Gross receipts or sales"
+              value={formatCents(totalIncome)}
+            />
+            <ReconRow
+              line="Line 28"
+              label="Total expenses"
+              value={formatCents(totalExpense)}
+              note={
+                totalGrossExpense !== totalExpense
+                  ? `Logged ${formatCents(totalGrossExpense)} gross · ${formatCents(
+                      totalGrossExpense - totalExpense,
+                    )} of meals non-deductible per IRC §274(n)`
+                  : undefined
+              }
+            />
+            <ReconRow
+              line="Line 31"
+              label={
+                nbi.netBusinessIncomeCents < 0
+                  ? "Net loss"
+                  : "Net profit"
+              }
+              value={formatCents(nbi.netBusinessIncomeCents)}
+              emphasis
+            />
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+            Net profit also carries to Schedule 1, Line 3 and Schedule SE
+            (self-employment tax). Figures are the owner-entered totals for{" "}
+            {taxYear}; your preparer confirms final placement.
+          </p>
         </section>
 
         {/* Income detail */}
         <section className="mt-10">
-          <h2 className="display text-2xl text-forest-900">Income</h2>
+          <SectionTitle n="01" title="Income" />
           <table className="mt-3 w-full text-sm border-collapse">
             <thead>
               <tr className="border-b border-forest-100 text-left text-[11px] uppercase tracking-wide text-ink-muted">
@@ -291,11 +314,11 @@ export default async function ExportPage({
                   </tr>
                 ))
               )}
-              <tr className="font-medium">
-                <td className="py-2 pr-3" colSpan={3}>
+              <tr className="font-semibold border-t-2 border-forest-200 bg-cream/40">
+                <td className="py-2.5 pr-3" colSpan={3}>
                   Total income
                 </td>
-                <td className="py-2 text-right tabular-nums">
+                <td className="py-2.5 text-right tabular-nums">
                   {formatCents(totalIncome, { showCents: true })}
                 </td>
               </tr>
@@ -305,9 +328,7 @@ export default async function ExportPage({
 
         {/* Expenses by category */}
         <section className="mt-10">
-          <h2 className="display text-2xl text-forest-900">
-            Expenses by category
-          </h2>
+          <SectionTitle n="02" title="Expenses by category" />
           <table className="mt-3 w-full text-sm border-collapse">
             <thead>
               <tr className="border-b border-forest-100 text-left text-[11px] uppercase tracking-wide text-ink-muted">
@@ -370,11 +391,11 @@ export default async function ExportPage({
                   );
                 })
               )}
-              <tr className="font-medium">
-                <td className="py-2 pr-3" colSpan={4}>
+              <tr className="font-semibold border-t-2 border-forest-200 bg-cream/40">
+                <td className="py-2.5 pr-3" colSpan={4}>
                   Total deductible expenses
                 </td>
-                <td className="py-2 text-right tabular-nums">
+                <td className="py-2.5 text-right tabular-nums">
                   {formatCents(totalExpense, { showCents: true })}
                 </td>
               </tr>
@@ -384,10 +405,8 @@ export default async function ExportPage({
 
         {/* Per-line detail (each transaction). Page-break friendly. */}
         <section className="mt-10 break-before-page">
-          <h2 className="display text-2xl text-forest-900">
-            Expense detail (every transaction)
-          </h2>
-          <p className="text-xs text-ink-muted mt-1">
+          <SectionTitle n="03" title="Expense detail" hint="Every transaction" />
+          <p className="text-xs text-ink-muted mt-2">
             Sorted by month. Notes carry over from the original entry.
           </p>
           <table className="mt-3 w-full text-sm border-collapse">
@@ -482,26 +501,84 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Big({
-  label,
-  value,
+// Numbered section header — gives the workpaper a clean, scannable "01 / 02
+// / 03" spine and a consistent baseline rule under each title.
+function SectionTitle({
+  n,
+  title,
   hint,
 }: {
-  label: string;
-  value: string;
+  n: string;
+  title: string;
   hint?: string;
 }) {
   return (
-    <div className="border border-forest-100 rounded-xl p-4">
-      <div className="text-[11px] uppercase tracking-wide text-ink-muted">
-        {label}
-      </div>
-      <div className="mt-1 display text-2xl text-forest-900">{value}</div>
+    <div className="flex items-baseline gap-3 border-b border-forest-200 pb-2">
+      <span className="text-[11px] font-semibold tabular-nums text-gold-700">
+        {n}
+      </span>
+      <h2 className="display text-2xl text-forest-900">{title}</h2>
       {hint ? (
-        <div className="mt-1 text-[10px] text-ink-muted leading-snug">
+        <span className="ml-auto text-[11px] uppercase tracking-wide text-ink-muted">
           {hint}
-        </div>
+        </span>
       ) : null}
+    </div>
+  );
+}
+
+// A single Schedule C reconciliation line: form line ref, label, right-aligned
+// amount, optional footnote. The emphasised row (net profit/loss) gets a warm
+// cream band + heavier numerals so the eye lands on the bottom line.
+function ReconRow({
+  line,
+  label,
+  value,
+  note,
+  emphasis = false,
+}: {
+  line: string;
+  label: string;
+  value: string;
+  note?: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div
+      className={
+        "flex items-baseline gap-3 px-4 py-3 border-b border-forest-100 last:border-b-0 " +
+        (emphasis ? "bg-cream/60" : "")
+      }
+    >
+      <span className="w-16 shrink-0 text-[11px] font-medium tabular-nums text-gold-700">
+        {line}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div
+          className={
+            emphasis
+              ? "text-sm font-semibold text-forest-900"
+              : "text-sm text-forest-900"
+          }
+        >
+          {label}
+        </div>
+        {note ? (
+          <div className="mt-0.5 text-[10px] leading-snug text-ink-muted">
+            {note}
+          </div>
+        ) : null}
+      </div>
+      <div
+        className={
+          "shrink-0 text-right tabular-nums " +
+          (emphasis
+            ? "display text-xl text-forest-900"
+            : "text-base text-forest-900")
+        }
+      >
+        {value}
+      </div>
     </div>
   );
 }

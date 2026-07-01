@@ -751,6 +751,26 @@ main, footer, nav {
     box-shadow: 0 0 0 3px rgba(29, 40, 67, 0.12);
   }
 
+  /* Premium, accessible keyboard focus: one crisp on-brand gold ring, shown
+     ONLY for keyboard navigation (:focus-visible) — never on mouse click, so
+     it never nags pointer users. Modern browsers round the outline to match
+     each element's border-radius, so it hugs pills and cards cleanly. Inputs
+     keep their own inset ring (above); these are the actionable elements. */
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid rgba(196, 162, 93, 0.85);
+    outline-offset: 2px;
+  }
+
+  /* Branded text selection — a warm gold wash instead of the browser default
+     blue. A small detail, but the kind that makes the product feel bespoke. */
+  ::selection {
+    background: rgba(196, 162, 93, 0.28);
+    color: #121a2a;
+  }
+
   /* Select: ONE forest chevron, never the OS one.
 
      iOS WKWebView is the reason this targets the bare `select`
