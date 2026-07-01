@@ -538,14 +538,29 @@ main, footer, nav {
    live in @layer utilities) without !important. */
 @media (min-width: 1024px) {
   main > section[class~="lg:pl-60"] {
-    /* Fill more of the screen (was 80rem/1280px — too narrow, left large
-       gaps on normal-large monitors). 90rem fills up to ~1700px viewports
-       and only caps + recentres on genuinely ultra-wide displays. */
+    /* Base cap for laptops (~1440–1700px viewports): 90rem ≈ 1440px fills
+       essentially the whole canvas at those sizes. The ladder below scales
+       the cap UP on larger monitors so the app keeps filling the view
+       instead of stranding empty side-margins — while still capping on true
+       ultra-wide so no single card ever sprawls to an unreadable width. */
     max-width: 90rem;
     margin-inline: auto;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
   }
+}
+/* Responsive width ladder for larger displays. Each step raises the content
+   cap so a 1440p / 4K / 27–32" monitor fills appropriately rather than
+   showing a narrow centered column. Keeps a ceiling (140rem) so ultra-wide
+   (3440px+) doesn't stretch content edge-to-edge. */
+@media (min-width: 1700px) {
+  main > section[class~="lg:pl-60"] { max-width: 104rem; }
+}
+@media (min-width: 2000px) {
+  main > section[class~="lg:pl-60"] { max-width: 120rem; }
+}
+@media (min-width: 2400px) {
+  main > section[class~="lg:pl-60"] { max-width: 140rem; }
 }
 
 /* ============================================================================
