@@ -22,7 +22,7 @@
    - Champagne gold accent (#D5BB7E)
    - Warm cream surface (#F5EDD6)
    - Charcoal ink (#18181B)
-   Fonts: Fraunces (display) + Inter (body) loaded via next/font in layout.tsx;
+   Fonts: Fraunces (display) + Hanken Grotesk (body) loaded via next/font in layout.tsx;
    Conquera (custom) for the Taxottic wordmark only.
 ============================================================================ */
 
@@ -87,7 +87,7 @@ html {
   --color-ink-muted: #52525b;
 
   --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
   --font-wordmark: "Conquera", var(--font-fraunces), ui-serif, serif;
 }
 
@@ -473,6 +473,12 @@ body {
   min-height: 100dvh;
   font-family: var(--font-sans);
   position: relative;
+  /* Premium body typography: kerning + ligatures + contextual alternates
+     on, and a whisker of negative tracking so Hanken Grotesk sets tight
+     and deliberate (world-class product feel) rather than loose/default.
+     Numerals stay proportional here; data tables opt into tabular-nums. */
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  letter-spacing: -0.006em;
 }
 
 /* Atmospheric backdrop: warm gold veil top-right + forest accent

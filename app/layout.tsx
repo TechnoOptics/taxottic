@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { Fraunces, Inter } from "next/font/google";
+import { Fraunces, Hanken_Grotesk } from "next/font/google";
 import { PWASetup } from "@/components/PWASetup";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
 import { CapacitorNativeInit } from "@/components/CapacitorNativeInit";
@@ -14,8 +14,13 @@ const fraunces = Fraunces({
   display: "swap",
 });
 
-const inter = Inter({
-  variable: "--font-inter",
+// Body / UI typeface. Hanken Grotesk — a humanist grotesque with warmth
+// and precise numerals — replaces Inter so the app reads as a bespoke
+// product rather than the default modern-SaaS look. Pairs with Fraunces
+// (both humanist) for a cohesive, premium voice. Variable font: the full
+// 100–900 axis loads, so every weight the UI uses is covered.
+const hanken = Hanken_Grotesk({
+  variable: "--font-hanken",
   subsets: ["latin"],
   display: "swap",
 });
@@ -221,7 +226,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${inter.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${hanken.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col safe-pad-bottom">
         {children}
