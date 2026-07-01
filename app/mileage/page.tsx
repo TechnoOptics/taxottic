@@ -9,6 +9,12 @@ import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { DriverPicker } from "@/components/mileage/DriverPicker";
+import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
+import {
+  assessMileageTrackingHealth,
+} from "@/lib/mileage/health";
+import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
+import { recoverApproximateTrips } from "./actions";
 import {
   reclassifyTrip,
   deleteTrip,
@@ -212,6 +218,23 @@ export default async function MileagePage({
       .map((p) => ({ lat: p.lat, lng: p.lng })),
   }));
 
+  // Tracking-health check (self only — you can't fix another driver's
+  // phone). When drives aren't being captured, warn + offer recovery.
+  let health: Awaited<ReturnType<typeof assessMileageTrackingHealth>> | null =
+    null;
+  let recoverable = 0;
+  if (company && viewingSelf) {
+    health = await assessMileageTrackingHealth(admin, user.id, company.id);
+    if (health.status === "degraded") {
+      recoverable = await countRecoverableApproxTrips(
+        admin,
+        user.id,
+        company.id,
+        new Date(Date.now() - 90 * 86_400_000).toISOString(),
+      );
+    }
+  }
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -287,6 +310,16 @@ export default async function MileagePage({
                 lastPointISO={lastPointISO}
                 lastTripISO={lastTripISO}
               />
+            ) : null}
+
+            {viewingSelf && health?.status === "degraded" ? (
+              <div className="mt-4">
+                <TrackingHealthBanner
+                  reason={health.reason ?? ""}
+                  recoverable={recoverable}
+                  recoverAction={recoverApproximateTrips}
+                />
+              </div>
             ) : null}
 
             {/* Pending-classification banner. Mirrors the watch's

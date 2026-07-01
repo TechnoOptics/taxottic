@@ -5,7 +5,42 @@ import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { reclassifyTripCore } from "@/lib/mileage/reclassify";
 import { tripDeductionCents } from "@/lib/mileage/deduction";
 import { logCompanyActivity } from "@/lib/activity/log";
+import { reconstructApproximateTrips } from "@/lib/mileage/reconstruct";
 import { notify } from "@/lib/push";
+
+/**
+ * Recover approximate drives from the caller's degraded staging pool (see
+ * lib/mileage/reconstruct). Opt-in via the tracking-health banner. Scoped
+ * to the caller's OWN drives + their active company. Creates unclassified,
+ * flagged-approximate trips (no deduction until reviewed).
+ */
+export async function recoverApproximateTrips() {
+  const { user, admin } = await requireUserWithAdmin();
+  const memberships = await getMyCompanies();
+  const companyId = memberships[0]?.company?.id;
+  if (!companyId) throw new Error("No company to recover drives for.");
+
+  const sinceIso = new Date(Date.now() - 90 * 86_400_000).toISOString();
+  const created = await reconstructApproximateTrips(
+    admin,
+    user.id,
+    companyId,
+    sinceIso,
+  );
+
+  if (created > 0) {
+    await logCompanyActivity(admin, {
+      companyId,
+      actorUserId: user.id,
+      kind: "mileage.added",
+      summary: `Recovered ${created} approximate drive${created === 1 ? "" : "s"} after a tracking gap (unclassified, needs review)`,
+      payload: { created, approximate: true },
+    });
+  }
+
+  revalidatePath("/mileage");
+  revalidatePath("/mileage/classify");
+}
 
 /**
  * Re-classify a trip (business / personal / unclassified) and
