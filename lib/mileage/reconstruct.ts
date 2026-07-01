@@ -123,6 +123,12 @@ export async function reconstructApproximateTrips(
       console.error("[reconstruct] trip insert failed", error?.message);
       continue;
     }
+    // Give the trip its two endpoint points so the map can draw it (a
+    // straight line between the two stops — honest for an approximate trip).
+    await admin.from("mileage_points").insert([
+      { trip_id: ins.id, captured_at: startedAt, lat: a.lat, lng: a.lng },
+      { trip_id: ins.id, captured_at: endedAt, lat: b.lat, lng: b.lng },
+    ]);
     // Consume the two endpoint fixes (and anything between) into this trip.
     await admin
       .from("mileage_points_raw")
