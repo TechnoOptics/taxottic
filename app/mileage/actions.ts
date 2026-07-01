@@ -224,6 +224,162 @@ export async function deleteTrip(formData: FormData) {
 }
 
 /**
+ * Route-reconstructed drive — the "my phone died mid-drive" recovery path.
+ *
+ * When the tracker misses a long drive (phone died, background location
+ * killed, no signal on a road trip), the driver enters where they actually
+ * went — start, destination, and any stops in between — and the client
+ * computes the driving distance with the Google Directions service (road
+ * miles, not straight-line) plus the route polyline. This action just
+ * persists that: the trip + its path points. It's the honest, IRS-defensible
+ * fallback (a written record of the route driven) so a dead battery never
+ * costs the deduction.
+ *
+ * Form fields (all from the client after it computed the route):
+ *   started_at_local / ended_at_local  "YYYY-MM-DDTHH:MM"
+ *   tz_offset_min                       browser offset (see addManualTrip)
+ *   distance_miles                      route distance (user may have edited)
+ *   classification                      business | personal | unclassified
+ *   method                              "directions" | "straight_line"
+ *   stops_summary                       "A → B → C" for the note/audit trail
+ *   path                                JSON [{lat,lng}, …] route polyline
+ */
+export async function addRouteTrip(formData: FormData) {
+  const { user, admin } = await requireUserWithAdmin();
+  const memberships = await getMyCompanies();
+  const companyId = memberships[0]?.company?.id;
+  if (!companyId) throw new Error("Join a company before logging miles.");
+
+  const startedLocal = String(formData.get("started_at_local") ?? "");
+  const endedLocal = String(formData.get("ended_at_local") ?? "");
+  const miles = Number(formData.get("distance_miles") ?? 0);
+  const classification = String(
+    formData.get("classification") ?? "unclassified",
+  );
+  const tzOffsetMin = Number(formData.get("tz_offset_min") ?? 0);
+  const method =
+    String(formData.get("method") ?? "") === "directions"
+      ? "directions"
+      : "straight_line";
+  const stopsSummary = String(formData.get("stops_summary") ?? "").slice(0, 300);
+
+  // Route polyline — validated & clamped. Never trust the client's array
+  // shape or size; keep only well-formed coordinates, cap the count.
+  let path: { lat: number; lng: number }[] = [];
+  try {
+    const raw = JSON.parse(String(formData.get("path") ?? "[]"));
+    if (Array.isArray(raw)) {
+      path = raw
+        .filter(
+          (p) =>
+            p &&
+            Number.isFinite(p.lat) &&
+            Number.isFinite(p.lng) &&
+            Math.abs(p.lat) <= 90 &&
+            Math.abs(p.lng) <= 180,
+        )
+        .slice(0, 500)
+        .map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }));
+    }
+  } catch {
+    /* malformed path — save the trip without a drawn line */
+  }
+
+  if (!startedLocal || !endedLocal) throw new Error("Pick a start and an end time.");
+  if (!Number.isFinite(miles) || miles <= 0 || miles > 9_999) {
+    throw new Error("Enter a positive mileage under 9,999.");
+  }
+  if (
+    classification !== "business" &&
+    classification !== "personal" &&
+    classification !== "unclassified"
+  ) {
+    throw new Error("Invalid classification.");
+  }
+
+  // Same naive-datetime → UTC reconstruction as addManualTrip.
+  const startedLocalMs = Date.parse(startedLocal + ":00");
+  const endedLocalMs = Date.parse(endedLocal + ":00");
+  if (!Number.isFinite(startedLocalMs) || !Number.isFinite(endedLocalMs)) {
+    throw new Error("Couldn't parse the dates.");
+  }
+  const startedAt = new Date(startedLocalMs + tzOffsetMin * 60_000).toISOString();
+  const endedAt = new Date(endedLocalMs + tzOffsetMin * 60_000).toISOString();
+  if (new Date(endedAt) <= new Date(startedAt)) {
+    throw new Error("End time must be after start time.");
+  }
+
+  const taxYear = new Date(startedAt).getUTCFullYear();
+  const cls = classification as "business" | "personal" | "unclassified";
+  const deductionCents = tripDeductionCents({ distanceMiles: miles }, cls, taxYear);
+
+  const note =
+    `Reconstructed from entered stops${stopsSummary ? ` (${stopsSummary})` : ""}. ` +
+    (method === "directions"
+      ? "Road distance via Google Directions."
+      : "Straight-line estimate — may under-count road miles.") +
+    " Verify before claiming.";
+
+  const { data: insertedTrip, error } = await admin
+    .from("mileage_trips")
+    .insert({
+      company_id: companyId,
+      driver_user_id: user.id,
+      started_at: startedAt,
+      ended_at: endedAt,
+      distance_miles: Number(miles.toFixed(3)),
+      classification: cls,
+      tax_year: taxYear,
+      deduction_cents: deductionCents,
+      notes: note.slice(0, 500),
+    })
+    .select("id")
+    .single();
+  if (error || !insertedTrip) throw new Error("Couldn't save. Please try again.");
+
+  const tripId = insertedTrip.id as string;
+
+  // Persist the route polyline so the trip draws on the map like a tracked
+  // drive. Interpolate timestamps evenly across the trip window so the points
+  // are ordered and the map renders them in sequence.
+  if (path.length >= 2) {
+    const startMs = new Date(startedAt).getTime();
+    const spanMs = new Date(endedAt).getTime() - startMs;
+    const rows = path.map((p, i) => ({
+      trip_id: tripId,
+      captured_at: new Date(
+        startMs + Math.round((spanMs * i) / (path.length - 1)),
+      ).toISOString(),
+      lat: p.lat,
+      lng: p.lng,
+    }));
+    await admin.from("mileage_points").insert(rows);
+  }
+
+  if (cls === "unclassified") {
+    await notify(user.id, { kind: "trip_classify", tripId });
+  } else {
+    await notify(user.id, { kind: "trip_logged", tripId, classification: cls });
+  }
+
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: "mileage.added",
+    summary: `Reconstructed a ${miles.toFixed(1)}-mile drive from entered stops (${cls})`,
+    payload: { trip_id: tripId, distance_miles: miles, classification: cls, method },
+  });
+
+  revalidatePath("/mileage");
+  revalidatePath("/mileage/classify");
+  revalidatePath("/mileage/business");
+  revalidatePath("/c/[publicId]/money-out", "page");
+  revalidatePath("/c/[publicId]/my-deductions", "page");
+  revalidatePath("/c/[publicId]/forecast", "page");
+  revalidatePath("/c/[publicId]/savings-goals", "page");
+}
+
+/**
  * Manual drive entry — the backfill option when the tracker missed
  * a drive (no GPS captured, app was killed, schedule blocked, etc).
  * Required because GPS background capture is best-effort on Android

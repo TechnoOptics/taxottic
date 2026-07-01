@@ -8,6 +8,7 @@ import { TrackerStatus } from "@/components/mileage/TrackerStatus";
 import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
+import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
 import { DriverPicker } from "@/components/mileage/DriverPicker";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
 import {
@@ -19,6 +20,7 @@ import {
   reclassifyTrip,
   deleteTrip,
   addManualTrip,
+  addRouteTrip,
   moveTripCompany,
 } from "./actions";
 
@@ -489,6 +491,11 @@ export default async function MileagePage({
                 trip is always logged under the current user, so it's
                 hidden when reviewing another driver. */}
             {viewingSelf ? <ManualLogTrip action={addManualTrip} /> : null}
+            {/* Route reconstruction — the "phone died mid-drive" recovery.
+                Enter the stops; we compute the driving distance. */}
+            {viewingSelf ? (
+              <CompleteDriveFromStops action={addRouteTrip} />
+            ) : null}
 
             <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
               Deduction uses the IRS standard mileage rate for the
