@@ -310,24 +310,25 @@ export function LeftRail({
   // app header on lines 436-444 of globals.css.
   const railClass =
     mode === "rail"
-      ? // Same floating `.card` treatment as the right-hand sidebar boxes
-        // (all-around border, 1rem rounded corners, soft lift shadow) so the
-        // two sides read as matching panels. Insets applied via railStyle.
-        "!fixed z-40 hidden lg:flex flex-col " +
+      ? // Anchored to the left edge: rounded on the RIGHT only, a hairline
+        // right border + soft right shadow, spanning from just below the
+        // header to the bottom. Solid and connected to the page (not a
+        // detached floating card).
+        "!fixed left-0 z-40 hidden lg:flex flex-col " +
         "w-56 xl:w-60 2xl:w-64 " +
-        "card " +
+        "bg-paper/95 dark:bg-forest-800/95 " +
+        "border-r border-forest-100 dark:border-forest-700 " +
+        "rounded-r-2xl shadow-[2px_0_16px_rgba(18,26,42,0.10)] " +
         "px-2 pt-3 pb-3"
       : "card card-opaque relative w-64 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
 
   const railStyle =
     mode === "rail"
       ? {
-          // Float the rail with equal gaps (top below the header, left off
-          // the viewport edge, and off the bottom) so it reads as a card
-          // matching the right-hand sidebar boxes.
+          // Start just below the header (small gap so it doesn't touch the
+          // header bar) and run to the bottom, flush to the left edge.
           top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem) + 0.75rem)",
-          left: "0.75rem",
-          bottom: "calc(var(--safe-bottom, 0px) + 0.75rem)",
+          bottom: "var(--safe-bottom, 0px)",
         }
       : undefined;
 
