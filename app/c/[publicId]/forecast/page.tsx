@@ -1325,10 +1325,11 @@ function RowKV({ label, value }: { label: string; value: string }) {
 }
 
 // Bar colours as explicit hex (not Tailwind bg-* classes): the forecast
-// renders on the dark navy theme where bg-forest-700 was nearly the same
-// navy as the card, making income bars invisible. These light, distinct
-// tones read clearly on the dark card. Income = teal, expenses = gold.
-const BAR_INCOME = "#6cc1d6";
+// renders on the dark navy theme where the primary brand navy (#243150)
+// was nearly the same as the card, making income bars invisible. Income
+// uses the brand's LIGHTER blue (forest-400) — on-brand and legible on the
+// dark card; expenses use brand gold.
+const BAR_INCOME = "#5e6f9c"; // forest-400 (brand blue)
 const BAR_EXPENSE = "#e0c06a";
 
 function MonthlyBars({
