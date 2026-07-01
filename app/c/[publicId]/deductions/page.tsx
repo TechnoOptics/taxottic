@@ -156,7 +156,10 @@ export default async function DeductionsPage({ params }: { params: Params }) {
             these is on. Fill the details once; the forecast updates
             instantly.
           </p>
-          <div className="mt-4 grid sm:grid-cols-2 gap-3">
+          {/* Single quick-apply tile today — constrain its width so it
+              reads as one deliberate card instead of a half-empty 2-col
+              grid. Widen to a real grid here when a second tile lands. */}
+          <div className="mt-4 sm:max-w-md">
             <HomeOfficeQuickApply
               publicId={publicId}
               applied={homeOfficeApplied}

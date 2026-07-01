@@ -72,13 +72,18 @@ export function DeductionExplorer({ deductions, totalCount }: Props) {
           </p>
         </div>
       ) : (
-        <ul className="mt-6 grid gap-2">
+        // Two-up on large screens: a single full-width column left each
+        // category header as a lone title with a chevron stranded ~1,300px
+        // away. `items-start` keeps an unexpanded neighbour pinned to the top
+        // of its row when the sibling category is expanded (rather than
+        // stretching to match its height).
+        <ul className="mt-6 grid gap-3 lg:grid-cols-2 lg:items-start">
           {grouped.map(({ category, items }) => {
             const isOpen = isSearching || openCategories.has(category);
             return (
               <li
                 key={category}
-                className="card overflow-hidden"
+                className="card overflow-hidden self-start"
               >
                 <button
                   type="button"
