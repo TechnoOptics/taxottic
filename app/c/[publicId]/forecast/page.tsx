@@ -1038,6 +1038,27 @@ export default async function ForecastPage({ params }: { params: Params }) {
             className="mt-8 lg:mt-0 lg:sticky lg:max-h-[calc(100vh_-_var(--app-header-h,4rem)_-_3rem)] lg:overflow-y-auto space-y-4"
             style={{ top: "calc(var(--app-header-h, 4rem) + 1.5rem)" }}
           >
+            {/* Year-end summary — promoted to the top of the right rail so
+                it's one tap away (also linked from the collapsed "Work with a
+                CPA" section further down). This is the CPA-ready export. */}
+            <div className="card p-5 border-gold-300/60">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+                Tax prep
+              </div>
+              <h2 className="display text-base text-forest-900 mt-1">
+                Year-end summary
+              </h2>
+              <p className="text-xs text-ink-muted mt-1 leading-relaxed">
+                A clean, CPA-ready breakdown — income, expenses by Schedule C
+                line, and IRC citations — ready to hand off or export.
+              </p>
+              <Link
+                href={`/c/${publicId}/export?year=${taxYear}`}
+                className="btn-primary w-full mt-3"
+              >
+                Open year-end summary
+              </Link>
+            </div>
             {deductionBreakdown.length > 0 ? (
               <div className="card p-5">
                 <h2 className="display text-base text-forest-900">
