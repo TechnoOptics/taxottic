@@ -356,6 +356,26 @@ html[data-theme="dark"] body {
   }
 }
 
+/* Below lg, LeftRailMobile portals a fixed 56px "open menu" FAB to the
+   bottom-left corner (components/LeftRailMobile.tsx) — it has no
+   in-flow footprint, so scrollable content ran straight underneath it.
+   Confirmed on a real device (Galaxy Z Fold5, every authenticated
+   page): the FAB sat on top of card text, form labels, even truncating
+   "Amount (USD)" to "unt (USD)" on the Income page. Reserve the same
+   clearance the FAB's own drawer already uses above its bottom safe-
+   area inset (5rem — see the drawer's `bottom: calc(... + 5rem)` in
+   LeftRailMobile) as bottom padding on <main>, so the last section on
+   every page clears the FAB instead of running behind it. lg+ hides
+   the FAB entirely (`lg:hidden`), so this is scoped to below that
+   breakpoint only. */
+@media (max-width: 1023px) {
+  html[data-theme] main {
+    padding-bottom: calc(
+      max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 5rem
+    );
+  }
+}
+
 /* Modern thin scrollbars site-wide. Default browser scrollbars (chunky
    square buttons, grey thumb) read as dated — the user specifically
    flagged them. Replace with a thin gold-tinted thumb on transparent
