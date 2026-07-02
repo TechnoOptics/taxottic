@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LeftRail } from "./LeftRail";
 
-type Company = { publicId: string; name: string };
+type Company = { publicId: string; name: string; role?: "manager" | "member" };
 
 /**
  * Mobile/tablet entry point for the left-rail menu.

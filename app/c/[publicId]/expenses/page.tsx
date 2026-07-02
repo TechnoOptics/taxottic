@@ -45,10 +45,14 @@ export default async function ExpensesPage({
   // Team roster for the per-employee filter. Members can already read
   // every company expense (RLS: "member read"), so this filter is a
   // view convenience — it only renders when there are ≥2 members. Names
-  // come from profiles (full_name, falling back to email).
+  // come from profiles (full_name, falling back to email); department
+  // (if assigned) is appended so the admin can see where a drive/expense
+  // came from at a glance.
   const { data: memberRows } = await supabase
     .from("company_members")
-    .select("user_id, profile:profiles(full_name, email)")
+    .select(
+      "user_id, department:departments(name), profile:profiles(full_name, email)",
+    )
     .eq("company_id", company.id);
   const members = (memberRows ?? [])
     .map((m) => {
@@ -56,10 +60,12 @@ export default async function ExpensesPage({
         full_name: string | null;
         email: string | null;
       } | null;
+      const dept = m.department as unknown as { name: string } | null;
       const name = (p?.full_name?.trim() || p?.email || "Member").trim();
+      const withDept = dept?.name ? `${name} · ${dept.name}` : name;
       return {
         userId: m.user_id as string,
-        label: m.user_id === user.id ? `${name} · you` : name,
+        label: m.user_id === user.id ? `${withDept} · you` : withDept,
       };
     })
     .sort((a, b) => a.label.localeCompare(b.label));

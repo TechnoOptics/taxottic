@@ -95,6 +95,7 @@ export async function AppHeader({
   const companies = memberships.map((m) => ({
     publicId: m.company.public_id,
     name: m.company.name,
+    role: m.role,
   }));
 
   // Outstanding tasks (unclassified drives + transactions awaiting a

@@ -452,6 +452,21 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="forecast" />
         </div>
 
+        {/* Admin-only: this page is always the whole-company forecast.
+            Managers get a link to the department/employee breakdown
+            instead of duplicating that view inline here. */}
+        {isManager ? (
+          <div className="mt-4">
+            <Link
+              href={`/c/${publicId}/forecast/breakdown`}
+              className="inline-flex items-center gap-1.5 text-xs px-3 h-8 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
+            >
+              <span aria-hidden="true">🧭</span>
+              View by department &amp; employee →
+            </Link>
+          </div>
+        ) : null}
+
         {/* Fixed top-right pill — out of flow so it never pushes content down. */}
         {hasConnections ? (
           <SyncFreshness

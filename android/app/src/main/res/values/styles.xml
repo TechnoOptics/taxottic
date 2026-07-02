@@ -7,6 +7,23 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
+    </style>
+
+    <!-- Explicit alert-dialog theme. Without this, the native <select>
+         element's Android picker (a framework AlertDialog + ListView,
+         confirmed via `uiautomator dump`: android:id/parentPanel /
+         android:id/text1 CheckedTextView rows) rendered the launch splash
+         drawable (@drawable/splash — the full-bleed dark-green logo image)
+         behind its option rows, making the text unreadable. Swapping
+         AppTheme.NoActionBar's own windowBackground to a diagnostic red
+         had ZERO effect on the dialog, proving the dialog wasn't resolving
+         windowBackground from the Activity's theme at all — it falls back
+         to a default alertDialogTheme neither of our themes declared,
+         which apparently chains back to the splash drawable. Declaring our
+         own clean alertDialogTheme removes that ambiguity entirely. -->
+    <style name="AppTheme.AlertDialog" parent="android:Theme.DeviceDefault.Dialog.Alert">
+        <item name="android:windowBackground">@android:color/white</item>
     </style>
 
     <!-- Post-splash theme Capacitor's BridgeActivity switches to.
@@ -31,6 +48,7 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowBackground">#121a2a</item>
+        <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
         <item name="android:statusBarColor">#121a2a</item>
         <item name="android:navigationBarColor">#121a2a</item>
         <item name="android:windowLightStatusBar">false</item>

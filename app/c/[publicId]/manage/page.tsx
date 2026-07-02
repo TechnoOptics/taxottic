@@ -11,6 +11,10 @@ import {
   readAndClearLastInviteLink,
   removeMember,
   revokeInvite,
+  createDepartment,
+  renameDepartment,
+  deleteDepartment,
+  assignMemberDepartment,
 } from "./actions";
 import { closeCompany } from "@/app/actions/recycle-bin";
 import { CopyInviteLink } from "@/components/CopyInviteLink";
@@ -53,8 +57,16 @@ export default async function ManageCompanyPage({
   // then stitch them together by user_id.
   const { data: memberRows } = await admin
     .from("company_members")
-    .select("user_id, role, title, joined_at")
+    .select("user_id, role, title, joined_at, department_id, employee_number")
     .eq("company_id", company.id);
+
+  const { data: departmentRows } = await admin
+    .from("departments")
+    .select("id, name")
+    .eq("company_id", company.id)
+    .order("name");
+  const departments = departmentRows ?? [];
+  const departmentById = new Map(departments.map((d) => [d.id, d.name]));
 
   type ProfileRow = {
     id: string;
@@ -189,6 +201,74 @@ export default async function ManageCompanyPage({
           </span>
         </div>
 
+        {/* Departments — manager-only, flat (no nesting). Rendered above
+            Add an employee so a freshly-created department is already
+            available in that form's department picker on the same page
+            load (both sections share the `departments` array fetched
+            above). */}
+        {isManager ? (
+          <section className="mt-6 card p-5 sm:p-7">
+            <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
+              Departments
+            </div>
+            <h2 className="display mt-1 text-xl text-forest-900">
+              Group your team.
+            </h2>
+            <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-prose">
+              Departments are optional. Assign teammates to one so expenses
+              and mileage show where they came from at a glance.
+            </p>
+
+            {departments.length > 0 ? (
+              <ul className="mt-4 grid gap-2">
+                {departments.map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-forest-100 bg-white/60 px-4 py-2.5 text-sm"
+                  >
+                    <form
+                      action={renameDepartment}
+                      className="flex items-center gap-2 min-w-0 flex-1"
+                    >
+                      <input type="hidden" name="department_id" value={d.id} />
+                      <input
+                        name="name"
+                        defaultValue={d.name}
+                        className="input h-8 text-sm min-w-0"
+                      />
+                      <button className="text-xs text-gold-800 hover:text-gold-900 shrink-0">
+                        Save
+                      </button>
+                    </form>
+                    <form action={deleteDepartment}>
+                      <input type="hidden" name="department_id" value={d.id} />
+                      <button className="text-xs text-red-700 hover:text-red-900 shrink-0">
+                        Delete
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <form
+              action={createDepartment}
+              className="mt-4 flex flex-col sm:flex-row gap-2"
+            >
+              <input type="hidden" name="company_id" value={company.id} />
+              <input
+                name="name"
+                required
+                placeholder="e.g. Sales"
+                className="input"
+              />
+              <button className="btn-ghost text-sm px-4 h-10 whitespace-nowrap">
+                + Add department
+              </button>
+            </form>
+          </section>
+        ) : null}
+
         {/* Add Employee section: rendered at the TOP of the team page so
             it's the first thing managers see. For non-managers we still
             show the section header with a friendly note explaining who
@@ -255,6 +335,19 @@ export default async function ManageCompanyPage({
                   </select>
                 </Field>
               </div>
+
+              {departments.length > 0 ? (
+                <Field label="Department (optional)">
+                  <select name="department_id" className="input" defaultValue="">
+                    <option value="">No department</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
 
               <Field label="Personal welcome message (optional)">
                 <textarea
@@ -400,10 +493,51 @@ export default async function ManageCompanyPage({
                         {profile?.full_name ?? profile?.email}
                       </div>
                       <div className="text-xs text-ink-muted mt-0.5">
-                        {[m.title, prettyRole(m.role), profile?.public_id]
+                        {[
+                          m.employee_number
+                            ? `EMP-${String(m.employee_number).padStart(3, "0")}`
+                            : null,
+                          m.title,
+                          prettyRole(m.role),
+                          m.department_id
+                            ? departmentById.get(m.department_id)
+                            : null,
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </div>
+                      {isManager && departments.length > 0 ? (
+                        <form
+                          action={assignMemberDepartment}
+                          className="mt-1.5 flex items-center gap-1.5"
+                        >
+                          <input
+                            type="hidden"
+                            name="company_id"
+                            value={company.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="user_id"
+                            value={m.user_id}
+                          />
+                          <select
+                            name="department_id"
+                            defaultValue={m.department_id ?? ""}
+                            className="input h-7 text-xs py-0"
+                          >
+                            <option value="">No department</option>
+                            {departments.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button className="text-xs text-gold-800 hover:text-gold-900 shrink-0">
+                            Save
+                          </button>
+                        </form>
+                      ) : null}
                     </div>
                     {isManager ? (
                       <div className="flex items-center gap-4 shrink-0 flex-wrap">

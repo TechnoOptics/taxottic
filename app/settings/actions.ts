@@ -110,6 +110,92 @@ export async function revokeWatchDevice(formData: FormData) {
   revalidatePath("/settings/security");
 }
 
+function resolveSupabaseHost(): string {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).host;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Persist the caller's own uploaded avatar URL. Mirrors
+ * setCompanyLogoUrl's URL guard (must be our Supabase Storage host)
+ * but there's no manager check — every user owns their own avatar.
+ */
+export async function setAvatarUrl(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const avatarUrl = String(formData.get("avatar_url") ?? "").trim();
+  if (!avatarUrl) throw new Error("Missing input");
+
+  const supabaseHost = resolveSupabaseHost();
+  try {
+    const u = new URL(avatarUrl);
+    if (u.protocol !== "https:" || u.host !== supabaseHost) {
+      throw new Error("Avatar URL must be hosted on Supabase Storage.");
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Avatar URL")) throw err;
+    throw new Error("Invalid avatar URL");
+  }
+
+  await admin
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", user.id);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
+/** Remove the caller's avatar, including the stored objects. */
+export async function clearAvatarUrl() {
+  const { admin, user } = await requireUserWithAdmin();
+
+  const { data: objs } = await admin.storage.from("avatars").list(user.id);
+  if (objs && objs.length > 0) {
+    await admin.storage
+      .from("avatars")
+      .remove(objs.map((o) => `${user.id}/${o.name}`));
+  }
+
+  await admin.from("profiles").update({ avatar_url: null }).eq("id", user.id);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
+/** Update the caller's own display name. */
+export async function saveFullName(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const fullName = String(formData.get("full_name") ?? "").trim();
+  if (!fullName) throw new Error("Name can't be empty.");
+
+  await admin.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Update the caller's own "message" for a specific company —
+ * company_members.bio, a short per-membership blurb (role context,
+ * status, etc.) distinct from the profile-wide avatar/name. Scoped to
+ * (user_id, company_id) so a user in multiple companies can leave a
+ * different message per team; only their OWN row, never a teammate's.
+ */
+export async function saveCompanyBio(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const companyId = String(formData.get("company_id") ?? "");
+  const bio = String(formData.get("bio") ?? "").trim();
+  if (!companyId) throw new Error("Missing company");
+
+  const { error } = await admin
+    .from("company_members")
+    .update({ bio: bio || null })
+    .eq("company_id", companyId)
+    .eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+}
+
 /**
  * Toggle the Bella smart-search bar in the header. Default is off
  * (cleaner header for users who don't use Bella daily); flipping

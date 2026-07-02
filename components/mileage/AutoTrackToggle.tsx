@@ -39,6 +39,12 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
   // user-facing card stays clean while the crumb is one flag away for
   // on-device debugging.
   const [showDiag, setShowDiag] = useState(false);
+  // The "how this works" paragraph is long (location-use disclosure,
+  // required for Apple/Google review) but most users only need to see
+  // it once. Collapsed by default so the card reads as just a title +
+  // toggle; a small link expands it back in for anyone who wants the
+  // detail.
+  const [showDetails, setShowDetails] = useState(false);
   useEffect(() => {
     try {
       if (
@@ -232,13 +238,22 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           <div className="text-sm font-medium text-forest-900">
             Log my drives automatically
           </div>
-          <p className="mt-1 text-xs text-ink-muted leading-relaxed">
-            The app detects when you drive and stop, then logs the trip
-            so you can mark it business or personal. Location is used
-            only to compute your mileage deduction, sent straight to
-            your Taxottic account, and never sold or shared. Turn this
-            off any time; you can still add drives by hand.
-          </p>
+          <button
+            type="button"
+            onClick={() => setShowDetails((v) => !v)}
+            className="mt-1 text-[11px] text-ink-muted underline decoration-dotted hover:text-forest-900"
+          >
+            {showDetails ? "Hide details" : "How this works"}
+          </button>
+          {showDetails ? (
+            <p className="mt-1 text-xs text-ink-muted leading-relaxed">
+              The app detects when you drive and stop, then logs the trip
+              so you can mark it business or personal. Location is used
+              only to compute your mileage deduction, sent straight to
+              your Taxottic account, and never sold or shared. Turn this
+              off any time; you can still add drives by hand.
+            </p>
+          ) : null}
         </div>
         <button
           type="button"

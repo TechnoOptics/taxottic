@@ -61,7 +61,7 @@ export default async function MileagePage({
   searchParams: SP;
 }) {
   const { user, admin } = await requireUserWithAdmin();
-  const { range = "week", driver: driverParam = "" } = await searchParams;
+  const { range = "day", driver: driverParam = "" } = await searchParams;
   const rangeCfg = RANGES[range] ?? RANGES.week;
   const sinceIso = new Date(
     new Date().getTime() - rangeCfg.days * 86_400_000,
@@ -80,7 +80,9 @@ export default async function MileagePage({
   if (company && isManager) {
     const { data: memberRows } = await admin
       .from("company_members")
-      .select("user_id, profile:profiles(full_name, email)")
+      .select(
+        "user_id, department:departments(name), profile:profiles(full_name, email)",
+      )
       .eq("company_id", company.id);
     drivers = (memberRows ?? [])
       .map((m) => {
@@ -88,10 +90,12 @@ export default async function MileagePage({
           full_name: string | null;
           email: string | null;
         } | null;
+        const dept = m.department as unknown as { name: string } | null;
         const name = (p?.full_name?.trim() || p?.email || "Member").trim();
+        const withDept = dept?.name ? `${name} · ${dept.name}` : name;
         return {
           userId: m.user_id as string,
-          label: m.user_id === user.id ? `${name} · you` : name,
+          label: m.user_id === user.id ? `${withDept} · you` : withDept,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -416,45 +420,6 @@ export default async function MileagePage({
               </Link>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <Stat
-                label="Business miles"
-                value={fmtMiles(businessMiles)}
-                tone={businessMiles > 0 ? "good" : "neutral"}
-              />
-              <Stat
-                label="Mileage deduction"
-                value={fmtUsd(deductionCents)}
-                tone="good"
-              />
-              {/* Same "needs review" count, but when it's > 0 we wrap
-                  it in a Link to the swipe deck so the stat itself is
-                  the tap target (mirroring the amber banner above —
-                  some users tap the stat instead of the banner). */}
-              {viewingSelf && unclassifiedCount > 0 ? (
-                <Link
-                  href="/mileage/classify"
-                  className="col-span-2 sm:col-span-1 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                >
-                  <Stat
-                    label="Need review"
-                    value={String(unclassifiedCount)}
-                    tone="warn"
-                    caption="Tap to classify →"
-                  />
-                </Link>
-              ) : (
-                <Stat
-                  label="Need review"
-                  value={String(unclassifiedCount)}
-                  tone={unclassifiedCount > 0 ? "warn" : "neutral"}
-                  caption={
-                    unclassifiedCount > 0 ? "Unclassified" : "All caught up"
-                  }
-                />
-              )}
-            </div>
-
             {/* Map + trip list share one client owner so "Review" on a
                 trip focuses that single drive on the map and only ONE
                 trip is ever in review at a time. Default (no focus) is
@@ -483,6 +448,59 @@ export default async function MileagePage({
               }))}
               moveTripCompany={moveTripCompany}
             />
+
+            {/* Stat tiles moved below the map/trip list (May 2026) — the
+                user asked for the map and logged drives to be the first
+                thing visible on this page, not stats. Kept compact under
+                a small "Details" label rather than the full-size cards
+                that used to sit above the fold. */}
+            <div className="mt-6">
+              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+                Details
+              </div>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <Stat
+                  compact
+                  label="Business miles"
+                  value={fmtMiles(businessMiles)}
+                  tone={businessMiles > 0 ? "good" : "neutral"}
+                />
+                <Stat
+                  compact
+                  label="Mileage deduction"
+                  value={fmtUsd(deductionCents)}
+                  tone="good"
+                />
+                {/* Same "needs review" count, but when it's > 0 we wrap
+                    it in a Link to the swipe deck so the stat itself is
+                    the tap target (mirroring the amber banner above —
+                    some users tap the stat instead of the banner). */}
+                {viewingSelf && unclassifiedCount > 0 ? (
+                  <Link
+                    href="/mileage/classify"
+                    className="col-span-2 sm:col-span-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    <Stat
+                      compact
+                      label="Need review"
+                      value={String(unclassifiedCount)}
+                      tone="warn"
+                      caption="Tap to classify →"
+                    />
+                  </Link>
+                ) : (
+                  <Stat
+                    compact
+                    label="Need review"
+                    value={String(unclassifiedCount)}
+                    tone={unclassifiedCount > 0 ? "warn" : "neutral"}
+                    caption={
+                      unclassifiedCount > 0 ? "Unclassified" : "All caught up"
+                    }
+                  />
+                )}
+              </div>
+            </div>
 
             {/* Manual backfill entry — collapsed by default. The user
                 ALWAYS has a way to log a drive even if the tracker
@@ -516,11 +534,13 @@ function Stat({
   value,
   tone = "neutral",
   caption,
+  compact = false,
 }: {
   label: string;
   value: string;
   tone?: "neutral" | "good" | "warn";
   caption?: string;
+  compact?: boolean;
 }) {
   const dot =
     tone === "good"
@@ -529,13 +549,22 @@ function Stat({
         ? "bg-amber-400"
         : "bg-gold-400";
   return (
-    <article className="card p-4 flex items-center gap-3">
+    <article
+      className={
+        "card flex items-center gap-3 " + (compact ? "p-3" : "p-4")
+      }
+    >
       <span aria-hidden="true" className={"size-2.5 rounded-full " + dot} />
       <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+        <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
           {label}
         </div>
-        <div className="display text-2xl text-forest-900 tabular-nums mt-0.5">
+        <div
+          className={
+            "display text-forest-900 tabular-nums mt-0.5 " +
+            (compact ? "text-lg" : "text-2xl")
+          }
+        >
           {value}
         </div>
         {caption ? (

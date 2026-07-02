@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { invitationToken } from "@/lib/ids";
 import { checkInviteLimit } from "@/lib/plans/usage";
+import { sendEmail } from "@/lib/email/transport";
+import { renderCompanyMemberInviteEmail } from "@/lib/email/templates/company-member-invite";
 
 async function isManagerOf(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
@@ -49,6 +51,7 @@ export async function inviteMember(formData: FormData) {
   const fullName = textOrNull(formData.get("full_name"));
   const title = textOrNull(formData.get("title"));
   const personalMessage = textOrNull(formData.get("personal_message"));
+  const departmentId = textOrNull(formData.get("department_id"));
   // If the user opted in via "yes, raise my headcount", we'll bump the
   // business_profiles.employee_count to fit.
   const allowBumpHeadcount = formData.get("allow_bump_headcount") === "on";
@@ -56,6 +59,20 @@ export async function inviteMember(formData: FormData) {
   if (!companyId || !email) throw new Error("Missing fields");
   if (!(await isManagerOf(admin, user.id, companyId))) {
     throw new Error("Only the company manager can invite teammates.");
+  }
+
+  // Confirm the chosen department actually belongs to this company before
+  // it ever reaches the invitations row — a stray/forged id from another
+  // company should silently drop rather than cross-link departments.
+  let verifiedDepartmentId: string | null = null;
+  if (departmentId) {
+    const { data: dept } = await admin
+      .from("departments")
+      .select("id")
+      .eq("id", departmentId)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    verifiedDepartmentId = dept?.id ?? null;
   }
 
   const limit = await checkInviteLimit(supabase, user.id, companyId);
@@ -117,13 +134,14 @@ export async function inviteMember(formData: FormData) {
     full_name: fullName,
     title,
     personal_message: personalMessage,
+    department_id: verifiedDepartmentId,
   });
 
   if (error) throw new Error(error.message);
 
   const { data: company } = await admin
     .from("companies")
-    .select("public_id")
+    .select("public_id, name")
     .eq("id", companyId)
     .single();
 
@@ -134,6 +152,31 @@ export async function inviteMember(formData: FormData) {
   // read it; cleared on next render.
   const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
   const inviteUrl = `${origin}/invite/${token}`;
+
+  // Actually email the invitee. Previously this function only wrote the
+  // invitations row and handed the manager a link to copy/share — no
+  // email ever went out, so invitees never learned they'd been added
+  // unless the manager separately sent them the link by hand.
+  if (company) {
+    const rendered = renderCompanyMemberInviteEmail({
+      companyName: company.name,
+      inviterName: (user.user_metadata?.full_name as string | undefined) ?? null,
+      recipientName: fullName,
+      role,
+      title,
+      personalMessage,
+      inviteUrl,
+    });
+    await sendEmail({
+      to: email,
+      fromName: rendered.fromName,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      tags: { kind: "company-member-invite", role },
+    });
+  }
+
   const cookieStore = await cookies();
   cookieStore.set(INVITE_LINK_COOKIE, inviteUrl, {
     httpOnly: true,
@@ -218,4 +261,133 @@ export async function revokeInvite(formData: FormData) {
   const publicId = (invite?.companies as unknown as { public_id?: string })
     ?.public_id;
   if (publicId) revalidatePath(`/c/${publicId}/manage`);
+}
+
+async function revalidateManageForCompany(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  companyId: string,
+) {
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .maybeSingle();
+  if (company) revalidatePath(`/c/${company.public_id}/manage`);
+}
+
+export async function createDepartment(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const companyId = String(formData.get("company_id") ?? "");
+  const name = textOrNull(formData.get("name"));
+
+  if (!companyId || !name) throw new Error("Missing fields");
+  if (!(await isManagerOf(admin, user.id, companyId))) {
+    throw new Error("Only the company manager can create departments.");
+  }
+
+  const { error } = await admin.from("departments").insert({
+    company_id: companyId,
+    name,
+    created_by: user.id,
+  });
+  // Unique (company_id, lower(name)) — surface a friendly message on
+  // conflict instead of the raw Postgres constraint error.
+  if (error) {
+    throw new Error(
+      error.code === "23505"
+        ? `A department named "${name}" already exists.`
+        : error.message,
+    );
+  }
+
+  await revalidateManageForCompany(admin, companyId);
+}
+
+export async function renameDepartment(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const departmentId = String(formData.get("department_id") ?? "");
+  const name = textOrNull(formData.get("name"));
+  if (!departmentId || !name) throw new Error("Missing fields");
+
+  const { data: dept } = await admin
+    .from("departments")
+    .select("company_id")
+    .eq("id", departmentId)
+    .maybeSingle();
+  if (!dept) throw new Error("Department not found.");
+  if (!(await isManagerOf(admin, user.id, dept.company_id))) {
+    throw new Error("Only the company manager can rename departments.");
+  }
+
+  const { error } = await admin
+    .from("departments")
+    .update({ name })
+    .eq("id", departmentId);
+  if (error) {
+    throw new Error(
+      error.code === "23505"
+        ? `A department named "${name}" already exists.`
+        : error.message,
+    );
+  }
+
+  await revalidateManageForCompany(admin, dept.company_id);
+}
+
+export async function deleteDepartment(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const departmentId = String(formData.get("department_id") ?? "");
+  if (!departmentId) throw new Error("Missing fields");
+
+  const { data: dept } = await admin
+    .from("departments")
+    .select("company_id")
+    .eq("id", departmentId)
+    .maybeSingle();
+  if (!dept) return;
+  if (!(await isManagerOf(admin, user.id, dept.company_id))) {
+    throw new Error("Only the company manager can delete departments.");
+  }
+
+  // Members in this department fall back to "no department" (the fk is
+  // on delete set null) rather than being blocked or removed from the team.
+  const { error } = await admin
+    .from("departments")
+    .delete()
+    .eq("id", departmentId);
+  if (error) throw new Error(error.message);
+
+  await revalidateManageForCompany(admin, dept.company_id);
+}
+
+export async function assignMemberDepartment(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const companyId = String(formData.get("company_id") ?? "");
+  const memberUserId = String(formData.get("user_id") ?? "");
+  // Empty string = unassign (department_id column goes back to null).
+  const departmentId = textOrNull(formData.get("department_id"));
+
+  if (!companyId || !memberUserId) throw new Error("Missing fields");
+  if (!(await isManagerOf(admin, user.id, companyId))) {
+    throw new Error("Only the company manager can assign departments.");
+  }
+
+  if (departmentId) {
+    const { data: dept } = await admin
+      .from("departments")
+      .select("id")
+      .eq("id", departmentId)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    if (!dept) throw new Error("Department not found for this company.");
+  }
+
+  const { error } = await admin
+    .from("company_members")
+    .update({ department_id: departmentId })
+    .eq("company_id", companyId)
+    .eq("user_id", memberUserId);
+  if (error) throw new Error(error.message);
+
+  await revalidateManageForCompany(admin, companyId);
 }

@@ -46,7 +46,21 @@ import { useEffect, useState, type ReactNode } from "react";
 type Company = {
   publicId: string;
   name: string;
+  role?: "manager" | "member";
 };
+
+// Nav items visible to a plain "member" (not a manager). Members get the
+// day-to-day workflow — add expenses, track mileage, chat, see the team,
+// edit their own profile — not the tax-planning/admin surfaces (Forecast,
+// Income, Import, deduction explorer, company-wide Activity feed).
+// Managers see every item in COMPANY_ITEMS, unfiltered.
+const MEMBER_VISIBLE_KEYS = new Set([
+  "expenses",
+  "mileage",
+  "chat",
+  "team",
+  "settings",
+]);
 
 type Mode = "rail" | "sheet";
 
@@ -459,7 +473,10 @@ export function LeftRail({
           </span>
         </div>
         <ul className="grid gap-1" role="navigation">
-          {COMPANY_ITEMS.map((item) => {
+          {(activeCompany.role === "manager"
+            ? COMPANY_ITEMS
+            : COMPANY_ITEMS.filter((item) => MEMBER_VISIBLE_KEYS.has(item.key))
+          ).map((item) => {
             const href = companyHref(item.path);
             const active = isActive(href);
             return (

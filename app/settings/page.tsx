@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
+import { AvatarUploader } from "@/components/AvatarUploader";
 import {
   setActivePlatform,
   setShowSmartSearch,
+  setAvatarUrl,
+  clearAvatarUrl,
+  saveFullName,
+  saveCompanyBio,
 } from "./actions";
 
 const PLATFORM_DESCRIPTION: Record<string, { label: string; body: string }> = {
@@ -27,9 +32,25 @@ export default async function SettingsPage() {
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("active_platform, full_name, show_smart_search")
+    .select("active_platform, full_name, avatar_url, show_smart_search")
     .eq("id", user.id)
     .maybeSingle();
+
+  // For the per-company "message" (company_members.bio) — most users
+  // belong to one company, but list every membership so nobody's
+  // message is hidden just because they're on more than one team.
+  const { data: memberships } = await admin
+    .from("company_members")
+    .select("bio, company:companies(id, public_id, name)")
+    .eq("user_id", user.id);
+  const bioMemberships = (memberships ?? [])
+    .map((m) => {
+      const company = Array.isArray(m.company) ? m.company[0] : m.company;
+      return company
+        ? { companyId: company.id, companyName: company.name, bio: m.bio as string | null }
+        : null;
+    })
+    .filter((m): m is { companyId: string; companyName: string; bio: string | null } => m !== null);
 
   const current = (profile?.active_platform as string | null) ?? "user";
   const showSmartSearch = profile?.show_smart_search === true;
@@ -50,6 +71,71 @@ export default async function SettingsPage() {
         <p className="mt-2 text-sm text-ink-soft">
           Signed in as {profile?.full_name ?? user.email}.
         </p>
+
+        <section className="card mt-8 p-6 sm:p-7">
+          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+            Profile
+          </div>
+          <h2 className="display mt-1 text-xl text-forest-900">
+            Photo &amp; name
+          </h2>
+          <div className="mt-4">
+            <AvatarUploader
+              userId={user.id}
+              displayName={profile?.full_name ?? user.email ?? "You"}
+              initialAvatarUrl={profile?.avatar_url ?? null}
+              setAvatarAction={setAvatarUrl}
+              clearAvatarAction={clearAvatarUrl}
+            />
+          </div>
+          <form action={saveFullName} className="mt-5 flex flex-wrap gap-2">
+            <input
+              name="full_name"
+              type="text"
+              defaultValue={profile?.full_name ?? ""}
+              placeholder="Your full name"
+              className="input flex-1 min-w-[12rem]"
+            />
+            <button type="submit" className="btn-primary text-sm">
+              Save name
+            </button>
+          </form>
+
+          {bioMemberships.length > 0 ? (
+            <div className="mt-6 grid gap-4">
+              {bioMemberships.map((m) => (
+                <div key={m.companyId}>
+                  <label className="text-sm font-medium text-forest-800">
+                    Message for {m.companyName}
+                  </label>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    Shows to your manager and teammates on the roster — e.g.
+                    your role, availability, or a short status.
+                  </p>
+                  <form
+                    action={saveCompanyBio}
+                    className="mt-2 grid gap-2"
+                  >
+                    <input type="hidden" name="company_id" value={m.companyId} />
+                    <textarea
+                      name="bio"
+                      rows={2}
+                      maxLength={280}
+                      defaultValue={m.bio ?? ""}
+                      placeholder="e.g. Lead photographer — usually out on shoots Tue/Thu"
+                      className="input py-2"
+                    />
+                    <div>
+                      <button type="submit" className="btn-ghost text-sm">
+                        Save message
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
         {superAdmin ? (
           <section className="card mt-8 p-6 sm:p-7">
