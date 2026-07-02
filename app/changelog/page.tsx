@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
+import { SignInIconLink } from "@/components/SignInIconLink";
 
 export const metadata = {
   title: "Changelog — what's new in Taxottic",
@@ -154,12 +155,7 @@ export default function ChangelogPage() {
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
-          <Link
-            href="/login"
-            className="text-sm text-cream/80 hover:text-cream"
-          >
-            Sign in
-          </Link>
+          <SignInIconLink />
         </div>
       </header>
 

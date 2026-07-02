@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/Wordmark";
+import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import {
   PLAN_PRICING,
@@ -278,12 +279,7 @@ export default async function Home({
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
-          <Link
-            href="/login"
-            className="text-sm text-cream/80 hover:text-cream transition-colors"
-          >
-            Sign in
-          </Link>
+          <SignInIconLink />
         </div>
         {/* Thin gold sweep - same signature line as the AppHeader. */}
         <div

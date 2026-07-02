@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
+import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { WebOnly } from "@/components/WebOnly";
 import { PLAN_LIMITS, PLAN_PRICING, isUnlimited } from "@/lib/plans/limits";
@@ -274,12 +275,7 @@ export default function PricingPage() {
           <Link href="/" aria-label="Taxottic home">
             <Wordmark size="md" tone="cream" />
           </Link>
-          <Link
-            href="/login"
-            className="text-sm text-cream/80 hover:text-cream transition-colors"
-          >
-            Sign in
-          </Link>
+          <SignInIconLink />
         </div>
         <div
           aria-hidden="true"
