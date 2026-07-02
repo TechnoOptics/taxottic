@@ -1439,15 +1439,41 @@ function DeductionDonut({
   if (total <= 0) return null;
   const R = 60;
   const C = 2 * Math.PI * R;
-  const fracs = slices.map((s) => s.cents / total);
+  const rawFracs = slices.map((s) => s.cents / total);
+
+  // Real deduction mixes are often lopsided (one dominant category, several
+  // small ones) — at a 22px stroke width, a true-proportion slice under a
+  // few percent shrinks to a hairline that's invisible or unclickable-
+  // looking, which read as "the chart is broken." Give every non-zero
+  // slice a MINIMUM visual arc width, borrowed proportionally from the
+  // larger slices, so nothing disappears. The legend's percentages/dollar
+  // amounts stay tied to the TRUE fractions — only the ring's arc widths
+  // are adjusted.
+  const MIN_FRAC = 0.045;
+  const deficit = rawFracs.reduce((a, f) => a + Math.max(0, MIN_FRAC - f), 0);
+  const boostableTotal = rawFracs.reduce(
+    (a, f) => a + (f > MIN_FRAC ? f : 0),
+    0,
+  );
+  const visualFracs = rawFracs.map((f) => {
+    if (f < MIN_FRAC) return MIN_FRAC;
+    if (boostableTotal <= 0) return f;
+    return Math.max(0, f - deficit * (f / boostableTotal));
+  });
+
+  // A few px reserved as a visible seam between segments so adjacent
+  // slices (especially a big one next to a boosted sliver) read as
+  // distinct wedges instead of a single undifferentiated ring.
+  const SEAM = 3;
   const arcs = slices.map((s, i) => {
-    const frac = fracs[i];
-    const startFrac = fracs.slice(0, i).reduce((a, b) => a + b, 0);
+    const frac = visualFracs[i];
+    const startFrac = visualFracs.slice(0, i).reduce((a, b) => a + b, 0);
+    const dash = Math.max(0, frac * C - SEAM);
     return {
       color: DONUT_COLORS[i % DONUT_COLORS.length],
-      dash: frac * C,
-      gap: C - frac * C,
-      offset: -startFrac * C,
+      dash,
+      gap: C - dash,
+      offset: -(startFrac * C + SEAM / 2),
     };
   });
 
