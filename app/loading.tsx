@@ -29,15 +29,26 @@ export default function Loading() {
           "linear-gradient(180deg, #2a3a5e 0%, #1d2843 50%, #121a2a 100%)",
       }}
     >
-      {/* Blurred depth — two soft halos behind the mark. Big blur,
-          low alpha, no animation; just gives the screen "weight". */}
+      {/* Soft depth halos behind the mark. These used to carry an
+          additional `filter: blur(38px)` on top of the gradients' own
+          fade-to-transparent stops — a real device (Galaxy Z Fold5)
+          started rendering this whole screen as solid BLACK instead of
+          navy, with the pulse animation still visibly driving repaints
+          (confirmed via logcat: continuous WebView onDraw calls), which
+          points at a WebView/GPU compositing bug with a large full-
+          screen `filter: blur()` layer rather than a frozen/crashed
+          page. Android's System WebView auto-updates independently of
+          our own deploys, so this can regress with no code change on
+          our end. The gradients already fade out smoothly via their
+          own stops (`transparent 65%` / `70%`); dropping the extra blur
+          removes the risky GPU filter entirely without losing the
+          soft-glow look. */}
       <span
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
             "radial-gradient(60% 45% at 50% 45%, rgba(213, 187, 126, 0.16), transparent 65%), radial-gradient(45% 40% at 70% 75%, rgba(42, 58, 94, 0.55), transparent 70%), radial-gradient(35% 30% at 25% 30%, rgba(29, 40, 67, 0.55), transparent 70%)",
-          filter: "blur(38px)",
         }}
       />
 
