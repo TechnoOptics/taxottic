@@ -32,19 +32,15 @@ export function OutstandingTasksPopup({ count, items }: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    console.log("[outstanding-debug] popup effect ran, count=", count, "items=", items?.length);
     if (count <= 0) return;
     try {
-      const flag = sessionStorage.getItem(DISMISS_KEY);
-      console.log("[outstanding-debug] dismiss flag=", flag);
-      if (flag === "1") return;
-    } catch (e) {
-      console.log("[outstanding-debug] sessionStorage threw", e);
+      if (sessionStorage.getItem(DISMISS_KEY) === "1") return;
+    } catch {
+      /* private mode — show it anyway, no memory across reloads either */
     }
-    console.log("[outstanding-debug] calling setOpen(true)");
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on-load surfacing, condition depends on browser storage only readable client-side
     setOpen(true);
-  }, [count, items]);
+  }, [count]);
 
   function close() {
     setOpen(false);
