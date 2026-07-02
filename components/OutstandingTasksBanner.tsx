@@ -22,21 +22,33 @@ const DISMISS_KEY = "taxottic.outstanding.banner.dismissed";
  */
 export function OutstandingTasksBanner({ count, firstHref }: Props) {
   const [dismissed, setDismissed] = useState(true);
+  const [mountedClient, setMountedClient] = useState(false);
+  const [effectError, setEffectError] = useState<string | null>(null);
 
   useEffect(() => {
-    let wasDismissed = false;
     try {
-      wasDismissed = sessionStorage.getItem(DISMISS_KEY) === "1";
-    } catch {
-      /* private mode — treat as not dismissed */
+      let wasDismissed = false;
+      try {
+        wasDismissed = sessionStorage.getItem(DISMISS_KEY) === "1";
+      } catch {
+        /* private mode — treat as not dismissed */
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only sessionStorage; must run after mount
+      setDismissed(wasDismissed);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- proves this effect ran at all
+      setMountedClient(true);
+    } catch (e) {
+      setEffectError(e instanceof Error ? e.message : String(e));
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only sessionStorage; must run after mount
-    setDismissed(wasDismissed);
   }, []);
 
-  if (count <= 0 || dismissed) return null;
-
   return (
+    <>
+      <div style={{ background: "lime", padding: 4, fontSize: 11 }}>
+        TEMP-DEBUG banner: mountedClient={String(mountedClient)} dismissed=
+        {String(dismissed)} count={count} err={effectError ?? "none"}
+      </div>
+      {count <= 0 || dismissed ? null : (
     <div className="flex items-center gap-3 rounded-xl border border-gold-300/60 bg-gold-50/70 px-4 py-2.5 text-xs text-forest-900">
       <span aria-hidden="true">🔔</span>
       <span className="min-w-0 flex-1">
@@ -65,5 +77,7 @@ export function OutstandingTasksBanner({ count, firstHref }: Props) {
         ×
       </button>
     </div>
+      )}
+    </>
   );
 }
