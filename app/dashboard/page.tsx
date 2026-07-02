@@ -619,18 +619,22 @@ export default async function DashboardPage() {
     items: [],
     count: 0,
   };
+  let __outstandingDebug = "";
   try {
     outstanding = await getOutstandingTasks(supabase, {
       userId: user.id,
       companyId: companies[0]?.company.id ?? null,
       companyPublicId: companies[0]?.company.public_id ?? null,
     });
-  } catch {
-    /* best-effort */
+    __outstandingDebug = `ok count=${outstanding.count} uid=${user.id} cid=${companies[0]?.company.id} pid=${companies[0]?.company.public_id}`;
+  } catch (e) {
+    __outstandingDebug = `ERR ${e instanceof Error ? e.message : String(e)}`;
   }
 
   return (
     <main id="main" className="min-h-screen">
+      {/* TEMP-DEBUG */}
+      <span style={{ display: "none" }} data-outstanding-debug={__outstandingDebug} />
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12">
         <header>
