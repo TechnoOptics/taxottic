@@ -20,6 +20,20 @@ async function userBelongsToCompany(
   return !!data;
 }
 
+async function userIsManagerOf(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  userId: string,
+  companyId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  return data?.role === "manager";
+}
+
 const VALID_RECURRENCES = new Set([
   "one_off",
   "weekly",
@@ -184,6 +198,144 @@ export async function updateExpense(formData: FormData) {
   if (company) {
     revalidatePath(`/c/${company.public_id}/expenses`);
     revalidatePath(`/c/${company.public_id}/forecast`);
+  }
+}
+
+// Manager-only review actions. A manager reviewing a teammate's logged
+// expenses can leave a note (visible to the teammate, distinct from the
+// teammate's own `notes`) and/or reclassify a miscategorized personal
+// purchase out of the business deduction entirely — without deleting the
+// row, so the teammate's own log stays intact.
+export async function setExpenseClassification(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const id = String(formData.get("id") ?? "");
+  const companyId = String(formData.get("company_id") ?? "");
+  const classificationRaw = String(formData.get("classification") ?? "");
+  if (!id || !companyId) throw new Error("Invalid input");
+  if (classificationRaw !== "business" && classificationRaw !== "personal") {
+    throw new Error("Invalid classification");
+  }
+  if (!(await userIsManagerOf(admin, user.id, companyId))) {
+    throw new Error("Only a manager can reclassify a teammate's expense");
+  }
+
+  const { data: existing } = await admin
+    .from("monthly_expenses")
+    .select("amount_cents, month, category_code, user_id")
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+
+  const { error } = await admin
+    .from("monthly_expenses")
+    .update({ classification: classificationRaw })
+    .eq("id", id)
+    .eq("company_id", companyId);
+  if (error) throw new Error(error.message);
+
+  if (existing) {
+    await logCompanyActivity(admin, {
+      companyId,
+      actorUserId: user.id,
+      kind: "expense.reclassified",
+      summary: `Marked ${formatCents(existing.amount_cents)} expense (${existing.category_code}) as ${classificationRaw}`,
+      payload: { id, classification: classificationRaw, ...existing },
+    });
+  }
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  if (company) {
+    revalidatePath(`/c/${company.public_id}/expenses`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+    revalidatePath(`/c/${company.public_id}/forecast/breakdown`);
+  }
+}
+
+export async function setExpenseManagerNote(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const id = String(formData.get("id") ?? "");
+  const companyId = String(formData.get("company_id") ?? "");
+  const note = String(formData.get("manager_note") ?? "").trim() || null;
+  if (!id || !companyId) throw new Error("Invalid input");
+  if (!(await userIsManagerOf(admin, user.id, companyId))) {
+    throw new Error("Only a manager can leave a note on a teammate's expense");
+  }
+
+  const { error } = await admin
+    .from("monthly_expenses")
+    .update({ manager_note: note })
+    .eq("id", id)
+    .eq("company_id", companyId);
+  if (error) throw new Error(error.message);
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  if (company) revalidatePath(`/c/${company.public_id}/expenses`);
+}
+
+// "Or if the user says so" — the manual half of recurring-expense
+// control. The automated bank-sync detector (lib/banking/recurring.ts)
+// catches a subscription that's gone quiet; this lets the person who
+// logged it (or a manager) end the projection immediately, e.g. right
+// when they cancel it, without waiting for the next sync to notice.
+// endMonth defaults to the CURRENT calendar month so past months stay
+// intact and only the forward projection stops; pass 0/omit to clear
+// a previously-set end and let it project through December again.
+export async function setExpenseRecurrenceEnd(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const id = String(formData.get("id") ?? "");
+  const companyId = String(formData.get("company_id") ?? "");
+  const clear = formData.get("clear") === "1";
+  if (!id || !companyId) throw new Error("Invalid input");
+
+  const { data: existing } = await admin
+    .from("monthly_expenses")
+    .select("user_id, month, category_code, amount_cents")
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!existing) throw new Error("Expense not found");
+
+  const isOwner = existing.user_id === user.id;
+  const isManager = await userIsManagerOf(admin, user.id, companyId);
+  if (!isOwner && !isManager) {
+    throw new Error("Not allowed to change this expense's recurrence");
+  }
+
+  const currentMonth = new Date().getUTCMonth() + 1;
+  const { error } = await admin
+    .from("monthly_expenses")
+    .update({ recurrence_end_month: clear ? null : currentMonth })
+    .eq("id", id)
+    .eq("company_id", companyId);
+  if (error) throw new Error(error.message);
+
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind: clear ? "expense.recurrence_resumed" : "expense.recurrence_stopped",
+    summary: clear
+      ? `Resumed projecting a recurring expense (${existing.category_code})`
+      : `Stopped projecting a recurring expense (${existing.category_code}) after month ${currentMonth}`,
+    payload: { id, recurrence_end_month: clear ? null : currentMonth },
+  });
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .single();
+  if (company) {
+    revalidatePath(`/c/${company.public_id}/expenses`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+    revalidatePath(`/c/${company.public_id}/forecast/breakdown`);
   }
 }
 

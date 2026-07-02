@@ -31,6 +31,13 @@ export type RecurringRow = {
   month: number;             // 1-12 (1 = January)
   amount_cents: number;
   recurrence: Recurrence | null;
+  // Last month this row's projection applies to (1-12), inclusive. null =
+  // project through December as before. Set when a recurring charge has
+  // stopped — either the user said so directly, or the bank-sync
+  // recurring-detector noticed the charge stopped showing up (see
+  // lib/banking/recurring.ts) — so the forecast doesn't keep inflating a
+  // cancelled subscription indefinitely.
+  recurrence_end_month?: number | null;
 };
 
 // Roughly 52 weeks / 12 months. Used to convert a weekly rate to a
@@ -47,6 +54,17 @@ export function expandRowToMonthly(row: RecurringRow): number[] {
   const out = new Array(12).fill(0) as number[];
   const startIdx = clamp(row.month, 1, 12) - 1;
   const recur = (row.recurrence ?? "one_off") as Recurrence;
+  // Cap projection at recurrence_end_month, if set. Applied as a final
+  // pass below so every cadence branch gets it for free. Floored at
+  // startIdx so a nonsensical end-before-start value (shouldn't happen,
+  // but this is forecast math — don't let bad data silently erase a
+  // row's own real occurrence) can never zero out the start month itself.
+  const endIdx = Math.max(
+    row.recurrence_end_month != null
+      ? clamp(row.recurrence_end_month, 1, 12) - 1
+      : 11,
+    startIdx,
+  );
 
   switch (recur) {
     case "one_off": {
@@ -87,6 +105,14 @@ export function expandRowToMonthly(row: RecurringRow): number[] {
       }
       break;
     }
+  }
+
+  // Zero out anything projected past the cap. Only affects the
+  // "monthly"/"quarterly" branches in practice — one_off/annual only
+  // ever populate startIdx, which is always <= endIdx by construction
+  // (recurrence_end_month can't be set before the row's own start month).
+  if (endIdx < 11) {
+    for (let i = endIdx + 1; i < 12; i++) out[i] = 0;
   }
 
   return out;

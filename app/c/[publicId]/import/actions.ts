@@ -13,6 +13,7 @@ import {
 import { checkCsvImportLimit, isSuperAdmin } from "@/lib/plans/usage";
 import { consume } from "@/lib/plans/credits";
 import { evaluateBadges } from "@/lib/badges/evaluate";
+import { applyRecurringExpenseDetection } from "@/lib/banking/recurring";
 import {
   loadRules,
   matchRule,
@@ -514,6 +515,10 @@ export async function applyTransactions(formData: FormData) {
       summary: `Applied ${createdExpenses.length} transaction${createdExpenses.length === 1 ? "" : "s"} from an import`,
       payload: { import_id: importId, count: createdExpenses.length },
     });
+    // Same recurring-stream detector the bank syncs run — a CSV import
+    // is just another "updated expense sheet", so a subscription that
+    // stops showing up in a newer statement gets caught here too.
+    await applyRecurringExpenseDetection(admin, companyId, taxYear);
   }
 
   const { data: company } = await admin
@@ -953,6 +958,9 @@ async function runBellaCategorize(args: {
             .eq("id", txId);
         }
       }
+      // Same recurring-stream detector the bank syncs run — Bella's
+      // auto-apply is just another path new expense rows land through.
+      await applyRecurringExpenseDetection(admin, companyId, taxYear);
     }
   }
 

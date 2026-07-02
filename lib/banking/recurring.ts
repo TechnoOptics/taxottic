@@ -31,6 +31,7 @@ export type ExpenseRowForRecurrence = {
   amount_cents: number;
   category_code: string | null;
   recurrence: string | null;
+  recurrence_end_month?: number | null;
 };
 
 export type RecurrenceValue =
@@ -39,10 +40,36 @@ export type RecurrenceValue =
   | "monthly"
   | "quarterly"
   | "annual";
-export type RecurrenceUpdate = { id: string; recurrence: RecurrenceValue };
+export type RecurrenceUpdate = {
+  id: string;
+  recurrence: RecurrenceValue;
+  // Set when the stream is detected as STOPPED (see "stopped stream"
+  // detection below) — caps the forecast projection right after the
+  // last real occurrence instead of projecting through December.
+  // Present with value `null` means "clear any previous end month"
+  // (the stream resumed), so it must be written even when null.
+  recurrence_end_month?: number | null;
+};
 
 /** Minimum distinct months a stream must span to count as recurring. */
 export const MIN_RECURRING_MONTHS = 3;
+
+/**
+ * How many cycles of silence before we call a stream stopped rather than
+ * "sync just hasn't caught up yet". Monthly gets 2 full cycles (2 months)
+ * since a bank pull landing a few days late is common. Quarterly gets 1
+ * full cycle (3 months): with MIN_RECURRING_MONTHS = 3, the earliest a
+ * quarterly stream can even qualify as recurring is 3 occurrences spread
+ * across 6 months (e.g. months 1, 4, 7 — anchor month 7) — at 2 cycles
+ * (6 more months) the stopped-check would need asOfMonth >= 13, which is
+ * impossible within a single tax year, so quarterly would never fire.
+ * 1 cycle (3 months) keeps it reachable while still requiring a full
+ * missed billing period, not just a slightly-late sync.
+ */
+const STOPPED_AFTER_CYCLES: Record<"monthly" | "quarterly", number> = {
+  monthly: 2,
+  quarterly: 1,
+};
 
 function dollarBucket(cents: number): number {
   return Math.round(Math.abs(cents) / 100);
@@ -60,9 +87,19 @@ function inferCadence(sortedMonths: number[]): "monthly" | "quarterly" {
 /**
  * Pure core: given a company's expense rows, return only the recurrence
  * CHANGES needed (rows already at the right value are omitted).
+ *
+ * `asOfMonth` is the latest month we actually have synced/entered data
+ * for (1-12) — used to detect a stream that's gone quiet: if the
+ * anchor's cadence says another occurrence should have shown up by now
+ * and it's been silent for STOPPED_AFTER_CYCLES full cycles, we cap the
+ * anchor's recurrence_end_month at its own month instead of letting the
+ * forecast keep projecting a cancelled subscription through December.
+ * Omit `asOfMonth` to skip stopped-stream detection entirely (existing
+ * behaviour) — every current caller passes it.
  */
 export function computeRecurrenceUpdates(
   rows: ExpenseRowForRecurrence[],
+  asOfMonth?: number,
 ): RecurrenceUpdate[] {
   const groups = new Map<string, ExpenseRowForRecurrence[]>();
   for (const r of rows) {
@@ -78,6 +115,10 @@ export function computeRecurrenceUpdates(
       (a, b) => a - b,
     );
     const want = new Map<string, RecurrenceValue>();
+    // recurrence_end_month to write per row id — undefined = "don't touch
+    // it" (avoids clobbering a manual "user says so" stop set elsewhere),
+    // null = "clear it" (stream resumed), a number = "cap it here".
+    const wantEndMonth = new Map<string, number | null>();
     if (distinctMonths.length >= MIN_RECURRING_MONTHS) {
       const cadence = inferCadence(distinctMonths);
       // Anchor = single latest-month row (ties broken by id for stability).
@@ -87,6 +128,20 @@ export function computeRecurrenceUpdates(
       for (const r of group) {
         want.set(r.id, r.id === anchor.id ? cadence : "one_off");
       }
+      if (asOfMonth != null) {
+        const cadenceStep = cadence === "quarterly" ? 3 : 1;
+        const silentSince = asOfMonth - anchor.month;
+        const stopped = silentSince >= cadenceStep * STOPPED_AFTER_CYCLES[cadence];
+        // Cap right at the anchor's own month when stopped (its real
+        // occurrence still counts; nothing projects past it). Clear
+        // (null) when the anchor is current again — the stream resumed.
+        // Only touch it if that's an actual change from what's stored,
+        // so a re-run doesn't keep rewriting the same value.
+        const nextEndMonth = stopped ? anchor.month : null;
+        if ((anchor.recurrence_end_month ?? null) !== nextEndMonth) {
+          wantEndMonth.set(anchor.id, nextEndMonth);
+        }
+      }
     } else {
       // Too few to be recurring — ensure none are left marked recurring.
       for (const r of group) want.set(r.id, "one_off");
@@ -94,7 +149,17 @@ export function computeRecurrenceUpdates(
     for (const r of group) {
       const target = want.get(r.id)!;
       const current = (r.recurrence ?? "one_off") as RecurrenceValue;
-      if (target !== current) updates.push({ id: r.id, recurrence: target });
+      const targetEndMonth = wantEndMonth.get(r.id);
+      const recurrenceChanged = target !== current;
+      if (recurrenceChanged || targetEndMonth !== undefined) {
+        updates.push({
+          id: r.id,
+          recurrence: target,
+          ...(targetEndMonth !== undefined
+            ? { recurrence_end_month: targetEndMonth }
+            : {}),
+        });
+      }
     }
   }
   return updates;
@@ -107,8 +172,10 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 /**
- * Persist a set of recurrence changes to `table`, batching by target value
- * (≤5 distinct values) and id-chunk so we issue a few bounded statements.
+ * Persist a set of recurrence changes to `table`, batching by the exact
+ * set of fields being written (recurrence, and recurrence_end_month when
+ * present) so same-shaped updates share one statement, and id-chunk so we
+ * issue a few bounded statements per shape.
  */
 async function persistRecurrenceUpdates(
   admin: SupabaseClient,
@@ -116,17 +183,25 @@ async function persistRecurrenceUpdates(
   updates: RecurrenceUpdate[],
 ): Promise<number> {
   if (updates.length === 0) return 0;
-  const byValue = new Map<RecurrenceValue, string[]>();
+  const byShape = new Map<
+    string,
+    { patch: Record<string, unknown>; ids: string[] }
+  >();
   for (const u of updates) {
-    const ids = byValue.get(u.recurrence) ?? [];
-    ids.push(u.id);
-    byValue.set(u.recurrence, ids);
+    const patch: Record<string, unknown> = { recurrence: u.recurrence };
+    if (u.recurrence_end_month !== undefined) {
+      patch.recurrence_end_month = u.recurrence_end_month;
+    }
+    const key = JSON.stringify(patch);
+    const entry = byShape.get(key) ?? { patch, ids: [] };
+    entry.ids.push(u.id);
+    byShape.set(key, entry);
   }
-  for (const [value, ids] of byValue) {
+  for (const { patch, ids } of byShape.values()) {
     for (const ids100 of chunk(ids, 100)) {
       const { error } = await admin
         .from(table)
-        .update({ recurrence: value })
+        .update(patch)
         .in("id", ids100);
       if (error) console.error(`[recurring] ${table} update failed`, error.message);
     }
@@ -146,16 +221,29 @@ export async function applyRecurringExpenseDetection(
 ): Promise<number> {
   const { data: rows, error } = await admin
     .from("monthly_expenses")
-    .select("id, month, amount_cents, category_code, recurrence")
+    .select(
+      "id, month, amount_cents, category_code, recurrence, recurrence_end_month",
+    )
     .eq("company_id", companyId)
-    .eq("tax_year", taxYear);
+    .eq("tax_year", taxYear)
+    // A manager who already marked an expense "personal" made an explicit
+    // call the detector shouldn't second-guess — leave it out of both the
+    // recurrence inference and the stopped-stream check entirely.
+    .eq("classification", "business");
   if (error) {
     console.error("[recurring] fetch failed", error.message);
     return 0;
   }
   if (!rows || rows.length === 0) return 0;
 
-  const updates = computeRecurrenceUpdates(rows as ExpenseRowForRecurrence[]);
+  // "As of" the freshest month actually present in this sheet/bank pull
+  // — i.e. relative to the data we really have, not wall-clock "today",
+  // so a sync that hasn't caught up yet never falsely reads as silence.
+  const asOfMonth = rows.reduce((max, r) => Math.max(max, r.month), 0);
+  const updates = computeRecurrenceUpdates(
+    rows as ExpenseRowForRecurrence[],
+    asOfMonth,
+  );
   return persistRecurrenceUpdates(admin, "monthly_expenses", updates);
 }
 

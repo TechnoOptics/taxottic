@@ -85,7 +85,13 @@ export default async function ForecastPage({ params }: { params: Params }) {
       .eq("tax_year", taxYear),
     supabase
       .from("monthly_expenses")
-      .select("amount_cents, month, category_code, recurrence")
+      .select("amount_cents, month, category_code, recurrence, recurrence_end_month")
+      // Income belongs to the business as a whole; expenses can be
+      // reclassified "personal" by a manager reviewing the log (or by
+      // whoever logged it) when something isn't actually a business
+      // write-off. Personal-classified rows stay in the database as a
+      // record but never count toward the deduction or the forecast.
+      .eq("classification", "business")
       .eq("company_id", company.id)
       .eq("tax_year", taxYear),
   ]);

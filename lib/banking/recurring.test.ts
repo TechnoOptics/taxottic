@@ -12,7 +12,15 @@ const row = (
   amount_cents: number,
   category_code: string | null = "software_subscriptions",
   recurrence: string | null = "one_off",
-): ExpenseRowForRecurrence => ({ id, month, amount_cents, category_code, recurrence });
+  recurrence_end_month: number | null = null,
+): ExpenseRowForRecurrence => ({
+  id,
+  month,
+  amount_cents,
+  category_code,
+  recurrence,
+  recurrence_end_month,
+});
 
 describe("computeRecurrenceUpdates", () => {
   it("marks only the LATEST occurrence of a monthly stream (no double-count)", () => {
@@ -75,6 +83,95 @@ describe("computeRecurrenceUpdates", () => {
     expect(updates).toContainEqual({ id: "a6", recurrence: "one_off" });
     expect(updates).toContainEqual({ id: "a7", recurrence: "monthly" });
     expect(updates).toHaveLength(2);
+  });
+
+  describe("stopped-stream detection (asOfMonth)", () => {
+    it("does nothing when asOfMonth is omitted, even with a stale anchor", () => {
+      // Anchor is month 3, but there's no way to know "now" — no
+      // asOfMonth means no stopped-stream inference at all.
+      const rows = [1, 2, 3].map((m) =>
+        row(`a${m}`, m, 8999, "software_subscriptions", m === 3 ? "monthly" : "one_off"),
+      );
+      expect(computeRecurrenceUpdates(rows)).toEqual([]);
+    });
+
+    it("does NOT flag a stream as stopped within the grace window", () => {
+      // Monthly anchor at month 3, asOfMonth 4 — only one silent cycle,
+      // could just be a slightly-late sync. STOPPED_AFTER_CYCLES is 2.
+      const rows = [1, 2, 3].map((m) =>
+        row(`a${m}`, m, 8999, "software_subscriptions", m === 3 ? "monthly" : "one_off"),
+      );
+      expect(computeRecurrenceUpdates(rows, 4)).toEqual([]);
+    });
+
+    it("caps recurrence_end_month at the anchor's own month after 2 silent monthly cycles", () => {
+      // Monthly anchor at month 3, asOfMonth 5 — two full months of
+      // silence with no new occurrence → treat as cancelled.
+      const rows = [1, 2, 3].map((m) =>
+        row(`a${m}`, m, 8999, "software_subscriptions", m === 3 ? "monthly" : "one_off"),
+      );
+      expect(computeRecurrenceUpdates(rows, 5)).toEqual([
+        { id: "a3", recurrence: "monthly", recurrence_end_month: 3 },
+      ]);
+    });
+
+    it("does not flag a quarterly stream within its 1-cycle (3-month) grace window", () => {
+      // Quarterly anchor at month 7 (3 occurrences: 1, 4, 7 — the
+      // earliest a quarterly stream can qualify as recurring at all,
+      // since MIN_RECURRING_MONTHS = 3). asOfMonth 9 is only 2 months
+      // of silence — under the 3-month (1-cycle) threshold.
+      const rows = [1, 4, 7].map((m) =>
+        row(`q${m}`, m, 20000, "software_subscriptions", m === 7 ? "quarterly" : "one_off"),
+      );
+      expect(computeRecurrenceUpdates(rows, 9)).toEqual([]);
+    });
+
+    it("flags a quarterly stream stopped after 1 full missed quarter (3 months silent)", () => {
+      const rows = [1, 4, 7].map((m) =>
+        row(`q${m}`, m, 20000, "software_subscriptions", m === 7 ? "quarterly" : "one_off"),
+      );
+      expect(computeRecurrenceUpdates(rows, 10)).toEqual([
+        { id: "q7", recurrence: "quarterly", recurrence_end_month: 7 },
+      ]);
+    });
+
+    it("clears a stale end month if the anchor is within the grace window again", () => {
+      // a3 carries a stored recurrence_end_month of 3 from an earlier
+      // run, but THIS run's asOfMonth (4) is within the grace window —
+      // not actually stopped — so the stale cap gets cleared back to
+      // null even though the recurrence value itself doesn't change.
+      const rows = [
+        row("a1", 1, 8999, "software_subscriptions", "one_off"),
+        row("a2", 2, 8999, "software_subscriptions", "one_off"),
+        row("a3", 3, 8999, "software_subscriptions", "monthly", 3),
+      ];
+      expect(computeRecurrenceUpdates(rows, 4)).toEqual([
+        { id: "a3", recurrence: "monthly", recurrence_end_month: null },
+      ]);
+    });
+
+    it("does not re-emit an update once the stopped cap is already persisted", () => {
+      // a3 already has recurrence "monthly" AND recurrence_end_month 3
+      // stored — a re-run with the same asOfMonth should be a no-op.
+      const rows = [
+        row("a1", 1, 8999, "software_subscriptions", "one_off"),
+        row("a2", 2, 8999, "software_subscriptions", "one_off"),
+        row("a3", 3, 8999, "software_subscriptions", "monthly", 3),
+      ];
+      expect(computeRecurrenceUpdates(rows, 5)).toEqual([]);
+    });
+
+    it("never touches a manually-set end month on a stream too short to be recurring", () => {
+      // Only 2 distinct months → not recurring at all; a manual
+      // recurrence_end_month set on one of them stays untouched because
+      // the detector expresses no opinion on end month at all when it
+      // never anchors a stream (undefined key ⇒ omitted from the update).
+      const rows = [
+        row("x1", 2, 4999, "software_subscriptions", "one_off", 6),
+        row("x2", 5, 4999, "software_subscriptions", "one_off"),
+      ];
+      expect(computeRecurrenceUpdates(rows, 6)).toEqual([]);
+    });
   });
 });
 

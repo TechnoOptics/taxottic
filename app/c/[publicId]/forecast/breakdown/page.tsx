@@ -66,14 +66,20 @@ export default async function ForecastBreakdownPage({
       .eq("company_id", company.id)
       .eq("tax_year", taxYear)
       .maybeSingle(),
+    // Company-wide only — income belongs to the business, never a
+    // slice of it, so it's never bucketed per department/employee below
+    // (see the file-header note and the whole-company summary tiles).
     supabase
       .from("monthly_income")
-      .select("amount_cents, month, recurrence, user_id")
+      .select("amount_cents, month, recurrence")
       .eq("company_id", company.id)
       .eq("tax_year", taxYear),
     supabase
       .from("monthly_expenses")
-      .select("amount_cents, month, category_code, recurrence, user_id")
+      .select(
+        "amount_cents, month, category_code, recurrence, recurrence_end_month, user_id",
+      )
+      .eq("classification", "business")
       .eq("company_id", company.id)
       .eq("tax_year", taxYear),
     supabase
@@ -97,7 +103,7 @@ export default async function ForecastBreakdownPage({
     redirect(`/onboarding/tax-profile?next=/c/${publicId}/forecast/breakdown`);
   }
 
-  const incomes = (incomeRows ?? []) as (IncomeRow & { user_id: string | null })[];
+  const incomes = (incomeRows ?? []) as IncomeRow[];
   const expenses = (expenseRows ?? []) as (ExpenseRow & { user_id: string | null })[];
   const trips = (tripRows ?? []) as {
     deduction_cents: number;
@@ -151,10 +157,14 @@ export default async function ForecastBreakdownPage({
     trackedTripCount: trips.length,
   });
 
-  // Per-employee raw contribution (income / expenses / mileage logged).
-  // Deliberately NOT a re-run of the tax engine — see file header.
+  // Per-employee raw contribution — expenses + tracked mileage ONLY.
+  // Income belongs to the business as a whole, never a slice of it: a
+  // teammate's job is to log what they spent or drove, not to "generate
+  // revenue" in the system's model, so income is deliberately excluded
+  // from this per-employee/per-department breakdown (it still appears,
+  // company-wide, in the summary tiles above). Deliberately NOT a re-run
+  // of the tax engine either — see file header.
   type Slice = {
-    incomeCents: number;
     expenseCents: number;
     mileageCents: number;
     miles: number;
@@ -163,19 +173,16 @@ export default async function ForecastBreakdownPage({
   function bump(userId: string | null, patch: Partial<Slice>) {
     const key = userId ?? "unknown";
     const cur = byEmployee.get(key) ?? {
-      incomeCents: 0,
       expenseCents: 0,
       mileageCents: 0,
       miles: 0,
     };
     byEmployee.set(key, {
-      incomeCents: cur.incomeCents + (patch.incomeCents ?? 0),
       expenseCents: cur.expenseCents + (patch.expenseCents ?? 0),
       mileageCents: cur.mileageCents + (patch.mileageCents ?? 0),
       miles: cur.miles + (patch.miles ?? 0),
     });
   }
-  for (const r of incomes) bump(r.user_id, { incomeCents: r.amount_cents });
   for (const r of expenses) bump(r.user_id, { expenseCents: r.amount_cents });
   for (const t of trips)
     bump(t.driver_user_id, {
@@ -198,13 +205,12 @@ export default async function ForecastBreakdownPage({
           (userId === "unknown" ? "Unattributed" : "Former member"),
         employeeNumber: member?.employee_number ?? null,
         departmentName: dept?.name ?? "Unassigned",
-        net: slice.incomeCents - slice.expenseCents - slice.mileageCents,
+        totalCents: slice.expenseCents + slice.mileageCents,
         ...slice,
       };
     })
-    .sort((a, b) => b.incomeCents + b.mileageCents - (a.incomeCents + a.mileageCents));
+    .sort((a, b) => b.totalCents - a.totalCents);
 
-  const totalIncome = employeeRows.reduce((a, r) => a + r.incomeCents, 0) || 1;
   const totalExpense =
     employeeRows.reduce((a, r) => a + r.expenseCents + r.mileageCents, 0) || 1;
 
@@ -220,13 +226,12 @@ export default async function ForecastBreakdownPage({
     .map(([name, rows]) => ({
       name,
       memberCount: rows.length,
-      incomeCents: rows.reduce((a, r) => a + r.incomeCents, 0),
       expenseCents: rows.reduce((a, r) => a + r.expenseCents, 0),
       mileageCents: rows.reduce((a, r) => a + r.mileageCents, 0),
-      net: rows.reduce((a, r) => a + r.net, 0),
+      totalCents: rows.reduce((a, r) => a + r.totalCents, 0),
       rows,
     }))
-    .sort((a, b) => b.incomeCents - a.incomeCents);
+    .sort((a, b) => b.totalCents - a.totalCents);
 
   return (
     <main id="main" className="min-h-screen">
@@ -272,15 +277,16 @@ export default async function ForecastBreakdownPage({
 
         <h2 className="display mt-10 text-xl text-forest-900">By department</h2>
         <p className="mt-1 text-xs text-ink-muted max-w-2xl">
-          Income and expenses logged by each department&apos;s members, plus
-          their tracked business mileage deduction. Percent-of-company
-          columns show each department&apos;s share — the fastest way to see
-          where spend and revenue are concentrated.
+          Expenses logged by each department&apos;s members, plus their
+          tracked business mileage deduction. Income isn&apos;t sliced here —
+          it belongs to the business as a whole, not to any one department
+          or employee (see the company-wide tile above). Percent-of-company
+          shows each department&apos;s share of total logged spend.
         </p>
         <div className="mt-4 grid gap-3">
           {departmentSummaries.length === 0 ? (
             <p className="text-sm text-ink-muted">
-              No income or expenses logged yet.
+              No expenses or mileage logged yet.
             </p>
           ) : (
             departmentSummaries.map((d) => (
@@ -288,12 +294,10 @@ export default async function ForecastBreakdownPage({
                 key={d.name}
                 name={d.name}
                 memberCount={d.memberCount}
-                incomeCents={d.incomeCents}
                 expenseCents={d.expenseCents}
                 mileageCents={d.mileageCents}
-                net={d.net}
-                incomeShare={d.incomeCents / totalIncome}
-                expenseShare={(d.expenseCents + d.mileageCents) / totalExpense}
+                totalCents={d.totalCents}
+                expenseShare={d.totalCents / totalExpense}
               />
             ))
           )}
@@ -301,8 +305,10 @@ export default async function ForecastBreakdownPage({
 
         <h2 className="display mt-10 text-xl text-forest-900">By employee</h2>
         <p className="mt-1 text-xs text-ink-muted max-w-2xl">
-          Every teammate who has logged income, an expense, or a business
-          drive this tax year, sorted by total contribution.
+          Every teammate who has logged an expense or a business drive this
+          tax year, sorted by total contribution. Employees log spend and
+          mileage — they don&apos;t generate income in Taxottic&apos;s model,
+          so there&apos;s no income column here.
         </p>
         <div className="mt-4 overflow-x-auto rounded-2xl border border-forest-100">
           <table className="w-full text-sm">
@@ -310,16 +316,15 @@ export default async function ForecastBreakdownPage({
               <tr className="bg-cream/60 text-left text-[10px] uppercase tracking-[0.18em] text-gold-700">
                 <th className="px-4 py-2.5 font-medium">Employee</th>
                 <th className="px-4 py-2.5 font-medium">Department</th>
-                <th className="px-4 py-2.5 font-medium text-right">Income</th>
                 <th className="px-4 py-2.5 font-medium text-right">Expenses</th>
                 <th className="px-4 py-2.5 font-medium text-right">Mileage</th>
-                <th className="px-4 py-2.5 font-medium text-right">Net</th>
+                <th className="px-4 py-2.5 font-medium text-right">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-forest-50">
               {employeeRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-ink-muted">
+                  <td colSpan={5} className="px-4 py-6 text-center text-ink-muted">
                     No activity logged yet.
                   </td>
                 </tr>
@@ -340,16 +345,13 @@ export default async function ForecastBreakdownPage({
                       {r.departmentName}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">
-                      {formatCents(r.incomeCents)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">
                       {formatCents(r.expenseCents)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">
                       {formatCents(r.mileageCents)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-medium text-forest-900">
-                      {formatCents(r.net)}
+                      {formatCents(r.totalCents)}
                     </td>
                   </tr>
                 ))
@@ -362,7 +364,9 @@ export default async function ForecastBreakdownPage({
           This breakdown shows what each department and employee logged — it
           is not a separate tax forecast per slice. Federal tax brackets are
           non-linear, so per-slice forecasts wouldn&apos;t sum back to the
-          company total shown above and on the main forecast page.
+          company total shown above and on the main forecast page. Income is
+          always company-wide; only expenses and mileage are attributed to
+          employees and departments.
         </p>
       </section>
     </main>
@@ -407,20 +411,16 @@ function MiniStat({
 function DeptCard({
   name,
   memberCount,
-  incomeCents,
   expenseCents,
   mileageCents,
-  net,
-  incomeShare,
+  totalCents,
   expenseShare,
 }: {
   name: string;
   memberCount: number;
-  incomeCents: number;
   expenseCents: number;
   mileageCents: number;
-  net: number;
-  incomeShare: number;
+  totalCents: number;
   expenseShare: number;
 }) {
   return (
@@ -431,27 +431,13 @@ function DeptCard({
           {memberCount} {memberCount === 1 ? "member" : "members"}
         </span>
       </div>
-      <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
-            Income
-          </div>
-          <div className="tabular-nums text-forest-900 mt-0.5">
-            {formatCents(incomeCents)}
-          </div>
-          <div className="text-[10px] text-ink-muted mt-0.5">
-            {Math.round(incomeShare * 100)}% of company
-          </div>
-        </div>
+      <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
         <div>
           <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
             Expenses
           </div>
           <div className="tabular-nums text-forest-900 mt-0.5">
             {formatCents(expenseCents)}
-          </div>
-          <div className="text-[10px] text-ink-muted mt-0.5">
-            {Math.round(expenseShare * 100)}% of company
           </div>
         </div>
         <div>
@@ -464,10 +450,13 @@ function DeptCard({
         </div>
         <div>
           <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
-            Net
+            Total logged
           </div>
           <div className="tabular-nums font-medium text-forest-900 mt-0.5">
-            {formatCents(net)}
+            {formatCents(totalCents)}
+          </div>
+          <div className="text-[10px] text-ink-muted mt-0.5">
+            {Math.round(expenseShare * 100)}% of company
           </div>
         </div>
       </div>

@@ -7,7 +7,14 @@ import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { formatCents } from "@/lib/tax/forecast";
-import { addExpense, deleteExpense, updateExpense } from "./actions";
+import {
+  addExpense,
+  deleteExpense,
+  updateExpense,
+  setExpenseClassification,
+  setExpenseManagerNote,
+  setExpenseRecurrenceEnd,
+} from "./actions";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
 import { ExpenseRow } from "@/components/ExpenseRow";
 import { ReceiptUploader } from "@/components/ReceiptUploader";
@@ -39,7 +46,8 @@ export default async function ExpensesPage({
 }) {
   const { publicId } = await params;
   const { emp: empRaw = "" } = await searchParams;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, isManager } =
+    await loadCompanyByPublicId(publicId);
   const taxYear = new Date().getUTCFullYear();
   const currentMonth = new Date().getUTCMonth() + 1;
 
@@ -86,7 +94,7 @@ export default async function ExpensesPage({
   let expQuery = supabase
     .from("monthly_expenses")
     .select(
-      "id, month, amount_cents, category_code, recurrence, notes, created_at, user_id, category:deduction_categories(label, is_meal)",
+      "id, month, amount_cents, category_code, recurrence, recurrence_end_month, classification, manager_note, notes, created_at, user_id, category:deduction_categories(label, is_meal)",
     )
     .eq("company_id", company.id)
     .eq("tax_year", taxYear)
@@ -105,7 +113,12 @@ export default async function ExpensesPage({
       .order("display_order"),
   ]);
 
-  const expensesTotal = (rows ?? []).reduce((a, r) => a + r.amount_cents, 0);
+  // Personal-classified rows still show in the list (so a manager can see
+  // what got reclassified and why) but never count toward the YTD
+  // deduction total — they're not a business write-off anymore.
+  const expensesTotal = (rows ?? [])
+    .filter((r) => r.classification !== "personal")
+    .reduce((a, r) => a + r.amount_cents, 0);
 
   // Tracked business mileage, rolled up per month, so a logged drive
   // shows as a deduction line in the month it happened — the user
@@ -252,7 +265,9 @@ export default async function ExpensesPage({
                     (t) => t.month === month,
                   );
                   const monthTotal =
-                    monthRows.reduce((a, r) => a + r.amount_cents, 0) +
+                    monthRows
+                      .filter((r) => r.classification !== "personal")
+                      .reduce((a, r) => a + r.amount_cents, 0) +
                     (mm?.cents ?? 0);
                   const isCurrent = month === currentMonth;
                   const itemCount = monthRows.length + tripsThisMonth.length;
@@ -441,6 +456,13 @@ export default async function ExpensesPage({
                                   recurrence: r.recurrence,
                                   notes: r.notes,
                                   category: cat,
+                                  classification:
+                                    (r.classification as
+                                      | "business"
+                                      | "personal"
+                                      | undefined) ?? "business",
+                                  managerNote: r.manager_note,
+                                  recurrenceEndMonth: r.recurrence_end_month,
                                 }}
                                 companyId={company.id}
                                 taxYear={taxYear}
@@ -455,6 +477,18 @@ export default async function ExpensesPage({
                                 }
                                 updateAction={updateExpense}
                                 deleteAction={deleteExpense}
+                                isManager={isManager}
+                                reclassifyAction={
+                                  isManager ? setExpenseClassification : undefined
+                                }
+                                setNoteAction={
+                                  isManager ? setExpenseManagerNote : undefined
+                                }
+                                setRecurrenceEndAction={
+                                  isManager || r.user_id === user.id
+                                    ? setExpenseRecurrenceEnd
+                                    : undefined
+                                }
                               />
                             );
                           })}

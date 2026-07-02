@@ -30,6 +30,10 @@ export type IncomeRow = {
   amount_cents: number;
   month: number;
   recurrence: Recurrence | null;
+  // Last month (1-12) a recurring row's projection applies to. null =
+  // project through December. Lets a cancelled/ended recurring charge
+  // stop inflating the forecast — see lib/tax/recurrence.ts.
+  recurrence_end_month?: number | null;
 };
 export type ExpenseRow = IncomeRow & { category_code: string };
 
@@ -166,6 +170,7 @@ export function buildCompanyForecast(
         month: r.month,
         amount_cents: r.amount_cents,
         recurrence: r.recurrence,
+        recurrence_end_month: r.recurrence_end_month,
       }),
     ),
   );
@@ -175,6 +180,7 @@ export function buildCompanyForecast(
         month: r.month,
         amount_cents: r.amount_cents,
         recurrence: r.recurrence,
+        recurrence_end_month: r.recurrence_end_month,
       }),
     ),
   );
@@ -196,6 +202,7 @@ export function buildCompanyForecast(
             month: r.month,
             amount_cents: r.amount_cents,
             recurrence: r.recurrence,
+            recurrence_end_month: r.recurrence_end_month,
           }),
         ),
     );
