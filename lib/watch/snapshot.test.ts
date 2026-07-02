@@ -9,6 +9,7 @@ const base: SnapshotInput = {
   pendingTrips: [],
   pendingExpenses: [],
   goals: [],
+  outstandingCount: 0,
   deductions: [],
   forecast: undefined,
   latestBadgeCode: null,
@@ -109,5 +110,21 @@ describe("buildWatchSnapshot", () => {
     expect(s.confirmations).toEqual([]);
     expect(s.goals).toEqual([]);
     expect(s.mileage.trackingActive).toBe(false);
+    expect(s.outstandingCount).toBe(0);
+  });
+
+  it("carries the TRUE outstanding count, independent of the capped swipe deck", () => {
+    // The swipe deck (confirmations) only ships a couple of preview
+    // cards, but outstandingCount must reflect the real total so a
+    // watch complication never undercounts.
+    const s = buildWatchSnapshot({
+      ...base,
+      pendingTrips: [
+        { id: "t1", distanceMiles: 3, startedAtISO: "2026-05-18T14:14:00Z", estDeductionCents: 200 },
+      ],
+      outstandingCount: 14,
+    });
+    expect(s.confirmations).toHaveLength(1);
+    expect(s.outstandingCount).toBe(14);
   });
 });

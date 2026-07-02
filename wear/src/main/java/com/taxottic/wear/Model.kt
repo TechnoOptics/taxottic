@@ -16,6 +16,11 @@ data class WatchSnapshot(
     val streakDays: Int = 0,
     val forecast: Forecast? = null,
     val confirmations: List<Confirm> = emptyList(),
+    // TRUE total across every outstanding-tasks source (unclassified drives
+    // + pending transactions) — NOT confirmations.size, which is a capped
+    // preview list. Bind a tile badge to this, not the list size. Defaults
+    // to 0 so older cached payloads decode fine.
+    val outstandingCount: Int = 0,
     val deductions: List<Deduction> = emptyList(),
     val goals: List<Goal> = emptyList(),
     val mileage: Mileage = Mileage(),

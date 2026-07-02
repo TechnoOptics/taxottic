@@ -91,9 +91,40 @@ describe("buildPayload", () => {
       { kind: "goal_met", goalLabel: "Q3 set-aside", goalId: "g" },
       { kind: "badge_awarded", badgeLabel: "Saver", badgeCode: "c" },
       { kind: "message", fromName: "Pat", threadId: "t", messageId: "m" },
+      { kind: "outstanding_reminder", count: 12, dayKey: "2026-07-01" },
     ];
     for (const e of events) {
       expect(buildPayload(e).body).not.toMatch(/\$|\d{2,}/);
     }
+  });
+
+  it("outstanding_reminder: count stays out of the body, dedupes per day", () => {
+    const p = buildPayload({
+      kind: "outstanding_reminder",
+      count: 7,
+      dayKey: "2026-07-01",
+    });
+    // Privacy: the count is useful for the in-app badge but must not leak
+    // onto the lock screen — only `data` carries it.
+    expect(p.body).not.toMatch(/7/);
+    expect(p.data.count).toBe("7");
+    expect(p.category).toBeUndefined();
+    expect(p.dedupeKey).toBe("outstanding_reminder:2026-07-01");
+
+    // Same day, different count → SAME dedupe key (at most one push/day).
+    const again = buildPayload({
+      kind: "outstanding_reminder",
+      count: 9,
+      dayKey: "2026-07-01",
+    });
+    expect(again.dedupeKey).toBe(p.dedupeKey);
+
+    // Different day → different dedupe key.
+    const tomorrow = buildPayload({
+      kind: "outstanding_reminder",
+      count: 7,
+      dayKey: "2026-07-02",
+    });
+    expect(tomorrow.dedupeKey).not.toBe(p.dedupeKey);
   });
 });

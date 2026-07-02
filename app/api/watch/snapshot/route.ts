@@ -128,14 +128,21 @@ export async function GET(req: NextRequest) {
     /* today 0 */
   }
 
+  // outstandingCount is the TRUE total across every source below — the
+  // arrays above/below are all capped preview lists for the swipe deck,
+  // but a watch-face complication needs the real number (mirrors the
+  // phone's header-bell count; see lib/tasks/outstanding.ts).
+  let outstandingCount = 0;
+
   try {
-    const { data } = await admin
+    const { data, count } = await admin
       .from("mileage_trips")
-      .select("id, distance_miles, started_at")
+      .select("id, distance_miles, started_at", { count: "exact" })
       .eq("driver_user_id", uid)
       .eq("classification", "unclassified")
       .order("started_at", { ascending: false })
       .limit(6);
+    outstandingCount += count ?? 0;
     pendingTrips = (data ?? []).map((row) => {
       const t = row as {
         id: string;
@@ -187,12 +194,16 @@ export async function GET(req: NextRequest) {
   if (hitGoal) reward = { title: "Goal reached!", detail: hitGoal.title };
 
   // Bank-synced transactions awaiting a business-or-personal call —
-  // the swipe deck's expense cards.
+  // the swipe deck's expense cards. Two sources: CSV-imported
+  // (bank_transactions, scoped by company_id) and Plaid-synced
+  // (account_transactions, RLS-scoped via the account→connection→
+  // company chain — same simplification the header bell uses, since
+  // account_transactions carries no company_id column directly).
   if (companyId) {
     try {
-      const { data } = await admin
+      const { data, count } = await admin
         .from("bank_transactions")
-        .select("id, description, amount_cents")
+        .select("id, description, amount_cents", { count: "exact" })
         .eq("company_id", companyId)
         .eq("ignored", false)
         .is("applied_category_code", null)
@@ -200,23 +211,62 @@ export async function GET(req: NextRequest) {
         .is("applied_income_id", null)
         .order("posted_at", { ascending: false })
         .limit(8);
-      pendingExpenses = (data ?? []).map((row) => {
-        const t = row as {
-          id: string;
-          description: string | null;
-          amount_cents: number;
-        };
-        return {
-          id: t.id,
-          kind: "expense" as const,
-          label: (t.description || "Bank expense").slice(0, 40),
-          note: "needs business or personal",
-          amountCents: Math.abs(Number(t.amount_cents || 0)),
-        };
-      });
+      outstandingCount += count ?? 0;
+      pendingExpenses.push(
+        ...(data ?? []).map((row) => {
+          const t = row as {
+            id: string;
+            description: string | null;
+            amount_cents: number;
+          };
+          return {
+            id: t.id,
+            kind: "expense" as const,
+            label: (t.description || "Bank expense").slice(0, 40),
+            note: "needs business or personal",
+            amountCents: Math.abs(Number(t.amount_cents || 0)),
+          };
+        }),
+      );
     } catch {
-      /* no bank feed yet */
+      /* no CSV bank feed yet */
     }
+    try {
+      const { data, count } = await admin
+        .from("account_transactions")
+        .select("id, description, merchant_name, amount_cents", {
+          count: "exact",
+        })
+        .eq("user_action", "pending")
+        .order("posted_date", { ascending: false })
+        .limit(8);
+      outstandingCount += count ?? 0;
+      pendingExpenses.push(
+        ...(data ?? []).map((row) => {
+          const t = row as {
+            id: string;
+            description: string | null;
+            merchant_name: string | null;
+            amount_cents: number;
+          };
+          return {
+            id: t.id,
+            kind: "expense" as const,
+            label: (t.merchant_name || t.description || "Bank expense").slice(
+              0,
+              40,
+            ),
+            note: "needs business or personal",
+            amountCents: Math.abs(Number(t.amount_cents || 0)),
+          };
+        }),
+      );
+    } catch {
+      /* no Plaid-synced feed yet */
+    }
+    // Preview list stays a manageable size for the swipe deck even
+    // though outstandingCount above already carries the true total.
+    pendingExpenses = pendingExpenses.slice(0, 8);
   }
 
   try {
@@ -373,6 +423,7 @@ export async function GET(req: NextRequest) {
         pendingTrips,
         pendingExpenses,
         goals,
+        outstandingCount,
         deductions: [],
         forecast: forecastOut,
         latestBadgeCode,

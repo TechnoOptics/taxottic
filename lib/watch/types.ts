@@ -47,6 +47,16 @@ export type WatchSnapshot = {
   /** The swipe deck: trips / expenses / income awaiting one gesture. */
   confirmations: WatchConfirm[];
 
+  /** TRUE total count across every outstanding-tasks source (unclassified
+   *  drives + pending transactions) — NOT capped like `confirmations`,
+   *  which only ships a preview page's worth for the swipe deck. This is
+   *  the stable primitive a watch-face complication / tile badge binds
+   *  to, so it doesn't have to infer a count from an array length that's
+   *  deliberately truncated. Mirrors the phone's header-bell count
+   *  (lib/tasks/outstanding.ts) so the number on the wrist always
+   *  matches the number in the app. */
+  outstandingCount: number;
+
   /** Top available deductions (captured + still on the table). */
   deductions: WatchDeduction[];
 
@@ -79,6 +89,7 @@ export const EMPTY_WATCH_SNAPSHOT: WatchSnapshot = {
   estimatedTaxSavedCents: 0,
   streakDays: 0,
   confirmations: [],
+  outstandingCount: 0,
   deductions: [],
   goals: [],
   mileage: {

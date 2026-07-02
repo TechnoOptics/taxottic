@@ -31,7 +31,18 @@ export type PushEvent =
   | { kind: "expense_applied"; refId: string }
   | { kind: "goal_met"; goalLabel: string; goalId: string }
   | { kind: "badge_awarded"; badgeLabel: string; badgeCode: string }
-  | { kind: "message"; fromName: string; threadId: string; messageId: string };
+  | { kind: "message"; fromName: string; threadId: string; messageId: string }
+  /**
+   * Periodic nudge for the "outstanding tasks" backlog (unclassified
+   * drives + transactions awaiting a category). `count` rides in
+   * `data` only — same no-detail-on-the-lock-screen rule as every
+   * other kind — for the in-app bell/badge to read after the tap.
+   * `dayKey` (the caller's local YYYY-MM-DD) is folded into the
+   * dedupe key so at most one of these fires per user per day,
+   * however often the cron runs — keeps this a pure function (no
+   * Date.now() inside payloads.ts).
+   */
+  | { kind: "outstanding_reminder"; count: number; dayKey: string };
 
 export type PushPayload = {
   title: string;
@@ -115,6 +126,16 @@ export function buildPayload(e: PushEvent): PushPayload {
         body: `${e.fromName} sent you a message.`,
         data: { kind: e.kind, threadId: e.threadId, messageId: e.messageId },
         dedupeKey: `message:${e.threadId}:${e.messageId}`,
+      };
+    case "outstanding_reminder":
+      return {
+        // Same no-detail privacy rule as every other kind: the count is
+        // useful for the in-app bell/badge, but the lock-screen body stays
+        // generic — "something's waiting, open to see" — not a number.
+        title: "A few things need a quick look",
+        body: "Some drives or transactions are waiting for a business-or-personal call.",
+        data: { kind: e.kind, count: String(e.count) },
+        dedupeKey: `outstanding_reminder:${e.dayKey}`,
       };
   }
 }

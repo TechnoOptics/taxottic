@@ -37,6 +37,11 @@ export type SnapshotInput = {
     savedCents: number;
     targetCents: number;
   }>;
+  /** TRUE total across every outstanding-tasks source — see
+   *  WatchSnapshot.outstandingCount. The route computes this
+   *  separately from `pendingTrips`/`pendingExpenses` above, which are
+   *  capped preview lists for the swipe deck. */
+  outstandingCount: number;
   deductions: WatchDeduction[];
   /** Server-derived "is the phone tracking right now?" — true when
    *  the user has emitted a GPS point in the last 5 minutes. Lets
@@ -139,6 +144,7 @@ export function buildWatchSnapshot(input: SnapshotInput): WatchSnapshot {
     rightLabel: "Personal",
   }));
   snap.confirmations = [...tripCards, ...expenseCards];
+  snap.outstandingCount = Math.max(0, Math.round(input.outstandingCount));
 
   snap.goals = input.goals.map(
     (g): WatchGoal => ({

@@ -13,6 +13,11 @@ struct WatchSnapshot: Codable, Equatable {
 
     var forecast: Forecast?
     var confirmations: [Confirm] = []
+    // TRUE total across every outstanding-tasks source (unclassified
+    // drives + pending transactions) — NOT the same as confirmations.count,
+    // which is a capped preview list. Bind a complication/tile badge to
+    // this, not the array length. Defaults to 0 for older cached payloads.
+    var outstandingCount: Int = 0
     var deductions: [Deduction] = []
     var goals: [Goal] = []
     var mileage: Mileage = .init()

@@ -5,12 +5,14 @@ import { DarkThemeMount } from "./DarkThemeMount";
 import { LeftRail } from "./LeftRail";
 import { LeftRailMobile } from "./LeftRailMobile";
 import { SmartSearch } from "./SmartSearch";
+import { OutstandingTasksBell } from "./OutstandingTasksBell";
 import { createClient } from "@/lib/supabase/server";
 import { recordGdprConsent } from "@/app/actions/consent";
 import { submitFeedback } from "@/app/actions/feedback";
 import { setActivePlatform } from "@/app/settings/actions";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { getMyCompanies } from "@/lib/auth";
+import { getOutstandingTasks, type OutstandingItem } from "@/lib/tasks/outstanding";
 
 type AppHeaderProps = {
   email?: string;
@@ -48,17 +50,19 @@ export async function AppHeader({
   let showSmartSearch = false;
   let isSuperAdmin = false;
   let currentPlatform: "user" | "enterprise" | "hq" = "user";
+  let activeCompanyId: string | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
       .select(
-        "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search",
+        "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search, active_company_id",
       )
       .eq("id", user.id)
       .maybeSingle();
     fullName = profile?.full_name ?? null;
     avatarUrl = profile?.avatar_url ?? null;
     needsConsent = !profile?.gdpr_consented_at;
+    activeCompanyId = (profile?.active_company_id as string | null) ?? null;
     const rawPlatform = (profile?.active_platform as string | null) ?? "user";
     if (
       rawPlatform === "user" ||
@@ -82,17 +86,45 @@ export async function AppHeader({
     isSuperAdmin = Boolean(sa);
   }
 
-  // Fetch the user's companies for the LeftRail switcher. On admin /
+  // Fetch the user's companies for the LeftRail switcher (and, below,
+  // to resolve which company's outstanding tasks to show). On admin /
   // HQ surfaces the rail isn't rendered, so we skip the round trip
   // entirely. Otherwise this is a single PostgREST query that joins
   // company_members → companies, scoped by RLS + explicit user filter.
-  const companies =
-    homeHref === "/"
-      ? []
-      : (await getMyCompanies()).map((m) => ({
-          publicId: m.company.public_id,
-          name: m.company.name,
-        }));
+  const memberships = homeHref === "/" ? [] : await getMyCompanies();
+  const companies = memberships.map((m) => ({
+    publicId: m.company.public_id,
+    name: m.company.name,
+  }));
+
+  // Outstanding tasks (unclassified drives + transactions awaiting a
+  // business/personal or category call). Follows the same "active
+  // company" resolution as the watch snapshot endpoint: the company
+  // the user was last looking at, falling back to their first
+  // membership, and never trusting a stale active_company_id the user
+  // no longer belongs to. Consumer surfaces only (admin/HQ has no
+  // per-company tasks to surface).
+  let outstanding: { items: OutstandingItem[]; count: number } = {
+    items: [],
+    count: 0,
+  };
+  if (user && homeHref !== "/") {
+    const belongs = activeCompanyId
+      ? memberships.some((m) => m.company.id === activeCompanyId)
+      : false;
+    const active = belongs
+      ? memberships.find((m) => m.company.id === activeCompanyId)
+      : memberships[0];
+    try {
+      outstanding = await getOutstandingTasks(supabase, {
+        userId: user.id,
+        companyId: active?.company.id ?? null,
+        companyPublicId: active?.company.public_id ?? null,
+      });
+    } catch {
+      /* outstanding-tasks tally is best-effort — never break the header */
+    }
+  }
 
   return (
     <>
@@ -217,6 +249,12 @@ export async function AppHeader({
           ) : (
             <div className="flex-1" />
           )}
+          {homeHref !== "/" ? (
+            <OutstandingTasksBell
+              count={outstanding.count}
+              items={outstanding.items}
+            />
+          ) : null}
           <UserMenu
             email={email ?? null}
             fullName={fullName}

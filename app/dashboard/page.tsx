@@ -21,6 +21,9 @@ import { purgeExpiredRecycleBin } from "@/app/actions/recycle-bin";
 import { ReminderDismissButton } from "@/components/ReminderDismissButton";
 import { ReadinessHelp } from "@/components/ReadinessHelp";
 import { WebOnly } from "@/components/WebOnly";
+import { OutstandingTasksBanner } from "@/components/OutstandingTasksBanner";
+import { OutstandingTasksPopup } from "@/components/OutstandingTasksPopup";
+import { getOutstandingTasks, type OutstandingItem } from "@/lib/tasks/outstanding";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -607,6 +610,25 @@ export default async function DashboardPage() {
       )
     : null;
 
+  // Outstanding tasks — unclassified drives + transactions awaiting a
+  // business/personal or category call. Best-effort: a tally failure
+  // must never break the dashboard render. Follows the same "first
+  // company" convention this page already uses elsewhere (line below,
+  // the hero stat band's forecast link).
+  let outstanding: { items: OutstandingItem[]; count: number } = {
+    items: [],
+    count: 0,
+  };
+  try {
+    outstanding = await getOutstandingTasks(supabase, {
+      userId: user.id,
+      companyId: companies[0]?.company.id ?? null,
+      companyPublicId: companies[0]?.company.public_id ?? null,
+    });
+  } catch {
+    /* best-effort */
+  }
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -620,6 +642,19 @@ export default async function DashboardPage() {
             {greeting.pleasantry}
           </p>
         </header>
+
+        {outstanding.count > 0 ? (
+          <div className="mt-4">
+            <OutstandingTasksBanner
+              count={outstanding.count}
+              firstHref={outstanding.items[0]?.href ?? "/mileage/classify"}
+            />
+          </div>
+        ) : null}
+        <OutstandingTasksPopup
+          count={outstanding.count}
+          items={outstanding.items}
+        />
 
         <TrialBanner trial={trial} />
 
