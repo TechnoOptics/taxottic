@@ -21,9 +21,6 @@ import { purgeExpiredRecycleBin } from "@/app/actions/recycle-bin";
 import { ReminderDismissButton } from "@/components/ReminderDismissButton";
 import { ReadinessHelp } from "@/components/ReadinessHelp";
 import { WebOnly } from "@/components/WebOnly";
-import { OutstandingTasksBanner } from "@/components/OutstandingTasksBanner";
-import { OutstandingTasksPopup } from "@/components/OutstandingTasksPopup";
-import { getOutstandingTasks, type OutstandingItem } from "@/lib/tasks/outstanding";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -610,31 +607,8 @@ export default async function DashboardPage() {
       )
     : null;
 
-  // Outstanding tasks — unclassified drives + transactions awaiting a
-  // business/personal or category call. Best-effort: a tally failure
-  // must never break the dashboard render. Follows the same "first
-  // company" convention this page already uses elsewhere (line below,
-  // the hero stat band's forecast link).
-  let outstanding: { items: OutstandingItem[]; count: number } = {
-    items: [],
-    count: 0,
-  };
-  let __outstandingDebug = "";
-  try {
-    outstanding = await getOutstandingTasks(supabase, {
-      userId: user.id,
-      companyId: companies[0]?.company.id ?? null,
-      companyPublicId: companies[0]?.company.public_id ?? null,
-    });
-    __outstandingDebug = `ok count=${outstanding.count} uid=${user.id} cid=${companies[0]?.company.id} pid=${companies[0]?.company.public_id}`;
-  } catch (e) {
-    __outstandingDebug = `ERR ${e instanceof Error ? e.message : String(e)}`;
-  }
-
   return (
     <main id="main" className="min-h-screen">
-      {/* TEMP-DEBUG */}
-      <span style={{ display: "none" }} data-outstanding-debug={__outstandingDebug} />
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12">
         <header>
@@ -646,23 +620,6 @@ export default async function DashboardPage() {
             {greeting.pleasantry}
           </p>
         </header>
-
-        <div style={{ background: "red", color: "white", padding: 8, fontSize: 14 }}>
-          TEMP-DEBUG: outstanding.count={outstanding.count}, condition={String(outstanding.count > 0)}, items.length={outstanding.items.length}
-        </div>
-        {outstanding.count > 0 ? (
-          <div className="mt-4">
-            <div style={{ background: "orange", padding: 4 }}>TEMP-DEBUG: banner-branch-entered</div>
-            <OutstandingTasksBanner
-              count={outstanding.count}
-              firstHref={outstanding.items[0]?.href ?? "/mileage/classify"}
-            />
-          </div>
-        ) : null}
-        <OutstandingTasksPopup
-          count={outstanding.count}
-          items={outstanding.items}
-        />
 
         <TrialBanner trial={trial} />
 
