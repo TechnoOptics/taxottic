@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PendingTrip } from "@/app/mileage/classify/page";
+import { MileageMap } from "@/components/mileage/MileageMap";
+import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 
 type Props = {
   pending: PendingTrip[];
@@ -157,6 +159,47 @@ export function ClassifyDeck({ pending, action }: Props) {
           {minutes} min · est. deduction $
           {(trip.estDeductionCents / 100).toFixed(2)} if business
         </div>
+
+        {/* Where the drive actually went — the user asked for this
+            specifically: the deck previously showed only distance and
+            dollars, giving no way to recognize the drive before calling
+            it business or personal. stopPropagation on pointerdown keeps
+            panning/zooming the map from also being read as the card's
+            own swipe-to-classify gesture (the swipe handlers bail out
+            via their `startX.current == null` guard once the down event
+            never reaches them). */}
+        <div className="mt-4" onPointerDown={(e) => e.stopPropagation()}>
+          {trip.points.length >= 2 ? (
+            <>
+              <TripEndpoints
+                startLat={trip.points[0].lat}
+                startLng={trip.points[0].lng}
+                endLat={trip.points[trip.points.length - 1].lat}
+                endLng={trip.points[trip.points.length - 1].lng}
+                className="mb-2"
+              />
+              <div className="rounded-xl overflow-hidden">
+                <MileageMap
+                  trips={[
+                    {
+                      id: trip.id,
+                      classification: "unclassified",
+                      points: trip.points,
+                    },
+                  ]}
+                  places={[]}
+                  height={200}
+                  focusMode
+                />
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-forest-100 bg-cream/40 px-3 py-4 text-center text-xs text-ink-muted">
+              Route not recorded for this drive.
+            </div>
+          )}
+        </div>
+
         {Math.abs(dx) > 40 ? (
           <div
             className={

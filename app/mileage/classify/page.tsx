@@ -12,6 +12,11 @@ export type PendingTrip = {
   endedAtISO: string;
   distanceMiles: number;
   estDeductionCents: number;
+  /** Route breadcrumb (bounded, evenly-strided) so the reviewer can SEE
+   *  where the drive went before calling it business or personal —
+   *  empty when the trip has no recorded points (e.g. a very old
+   *  reconstructed/manual entry). */
+  points: { lat: number; lng: number }[];
 };
 
 export default async function ClassifyPage() {
@@ -28,14 +33,38 @@ export default async function ClassifyPage() {
     .order("started_at", { ascending: false })
     .limit(20);
 
-  const pending: PendingTrip[] = (data ?? []).map((row: unknown) => {
-    const r = row as {
-      id: string;
-      started_at: string;
-      ended_at: string;
-      distance_miles: number;
-      tax_year: number;
-    };
+  const tripRows = (data ?? []) as {
+    id: string;
+    started_at: string;
+    ended_at: string;
+    distance_miles: number;
+    tax_year: number;
+  }[];
+
+  // Route polylines for every pending trip in one round-trip, via the
+  // same bounded RPC the /mileage overview map uses — NOT an embedded
+  // mileage_points(...) join, which PostgREST caps at 1000 rows and
+  // would truncate a long drive mid-route. p_max is smaller here (150)
+  // since each card only needs a smooth-enough line, not a YTD overview.
+  const pointsByTrip = new Map<string, { lat: number; lng: number }[]>();
+  if (tripRows.length > 0) {
+    const { data: polyRows } = await admin.rpc("mileage_trip_polylines", {
+      p_trip_ids: tripRows.map((t) => t.id),
+      p_max: 150,
+    });
+    for (const r of (polyRows ?? []) as {
+      trip_id: string;
+      lat: number;
+      lng: number;
+    }[]) {
+      const arr = pointsByTrip.get(r.trip_id);
+      const pt = { lat: r.lat, lng: r.lng };
+      if (arr) arr.push(pt);
+      else pointsByTrip.set(r.trip_id, [pt]);
+    }
+  }
+
+  const pending: PendingTrip[] = tripRows.map((r) => {
     const miles = Number(r.distance_miles || 0);
     return {
       id: r.id,
@@ -43,6 +72,7 @@ export default async function ClassifyPage() {
       endedAtISO: r.ended_at,
       distanceMiles: miles,
       estDeductionCents: businessMileageDeductionCents(miles, r.tax_year),
+      points: pointsByTrip.get(r.id) ?? [],
     };
   });
 
