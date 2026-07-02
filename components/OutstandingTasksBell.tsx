@@ -10,7 +10,18 @@ type Props = {
   items: OutstandingItem[];
 };
 
-type AnchorRect = { top: number; right: number };
+type AnchorRect = { top: number; left: number; width: number };
+
+// Base panel width (matches the old w-80 / 20rem). On very narrow phones
+// (verified on a real device: a Galaxy Z Fold5's cover screen) the panel
+// was overflowing past the LEFT edge of the viewport — it was positioned
+// via `right: <offset from the button>` with only a CSS max-width safety
+// net, which shrinks the panel but doesn't reposition it, so a
+// wide-enough panel anchored too far right still spills off-screen.
+// Compute an explicit LEFT position instead and clamp it in JS so the
+// panel can never go off either edge, regardless of viewport quirks.
+const PANEL_WIDTH = 320;
+const EDGE_MARGIN = 8;
 
 const KIND_ICON: Record<OutstandingItem["kind"], string> = {
   trip: "🚗",
@@ -43,7 +54,18 @@ export function OutstandingTasksBell({ count, items }: Props) {
     function recompute() {
       const r = buttonRef.current?.getBoundingClientRect();
       if (!r) return;
-      setAnchor({ top: r.bottom + 8, right: window.innerWidth - r.right });
+      const vw = window.innerWidth;
+      // Panel width shrinks to fit on screens narrower than the panel
+      // itself + both margins (e.g. a phone in split-screen).
+      const width = Math.min(PANEL_WIDTH, vw - EDGE_MARGIN * 2);
+      // Right-align the panel's right edge under the button's right edge
+      // by default, then clamp so it can never cross either margin.
+      const idealLeft = r.right - width;
+      const left = Math.max(
+        EDGE_MARGIN,
+        Math.min(idealLeft, vw - width - EDGE_MARGIN),
+      );
+      setAnchor({ top: r.bottom + 8, left, width });
     }
     recompute();
     window.addEventListener("resize", recompute);
@@ -82,13 +104,13 @@ export function OutstandingTasksBell({ count, items }: Props) {
             style={{
               position: "fixed",
               top: anchor.top,
-              right: anchor.right,
+              left: anchor.left,
+              width: anchor.width,
               zIndex: 9999,
-              maxWidth: "calc(100vw - 16px)",
               maxHeight: "calc(100vh - 32px)",
               overflowY: "auto",
             }}
-            className="w-80 card card-opaque p-2 shadow-2xl"
+            className="card card-opaque p-2 shadow-2xl"
           >
             <div className="px-3 py-2.5 border-b border-forest-100">
               <div className="text-sm font-medium text-forest-900">
@@ -142,15 +164,15 @@ export function OutstandingTasksBell({ count, items }: Props) {
             : "Notifications"
         }
         aria-expanded={open}
-        className="relative inline-flex size-9 items-center justify-center rounded-full text-cream/85 hover:text-cream hover:bg-white/10 transition-colors"
+        className="relative inline-flex size-8 items-center justify-center rounded-full text-cream/85 hover:text-cream hover:bg-white/10 transition-colors"
       >
-        <span aria-hidden="true" className="text-lg leading-none">
+        <span aria-hidden="true" className="text-base leading-none">
           🔔
         </span>
         {count > 0 ? (
           <span
             aria-hidden="true"
-            className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-500 px-1 text-[10px] font-semibold leading-none text-forest-950"
+            className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-gold-500 px-1 text-[9px] font-semibold leading-none text-forest-950"
           >
             {count > 99 ? "99+" : count}
           </span>
