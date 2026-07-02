@@ -376,6 +376,17 @@ html[data-theme="dark"] body {
   }
 }
 
+/* The mobile FAB rendered ON TOP of the OutstandingTasksPopup's buttons on
+   a real device despite the popup's numerically higher z-index — verified
+   this isn't a simple stacking-order fix (both are position:fixed direct
+   children of <body>, so z-index should have been enough). Whatever the
+   exact cause, the guaranteed-correct fix is to hide the FAB outright
+   while that modal (or any future one that opts in) is open. The modal
+   toggles this class on <body> for the duration it's open. */
+body.modal-open-hide-fab button[aria-label="Open menu"] {
+  display: none;
+}
+
 /* Modern thin scrollbars site-wide. Default browser scrollbars (chunky
    square buttons, grey thumb) read as dated — the user specifically
    flagged them. Replace with a thin gold-tinted thumb on transparent

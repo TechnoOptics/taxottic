@@ -42,6 +42,19 @@ export function OutstandingTasksPopup({ count, items }: Props) {
     setOpen(true);
   }, [count]);
 
+  // The mobile "open menu" FAB (LeftRailMobile) is portaled straight to
+  // document.body with its own fixed positioning + z-index — verified on a
+  // real device (Galaxy Z Fold5) that it was rendering ON TOP of this
+  // modal's Review/Not-now buttons despite a numerically lower z-index,
+  // i.e. it isn't a simple stacking-order fix. Toggling a body class the
+  // FAB explicitly hides on (see .modal-open-hide-fab in globals.css) is
+  // the guaranteed-correct fix regardless of the exact stacking mechanism.
+  useEffect(() => {
+    if (!open) return;
+    document.body.classList.add("modal-open-hide-fab");
+    return () => document.body.classList.remove("modal-open-hide-fab");
+  }, [open]);
+
   function close() {
     setOpen(false);
     try {
