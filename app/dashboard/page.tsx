@@ -647,8 +647,12 @@ export default async function DashboardPage() {
           </p>
         </header>
 
+        <div style={{ background: "red", color: "white", padding: 8, fontSize: 14 }}>
+          TEMP-DEBUG: outstanding.count={outstanding.count}, condition={String(outstanding.count > 0)}, items.length={outstanding.items.length}
+        </div>
         {outstanding.count > 0 ? (
           <div className="mt-4">
+            <div style={{ background: "orange", padding: 4 }}>TEMP-DEBUG: banner-branch-entered</div>
             <OutstandingTasksBanner
               count={outstanding.count}
               firstHref={outstanding.items[0]?.href ?? "/mileage/classify"}
