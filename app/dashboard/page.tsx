@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
+import {
+  requireUserWithAdmin,
+  getMyCompanies,
+  type CompanyMembership,
+} from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
@@ -256,6 +260,30 @@ export default async function DashboardPage() {
         </section>
       </main>
     );
+  }
+
+  // Plain-member dashboard: a user with zero manager memberships doesn't
+  // need the owner-oriented tax forecast, tax-savings playbook, or active
+  // goals — those are financial-strategy tools for whoever owns the
+  // business. What a member DOES need day to day: a quick way to log an
+  // expense/drive, a look at their own recent activity, and the same
+  // outstanding-tasks/reminders/achievements every user gets. Skipping
+  // the owner branch here also skips its two expensive per-company
+  // fetches (goals, computeReadiness) entirely rather than computing and
+  // then discarding them.
+  const isMemberOnly = companies.every((m) => m.role !== "manager");
+  if (isMemberOnly) {
+    return renderMemberDashboard({
+      user,
+      supabase,
+      admin,
+      taxYear,
+      greeting,
+      companies,
+      showWelcomeTour,
+      tourDisplayName,
+      newlyEarnedCodes,
+    });
   }
 
   // Pull dashboard data: upcoming + overdue reminders + active goals + badges
@@ -1114,6 +1142,291 @@ export default async function DashboardPage() {
       />
 
       {/* Celebrate any badges that were just awarded on this render. */}
+      <MedalCelebration newlyEarnedCodes={newlyEarnedCodes} />
+    </main>
+  );
+}
+
+/**
+ * Dashboard for a user with zero manager memberships — a plain team
+ * member. Skips the owner-oriented tax forecast, tax-savings playbook,
+ * and active-goals sections entirely (and the two expensive per-company
+ * fetches that back them: computeReadiness + goals) in favor of what a
+ * member actually needs day to day: quick-add links, their own recent
+ * activity, and the same outstanding-tasks/reminders/achievements every
+ * user gets.
+ */
+async function renderMemberDashboard(args: {
+  user: Awaited<ReturnType<typeof requireUserWithAdmin>>["user"];
+  supabase: Awaited<ReturnType<typeof requireUserWithAdmin>>["supabase"];
+  admin: Awaited<ReturnType<typeof requireUserWithAdmin>>["admin"];
+  taxYear: number;
+  greeting: ReturnType<typeof buildGreeting>;
+  companies: CompanyMembership[];
+  showWelcomeTour: boolean;
+  tourDisplayName: string | null;
+  newlyEarnedCodes: string[];
+}) {
+  const {
+    user,
+    supabase,
+    admin,
+    taxYear,
+    greeting,
+    companies,
+    showWelcomeTour,
+    tourDisplayName,
+    newlyEarnedCodes,
+  } = args;
+
+  // "Primary" company for quick-add links + recent activity — the first
+  // one the user joined, same "first company" convention the owner
+  // dashboard uses for its hero forecast link.
+  const primary = companies[0]?.company ?? null;
+
+  let outstanding: { items: OutstandingItem[]; count: number } = {
+    items: [],
+    count: 0,
+  };
+  try {
+    outstanding = await getOutstandingTasks(supabase, {
+      userId: user.id,
+      companyId: primary?.id ?? null,
+      companyPublicId: primary?.public_id ?? null,
+    });
+  } catch {
+    /* best-effort */
+  }
+
+  const nowIso = new Date().toISOString();
+  const monthStart = new Date(
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+  ).toISOString();
+
+  const [
+    { data: upcomingReminders },
+    { data: badges },
+    { data: mileageTripRows },
+    { count: thisMonthExpenseCount },
+    { data: recentExpenses },
+  ] = await Promise.all([
+    supabase
+      .from("reminders")
+      .select("id, kind, title, due_at")
+      .eq("user_id", user.id)
+      .is("dismissed_at", null)
+      .gte("due_at", nowIso)
+      .order("due_at", { ascending: true })
+      .limit(3),
+    supabase
+      .from("badges")
+      .select("badge_code, awarded_at")
+      .eq("user_id", user.id)
+      .order("awarded_at", { ascending: false }),
+    admin
+      .from("mileage_trips")
+      .select("distance_miles, deduction_cents")
+      .eq("driver_user_id", user.id)
+      .eq("classification", "business")
+      .eq("tax_year", taxYear),
+    admin
+      .from("monthly_expenses")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", monthStart),
+    admin
+      .from("monthly_expenses")
+      .select(
+        "id, month, amount_cents, notes, created_at, category:deduction_categories(label)",
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
+
+  const mileageTrips = mileageTripRows ?? [];
+  const mileageYtdCents = mileageTrips.reduce(
+    (a, t) => a + Number(t.deduction_cents ?? 0),
+    0,
+  );
+  const mileageYtdMiles = mileageTrips.reduce(
+    (a, t) => a + Number(t.distance_miles ?? 0),
+    0,
+  );
+  const thisMonthExpenses = thisMonthExpenseCount ?? 0;
+  const nextReminder = upcomingReminders?.[0] ?? null;
+  const nextDeadlineDays = nextReminder
+    ? Math.ceil(
+        (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000,
+      )
+    : null;
+
+  return (
+    <main id="main" className="min-h-screen">
+      <AppHeader email={user.email ?? undefined} />
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12">
+        <header>
+          <div className="kicker-sm">Tax year {taxYear}</div>
+          <h1 className="display mt-3 text-4xl sm:text-5xl text-forest-900 leading-[1.05]">
+            {greeting.head}
+          </h1>
+          <p className="mt-3 text-base text-ink-soft max-w-xl leading-relaxed">
+            {greeting.pleasantry}
+          </p>
+          {primary ? (
+            <p className="mt-1 text-sm text-ink-muted">{primary.name}</p>
+          ) : null}
+        </header>
+
+        {outstanding.count > 0 ? (
+          <div className="mt-4">
+            <OutstandingTasksBanner
+              count={outstanding.count}
+              firstHref={outstanding.items[0]?.href ?? "/mileage/classify"}
+            />
+          </div>
+        ) : null}
+        <OutstandingTasksPopup count={outstanding.count} items={outstanding.items} />
+
+        {/* Quick actions — the three things a member actually does day
+            to day. Big, obvious tap targets rather than nav-menu hunting. */}
+        <section className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link
+            href={primary ? `/c/${primary.public_id}/expenses` : "#"}
+            className="surface surface-hover p-5 flex items-center gap-3"
+          >
+            <span aria-hidden="true" className="text-2xl">
+              🧾
+            </span>
+            <div>
+              <div className="display text-lg text-forest-900">Add expense</div>
+              <div className="text-[13px] text-ink-muted">
+                Connect, upload a receipt, or enter by hand
+              </div>
+            </div>
+          </Link>
+          <Link
+            href="/mileage"
+            className="surface surface-hover p-5 flex items-center gap-3"
+          >
+            <span aria-hidden="true" className="text-2xl">
+              🚗
+            </span>
+            <div>
+              <div className="display text-lg text-forest-900">Log mileage</div>
+              <div className="text-[13px] text-ink-muted">
+                Auto-tracked or add a drive by hand
+              </div>
+            </div>
+          </Link>
+          <Link
+            href={primary ? `/c/${primary.public_id}/chat` : "#"}
+            className="surface surface-hover p-5 flex items-center gap-3"
+          >
+            <span aria-hidden="true" className="text-2xl">
+              💬
+            </span>
+            <div>
+              <div className="display text-lg text-forest-900">Chat</div>
+              <div className="text-[13px] text-ink-muted">
+                Message your team
+              </div>
+            </div>
+          </Link>
+        </section>
+
+        {/* Your activity — spending + mileage this user has personally
+            logged, plus the next reminder. Mirrors the owner dashboard's
+            hero stat band shape but scoped to this one person. */}
+        <section className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="surface p-5">
+            <div className="kicker-sm">Logged this month</div>
+            <div className="display text-2xl text-forest-900 mt-1">
+              {thisMonthExpenses}
+            </div>
+            <div className="text-[13px] text-ink-muted mt-0.5">
+              {thisMonthExpenses === 1 ? "expense" : "expenses"}
+            </div>
+          </div>
+          <div className="surface p-5">
+            <div className="kicker-sm">Mileage YTD</div>
+            <div className="display text-2xl text-forest-900 mt-1 tabular-nums">
+              {formatCents(mileageYtdCents)}
+            </div>
+            <div className="text-[13px] text-ink-muted mt-0.5">
+              {mileageYtdMiles.toLocaleString(undefined, {
+                maximumFractionDigits: 0,
+              })}{" "}
+              mi
+            </div>
+          </div>
+          <Link
+            href="/reminders"
+            className="surface surface-hover p-5 col-span-2 sm:col-span-1"
+          >
+            <div className="kicker-sm">Next deadline</div>
+            <div className="display text-2xl text-forest-900 mt-1">
+              {nextDeadlineDays === null
+                ? "—"
+                : nextDeadlineDays <= 0
+                  ? "Today"
+                  : `${nextDeadlineDays}d`}
+            </div>
+            <div className="text-[13px] text-ink-muted mt-0.5 truncate">
+              {nextReminder ? nextReminder.title : "Nothing scheduled"}
+            </div>
+          </Link>
+        </section>
+
+        {/* Recent activity — this user's own last few logged expenses,
+            so "what have I been logging" is answerable at a glance
+            without leaving the dashboard. */}
+        {recentExpenses && recentExpenses.length > 0 ? (
+          <section className="mt-8">
+            <div className="kicker-sm">Your recent activity</div>
+            <ul className="mt-3 grid gap-2">
+              {recentExpenses.map((e) => {
+                const cat = e.category as unknown as { label: string } | null;
+                return (
+                  <li
+                    key={e.id}
+                    className="rounded-lg border border-forest-100 bg-white/60 px-4 py-2.5 text-sm flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-forest-900 truncate">
+                        {e.notes || cat?.label || "Expense"}
+                      </div>
+                      <div className="text-[11px] text-ink-muted">
+                        {cat?.label ?? "Uncategorized"}
+                      </div>
+                    </div>
+                    <div className="text-forest-900 tabular-nums shrink-0">
+                      {formatCents(e.amount_cents)}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
+        {/* Achievements: same universal gamification every user gets. */}
+        <section className="mt-10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="kicker-sm">Your achievements</div>
+            <span className="text-xs text-ink-muted">
+              {badges?.length ?? 0} earned
+            </span>
+          </div>
+          <AchievementsGrid earnedCodes={(badges ?? []).map((b) => b.badge_code)} />
+        </section>
+      </section>
+
+      <WelcomeTour
+        show={showWelcomeTour}
+        completeAction={completeWelcomeTour}
+        displayName={tourDisplayName}
+      />
       <MedalCelebration newlyEarnedCodes={newlyEarnedCodes} />
     </main>
   );

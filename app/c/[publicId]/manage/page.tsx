@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -18,6 +17,7 @@ import {
 } from "./actions";
 import { closeCompany } from "@/app/actions/recycle-bin";
 import { CopyInviteLink } from "@/components/CopyInviteLink";
+import { TeamRoster, type RosterRow } from "@/components/TeamRoster";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -475,129 +475,42 @@ export default async function ManageCompanyPage({
         {/* Existing team roster, now BELOW the add-employee section */}
         <section className="mt-6 card p-5 sm:p-7">
           <h2 className="display text-xl text-forest-900">Current team</h2>
-          <ul className="mt-4 grid gap-2">
-            {members?.map((m) => {
-              const profile = m.profile as unknown as {
-                public_id: string;
-                email: string;
-                full_name: string | null;
-              };
-              return (
-                <li
-                  key={m.user_id}
-                  className="rounded-lg border border-forest-100 bg-white/60 px-4 py-3 text-sm"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-forest-900 truncate">
-                        {profile?.full_name ?? profile?.email}
-                      </div>
-                      <div className="text-xs text-ink-muted mt-0.5">
-                        {[
-                          m.employee_number
-                            ? `EMP-${String(m.employee_number).padStart(3, "0")}`
-                            : null,
-                          m.title,
-                          prettyRole(m.role),
-                          m.department_id
-                            ? departmentById.get(m.department_id)
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </div>
-                      {isManager && departments.length > 0 ? (
-                        <form
-                          action={assignMemberDepartment}
-                          className="mt-1.5 flex items-center gap-1.5"
-                        >
-                          <input
-                            type="hidden"
-                            name="company_id"
-                            value={company.id}
-                          />
-                          <input
-                            type="hidden"
-                            name="user_id"
-                            value={m.user_id}
-                          />
-                          <select
-                            name="department_id"
-                            defaultValue={m.department_id ?? ""}
-                            className="input h-7 text-xs py-0"
-                          >
-                            <option value="">No department</option>
-                            {departments.map((d) => (
-                              <option key={d.id} value={d.id}>
-                                {d.name}
-                              </option>
-                            ))}
-                          </select>
-                          <button className="text-xs text-gold-800 hover:text-gold-900 shrink-0">
-                            Save
-                          </button>
-                        </form>
-                      ) : null}
-                    </div>
-                    {isManager ? (
-                      <div className="flex items-center gap-4 shrink-0 flex-wrap">
-                        <div className="text-right">
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
-                            Expenses
-                          </div>
-                          <div className="text-sm text-forest-900 tabular-nums">
-                            {formatCents(expenseByUser.get(m.user_id) ?? 0)}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
-                            Business miles
-                          </div>
-                          <div className="text-sm text-forest-900 tabular-nums">
-                            {(
-                              mileageByUser.get(m.user_id)?.miles ?? 0
-                            ).toLocaleString(undefined, {
-                              maximumFractionDigits: 0,
-                            })}{" "}
-                            mi
-                            <span className="text-ink-muted">
-                              {" · "}
-                              {formatCents(
-                                mileageByUser.get(m.user_id)?.cents ?? 0,
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <Link
-                          href={`/c/${publicId}/expenses?emp=${m.user_id}`}
-                          className="text-xs text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2 whitespace-nowrap"
-                        >
-                          View expenses &rarr;
-                        </Link>
-                        {m.user_id !== user.id ? (
-                          <form action={removeMember}>
-                            <input
-                              type="hidden"
-                              name="company_id"
-                              value={company.id}
-                            />
-                            <input
-                              type="hidden"
-                              name="user_id"
-                              value={m.user_id}
-                            />
-                            <button className="text-xs text-red-700 hover:text-red-900">
-                              Remove
-                            </button>
-                          </form>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="mt-4">
+            <TeamRoster
+              members={(members ?? []).map((m): RosterRow => {
+                const profile = m.profile as unknown as {
+                  public_id: string;
+                  email: string;
+                  full_name: string | null;
+                };
+                return {
+                  userId: m.user_id,
+                  name: profile?.full_name ?? profile?.email ?? "Member",
+                  email: profile?.email ?? "",
+                  employeeNumber: m.employee_number,
+                  title: m.title,
+                  roleLabel: prettyRole(m.role),
+                  departmentId: m.department_id,
+                  departmentName: m.department_id
+                    ? (departmentById.get(m.department_id) ?? null)
+                    : null,
+                  expenseLabel: formatCents(expenseByUser.get(m.user_id) ?? 0),
+                  mileageLabel: `${(
+                    mileageByUser.get(m.user_id)?.miles ?? 0
+                  ).toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })} mi · ${formatCents(mileageByUser.get(m.user_id)?.cents ?? 0)}`,
+                  isSelf: m.user_id === user.id,
+                };
+              })}
+              departments={departments}
+              companyId={company.id}
+              publicId={publicId}
+              isManager={isManager}
+              assignMemberDepartment={assignMemberDepartment}
+              removeMember={removeMember}
+            />
+          </div>
         </section>
       </section>
     </main>
