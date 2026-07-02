@@ -47,6 +47,13 @@ export function OutstandingTasksBanner({ count, firstHref }: Props) {
       <div style={{ background: "lime", padding: 4, fontSize: 11 }}>
         TEMP-DEBUG banner: mountedClient={String(mountedClient)} dismissed=
         {String(dismissed)} count={count} err={effectError ?? "none"}
+        <button
+          type="button"
+          style={{ marginLeft: 8, background: "black", color: "white", padding: "2px 8px" }}
+          onClick={() => setMountedClient(true)}
+        >
+          CLICK-TEST
+        </button>
       </div>
       {count <= 0 || dismissed ? null : (
     <div className="flex items-center gap-3 rounded-xl border border-gold-300/60 bg-gold-50/70 px-4 py-2.5 text-xs text-forest-900">
