@@ -5,6 +5,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { PageHeader } from "@/components/PageHeader";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { createServiceClient } from "@/lib/supabase/server";
 import { formatCents } from "@/lib/tax/forecast";
 import {
   buildCompanyForecast,
@@ -83,7 +84,7 @@ export default async function ForecastBreakdownPage({
       .eq("tax_year", taxYear),
     supabase
       .from("company_members")
-      .select("user_id, role, department_id, employee_number, profile:profiles(full_name, email)")
+      .select("user_id, role, department_id, employee_number")
       .eq("company_id", company.id),
     supabase
       .from("departments")
@@ -110,19 +111,22 @@ export default async function ForecastBreakdownPage({
     employee_number: number | null;
     profile: { full_name: string | null; email: string | null } | null;
   };
-  // PostgREST returns the to-one `profile:profiles(...)` embed as an
-  // object at runtime, but without generated DB types TS can only infer
-  // it loosely — normalize defensively (some client configs return a
-  // single-element array instead) rather than fight the cast.
-  const members: MemberRow[] = (memberRows ?? []).map((m) => {
-    const raw = m as unknown as Omit<MemberRow, "profile"> & {
-      profile: MemberRow["profile"] | MemberRow["profile"][];
-    };
-    return {
-      ...raw,
-      profile: Array.isArray(raw.profile) ? (raw.profile[0] ?? null) : raw.profile,
-    };
-  });
+  // company_members.user_id has NO foreign key to profiles (it points at
+  // auth.users), so PostgREST can't resolve an embedded
+  // `profile:profiles(...)` select — it silently returns null (same
+  // gotcha documented in manage/page.tsx). Fetch profiles separately and
+  // stitch by id.
+  const rawMemberRows = (memberRows ?? []) as Omit<MemberRow, "profile">[];
+  const memberIds = rawMemberRows.map((m) => m.user_id);
+  const admin = createServiceClient();
+  const { data: profileRows } = memberIds.length
+    ? await admin.from("profiles").select("id, full_name, email").in("id", memberIds)
+    : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
+  const profileById = new Map((profileRows ?? []).map((p) => [p.id, p]));
+  const members: MemberRow[] = rawMemberRows.map((m) => ({
+    ...m,
+    profile: profileById.get(m.user_id) ?? null,
+  }));
   const departments = (departmentRows ?? []) as { id: string; name: string }[];
 
   // Whole-company forecast — identical inputs/engine call to the main

@@ -4,6 +4,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { PageHeader } from "@/components/PageHeader";
 import { ImportConnectActions } from "@/components/ImportConnectActions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { formatCents } from "@/lib/tax/forecast";
 import { addExpense, deleteExpense, updateExpense } from "./actions";
@@ -48,18 +49,25 @@ export default async function ExpensesPage({
   // come from profiles (full_name, falling back to email); department
   // (if assigned) is appended so the admin can see where a drive/expense
   // came from at a glance.
+  //
+  // company_members.user_id has NO foreign key to profiles (it points at
+  // auth.users), so PostgREST can't resolve an embedded
+  // `profile:profiles(...)` select — it silently returns null (see the
+  // same note in manage/page.tsx, where this exact embed once blanked
+  // the roster). Fetch members and profiles separately and stitch by id.
+  const admin = createServiceClient();
   const { data: memberRows } = await supabase
     .from("company_members")
-    .select(
-      "user_id, department:departments(name), profile:profiles(full_name, email)",
-    )
+    .select("user_id, department:departments(name)")
     .eq("company_id", company.id);
+  const memberIds = (memberRows ?? []).map((m) => m.user_id);
+  const { data: profileRows } = memberIds.length
+    ? await admin.from("profiles").select("id, full_name, email").in("id", memberIds)
+    : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
+  const profileById = new Map((profileRows ?? []).map((p) => [p.id, p]));
   const members = (memberRows ?? [])
     .map((m) => {
-      const p = m.profile as unknown as {
-        full_name: string | null;
-        email: string | null;
-      } | null;
+      const p = profileById.get(m.user_id) ?? null;
       const dept = m.department as unknown as { name: string } | null;
       const name = (p?.full_name?.trim() || p?.email || "Member").trim();
       const withDept = dept?.name ? `${name} · ${dept.name}` : name;

@@ -78,18 +78,22 @@ export default async function MileagePage({
   // still listed (picking them just shows an empty log).
   let drivers: { userId: string; label: string }[] = [];
   if (company && isManager) {
+    // company_members.user_id has NO foreign key to profiles (it points
+    // at auth.users), so PostgREST can't resolve an embedded
+    // `profile:profiles(...)` select — it silently returns null (same
+    // gotcha documented in manage/page.tsx). Fetch profiles separately.
     const { data: memberRows } = await admin
       .from("company_members")
-      .select(
-        "user_id, department:departments(name), profile:profiles(full_name, email)",
-      )
+      .select("user_id, department:departments(name)")
       .eq("company_id", company.id);
+    const memberIds = (memberRows ?? []).map((m) => m.user_id);
+    const { data: profileRows } = memberIds.length
+      ? await admin.from("profiles").select("id, full_name, email").in("id", memberIds)
+      : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
+    const profileById = new Map((profileRows ?? []).map((p) => [p.id, p]));
     drivers = (memberRows ?? [])
       .map((m) => {
-        const p = m.profile as unknown as {
-          full_name: string | null;
-          email: string | null;
-        } | null;
+        const p = profileById.get(m.user_id) ?? null;
         const dept = m.department as unknown as { name: string } | null;
         const name = (p?.full_name?.trim() || p?.email || "Member").trim();
         const withDept = dept?.name ? `${name} · ${dept.name}` : name;
