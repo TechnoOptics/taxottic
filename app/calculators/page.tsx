@@ -53,6 +53,13 @@ const CALCULATORS = [
       "For independent contractors, gig workers, and freelancers — estimate your tax on 1099-NEC and 1099-K income, including what your write-offs save you.",
     live: true,
   },
+  {
+    slug: "mileage-deduction",
+    title: "Mileage Deduction Calculator",
+    blurb:
+      "Turn business miles into a deduction at the 2026 IRS rate (70¢/mile) and see roughly what it saves you — for anyone who drives for work.",
+    live: true,
+  },
 ];
 
 // Companion guides — the calculators answer "how much," the guides

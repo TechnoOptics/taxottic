@@ -120,6 +120,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/calculators/self-employment-tax",
     "/calculators/quarterly-estimated-tax",
     "/calculators/1099-tax",
+    "/calculators/mileage-deduction",
   ].map((path) => ({
     url: `${baseUrl}${path}`,
     lastModified: now,
