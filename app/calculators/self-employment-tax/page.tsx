@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { SelfEmploymentTaxCalculator } from "@/components/calculators/SelfEmploymentTaxCalculator";
+import {
+  SelfEmploymentTaxCalculator,
+  type SETaxInitial,
+} from "@/components/calculators/SelfEmploymentTaxCalculator";
+import type { FilingStatus } from "@/lib/tax/constants-2025";
 
 const SITE = "https://taxottic.com";
 const SLUG = "self-employment-tax";
@@ -10,36 +15,77 @@ const TITLE = "Self-Employment Tax Calculator (2026) — Free & Instant";
 const DESCRIPTION =
   "Free self-employment tax calculator. Estimate your 2026 self-employment tax (15.3%), federal & state income tax, QBI deduction, and quarterly payments from your 1099 income — no sign-up. Runs the same IRS-aligned engine as Taxottic.";
 
-export const metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: `/calculators/${SLUG}` },
-  openGraph: {
+type Search = Promise<Record<string, string | string[] | undefined>>;
+
+function readInitial(
+  sp: Record<string, string | string[] | undefined>,
+): SETaxInitial {
+  const one = (v: string | string[] | undefined) =>
+    (Array.isArray(v) ? v[0] : v) ?? undefined;
+  return {
+    income: one(sp.income),
+    expenses: one(sp.expenses),
+    filing: one(sp.filing) as FilingStatus | undefined,
+    state: one(sp.state),
+    w2: one(sp.w2),
+  };
+}
+
+// Dynamic OG image reflecting a shared result (?income=…). Canonical
+// stays param-free so search indexes one version, but a shared link
+// unfurls into a card showing that person's estimated number.
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Search;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const init = readInitial(sp);
+  const ogParams = new URLSearchParams();
+  if (init.income) ogParams.set("income", init.income);
+  if (init.expenses) ogParams.set("expenses", init.expenses);
+  if (init.filing) ogParams.set("filing", init.filing);
+  if (init.state) ogParams.set("state", init.state);
+  const ogUrl = `/api/og/se-tax${ogParams.toString() ? `?${ogParams}` : ""}`;
+
+  return {
     title: TITLE,
     description: DESCRIPTION,
-    url: `/calculators/${SLUG}`,
-    type: "website",
-  },
-  keywords: [
-    "self-employment tax calculator",
-    "1099 tax calculator",
-    "self employed tax calculator",
-    "SE tax calculator",
-    "freelance tax calculator",
-    "quarterly estimated tax calculator",
-    "how much self employment tax will I owe",
-  ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
+    alternates: { canonical: `/calculators/${SLUG}` },
+    openGraph: {
+      title: TITLE,
+      description: DESCRIPTION,
+      url: `/calculators/${SLUG}`,
+      type: "website",
+      images: [{ url: ogUrl, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: TITLE,
+      description: DESCRIPTION,
+      images: [ogUrl],
+    },
+    keywords: [
+      "self-employment tax calculator",
+      "1099 tax calculator",
+      "self employed tax calculator",
+      "SE tax calculator",
+      "freelance tax calculator",
+      "quarterly estimated tax calculator",
+      "how much self employment tax will I owe",
+    ],
+    robots: {
       index: true,
       follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-snippet": -1,
+        "max-image-preview": "large",
+      },
     },
-  },
-};
+  };
+}
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",
@@ -116,7 +162,12 @@ const FAQ_LD = {
   ],
 };
 
-export default function SelfEmploymentTaxCalculatorPage() {
+export default async function SelfEmploymentTaxCalculatorPage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const initial = readInitial(await searchParams);
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={BREADCRUMB_LD} />
@@ -174,7 +225,7 @@ export default function SelfEmploymentTaxCalculatorPage() {
 
       {/* Calculator */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <SelfEmploymentTaxCalculator />
+        <SelfEmploymentTaxCalculator initial={initial} />
       </section>
 
       {/* Supporting content — real substance for ranking + humans */}
