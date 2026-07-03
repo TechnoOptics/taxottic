@@ -161,7 +161,7 @@ export async function inviteMember(formData: FormData) {
 
   const { data: company } = await admin
     .from("companies")
-    .select("public_id, name")
+    .select("public_id, name, logo_url")
     .eq("id", companyId)
     .single();
 
@@ -181,6 +181,7 @@ export async function inviteMember(formData: FormData) {
   if (company) {
     const rendered = renderCompanyMemberInviteEmail({
       companyName: company.name,
+      companyLogoUrl: company.logo_url,
       inviterName: (user.user_metadata?.full_name as string | undefined) ?? null,
       recipientName: fullName,
       role,
