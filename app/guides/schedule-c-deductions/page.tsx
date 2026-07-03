@@ -90,6 +90,11 @@ export default function Page() {
         title={TITLE}
         lead="Every dollar of legitimate business expense lowers the income you pay tax on. Here are the deductions self-employed people most often miss — and where each one comes from in the tax code."
         updated="June 2026"
+        calc={{
+          href: "/calculators/self-employment-tax",
+          label: "Self-employment tax calculator",
+          blurb: "See how Schedule C deductions cut your self-employment tax.",
+        }}
       >
         <H2>The one rule behind every deduction</H2>
         <P>

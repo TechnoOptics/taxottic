@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="If you run your business from home, a slice of your rent, utilities, and insurance can become a deduction. Here's who qualifies and the two ways to calculate it."
         updated="June 2026"
+        calc={{
+          href: "/calculators/self-employment-tax",
+          label: "Self-employment tax calculator",
+          blurb: "See how deductions like the home office lower what you owe.",
+        }}
       >
         <H2>The two-part qualifying test</H2>
         <P>

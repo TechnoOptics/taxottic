@@ -214,15 +214,31 @@ export default async function EffectiveTaxRatePage({
             Keep going
           </div>
           <h2 className="display text-xl text-forest-900 mt-1">
-            Related tools
+            Related guides &amp; tools
           </h2>
           <ul className="mt-3 grid gap-2 text-sm">
+            <li>
+              <Link
+                href="/guides/1099-vs-w2"
+                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+              >
+                1099 vs W-2: how your taxes actually differ
+              </Link>
+            </li>
             <li>
               <Link
                 href="/calculators/self-employment-tax"
                 className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
               >
                 Self-employment tax calculator
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/guides/quarterly-estimated-taxes-explained"
+                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+              >
+                Quarterly estimated taxes, explained
               </Link>
             </li>
             <li>

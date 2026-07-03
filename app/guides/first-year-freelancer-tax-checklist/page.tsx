@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="Going out on your own? Do these few things from day one and your first tax season will be boring — in the best way."
         updated="June 2026"
+        calc={{
+          href: "/calculators/self-employment-tax",
+          label: "Self-employment tax calculator",
+          blurb: "See what you'll owe on your first year of 1099 income.",
+        }}
       >
         <H2>The day-one checklist</H2>
         <UL>

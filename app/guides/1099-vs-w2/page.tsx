@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="The forms look similar, but they put you on two very different tax footings. Here's what actually changes when income comes on a 1099 instead of a W-2."
         updated="June 2026"
+        calc={{
+          href: "/calculators/effective-tax-rate",
+          label: "Effective tax rate calculator",
+          blurb: "See your real rate and take-home on 1099 vs W-2 income.",
+        }}
       >
         <H2>What each form means</H2>
         <UL>

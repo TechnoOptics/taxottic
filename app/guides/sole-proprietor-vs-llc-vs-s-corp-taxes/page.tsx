@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="Sole proprietor, LLC, and S-corp aren't three flavors of the same thing — they're a mix of legal structure and tax treatment. Here's how each actually affects what you owe."
         updated="June 2026"
+        calc={{
+          href: "/calculators/self-employment-tax",
+          label: "Self-employment tax calculator",
+          blurb: "See the self-employment tax your entity choice changes.",
+        }}
       >
         <H2>Sole proprietorship</H2>
         <P>

@@ -13,17 +13,24 @@ import { Wordmark } from "@/components/Wordmark";
  * JSON-LD the article ships (Google rejects schema that diverges from
  * visible content).
  */
+/** A matching free calculator to surface inline at the top of a guide —
+ *  sends the high-intent mid-article reader straight to the tool and
+ *  interlinks the editorial + tool clusters for topical authority. */
+export type GuideCalc = { href: string; label: string; blurb: string };
+
 export function GuideShell({
   title,
   kicker,
   lead,
   updated,
+  calc,
   children,
 }: {
   title: string;
   kicker: string;
   lead: string;
   updated: string;
+  calc?: GuideCalc;
   children: React.ReactNode;
 }) {
   return (
@@ -79,6 +86,54 @@ export function GuideShell({
         <div aria-hidden="true" className="gold-flourish mt-5">
           <span />
         </div>
+
+        {/* Matching free-calculator card — the in-content path from a
+            search reader to the interactive tool. */}
+        {calc ? (
+          <Link
+            href={calc.href}
+            className="group card mt-7 p-5 flex items-center gap-4 hover:border-gold-300 transition-colors"
+          >
+            <div
+              aria-hidden="true"
+              className="shrink-0 grid place-items-center h-11 w-11 rounded-xl bg-forest-900 text-cream"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="4" y="2" width="16" height="20" rx="2" />
+                <line x1="8" y1="6" x2="16" y2="6" />
+                <line x1="8" y1="10" x2="8" y2="10" />
+                <line x1="12" y1="10" x2="12" y2="10" />
+                <line x1="16" y1="10" x2="16" y2="10" />
+                <line x1="8" y1="14" x2="8" y2="14" />
+                <line x1="12" y1="14" x2="12" y2="14" />
+                <line x1="8" y1="18" x2="12" y2="18" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-gold-700">
+                Free calculator
+              </div>
+              <div className="text-base font-medium text-forest-900">
+                {calc.label}
+              </div>
+              <div className="text-sm text-ink-soft leading-snug mt-0.5">
+                {calc.blurb}
+              </div>
+            </div>
+            <span className="ml-auto shrink-0 text-gold-700 group-hover:text-gold-900 text-sm hidden sm:inline">
+              Open →
+            </span>
+          </Link>
+        ) : null}
 
         <div className="mt-8 grid gap-5">{children}</div>
 

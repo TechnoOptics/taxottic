@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="If you drive for work, those miles are money. Here's how the deduction works, which trips qualify, and the log you need to keep to claim it cleanly."
         updated="June 2026"
+        calc={{
+          href: "/calculators/mileage-deduction",
+          label: "Mileage deduction calculator",
+          blurb: "Turn your business miles into a deduction at the 2026 IRS rate.",
+        }}
       >
         <H2>Two ways to claim it</H2>
         <UL>

@@ -89,6 +89,11 @@ export default function Page() {
         title={TITLE}
         lead="Short answer: many self-employed people set aside 25–30% of their net income. Here's why, and how to make it automatic so a tax bill never catches you off guard."
         updated="June 2026"
+        calc={{
+          href: "/calculators/how-much-to-set-aside",
+          label: "How much to set aside calculator",
+          blurb: "Find the exact percentage of each payment to save for taxes.",
+        }}
       >
         <H2>The two taxes you&apos;re saving for</H2>
         <P>

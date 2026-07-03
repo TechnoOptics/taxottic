@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="Got a 1099-K from PayPal, Venmo, Stripe, or Etsy and not sure what it means? Here's what it reports, why the number looks too big, and what to do with it."
         updated="June 2026"
+        calc={{
+          href: "/calculators/1099-tax",
+          label: "1099 tax calculator",
+          blurb: "See what you owe on 1099-K and 1099-NEC income.",
+        }}
       >
         <H2>What it is</H2>
         <P>

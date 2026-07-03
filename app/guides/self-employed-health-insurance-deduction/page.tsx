@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="If you buy your own health coverage, you can likely deduct the premiums — for you and your family. Here's who qualifies and how it works."
         updated="June 2026"
+        calc={{
+          href: "/calculators/self-employment-tax",
+          label: "Self-employment tax calculator",
+          blurb: "See what you owe on 1099 income after your deductions.",
+        }}
       >
         <H2>The basic idea</H2>
         <P>

@@ -305,6 +305,22 @@ export default async function StateSelfEmploymentTaxPage({
               All states →
             </Link>
           </div>
+          <div className="mt-4 pt-4 border-t border-forest-100 text-sm text-ink-soft">
+            Related reading:{" "}
+            <Link
+              href="/guides/self-employment-tax-how-much-to-set-aside"
+              className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+            >
+              how much to set aside
+            </Link>{" "}
+            ·{" "}
+            <Link
+              href="/guides/quarterly-estimated-taxes-explained"
+              className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+            >
+              quarterly estimated taxes
+            </Link>
+          </div>
         </div>
       </section>
     </main>

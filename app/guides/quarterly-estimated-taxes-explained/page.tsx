@@ -89,6 +89,11 @@ export default function Page() {
         title={TITLE}
         lead="No employer is withholding tax from your income, so the IRS asks you to prepay it four times a year. Here's who owes, when, how much, and how to never trip the penalty."
         updated="June 2026"
+        calc={{
+          href: "/calculators/quarterly-estimated-tax",
+          label: "Quarterly estimated tax calculator",
+          blurb: "Work out each of your four IRS payments and their due dates.",
+        }}
       >
         <H2>Why they exist</H2>
         <P>

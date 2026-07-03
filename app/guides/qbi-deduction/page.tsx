@@ -78,6 +78,11 @@ export default function Page() {
         title={TITLE}
         lead="One of the biggest breaks for the self-employed: deduct up to 20% of your business income, on top of your normal expenses. Here's how it works and when limits apply."
         updated="June 2026"
+        calc={{
+          href: "/calculators/self-employment-tax",
+          label: "Self-employment tax calculator",
+          blurb: "See your QBI deduction and total tax on 1099 income.",
+        }}
       >
         <H2>What it is</H2>
         <P>
