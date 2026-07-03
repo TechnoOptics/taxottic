@@ -14,6 +14,26 @@ export const metadata = {
       "Plain-English guides on self-employment tax, deductions, and quarterly estimates — no sign-in required.",
     url: "/guides",
     type: "website",
+    images: [
+      {
+        url: `/api/og/guide?title=${encodeURIComponent(
+          "Guides for freelancers & small business",
+        )}&kicker=${encodeURIComponent("Free guides")}`,
+        width: 1200,
+        height: 630,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Taxottic Guides",
+    description:
+      "Plain-English guides on self-employment tax, deductions, and quarterly estimates — no sign-in required.",
+    images: [
+      `/api/og/guide?title=${encodeURIComponent(
+        "Guides for freelancers & small business",
+      )}&kicker=${encodeURIComponent("Free guides")}`,
+    ],
   },
   robots: {
     index: true,
