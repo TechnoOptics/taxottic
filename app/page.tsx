@@ -1136,6 +1136,9 @@ function Footer() {
             <Link href="/calculators" className="hover:text-forest-700">
               Free calculators
             </Link>
+            <Link href="/compare" className="hover:text-forest-700">
+              Compare
+            </Link>
             <Link href="/changelog" className="hover:text-forest-700">
               Changelog
             </Link>

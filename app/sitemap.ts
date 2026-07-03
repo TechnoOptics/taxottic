@@ -130,6 +130,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === "/calculators" ? 0.8 : 0.9,
   }));
 
+  // Comparison / "alternative to" pages. High commercial-intent
+  // ("[competitor] alternative" searches signal someone ready to
+  // switch), so they rank + convert well.
+  const compare: MetadataRoute.Sitemap = [
+    "/compare",
+    "/compare/quickbooks-self-employed-alternative",
+    "/compare/keeper-alternative",
+  ].map((path) => ({
+    url: `${baseUrl}${path}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.7,
+  }));
+
   // Legal hub + sub-pages. These are linked from the footer and exist
   // as real documents (DPA, privacy, terms, etc.) so they deserve
   // their own sitemap entries. /legal/dmca and /legal/accessibility
@@ -152,5 +166,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
-  return [...marketing, ...calculators, ...guides, ...legal];
+  return [...marketing, ...calculators, ...compare, ...guides, ...legal];
 }
