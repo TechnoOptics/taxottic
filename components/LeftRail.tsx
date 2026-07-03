@@ -344,7 +344,13 @@ export function LeftRail({
         "border-r border-forest-100 dark:border-forest-700 " +
         "rounded-r-2xl shadow-[2px_0_16px_rgba(18,26,42,0.10)] " +
         "px-2 pt-3 pb-3"
-      : "card card-opaque relative w-64 max-w-[85vw] !rounded-r-2xl !rounded-l-none !p-2 flex flex-col";
+      : // Floating sheet: unlike the rail (flush to the screen edge, so
+        // only its outer corners round), the sheet sits with a gap on
+        // every side — squaring off its left edge read as unfinished
+        // next to the rest of the app's uniformly-rounded `.card`
+        // surfaces. Full rounding + a touch more padding brings it in
+        // line with that language.
+        "card card-opaque relative w-64 max-w-[85vw] !rounded-2xl p-2.5 flex flex-col";
 
   const railStyle =
     mode === "rail"
@@ -537,6 +543,31 @@ export function LeftRail({
       aria-label="Main menu"
       suppressHydrationWarning
     >
+      {mode === "sheet" ? (
+        <div className="flex items-center justify-between px-2 pt-1 pb-2">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-ink-muted font-medium">
+            Menu
+          </span>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Close menu"
+            className="size-8 rounded-full grid place-items-center text-ink-soft hover:bg-cream hover:text-forest-900 transition-colors"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            >
+              <path d="M3 3 L13 13 M13 3 L3 13" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
       {topSection}
       {hydrated || mode === "sheet" ? (
         <>

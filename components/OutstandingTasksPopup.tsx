@@ -70,7 +70,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[70] grid place-items-end sm:place-items-center px-3 pb-3 sm:p-6"
+      className="fixed inset-0 z-[70] grid place-items-center p-3 sm:p-6"
       onClick={close}
     >
       <div className="absolute inset-0 bg-forest-900/40 backdrop-blur-sm" />
