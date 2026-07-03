@@ -146,6 +146,11 @@ async function _loadCompanyByPublicId(publicId: string) {
     user,
     company,
     isManager: membership?.role === "manager",
+    // Raw role, so callers that need department-lead scoping (e.g. the
+    // forecast breakdown page, expense review) can branch on it without
+    // this shared helper needing to know about department scoping
+    // itself.
+    role: (membership?.role as "manager" | "lead" | "member" | undefined) ?? null,
     crossTenant,
   };
 }

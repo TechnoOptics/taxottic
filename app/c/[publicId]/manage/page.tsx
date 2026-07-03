@@ -161,7 +161,11 @@ export default async function ManageCompanyPage({
           <CompanyNav publicId={publicId} active="team" />
         </div>
 
-        {/* If we just created an invite, show a one-time copy-link card. */}
+        {/* If we just created an invite, show a one-time copy-link card.
+            The email-sent state is surfaced explicitly — previously a
+            manager saw this exact same "ready" card whether or not the
+            invite email actually went out, with no way to tell the two
+            apart. */}
         {lastInviteLink ? (
           <section className="mt-6 card p-6 border-gold-300/60 bg-cream/60">
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
@@ -170,12 +174,29 @@ export default async function ManageCompanyPage({
             <h2 className="display mt-1 text-xl text-forest-900">
               Share the welcome link.
             </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              We saved the invitation. Send this link to your new teammate via
-              email, text, or whatever they actually open. They&apos;ll sign in
-              with the email you specified and join the team automatically.
-            </p>
-            <CopyInviteLink url={lastInviteLink} />
+            {lastInviteLink.emailSent ? (
+              <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+                We saved the invitation and emailed your new teammate a
+                welcome link. You can also send this link yourself via text
+                or whatever they actually open.
+              </p>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+                  We saved the invitation, but{" "}
+                  <span className="font-medium text-amber-800">
+                    the welcome email couldn&apos;t be sent automatically
+                  </span>{" "}
+                  — please share this link with your new teammate yourself
+                  (email, text, whatever they actually open).
+                </p>
+                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  ⚠️ Automatic email delivery isn&apos;t configured yet. The
+                  invitation itself was created successfully.
+                </div>
+              </>
+            )}
+            <CopyInviteLink url={lastInviteLink.url} />
           </section>
         ) : null}
 
@@ -331,6 +352,10 @@ export default async function ManageCompanyPage({
                     defaultValue="member"
                     options={[
                       { value: "member", label: "Member - sees forecasts, logs" },
+                      {
+                        value: "lead",
+                        label: "Department lead - reviews their department",
+                      },
                       { value: "manager", label: "Manager - can edit + invite" },
                     ]}
                   />
@@ -338,7 +363,7 @@ export default async function ManageCompanyPage({
               </div>
 
               {departments.length > 0 ? (
-                <Field label="Department (optional)">
+                <Field label="Department (required for department leads)">
                   <CustomSelect
                     name="department_id"
                     defaultValue=""
@@ -535,6 +560,7 @@ function Field({
 
 function prettyRole(role: string | null | undefined): string {
   if (role === "manager") return "Manager";
+  if (role === "lead") return "Department lead";
   if (role === "member") return "Member";
   return role ?? "";
 }

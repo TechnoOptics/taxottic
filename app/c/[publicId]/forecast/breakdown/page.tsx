@@ -37,10 +37,15 @@ export default async function ForecastBreakdownPage({
   searchParams?: SP;
 }) {
   const { publicId } = await params;
-  const { supabase, user, company, isManager } =
+  const { supabase, user, company, isManager, role } =
     await loadCompanyByPublicId(publicId);
 
-  if (!isManager) redirect(`/c/${publicId}/forecast`);
+  // A department lead can see this page too, but scoped to just their
+  // own department below (see the filtering after departmentSummaries /
+  // employeeRows are built) — everyone else (plain members) gets
+  // bounced back to the regular forecast.
+  const isLead = role === "lead";
+  if (!isManager && !isLead) redirect(`/c/${publicId}/forecast`);
 
   const taxYear = new Date().getUTCFullYear();
   const currentMonth = new Date().getUTCMonth() + 1;
@@ -191,7 +196,7 @@ export default async function ForecastBreakdownPage({
     });
 
   const memberByUserId = new Map(members.map((m) => [m.user_id, m]));
-  const employeeRows = Array.from(byEmployee.entries())
+  const allEmployeeRows = Array.from(byEmployee.entries())
     .map(([userId, slice]) => {
       const member = memberByUserId.get(userId);
       const dept = member?.department_id
@@ -211,18 +216,22 @@ export default async function ForecastBreakdownPage({
     })
     .sort((a, b) => b.totalCents - a.totalCents);
 
+  // Company-wide total — kept as the "% of company" denominator even
+  // for a department lead (whose visible rows get filtered below), so
+  // their department card still reads as "your dept is N% of company
+  // spend" rather than a meaningless 100%.
   const totalExpense =
-    employeeRows.reduce((a, r) => a + r.expenseCents + r.mileageCents, 0) || 1;
+    allEmployeeRows.reduce((a, r) => a + r.expenseCents + r.mileageCents, 0) || 1;
 
   // Roll employee rows up into department rows (including "Unassigned").
-  const byDept = new Map<string, typeof employeeRows>();
-  for (const row of employeeRows) {
+  const byDept = new Map<string, typeof allEmployeeRows>();
+  for (const row of allEmployeeRows) {
     const key = row.departmentName;
     const arr = byDept.get(key) ?? [];
     arr.push(row);
     byDept.set(key, arr);
   }
-  const departmentSummaries = Array.from(byDept.entries())
+  const allDepartmentSummaries = Array.from(byDept.entries())
     .map(([name, rows]) => ({
       name,
       memberCount: rows.length,
@@ -232,6 +241,27 @@ export default async function ForecastBreakdownPage({
       rows,
     }))
     .sort((a, b) => b.totalCents - a.totalCents);
+
+  // A department lead (not a manager) only ever sees their OWN
+  // department's slice — never the full company breakdown. Managers see
+  // everything, unfiltered.
+  const myDepartmentName = isLead
+    ? (() => {
+        const mine = memberByUserId.get(user.id);
+        const dept = mine?.department_id
+          ? departments.find((d) => d.id === mine.department_id)
+          : null;
+        return dept?.name ?? "Unassigned";
+      })()
+    : null;
+  const employeeRows =
+    isLead && !isManager
+      ? allEmployeeRows.filter((r) => r.departmentName === myDepartmentName)
+      : allEmployeeRows;
+  const departmentSummaries =
+    isLead && !isManager
+      ? allDepartmentSummaries.filter((d) => d.name === myDepartmentName)
+      : allDepartmentSummaries;
 
   return (
     <main id="main" className="min-h-screen">
@@ -257,6 +287,14 @@ export default async function ForecastBreakdownPage({
             ← Back to the whole-company forecast
           </Link>
         </div>
+
+        {isLead && !isManager ? (
+          <div className="mt-4 rounded-lg border border-gold-300/60 bg-cream/60 px-3 py-2 text-xs text-forest-800">
+            You&apos;re a department lead — showing{" "}
+            <span className="font-medium">{myDepartmentName}</span> only. The
+            summary tiles below are still company-wide, for context.
+          </div>
+        ) : null}
 
         {/* Whole-company summary — identical numbers to /forecast, shown
             here as the baseline every slice's % share is measured against. */}

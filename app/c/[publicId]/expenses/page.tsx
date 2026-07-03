@@ -46,10 +46,11 @@ export default async function ExpensesPage({
 }) {
   const { publicId } = await params;
   const { emp: empRaw = "" } = await searchParams;
-  const { supabase, user, company, isManager } =
+  const { supabase, user, company, isManager, role } =
     await loadCompanyByPublicId(publicId);
   const taxYear = new Date().getUTCFullYear();
   const currentMonth = new Date().getUTCMonth() + 1;
+  const isLead = role === "lead";
 
   // Team roster for the per-employee filter. Members can already read
   // every company expense (RLS: "member read"), so this filter is a
@@ -66,7 +67,7 @@ export default async function ExpensesPage({
   const admin = createServiceClient();
   const { data: memberRows } = await supabase
     .from("company_members")
-    .select("user_id, department:departments(name)")
+    .select("user_id, department_id, department:departments(name)")
     .eq("company_id", company.id);
   const memberIds = (memberRows ?? []).map((m) => m.user_id);
   const { data: profileRows } = memberIds.length
@@ -87,6 +88,15 @@ export default async function ExpensesPage({
     .sort((a, b) => a.label.localeCompare(b.label));
   const memberMap = new Map(members.map((m) => [m.userId, m.label]));
   const multiMember = members.length >= 2;
+
+  // department_id per teammate, used below to scope a department lead's
+  // review controls to just their own department's expense rows (the
+  // server actions re-check this too — this is only for which rows show
+  // the review UI at all).
+  const departmentIdByUser = new Map(
+    (memberRows ?? []).map((m) => [m.user_id as string, m.department_id as string | null]),
+  );
+  const myDepartmentId = isLead ? departmentIdByUser.get(user.id) ?? null : null;
   // Only honour ?emp= when it names a real member; an unknown id falls
   // back to "everyone" rather than silently showing zero rows.
   const emp = memberMap.has(empRaw) ? empRaw : "";
@@ -445,6 +455,16 @@ export default async function ExpensesPage({
                               label: string;
                               is_meal: boolean;
                             } | null;
+                            // A department lead only gets review controls on
+                            // rows owned by a teammate in their own
+                            // department — the server actions re-check this
+                            // too, but this decides whether to render the
+                            // controls at all.
+                            const canReviewRow =
+                              isManager ||
+                              (isLead &&
+                                myDepartmentId != null &&
+                                departmentIdByUser.get(r.user_id) === myDepartmentId);
                             return (
                               <ExpenseRow
                                 key={r.id}
@@ -477,15 +497,15 @@ export default async function ExpensesPage({
                                 }
                                 updateAction={updateExpense}
                                 deleteAction={deleteExpense}
-                                isManager={isManager}
+                                isManager={canReviewRow}
                                 reclassifyAction={
-                                  isManager ? setExpenseClassification : undefined
+                                  canReviewRow ? setExpenseClassification : undefined
                                 }
                                 setNoteAction={
-                                  isManager ? setExpenseManagerNote : undefined
+                                  canReviewRow ? setExpenseManagerNote : undefined
                                 }
                                 setRecurrenceEndAction={
-                                  isManager || r.user_id === user.id
+                                  canReviewRow || r.user_id === user.id
                                     ? setExpenseRecurrenceEnd
                                     : undefined
                                 }

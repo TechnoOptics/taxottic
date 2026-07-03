@@ -7,7 +7,7 @@ export type CompanyMemberInviteArgs = {
   companyName: string;
   inviterName?: string | null;
   recipientName?: string | null;
-  role: "member" | "manager";
+  role: "member" | "lead" | "manager";
   title?: string | null;
   personalMessage?: string | null;
   inviteUrl: string;
@@ -21,6 +21,11 @@ const ROLE_NARRATIVE: Record<
     headline: "as a team member",
     rights:
       "You'll be able to log your own expenses, track business mileage, and chat with the team on Taxottic.",
+  },
+  lead: {
+    headline: "as a department lead",
+    rights:
+      "You'll be able to log your own expenses and mileage, plus review and reclassify expenses for your department's team members on Taxottic.",
   },
   manager: {
     headline: "as a manager",

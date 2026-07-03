@@ -46,7 +46,7 @@ import { useEffect, useState, type ReactNode } from "react";
 type Company = {
   publicId: string;
   name: string;
-  role?: "manager" | "member";
+  role?: "manager" | "lead" | "member";
 };
 
 // Nav items visible to a plain "member" (not a manager). Members get the
@@ -61,6 +61,12 @@ const MEMBER_VISIBLE_KEYS = new Set([
   "team",
   "settings",
 ]);
+
+// A department lead sees everything a manager does EXCEPT company-wide
+// financial input (Income, Import) — their review/forecast rights are
+// scoped to their own department at the page/RLS level, but company-wide
+// income entry stays a manager-only surface.
+const LEAD_HIDDEN_KEYS = new Set(["income", "import"]);
 
 type Mode = "rail" | "sheet";
 
@@ -475,7 +481,9 @@ export function LeftRail({
         <ul className="grid gap-1" role="navigation">
           {(activeCompany.role === "manager"
             ? COMPANY_ITEMS
-            : COMPANY_ITEMS.filter((item) => MEMBER_VISIBLE_KEYS.has(item.key))
+            : activeCompany.role === "lead"
+              ? COMPANY_ITEMS.filter((item) => !LEAD_HIDDEN_KEYS.has(item.key))
+              : COMPANY_ITEMS.filter((item) => MEMBER_VISIBLE_KEYS.has(item.key))
           ).map((item) => {
             const href = companyHref(item.path);
             const active = isActive(href);

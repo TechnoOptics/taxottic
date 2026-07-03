@@ -54,7 +54,7 @@ type Params = Promise<{ publicId: string }>;
 
 export default async function ForecastPage({ params }: { params: Params }) {
   const { publicId } = await params;
-  const { supabase, user, company, isManager } =
+  const { supabase, user, company, isManager, role } =
     await loadCompanyByPublicId(publicId);
 
   const taxYear = new Date().getUTCFullYear();
@@ -458,17 +458,21 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <CompanyNav publicId={publicId} active="forecast" />
         </div>
 
-        {/* Admin-only: this page is always the whole-company forecast.
-            Managers get a link to the department/employee breakdown
-            instead of duplicating that view inline here. */}
-        {isManager ? (
+        {/* This page is always the whole-company forecast. Managers get
+            a link to the full department/employee breakdown; a
+            department lead gets the same link but only sees their own
+            department there — instead of duplicating either view
+            inline here. */}
+        {isManager || role === "lead" ? (
           <div className="mt-4">
             <Link
               href={`/c/${publicId}/forecast/breakdown`}
               className="inline-flex items-center gap-1.5 text-xs px-3 h-8 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
             >
               <span aria-hidden="true">🧭</span>
-              View by department &amp; employee →
+              {isManager
+                ? "View by department & employee →"
+                : "View your department →"}
             </Link>
           </div>
         ) : null}

@@ -40,6 +40,14 @@ async function isManagerOf(
 // the redirect, without making the URL itself part of the invite list
 // (the link must stay private to people the manager hands it to).
 const INVITE_LINK_COOKIE = "taxottic_last_invite_link";
+// Paired one-shot cookie: whether the invite email actually went out.
+// sendEmail() never throws (best-effort transport) and previously its
+// result was discarded entirely, so a manager had no way to tell "the
+// invitee will get an email" from "nothing was sent, share the link
+// yourself" — both looked like an identical success screen. "1" = sent
+// via a real provider; absent/anything else = not sent (no provider
+// configured, or the provider call failed).
+const INVITE_EMAIL_STATUS_COOKIE = "taxottic_last_invite_email_status";
 
 export async function inviteMember(formData: FormData) {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -47,7 +55,10 @@ export async function inviteMember(formData: FormData) {
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
-  const role = String(formData.get("role") ?? "member") as "member" | "manager";
+  const role = String(formData.get("role") ?? "member") as
+    | "member"
+    | "lead"
+    | "manager";
   const fullName = textOrNull(formData.get("full_name"));
   const title = textOrNull(formData.get("title"));
   const personalMessage = textOrNull(formData.get("personal_message"));
@@ -73,6 +84,14 @@ export async function inviteMember(formData: FormData) {
       .eq("company_id", companyId)
       .maybeSingle();
     verifiedDepartmentId = dept?.id ?? null;
+  }
+
+  // A department lead without a department can't review anything —
+  // the role only means something scoped to one department.
+  if (role === "lead" && !verifiedDepartmentId) {
+    throw new Error(
+      "Pick a department for a department lead — their review rights are scoped to it.",
+    );
   }
 
   const limit = await checkInviteLimit(supabase, user.id, companyId);
@@ -157,6 +176,7 @@ export async function inviteMember(formData: FormData) {
   // invitations row and handed the manager a link to copy/share — no
   // email ever went out, so invitees never learned they'd been added
   // unless the manager separately sent them the link by hand.
+  let emailSent = false;
   if (company) {
     const rendered = renderCompanyMemberInviteEmail({
       companyName: company.name,
@@ -167,7 +187,7 @@ export async function inviteMember(formData: FormData) {
       personalMessage,
       inviteUrl,
     });
-    await sendEmail({
+    const result = await sendEmail({
       to: email,
       fromName: rendered.fromName,
       subject: rendered.subject,
@@ -175,6 +195,15 @@ export async function inviteMember(formData: FormData) {
       text: rendered.text,
       tags: { kind: "company-member-invite", role },
     });
+    // "noop" means no provider was configured at all — that's not a
+    // real send, regardless of the ok:true it returns for callers that
+    // just want "did this throw." A failed Resend call also isn't sent.
+    emailSent = result.ok && result.provider !== "noop";
+    if (!emailSent) {
+      console.error(
+        `[invite] email not sent to ${email} (provider=${result.provider}${result.reason ? `, reason=${result.reason}` : ""})`,
+      );
+    }
   }
 
   const cookieStore = await cookies();
@@ -185,20 +214,33 @@ export async function inviteMember(formData: FormData) {
     path: "/",
     maxAge: 60 * 5, // 5 minutes - long enough to render once after redirect
   });
+  cookieStore.set(INVITE_EMAIL_STATUS_COOKIE, emailSent ? "1" : "0", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 5,
+  });
 
   if (company) revalidatePath(`/c/${company.public_id}/manage`);
 }
 
 /**
- * Read-and-clear: pulls the most recent invite link out of the cookie
- * (set by inviteMember) so the manage page can show a share card once,
- * then deletes the cookie so reloading the page doesn't keep showing it.
+ * Read-and-clear: pulls the most recent invite link + whether its email
+ * actually sent out of cookies (set by inviteMember) so the manage page
+ * can show a share card once, then deletes both cookies so reloading
+ * the page doesn't keep showing it.
  */
-export async function readAndClearLastInviteLink(): Promise<string | null> {
+export async function readAndClearLastInviteLink(): Promise<{
+  url: string;
+  emailSent: boolean;
+} | null> {
   const cookieStore = await cookies();
-  const value = cookieStore.get(INVITE_LINK_COOKIE)?.value ?? null;
-  if (value) cookieStore.delete(INVITE_LINK_COOKIE);
-  return value;
+  const url = cookieStore.get(INVITE_LINK_COOKIE)?.value ?? null;
+  const emailSent = cookieStore.get(INVITE_EMAIL_STATUS_COOKIE)?.value === "1";
+  if (url) cookieStore.delete(INVITE_LINK_COOKIE);
+  cookieStore.delete(INVITE_EMAIL_STATUS_COOKIE);
+  return url ? { url, emailSent } : null;
 }
 
 function textOrNull(v: FormDataEntryValue | null): string | null {

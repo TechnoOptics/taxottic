@@ -20,18 +20,35 @@ async function userBelongsToCompany(
   return !!data;
 }
 
-async function userIsManagerOf(
+// A manager can review any teammate's expense; a department lead can
+// review only a teammate in their own department. Mirrors the
+// is_department_lead_of_user() RLS function so app-level authorization
+// and the database policy agree — this check just lets us return a
+// clear error message instead of a generic RLS failure.
+async function userCanReviewExpenseOwner(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
-  userId: string,
+  callerUserId: string,
   companyId: string,
+  targetUserId: string,
 ): Promise<boolean> {
-  const { data } = await admin
+  const { data: caller } = await admin
     .from("company_members")
-    .select("role")
-    .eq("user_id", userId)
+    .select("role, department_id")
+    .eq("user_id", callerUserId)
     .eq("company_id", companyId)
     .maybeSingle();
-  return data?.role === "manager";
+  if (!caller) return false;
+  if (caller.role === "manager") return true;
+  if (caller.role === "lead" && caller.department_id) {
+    const { data: target } = await admin
+      .from("company_members")
+      .select("department_id")
+      .eq("user_id", targetUserId)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    return target?.department_id === caller.department_id;
+  }
+  return false;
 }
 
 const VALID_RECURRENCES = new Set([
@@ -201,11 +218,12 @@ export async function updateExpense(formData: FormData) {
   }
 }
 
-// Manager-only review actions. A manager reviewing a teammate's logged
-// expenses can leave a note (visible to the teammate, distinct from the
-// teammate's own `notes`) and/or reclassify a miscategorized personal
-// purchase out of the business deduction entirely — without deleting the
-// row, so the teammate's own log stays intact.
+// Manager (or department-lead, scoped to their own department) review
+// actions. Reviewing a teammate's logged expenses can leave a note
+// (visible to the teammate, distinct from the teammate's own `notes`)
+// and/or reclassify a miscategorized personal purchase out of the
+// business deduction entirely — without deleting the row, so the
+// teammate's own log stays intact.
 export async function setExpenseClassification(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
@@ -215,9 +233,6 @@ export async function setExpenseClassification(formData: FormData) {
   if (classificationRaw !== "business" && classificationRaw !== "personal") {
     throw new Error("Invalid classification");
   }
-  if (!(await userIsManagerOf(admin, user.id, companyId))) {
-    throw new Error("Only a manager can reclassify a teammate's expense");
-  }
 
   const { data: existing } = await admin
     .from("monthly_expenses")
@@ -225,6 +240,14 @@ export async function setExpenseClassification(formData: FormData) {
     .eq("id", id)
     .eq("company_id", companyId)
     .maybeSingle();
+  if (!existing) throw new Error("Expense not found");
+  if (
+    !(await userCanReviewExpenseOwner(admin, user.id, companyId, existing.user_id))
+  ) {
+    throw new Error(
+      "Only a manager, or that teammate's department lead, can reclassify this expense",
+    );
+  }
 
   const { error } = await admin
     .from("monthly_expenses")
@@ -261,8 +284,20 @@ export async function setExpenseManagerNote(formData: FormData) {
   const companyId = String(formData.get("company_id") ?? "");
   const note = String(formData.get("manager_note") ?? "").trim() || null;
   if (!id || !companyId) throw new Error("Invalid input");
-  if (!(await userIsManagerOf(admin, user.id, companyId))) {
-    throw new Error("Only a manager can leave a note on a teammate's expense");
+
+  const { data: existing } = await admin
+    .from("monthly_expenses")
+    .select("user_id")
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!existing) throw new Error("Expense not found");
+  if (
+    !(await userCanReviewExpenseOwner(admin, user.id, companyId, existing.user_id))
+  ) {
+    throw new Error(
+      "Only a manager, or that teammate's department lead, can leave a note on this expense",
+    );
   }
 
   const { error } = await admin
@@ -304,8 +339,13 @@ export async function setExpenseRecurrenceEnd(formData: FormData) {
   if (!existing) throw new Error("Expense not found");
 
   const isOwner = existing.user_id === user.id;
-  const isManager = await userIsManagerOf(admin, user.id, companyId);
-  if (!isOwner && !isManager) {
+  const canReview = await userCanReviewExpenseOwner(
+    admin,
+    user.id,
+    companyId,
+    existing.user_id,
+  );
+  if (!isOwner && !canReview) {
     throw new Error("Not allowed to change this expense's recurrence");
   }
 
