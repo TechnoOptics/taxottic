@@ -159,7 +159,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
           {visibleItems.map((it) => {
             const key = `${it.kind}:${it.id}`;
             return (
-              <li key={key} className="group/row relative">
+              <li key={key} className="relative">
                 <Link
                   href={it.href}
                   onClick={close}
@@ -185,7 +185,11 @@ export function OutstandingTasksPopup({ count, items }: Props) {
                   onClick={(e) => dismissItem(e, key)}
                   aria-label={`Dismiss ${it.title}`}
                   title="Just informational — stop showing this"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 size-7 rounded-full grid place-items-center text-ink-muted opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:bg-cream hover:text-forest-900 transition-opacity"
+                  // Always visible, not hover-only: this app is primarily used
+                  // on touchscreens, which have no hover state, so an
+                  // opacity-0-until-:hover button is invisible AND
+                  // unreachable there (confirmed on a real device).
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 size-7 rounded-full grid place-items-center text-ink-muted/70 hover:bg-cream hover:text-forest-900 transition-colors"
                 >
                   <svg
                     viewBox="0 0 16 16"
