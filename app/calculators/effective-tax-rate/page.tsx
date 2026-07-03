@@ -1,44 +1,42 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { EffectiveTaxRateCalculator } from "@/components/calculators/EffectiveTaxRateCalculator";
+import type { FilingStatus } from "@/lib/tax/constants-2025";
+import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
 
 const SITE = "https://taxottic.com";
 const SLUG = "effective-tax-rate";
 const TITLE = "Effective Tax Rate Calculator (2026) — Free";
 const DESCRIPTION =
   "Free effective tax rate calculator. See what you actually pay across all your income — effective rate, marginal bracket, total tax, and after-tax take-home — for W-2 or self-employment income. No sign-up.";
+const KEYWORDS = [
+  "effective tax rate calculator",
+  "marginal tax rate calculator",
+  "what is my tax rate",
+  "average tax rate calculator",
+  "after tax income calculator",
+  "tax bracket calculator",
+];
 
-export const metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: `/calculators/${SLUG}` },
-  openGraph: {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Search;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  return buildCalcMetadata({
+    slug: SLUG,
     title: TITLE,
     description: DESCRIPTION,
-    url: `/calculators/${SLUG}`,
-    type: "website",
-  },
-  keywords: [
-    "effective tax rate calculator",
-    "marginal tax rate calculator",
-    "what is my tax rate",
-    "average tax rate calculator",
-    "after tax income calculator",
-    "tax bracket calculator",
-  ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
-    },
-  },
-};
+    keywords: KEYWORDS,
+    calc: "effective",
+    sp,
+    ogKeys: ["income", "type", "filing", "state"],
+  });
+}
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",
@@ -104,7 +102,18 @@ const FAQ_LD = {
   ],
 };
 
-export default function EffectiveTaxRatePage() {
+export default async function EffectiveTaxRatePage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const s = readSearch(await searchParams);
+  const initial = {
+    income: s.income,
+    type: s.type === "self" ? ("self" as const) : undefined,
+    filing: s.filing as FilingStatus | undefined,
+    state: s.state,
+  };
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={BREADCRUMB_LD} />
@@ -160,7 +169,7 @@ export default function EffectiveTaxRatePage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <EffectiveTaxRateCalculator />
+        <EffectiveTaxRateCalculator initial={initial} />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8 grid gap-8">

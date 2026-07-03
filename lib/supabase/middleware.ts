@@ -20,6 +20,15 @@ const PUBLIC_PATHS = [
   // Editorial guides hub + articles — public marketing content; must
   // not bounce anonymous readers (or crawlers) through /login.
   "/guides",
+  // Free calculators (+ per-state pages) and competitor comparison
+  // pages — public organic-acquisition surface. Without these, every
+  // anonymous visitor and search-engine crawler hitting a calculator or
+  // comparison URL was 307'd to /login, making the entire suite
+  // invisible to search and broken for shared links. The `startsWith`
+  // check below means "/calculators" also covers
+  // "/calculators/self-employment-tax/california" etc.
+  "/calculators",
+  "/compare",
   "/changelog",
   "/example",
   "/manifest.webmanifest",

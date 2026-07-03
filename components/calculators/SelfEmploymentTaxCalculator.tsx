@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { forecast, formatCents, type ForecastInput } from "@/lib/tax/forecast";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
+import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
 
 /** Inputs the page reads from ?income=…&expenses=…&filing=…&state=…&w2=…
  *  so a shared link opens a pre-filled, already-computed calculator. */
@@ -133,7 +134,6 @@ export function SelfEmploymentTaxCalculator({
   const [stateCode, setStateCode] = useState(initial?.state ?? "");
   const [hasW2, setHasW2] = useState(!!initial?.w2);
   const [w2Wages, setW2Wages] = useState(initial?.w2 ?? "");
-  const [copied, setCopied] = useState(false);
 
   const grossNum = parseFloat(income) || 0;
   const expensesNum = parseFloat(expenses) || 0;
@@ -163,54 +163,19 @@ export function SelfEmploymentTaxCalculator({
     (q) => !q.isPast && q.amountCents > 0,
   );
 
-  // Keep the URL in sync with the inputs (no navigation) so the address
-  // bar — and anything the user copies/shares — always reproduces the
-  // current calculation with a matching OG preview. history.replaceState
-  // avoids a Next.js navigation / server round-trip on every keystroke.
-  const shareQuery = useMemo(() => {
-    const p = new URLSearchParams();
-    if (income) p.set("income", income);
-    if (expenses) p.set("expenses", expenses);
-    if (filingStatus !== "single") p.set("filing", filingStatus);
-    if (stateCode) p.set("state", stateCode);
-    if (hasW2 && w2Wages) p.set("w2", w2Wages);
-    return p.toString();
-  }, [income, expenses, filingStatus, stateCode, hasW2, w2Wages]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const url = shareQuery
-      ? `${window.location.pathname}?${shareQuery}`
-      : window.location.pathname;
-    window.history.replaceState(null, "", url);
-  }, [shareQuery]);
-
-  async function share() {
-    if (typeof window === "undefined") return;
-    const url = window.location.href;
-    const shareData = {
-      title: "Self-Employment Tax Calculator — Taxottic",
-      text: result
+  const { share, copied } = useCalcShare(
+    {
+      income,
+      expenses,
+      filing: filingStatus !== "single" ? filingStatus : undefined,
+      state: stateCode || undefined,
+      w2: hasW2 && w2Wages ? w2Wages : undefined,
+    },
+    () =>
+      result
         ? `My estimated self-employment tax: ${formatCents(result.totalTaxCents)}. Check yours free:`
         : "Free self-employment tax calculator:",
-      url,
-    };
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-        return;
-      }
-    } catch {
-      /* user cancelled the native sheet — fall through to copy */
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked — nothing more we can do gracefully */
-    }
-  }
+  );
 
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
@@ -357,36 +322,7 @@ export function SelfEmploymentTaxCalculator({
               <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
                 Estimated {TAX_YEAR} tax
               </div>
-              <button
-                type="button"
-                onClick={share}
-                className="shrink-0 -mt-1 inline-flex items-center gap-1.5 rounded-full border border-forest-100 px-3 py-1.5 text-xs font-medium text-forest-800 hover:bg-cream hover:border-gold-300 transition-colors"
-                aria-label="Share this result"
-              >
-                {copied ? (
-                  "Link copied"
-                ) : (
-                  <>
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="14"
-                      height="14"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="18" cy="5" r="3" />
-                      <circle cx="6" cy="12" r="3" />
-                      <circle cx="18" cy="19" r="3" />
-                      <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
-                    </svg>
-                    Share
-                  </>
-                )}
-              </button>
+              <ShareButton onShare={share} copied={copied} />
             </div>
             <div className="mt-1 flex items-baseline gap-3 flex-wrap">
               <span className="display text-4xl sm:text-5xl text-forest-900">

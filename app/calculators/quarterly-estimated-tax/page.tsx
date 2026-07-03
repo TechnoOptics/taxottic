@@ -1,44 +1,44 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { SelfEmploymentTaxCalculator } from "@/components/calculators/SelfEmploymentTaxCalculator";
+import {
+  SelfEmploymentTaxCalculator,
+  type SETaxInitial,
+} from "@/components/calculators/SelfEmploymentTaxCalculator";
+import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
 
 const SITE = "https://taxottic.com";
 const SLUG = "quarterly-estimated-tax";
 const TITLE = "Quarterly Estimated Tax Calculator (2026) — Free";
 const DESCRIPTION =
   "Free quarterly estimated tax calculator. Estimate your 2026 IRS quarterly payments from your self-employment income — all four due dates, federal + state, self-employment tax, and QBI. No sign-up.";
+const KEYWORDS = [
+  "quarterly estimated tax calculator",
+  "estimated tax calculator",
+  "quarterly tax calculator",
+  "IRS estimated payments calculator",
+  "self employed quarterly tax calculator",
+  "1040-ES calculator",
+];
 
-export const metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: `/calculators/${SLUG}` },
-  openGraph: {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Search;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  return buildCalcMetadata({
+    slug: SLUG,
     title: TITLE,
     description: DESCRIPTION,
-    url: `/calculators/${SLUG}`,
-    type: "website",
-  },
-  keywords: [
-    "quarterly estimated tax calculator",
-    "estimated tax calculator",
-    "quarterly tax calculator",
-    "IRS estimated payments calculator",
-    "self employed quarterly tax calculator",
-    "1040-ES calculator",
-  ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
-    },
-  },
-};
+    keywords: KEYWORDS,
+    calc: "quarterly",
+    sp,
+    ogKeys: ["income", "expenses", "filing", "state"],
+  });
+}
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",
@@ -112,7 +112,19 @@ const FAQ_LD = {
   ],
 };
 
-export default function QuarterlyEstimatedTaxCalculatorPage() {
+export default async function QuarterlyEstimatedTaxCalculatorPage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const s = readSearch(await searchParams);
+  const initial: SETaxInitial = {
+    income: s.income,
+    expenses: s.expenses,
+    filing: s.filing as SETaxInitial["filing"],
+    state: s.state,
+    w2: s.w2,
+  };
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={BREADCRUMB_LD} />
@@ -168,7 +180,7 @@ export default function QuarterlyEstimatedTaxCalculatorPage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <SelfEmploymentTaxCalculator showFullQuarterlySchedule />
+        <SelfEmploymentTaxCalculator showFullQuarterlySchedule initial={initial} />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8 grid gap-8">

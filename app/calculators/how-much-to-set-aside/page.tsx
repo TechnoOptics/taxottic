@@ -1,43 +1,41 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SetAsideCalculator } from "@/components/calculators/SetAsideCalculator";
+import type { FilingStatus } from "@/lib/tax/constants-2025";
+import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
 
 const SITE = "https://taxottic.com";
 const SLUG = "how-much-to-set-aside";
 const TITLE = "How Much to Set Aside for Taxes (Self-Employed) — Calculator";
 const DESCRIPTION =
   "Free calculator: how much of every payment to set aside for taxes when you're self-employed. Get the exact percentage — covering self-employment tax plus federal & state income tax. No sign-up.";
+const KEYWORDS = [
+  "how much to set aside for taxes",
+  "how much to save for taxes self employed",
+  "tax set aside calculator",
+  "what percent to save for taxes 1099",
+  "self employed tax savings calculator",
+];
 
-export const metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: `/calculators/${SLUG}` },
-  openGraph: {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Search;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  return buildCalcMetadata({
+    slug: SLUG,
     title: TITLE,
     description: DESCRIPTION,
-    url: `/calculators/${SLUG}`,
-    type: "website",
-  },
-  keywords: [
-    "how much to set aside for taxes",
-    "how much to save for taxes self employed",
-    "tax set aside calculator",
-    "what percent to save for taxes 1099",
-    "self employed tax savings calculator",
-  ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
-    },
-  },
-};
+    keywords: KEYWORDS,
+    calc: "set-aside",
+    sp,
+    ogKeys: ["income", "expenses", "filing", "state"],
+  });
+}
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",
@@ -103,7 +101,18 @@ const FAQ_LD = {
   ],
 };
 
-export default function SetAsidePage() {
+export default async function SetAsidePage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const s = readSearch(await searchParams);
+  const initial = {
+    income: s.income,
+    expenses: s.expenses,
+    filing: s.filing as FilingStatus | undefined,
+    state: s.state,
+  };
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={BREADCRUMB_LD} />
@@ -158,7 +167,7 @@ export default function SetAsidePage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <SetAsideCalculator />
+        <SetAsideCalculator initial={initial} />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8 grid gap-8">

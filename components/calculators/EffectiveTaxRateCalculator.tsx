@@ -11,6 +11,7 @@ import {
   FILING_STATUS_OPTIONS,
   US_STATES,
 } from "@/lib/calculators/base-input";
+import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
 
 /**
  * Effective tax rate calculator — the general-audience tool.
@@ -37,11 +38,24 @@ function marginalFederalRate(
   return rate;
 }
 
-export function EffectiveTaxRateCalculator() {
-  const [income, setIncome] = useState("");
-  const [incomeType, setIncomeType] = useState<"w2" | "self">("w2");
-  const [filingStatus, setFilingStatus] = useState<FilingStatus>("single");
-  const [stateCode, setStateCode] = useState("");
+export function EffectiveTaxRateCalculator({
+  initial,
+}: {
+  initial?: {
+    income?: string;
+    type?: "w2" | "self";
+    filing?: FilingStatus;
+    state?: string;
+  };
+} = {}) {
+  const [income, setIncome] = useState(initial?.income ?? "");
+  const [incomeType, setIncomeType] = useState<"w2" | "self">(
+    initial?.type ?? "w2",
+  );
+  const [filingStatus, setFilingStatus] = useState<FilingStatus>(
+    initial?.filing ?? "single",
+  );
+  const [stateCode, setStateCode] = useState(initial?.state ?? "");
 
   const grossNum = parseFloat(income) || 0;
   const hasEntered = income.trim() !== "" && grossNum > 0;
@@ -71,6 +85,19 @@ export function EffectiveTaxRateCalculator() {
       afterTaxCents: cents - r.totalTaxCents,
     };
   }, [hasEntered, grossNum, incomeType, filingStatus, stateCode]);
+
+  const { share, copied } = useCalcShare(
+    {
+      income,
+      type: incomeType !== "w2" ? incomeType : undefined,
+      filing: filingStatus !== "single" ? filingStatus : undefined,
+      state: stateCode || undefined,
+    },
+    () =>
+      result
+        ? `My effective tax rate: ${(result.effectiveRate * 100).toFixed(1)}%. Check yours free:`
+        : "Free effective tax rate calculator:",
+  );
 
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
@@ -161,8 +188,11 @@ export function EffectiveTaxRateCalculator() {
       <div className="lg:sticky lg:top-6">
         {result ? (
           <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-              Effective tax rate
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+                Effective tax rate
+              </div>
+              <ShareButton onShare={share} copied={copied} />
             </div>
             <div className="mt-1 display text-5xl sm:text-6xl text-forest-900">
               {(result.effectiveRate * 100).toFixed(1)}%

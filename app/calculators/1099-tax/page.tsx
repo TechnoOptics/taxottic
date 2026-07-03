@@ -1,45 +1,45 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { SelfEmploymentTaxCalculator } from "@/components/calculators/SelfEmploymentTaxCalculator";
+import {
+  SelfEmploymentTaxCalculator,
+  type SETaxInitial,
+} from "@/components/calculators/SelfEmploymentTaxCalculator";
+import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
 
 const SITE = "https://taxottic.com";
 const SLUG = "1099-tax";
 const TITLE = "1099 Tax Calculator (2026) — Free for Contractors";
 const DESCRIPTION =
   "Free 1099 tax calculator for independent contractors, gig workers, and freelancers. Estimate your 2026 tax on 1099-NEC / 1099-K income — self-employment tax, federal + state, QBI, and quarterly payments. No sign-up.";
+const KEYWORDS = [
+  "1099 tax calculator",
+  "1099 income tax calculator",
+  "independent contractor tax calculator",
+  "gig worker tax calculator",
+  "1099-NEC tax calculator",
+  "freelance tax calculator",
+  "how much tax do I owe on 1099 income",
+];
 
-export const metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: `/calculators/${SLUG}` },
-  openGraph: {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Search;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  return buildCalcMetadata({
+    slug: SLUG,
     title: TITLE,
     description: DESCRIPTION,
-    url: `/calculators/${SLUG}`,
-    type: "website",
-  },
-  keywords: [
-    "1099 tax calculator",
-    "1099 income tax calculator",
-    "independent contractor tax calculator",
-    "gig worker tax calculator",
-    "1099-NEC tax calculator",
-    "freelance tax calculator",
-    "how much tax do I owe on 1099 income",
-  ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
-    },
-  },
-};
+    keywords: KEYWORDS,
+    calc: "1099",
+    sp,
+    ogKeys: ["income", "expenses", "filing", "state"],
+  });
+}
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",
@@ -113,7 +113,19 @@ const FAQ_LD = {
   ],
 };
 
-export default function TenNinetyNineTaxCalculatorPage() {
+export default async function TenNinetyNineTaxCalculatorPage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const s = readSearch(await searchParams);
+  const initial: SETaxInitial = {
+    income: s.income,
+    expenses: s.expenses,
+    filing: s.filing as SETaxInitial["filing"],
+    state: s.state,
+    w2: s.w2,
+  };
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={BREADCRUMB_LD} />
@@ -169,7 +181,7 @@ export default function TenNinetyNineTaxCalculatorPage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <SelfEmploymentTaxCalculator />
+        <SelfEmploymentTaxCalculator initial={initial} />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8 grid gap-8">

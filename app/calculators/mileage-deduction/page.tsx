@@ -1,44 +1,41 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MileageDeductionCalculator } from "@/components/calculators/MileageDeductionCalculator";
+import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
 
 const SITE = "https://taxottic.com";
 const SLUG = "mileage-deduction";
 const TITLE = "Mileage Deduction Calculator (2026) — Free, IRS Rate";
 const DESCRIPTION =
   "Free business mileage deduction calculator using the 2026 IRS standard mileage rate (70¢/mile). See your deduction and estimated tax savings from business miles — no sign-up.";
+const KEYWORDS = [
+  "mileage deduction calculator",
+  "IRS mileage calculator",
+  "business mileage calculator",
+  "mileage tax deduction calculator",
+  "2026 mileage rate calculator",
+  "self employed mileage deduction",
+];
 
-export const metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: `/calculators/${SLUG}` },
-  openGraph: {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Search;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  return buildCalcMetadata({
+    slug: SLUG,
     title: TITLE,
     description: DESCRIPTION,
-    url: `/calculators/${SLUG}`,
-    type: "website",
-  },
-  keywords: [
-    "mileage deduction calculator",
-    "IRS mileage calculator",
-    "business mileage calculator",
-    "mileage tax deduction calculator",
-    "2026 mileage rate calculator",
-    "self employed mileage deduction",
-  ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
-    },
-  },
-};
+    keywords: KEYWORDS,
+    calc: "mileage",
+    sp,
+    ogKeys: ["miles", "rate"],
+  });
+}
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",
@@ -112,7 +109,13 @@ const FAQ_LD = {
   ],
 };
 
-export default function MileageDeductionCalculatorPage() {
+export default async function MileageDeductionCalculatorPage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const s = readSearch(await searchParams);
+  const initial = { miles: s.miles, rate: s.rate };
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={BREADCRUMB_LD} />
@@ -166,7 +169,7 @@ export default function MileageDeductionCalculatorPage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <MileageDeductionCalculator />
+        <MileageDeductionCalculator initial={initial} />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8 grid gap-8">

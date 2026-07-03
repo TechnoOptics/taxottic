@@ -222,6 +222,10 @@ function buildCard(sp: URLSearchParams): Card {
 
 export function GET(req: NextRequest) {
   const card = buildCard(req.nextUrl.searchParams);
+  // Optional eyebrow override — used by the per-state pages to show
+  // "Self-Employment Tax · California" instead of the generic label.
+  const labelOverride = req.nextUrl.searchParams.get("label");
+  if (labelOverride) card.eyebrow = labelOverride.slice(0, 60);
 
   return new ImageResponse(
     (

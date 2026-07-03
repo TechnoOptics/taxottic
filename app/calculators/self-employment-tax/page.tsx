@@ -8,6 +8,7 @@ import {
   type SETaxInitial,
 } from "@/components/calculators/SelfEmploymentTaxCalculator";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
+import { CALC_STATES } from "@/lib/calculators/states";
 
 const SITE = "https://taxottic.com";
 const SLUG = "self-employment-tax";
@@ -41,12 +42,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const sp = await searchParams;
   const init = readInitial(sp);
-  const ogParams = new URLSearchParams();
+  const ogParams = new URLSearchParams({ calc: "se-tax" });
   if (init.income) ogParams.set("income", init.income);
   if (init.expenses) ogParams.set("expenses", init.expenses);
   if (init.filing) ogParams.set("filing", init.filing);
   if (init.state) ogParams.set("state", init.state);
-  const ogUrl = `/api/og/se-tax${ogParams.toString() ? `?${ogParams}` : ""}`;
+  const ogUrl = `/api/og/calc?${ogParams}`;
 
   return {
     title: TITLE,
@@ -312,6 +313,30 @@ export default async function SelfEmploymentTaxCalculatorPage({
               </Link>
             </li>
           </ul>
+        </div>
+
+        <div className="card p-6">
+          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+            By state
+          </div>
+          <h2 className="display text-xl text-forest-900 mt-1">
+            Self-employment tax by state
+          </h2>
+          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+            Your self-employment tax is federal, but your state income tax
+            isn&rsquo;t. See the real numbers for your state:
+          </p>
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-sm">
+            {CALC_STATES.map((s) => (
+              <Link
+                key={s.code}
+                href={`/calculators/self-employment-tax/${s.slug}`}
+                className="text-gold-800 hover:text-gold-900 truncate"
+              >
+                {s.name}
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
     </main>

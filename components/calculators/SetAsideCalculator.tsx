@@ -10,6 +10,7 @@ import {
   FILING_STATUS_OPTIONS,
   US_STATES,
 } from "@/lib/calculators/base-input";
+import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
 
 /**
  * "How much should I set aside for taxes?" calculator.
@@ -23,11 +24,22 @@ import {
 
 const TAX_YEAR = 2026;
 
-export function SetAsideCalculator() {
-  const [income, setIncome] = useState("");
-  const [expenses, setExpenses] = useState("");
-  const [filingStatus, setFilingStatus] = useState<FilingStatus>("single");
-  const [stateCode, setStateCode] = useState("");
+export function SetAsideCalculator({
+  initial,
+}: {
+  initial?: {
+    income?: string;
+    expenses?: string;
+    filing?: FilingStatus;
+    state?: string;
+  };
+} = {}) {
+  const [income, setIncome] = useState(initial?.income ?? "");
+  const [expenses, setExpenses] = useState(initial?.expenses ?? "");
+  const [filingStatus, setFilingStatus] = useState<FilingStatus>(
+    initial?.filing ?? "single",
+  );
+  const [stateCode, setStateCode] = useState(initial?.state ?? "");
 
   const grossNum = parseFloat(income) || 0;
   const expensesNum = parseFloat(expenses) || 0;
@@ -51,6 +63,19 @@ export function SetAsideCalculator() {
       perThousandCents: Math.round(pct * 100000), // $ per $1,000
     };
   }, [hasEntered, grossNum, expensesNum, filingStatus, stateCode]);
+
+  const { share, copied } = useCalcShare(
+    {
+      income,
+      expenses,
+      filing: filingStatus !== "single" ? filingStatus : undefined,
+      state: stateCode || undefined,
+    },
+    () =>
+      result
+        ? `I set aside ${(result.pct * 100).toFixed(0)}% of every payment for taxes. Find your number free:`
+        : "Free tax set-aside calculator:",
+  );
 
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
@@ -147,8 +172,11 @@ export function SetAsideCalculator() {
       <div className="lg:sticky lg:top-6">
         {result ? (
           <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-              Set aside
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+                Set aside
+              </div>
+              <ShareButton onShare={share} copied={copied} />
             </div>
             <div className="mt-1 flex items-baseline gap-3 flex-wrap">
               <span className="display text-5xl sm:text-6xl text-forest-900">

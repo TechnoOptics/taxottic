@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatCents } from "@/lib/tax/forecast";
 import { getTaxYearConstants } from "@/lib/tax/constants";
+import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
 
 /**
  * Public, no-login business-mileage deduction calculator.
@@ -33,9 +34,15 @@ const RATE_PRESETS: { value: number; label: string }[] = [
   { value: 0.37, label: "37% income tax bracket" },
 ];
 
-export function MileageDeductionCalculator() {
-  const [miles, setMiles] = useState("");
-  const [rate, setRate] = useState(0.3);
+export function MileageDeductionCalculator({
+  initial,
+}: {
+  initial?: { miles?: string; rate?: string };
+} = {}) {
+  const [miles, setMiles] = useState(initial?.miles ?? "");
+  const [rate, setRate] = useState(
+    initial?.rate ? parseFloat(initial.rate) : 0.3,
+  );
 
   const milesNum = parseFloat(miles.replace(/,/g, "")) || 0;
   const hasEntered = miles.trim() !== "" && milesNum > 0;
@@ -44,6 +51,14 @@ export function MileageDeductionCalculator() {
     const d = Math.round(milesNum * RATE_CENTS);
     return { deductionCents: d, savingsCents: Math.round(d * rate) };
   }, [milesNum, rate]);
+
+  const { share, copied } = useCalcShare(
+    { miles: miles || undefined, rate: String(rate) },
+    () =>
+      hasEntered
+        ? `My business mileage deduction: ${formatCents(deductionCents)}. Calculate yours free:`
+        : "Free mileage deduction calculator:",
+  );
 
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
@@ -104,8 +119,11 @@ export function MileageDeductionCalculator() {
       <div className="lg:sticky lg:top-6">
         {hasEntered ? (
           <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-              Your mileage deduction
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+                Your mileage deduction
+              </div>
+              <ShareButton onShare={share} copied={copied} />
             </div>
             <div className="mt-1 display text-4xl sm:text-5xl text-forest-900">
               {formatCents(deductionCents)}
