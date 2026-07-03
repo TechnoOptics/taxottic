@@ -60,6 +60,20 @@ const CALCULATORS = [
       "Turn business miles into a deduction at the 2026 IRS rate (70¢/mile) and see roughly what it saves you — for anyone who drives for work.",
     live: true,
   },
+  {
+    slug: "how-much-to-set-aside",
+    title: "How Much to Set Aside for Taxes",
+    blurb:
+      "The exact percentage of every payment to move into savings so quarterly taxes are covered and April is calm — not a rule of thumb.",
+    live: true,
+  },
+  {
+    slug: "effective-tax-rate",
+    title: "Effective Tax Rate Calculator",
+    blurb:
+      "What you actually pay across all your income — effective rate, marginal bracket, and after-tax take-home. Works for W-2 or self-employment income.",
+    live: true,
+  },
 ];
 
 // Companion guides — the calculators answer "how much," the guides
