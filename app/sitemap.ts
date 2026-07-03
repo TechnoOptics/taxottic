@@ -110,6 +110,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === "/guides" ? 0.8 : 0.7,
   }));
 
+  // Free interactive calculators. Tool-shaped pages targeting the
+  // highest-volume, highest-intent tax queries ("self-employment tax
+  // calculator", "1099 tax calculator"). High priority — interactive
+  // tools rank well, earn backlinks, and demonstrate the product's
+  // value instantly, so this is a top organic-acquisition surface.
+  const calculators: MetadataRoute.Sitemap = [
+    "/calculators",
+    "/calculators/self-employment-tax",
+  ].map((path) => ({
+    url: `${baseUrl}${path}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: path === "/calculators" ? 0.8 : 0.9,
+  }));
+
   // Legal hub + sub-pages. These are linked from the footer and exist
   // as real documents (DPA, privacy, terms, etc.) so they deserve
   // their own sitemap entries. /legal/dmca and /legal/accessibility
@@ -132,5 +147,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
-  return [...marketing, ...guides, ...legal];
+  return [...marketing, ...calculators, ...guides, ...legal];
 }

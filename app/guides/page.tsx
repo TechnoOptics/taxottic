@@ -159,7 +159,7 @@ export default function GuidesIndex() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 grid gap-4">
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-6 grid gap-4">
         {GUIDES.map((g) => (
           <Link
             key={g.slug}
@@ -177,6 +177,28 @@ export default function GuidesIndex() {
             </span>
           </Link>
         ))}
+      </section>
+
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+        <Link
+          href="/calculators"
+          className="card p-6 border-gold-300/60 hover:border-gold-300 transition-colors block"
+        >
+          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+            Free tools
+          </div>
+          <h2 className="display text-lg sm:text-xl text-forest-900 mt-1">
+            Prefer to just see the number?
+          </h2>
+          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+            Try the free self-employment tax calculator — estimate your
+            self-employment tax, income tax, and quarterly payments instantly,
+            no sign-up.
+          </p>
+          <span className="mt-3 inline-block text-sm text-gold-800">
+            Open the calculators →
+          </span>
+        </Link>
       </section>
     </main>
   );
