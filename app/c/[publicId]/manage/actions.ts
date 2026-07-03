@@ -237,9 +237,15 @@ export async function readAndClearLastInviteLink(): Promise<{
 } | null> {
   const cookieStore = await cookies();
   const url = cookieStore.get(INVITE_LINK_COOKIE)?.value ?? null;
-  const emailSent = cookieStore.get(INVITE_EMAIL_STATUS_COOKIE)?.value === "1";
+  const emailSentCookie = cookieStore.get(INVITE_EMAIL_STATUS_COOKIE);
+  const emailSent = emailSentCookie?.value === "1";
+  // Conditional deletes, matching the original single-cookie pattern —
+  // Next.js only allows cookie mutation during a Server Action/Route
+  // Handler response. This page also renders on a plain GET navigation
+  // (no invite just happened, nothing to clear), where cookies() is
+  // read-only; calling delete() unconditionally there threw.
   if (url) cookieStore.delete(INVITE_LINK_COOKIE);
-  cookieStore.delete(INVITE_EMAIL_STATUS_COOKIE);
+  if (emailSentCookie) cookieStore.delete(INVITE_EMAIL_STATUS_COOKIE);
   return url ? { url, emailSent } : null;
 }
 
