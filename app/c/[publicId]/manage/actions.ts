@@ -226,27 +226,35 @@ export async function inviteMember(formData: FormData) {
 }
 
 /**
- * Read-and-clear: pulls the most recent invite link + whether its email
+ * Read-only peek: pulls the most recent invite link + whether its email
  * actually sent out of cookies (set by inviteMember) so the manage page
- * can show a share card once, then deletes both cookies so reloading
- * the page doesn't keep showing it.
+ * can show a share card once. Never mutates cookies — Next.js only allows
+ * cookies().set()/delete() during a Server Action or Route Handler
+ * response, not a plain page render (this page also renders on a normal
+ * GET navigation, where the cookie store is read-only). Clearing happens
+ * separately via clearLastInviteLinkCookie, called from a client component
+ * after mount.
  */
-export async function readAndClearLastInviteLink(): Promise<{
+export async function peekLastInviteLink(): Promise<{
   url: string;
   emailSent: boolean;
 } | null> {
   const cookieStore = await cookies();
   const url = cookieStore.get(INVITE_LINK_COOKIE)?.value ?? null;
-  const emailSentCookie = cookieStore.get(INVITE_EMAIL_STATUS_COOKIE);
-  const emailSent = emailSentCookie?.value === "1";
-  // Conditional deletes, matching the original single-cookie pattern —
-  // Next.js only allows cookie mutation during a Server Action/Route
-  // Handler response. This page also renders on a plain GET navigation
-  // (no invite just happened, nothing to clear), where cookies() is
-  // read-only; calling delete() unconditionally there threw.
-  if (url) cookieStore.delete(INVITE_LINK_COOKIE);
-  if (emailSentCookie) cookieStore.delete(INVITE_EMAIL_STATUS_COOKIE);
+  const emailSent = cookieStore.get(INVITE_EMAIL_STATUS_COOKIE)?.value === "1";
   return url ? { url, emailSent } : null;
+}
+
+/**
+ * Clears the invite-link cookies. This is a Server Action, so — unlike
+ * peekLastInviteLink — it's allowed to mutate cookies. Call it from a
+ * client component once the share card has been shown, so a page reload
+ * doesn't keep re-displaying the same invite.
+ */
+export async function clearLastInviteLinkCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete(INVITE_LINK_COOKIE);
+  cookieStore.delete(INVITE_EMAIL_STATUS_COOKIE);
 }
 
 function textOrNull(v: FormDataEntryValue | null): string | null {

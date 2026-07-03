@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { formatCents } from "@/lib/tax/forecast";
 import {
   inviteMember,
-  readAndClearLastInviteLink,
+  peekLastInviteLink,
+  clearLastInviteLinkCookie,
   removeMember,
   revokeInvite,
   createDepartment,
@@ -19,6 +20,7 @@ import { closeCompany } from "@/app/actions/recycle-bin";
 import { CopyInviteLink } from "@/components/CopyInviteLink";
 import { CustomSelect } from "@/components/CustomSelect";
 import { TeamRoster, type RosterRow } from "@/components/TeamRoster";
+import { ClearInviteLinkOnMount } from "@/components/ClearInviteLinkOnMount";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -106,7 +108,7 @@ export default async function ManageCompanyPage({
 
   // One-shot: was an invite just created? If so, fetch the share link
   // from the cookie set by the action so we can render a copy card.
-  const lastInviteLink = isManager ? await readAndClearLastInviteLink() : null;
+  const lastInviteLink = isManager ? await peekLastInviteLink() : null;
 
   // Per-member financials so the roster doubles as a "who's expensing /
   // driving what" summary. Managers only. Mileage is BUSINESS-only — an
@@ -168,6 +170,7 @@ export default async function ManageCompanyPage({
             apart. */}
         {lastInviteLink ? (
           <section className="mt-6 card p-6 border-gold-300/60 bg-cream/60">
+            <ClearInviteLinkOnMount clearAction={clearLastInviteLinkCookie} />
             <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
               Invitation ready
             </div>
