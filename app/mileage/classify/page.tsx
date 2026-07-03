@@ -19,8 +19,15 @@ export type PendingTrip = {
   points: { lat: number; lng: number }[];
 };
 
-export default async function ClassifyPage() {
+type Search = Promise<{ trip?: string }>;
+
+export default async function ClassifyPage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
   const { admin, user } = await requireUserWithAdmin();
+  const { trip: targetTripId } = await searchParams;
 
   // Pull every unclassified trip the user owns across companies they
   // belong to. The /api/watch/confirm flow uses driver_user_id as the
@@ -80,6 +87,17 @@ export default async function ClassifyPage() {
   // map / breadcrumbs instead of a stranded empty page.
   if (pending.length === 0) {
     redirect("/mileage?caughtup=1");
+  }
+
+  // Deep-linked from the outstanding-items list (?trip=<id>): the deck
+  // always starts at index 0, so move the target trip to the front
+  // instead of leaving the reviewer to hunt for it in the stack.
+  if (targetTripId) {
+    const idx = pending.findIndex((p) => p.id === targetTripId);
+    if (idx > 0) {
+      const [target] = pending.splice(idx, 1);
+      pending.unshift(target);
+    }
   }
 
   return (

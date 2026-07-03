@@ -84,7 +84,7 @@ export async function getOutstandingTasks(
           kind: "trip",
           title: `${Number(row.distance_miles ?? 0).toFixed(1)} mi drive`,
           subtitle: `${monthDayLabel(row.started_at)} · business or personal?`,
-          href: "/mileage/classify",
+          href: `/mileage/classify?trip=${row.id}`,
         });
       }
     }
@@ -128,7 +128,7 @@ export async function getOutstandingTasks(
             kind: "csv_transaction",
             title: row.description?.trim() || formatCents(row.amount_cents),
             subtitle: `${monthDayLabel(row.posted_at)} · needs a category`,
-            href: `/c/${companyPublicId}/import/${row.import_id}`,
+            href: `/c/${companyPublicId}/import/${row.import_id}?highlight=${row.id}`,
           });
         }
       }
@@ -166,7 +166,7 @@ export async function getOutstandingTasks(
               row.description?.trim() ||
               formatCents(row.amount_cents),
             subtitle: `${monthDayLabel(row.posted_date)} · needs a category`,
-            href: `/c/${companyPublicId}/banks`,
+            href: `/c/${companyPublicId}/banks?highlight=${row.id}#transactions`,
           });
         }
       }

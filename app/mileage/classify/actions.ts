@@ -35,4 +35,9 @@ export async function classifyTrip(formData: FormData) {
   revalidatePath("/c/[publicId]/my-deductions", "page");
   revalidatePath("/c/[publicId]/forecast", "page");
   revalidatePath("/c/[publicId]/savings-goals", "page");
+  // The dashboard's outstanding-items bell/banner/popup all read the same
+  // tally — without this, a classified trip kept showing there until the
+  // page's own cache TTL expired, even though the classify deck itself
+  // had already advanced past it.
+  revalidatePath("/dashboard");
 }

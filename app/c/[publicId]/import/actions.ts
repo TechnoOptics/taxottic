@@ -536,7 +536,6 @@ export async function setTxCategory(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
   const code = String(formData.get("category_code") ?? "");
-  const importId = String(formData.get("import_id") ?? "");
   if (!id) return;
 
   // Verify the transaction belongs to a company the user is in.
@@ -556,13 +555,22 @@ export async function setTxCategory(formData: FormData) {
       ignored: false,
     })
     .eq("id", id);
-  revalidatePath(`/c/[publicId]/import/${importId}`);
+  // Bug: this was `revalidatePath(\`/c/[publicId]/import/${importId}\`)` —
+  // "[publicId]" as a literal string isn't a real path (a real URL is
+  // /c/co_xyz/import/{importId}), so this never actually invalidated the
+  // page the user was looking at. The "page" template form revalidates
+  // the route for every company's public_id, which is what's needed here
+  // since this action only has the internal company_id, not the public one.
+  revalidatePath("/c/[publicId]/import/[importId]", "page");
+  // The dashboard's outstanding-items bell/banner/popup read this same
+  // table — without this a categorized transaction kept showing there
+  // until the page's own cache TTL expired.
+  revalidatePath("/dashboard");
 }
 
 export async function ignoreTx(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
   const id = String(formData.get("id") ?? "");
-  const importId = String(formData.get("import_id") ?? "");
   if (!id) return;
 
   const { data: tx } = await admin
@@ -578,7 +586,8 @@ export async function ignoreTx(formData: FormData) {
     .from("bank_transactions")
     .update({ ignored: true, applied_category_code: null })
     .eq("id", id);
-  revalidatePath(`/c/[publicId]/import/${importId}`);
+  revalidatePath("/c/[publicId]/import/[importId]", "page");
+  revalidatePath("/dashboard");
 }
 
 /**
@@ -729,7 +738,7 @@ async function runBellaCategorize(args: {
   );
 
   if (candidates.length === 0) {
-    revalidatePath(`/c/[publicId]/import/${importId}`);
+    revalidatePath("/c/[publicId]/import/[importId]", "page");
     return;
   }
 

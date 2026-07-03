@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   CategoryCombobox,
   type CategoryOption,
@@ -75,6 +75,10 @@ type Props = {
   setTxCategory: (formData: FormData) => Promise<void>;
   ignoreTx: (formData: FormData) => Promise<void>;
   teachBella: (formData: FormData) => Promise<void>;
+  /** Deep-linked from the outstanding-items list (?highlight=<id>) —
+   *  scrolls this row into view and rings it briefly on mount so the
+   *  user doesn't have to hunt for it in a long import. */
+  highlight?: boolean;
 };
 
 export function TxRow({
@@ -88,9 +92,20 @@ export function TxRow({
   setTxCategory,
   ignoreTx,
   teachBella,
+  highlight,
 }: Props) {
   const [phase, setPhase] = useState<"idle" | "leaving">("idle");
   const [_pending, startTransition] = useTransition();
+  const [justArrived, setJustArrived] = useState(!!highlight);
+  const rowRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (!highlight) return;
+    rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setJustArrived(false), 2600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount
+  }, []);
 
   const isApplied = !!tx.applied_expense_id;
   const selected =
@@ -135,6 +150,8 @@ export function TxRow({
 
   return (
     <li
+      ref={rowRef}
+      id={`txn-${tx.id}`}
       data-leaving={phase === "leaving"}
       className={
         // Base shell + responsive grid.
@@ -146,12 +163,15 @@ export function TxRow({
         // "Ask Bella suggested looks on the items, it is not
         // visible" — making the entire LEFT edge gold pulls the
         // eye in a way a 11px chip never can.
-        (wasBellaSuggested
-          ? "border-l-[3px] border-l-gold-500 border-y-forest-100 border-r-forest-100 shadow-[0_0_0_1px_var(--color-gold-200)] "
-          : isRefundPair
-            ? "border-l-[3px] border-l-emerald-500 border-y-forest-100 border-r-forest-100 "
-            : "border-forest-100 ") +
-        // Slide-off transition (categorize/ignore animation).
+        (justArrived
+          ? "border-l-[3px] border-l-forest-800 ring-2 ring-forest-800/30 "
+          : wasBellaSuggested
+            ? "border-l-[3px] border-l-gold-500 border-y-forest-100 border-r-forest-100 shadow-[0_0_0_1px_var(--color-gold-200)] "
+            : isRefundPair
+              ? "border-l-[3px] border-l-emerald-500 border-y-forest-100 border-r-forest-100 "
+              : "border-forest-100 ") +
+        // Slide-off transition (categorize/ignore animation) + the
+        // highlight ring fading back out after it's served its purpose.
         "transition-all duration-[350ms] ease-out " +
         "data-[leaving=true]:opacity-0 " +
         "data-[leaving=true]:translate-x-12 " +

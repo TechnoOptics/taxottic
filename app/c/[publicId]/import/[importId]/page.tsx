@@ -18,9 +18,17 @@ import { type CategoryOption } from "@/components/CategoryCombobox";
 import { TxRow } from "@/components/import/TxRow";
 
 type Params = Promise<{ publicId: string; importId: string }>;
+type Search = Promise<{ highlight?: string }>;
 
-export default async function ImportReviewPage({ params }: { params: Params }) {
+export default async function ImportReviewPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: Search;
+}) {
   const { publicId, importId } = await params;
+  const { highlight: targetTxId } = await searchParams;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
   const superAdmin = await isSuperAdmin(supabase);
@@ -201,6 +209,13 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
     arr.push(t);
     monthMap.set(key, arr);
   }
+
+  // Deep-linked from the outstanding-items list (?highlight=<id>): if
+  // the target row already got tagged since the item was surfaced,
+  // it lives in the collapsed "Sorted, awaiting Apply" pile — force
+  // that <details> open so TxRow's scrollIntoView can actually reach it.
+  const targetInTagged =
+    !!targetTxId && taggedDebits.some((t) => t.id === targetTxId);
   const debitGroups = Array.from(monthMap.entries())
     .sort((a, b) => {
       if (a[0] === "unknown") return 1;
@@ -404,6 +419,7 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                         setTxCategory={setTxCategory}
                         ignoreTx={ignoreTx}
                         teachBella={teachBella}
+                        highlight={t.id === targetTxId}
                       />
                     ))}
                   </ul>
@@ -420,7 +436,7 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
             committing. */}
         {taggedDebits.length > 0 ? (
           <section className="mt-6 card p-5">
-            <details>
+            <details open={targetInTagged}>
               <summary className="cursor-pointer select-none flex items-baseline justify-between gap-3 flex-wrap">
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
@@ -449,6 +465,7 @@ export default async function ImportReviewPage({ params }: { params: Params }) {
                     setTxCategory={setTxCategory}
                     ignoreTx={ignoreTx}
                     teachBella={teachBella}
+                    highlight={t.id === targetTxId}
                   />
                 ))}
               </ul>
