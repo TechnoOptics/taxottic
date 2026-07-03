@@ -58,7 +58,8 @@ export async function inviteMember(formData: FormData) {
   const role = String(formData.get("role") ?? "member") as
     | "member"
     | "lead"
-    | "manager";
+    | "manager"
+    | "expenser";
   const fullName = textOrNull(formData.get("full_name"));
   const title = textOrNull(formData.get("title"));
   const personalMessage = textOrNull(formData.get("personal_message"));

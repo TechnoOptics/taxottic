@@ -150,7 +150,13 @@ async function _loadCompanyByPublicId(publicId: string) {
     // forecast breakdown page, expense review) can branch on it without
     // this shared helper needing to know about department scoping
     // itself.
-    role: (membership?.role as "manager" | "lead" | "member" | undefined) ?? null,
+    role:
+      (membership?.role as
+        | "manager"
+        | "lead"
+        | "member"
+        | "expenser"
+        | undefined) ?? null,
     crossTenant,
   };
 }

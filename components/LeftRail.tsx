@@ -46,7 +46,7 @@ import { useEffect, useState, type ReactNode } from "react";
 type Company = {
   publicId: string;
   name: string;
-  role?: "manager" | "lead" | "member";
+  role?: "manager" | "lead" | "member" | "expenser";
 };
 
 // Nav items visible to a plain "member" (not a manager). Members get the
@@ -67,6 +67,10 @@ const MEMBER_VISIBLE_KEYS = new Set([
 // scoped to their own department at the page/RLS level, but company-wide
 // income entry stays a manager-only surface.
 const LEAD_HIDDEN_KEYS = new Set(["income", "import"]);
+
+// Narrowest role: can only log their own expenses/mileage and use chat.
+// No forecast, income, roster, deduction explorer, or settings surfaces.
+const EXPENSER_VISIBLE_KEYS = new Set(["expenses", "mileage", "chat"]);
 
 type Mode = "rail" | "sheet";
 
@@ -483,7 +487,13 @@ export function LeftRail({
             ? COMPANY_ITEMS
             : activeCompany.role === "lead"
               ? COMPANY_ITEMS.filter((item) => !LEAD_HIDDEN_KEYS.has(item.key))
-              : COMPANY_ITEMS.filter((item) => MEMBER_VISIBLE_KEYS.has(item.key))
+              : activeCompany.role === "expenser"
+                ? COMPANY_ITEMS.filter((item) =>
+                    EXPENSER_VISIBLE_KEYS.has(item.key),
+                  )
+                : COMPANY_ITEMS.filter((item) =>
+                    MEMBER_VISIBLE_KEYS.has(item.key),
+                  )
           ).map((item) => {
             const href = companyHref(item.path);
             const active = isActive(href);

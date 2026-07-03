@@ -41,7 +41,7 @@ export default async function DashboardPage() {
     .from("company_members")
     .select("company_id, role, joined_at")
     .eq("user_id", user.id)
-    .eq("role", "member")
+    .in("role", ["member", "expenser"])
     .is("onboarded_at", null)
     .order("joined_at", { ascending: false })
     .limit(1)

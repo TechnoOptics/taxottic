@@ -7,7 +7,7 @@ import { LeftRail } from "./LeftRail";
 type Company = {
   publicId: string;
   name: string;
-  role?: "manager" | "lead" | "member";
+  role?: "manager" | "lead" | "member" | "expenser";
 };
 
 /**

@@ -354,6 +354,10 @@ export default async function ManageCompanyPage({
                     name="role"
                     defaultValue="member"
                     options={[
+                      {
+                        value: "expenser",
+                        label: "Expenser - logs expenses & mileage only",
+                      },
                       { value: "member", label: "Member - sees forecasts, logs" },
                       {
                         value: "lead",
@@ -565,5 +569,6 @@ function prettyRole(role: string | null | undefined): string {
   if (role === "manager") return "Manager";
   if (role === "lead") return "Department lead";
   if (role === "member") return "Member";
+  if (role === "expenser") return "Expenser";
   return role ?? "";
 }

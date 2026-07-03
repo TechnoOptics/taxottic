@@ -95,7 +95,9 @@ export type CompanyMembership = {
   // "lead" = department lead: manager-like expense review + forecast
   // visibility scoped to their own department only. Not a full manager
   // (no invite/company-settings rights).
-  role: "manager" | "lead" | "member";
+  // "expenser" = narrowest role: can only log their own expenses/mileage
+  // and use chat. No forecast, income, roster, or company-settings access.
+  role: "manager" | "lead" | "member" | "expenser";
   // ISO timestamp the current user joined this company. Surfaced on
   // the dashboard ("Manager · added May 12, 2026") instead of the raw
   // public_id, per the May 2026 audit's P2 finding that the
