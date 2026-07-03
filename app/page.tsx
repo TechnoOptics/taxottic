@@ -1133,6 +1133,9 @@ function Footer() {
             <Link href="/guides" className="hover:text-forest-700">
               Guides
             </Link>
+            <Link href="/calculators" className="hover:text-forest-700">
+              Free calculators
+            </Link>
             <Link href="/changelog" className="hover:text-forest-700">
               Changelog
             </Link>
