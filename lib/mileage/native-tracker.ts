@@ -604,7 +604,21 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   loadPersistedBuffer();
   companyId = savedCompany;
   void flush(); // drain a killed-mid-drive leftover
-  if (!tracking) await startMileageTracking(savedCompany);
+  // Always re-verify/re-arm here, ignoring the in-memory `tracking` flag.
+  // That flag only reflects whether OUR code called bg.start() — it stays
+  // true even when Android (esp. Samsung's "Sleeping apps" battery
+  // optimization) silently kills the underlying foreground GPS service
+  // while the WebView process itself survives. Trusting the stale flag
+  // meant resume-on-launch/resume-on-foreground was a no-op forever after
+  // the OS killed the service, which is exactly the "tracker hasn't
+  // logged in a while" bug (confirmed live: /mileage/diagnose showed the
+  // native service reporting ALREADY_STARTED, i.e. genuinely running,
+  // while zero fixes had landed in days — the callback attached to it was
+  // orphaned). Resetting `tracking` forces startMileageTracking's existing
+  // stop-then-start dance to run every resume, which rebuilds a fresh
+  // subscription with a live callback whether or not the flag was honest.
+  tracking = false;
+  await startMileageTracking(savedCompany);
 }
 
 /** Open the OS app-settings screen so the user can flip Location to
