@@ -118,6 +118,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const calculators: MetadataRoute.Sitemap = [
     "/calculators",
     "/calculators/self-employment-tax",
+    "/calculators/quarterly-estimated-tax",
+    "/calculators/1099-tax",
   ].map((path) => ({
     url: `${baseUrl}${path}`,
     lastModified: now,

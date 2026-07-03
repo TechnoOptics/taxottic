@@ -104,7 +104,14 @@ function baseInput(): ForecastInput {
   };
 }
 
-export function SelfEmploymentTaxCalculator() {
+export function SelfEmploymentTaxCalculator({
+  showFullQuarterlySchedule = false,
+}: {
+  /** When true, the result shows all four quarterly payments + due
+   *  dates instead of just the next one — used by the quarterly-
+   *  estimated-tax calculator page, where the schedule IS the point. */
+  showFullQuarterlySchedule?: boolean;
+} = {}) {
   const [income, setIncome] = useState("");
   const [expenses, setExpenses] = useState("");
   const [filingStatus, setFilingStatus] = useState<FilingStatus>("single");
@@ -317,7 +324,36 @@ export function SelfEmploymentTaxCalculator() {
               ) : null}
             </dl>
 
-            {nextQuarter ? (
+            {showFullQuarterlySchedule ? (
+              <div className="mt-5 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                  Your {TAX_YEAR} quarterly payment schedule
+                </div>
+                <ul className="mt-2 grid gap-1.5">
+                  {result.quarterlyEstimates.map((q) => (
+                    <li
+                      key={q.quarter}
+                      className={
+                        "flex items-baseline justify-between gap-3 text-sm " +
+                        (q.isPast ? "opacity-55" : "")
+                      }
+                    >
+                      <span className="text-ink-soft">
+                        Q{q.quarter} · due{" "}
+                        {new Date(q.dueDate + "T00:00:00").toLocaleDateString(
+                          "en-US",
+                          { month: "short", day: "numeric" },
+                        )}
+                        {q.isPast ? " (passed)" : ""}
+                      </span>
+                      <span className="tabular-nums font-medium text-forest-900">
+                        {formatCents(Math.max(0, q.amountCents))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : nextQuarter ? (
               <div className="mt-5 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
                   Next quarterly payment

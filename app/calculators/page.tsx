@@ -39,6 +39,20 @@ const CALCULATORS = [
       "See your full 2026 tax on 1099 income — self-employment tax, federal and state income tax, QBI deduction, and your next quarterly payment.",
     live: true,
   },
+  {
+    slug: "quarterly-estimated-tax",
+    title: "Quarterly Estimated Tax Calculator",
+    blurb:
+      "Work out what to send the IRS each quarter — all four payments and due dates, so you set the money aside and dodge the underpayment penalty.",
+    live: true,
+  },
+  {
+    slug: "1099-tax",
+    title: "1099 Tax Calculator",
+    blurb:
+      "For independent contractors, gig workers, and freelancers — estimate your tax on 1099-NEC and 1099-K income, including what your write-offs save you.",
+    live: true,
+  },
 ];
 
 // Companion guides — the calculators answer "how much," the guides
