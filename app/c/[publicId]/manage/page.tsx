@@ -17,6 +17,7 @@ import {
 } from "./actions";
 import { closeCompany } from "@/app/actions/recycle-bin";
 import { CopyInviteLink } from "@/components/CopyInviteLink";
+import { CustomSelect } from "@/components/CustomSelect";
 import { TeamRoster, type RosterRow } from "@/components/TeamRoster";
 
 type Params = Promise<{ publicId: string }>;
@@ -325,27 +326,27 @@ export default async function ManageCompanyPage({
                   />
                 </Field>
                 <Field label="Access level">
-                  <select
+                  <CustomSelect
                     name="role"
-                    className="input"
                     defaultValue="member"
-                  >
-                    <option value="member">Member - sees forecasts, logs</option>
-                    <option value="manager">Manager - can edit + invite</option>
-                  </select>
+                    options={[
+                      { value: "member", label: "Member - sees forecasts, logs" },
+                      { value: "manager", label: "Manager - can edit + invite" },
+                    ]}
+                  />
                 </Field>
               </div>
 
               {departments.length > 0 ? (
                 <Field label="Department (optional)">
-                  <select name="department_id" className="input" defaultValue="">
-                    <option value="">No department</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
+                  <CustomSelect
+                    name="department_id"
+                    defaultValue=""
+                    options={[
+                      { value: "", label: "No department" },
+                      ...departments.map((d) => ({ value: d.id, label: d.name })),
+                    ]}
+                  />
                 </Field>
               ) : null}
 
