@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { headers } from "next/headers";
 import { CALC_STATES } from "@/lib/calculators/states";
+import { CALC_INCOMES } from "@/lib/calculators/incomes";
 
 /**
  * /sitemap.xml — host-aware.
@@ -141,6 +142,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
+  // Programmatic "self-employment tax on $X" pages. Each targets a
+  // specific high-volume query ("how much tax on 100k self employed")
+  // with a real computed breakdown, so each is a substantive answer page.
+  const incomeCalculators: MetadataRoute.Sitemap = CALC_INCOMES.map((n) => ({
+    url: `${baseUrl}/calculators/self-employment-tax/on/${n}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
   // Comparison / "alternative to" pages. High commercial-intent
   // ("[competitor] alternative" searches signal someone ready to
   // switch), so they rank + convert well.
@@ -181,6 +192,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...marketing,
     ...calculators,
     ...stateCalculators,
+    ...incomeCalculators,
     ...compare,
     ...guides,
     ...legal,

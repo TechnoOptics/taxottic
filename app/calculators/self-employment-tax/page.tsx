@@ -9,6 +9,7 @@ import {
 } from "@/components/calculators/SelfEmploymentTaxCalculator";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
 import { CALC_STATES } from "@/lib/calculators/states";
+import { CALC_INCOMES, formatDollars } from "@/lib/calculators/incomes";
 
 const SITE = "https://taxottic.com";
 const SLUG = "self-employment-tax";
@@ -334,6 +335,30 @@ export default async function SelfEmploymentTaxCalculatorPage({
                 className="text-gold-800 hover:text-gold-900 truncate"
               >
                 {s.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="card p-6">
+          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+            By income
+          </div>
+          <h2 className="display text-xl text-forest-900 mt-1">
+            Self-employment tax by income
+          </h2>
+          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+            See the exact 2026 breakdown for a specific income &mdash; total
+            tax, effective rate, and how much to set aside:
+          </p>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+            {CALC_INCOMES.map((n) => (
+              <Link
+                key={n}
+                href={`/calculators/self-employment-tax/on/${n}`}
+                className="text-gold-800 hover:text-gold-900"
+              >
+                {formatDollars(n)}
               </Link>
             ))}
           </div>
