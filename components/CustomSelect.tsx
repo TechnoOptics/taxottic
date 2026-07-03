@@ -59,7 +59,11 @@ export function CustomSelect({
   const selected = options.find((o) => o.value === value);
 
   return (
-    <div ref={rootRef} className="relative">
+    // min-w-0: this is typically a grid/flex item; without it, the
+    // truncated (white-space: nowrap) label below can force this whole
+    // element — and its parent grid track — wider than the viewport on
+    // mobile instead of actually truncating.
+    <div ref={rootRef} className="relative min-w-0">
       <input type="hidden" name={name} value={value} />
       <button
         type="button"
@@ -73,7 +77,7 @@ export function CustomSelect({
       >
         <span
           className={
-            "truncate " + (selected ? "" : "text-ink-muted")
+            "min-w-0 truncate " + (selected ? "" : "text-ink-muted")
           }
         >
           {selected?.label ?? placeholder ?? "Select…"}

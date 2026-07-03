@@ -558,7 +558,11 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5">
+    // min-w-0 overrides the grid item default of min-width: auto — without
+    // it, a truncated (white-space: nowrap) child like CustomSelect's
+    // closed-button label can force this column, and the whole card, wider
+    // than the viewport on mobile instead of actually truncating.
+    <label className="grid gap-1.5 min-w-0">
       <span className="text-sm font-medium text-forest-800">{label}</span>
       {children}
     </label>
