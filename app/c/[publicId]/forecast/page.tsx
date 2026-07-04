@@ -794,7 +794,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             />
             <RowKV
               label="Overall (all tax / gross)"
-              value={pct(result.effectiveRate)}
+              value={pct(result.overallEffectiveRate)}
             />
           </Card>
           <Card title="Self-employment tax">

@@ -213,7 +213,7 @@ export default async function PersonalForecastPage() {
                 value={`- ${formatCents(result.childAndDependentCreditsCents)}`}
               />
             ) : null}
-            <KV label="Effective rate" value={(result.effectiveRate * 100).toFixed(1) + "%"} />
+            <KV label="Effective rate" value={(result.overallEffectiveRate * 100).toFixed(1) + "%"} />
           </Card>
           <Card title="State">
             <BigNumber>{formatCents(result.stateTaxCents)}</BigNumber>

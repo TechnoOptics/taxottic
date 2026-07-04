@@ -329,7 +329,7 @@ export function SelfEmploymentTaxCalculator({
                 {formatCents(result.totalTaxCents)}
               </span>
               <span className="text-sm text-ink-soft">
-                ≈ {(result.effectiveRate * 100).toFixed(1)}% of income
+                ≈ {(result.overallEffectiveRate * 100).toFixed(1)}% of income
               </span>
             </div>
 

@@ -367,7 +367,7 @@ export async function GET(req: NextRequest) {
         forecastOut = {
           label: `${taxYear} projected estimate`,
           netCents: net,
-          effectiveRatePct: Math.round((result.effectiveRate ?? 0) * 100),
+          effectiveRatePct: Math.round((result.overallEffectiveRate ?? 0) * 100),
           ytdIncomeCents: result.projectedIncomeCents ?? 0,
         };
       }

@@ -75,12 +75,12 @@ export function EffectiveTaxRateCalculator({
             ownerW2SsWagesCents: cents,
           };
     const r = forecast(input);
-    // Compute the effective rate against the income the visitor entered
-    // — NOT r.effectiveRate, which the engine defines as tax ÷ *business*
-    // income and returns 0 for a pure W-2 filer (business income = 0).
     return {
       totalTaxCents: r.totalTaxCents,
-      effectiveRate: cents > 0 ? r.totalTaxCents / cents : 0,
+      // Engine's overallEffectiveRate (total tax ÷ total gross income)
+      // now handles W-2 + mixed income correctly, so the local workaround
+      // this replaced is gone.
+      effectiveRate: r.overallEffectiveRate,
       marginalRate: marginalFederalRate(r.taxableIncomeCents, filingStatus),
       afterTaxCents: cents - r.totalTaxCents,
     };

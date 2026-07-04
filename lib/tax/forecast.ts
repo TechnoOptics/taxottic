@@ -366,12 +366,19 @@ export type ForecastResult = {
   refundCents: number;
 
   monthlySaveTargetCents: number;
-  effectiveRate: number;
+  /**
+   * Total tax ÷ total gross income (business + W-2 + spouse), or 0 when
+   * there's no income. The honest "your overall effective rate" figure.
+   * Renamed from `effectiveRate`, which divided by BUSINESS income only —
+   * that returned 0% for a pure-W-2 filer and overstated the rate for
+   * mixed filers (the field name lied about its denominator).
+   */
+  overallEffectiveRate: number;
   /**
    * Federal income tax / taxable income (or 0 when taxable income is
    * 0). The UI shows this as "Effective rate" under the Federal Income
-   * Tax tile — distinct from `effectiveRate` which is the combined
-   * total/gross figure used in overall "you'll keep ~X%" copy.
+   * Tax tile — distinct from `overallEffectiveRate` which is the
+   * combined total/gross figure used in overall "you'll keep ~X%" copy.
    * Introduced in response to the May 2026 audit's High #4 finding
    * that the FIT tile was rendering 11% on a $0 federal income tax.
    */
@@ -515,6 +522,18 @@ export function forecast(input: ForecastInput): ForecastResult {
   const projectedIncome = round(input.ytdIncomeCents * projectionFactor);
   const projectedExpenses = round(ytdDeductibleExpenses * projectionFactor);
 
+  // Denominator for the OVERALL effective rate (total tax ÷ total gross
+  // income). Includes W-2 + spouse income so the rate is correct for W-2
+  // and mixed filers — the old business-only denominator returned 0% for
+  // a pure-W-2 filer and overstated the rate for anyone with W-2 wages
+  // (May 2026 audit). A pure self-employed filer has no W-2/spouse income,
+  // so this equals projectedIncome and their displayed rate is unchanged.
+  const totalGrossIncomeCents =
+    projectedIncome +
+    input.ownerW2WagesCents +
+    input.spouseW2WagesCents +
+    input.spouseIncomeCents;
+
   // Above-the-line aggregation. The original engine had one number
   // (ytdAboveTheLineCents) summed from monthly_expenses rows tagged with
   // ABOVE_THE_LINE_CODES; many users don't categorize retirement
@@ -637,7 +656,8 @@ export function forecast(input: ForecastInput): ForecastResult {
       stillOwedCents: remaining,
       refundCents: refund,
       monthlySaveTargetCents: monthlySaveTarget,
-      effectiveRate: projectedIncome > 0 ? totalTax / projectedIncome : 0,
+      overallEffectiveRate:
+        totalGrossIncomeCents > 0 ? totalTax / totalGrossIncomeCents : 0,
       // C-Corps don't have an ordinary FIT tile to label, but keep the
       // field shape uniform so the UI doesn't have to branch on
       // entity type. Use the flat federal rate as the "FIT effective
@@ -1555,7 +1575,8 @@ export function forecast(input: ForecastInput): ForecastResult {
   // additional Medicare + NIIT, less credits) over gross projected
   // income. This is the "you'll lose ~X% of every dollar to tax"
   // number — useful as a top-line stat.
-  const effective = projectedIncome > 0 ? totalTax / projectedIncome : 0;
+  const effective =
+    totalGrossIncomeCents > 0 ? totalTax / totalGrossIncomeCents : 0;
   // Federal-income-tax-specific effective rate: federal income tax over
   // TAXABLE income. The May 2026 audit (High #4) caught the UI showing
   // the combined `effective` under a tile labelled "Federal income tax
@@ -1822,7 +1843,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     stillOwedCents: remaining,
     refundCents: refund,
     monthlySaveTargetCents: monthlySaveTarget,
-    effectiveRate: effective,
+    overallEffectiveRate: effective,
     federalIncomeTaxEffectiveRate,
     marginalRate: marginal,
     quarterlyEstimates,

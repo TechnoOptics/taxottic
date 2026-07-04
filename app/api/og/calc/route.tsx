@@ -108,7 +108,7 @@ function buildCard(sp: URLSearchParams): Card {
         result: {
           context: `Estimated ${TAX_YEAR} tax on ${formatCents(toCents(net))} of 1099 income`,
           big: formatCents(r.totalTaxCents),
-          sub: `${(r.effectiveRate * 100).toFixed(1)}% effective rate · federal + state + SE tax`,
+          sub: `${(r.overallEffectiveRate * 100).toFixed(1)}% effective rate · federal + state + SE tax`,
         },
       };
     }
@@ -213,7 +213,7 @@ function buildCard(sp: URLSearchParams): Card {
         result: {
           context: `Estimated total tax on ${formatCents(toCents(net))} net self-employment income`,
           big: formatCents(r.totalTaxCents),
-          sub: `${(r.effectiveRate * 100).toFixed(1)}% effective rate · federal + state + self-employment tax`,
+          sub: `${(r.overallEffectiveRate * 100).toFixed(1)}% effective rate · federal + state + self-employment tax`,
         },
       };
     }
