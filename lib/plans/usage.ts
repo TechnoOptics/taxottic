@@ -26,7 +26,19 @@ export async function getActivePlan(
   userId: string,
 ): Promise<Plan> {
   const { data: superAdmin } = await supabase.rpc("is_super_admin");
-  if (superAdmin) return "practice";
+  if (superAdmin) {
+    // QA plan preview: a super-admin can pin their effective plan to any
+    // tier from the profile menu, to walk each plan's gated experience
+    // and confirm the gating matches the plan. Only consulted here, in
+    // the super-admin branch, so it can never be a paywall bypass for a
+    // normal user. Null / unset → default to the top 'practice' tier.
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("preview_plan")
+      .eq("id", userId)
+      .maybeSingle();
+    return asPlanOrNull(prof?.preview_plan) ?? "practice";
+  }
 
   const { data } = await supabase
     .from("subscriptions")
@@ -115,6 +127,26 @@ export function normalizePlan(raw: unknown): Plan {
       return "studio";
     default:
       return "free";
+  }
+}
+
+/**
+ * Validate a raw value as one of the six current plan tiers, else null.
+ * Unlike normalizePlan (which coerces unknowns to 'free'), this returns
+ * null for an absent/invalid value — used by the super-admin plan
+ * preview so "unset" is distinguishable from "free".
+ */
+export function asPlanOrNull(raw: unknown): Plan | null {
+  switch (raw) {
+    case "free":
+    case "filer":
+    case "solo":
+    case "studio":
+    case "scale":
+    case "practice":
+      return raw;
+    default:
+      return null;
   }
 }
 

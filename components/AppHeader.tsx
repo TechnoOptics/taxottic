@@ -9,8 +9,10 @@ import { OutstandingTasksBell } from "./OutstandingTasksBell";
 import { createClient } from "@/lib/supabase/server";
 import { recordGdprConsent } from "@/app/actions/consent";
 import { submitFeedback } from "@/app/actions/feedback";
-import { setActivePlatform } from "@/app/settings/actions";
-import { getActiveFeatureGates } from "@/lib/plans/usage";
+import { setActivePlatform, setPreviewPlan } from "@/app/settings/actions";
+import { getActiveFeatureGates, asPlanOrNull } from "@/lib/plans/usage";
+import type { Plan } from "@/lib/plans/limits";
+import { PlanPreviewBanner } from "./PlanPreviewBanner";
 import { getMyCompanies } from "@/lib/auth";
 import { getOutstandingTasks, type OutstandingItem } from "@/lib/tasks/outstanding";
 
@@ -51,11 +53,12 @@ export async function AppHeader({
   let isSuperAdmin = false;
   let currentPlatform: "user" | "enterprise" | "hq" = "user";
   let activeCompanyId: string | null = null;
+  let previewPlan: Plan | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
       .select(
-        "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search, active_company_id",
+        "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search, active_company_id, preview_plan",
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -84,6 +87,12 @@ export async function AppHeader({
     // disabled-and-hidden, it's structurally absent.
     const { data: sa } = await supabase.rpc("is_super_admin");
     isSuperAdmin = Boolean(sa);
+    // QA plan preview is a super-admin-only tool; only surface the
+    // pinned tier (and the banner) for them so a stray column value
+    // could never affect a normal user's chrome.
+    if (isSuperAdmin) {
+      previewPlan = asPlanOrNull(profile?.preview_plan);
+    }
   }
 
   // Fetch the user's companies for the LeftRail switcher (and, below,
@@ -265,9 +274,16 @@ export async function AppHeader({
             currentPlatform={currentPlatform}
             setPlatformAction={setActivePlatform}
             submitFeedbackAction={submitFeedback}
+            previewPlan={previewPlan}
+            setPreviewPlanAction={setPreviewPlan}
           />
         </div>
       </header>
+      {/* QA plan preview reminder — only when a super-admin has pinned a
+          lower tier than the default 'practice'. */}
+      {isSuperAdmin && previewPlan && previewPlan !== "practice" ? (
+        <PlanPreviewBanner plan={previewPlan} resetAction={setPreviewPlan} />
+      ) : null}
       {/* Spacer matches the fixed header's height (safe-area inset
           + the 3.25rem single row). The header is now always a
           single row at every width — smart search is opt-in and

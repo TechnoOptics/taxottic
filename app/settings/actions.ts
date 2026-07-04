@@ -241,3 +241,41 @@ export async function setActivePlatform(formData: FormData) {
   revalidatePath("/dashboard");
   redirect(PLATFORM_LANDING[platform]);
 }
+
+const PREVIEW_PLANS = new Set([
+  "free",
+  "filer",
+  "solo",
+  "studio",
+  "scale",
+  "practice",
+]);
+
+/**
+ * Super-admin QA plan preview. Pins profiles.preview_plan so the admin's
+ * effective plan (getActivePlan) resolves to the chosen tier across the
+ * whole app — server gates, page gates, and UI — letting them walk each
+ * plan's gated experience and confirm the gating matches the plan. An
+ * empty / unrecognized value clears the override (back to the default
+ * 'practice' super-admin experience).
+ *
+ * Hard-guarded to super-admins: a normal user calling this is Forbidden,
+ * and even if the row were somehow set, getActivePlan only consults it
+ * inside its super-admin branch — so this can never bypass a paywall.
+ */
+export async function setPreviewPlan(formData: FormData) {
+  const { supabase, admin, user } = await requireUserWithAdmin();
+  const { data: superAdmin } = await supabase.rpc("is_super_admin");
+  if (!superAdmin) {
+    throw new Error("Forbidden");
+  }
+  const raw = String(formData.get("plan") ?? "");
+  const value = PREVIEW_PLANS.has(raw) ? raw : null; // "" / invalid → clear
+  await admin
+    .from("profiles")
+    .update({ preview_plan: value })
+    .eq("id", user.id);
+  // Plan gating touches the entire authenticated app, so bust the whole
+  // root-layout cache rather than a handful of paths.
+  revalidatePath("/", "layout");
+}

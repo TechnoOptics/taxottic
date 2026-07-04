@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { FeedbackModal } from "./FeedbackModal";
 import { ThemeToggle } from "./ThemeToggle";
 import { WebOnly } from "./WebOnly";
+import type { Plan } from "@/lib/plans/limits";
 
 type Platform = "user" | "enterprise" | "hq";
 
@@ -46,9 +47,30 @@ type Props = {
    * looked cluttered").
    */
   submitFeedbackAction?: (formData: FormData) => Promise<void>;
+  /**
+   * Super-admin QA plan preview. When both are provided (super-admins
+   * only), the dropdown renders a "Preview plan" section that pins the
+   * admin's effective plan to any tier so they can walk each plan's
+   * gated experience. `previewPlan` is the currently-pinned tier (or
+   * null = the default 'practice' super-admin experience).
+   */
+  previewPlan?: Plan | null;
+  setPreviewPlanAction?: (formData: FormData) => Promise<void>;
 };
 
 type AnchorRect = { top: number; right: number };
+
+// Plan tiers for the super-admin preview switcher, cheapest → richest.
+// The hint is the human-readable gist of what each tier unlocks, so a
+// QA pass can sanity-check the gating matches the plan at a glance.
+const PLAN_PREVIEW_META: { plan: Plan; label: string; hint: string }[] = [
+  { plan: "free", label: "Free", hint: "No paid features (expired / trial)" },
+  { plan: "filer", label: "Filer", hint: "W-2 forecast · Bella (Haiku)" },
+  { plan: "solo", label: "Solo", hint: "1099 forecast · bank sync · CSV" },
+  { plan: "studio", label: "Studio", hint: "Multi-company · team · multi-state" },
+  { plan: "scale", label: "Scale", hint: "Priority · audit · white-label · API" },
+  { plan: "practice", label: "Practice", hint: "Everything · preparer center" },
+];
 
 // Portal labels for the switcher. We deliberately don't render the
 // destination hostname here anymore — the server action handling the
@@ -80,6 +102,8 @@ export function UserMenu({
   currentPlatform = "user",
   setPlatformAction,
   submitFeedbackAction,
+  previewPlan = null,
+  setPreviewPlanAction,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
@@ -143,6 +167,9 @@ export function UserMenu({
 
   const showSwitcher = isSuperAdmin && setPlatformAction;
   const showFeedback = Boolean(submitFeedbackAction);
+  const showPlanPreview = isSuperAdmin && Boolean(setPreviewPlanAction);
+  // Unset override = the default 'practice' super-admin experience.
+  const effectivePreview: Plan = previewPlan ?? "practice";
 
   const dropdown =
     open && anchor && mounted
@@ -233,6 +260,66 @@ export function UserMenu({
                             {isCurrent ? (
                               <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium shrink-0">
                                 Current
+                              </span>
+                            ) : (
+                              <span
+                                aria-hidden="true"
+                                className="text-ink-muted group-hover:text-forest-800 shrink-0"
+                              >
+                                →
+                              </span>
+                            )}
+                          </button>
+                        </form>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+
+            {/* Plan preview (super-admins only). Pins the admin's
+                effective plan to any tier so they can walk each plan's
+                gated experience and confirm the gating matches the
+                plan. Server-enforced via profiles.preview_plan →
+                getActivePlan, so it flows through every gate. */}
+            {showPlanPreview ? (
+              <div className="px-1 py-2 border-b border-forest-100">
+                <div className="px-2 pt-1 text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+                  Preview plan · QA
+                </div>
+                <div className="px-2 pb-2 pt-0.5 text-[11px] text-ink-muted leading-snug">
+                  Pin your plan to walk each tier&rsquo;s gated view.
+                </div>
+                <ul className="grid gap-1">
+                  {PLAN_PREVIEW_META.map(({ plan, label, hint }) => {
+                    const isCurrent = effectivePreview === plan;
+                    return (
+                      <li key={plan}>
+                        <form
+                          action={setPreviewPlanAction}
+                          onSubmit={() => setOpen(false)}
+                        >
+                          <input type="hidden" name="plan" value={plan} />
+                          <button
+                            type="submit"
+                            disabled={isCurrent}
+                            className={
+                              "w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 group " +
+                              (isCurrent
+                                ? "bg-cream text-forest-900 cursor-default"
+                                : "text-forest-800 hover:bg-cream")
+                            }
+                          >
+                            <span className="flex-1 min-w-0">
+                              <span className="block font-medium">{label}</span>
+                              <span className="block text-[11px] text-ink-muted">
+                                {hint}
+                              </span>
+                            </span>
+                            {isCurrent ? (
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium shrink-0">
+                                Viewing
                               </span>
                             ) : (
                               <span
