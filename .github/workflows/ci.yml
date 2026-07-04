@@ -179,6 +179,42 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  ct:
+    name: component visual regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Compare components against Linux baselines
+        # Renders the isolated component harness (its own Vite server — no
+        # app server, no Supabase) and diffs against the committed
+        # *-ct-*-linux.png baselines. Catches component-level layout/style
+        # regressions (e.g. the mobile select overflow). Regenerate the
+        # Linux baselines via the visual-baselines job when the UI changes.
+        run: npm run test:ct
+
+      - name: Upload diff report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ct-diff-report
+          path: playwright-report/
+          retention-days: 7
+
   visual-baselines:
     # Manual only (Actions → this workflow → "Run workflow"). Regenerates
     # the LINUX visual-regression baselines the `visual` job compares
