@@ -54,14 +54,32 @@ export async function AppHeader({
   let currentPlatform: "user" | "enterprise" | "hq" = "user";
   let activeCompanyId: string | null = null;
   let previewPlan: Plan | null = null;
+  // The header's per-user reads all depend only on the validated user id,
+  // so fan them out concurrently instead of awaiting in series (was
+  // profile → gates → super-admin → memberships, ~4 sequential round
+  // trips). getActiveFeatureGates and isSuperAdminCached both resolve
+  // is_super_admin, but React cache() collapses that to a single RPC even
+  // under concurrency. Memberships feed the LeftRail switcher + the
+  // outstanding-tasks company resolution below, and are consumer-surface
+  // only (admin/HQ hosts render no rail, so we skip that fetch).
+  let memberships: Awaited<ReturnType<typeof getMyCompanies>> = [];
   if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select(
-        "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search, active_company_id, preview_plan",
-      )
-      .eq("id", user.id)
-      .maybeSingle();
+    const [profile, gatesResult, superAdmin, myCompanies] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select(
+          "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search, active_company_id, preview_plan",
+        )
+        .eq("id", user.id)
+        .maybeSingle()
+        .then((r) => r.data),
+      getActiveFeatureGates(supabase, user.id),
+      isSuperAdminCached(),
+      homeHref === "/"
+        ? Promise.resolve<Awaited<ReturnType<typeof getMyCompanies>>>([])
+        : getMyCompanies(),
+    ]);
+
     fullName = profile?.full_name ?? null;
     avatarUrl = profile?.avatar_url ?? null;
     needsConsent = !profile?.gdpr_consented_at;
@@ -74,32 +92,24 @@ export async function AppHeader({
     ) {
       currentPlatform = rawPlatform;
     }
-    const { gates } = await getActiveFeatureGates(supabase, user.id);
-    bellaEnabled = gates.bella;
+    bellaEnabled = gatesResult.gates.bella;
     // Smart search is OFF by default; the user opts in from
     // /settings → Header. Treat null/undefined as false too, so a
     // fresh install or a row created before the column existed
     // doesn't silently render the search input.
     showSmartSearch = profile?.show_smart_search === true;
-    // Resolve super-admin via the seeded helper so the menu only
-    // shows the portal switcher to users who can actually use it.
-    // Non-super-admins won't see the section at all - it's not
+    // Non-super-admins won't see the portal switcher at all — it's not
     // disabled-and-hidden, it's structurally absent.
-    isSuperAdmin = await isSuperAdminCached();
+    isSuperAdmin = superAdmin;
     // QA plan preview is a super-admin-only tool; only surface the
     // pinned tier (and the banner) for them so a stray column value
     // could never affect a normal user's chrome.
     if (isSuperAdmin) {
       previewPlan = asPlanOrNull(profile?.preview_plan);
     }
+    memberships = myCompanies;
   }
 
-  // Fetch the user's companies for the LeftRail switcher (and, below,
-  // to resolve which company's outstanding tasks to show). On admin /
-  // HQ surfaces the rail isn't rendered, so we skip the round trip
-  // entirely. Otherwise this is a single PostgREST query that joins
-  // company_members → companies, scoped by RLS + explicit user filter.
-  const memberships = homeHref === "/" ? [] : await getMyCompanies();
   const companies = memberships.map((m) => ({
     publicId: m.company.public_id,
     name: m.company.name,
