@@ -110,7 +110,7 @@ export function MileageDeductionCalculator({
           <div className="rounded-xl bg-cream/70 border border-gold-300/40 px-4 py-3 text-sm text-ink-soft">
             2026 IRS standard mileage rate:{" "}
             <span className="font-medium text-forest-800">
-              {(RATE_CENTS / 100).toFixed(2)} / mile
+              {RATE_CENTS}¢ / mile
             </span>
           </div>
         </div>
@@ -130,7 +130,7 @@ export function MileageDeductionCalculator({
             </div>
             <p className="mt-2 text-sm text-ink-soft">
               {milesNum.toLocaleString()} business miles ×{" "}
-              {(RATE_CENTS / 100).toFixed(2)}/mile
+              {RATE_CENTS}¢/mile
             </p>
 
             <div className="mt-5 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">

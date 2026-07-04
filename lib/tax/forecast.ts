@@ -488,14 +488,17 @@ export function forecast(input: ForecastInput): ForecastResult {
     // the prior year's rate. Phrase the assumption to be honest about
     // that so a user comparing to their own bookkeeping software
     // doesn't think we miscoded - we're a placeholder that will refresh.
-    const ratePerMile = (k.MILEAGE_RATE_PER_MILE_CENTS / 100).toFixed(2);
+    // Render as cents (e.g. "72.5¢") so half-cent rates like the 2026
+    // 72.5¢/mile show correctly — a dollar `.toFixed(2)` would round
+    // $0.725 down to "$0.72".
+    const ratePerMile = `${k.MILEAGE_RATE_PER_MILE_CENTS}¢`;
     if (k.isMileageRateProvisional) {
       assumptions.push(
-        `Vehicle: standard mileage applied at $${ratePerMile} per business mile (the ${k.year} IRS Notice hasn't been published yet; we're carrying forward last year's rate as a placeholder and will refresh once the Notice posts).`,
+        `Vehicle: standard mileage applied at ${ratePerMile} per business mile (the ${k.year} IRS Notice hasn't been published yet; we're carrying forward last year's rate as a placeholder and will refresh once the Notice posts).`,
       );
     } else {
       assumptions.push(
-        `Vehicle: standard mileage applied at the IRS ${k.year} rate of $${ratePerMile} per business mile.`,
+        `Vehicle: standard mileage applied at the IRS ${k.year} rate of ${ratePerMile} per business mile.`,
       );
     }
   }

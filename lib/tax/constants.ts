@@ -155,14 +155,10 @@ const BUNDLE_2026: TaxYearConstants = {
     obbbaMinimumQbiToQualifyCents: QBI_2026.obbbaMinimumQbiToQualifyCents,
   },
   MILEAGE_RATE_PER_MILE_CENTS: MILEAGE_RATE_2026_PER_MILE_CENTS,
-  // The 2026 IRS Notice setting the standard mileage rate hadn't
-  // been released when this bundle was built; the rate above falls
-  // back to the 2025 value. The forecast engine surfaces a
-  // "provisional rate" assumption when this flag is true; flip to
-  // false (and update MILEAGE_RATE_2026_PER_MILE_CENTS) once the
-  // 2026 Notice publishes (typically late December 2025 / early
-  // January 2026).
-  isMileageRateProvisional: true,
+  // Final: 72.5¢/mile per IRS Notice 2026-10 (verified against irs.gov,
+  // Jul 2026). No longer provisional, so the forecast drops the
+  // "placeholder rate" assumption caveat.
+  isMileageRateProvisional: false,
   // OBBBA § 70433: raised § 6041 reporting threshold from $600 to
   // $2,000 for payments made after Dec 31 2025.
   INFO_REPORTING_THRESHOLD_CENTS: 2000 * 100,
