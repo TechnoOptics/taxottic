@@ -67,6 +67,21 @@ export async function saveBusinessProfile(formData: FormData) {
   });
   if (error) throw new Error(error.message);
 
+  // Manager receipt policy (item 10): the price point above which team
+  // members must attach a scanned receipt. Empty/blank clears it (no
+  // requirement). Lives on companies because it's a company-wide policy,
+  // not a per-tax-year figure.
+  const receiptThresholdRaw = String(
+    formData.get("receipt_required_above") ?? "",
+  ).trim();
+  const receiptThresholdCents =
+    receiptThresholdRaw === "" ? null : parseDollarsToCents(receiptThresholdRaw);
+  const { error: policyError } = await admin
+    .from("companies")
+    .update({ receipt_required_above_cents: receiptThresholdCents })
+    .eq("id", companyId);
+  if (policyError) throw new Error(policyError.message);
+
   await logCompanyActivity(admin, {
     companyId,
     actorUserId: user.id,

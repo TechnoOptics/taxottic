@@ -87,6 +87,7 @@ export default async function ProfilePage({ params }: { params: Params }) {
               zip: bp?.zip ?? null,
               phone: bp?.phone ?? null,
               businessEmail: bp?.business_email ?? null,
+              receiptRequiredAboveCents: company.receipt_required_above_cents,
             }}
             action={saveBusinessProfile}
           />

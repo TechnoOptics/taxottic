@@ -71,6 +71,10 @@ export async function addExpense(formData: FormData) {
   const recurrence = VALID_RECURRENCES.has(recurrenceRaw)
     ? recurrenceRaw
     : "one_off";
+  // The receipt-scan flow (ReceiptUploader) stamps this; the manual
+  // "Add an expense" form never can, which is what makes the manager's
+  // receipt threshold below enforceable.
+  const receiptCaptured = String(formData.get("receipt_captured") ?? "") === "1";
 
   if (
     !companyId ||
@@ -96,6 +100,21 @@ export async function addExpense(formData: FormData) {
     throw new Error("Not a member of this company");
   }
 
+  // Manager receipt policy (item 10): fetch the company once for both the
+  // threshold check and the later revalidate.
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id, receipt_required_above_cents")
+    .eq("id", companyId)
+    .single();
+
+  const threshold = company?.receipt_required_above_cents ?? null;
+  if (threshold !== null && cents > threshold && !receiptCaptured) {
+    throw new Error(
+      `A receipt is required for expenses over ${formatCents(threshold)}. Use "Scan a receipt" above to capture one.`,
+    );
+  }
+
   const { data: inserted, error } = await admin
     .from("monthly_expenses")
     .insert({
@@ -107,6 +126,7 @@ export async function addExpense(formData: FormData) {
       category_code: categoryCode,
       recurrence,
       notes,
+      receipt_captured: receiptCaptured,
     })
     .select("id")
     .single();
@@ -132,11 +152,6 @@ export async function addExpense(formData: FormData) {
     payload: { month, amount_cents: cents, category_code: categoryCode, recurrence },
   });
 
-  const { data: company } = await admin
-    .from("companies")
-    .select("public_id")
-    .eq("id", companyId)
-    .single();
   if (company) {
     revalidatePath(`/c/${company.public_id}/expenses`);
     revalidatePath(`/c/${company.public_id}/forecast`);

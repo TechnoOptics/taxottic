@@ -253,6 +253,9 @@ export function ReceiptUploader({
           <input type="hidden" name="company_id" value={companyId} />
           <input type="hidden" name="tax_year" value={taxYear} />
           <input type="hidden" name="recurrence" value="one_off" />
+          {/* Item 10: proves this expense came through the receipt scan,
+             so it satisfies the manager's receipt-required threshold. */}
+          <input type="hidden" name="receipt_captured" value="1" />
 
           <div className="rounded-lg border border-forest-100 bg-cream/40 p-3 text-xs text-ink-soft">
             <div className="flex items-center gap-2 flex-wrap">

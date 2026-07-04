@@ -203,6 +203,7 @@ export default async function ExpensesPage({
             currentMonth={currentMonth}
             categories={(categories as CategoryRow[] | null) ?? []}
             action={addExpense}
+            receiptThreshold={company.receipt_required_above_cents}
             recentVendors={Array.from(
               new Set(
                 (rows ?? [])
