@@ -141,6 +141,15 @@ export type ForecastInput = {
   spouseW2SsWagesCents: number;
 
   entityType: EntityType;
+  /**
+   * Which side of the app this forecast is for. "business" (the company
+   * forecast) suppresses individual-return credits the personal side owns:
+   * child tax credit, EITC, Saver's Credit, and education credits. Those
+   * belong on the personal return, so the business view shows only the
+   * business's tax picture. Defaults to "personal" (undefined), preserving
+   * existing behavior everywhere else (personal forecast, all calculators).
+   */
+  scope?: "personal" | "business";
   ytdIncomeCents: number;
   // Schedule C-style business expenses (excluding meals, which is its own
   // bucket and gets the 50% rule applied by the engine, and excluding
@@ -1217,13 +1226,17 @@ export function forecast(input: ForecastInput): ForecastResult {
   // non-refundable here (we deliberately don't model the refundable
   // Additional CTC because forecasting "you'll get money back" is more
   // surprising than helpful for a save-target tool).
-  const credits = computeFamilyCredits({
-    dependents: input.dependents,
-    dependentsUnder17: input.dependentsUnder17,
-    filingStatus: input.filingStatus,
-    agiCents: agi,
-    taxYear: input.taxYear,
-  });
+  // Business scope suppresses individual-return credits (see ForecastInput.scope).
+  const isBusinessScope = input.scope === "business";
+  const credits = isBusinessScope
+    ? 0
+    : computeFamilyCredits({
+        dependents: input.dependents,
+        dependentsUnder17: input.dependentsUnder17,
+        filingStatus: input.filingStatus,
+        agiCents: agi,
+        taxYear: input.taxYear,
+      });
   if (credits > 0) {
     assumptions.push(
       `Family credits: $${(k.CHILD_TAX_CREDIT.ctcPerChildCents / 100).toLocaleString()} per qualifying child under 17 (CTC) + $${(k.CHILD_TAX_CREDIT.odcPerOtherCents / 100).toLocaleString()} per other dependent (ODC), phased out above the AGI threshold.`,
@@ -1246,9 +1259,11 @@ export function forecast(input: ForecastInput): ForecastResult {
     age: input.age,
     taxYear: input.taxYear,
   });
-  const saversCreditCents = saversResult.creditCents;
-  const saversCreditRate = saversResult.rate;
-  const saversCreditReasonZero = saversResult.reasonZero ?? "";
+  const saversCreditCents = isBusinessScope ? 0 : saversResult.creditCents;
+  const saversCreditRate = isBusinessScope ? 0 : saversResult.rate;
+  const saversCreditReasonZero = isBusinessScope
+    ? ""
+    : (saversResult.reasonZero ?? "");
   if (saversCreditCents > 0) {
     assumptions.push(
       `Saver's Credit (§ 25B) applied at ${Math.round(saversResult.rate * 100)}% of qualifying retirement contributions: $${(saversCreditCents / 100).toLocaleString()}. Non-refundable - reduces tax to zero but no refund of the unused portion.`,
@@ -1269,10 +1284,16 @@ export function forecast(input: ForecastInput): ForecastResult {
     filingStatus: input.filingStatus,
     claimAotc: input.claimAotc ?? false,
   });
-  const educationCreditRefundableCents = eduCredit.refundableCents;
-  const educationCreditNonRefundableCents = eduCredit.nonRefundableCents;
-  const educationCreditKind = eduCredit.kind;
-  const educationCreditReasonZero = eduCredit.reasonZero ?? "";
+  const educationCreditRefundableCents = isBusinessScope
+    ? 0
+    : eduCredit.refundableCents;
+  const educationCreditNonRefundableCents = isBusinessScope
+    ? 0
+    : eduCredit.nonRefundableCents;
+  const educationCreditKind = isBusinessScope ? "none" : eduCredit.kind;
+  const educationCreditReasonZero = isBusinessScope
+    ? ""
+    : (eduCredit.reasonZero ?? "");
   if (educationCreditRefundableCents + educationCreditNonRefundableCents > 0) {
     if (educationCreditKind === "aotc") {
       assumptions.push(
@@ -1555,8 +1576,10 @@ export function forecast(input: ForecastInput): ForecastResult {
     filingStatus: input.filingStatus,
     taxYear: input.taxYear,
   });
-  const eitcCents = eitcResult.creditCents;
-  const eitcReasonZero = eitcResult.reasonZero ?? "";
+  const eitcCents = isBusinessScope ? 0 : eitcResult.creditCents;
+  const eitcReasonZero = isBusinessScope
+    ? ""
+    : (eitcResult.reasonZero ?? "");
   if (eitcCents > 0) {
     assumptions.push(
       `Earned Income Tax Credit (§ 32) applied: $${(eitcCents / 100).toLocaleString()} (refundable - if you owe less than that in tax, the IRS sends the rest back as a refund).`,

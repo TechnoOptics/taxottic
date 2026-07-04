@@ -302,6 +302,9 @@ export function buildCompanyForecast(
     | "monthsEntered"
   > = {
     taxYear,
+    // Business side: suppress individual-return credits (child tax credit,
+    // EITC, Saver's, education). Those live on the personal forecast.
+    scope: "business",
     filingStatus: taxProfile.filing_status as FilingStatus,
     stateCode: company.state_code ?? taxProfile.state_code,
     age: taxProfile.age,
