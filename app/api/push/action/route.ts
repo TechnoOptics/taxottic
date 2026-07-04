@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // The native shell calls this from the
 // pushNotificationActionPerformed listener when the user taps a
 // notification action button (Phase 2's "Business / Personal"). Auth
-// via session — a notification action is UNTRUSTED, so we re-validate
+// via session, a notification action is UNTRUSTED, so we re-validate
 // the user and re-authorise the target row inside the shared
 // reclassify core exactly as the in-app button does. Unknown actions
 // map to { type:"open" } and mutate nothing.
@@ -59,6 +59,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, did: "reclassify_trip" });
   }
 
-  // "open" — nothing to mutate; the client foregrounds + routes.
+  // "open", nothing to mutate; the client foregrounds + routes.
   return NextResponse.json({ ok: true, did: "open" });
 }

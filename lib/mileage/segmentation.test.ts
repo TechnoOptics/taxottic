@@ -33,7 +33,7 @@ describe("haversineMeters", () => {
   });
 });
 
-describe("segmentTrips — the business's logical flow", () => {
+describe("segmentTrips, the business's logical flow", () => {
   it("one drive then a 5-min stop → exactly one trip ending at arrival", () => {
     const points: GpsPoint[] = [];
     let t = 0;
@@ -72,7 +72,7 @@ describe("segmentTrips — the business's logical flow", () => {
       north += 100;
       t += 10 * SEC;
     }
-    // Park 12.5 min — a real destination, longer than TRIP_END_DWELL_MS.
+    // Park 12.5 min, a real destination, longer than TRIP_END_DWELL_MS.
     for (let i = 0; i < 25; i++) {
       points.push(pt(north, t));
       t += 30 * SEC;
@@ -95,7 +95,7 @@ describe("segmentTrips — the business's logical flow", () => {
   it("a multi-minute traffic stop does NOT split one drive (the reported bug)", () => {
     // Drive, hit traffic and sit ~6.5 min (longer than the OLD 5-min
     // split, but under TRIP_END_DWELL_MS), then continue. Must come out
-    // as ONE continuous trip — not two fragments.
+    // as ONE continuous trip, not two fragments.
     const points: GpsPoint[] = [];
     let t = 0;
     let north = 0;
@@ -177,7 +177,7 @@ describe("segmentTrips — the business's logical flow", () => {
     // `cur.speedMps >= 0` check returned 0 immediately and the
     // haversine fallback was bypassed → trip never opened. This test
     // proves the fix: a stream of points moving 100 m every 10 s
-    // (10 m/s — clearly driving) but each tagged `speedMps: 0` MUST
+    // (10 m/s, clearly driving) but each tagged `speedMps: 0` MUST
     // still be detected as a drive.
     const points: GpsPoint[] = [];
     let t = 0;
@@ -202,7 +202,7 @@ describe("segmentTrips — the business's logical flow", () => {
   });
 
   it("closeOpenAtEnd:false leaves the tail trip in staging (no fragmentation during a live drive)", () => {
-    // 30 hops at 10 m/s — a single ongoing drive that never paused.
+    // 30 hops at 10 m/s, a single ongoing drive that never paused.
     // The default behavior would emit one tail-closed trip; with
     // closeOpenAtEnd:false the trip is deferred so a heartbeat ingest
     // during the drive doesn't materialize a fragment that subsequent

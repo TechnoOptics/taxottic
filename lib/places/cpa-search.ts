@@ -88,7 +88,7 @@ export async function searchCpas(
 
   // Cap the upstream Google Places call at 6 seconds. Without this,
   // a slow Google response (or a network blip on the Vercel edge)
-  // leaves the route handler hung — clients abort their fetch on
+  // leaves the route handler hung, clients abort their fetch on
   // their own 8-second timer but the server-side request keeps
   // running, burning a serverless invocation. Reported in the May
   // 2026 weekly re-audit ("/api/cpa-search POST stays pending").
@@ -105,7 +105,7 @@ export async function searchCpas(
     });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      // Treat upstream timeout the same as a missing API key — the
+      // Treat upstream timeout the same as a missing API key, the
       // route handler returns `results: null` and the client falls
       // back to the Google Maps link.
       return null;

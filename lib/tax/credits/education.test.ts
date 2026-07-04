@@ -5,7 +5,7 @@ import { computeEducationCreditCents } from "./education";
  * Education-credit math verification.
  *
  * Sources for the expected values:
- *   - IRS Pub 970 (Tax Benefits for Education) — worked examples
+ *   - IRS Pub 970 (Tax Benefits for Education), worked examples
  *   - IRC § 25A
  *   - Form 8863 instructions
  *
@@ -26,7 +26,7 @@ import { computeEducationCreditCents } from "./education";
  * $20k for MFJ.
  */
 
-describe("AOTC — maximum credit math", () => {
+describe("AOTC, maximum credit math", () => {
   it("$4,000 of expenses → $2,500 credit (full max)", () => {
     // 100% of first $2,000 = $2,000
     // 25% of next $2,000 = $500
@@ -76,7 +76,7 @@ describe("AOTC — maximum credit math", () => {
   });
 });
 
-describe("AOTC — phase-out", () => {
+describe("AOTC, phase-out", () => {
   it("single, MAGI = $80,000 (at threshold) → full credit", () => {
     const res = computeEducationCreditCents({
       qualifiedExpensesCents: 4_000 * 100,
@@ -178,7 +178,7 @@ describe("Lifetime Learning Credit", () => {
   });
 });
 
-describe("Education credits — disqualifiers", () => {
+describe("Education credits, disqualifiers", () => {
   it("MFS → no credit regardless of AOTC/LLC choice", () => {
     const aotc = computeEducationCreditCents({
       qualifiedExpensesCents: 4_000 * 100,
@@ -224,7 +224,7 @@ describe("Education credits — disqualifiers", () => {
   });
 });
 
-describe("Education credits — split behavior", () => {
+describe("Education credits, split behavior", () => {
   it("AOTC always splits refundable + non-refundable correctly", () => {
     const cases = [
       { expenses: 1_000, expected: { ref: 400, nonref: 600 } }, // $1,000 credit

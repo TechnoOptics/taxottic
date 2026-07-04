@@ -13,7 +13,7 @@ export type PendingTrip = {
   distanceMiles: number;
   estDeductionCents: number;
   /** Route breadcrumb (bounded, evenly-strided) so the reviewer can SEE
-   *  where the drive went before calling it business or personal —
+   *  where the drive went before calling it business or personal -
    *  empty when the trip has no recorded points (e.g. a very old
    *  reconstructed/manual entry). */
   points: { lat: number; lng: number }[];
@@ -49,7 +49,7 @@ export default async function ClassifyPage({
   }[];
 
   // Route polylines for every pending trip in one round-trip, via the
-  // same bounded RPC the /mileage overview map uses — NOT an embedded
+  // same bounded RPC the /mileage overview map uses, NOT an embedded
   // mileage_points(...) join, which PostgREST caps at 1000 rows and
   // would truncate a long drive mid-route. p_max is smaller here (150)
   // since each card only needs a smooth-enough line, not a YTD overview.
@@ -83,7 +83,7 @@ export default async function ClassifyPage({
     };
   });
 
-  // Nothing to do — bounce back to Mileage so the user sees the
+  // Nothing to do, bounce back to Mileage so the user sees the
   // map / breadcrumbs instead of a stranded empty page.
   if (pending.length === 0) {
     redirect("/mileage?caughtup=1");
@@ -113,7 +113,7 @@ export default async function ClassifyPage({
             : `${pending.length} drives need a quick call.`}
         </h1>
         <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-          Tap <strong>Business</strong> if the drive was for work — it
+          Tap <strong>Business</strong> if the drive was for work, it
           counts toward your Schedule C mileage deduction. Tap{" "}
           <strong>Personal</strong> if it&apos;s a regular errand. Same
           calls the watch surface for the swipe deck, just bigger.

@@ -4,7 +4,7 @@
 // TaxotticWatchBridge plugin (→ WCSession + complication App Group),
 // merging the two device-only mileage flags first. startWatchBridge()
 // forwards inbound one-gesture watch actions to the SAME server paths
-// the in-app / notification flows use — no new tax/mileage logic.
+// the in-app / notification flows use, no new tax/mileage logic.
 //
 // Graceful degradation (#69 lesson): dynamic-imported + guarded on
 // isNativePlatform + isPluginAvailable. Web and pre-plugin binaries
@@ -63,7 +63,7 @@ export async function syncWatch(): Promise<void> {
     lastCompanyId = snapshot.companyId ?? lastCompanyId;
 
     // trackingActive / autoApplyBusiness are device prefs the server
-    // can't know — merge them in client-side.
+    // can't know, merge them in client-side.
     try {
       const { getMileageTrackingState } = await import(
         "@/lib/mileage/native-tracker"
@@ -81,12 +81,12 @@ export async function syncWatch(): Promise<void> {
         autoApplyBusiness: autoApply,
       };
     } catch {
-      /* native-tracker absent — leave server defaults */
+      /* native-tracker absent, leave server defaults */
     }
 
     await bg.sync({ snapshot });
   } catch {
-    /* offline / signed out — leave the watch as-is */
+    /* offline / signed out, leave the watch as-is */
   }
 }
 
@@ -103,7 +103,7 @@ export async function startWatchBridge(): Promise<void> {
     });
     actionUnsub = handle.remove;
   } catch {
-    /* absent — no-op */
+    /* absent, no-op */
   }
 
   // Keep the watch live: re-push the snapshot whenever the phone
@@ -119,7 +119,7 @@ export async function startWatchBridge(): Promise<void> {
       if (isActive) void syncWatch();
     });
   } catch {
-    /* @capacitor/app absent — launch + post-action sync still apply */
+    /* @capacitor/app absent, launch + post-action sync still apply */
   }
 }
 
@@ -158,7 +158,7 @@ async function handleAction(msg: Record<string, unknown>): Promise<void> {
         await tracker.stopMileageTracking();
       }
     } catch {
-      /* tracker plugin absent — no-op */
+      /* tracker plugin absent, no-op */
     }
     void syncWatch(); // reflect the new tracking state on the watch
     return;

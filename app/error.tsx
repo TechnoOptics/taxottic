@@ -8,7 +8,7 @@ import { useEffect } from "react";
  *
  * Without this file, an uncaught throw in a server component, page
  * data fetch, or server action renders Next's default crash page
- * — which the user reports as "the app crashed saying the page
+ *, which the user reports as "the app crashed saying the page
  * could not load." That page has no branding, no recovery
  * affordances, and looks like the app died.
  *
@@ -29,7 +29,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Best-effort log — Sentry / Vercel will also catch the throw.
+    // Best-effort log, Sentry / Vercel will also catch the throw.
     console.error("[error.tsx]", error.digest, error.message);
   }, [error]);
 
@@ -47,7 +47,7 @@ export default function GlobalError({
         </h1>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed">
           The server hit an error before the page finished rendering.
-          Your data is safe — only this view is affected.
+          Your data is safe, only this view is affected.
         </p>
 
         {error?.message ? (
@@ -78,7 +78,7 @@ export default function GlobalError({
         </div>
 
         <p className="mt-4 text-[11px] text-ink-muted leading-relaxed">
-          If this keeps happening, send us the reference id above —{" "}
+          If this keeps happening, send us the reference id above -{" "}
           <a
             href="mailto:hello@taxottic.com"
             className="underline underline-offset-2 hover:text-forest-900"

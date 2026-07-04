@@ -29,7 +29,7 @@ export type StatePayload = {
   fid: string;
   /** Provider id. */
   prov: "zoom" | "google" | "microsoft";
-  /** Random per-flow nonce — defense in depth against replay. */
+  /** Random per-flow nonce, defense in depth against replay. */
   n: string;
 };
 

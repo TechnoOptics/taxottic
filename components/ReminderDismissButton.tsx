@@ -9,7 +9,7 @@ import { dismissAllOverdueReminders } from "@/app/reminders/actions";
  * Previously this was a bare `<form action={dismissAllOverdueReminders}>`
  * rendered directly in the dashboard Server Component. On device that
  * form submitted as a plain navigation POST to /dashboard WITHOUT the
- * Next-Action header — so the server action never ran and the card
+ * Next-Action header, so the server action never ran and the card
  * never dismissed (confirmed on a Galaxy Z Fold5: dismissed_at stayed
  * null after tapping the X). Invoking the server action from a Client
  * Component via a transition dispatches it as a proper action RPC, so
@@ -22,7 +22,7 @@ export function ReminderDismissButton() {
       type="button"
       disabled={pending}
       aria-label="Dismiss overdue reminders"
-      title="Dismiss — you can still open them from /reminders"
+      title="Dismiss, you can still open them from /reminders"
       onClick={() => {
         startTransition(() => {
           void dismissAllOverdueReminders();

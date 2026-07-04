@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Accessibility — Taxottic WCAG 2.2 AA commitment",
+  title: "Accessibility, Taxottic WCAG 2.2 AA commitment",
   description:
     "Taxottic's accessibility commitment. WCAG 2.2 Level AA target, what's in place today, known gaps, and how to report a barrier (access@taxottic.com).",
   alternates: { canonical: "/legal/accessibility" },
@@ -81,7 +81,7 @@ export default function AccessibilityPage() {
               </li>
               <li>
                 <strong>Resizable text.</strong> Pinch-zoom and browser
-                zoom are not capped — you can zoom up to 500% without
+                zoom are not capped, you can zoom up to 500% without
                 losing content or function (WCAG 1.4.4). The previous
                 viewport setting that capped zoom at 5× has been removed
                 following the May 2026 audit.
@@ -90,13 +90,13 @@ export default function AccessibilityPage() {
                 <strong>Colour contrast.</strong> Body text on cream and
                 forest-green backgrounds meets AA contrast (4.5:1 for
                 body, 3:1 for large text). The gold accent is decorative
-                only — never relied on to convey state.
+                only, never relied on to convey state.
               </li>
               <li>
                 <strong>Forms.</strong> Visible labels paired with
                 inputs, descriptive error messages bound by{" "}
                 <code>aria-describedby</code>, and required fields
-                announced — not just shown with a red asterisk.
+                announced, not just shown with a red asterisk.
               </li>
               <li>
                 <strong>Time-out warnings.</strong> Long-running flows
@@ -168,7 +168,7 @@ export default function AccessibilityPage() {
                 >
                   WCAG 2.2, Level AA
                 </a>{" "}
-                — the primary target.
+, the primary target.
               </li>
               <li>
                 <a
@@ -179,7 +179,7 @@ export default function AccessibilityPage() {
                 >
                   Section 508
                 </a>{" "}
-                — for U.S. federal-procurement compatibility (informational).
+, for U.S. federal-procurement compatibility (informational).
               </li>
               <li>
                 <a
@@ -190,7 +190,7 @@ export default function AccessibilityPage() {
                 >
                   EN 301 549
                 </a>{" "}
-                — for EU public-sector procurement (informational).
+, for EU public-sector procurement (informational).
               </li>
             </ul>
             <p>
@@ -235,7 +235,7 @@ export default function AccessibilityPage() {
               We acknowledge accessibility reports within two business
               days and aim to ship a fix within 30 days for blocking
               issues. While a barrier exists, we will offer an
-              alternative path to complete the task — by email, phone, or
+              alternative path to complete the task, by email, phone, or
               with a member of the team on a call.
             </p>
           </Section>

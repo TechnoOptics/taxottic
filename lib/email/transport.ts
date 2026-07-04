@@ -16,7 +16,7 @@
  * format gives us a more predictable surface for tests. We can
  * always swap in the SDK if Resend ships features we want.
  *
- * Errors are NEVER surfaced as exceptions — caller gets
+ * Errors are NEVER surfaced as exceptions, caller gets
  * `{ ok: false, reason }`. Email delivery is treated as best-effort
  * so an SMTP outage doesn't take down the request that triggered
  * the send.

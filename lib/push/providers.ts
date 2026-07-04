@@ -2,7 +2,7 @@
 //
 // HONEST SCOPE (same status as the iOS build / Maps key): the APNs
 // and FCM transports are real, but they are exercised only once the
-// founder provisions credentials — they CANNOT be CI-verified (no
+// founder provisions credentials, they CANNOT be CI-verified (no
 // keys, no device). Phase 1's tested surface is the orchestration
 // (lib/push/send.ts) + payloads, proven with a fake provider. With
 // no credentials, resolveProvider() returns the Noop provider so the
@@ -31,7 +31,7 @@ export const NoopProvider: PushProvider = {
 };
 
 // ---------------------------------------------------------------------------
-// APNs (iOS) — token-based auth, ES256 JWT, HTTP/2. Env:
+// APNs (iOS), token-based auth, ES256 JWT, HTTP/2. Env:
 //   APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY (.p8 contents),
 //   APNS_BUNDLE_ID, APNS_PRODUCTION ("1" → api.push.apple.com).
 // ---------------------------------------------------------------------------
@@ -118,7 +118,7 @@ const ApnsProvider: PushProvider = {
 };
 
 // ---------------------------------------------------------------------------
-// FCM v1 (Android) — service-account JWT → OAuth2 access token →
+// FCM v1 (Android), service-account JWT → OAuth2 access token →
 // HTTPS POST. Env: FCM_SERVICE_ACCOUNT_JSON (the full SA JSON).
 // ---------------------------------------------------------------------------
 function fcmConfigured() {
@@ -208,7 +208,7 @@ const FcmProvider: PushProvider = {
  * Resolve the provider for the current environment. Routes per
  * platform; any platform without configured credentials falls back
  * to Noop (clean no-op, not a crash). web → Noop in Phase 1 (web
- * push needs VAPID + a service worker — out of scope).
+ * push needs VAPID + a service worker, out of scope).
  */
 export function resolveProvider(): PushProvider {
   const apnsOn = apnsConfigured();

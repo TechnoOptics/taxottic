@@ -65,7 +65,7 @@ export function getPriceId(key: PriceKey): string {
   return map[key] ?? "";
 }
 
-/** Type-narrowing helpers — used by routes to validate a `price_key`. */
+/** Type-narrowing helpers, used by routes to validate a `price_key`. */
 const SUBSCRIPTION_KEYS = new Set<SubscriptionPriceKey>([
   "filer_monthly",
   "filer_yearly",

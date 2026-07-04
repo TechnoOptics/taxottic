@@ -4,7 +4,7 @@
  * Append-only ledger semantics: every change to a user's balance is a
  * row in `credits_ledger`. The current balance is always
  * `SUM(delta_credits)` for that user. We never persist a standalone
- * balance counter — that's the only way to keep balance and history
+ * balance counter, that's the only way to keep balance and history
  * impossible to diverge.
  *
  * Operations:
@@ -66,7 +66,7 @@ export async function getBalance(
  * Idempotently grant the monthly allowance for a user's current plan.
  *
  * "Idempotent" means: calling this multiple times in the same period
- * is a no-op. We key off `subscriptions.last_credit_grant_at` —
+ * is a no-op. We key off `subscriptions.last_credit_grant_at` -
  * if it's within the last 27 days we don't grant again (27 not 30 so
  * we tolerate slightly drifted billing cycles).
  *
@@ -155,12 +155,12 @@ export async function ensureMonthlyGrant(
 
 /**
  * Consume credits for a user-facing action. Returns insufficient if
- * the user can't afford it — the caller is expected to surface the
+ * the user can't afford it, the caller is expected to surface the
  * "buy a top-up" CTA.
  *
  * Race protection: we re-read the balance after the insert. If a
  * parallel request burned the balance, the post-write balance could
- * dip negative. That's accepted — the ledger is the source of truth
+ * dip negative. That's accepted, the ledger is the source of truth
  * and a small overshoot in a rare race is cheaper than a heavyweight
  * lock here. The next monthly grant restores parity.
  */
@@ -187,7 +187,7 @@ export async function consume(
 
 /**
  * Record a top-up purchase from Stripe. Idempotent on `stripeChargeId`
- * — if we already recorded a row with that ref we skip. Caller is
+ *, if we already recorded a row with that ref we skip. Caller is
  * the Stripe webhook.
  */
 export async function recordTopUp(

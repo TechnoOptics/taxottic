@@ -10,7 +10,7 @@ export const maxDuration = 300;
  * sync function to refresh it. The function itself enforces a
  * monthly cost throttle (see lib/plaid/sync.ts), so most days
  * each connection short-circuits without an API call. The reason
- * we still run daily — instead of monthly — is failure recovery:
+ * we still run daily, instead of monthly, is failure recovery:
  * if the first-of-month run fails (Plaid outage, transient 5xx),
  * the next day's run will retry because last_synced_at is only
  * updated on a successful sync.

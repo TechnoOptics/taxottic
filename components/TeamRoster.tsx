@@ -28,11 +28,11 @@ type Props = {
 };
 
 /**
- * Team roster with a name/title search box and a department filter —
+ * Team roster with a name/title search box and a department filter -
  * a flat, unfiltered <ul> reads fine for a handful of teammates but
  * becomes an unscannable wall at real scale (a manager running 100
  * employees). Filtering happens client-side against the already-fetched
- * roster (cheap at this size — no extra round-trip per keystroke).
+ * roster (cheap at this size, no extra round-trip per keystroke).
  */
 export function TeamRoster({
   members,

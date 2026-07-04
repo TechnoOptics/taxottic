@@ -57,7 +57,7 @@ export function NewCompanyWizard({
 
   function next() {
     setError(null);
-    // Welcome stage has no required input — full name is optional on
+    // Welcome stage has no required input, full name is optional on
     // first-company askForName runs (collected in /settings later if
     // skipped here).
     if (stage === 1 && !name.trim()) {
@@ -118,7 +118,7 @@ export function NewCompanyWizard({
 
   return (
     <section className="max-w-xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      {/* Progress ribbon — gold dots that fill as you advance. */}
+      {/* Progress ribbon, gold dots that fill as you advance. */}
       <div className="flex items-center justify-between gap-3 mb-5">
         <button
           type="button"
@@ -157,7 +157,7 @@ export function NewCompanyWizard({
         data-dir={direction}
         className="card wizard-card p-6 sm:p-8 relative overflow-hidden"
       >
-        {/* Sheen — a faint gold gradient that sweeps across the new
+        {/* Sheen, a faint gold gradient that sweeps across the new
             card on entry. Pure decoration; doesn't affect layout. */}
         <span aria-hidden="true" className="wizard-sheen" />
 
@@ -212,7 +212,7 @@ export function NewCompanyWizard({
         ) : null}
       </div>
 
-      {/* Footer nav — hidden on review (the form has its own submit). */}
+      {/* Footer nav, hidden on review (the form has its own submit). */}
       {stage < 4 ? (
         <div className="mt-5 flex items-center justify-between gap-2">
           <p className="text-xs text-ink-muted">
@@ -323,23 +323,23 @@ function WelcomeStage({
       </h1>
       <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
         A few quick questions and Taxottic shapes itself to your
-        business — your forecast, deduction matching, state taxes,
+        business, your forecast, deduction matching, state taxes,
         invoicing, the lot. Every answer makes the rest of the app
         smarter for <em>you</em>; nothing here is filed with the IRS,
         and everything is editable later.
       </p>
       <div className="mt-5 grid gap-3 text-xs text-ink-muted">
         <Bullet>
-          <strong className="text-forest-900">Name</strong> — so the
+          <strong className="text-forest-900">Name</strong>, so the
           app addresses your business properly across every screen.
         </Bullet>
         <Bullet>
-          <strong className="text-forest-900">Structure</strong> —
+          <strong className="text-forest-900">Structure</strong> -
           drives whether the forecast runs Schedule C, Form 1065, or
           C-Corp math.
         </Bullet>
         <Bullet>
-          <strong className="text-forest-900">Home state</strong> —
+          <strong className="text-forest-900">Home state</strong> -
           unlocks state-tax estimates and the find-a-CPA card.
         </Bullet>
       </div>
@@ -363,7 +363,7 @@ function WelcomeStage({
             maxLength={120}
           />
           <p className="text-[11px] text-ink-muted">
-            Goes on your profile — used for greetings and on documents
+            Goes on your profile, used for greetings and on documents
             shared with your team. Change it any time in
             <code className="px-1">/settings</code>.
           </p>
@@ -391,7 +391,7 @@ function NameStage({
         What do you call it?
       </h2>
       <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-        Use the working name — what your customers know you as. The
+        Use the working name, what your customers know you as. The
         legal name + EIN can come later in the company profile. This
         is how Taxottic addresses your business throughout the app.
       </p>
@@ -428,7 +428,7 @@ function EntityStage({
       <p className="mt-2 text-sm text-ink-soft leading-relaxed">
         This drives the math: Schedule&nbsp;C vs. Form&nbsp;1065 vs.
         C-Corp returns, owner-payroll handling, self-employment tax,
-        and which deductions surface. Not sure? Go with your gut —
+        and which deductions surface. Not sure? Go with your gut -
         Taxottic flags anything that looks off later.
       </p>
       <ul className="mt-4 grid gap-2">
@@ -496,7 +496,7 @@ function StateStage({
         Your home state runs state-income-tax estimates inside the
         forecast and powers the find-a-CPA card. If you have nexus in
         other states (e.g., remote employees), add those later under
-        the company profile — we&apos;ll factor them into the forecast too.
+        the company profile, we&apos;ll factor them into the forecast too.
       </p>
       <input
         autoFocus

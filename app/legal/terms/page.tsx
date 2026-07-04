@@ -49,7 +49,7 @@ export default function TermsPage() {
               file returns on your behalf.
             </p>
             <h3 className="display text-base text-forest-900 mt-2">
-              Forecast vs. tax advice — the distinction
+              Forecast vs. tax advice, the distinction
             </h3>
             <p>
               Every number Taxottic shows is a <strong>forecast</strong>:
@@ -77,7 +77,7 @@ export default function TermsPage() {
                 Tax advice rendered by a licensed Enrolled Agent, CPA,
                 or attorney
               </li>
-              <li>A filed return — only the IRS / state DOR + your
+              <li>A filed return, only the IRS / state DOR + your
                 preparer can produce that
               </li>
               <li>
@@ -85,7 +85,7 @@ export default function TermsPage() {
                 circumstances the engine doesn&apos;t see
               </li>
               <li>
-                A guarantee that the rate tables we use are current —
+                A guarantee that the rate tables we use are current -
                 states publish rate changes at varying cadences and
                 we may lag a few weeks
               </li>

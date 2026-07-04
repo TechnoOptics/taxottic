@@ -15,7 +15,7 @@ type Props = {
 
 /**
  * Lightweight password popup for unlocking PDF tax documents. Renders
- * an in-page modal (no portal — keeps it scoped to the upload component)
+ * an in-page modal (no portal, keeps it scoped to the upload component)
  * and locks focus on the password input. Shift-Tab cycles correctly.
  */
 export function PdfPasswordPrompt({ fileName, wrongAttempt, onSubmit, onCancel }: Props) {

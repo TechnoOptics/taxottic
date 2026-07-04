@@ -52,7 +52,7 @@ export async function firmCustomHostFromHeaders(): Promise<string | null> {
 export type FirmRecord = {
   id: string;
   public_id: string;
-  slug: string | null; // subdomain slug — null for legacy firms until backfilled
+  slug: string | null; // subdomain slug, null for legacy firms until backfilled
   name: string;
   legal_name: string | null;
   logo_url: string | null;
@@ -73,7 +73,7 @@ export type FirmMembership = {
 export type FirmContext = {
   firm: FirmRecord;
   membership: FirmMembership;
-  /** All firms this user has any role in — surfaced in the firm
+  /** All firms this user has any role in, surfaced in the firm
    *  switcher when length > 1. Empty for the typical single-firm
    *  preparer. */
   allFirms: FirmRecord[];

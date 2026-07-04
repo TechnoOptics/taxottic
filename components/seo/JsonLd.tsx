@@ -19,7 +19,7 @@
  * Usage:
  *   <JsonLd data={{ "@context": "https://schema.org", "@type": "Organization", ... }} />
  *
- * Multiple blobs on the same page are fine — each goes in its own
+ * Multiple blobs on the same page are fine, each goes in its own
  * <script> tag and Google parses them independently. Don't try to
  * merge them with `@graph` unless you have a specific schema reason.
  */
@@ -39,7 +39,7 @@ export function JsonLd({ data }: Props) {
   // Escape any `</script` that snuck into a string value. Without this,
   // a user-controlled string ending the script tag could break the page
   // and worst-case open an XSS hole. The replacement keeps the visible
-  // text intact — Google still reads "</script" within a string value
+  // text intact, Google still reads "</script" within a string value
   // correctly.
   const serialized = JSON.stringify(data).replace(
     /<\/script/gi,

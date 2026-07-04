@@ -14,12 +14,12 @@ export const dynamic = "force-dynamic";
 //      staging pool, runs segmentTrips() over it, and materialises any
 //      CLOSED trip into mileage_trips + mileage_points (marking the
 //      contributing staging rows consumed). Points belonging to an OPEN
-//      (still-moving) trip stay staged for the next batch — nothing is
+//      (still-moving) trip stay staged for the next batch, nothing is
 //      dropped.
 //
 // The segmenter needs a 5-min stationary dwell (or 8-min capture gap)
 // to close a trip. The device's @capgo plugin flushes every ~2 min
-// mid-drive, so a single batch is rarely a complete drive on its own —
+// mid-drive, so a single batch is rarely a complete drive on its own -
 // that's why we re-segment the whole unconsumed pool every call.
 //
 // Bound: ingest segments only the last ~24h of staging (per-request
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    console.log("[ingest] 401 — no session");
+    console.log("[ingest] 401, no session");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as Body;
   } catch {
-    console.log("[ingest] 400 — invalid_json");
+    console.log("[ingest] 400, invalid_json");
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
@@ -74,13 +74,13 @@ export async function POST(req: NextRequest) {
   const sessionEnded = body.sessionEnded === true;
   const rawPoints = Array.isArray(body.points) ? body.points : [];
   if (!companyId) {
-    console.log("[ingest] 400 — missing_company user=" + user.id);
+    console.log("[ingest] 400, missing_company user=" + user.id);
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
   const points = rawPoints.filter(isFinitePoint).sort((a, b) => a.ts - b.ts);
   if (points.length > 50_000) {
     console.log(
-      "[ingest] 413 — too_many_points user=" + user.id + " n=" + points.length,
+      "[ingest] 413, too_many_points user=" + user.id + " n=" + points.length,
     );
     return NextResponse.json({ error: "too_many_points" }, { status: 413 });
   }
@@ -95,13 +95,13 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!membership) {
     console.log(
-      "[ingest] 403 — not_a_member user=" + user.id + " company=" + companyId,
+      "[ingest] 403, not_a_member user=" + user.id + " company=" + companyId,
     );
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   // 1. Stage the incoming points. Even a 1-point batch lands so we
-  // never silently drop. An empty array is allowed — the device can
+  // never silently drop. An empty array is allowed, the device can
   // call us purely to let the segmenter catch up to already-staged data.
   if (points.length > 0) {
     const stagingRows = points.map((p) => ({

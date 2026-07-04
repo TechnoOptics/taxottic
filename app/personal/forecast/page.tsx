@@ -29,7 +29,7 @@ import {
 /**
  * Personal-mode forecast for W-2 / wage-earner users.
  *
- * The same forecast engine drives this — we just feed it zero
+ * The same forecast engine drives this, we just feed it zero
  * Schedule C income and the user's W-2 wages + spouse W-2 (already
  * supported, including household-level Additional Medicare and NIIT).
  *
@@ -160,7 +160,7 @@ export default async function PersonalForecastPage() {
                 money back; stillOwedCents > 0 means they owe a
                 top-up. Previously the page hard-coded
                 `Math.max(stillOwedCents, 0)` which always rendered $0
-                next to a "Refund expected" label — the actual refund
+                next to a "Refund expected" label, the actual refund
                 amount was never computed. */}
             {result.refundCents > 0 ? (
               <Stat
@@ -283,7 +283,7 @@ export default async function PersonalForecastPage() {
           {taxYear} (Rev. Proc. 2025-32, reflecting the One Big Beautiful Bill
           amendments), household-level Additional Medicare (Form 8959), Net
           Investment Income Tax (Form 8960), and a curated state rate.
-          Educational guidance only — talk with a CPA for binding decisions.
+          Educational guidance only, talk with a CPA for binding decisions.
         </p>
 
         <div className="mt-6">

@@ -2,7 +2,7 @@
 //
 // Tone is professional but not bureaucratic: this is a quick form
 // the recipient needs to complete so the firm can issue them a
-// 1099. We don't ask the recipient to upload their existing W-9 —
+// 1099. We don't ask the recipient to upload their existing W-9 -
 // fields go directly into our database, signed in-app.
 
 export type W9RequestArgs = {
@@ -52,7 +52,7 @@ export function renderW9RequestEmail(args: W9RequestArgs): {
           ${inviterLine} needs your IRS Form W-9 before issuing your end-of-year 1099. The form captures your legal name, taxpayer identification number (SSN or EIN), and address.
         </p>
         <p style="margin: 0 0 16px; color: #18181B; font-size: 14px; line-height: 1.6;">
-          Why we ask: the IRS requires payers to collect a W-9 from any contractor paid $600+ in a calendar year. Without it, the payer has to withhold 24% backup tax — and you don't want that.
+          Why we ask: the IRS requires payers to collect a W-9 from any contractor paid $600+ in a calendar year. Without it, the payer has to withhold 24% backup tax, and you don't want that.
         </p>
         <p style="margin: 0 0 24px; color: #18181B; font-size: 14px; line-height: 1.6;">
           Click below to fill the form. It takes about two minutes; all data is transmitted encrypted and stored on Taxottic's secure platform.
@@ -63,7 +63,7 @@ export function renderW9RequestEmail(args: W9RequestArgs): {
         </p>
         <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 32px 0 16px;" />
         <p style="margin: 0; color: #71717A; font-size: 11px; line-height: 1.6;">
-          Questions? Reply directly — this email is sent on behalf of ${escapeHtml(args.firmName)} via Taxottic.
+          Questions? Reply directly, this email is sent on behalf of ${escapeHtml(args.firmName)} via Taxottic.
         </p>
       </td></tr></table>
     </td></tr></table>
@@ -75,7 +75,7 @@ export function renderW9RequestEmail(args: W9RequestArgs): {
     `Why: the IRS requires payers to collect a W-9 from any contractor paid $600+. Without it, the payer has to withhold 24% backup tax.\n\n` +
     `Fill the form: ${args.fillUrl}\n\n` +
     `This request expires on ${expires}.\n\n` +
-    `Questions? Reply directly — this email is sent on behalf of ${args.firmName} via Taxottic.`;
+    `Questions? Reply directly, this email is sent on behalf of ${args.firmName} via Taxottic.`;
 
   return {
     subject,

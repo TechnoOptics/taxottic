@@ -12,7 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // If the derived slug collides with an existing firm we append
 // `-2`, `-3`, ... until we find a free one. The DB enforces
 // uniqueness via the partial unique index `firms_slug_unique`, so
-// even if two approvals race we won't break the constraint — the
+// even if two approvals race we won't break the constraint, the
 // second insert just fails and the operator retries from the
 // /admin/firms surface.
 //
@@ -27,7 +27,7 @@ const STRIP_WORDS = new Set([
   "the",
   "of",
   // We intentionally keep "cpa", "llp", "llc", "inc", etc. because
-  // those are signal — a slug that says "smith-allen-cpa" is more
+  // those are signal, a slug that says "smith-allen-cpa" is more
   // recognizable than "smith-allen". Only the genuinely throwaway
   // glue words get dropped.
 ]);
@@ -43,7 +43,7 @@ export function deriveSlugCandidate(firmName: string): string {
   //    below ensures we never insert an empty slug.
   const lower = firmName.toLowerCase();
   // 2. Replace ampersands with "and" so "Smith & Allen" -> "smith-and-allen"
-  //    then immediately strip "and" if it landed in STRIP_WORDS — net
+  //    then immediately strip "and" if it landed in STRIP_WORDS, net
   //    effect is "smith-allen". The "&"->"and" detour preserves the
   //    intent for languages that don't have an ampersand mapping.
   const expanded = lower.replace(/&/g, " and ");
@@ -59,7 +59,7 @@ export function deriveSlugCandidate(firmName: string): string {
   if (s.length > MAX_LEN) {
     s = s.slice(0, MAX_LEN);
     // After truncating, make sure we don't end mid-token with a
-    // trailing hyphen — that would fail the CHECK constraint.
+    // trailing hyphen, that would fail the CHECK constraint.
     s = s.replace(/-+$/, "");
   }
   // 5. Pad short slugs. A firm named "AC" would derive to "ac" (2
@@ -112,7 +112,7 @@ export function isValidSlugFormat(slug: string): boolean {
 /**
  * Find an unclaimed slug for the given firm name. Tries the
  * derived candidate first; on collision appends `-2`, `-3`, ...
- * Caller is responsible for inserting under a unique constraint —
+ * Caller is responsible for inserting under a unique constraint -
  * this just gives a safe starting point.
  */
 export async function pickAvailableSlug(

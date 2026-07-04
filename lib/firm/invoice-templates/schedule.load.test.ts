@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { computeNextIssueAt } from "./schedule";
 
 // Synthetic load sanity-check for the schedule helper. The cron
-// route invokes computeNextIssueAt once per template — at firm
+// route invokes computeNextIssueAt once per template, at firm
 // scale that means low-thousands per tick. If the helper ever
 // regressed into a slow path (e.g., locale-aware Intl
 // instantiation per call), the cron's wall budget would tighten
 // fast. This test catches a 10x slowdown without flakily failing
 // on a fast CI machine.
 
-describe("computeNextIssueAt — load profile", () => {
+describe("computeNextIssueAt, load profile", () => {
   it("handles 10,000 invocations under 250ms", () => {
     const start = Date.now();
     for (let i = 0; i < 10_000; i++) {

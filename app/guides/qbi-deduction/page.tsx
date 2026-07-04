@@ -46,7 +46,7 @@ const FAQ_LD = {
       name: "What is the QBI deduction?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The Qualified Business Income deduction (Section 199A) lets eligible self-employed people and owners of pass-through businesses deduct up to 20% of their qualified business income. It's taken on your personal return after your business expenses — it doesn't reduce self-employment tax, but it lowers the income you pay income tax on. It applies to sole proprietors, partnerships, S-corps, and most LLCs.",
+        text: "The Qualified Business Income deduction (Section 199A) lets eligible self-employed people and owners of pass-through businesses deduct up to 20% of their qualified business income. It's taken on your personal return after your business expenses, it doesn't reduce self-employment tax, but it lowers the income you pay income tax on. It applies to sole proprietors, partnerships, S-corps, and most LLCs.",
       },
     },
     {
@@ -54,7 +54,7 @@ const FAQ_LD = {
       name: "Who qualifies for the QBI deduction?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Owners of pass-through businesses with qualified business income. Below an annual taxable-income threshold (which the IRS adjusts each year), most businesses get the full 20% simply. Above the threshold, limits kick in based on W-2 wages your business pays and its property — and 'specified service' businesses (health, law, accounting, consulting, financial services, and similar) get phased out entirely at higher incomes.",
+        text: "Owners of pass-through businesses with qualified business income. Below an annual taxable-income threshold (which the IRS adjusts each year), most businesses get the full 20% simply. Above the threshold, limits kick in based on W-2 wages your business pays and its property, and 'specified service' businesses (health, law, accounting, consulting, financial services, and similar) get phased out entirely at higher incomes.",
       },
     },
     {
@@ -108,12 +108,12 @@ export default function Page() {
         <P>Above that income threshold, two things matter:</P>
         <UL>
           <LI>
-            <strong>Wage &amp; property limits</strong> — your deduction may be
+            <strong>Wage &amp; property limits</strong>, your deduction may be
             capped based on the W-2 wages your business pays and the cost of its
             qualified property.
           </LI>
           <LI>
-            <strong>Specified service businesses (SSTBs)</strong> — fields like
+            <strong>Specified service businesses (SSTBs)</strong>, fields like
             health, law, accounting, consulting, performing arts, and financial
             services get <strong>phased out</strong> of QBI entirely once income
             climbs high enough.
@@ -121,12 +121,12 @@ export default function Page() {
         </UL>
         <P>
           If you&apos;re over the threshold or in an SSTB, this is genuinely
-          worth a CPA&apos;s eye — the rules are intricate and the dollars are
+          worth a CPA&apos;s eye, the rules are intricate and the dollars are
           large.
         </P>
 
         <Callout>
-          QBI stacks <em>on top of</em> your ordinary deductions — it
+          QBI stacks <em>on top of</em> your ordinary deductions, it
           doesn&apos;t replace them. Taxottic factors the QBI math into your
           forecast automatically, so the deduction is reflected in what it tells
           you to set aside rather than being a year-end surprise.
@@ -137,7 +137,7 @@ export default function Page() {
           The Qualified Business Income deduction (Section 199A) lets eligible
           self-employed people and owners of pass-through businesses deduct up
           to 20% of their qualified business income. It&apos;s taken on your
-          personal return after your business expenses — it doesn&apos;t reduce
+          personal return after your business expenses, it doesn&apos;t reduce
           self-employment tax, but it lowers the income you pay income tax on.
           It applies to sole proprietors, partnerships, S-corps, and most LLCs.
         </H3FAQ>
@@ -146,7 +146,7 @@ export default function Page() {
           Below an annual taxable-income threshold (which the IRS adjusts each
           year), most businesses get the full 20% simply. Above the threshold,
           limits kick in based on W-2 wages your business pays and its property
-          — and &ldquo;specified service&rdquo; businesses (health, law,
+, and &ldquo;specified service&rdquo; businesses (health, law,
           accounting, consulting, financial services, and similar) get phased
           out entirely at higher incomes.
         </H3FAQ>

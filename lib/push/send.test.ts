@@ -98,7 +98,7 @@ describe("sendToUser", () => {
     );
     const r = await sendToUser(store, provider, "u1", EVENT);
     expect(r).toEqual({ sent: true, delivered: 1, revoked: 0 });
-    // Not re-sent on a retry — the row was already claimed.
+    // Not re-sent on a retry, the row was already claimed.
     const retry = await sendToUser(store, provider, "u1", EVENT);
     expect(retry.sent).toBe(false);
   });

@@ -26,7 +26,7 @@ describe("badgeTitle", () => {
 });
 
 describe("buildWatchSnapshot", () => {
-  it("clamps readiness 0–100", () => {
+  it("clamps readiness 0-100", () => {
     expect(
       buildWatchSnapshot({ ...base, readinessScore: 142 }).taxReadinessPct,
     ).toBe(100);

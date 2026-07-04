@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "DMCA Policy — Taxottic copyright notice & counter-notice",
+  title: "DMCA Policy, Taxottic copyright notice & counter-notice",
   description:
     "How to submit a DMCA copyright notice or counter-notice for content on Taxottic. Designated agent, required fields, repeat-infringer policy.",
   alternates: { canonical: "/legal/dmca" },
@@ -101,7 +101,7 @@ export default function DmcaPage() {
               </li>
               <li>
                 Identify the allegedly infringing material on Taxottic
-                with enough detail for us to locate it — typically a URL,
+                with enough detail for us to locate it, typically a URL,
                 a file name, the company / matter it lives under, or a
                 screenshot.
               </li>
@@ -152,7 +152,7 @@ export default function DmcaPage() {
             </ol>
             <p>
               We will forward valid counter-notices to the complainant.
-              If the complainant does not file suit within 10–14 business
+              If the complainant does not file suit within 10-14 business
               days, we will restore the content.
             </p>
           </Section>
@@ -161,7 +161,7 @@ export default function DmcaPage() {
             <p>
               In line with § 512(i), we terminate the accounts of users
               who, in our judgment, are repeat infringers. The threshold
-              is intentionally not a fixed strike count — we look at the
+              is intentionally not a fixed strike count, we look at the
               pattern of notices, the user&apos;s response, and whether the
               activity appears willful.
             </p>
@@ -175,7 +175,7 @@ export default function DmcaPage() {
           <Section title="What this policy does NOT cover">
             <ul className="list-disc pl-5 grid gap-2">
               <li>
-                Trademark complaints — please contact{" "}
+                Trademark complaints, please contact{" "}
                 <a
                   href="mailto:legal@taxottic.com"
                   className="underline hover:text-forest-900"
@@ -185,14 +185,14 @@ export default function DmcaPage() {
                 instead.
               </li>
               <li>
-                Privacy / personal-data complaints — see the{" "}
+                Privacy / personal-data complaints, see the{" "}
                 <Link href="/legal/privacy" className="underline hover:text-forest-900">
                   Privacy Policy
                 </Link>{" "}
                 for how to request access, correction, or deletion.
               </li>
               <li>
-                General content complaints (e.g., abuse, harassment) —
+                General content complaints (e.g., abuse, harassment) -
                 see the{" "}
                 <Link
                   href="/legal/acceptable-use"

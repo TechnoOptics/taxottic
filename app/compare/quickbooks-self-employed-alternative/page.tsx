@@ -5,9 +5,9 @@ import { JsonLd } from "@/components/seo/JsonLd";
 
 const SITE = "https://taxottic.com";
 const SLUG = "quickbooks-self-employed-alternative";
-const TITLE = "QuickBooks Self-Employed Alternative (2026) — Taxottic";
+const TITLE = "QuickBooks Self-Employed Alternative (2026), Taxottic";
 const DESCRIPTION =
-  "QuickBooks Self-Employed was discontinued. Taxottic is a year-round tax-forecasting alternative for freelancers — live estimates, quarterly taxes, IRS-cited deductions, and automatic mileage, free to start.";
+  "QuickBooks Self-Employed was discontinued. Taxottic is a year-round tax-forecasting alternative for freelancers, live estimates, quarterly taxes, IRS-cited deductions, and automatic mileage, free to start.";
 
 export const metadata = {
   title: TITLE,
@@ -75,7 +75,7 @@ const FAQ_LD = {
       name: "Is Taxottic a replacement for QuickBooks Self-Employed?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "For the tax side, yes — Taxottic keeps a live, bank-synced forecast of what you'll owe, tracks quarterly estimated taxes, surfaces IRS-cited deductions, and logs your business mileage automatically. It is not a full bookkeeping suite and it does not file your return, so it pairs with your filing software rather than replacing it. It starts free.",
+        text: "For the tax side, yes, Taxottic keeps a live, bank-synced forecast of what you'll owe, tracks quarterly estimated taxes, surfaces IRS-cited deductions, and logs your business mileage automatically. It is not a full bookkeeping suite and it does not file your return, so it pairs with your filing software rather than replacing it. It starts free.",
       },
     },
     {
@@ -141,9 +141,9 @@ export default function QuickBooksAlternativePage() {
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           QuickBooks Self-Employed is being retired in favor of QuickBooks
-          Solopreneur. If you&rsquo;re weighing what to use instead — and you
+          Solopreneur. If you&rsquo;re weighing what to use instead, and you
           care most about knowing what you&rsquo;ll owe and claiming every
-          deduction — here&rsquo;s an honest look at where Taxottic fits.
+          deduction, here&rsquo;s an honest look at where Taxottic fits.
         </p>
       </section>
 
@@ -164,7 +164,7 @@ export default function QuickBooksAlternativePage() {
             <strong className="text-forest-800">
               it doesn&rsquo;t file your return
             </strong>{" "}
-            — it pairs with whatever you file with. What it does instead is keep
+, it pairs with whatever you file with. What it does instead is keep
             a live answer to the question that actually keeps freelancers up at
             night: <em>how much will I owe, and am I setting enough aside?</em>
           </p>
@@ -178,7 +178,7 @@ export default function QuickBooksAlternativePage() {
             {[
               [
                 "A live forecast, not a year-end surprise",
-                "Connect your bank and Taxottic keeps a running estimate of your federal + state tax, self-employment tax, and QBI deduction — updated as money moves, not reconstructed in April.",
+                "Connect your bank and Taxottic keeps a running estimate of your federal + state tax, self-employment tax, and QBI deduction, updated as money moves, not reconstructed in April.",
               ],
               [
                 "Quarterly estimated taxes, handled",
@@ -186,11 +186,11 @@ export default function QuickBooksAlternativePage() {
               ],
               [
                 "IRS-cited deductions",
-                "A library of 1,000+ deductions, each tied to its IRS source, filtered to your entity type — so you claim what you're owed with a citation to back it up.",
+                "A library of 1,000+ deductions, each tied to its IRS source, filtered to your entity type, so you claim what you're owed with a citation to back it up.",
               ],
               [
                 "Mileage that logs itself",
-                "Automatic background mileage tracking builds an IRS-ready log as you drive — no notebook, no forgotten trips.",
+                "Automatic background mileage tracking builds an IRS-ready log as you drive, no notebook, no forgotten trips.",
               ],
               [
                 "Free to start, then from $4.99/mo",
@@ -245,7 +245,7 @@ export default function QuickBooksAlternativePage() {
           </h2>
           <p className="mt-2 text-sm text-cream/90 max-w-md mx-auto leading-relaxed">
             Try a free calculator, or start a free account and connect your bank
-            for a live forecast — no card required.
+            for a live forecast, no card required.
           </p>
           <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
             <Link

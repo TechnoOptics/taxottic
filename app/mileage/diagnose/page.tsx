@@ -69,13 +69,13 @@ export default async function MileageDiagnosePage() {
             <li>
               <strong>Native shell</strong>: Capacitor reports this is
               a real app (not the web). On the web this fails by
-              design — open this page in the installed Taxottic app.
+              design, open this page in the installed Taxottic app.
             </li>
             <li>
               <strong>Plugin available</strong>: the @capgo background-
               geolocation module is compiled into THIS build. If red,
               you&apos;re on an old TestFlight / APK that predates the
-              plugin — rebuild.
+              plugin, rebuild.
             </li>
             <li>
               <strong>Import resolved</strong>: the JS shim loaded.
@@ -91,7 +91,7 @@ export default async function MileageDiagnosePage() {
               <strong>Callbacks firing</strong>: the GPS hardware is
               actually sending fixes. Counter ticks up as you move.
               If start() resolved but this stays at zero, the OS
-              suppressed the GPS — almost always{" "}
+              suppressed the GPS, almost always{" "}
               <strong>battery optimization</strong> killing the
               foreground service.
             </li>

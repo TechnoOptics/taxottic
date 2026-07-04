@@ -8,7 +8,7 @@ import {
   extendOutreach,
 } from "./actions";
 
-// /firm/outreach — pending invitations not yet on Taxottic.
+// /firm/outreach, pending invitations not yet on Taxottic.
 //
 // firm_client_outreach is the queue of "we invited them; they
 // haven't signed up yet" prospects. Once a prospect creates a

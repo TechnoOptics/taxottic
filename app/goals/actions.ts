@@ -23,7 +23,7 @@ export async function addGoal(formData: FormData) {
   // If the goal is being attached to a company, the user must actually
   // be a member of that company. Without this check a user could pollute
   // another tenant's goal listing by passing an arbitrary company_id in
-  // the form payload — write-only mis-attribution, not a read leak, but
+  // the form payload, write-only mis-attribution, not a read leak, but
   // it lets one user's goal show up under another company's UI.
   // Mirrors the membership gate in app/c/[publicId]/savings-goals/actions.ts.
   if (companyId) {

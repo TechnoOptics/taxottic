@@ -13,7 +13,7 @@ import type { Classification, Trip } from "./segmentation";
 /**
  * Deductible cents for `miles` business miles in `taxYear` at the
  * IRS standard mileage rate. Years outside the bundled set fall
- * back (getTaxYearConstants handles that) — the caller can surface
+ * back (getTaxYearConstants handles that), the caller can surface
  * `isFallback` if it needs to warn.
  */
 export function businessMileageDeductionCents(
@@ -27,7 +27,7 @@ export function businessMileageDeductionCents(
 
 /**
  * Deduction for a single segmented trip. Personal / unclassified
- * trips are worth $0 — only confirmed business travel deducts.
+ * trips are worth $0, only confirmed business travel deducts.
  * The standard mileage method (not actual-expense) is assumed; the
  * two methods are mutually exclusive per vehicle per year and the
  * standard method is what a per-trip tracker supports.
@@ -65,17 +65,17 @@ export function summarizeMileageDeduction(
  * `autoMileageCents`, for both the YTD ("close the books today") and
  * the year-end projected scenarios.
  *
- * Precedence — and the reason this lives in one tested place rather
+ * Precedence, and the reason this lives in one tested place rather
  * than inline in two pages:
  *
  *  1. The standard-mileage vs. actual-expense election is binding per
  *     vehicle per year. The stored per-trip `deduction_cents` is a
  *     standard-rate figure, so on the actual-expense method (or no
- *     vehicle) NEITHER path applies — result is zero.
+ *     vehicle) NEITHER path applies, result is zero.
  *  2. If the company actually used the GPS tracker and has classified-
  *     business trips, that is an IRS-grade contemporaneous mileage log
- *     — strictly better evidence than a hand-typed
- *     `vehicle_business_miles` estimate — so it wins. Its YTD value is
+ *, strictly better evidence than a hand-typed
+ *     `vehicle_business_miles` estimate, so it wins. Its YTD value is
  *     ground truth (real, dated drives, not pace-projected); the
  *     year-end figure pace-projects that real YTD with the same month
  *     basis the manual path uses.

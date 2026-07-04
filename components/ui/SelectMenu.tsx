@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 /**
- * On-brand dropdown that renders ENTIRELY in the DOM — no native
+ * On-brand dropdown that renders ENTIRELY in the DOM, no native
  * <select> popup. Native selects on Android WebViews (Capacitor) paint
  * their dropdown popup solid black in dark mode, blanking the screen
  * (reproduced on a Galaxy Z Fold5). A global `color-scheme: light`
@@ -11,10 +11,10 @@ import { useEffect, useId, useRef, useState } from "react";
  * crisp, consistent in-app menu.
  *
  * Drop-in for the two real-world shapes in this codebase:
- *   1. UNCONTROLLED form field — pass `name` + `defaultValue`. A hidden
+ *   1. UNCONTROLLED form field, pass `name` + `defaultValue`. A hidden
  *      <input name=...> carries the value so it submits with the form
  *      exactly like the old <select> did.
- *   2. CONTROLLED — pass `value` + `onValueChange`.
+ *   2. CONTROLLED, pass `value` + `onValueChange`.
  *
  * onValueChange fires after a pick; the hidden input is updated
  * synchronously first, so an `e.currentTarget.form?.requestSubmit()` in

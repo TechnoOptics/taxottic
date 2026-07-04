@@ -22,7 +22,7 @@ import { computeStateTaxFromBrackets } from "./state-brackets";
  * change, both the table AND these tests need to update.
  */
 
-describe("California — bracket math", () => {
+describe("California, bracket math", () => {
   it("single, $50,000 taxable → bracket math, ~ $1,816 state tax", () => {
     // 1% × $10,756              = $107.56
     // 2% × ($25,499-$10,756)    = $294.86
@@ -41,7 +41,7 @@ describe("California — bracket math", () => {
     expect(res!.taxCents).toBeLessThanOrEqual(157_800);
   });
 
-  it("MFJ uses doubled brackets — $50k income → much lower than single $50k", () => {
+  it("MFJ uses doubled brackets, $50k income → much lower than single $50k", () => {
     // MFJ at $50k stays in lower-rate brackets.
     // 1% × $21,512              = $215.12
     // 2% × ($50,000-$21,512)    = $569.76
@@ -80,7 +80,7 @@ describe("California — bracket math", () => {
   });
 });
 
-describe("New York — bracket math", () => {
+describe("New York, bracket math", () => {
   it("single, $80,650 (top of 5.5% bracket) → uses MFJ-doubled cap correctly", () => {
     // Single hits 5.5% bracket up to $80,650.
     // 4% × $8,500             = $340
@@ -112,7 +112,7 @@ describe("New York — bracket math", () => {
   });
 });
 
-describe("New Jersey — separate MFJ brackets (NOT doubled)", () => {
+describe("New Jersey, separate MFJ brackets (NOT doubled)", () => {
   it("MFJ and single brackets diverge above $35k - separate tables", () => {
     // NJ MFJ keeps a 1.75% bracket up to $50k (single tops out at $35k).
     // At $40k income:
@@ -140,7 +140,7 @@ describe("New Jersey — separate MFJ brackets (NOT doubled)", () => {
   });
 });
 
-describe("Massachusetts — 5% flat + 4% Fair Share surtax", () => {
+describe("Massachusetts, 5% flat + 4% Fair Share surtax", () => {
   it("$500k single → $25,000 (5% × $500k)", () => {
     const res = computeStateTaxFromBrackets({
       taxableIncomeCents: 500_000 * 100,
@@ -180,7 +180,7 @@ describe("Massachusetts — 5% flat + 4% Fair Share surtax", () => {
   });
 });
 
-describe("Minnesota — bracket math", () => {
+describe("Minnesota, bracket math", () => {
   it("single, $50k → ~$3,000 state tax", () => {
     // 5.35% × $32,570 = $1,742.50
     // 6.80% × ($50k - $32,570) = $1,185.24
@@ -196,7 +196,7 @@ describe("Minnesota — bracket math", () => {
   });
 });
 
-describe("Maryland — county-tax hint", () => {
+describe("Maryland, county-tax hint", () => {
   it("returns a bracket-math result + the state file marks county-tax separately", () => {
     const res = computeStateTaxFromBrackets({
       taxableIncomeCents: 100_000 * 100,

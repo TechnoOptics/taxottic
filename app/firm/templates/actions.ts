@@ -9,7 +9,7 @@ import { computeNextIssueAt } from "@/lib/firm/invoice-templates/schedule";
 
 // Tier 2 #2: Recurring invoice templates.
 //
-// The Phase 7 invoicing flow is one-shot — preparer drafts an
+// The Phase 7 invoicing flow is one-shot, preparer drafts an
 // invoice, hits "Send," done. Most firms have at least one client
 // on a flat monthly retainer where typing the same line items
 // every month is just toil. This action set lets the firm define

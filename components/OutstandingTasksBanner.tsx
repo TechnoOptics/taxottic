@@ -8,7 +8,7 @@ type Props = {
   firstHref: string;
 };
 
-// Separate dismissal key from the popup's — a user can close the popup
+// Separate dismissal key from the popup's, a user can close the popup
 // and still see this slim reminder (or vice versa); each surface has
 // its own per-session memory so dismissing one doesn't silently hide
 // the other.
@@ -28,7 +28,7 @@ export function OutstandingTasksBanner({ count, firstHref }: Props) {
     try {
       wasDismissed = sessionStorage.getItem(DISMISS_KEY) === "1";
     } catch {
-      /* private mode — treat as not dismissed */
+      /* private mode, treat as not dismissed */
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reads browser-only sessionStorage; must run after mount
     setDismissed(wasDismissed);
@@ -57,7 +57,7 @@ export function OutstandingTasksBanner({ count, firstHref }: Props) {
           try {
             sessionStorage.setItem(DISMISS_KEY, "1");
           } catch {
-            /* private mode — reappears next reload, acceptable */
+            /* private mode, reappears next reload, acceptable */
           }
         }}
         className="shrink-0 text-ink-muted hover:text-forest-900"

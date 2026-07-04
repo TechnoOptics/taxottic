@@ -13,7 +13,7 @@ import { redirect } from "next/navigation";
 // redirects absolute to https://taxottic.com/dashboard, which is the
 // proper fix. This file is the safety net for any other code path
 // (today or future) that emits a relative `/dashboard` redirect from
-// an admin context — instead of 404ing, the user lands here and we
+// an admin context, instead of 404ing, the user lands here and we
 // bounce them to the right consumer URL.
 //
 // Equivalent insurance for `/admin/firm`, `/admin/firm/<id>`, etc.

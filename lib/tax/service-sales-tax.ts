@@ -8,8 +8,8 @@
  *
  * The post-Wayfair (South Dakota v. Wayfair, Inc., 138 S. Ct. 2080
  * (2018)) regime made every state's economic-nexus thresholds the
- * binding test. If you exceed the threshold in a state — even
- * with zero physical presence there — you have nexus and must
+ * binding test. If you exceed the threshold in a state, even
+ * with zero physical presence there, you have nexus and must
  * collect / remit. Physical presence (an office, an employee, an
  * inventory location) ALSO creates nexus regardless of revenue.
  *
@@ -17,7 +17,7 @@
  * personal property but NOT services. Five states tax services
  * broadly via a gross-receipts-tax model (HI GET, NM GRT, SD,
  * WV, WA B&O). Other states tax SPECIFIC enumerated services. SaaS
- * is its own special case — about 24 states tax SaaS as either
+ * is its own special case, about 24 states tax SaaS as either
  * tangible personal property or as an enumerated service.
  *
  * Scope of automation:
@@ -241,7 +241,7 @@ const SERVICE_TAXABILITY: Record<string, Partial<Record<ServiceCategory, boolean
 /**
  * Per-state base sales-tax rate (the state-level component; local
  * jurisdiction overlays not included). Mirrors the DB-seeded
- * `sales_tax_state_rates` table — duplicated in code so the engine
+ * `sales_tax_state_rates` table, duplicated in code so the engine
  * can run without DB access.
  */
 export const STATE_BASE_SALES_TAX_RATE: Record<string, number> = {
@@ -298,7 +298,7 @@ export type ServiceSalesTaxResult = {
    *  no tax owed, but registration may still be required. */
   nexusExemptStates: string[];
   /** States where the business is APPROACHING the threshold
-   *  (80%+ of the dollar threshold) — register-soon warning. */
+   *  (80%+ of the dollar threshold), register-soon warning. */
   approachingThresholdStates: string[];
   /** Master hint list (collected from per-state results). */
   hints: string[];
@@ -377,7 +377,7 @@ export function computeServiceSalesTax(
     if (isHome) {
       stateResult.hasEconomicNexus = true;
       stateResult.notes.push(
-        `${code}: home / domicile state — nexus applies regardless of revenue (physical presence).`,
+        `${code}: home / domicile state, nexus applies regardless of revenue (physical presence).`,
       );
     } else if (nexusCfg) {
       const overDollarThreshold =
@@ -420,7 +420,7 @@ export function computeServiceSalesTax(
     } else if (stateResult.hasEconomicNexus && !stateResult.serviceTaxable) {
       result.nexusExemptStates.push(code);
       stateResult.hints.push(
-        `${code}: you have nexus but ${sale.category} services are exempt — no sales tax owed on this revenue. Registration may still be required to file a zero-tax return; verify with the state.`,
+        `${code}: you have nexus but ${sale.category} services are exempt, no sales tax owed on this revenue. Registration may still be required to file a zero-tax return; verify with the state.`,
       );
     }
 

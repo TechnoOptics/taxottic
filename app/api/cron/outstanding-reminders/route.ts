@@ -10,19 +10,19 @@ export const maxDuration = 120;
  *
  * Same "needs a business/personal or category call" backlog the header
  * bell / on-load popup / dashboard banner surface (lib/tasks/outstanding.ts)
- * — this is the proactive push nudge so a user who hasn't opened the app
+ *, this is the proactive push nudge so a user who hasn't opened the app
  * still hears about a growing backlog. Runs once daily; `notify()`'s
  * dedupe (keyed on today's date, see lib/push/payloads.ts) means a more
  * frequent schedule would still only ever deliver once per user per day.
  *
  * Two backlog sources, summed per user:
- *   1. Unclassified mileage trips — reminded to the DRIVER directly
+ *   1. Unclassified mileage trips, reminded to the DRIVER directly
  *      (mileage_trips.driver_user_id), regardless of company.
- *   2. Pending bank/CSV transactions — reminded to every MANAGER of the
+ *   2. Pending bank/CSV transactions, reminded to every MANAGER of the
  *      company the transactions belong to (member drivers don't
  *      necessarily see the books; managers do).
  *
- * Auth: same convention as every other cron in this codebase — Vercel's
+ * Auth: same convention as every other cron in this codebase, Vercel's
  * `x-vercel-cron: 1` header on scheduled runs, or `Authorization: Bearer
  * $CRON_SECRET` for manual/debug triggering.
  */
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     );
   }
   try {
-    // account_transactions has no company_id column directly — resolve it
+    // account_transactions has no company_id column directly, resolve it
     // through bank_accounts → bank_connections, same join the rest of the
     // banking feature uses.
     const { data: pendingTx, error: pendErr } = await admin

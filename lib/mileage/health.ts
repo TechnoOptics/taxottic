@@ -5,13 +5,13 @@ import { haversineMeters } from "./segmentation";
 //
 // A phone whose background location has been downgraded to "While Using"
 // (or has battery optimisation killing it) keeps logging points while the
-// app is FOREGROUND + parked, then gets woken by the OS at a new location —
+// app is FOREGROUND + parked, then gets woken by the OS at a new location -
 // so the staging pool fills with stationary clusters separated by big
 // "teleport" jumps, with almost no in-between driving samples. Segmentation
 // (correctly) makes no trips from that, so the user silently loses miles.
 //
 // This detects that exact signature from the recent raw pool so the UI can
-// warn the user to set Location to Always — instead of failing silently.
+// warn the user to set Location to Always, instead of failing silently.
 
 export type TrackingHealth = {
   status: "ok" | "degraded" | "idle";
@@ -73,7 +73,7 @@ export async function assessMileageTrackingHealth(
     movingPairs,
     bigJumps,
     reason: degraded
-      ? "Your phone is logging where you stop but not the driving in between — background location is likely set to “While Using” instead of “Always.”"
+      ? "Your phone is logging where you stop but not the driving in between, background location is likely set to “While Using” instead of “Always.”"
       : null,
   };
 }

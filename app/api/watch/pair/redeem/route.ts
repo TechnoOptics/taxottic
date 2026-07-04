@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // POST /api/watch/pair/redeem  { code }
 //
 // The signed-in PHONE calls this from Settings → Devices after the
-// user types the 6-digit code shown on the watch. Session auth —
+// user types the 6-digit code shown on the watch. Session auth -
 // the account the watch joins is whoever is signed in here, so the
 // code itself never carries a credential. Validates the code is
 // real, unexpired and unconsumed, binds the device to this user,
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 //
 // 6-digit codes only have ~20 bits of entropy, so we cap attempts
 // at 5/min per IP AND per signed-in user. With a 120s code lifetime
-// that's ~10 brute-force tries per code window — well below the
+// that's ~10 brute-force tries per code window, well below the
 // ~10⁻⁵ guess probability we tolerate.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

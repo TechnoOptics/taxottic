@@ -41,7 +41,7 @@ export function StripeConnectButton({ companyId, className }: Props) {
       }
       // Hard navigate. Stripe's consent screen requires a top-level
       // page load (no iframes); we never come back to THIS component
-      // — the OAuth-return route handles the round-trip server-side
+      //, the OAuth-return route handles the round-trip server-side
       // and 302s the user to /c/[publicId]/banks?stripe_connected=1.
       window.location.href = data.url as string;
     } catch (err) {
@@ -63,7 +63,7 @@ export function StripeConnectButton({ companyId, className }: Props) {
       {/* Stripe caches its own browser session across tabs. When that
           happens its OAuth consent page auto-binds to whatever Stripe
           account you're signed in as and offers only "Use this one"
-          or "Open new account" — no way to pick a different existing
+          or "Open new account", no way to pick a different existing
           Stripe. The only reliable workaround is to sign out of
           Stripe first; this link opens Stripe's logout in a new tab
           so the next "Connect Stripe" click starts from a clean

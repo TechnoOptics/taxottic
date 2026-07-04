@@ -4,7 +4,7 @@ import type { Plan } from "@/lib/plans/limits";
  * Fixed bottom pill shown to a super-admin who has pinned their
  * effective plan to a lower tier via the profile-menu QA switcher. It's
  * a constant reminder that features are gated *by the preview*, not
- * broken — and a one-tap exit back to the full ('practice') experience.
+ * broken, and a one-tap exit back to the full ('practice') experience.
  *
  * Rendered by AppHeader only when previewPlan is set and isn't already
  * the default 'practice' tier. Bottom-fixed so it never disturbs the

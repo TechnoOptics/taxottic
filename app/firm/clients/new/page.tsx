@@ -4,7 +4,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { inviteClient } from "./actions";
 
-// /firm/clients/new — invite a client to an engagement.
+// /firm/clients/new, invite a client to an engagement.
 //
 // One form. The server action sniffs the email and routes to either
 // the direct-engagement path (existing Taxottic user) or the
@@ -115,7 +115,7 @@ export default async function NewClientPage() {
             <textarea
               name="message"
               rows={3}
-              placeholder="Hi Riley — we'll handle your 2026 return. Use this link to share your books securely."
+              placeholder="Hi Riley, we'll handle your 2026 return. Use this link to share your books securely."
               className="input"
             />
           </label>
@@ -133,8 +133,8 @@ export default async function NewClientPage() {
         <p className="mt-6 text-[11px] text-ink-muted leading-relaxed max-w-xl">
           The engagement is created in a <em>pending</em> state until
           the client accepts on their side. Once active, your firm
-          has read-only access to their books — income, expenses,
-          bank feed, prior-year documents — and can post engagement
+          has read-only access to their books, income, expenses,
+          bank feed, prior-year documents, and can post engagement
           letters, drafts, and invoices from the client&apos;s page.
         </p>
       </section>

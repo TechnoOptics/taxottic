@@ -18,8 +18,8 @@ const SWIPE_THRESHOLD = 80;
  *
  * One trip at a time, full-width card with two big tap targets
  * (Business / Personal). The card also accepts a horizontal swipe
- * gesture — left = Business (matches watch left-Business
- * convention), right = Personal — for users who naturally pull off
+ * gesture, left = Business (matches watch left-Business
+ * convention), right = Personal, for users who naturally pull off
  * the watch's muscle memory. Drag adjusts translateX + rotation so
  * the swipe feels physical; release past threshold commits, before
  * snaps back.
@@ -160,7 +160,7 @@ export function ClassifyDeck({ pending, action }: Props) {
           {(trip.estDeductionCents / 100).toFixed(2)} if business
         </div>
 
-        {/* Where the drive actually went — the user asked for this
+        {/* Where the drive actually went, the user asked for this
             specifically: the deck previously showed only distance and
             dollars, giving no way to recognize the drive before calling
             it business or personal. stopPropagation on pointerdown keeps

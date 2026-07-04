@@ -40,7 +40,7 @@ const PLACE_GLYPH: Record<MapPlace["kind"], string> = {
 
 // Taxottic navy/gold map skin: water + roads in deep navy, parks +
 // landscape muted, every label cream-on-navy. Designed to pair with
-// the app's #1d2843 → #121a2a gradient — the map reads as the next
+// the app's #1d2843 → #121a2a gradient, the map reads as the next
 // surface in the same dial, not as a Google-default white slab. The
 // JSON is the standard Google Maps Style spec.
 const MAP_STYLE_TAXOTTIC: Array<Record<string, unknown>> = [
@@ -125,7 +125,7 @@ function polylineMiles(points: MapPoint[]): number {
 
 /** Gamified zoom floor: the map can't be zoomed out past this until
  *  the user has logged a long-enough single business trip. Cadence
- *  feels rewarding — local errands keep the dial close, road-trips
+ *  feels rewarding, local errands keep the dial close, road-trips
  *  open the country. Zooms are Google Maps zoom levels (0 = whole
  *  world, 21 = building). The bands map roughly to:
  *    < 1 mi   → block-level
@@ -185,7 +185,7 @@ export function MileageMap({
   // Gamified extent: longest single business trip in miles. Drives the
   // map's zoom-out floor (see unlockedMinZoom). Recomputed whenever the
   // trips prop changes so a fresh long drive immediately opens up more
-  // of the world. Business-only — personal drives don't unlock the
+  // of the world. Business-only, personal drives don't unlock the
   // dial because the deduction map is the business view.
   const longestBusinessMiles = (() => {
     let max = 0;
@@ -269,7 +269,7 @@ export function MileageMap({
           });
           overlays.push(shadow, line);
           // Start + end markers so a glance answers "which way did this
-          // drive go?" — green dot = where the trip began, navy/gold
+          // drive go?", green dot = where the trip began, navy/gold
           // checkered-flag disc = where it ended. Kept deliberately small
           // so the overview with many trips stays readable; the title
           // tooltips disambiguate on hover/long-press.
@@ -338,7 +338,7 @@ export function MileageMap({
           // Empty state: centre on whatever place we have (home or
           // first known point), else the rough US centroid. Don't
           // throw the user out to zoom-4 unless we truly have nothing
-          // — that wide a view felt "broken" in user testing.
+          //, that wide a view felt "broken" in user testing.
           const home = places.find((p) => p.kind === "home") ?? places[0];
           if (home) {
             map.setCenter({ lat: home.lat, lng: home.lng });
@@ -438,7 +438,7 @@ export function MileageMap({
           Review
         </span>
       </div>
-      {/* Gamified unlock chip — top-right corner of the map. Shows the
+      {/* Gamified unlock chip, top-right corner of the map. Shows the
           next "zoom out" milestone so the bound dial doesn't feel
           arbitrary. Disappears when everything is already unlocked. */}
       {unlockHint && (

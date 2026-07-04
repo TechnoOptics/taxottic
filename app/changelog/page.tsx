@@ -3,7 +3,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 
 export const metadata = {
-  title: "Changelog — what's new in Taxottic",
+  title: "Changelog, what's new in Taxottic",
   description:
     "Public release notes for Taxottic. Every shipped feature, fix, and security improvement, with dates. Updated as we ship.",
   alternates: { canonical: "/changelog" },
@@ -17,7 +17,7 @@ export const metadata = {
 };
 
 // Public changelog. The May 2026 audit (P2) flagged the absence of a
-// public changelog as a missed trust signal — "shipped twice this
+// public changelog as a missed trust signal, "shipped twice this
 // month" is itself a credibility marker, and search engines pick up
 // the cadence.
 //
@@ -55,19 +55,19 @@ const ENTRIES: Entry[] = [
   {
     date: "2026-05-11",
     title: "CI gate for tax math",
-    body: "GitHub Actions now runs the 125-test Vitest suite plus tsc on every PR. A change that breaks the tax math or any type can't merge silently. Lint reports but isn't yet blocking — backlog cleanup planned before flipping it on.",
+    body: "GitHub Actions now runs the 125-test Vitest suite plus tsc on every PR. A change that breaks the tax math or any type can't merge silently. Lint reports but isn't yet blocking, backlog cleanup planned before flipping it on.",
     tags: ["ops"],
   },
   {
     date: "2026-05-10",
     title: "Profile menu portal switcher",
-    body: "Super-admins can now jump between Consumer, Enterprise, and HQ from the profile menu. The 'Send feedback' bubble that used to float above Bella moved into the same menu — one launcher, less clutter.",
+    body: "Super-admins can now jump between Consumer, Enterprise, and HQ from the profile menu. The 'Send feedback' bubble that used to float above Bella moved into the same menu, one launcher, less clutter.",
     tags: ["shipped"],
   },
   {
     date: "2026-05-09",
     title: "Math verification: 125 tests, three layers",
-    body: "Layer 1 — IRS-published worked examples (EITC, Saver's Credit, AOTC, state brackets). Layer 2 — end-to-end fixture scenarios (W-2, sole prop, combined, AMT, LTCG, EITC). Layer 3 — property-based invariants (refund/owed reconciliation, CTC caps, QBI ≤ 20%, monotonicity). Caught one real bug along the way: long-term capital gains weren't being added to AGI for phase-out math.",
+    body: "Layer 1, IRS-published worked examples (EITC, Saver's Credit, AOTC, state brackets). Layer 2, end-to-end fixture scenarios (W-2, sole prop, combined, AMT, LTCG, EITC). Layer 3, property-based invariants (refund/owed reconciliation, CTC caps, QBI ≤ 20%, monotonicity). Caught one real bug along the way: long-term capital gains weren't being added to AGI for phase-out math.",
     tags: ["ops", "fix"],
   },
   {
@@ -108,7 +108,7 @@ const ENTRIES: Entry[] = [
   },
   {
     date: "2026-04-30",
-    title: "Stripe Connect — bank provider option",
+    title: "Stripe Connect, bank provider option",
     body: "Stripe Connect added as an alternative to Plaid for users whose bank already lives in a Stripe-connected account. Read-only scope, OAuth flow, transaction sync.",
     tags: ["shipped"],
   },
@@ -142,7 +142,7 @@ export default function ChangelogPage() {
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          // Native iOS overlays the WebView under the status bar — pad by
+          // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
           paddingTop:

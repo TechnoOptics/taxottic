@@ -29,14 +29,14 @@ function mirrorEcoToLocalStorage(eco: boolean) {
       eco ? "1" : "0",
     );
   } catch {
-    /* private mode — server still has the source of truth */
+    /* private mode, server still has the source of truth */
   }
 }
 
 /** Three-mode schedule editor.
  *
  * Always-on  → one big radio, nothing else.
- * Weekdays   → from/to time inputs (default 09:00–17:00).
+ * Weekdays   → from/to time inputs (default 09:00-17:00).
  * Custom     → 7 day rows, each with a checkbox + from/to pair when
  *              enabled.
  *
@@ -110,7 +110,7 @@ export function ScheduleForm({ initial, action }: Props) {
           checked={mode === "weekdays"}
           onChange={() => setMode("weekdays")}
           label="Weekdays only"
-          help="Mon–Fri inside the window below. Saturdays and Sundays are skipped (battery + privacy)."
+          help="Mon-Fri inside the window below. Saturdays and Sundays are skipped (battery + privacy)."
         />
         <Radio
           name="mode"
@@ -206,7 +206,7 @@ export function ScheduleForm({ initial, action }: Props) {
         </div>
       ) : null}
 
-      {/* Eco mode — orthogonal to the day/time schedule. Pumps
+      {/* Eco mode, orthogonal to the day/time schedule. Pumps
           the GPS distanceFilter from 25 m to 100 m and accepts
           stale fixes from the OS-fused provider. The trip starts
           / ends a hair less precise but the phone uses a fraction
@@ -228,7 +228,7 @@ export function ScheduleForm({ initial, action }: Props) {
               Sample location less often (100 m vs 25 m) and reuse
               cached fixes from the OS when fresh. Roughly 4× less
               battery. Trip polylines lose a little detail at the
-              very start and end of each drive — the total miles
+              very start and end of each drive, the total miles
               and deduction are unchanged.
             </p>
           </div>

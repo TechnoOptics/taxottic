@@ -8,9 +8,9 @@ import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/pa
 
 const SITE = "https://taxottic.com";
 const SLUG = "mileage-deduction";
-const TITLE = "Mileage Deduction Calculator (2026) — Free, IRS Rate";
+const TITLE = "Mileage Deduction Calculator (2026), Free, IRS Rate";
 const DESCRIPTION =
-  "Free business mileage deduction calculator using the 2026 IRS standard mileage rate (70¢/mile). See your deduction and estimated tax savings from business miles — no sign-up.";
+  "Free business mileage deduction calculator using the 2026 IRS standard mileage rate (70¢/mile). See your deduction and estimated tax savings from business miles, no sign-up.";
 const KEYWORDS = [
   "mileage deduction calculator",
   "IRS mileage calculator",
@@ -79,7 +79,7 @@ const FAQ_LD = {
       name: "What is the 2026 IRS mileage rate?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The 2026 IRS standard mileage rate for business use is 70 cents per mile. You multiply your business miles by that rate to get your deduction — it's meant to cover gas, maintenance, insurance, and depreciation, so you don't have to track every actual car expense.",
+        text: "The 2026 IRS standard mileage rate for business use is 70 cents per mile. You multiply your business miles by that rate to get your deduction, it's meant to cover gas, maintenance, insurance, and depreciation, so you don't have to track every actual car expense.",
       },
     },
     {
@@ -87,12 +87,12 @@ const FAQ_LD = {
       name: "Which miles can I deduct?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Miles driven for business — client visits, job sites, business errands, driving between work locations, and trips to the bank or supplier for the business. Your regular commute from home to a fixed workplace is not deductible. Keep a log with the date, miles, and purpose; the IRS can ask for it.",
+        text: "Miles driven for business, client visits, job sites, business errands, driving between work locations, and trips to the bank or supplier for the business. Your regular commute from home to a fixed workplace is not deductible. Keep a log with the date, miles, and purpose; the IRS can ask for it.",
       },
     },
     {
       "@type": "Question",
-      name: "Standard mileage rate or actual expenses — which is better?",
+      name: "Standard mileage rate or actual expenses, which is better?",
       acceptedAnswer: {
         "@type": "Answer",
         text: "The standard mileage rate (this calculator) is simplest and usually wins for higher-mileage, fuel-efficient vehicles. The actual-expense method (tracking gas, repairs, insurance, depreciation, and applying your business-use percentage) can be larger for expensive vehicles or low mileage. If you want the standard rate, you generally must choose it the first year you use the car for business.",
@@ -103,7 +103,7 @@ const FAQ_LD = {
       name: "How much does the mileage deduction actually save me?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The deduction lowers your taxable income, so your saving is the deduction times your marginal tax rate. For a self-employed driver it reduces both self-employment tax and income tax — often 25–40 cents saved per dollar deducted. Pick your situation above for an estimate.",
+        text: "The deduction lowers your taxable income, so your saving is the deduction times your marginal tax rate. For a self-employed driver it reduces both self-employment tax and income tax, often 25-40 cents saved per dollar deducted. Pick your situation above for an estimate.",
       },
     },
   ],
@@ -163,7 +163,7 @@ export default async function MileageDeductionCalculatorPage({
           Mileage Deduction Calculator
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
-          Turn your business miles into a tax deduction at the 2026 IRS rate —
+          Turn your business miles into a tax deduction at the 2026 IRS rate -
           and see roughly what it saves you. Instant, no sign-up.
         </p>
       </section>
@@ -179,15 +179,15 @@ export default async function MileageDeductionCalculatorPage({
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             If you drive for work, the IRS lets you deduct a flat rate for every
-            business mile —{" "}
-            <strong className="text-forest-800">70¢ per mile in 2026</strong> —
+            business mile -{" "}
+            <strong className="text-forest-800">70¢ per mile in 2026</strong> -
             instead of itemizing gas, repairs, insurance, and depreciation. It&rsquo;s
             one of the most valuable and most under-claimed deductions for
             freelancers, contractors, real-estate agents, delivery and rideshare
             drivers, and anyone who uses their own car for business. The only
             catch: you need a{" "}
-            <strong className="text-forest-800">contemporaneous log</strong> —
-            date, miles, and purpose for each trip — because a reconstructed
+            <strong className="text-forest-800">contemporaneous log</strong> -
+            date, miles, and purpose for each trip, because a reconstructed
             guess doesn&rsquo;t survive an audit. That&rsquo;s exactly the part
             Taxottic automates.
           </p>

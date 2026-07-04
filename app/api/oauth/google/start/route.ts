@@ -4,7 +4,7 @@ import { getFirmContext } from "@/lib/firm/context";
 import { signOauthState } from "@/lib/firm/oauth/state";
 import { getProvider, siteOrigin } from "@/lib/firm/oauth/providers";
 
-// /api/oauth/google/start — same shape as zoom/start. Google's
+// /api/oauth/google/start, same shape as zoom/start. Google's
 // authorize URL also accepts `access_type=offline` + `prompt=consent`
 // to ensure we get a refresh token on first connect (without
 // prompt=consent Google may issue access_token without

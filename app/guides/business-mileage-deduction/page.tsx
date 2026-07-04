@@ -46,7 +46,7 @@ const FAQ_LD = {
       name: "How does the business mileage deduction work?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "You deduct the cost of driving your own vehicle for business in one of two ways. The standard mileage rate multiplies your business miles by a set per-mile rate the IRS publishes each year. The actual-expense method deducts the business-use percentage of your real vehicle costs — gas, insurance, repairs, depreciation. You pick one method per vehicle per year; either way you need a mileage log. See IRS Publication 463.",
+        text: "You deduct the cost of driving your own vehicle for business in one of two ways. The standard mileage rate multiplies your business miles by a set per-mile rate the IRS publishes each year. The actual-expense method deducts the business-use percentage of your real vehicle costs, gas, insurance, repairs, depreciation. You pick one method per vehicle per year; either way you need a mileage log. See IRS Publication 463.",
       },
     },
     {
@@ -54,7 +54,7 @@ const FAQ_LD = {
       name: "What driving counts as business mileage?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Driving between work locations, to client or customer meetings, to pick up supplies, to the bank for business, or to a temporary work site. Your regular commute from home to a fixed workplace is personal and not deductible — but if your home is your principal place of business, trips from there to other work locations can count. Keep personal and business miles separate.",
+        text: "Driving between work locations, to client or customer meetings, to pick up supplies, to the bank for business, or to a temporary work site. Your regular commute from home to a fixed workplace is personal and not deductible, but if your home is your principal place of business, trips from there to other work locations can count. Keep personal and business miles separate.",
       },
     },
     {
@@ -88,13 +88,13 @@ export default function Page() {
         <H2>Two ways to claim it</H2>
         <UL>
           <LI>
-            <strong>Standard mileage rate</strong> — multiply your business
+            <strong>Standard mileage rate</strong>, multiply your business
             miles by the per-mile rate the IRS sets each year. Simple, and it
             already bundles in gas, wear, and depreciation. Best for most
             people and most cars.
           </LI>
           <LI>
-            <strong>Actual expenses</strong> — add up gas, insurance, repairs,
+            <strong>Actual expenses</strong>, add up gas, insurance, repairs,
             lease or depreciation, then deduct the business-use percentage.
             Worth the extra tracking for expensive vehicles or heavy business
             use.
@@ -115,7 +115,7 @@ export default function Page() {
         </UL>
         <P>
           Your daily <strong>commute</strong> to a regular workplace is
-          personal — not deductible. But if your home qualifies as your
+          personal, not deductible. But if your home qualifies as your
           principal place of business, driving from there to other work stops
           generally does count.
         </P>
@@ -132,7 +132,7 @@ export default function Page() {
           This is the friction Taxottic&apos;s mileage tracker removes: it logs
           your drives automatically by GPS, you swipe each one business or
           personal, and the business miles flow straight into your deduction at
-          the current IRS rate — a clean, contemporaneous log without the
+          the current IRS rate, a clean, contemporaneous log without the
           notebook.
         </Callout>
 
@@ -142,7 +142,7 @@ export default function Page() {
           of two ways. The <strong>standard mileage rate</strong> multiplies
           your business miles by a set per-mile rate the IRS publishes each
           year. The <strong>actual-expense method</strong> deducts the
-          business-use percentage of your real vehicle costs — gas, insurance,
+          business-use percentage of your real vehicle costs, gas, insurance,
           repairs, depreciation. You pick one method per vehicle per year;
           either way you need a mileage log. See IRS Publication 463.
         </H3FAQ>
@@ -150,7 +150,7 @@ export default function Page() {
           Driving between work locations, to client or customer meetings, to
           pick up supplies, to the bank for business, or to a temporary work
           site. Your regular commute from home to a fixed workplace is personal
-          and not deductible — but if your home is your principal place of
+          and not deductible, but if your home is your principal place of
           business, trips from there to other work locations can count. Keep
           personal and business miles separate.
         </H3FAQ>

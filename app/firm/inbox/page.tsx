@@ -8,7 +8,7 @@ import { ActivityList, type ActivityRow } from "@/components/firm/ActivityList";
 // Force dynamic so the read-cursor update happens on every visit.
 export const dynamic = "force-dynamic";
 
-// /firm/inbox — unified activity feed for the current firm.
+// /firm/inbox, unified activity feed for the current firm.
 //
 // On render we mark the user's read cursor to now() so the header
 // unread badge clears immediately. The ActivityList client component
@@ -76,7 +76,7 @@ export default async function FirmInboxPage() {
 
         <p className="mt-6 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
           Showing the most recent {LIMIT} events. Older events stay
-          in the database but don&apos;t render here — they surface in
+          in the database but don&apos;t render here, they surface in
           the per-client page&apos;s activity panel when you drill into
           an engagement.
         </p>

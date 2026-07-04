@@ -1,9 +1,9 @@
-// Phase 4 — native background drive capture (client side).
+// Phase 4, native background drive capture (client side).
 //
 // The device's ONLY job is to stream raw GPS points to
 // /api/mileage/ingest. Every bit of intelligence (trip segmentation,
 // classification, IRS deduction) is server-side and already unit-
-// tested — see docs/MILEAGE_TRACKER_SPEC.md. So this module is
+// tested, see docs/MILEAGE_TRACKER_SPEC.md. So this module is
 // deliberately thin: subscribe to the background-geolocation plugin,
 // buffer points, flush them in batches.
 //
@@ -22,7 +22,7 @@
 // Graceful-degradation discipline (the #69 "Browser plugin not
 // implemented" regression): the plugin's native code is compiled
 // INTO the app binary. On web, and on any installed build that
-// predates this plugin, it is absent — every entry point guards on
+// predates this plugin, it is absent, every entry point guards on
 // isNativePlatform() + isPluginAvailable("BackgroundGeolocation")
 // and no-ops cleanly so the /mileage page still renders.
 
@@ -31,7 +31,7 @@ import type { GpsPoint } from "./segmentation";
 // Minimal contract for the slice of @capgo/background-geolocation we
 // use. Declared locally (rather than importing the package's types at
 // module scope) so nothing from the native plugin is pulled into the
-// web bundle's static graph — the package is only ever reached through
+// web bundle's static graph, the package is only ever reached through
 // the dynamic import in guard().
 type BgLocation = {
   latitude: number;
@@ -71,7 +71,7 @@ const LS_ECO = "taxottic.mileage.eco";
 //
 // Eco mode bumps this to 100 m (only emit a fix when the user has
 // actually moved 100 m). On a Samsung the OS-fused provider sleeps
-// the GPS sensor between fixes — net effect is roughly 4× less
+// the GPS sensor between fixes, net effect is roughly 4× less
 // power. Trip polylines look the same to the eye; only the very
 // first and very last points lose a little precision (matters for
 // "start at exactly the office" auto-classify, not for the
@@ -83,7 +83,7 @@ const DISTANCE_FILTER_M_ECO = 100;
 //
 // (May 25 2026 rebuild) FLUSH_EVERY_MS dropped from 120_000 (2 min) to
 // 30_000 (30 s) so a real drive's points hit the server WHILE the
-// drive is happening — the previous cadence meant a 4-minute drive
+// drive is happening, the previous cadence meant a 4-minute drive
 // finished before the device ever called ingest, so nothing got
 // staged and the "tail-close at end of stream" trick that
 // materializes in-progress trips never ran. 30 s also keeps the
@@ -96,7 +96,7 @@ const FLUSH_EVERY_MS = 30_000;
  *  64 KB total request body. Once the buffer grew past ~700 points
  *  (~64 KB of JSON) EVERY flush threw `TypeError: Failed to fetch`, the
  *  batch was kept, and the buffer pegged at MAX_BUFFER (5000) on the
- *  user's phone with ZERO points ever reaching the server — proven on
+ *  user's phone with ZERO points ever reaching the server, proven on
  *  a Galaxy Z Fold5: a small POST returned 200, the same 179 KB body
  *  with keepalive threw, without keepalive returned normally. Fix is
  *  two-fold: drop keepalive (durability is already covered by the
@@ -111,7 +111,7 @@ const FLUSH_BATCH_MAX = 800;
  *  the cached `plugin` ref and don't pay this.
  *
  *  Bumped from 5 s → 10 s after a real-device 2026-05-26 incident
- *  where guard() finished at ~5–6 s on a cold start but
+ *  where guard() finished at ~5-6 s on a cold start but
  *  guardWithTimeout had already returned null at the 5 s mark.
  *  Combined with the race-recovery fallback in startMileageTracking,
  *  this gives the first tap a much better chance to succeed without
@@ -151,14 +151,14 @@ export const trackerDiag = {
   importOk: false as boolean,
   startFn: false as boolean,
   lastError: null as string | null,
-  // Last result from startMileageTracking() — set when the native
+  // Last result from startMileageTracking(), set when the native
   // bg.start() promise settles. Surfaced in the UI diag so we can
   // see the actual native return path without DevTools.
   startResult: "untouched" as string,
   startError: "" as string,
   cbHits: 0 as number,
   cbLastError: "" as string,
-  // Last flush round-trip — populated by flush() so the toggle UI
+  // Last flush round-trip, populated by flush() so the toggle UI
   // can show "the device IS reaching the server" or "the device
   // sent 40 points and got 401 back" without DevTools.
   flushCount: 0 as number,
@@ -210,7 +210,7 @@ async function guard(): Promise<BackgroundGeolocationPlugin | null> {
       if (!bg || typeof bg.start !== "function") return null;
       plugin = bg;
     } catch (e) {
-      // Package not in this bundle / native side absent — clean no-op.
+      // Package not in this bundle / native side absent, clean no-op.
       trackerDiag.lastError = `capgo import: ${String(e)}`;
       return null;
     }
@@ -221,7 +221,7 @@ async function guard(): Promise<BackgroundGeolocationPlugin | null> {
 /**
  * Stop the native watcher WITHOUT awaiting on Android.
  *
- * On Android the @capgo plugin's stop() — like start() — is callback-
+ * On Android the @capgo plugin's stop(), like start(), is callback-
  * style: its return is the Capacitor plugin proxy, NOT a real promise.
  * `await bg.stop()` therefore accesses `.then` on that proxy, which
  * Capacitor forwards to a native method literally named "then" (which
@@ -243,7 +243,7 @@ async function stopBgSafely(bg: BackgroundGeolocationPlugin): Promise<void> {
       await (bg.stop() as unknown as Promise<void>);
     }
   } catch {
-    /* no active session / already stopped — fine */
+    /* no active session / already stopped, fine */
   }
 }
 
@@ -251,7 +251,7 @@ function persistBuffer() {
   try {
     window.localStorage.setItem(LS_BUFFER, JSON.stringify(buffer));
   } catch {
-    /* quota / disabled — in-memory buffer still flushes */
+    /* quota / disabled, in-memory buffer still flushes */
   }
 }
 
@@ -262,7 +262,7 @@ function loadPersistedBuffer() {
     const parsed = JSON.parse(raw) as GpsPoint[];
     if (Array.isArray(parsed)) buffer = parsed.slice(-MAX_BUFFER);
   } catch {
-    /* corrupt — drop it */
+    /* corrupt, drop it */
   }
 }
 
@@ -283,12 +283,12 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
   if (!companyId) return;
   // Allow heartbeat (buffer.length === 0) WHILE tracking is active so
   // the server keeps re-segmenting staging. If we're not tracking and
-  // the buffer is empty, nothing to do — UNLESS this is the
+  // the buffer is empty, nothing to do, UNLESS this is the
   // session-end flush, which must reach the server even with an empty
   // buffer so the server force-closes the in-progress trip (see the
   // sessionEnded handling in /api/mileage/ingest). Without this
   // override, toggling off after a drive whose last points already
-  // flushed would never close the trip — it would sit open forever.
+  // flushed would never close the trip, it would sit open forever.
   if (buffer.length < 1 && !tracking && !sessionEnded) return;
   flushing = true;
   trackerDiag.flushCount++;
@@ -308,12 +308,12 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
     try {
       bodyJson = await res.clone().json();
     } catch {
-      /* not JSON — leave as null */
+      /* not JSON, leave as null */
     }
     if (res.ok) {
       // Server staged everything; drop locally so we don't re-send
       // the same points. The server's staging table is authoritative
-      // for "did this point land" — we trust the 2xx.
+      // for "did this point land", we trust the 2xx.
       buffer = buffer.slice(batch.length);
       persistBuffer();
       const j = bodyJson as
@@ -336,7 +336,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
       trackerDiag.flushLastResult = `${res.status} ${errBody}`;
     }
   } catch (e) {
-    // Offline / transient — keep the batch. Surface the error type
+    // Offline / transient, keep the batch. Surface the error type
     // (TypeError = network unreachable; AbortError = timed out).
     trackerDiag.flushLastResult = `network: ${
       e instanceof Error ? e.name + ":" + e.message.slice(0, 40) : "unknown"
@@ -373,7 +373,7 @@ function toPoint(p: {
 /**
  * Start streaming drives for `forCompanyId`. Idempotent (a second
  * call while tracking is live is a no-op). Persists the preference
- * so resumeMileageTrackingIfEnabled() can re-arm on a cold start —
+ * so resumeMileageTrackingIfEnabled() can re-arm on a cold start -
  * the plugin's tracking session does NOT survive a process kill.
  */
 export async function startMileageTracking(
@@ -388,7 +388,7 @@ export async function startMileageTracking(
   // RACE RECOVERY (2026-05-26): a real-device diag line showed
   // `plug=true imp=true start=true call=unsupported err=guard_timeout`.
   // guardWithTimeout's 5s timeout fired BEFORE guard() finished, so
-  // `bg` was null at the await boundary — but guard() finished a few
+  // `bg` was null at the await boundary, but guard() finished a few
   // hundred ms later and cached `plugin = bg`. The previous error
   // branch then read a stale `plugin === null` and reported unsupported.
   // Fix: after the await, re-check the module-level `plugin` cache.
@@ -397,7 +397,7 @@ export async function startMileageTracking(
   // twice on a slow first cold-start.
   let bg = plugin ?? (await guardWithTimeout());
   if (!bg && plugin) {
-    // guard() raced past the timeout — use the cached ref.
+    // guard() raced past the timeout, use the cached ref.
     bg = plugin;
   }
   if (!bg) {
@@ -417,7 +417,7 @@ export async function startMileageTracking(
     window.localStorage.setItem(LS_ENABLED, "1");
     window.localStorage.setItem(LS_COMPANY, forCompanyId);
   } catch {
-    /* private mode — tracking still works for this session */
+    /* private mode, tracking still works for this session */
   }
   loadPersistedBuffer();
 
@@ -428,7 +428,7 @@ export async function startMileageTracking(
   // Real-world failure: user drove, server received zero points across
   // the entire drive. Diag showed cbErr=ALREADY_STARTED. Root cause:
   // when Android kills the JS process but the @capgo foreground
-  // service survives (which it does — that's the whole point of a
+  // service survives (which it does, that's the whole point of a
   // foreground service), the NEXT JS run's bg.start() returns the
   // ALREADY_STARTED error AND DOES NOT REGISTER THE NEW LOCATION
   // CALLBACK. The orphaned old callback (in dead JS context) stays
@@ -455,7 +455,7 @@ export async function startMileageTracking(
   try {
     eco = window.localStorage.getItem(LS_ECO) === "1";
   } catch {
-    /* private mode — default to full fidelity */
+    /* private mode, default to full fidelity */
   }
   const distanceFilter = eco
     ? DISTANCE_FILTER_M_ECO
@@ -463,12 +463,12 @@ export async function startMileageTracking(
   try {
     // CRITICAL (2026-06-01 on-device forensics, Galaxy Z Fold5):
     // bg.start(options, callback) is a CALLBACK method, not a Promise
-    // method, on Android. Its return value is NOT a thenable — calling
+    // method, on Android. Its return value is NOT a thenable, calling
     // `.then()` on it proxies to a native method literally named "then"
     // that doesn't exist, throwing
     //   `"BackgroundGeolocation.then()" is not implemented on android`.
     // The old `.start(...).then(...).catch(...)` chain therefore tripped
-    // the rejection path on EVERY start — flipping tracking off and
+    // the rejection path on EVERY start, flipping tracking off and
     // writing LS_ENABLED="0" the instant tracking began, even though the
     // native foreground service was alive and delivering GPS fixes. So:
     // fire start() and DON'T chain. Success is reported optimistically
@@ -488,7 +488,7 @@ export async function startMileageTracking(
         // Samsung"; it's now ON by default (was eco-only) so the app is
         // battery-friendly out of the box. Safe for capture: segmentation
         // tolerates slightly-aged fixes and the trip DISTANCE + IRS
-        // deduction (derived point-to-point) are unaffected — only the
+        // deduction (derived point-to-point) are unaffected, only the
         // exact timestamp of a fix can lag a beat. Eco mode still layers
         // the bigger 100 m distanceFilter saving on top of this.
         stale: true,
@@ -517,7 +517,7 @@ export async function startMileageTracking(
       try {
         cb({ ok: true });
       } catch {
-        /* listener threw — keep going */
+        /* listener threw, keep going */
       }
     }
     // Web shim only (NEVER touch .then on the native bridge): surface a
@@ -542,7 +542,7 @@ export async function startMileageTracking(
           try {
             cb({ ok: false, error: trackerDiag.startError });
           } catch {
-            /* listener threw — keep going */
+            /* listener threw, keep going */
           }
         }
       });
@@ -580,7 +580,7 @@ export async function stopMileageTracking(): Promise<void> {
   // Final upload tagged sessionEnded so the server force-closes any
   // in-progress trip immediately (the user explicitly stopped). This
   // is the only thing that materializes a drive that ended without a
-  // 5-min stationary dwell — i.e. nearly every real drive, where you
+  // 5-min stationary dwell, i.e. nearly every real drive, where you
   // park and immediately toggle off.
   await flush({ sessionEnded: true }); // best-effort final upload
 }
@@ -605,7 +605,7 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   companyId = savedCompany;
   void flush(); // drain a killed-mid-drive leftover
   // Always re-verify/re-arm here, ignoring the in-memory `tracking` flag.
-  // That flag only reflects whether OUR code called bg.start() — it stays
+  // That flag only reflects whether OUR code called bg.start(), it stays
   // true even when Android (esp. Samsung's "Sleeping apps" battery
   // optimization) silently kills the underlying foreground GPS service
   // while the WebView process itself survives. Trusting the stale flag
@@ -613,7 +613,7 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   // the OS killed the service, which is exactly the "tracker hasn't
   // logged in a while" bug (confirmed live: /mileage/diagnose showed the
   // native service reporting ALREADY_STARTED, i.e. genuinely running,
-  // while zero fixes had landed in days — the callback attached to it was
+  // while zero fixes had landed in days, the callback attached to it was
   // orphaned). Resetting `tracking` forces startMileageTracking's existing
   // stop-then-start dance to run every resume, which rebuilds a fresh
   // subscription with a live callback whether or not the flag was honest.
@@ -630,7 +630,7 @@ export async function openLocationSettings(): Promise<void> {
   try {
     void bg.openSettings();
   } catch {
-    /* not available on this build — the on-screen steps still guide the user */
+    /* not available on this build, the on-screen steps still guide the user */
   }
 }
 

@@ -11,7 +11,7 @@ const TAXOTTIC_LOGO_URL = "https://taxottic.com/brand/full-logo.png";
 
 export type CompanyMemberInviteArgs = {
   companyName: string;
-  /** companies.logo_url — shown next to the company name when set.
+  /** companies.logo_url, shown next to the company name when set.
    *  Falls back to the same champagne monogram tile used in-app
    *  (see components/CompanyLogo.tsx) when null. */
   companyLogoUrl?: string | null;
@@ -66,7 +66,7 @@ export function renderCompanyMemberInviteEmail(
     ? `${escapeHtml(args.inviterName)} at ${escapeHtml(args.companyName)}`
     : escapeHtml(args.companyName);
   const subject = `You're invited to join ${args.companyName} on Taxottic`;
-  const preheader = `${inviterLine} added you ${narrative.headline} — accept your invite below.`;
+  const preheader = `${inviterLine} added you ${narrative.headline}, accept your invite below.`;
 
   // Company badge: the uploaded logo when present, otherwise the same
   // champagne-gradient monogram tile CompanyLogo.tsx falls back to

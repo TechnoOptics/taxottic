@@ -5,7 +5,7 @@ import { SelectMenu, type SelectOption } from "@/components/ui/SelectMenu";
 
 /**
  * Manager-only driver switcher for the mileage map. A company manager
- * can review any teammate's drive log — pick a person and the whole
+ * can review any teammate's drive log, pick a person and the whole
  * page (map, trip list, stats) re-scopes to their trips via `?driver=`.
  *
  * Picking yourself clears the param so `/mileage` stays the canonical

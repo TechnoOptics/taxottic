@@ -7,7 +7,7 @@ import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 
-// "My deductions" — the canonical answer to "what have I actually
+// "My deductions", the canonical answer to "what have I actually
 // claimed this year and how much have I saved?" Replaces the
 // transient medal-overlay acknowledgment with a permanent home
 // the user can revisit any time. Reads from the same source of
@@ -20,7 +20,7 @@ import { getTaxYearConstants } from "@/lib/tax/constants";
 //
 // Each section shows ONLY what the user has actually claimed (no
 // suggestions, no "could you also..."). The headline is the
-// running total — a single big number for "you've stacked $X in
+// running total, a single big number for "you've stacked $X in
 // deductions this tax year."
 
 export const dynamic = "force-dynamic";
@@ -78,7 +78,7 @@ export default async function MyDeductionsPage({
   // ── 2. Vehicle / mileage from the tracker ──
   // Sum every classified-business trip's stored deduction_cents. The
   // sync stores the IRS-rate cents at classify time, so we don't
-  // re-multiply here — that's the ground truth.
+  // re-multiply here, that's the ground truth.
   const mileage = await getBusinessMileageSummary(
     supabase,
     company.id,
@@ -150,7 +150,7 @@ export default async function MyDeductionsPage({
             </>
           }
           title="My deductions"
-          subtitle="Everything you've claimed this year, in one place. Each one shaves off taxable income — the total below is how much you've taken off the table so far."
+          subtitle="Everything you've claimed this year, in one place. Each one shaves off taxable income, the total below is how much you've taken off the table so far."
         />
 
         <div className="mt-6">
@@ -168,7 +168,7 @@ export default async function MyDeductionsPage({
           <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-xl">
             Total deductions across Home Office, Vehicle / Mileage, and
             every Schedule C expense category. Your actual tax savings
-            depend on your marginal rate — see the{" "}
+            depend on your marginal rate, see the{" "}
             <Link
               href={`/c/${publicId}/forecast`}
               className="text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"

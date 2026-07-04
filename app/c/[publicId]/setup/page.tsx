@@ -59,8 +59,8 @@ export default async function SetupHub({ params }: { params: Params }) {
       title: "Business profile",
       subtitle: "Name, entity type, state. Drives the whole forecast.",
       stat: profileComplete
-        ? `${company.name} · ${company.entity_type ?? "—"} · ${
-            company.state_code ?? "—"
+        ? `${company.name} · ${company.entity_type ?? "-"} · ${
+            company.state_code ?? "-"
           }`
         : "Profile is incomplete. Set entity type + state to unlock the forecast.",
       primary: { label: "Edit profile", href: `/c/${publicId}/profile` },

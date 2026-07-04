@@ -5,9 +5,9 @@ import { JsonLd } from "@/components/seo/JsonLd";
 
 const SITE = "https://taxottic.com";
 const SLUG = "keeper-alternative";
-const TITLE = "Keeper Tax Alternative (2026) — Taxottic";
+const TITLE = "Keeper Tax Alternative (2026), Taxottic";
 const DESCRIPTION =
-  "Looking for a Keeper alternative? Taxottic is a year-round tax-forecasting companion for freelancers — live estimates, quarterly taxes, 1,000+ IRS-cited deductions, and automatic mileage, free to start.";
+  "Looking for a Keeper alternative? Taxottic is a year-round tax-forecasting companion for freelancers, live estimates, quarterly taxes, 1,000+ IRS-cited deductions, and automatic mileage, free to start.";
 
 export const metadata = {
   title: TITLE,
@@ -62,7 +62,7 @@ const FAQ_LD = {
       name: "How is Taxottic different from Keeper?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Both connect to your bank, find deductible expenses, and show a running estimate of what you owe. The difference is scope and focus: Keeper also files your return and offers human tax pros, and its plans run around $20/month and up. Taxottic doesn't file — it's a year-round forecasting companion with a 1,000+ IRS-cited deduction library, full federal + state + self-employment + quarterly forecasting, and automatic mileage tracking, starting free.",
+        text: "Both connect to your bank, find deductible expenses, and show a running estimate of what you owe. The difference is scope and focus: Keeper also files your return and offers human tax pros, and its plans run around $20/month and up. Taxottic doesn't file, it's a year-round forecasting companion with a 1,000+ IRS-cited deduction library, full federal + state + self-employment + quarterly forecasting, and automatic mileage tracking, starting free.",
       },
     },
     {
@@ -133,7 +133,7 @@ export default function KeeperAlternativePage() {
           A Keeper alternative, focused on the forecast.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
-          Keeper and Taxottic overlap a lot — both connect to your bank, find
+          Keeper and Taxottic overlap a lot, both connect to your bank, find
           deductions, and estimate what you owe. Here&rsquo;s an honest look at
           where they part ways, so you can pick the one that matches how you
           actually want to handle your taxes.
@@ -148,7 +148,7 @@ export default function KeeperAlternativePage() {
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             Keeper is a strong, AI-driven deduction tracker that also{" "}
             <strong className="text-forest-800">files your return</strong> and
-            gives you access to human tax pros — a lot of value if you want one
+            gives you access to human tax pros, a lot of value if you want one
             app to do everything, at a price that reflects it. Taxottic is
             deliberately narrower: it&rsquo;s a{" "}
             <strong className="text-forest-800">
@@ -157,7 +157,7 @@ export default function KeeperAlternativePage() {
             that <strong className="text-forest-800">doesn&rsquo;t file</strong>.
             It focuses everything on keeping your forecast accurate and your
             deductions organized and cited, then pairs with whatever you file
-            with — for less.
+            with, for less.
           </p>
         </div>
 
@@ -169,11 +169,11 @@ export default function KeeperAlternativePage() {
             {[
               [
                 "IRS-cited deductions, not just flagged transactions",
-                "A library of 1,000+ deductions, each tied to its IRS source and filtered to your entity type — so a deduction comes with the citation that backs it up.",
+                "A library of 1,000+ deductions, each tied to its IRS source and filtered to your entity type, so a deduction comes with the citation that backs it up.",
               ],
               [
                 "A full forecasting engine",
-                "Live federal + state income tax, self-employment tax, the QBI deduction, the extra Medicare surcharge, and a quarterly payment schedule — the same math the app runs is the one behind our free calculators.",
+                "Live federal + state income tax, self-employment tax, the QBI deduction, the extra Medicare surcharge, and a quarterly payment schedule, the same math the app runs is the one behind our free calculators.",
               ],
               [
                 "Mileage that logs itself",
@@ -181,11 +181,11 @@ export default function KeeperAlternativePage() {
               ],
               [
                 "Built for teams and multiple businesses",
-                "Run several companies, add employees, or work as a firm across many clients — not just a single-person view.",
+                "Run several companies, add employees, or work as a firm across many clients, not just a single-person view.",
               ],
               [
                 "Free to start, then from $4.99/mo",
-                "A free tier with no card, and paid plans that come in under Keeper's ~$20/month deduction plan — because you're not paying for bundled filing you may not need.",
+                "A free tier with no card, and paid plans that come in under Keeper's ~$20/month deduction plan, because you're not paying for bundled filing you may not need.",
               ],
             ].map(([h, b]) => (
               <li key={h} className="card p-5">
@@ -236,7 +236,7 @@ export default function KeeperAlternativePage() {
           </h2>
           <p className="mt-2 text-sm text-cream/90 max-w-md mx-auto leading-relaxed">
             Try a free calculator, or start a free account and connect your bank
-            for a live forecast — no card required.
+            for a live forecast, no card required.
           </p>
           <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
             <Link

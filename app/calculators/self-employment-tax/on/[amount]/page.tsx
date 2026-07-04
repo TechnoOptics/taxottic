@@ -23,7 +23,7 @@ export function generateStaticParams() {
   return CALC_INCOMES.map((n) => ({ amount: String(n) }));
 }
 
-// Only the curated amounts are valid pages — any other number returns a
+// Only the curated amounts are valid pages, any other number returns a
 // real 404 instead of dynamically minting an unbounded doorway page.
 export const dynamicParams = false;
 
@@ -37,10 +37,10 @@ export async function generateMetadata({
   if (gross == null) return {};
   const snap = incomeSnapshot(gross);
   const money = formatDollars(gross);
-  const title = `Self-Employment Tax on ${money} (2026) — What You'll Owe`;
+  const title = `Self-Employment Tax on ${money} (2026), What You'll Owe`;
   const description = `On ${money} of self-employment income you'll owe about ${formatCents(
     snap.totalTaxCents,
-  )} in 2026 — ${formatCents(
+  )} in 2026, ${formatCents(
     snap.selfEmploymentTaxCents,
   )} self-employment tax plus federal income tax, an effective rate near ${(
     snap.effectiveRate * 100
@@ -96,7 +96,7 @@ export default async function IncomeSelfEmploymentTaxPage({
   const money = formatDollars(gross);
   const setAsidePct = Math.round(snap.setAsideFraction * 100);
 
-  // The breakdown rows — only show QBI when it's non-zero (it phases in
+  // The breakdown rows, only show QBI when it's non-zero (it phases in
   // with profit), so lower-income pages don't show a $0 line.
   const rows: { label: string; value: string; hint?: string }[] = [
     {
@@ -113,7 +113,7 @@ export default async function IncomeSelfEmploymentTaxPage({
   if (snap.qbiDeductionCents > 0) {
     rows.push({
       label: "Qualified business income deduction",
-      value: `– ${formatCents(snap.qbiDeductionCents)}`,
+      value: `- ${formatCents(snap.qbiDeductionCents)}`,
       hint: "The 20% QBI deduction, already reflected in the income tax above",
     });
   }
@@ -123,15 +123,15 @@ export default async function IncomeSelfEmploymentTaxPage({
       q: `How much self-employment tax do I pay on ${money}?`,
       a: `On ${money} of net self-employment profit, the self-employment tax alone is about ${formatCents(
         snap.selfEmploymentTaxCents,
-      )} — that's 15.3% (12.4% Social Security + 2.9% Medicare) on 92.35% of your profit. Add federal income tax and your total 2026 federal tax is roughly ${formatCents(
+      )}, that's 15.3% (12.4% Social Security + 2.9% Medicare) on 92.35% of your profit. Add federal income tax and your total 2026 federal tax is roughly ${formatCents(
         snap.totalTaxCents,
-      )}. Your state, business expenses, and other income can move this up or down — the calculator above lets you add them.`,
+      )}. Your state, business expenses, and other income can move this up or down, the calculator above lets you add them.`,
     },
     {
       q: `What's my effective tax rate on ${money} self-employed?`,
       a: `About ${(snap.effectiveRate * 100).toFixed(
         1,
-      )}% at the federal level on this income as a single filer with no state tax — meaning roughly ${formatCents(
+      )}% at the federal level on this income as a single filer with no state tax, meaning roughly ${formatCents(
         snap.afterTaxCents,
       )} is left after federal tax. Effective rate rises with income because more of it lands in higher brackets.`,
     },
@@ -139,7 +139,7 @@ export default async function IncomeSelfEmploymentTaxPage({
       q: `How much should I set aside for taxes on ${money}?`,
       a: `Setting aside about ${setAsidePct}% of what you earn covers the ${formatCents(
         snap.totalTaxCents,
-      )} you'd owe here. A common safe rule is 25–30% for most self-employed incomes; this page's ${setAsidePct}% is the exact figure for ${money}. Your next quarterly estimate would be around ${formatCents(
+      )} you'd owe here. A common safe rule is 25-30% for most self-employed incomes; this page's ${setAsidePct}% is the exact figure for ${money}. Your next quarterly estimate would be around ${formatCents(
         snap.quarterlyCents,
       )}.`,
     },
@@ -235,13 +235,13 @@ export default async function IncomeSelfEmploymentTaxPage({
           <strong className="text-forest-900">
             {formatCents(snap.totalTaxCents)}
           </strong>{" "}
-          in 2026 federal tax — roughly a {(snap.effectiveRate * 100).toFixed(1)}%
+          in 2026 federal tax, roughly a {(snap.effectiveRate * 100).toFixed(1)}%
           effective rate. Here&rsquo;s the breakdown, then add your state and
           expenses below.
         </p>
       </section>
 
-      {/* Computed breakdown — the substance that makes each income page a
+      {/* Computed breakdown, the substance that makes each income page a
           real answer rather than a templated shell. */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
         <div className="card p-5 sm:p-6">
@@ -323,7 +323,7 @@ export default async function IncomeSelfEmploymentTaxPage({
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             Self-employment tax comes first: 15.3% on 92.35% of your net profit,
             which on {money} is about {formatCents(snap.selfEmploymentTaxCents)}.
-            You then owe federal income tax on your profit — but after the
+            You then owe federal income tax on your profit, but after the
             standard deduction, the deduction for half your self-employment tax,
             and the QBI deduction where it applies. That&rsquo;s why your
             effective rate ({(snap.effectiveRate * 100).toFixed(1)}%) is well

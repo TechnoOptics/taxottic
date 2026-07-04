@@ -44,9 +44,9 @@ export function ForecastDisclaimer({
           A forecast, not tax advice.
         </h3>
         <p>
-          Numbers Taxottic shows you — projected tax owed, refund
+          Numbers Taxottic shows you, projected tax owed, refund
           estimate, quarterly payment recommendation, generated
-          Schedule C or K-1 draft — are <strong>forecasts</strong>{" "}
+          Schedule C or K-1 draft, are <strong>forecasts</strong>{" "}
           based on the books you&apos;ve entered and current-year
           tax tables. They are not tax advice, legal advice, or a
           filed return. Before you make a payment to the IRS, sign
@@ -70,7 +70,7 @@ export function ForecastDisclaimer({
   if (variant === "inline") {
     return (
       <em className="text-[11px] text-ink-muted">
-        Forecast only — not tax advice.{" "}
+        Forecast only, not tax advice.{" "}
         <Link
           href="/legal/terms#forecast-vs-advice"
           className="underline hover:text-forest-800"

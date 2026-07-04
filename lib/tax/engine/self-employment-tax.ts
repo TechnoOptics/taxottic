@@ -2,7 +2,7 @@ import type { TaxYearConstants } from "../constants";
 
 // Self-employment (SECA) tax: Social Security portion (capped at the wage
 // base, shared with W-2 SS wages) + uncapped Medicare portion. The 0.9%
-// additional Medicare surtax is intentionally NOT here — it applies to
+// additional Medicare surtax is intentionally NOT here, it applies to
 // COMBINED W-2 + SE earnings above a household threshold and is added in
 // forecast() at the household level.
 

@@ -10,7 +10,7 @@ import {
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 
-// Business-trips dashboard — the breadcrumb map of every drive
+// Business-trips dashboard, the breadcrumb map of every drive
 // classified as "business". Same data model as the parent /mileage
 // page (mileage_trips + mileage_points), filtered to a single
 // classification so the map can zoom-fit to ONLY business routes
@@ -18,8 +18,8 @@ import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 //
 // Why a dedicated page: the parent /mileage mixes business with
 // personal + unclassified for triage. When the user wants "where
-// did I go for work this year" — which is the actual narrative
-// behind the Schedule C mileage deduction — they need a focused
+// did I go for work this year", which is the actual narrative
+// behind the Schedule C mileage deduction, they need a focused
 // view at YTD scale. The two routes share the MileageMap component
 // so colour-coding, place markers, and bounds-fitting stay
 // consistent.
@@ -69,7 +69,7 @@ export default async function BusinessTripsPage({
   const { range = "ytd", trip: tripId } = await searchParams;
   // Single-trip focus: when the user opens a specific drive from the
   // Expenses mileage line (?trip=<id>), scope the whole page to just
-  // that one drive — the map auto-fits to its bounds and the list shows
+  // that one drive, the map auto-fits to its bounds and the list shows
   // its details. The range filter is dropped in this mode (the trip can
   // predate any preset window). Still scoped to the caller's own drives
   // (driver_user_id) so a guessed id can't surface someone else's trip.
@@ -95,13 +95,13 @@ export default async function BusinessTripsPage({
   let trips: TripRow[] = [];
   let places: MapPlace[] = [];
   // Route polylines via the mileage_trip_polylines RPC, NOT an embedded
-  // mileage_points(...) join — PostgREST caps embedded arrays at 1000
+  // mileage_points(...) join, PostgREST caps embedded arrays at 1000
   // rows, which truncated long drives mid-route. The RPC returns a
   // bounded, evenly-strided sample that reaches each route's true ends.
   const pointsByTrip = new Map<string, Pt[]>();
   if (company) {
     // Single classification filter at the DB layer means we only
-    // hydrate the breadcrumbs we'll actually render — important at
+    // hydrate the breadcrumbs we'll actually render, important at
     // YTD scale where a heavy-driving business can have thousands
     // of trips.
     let tripQuery = admin
@@ -227,7 +227,7 @@ export default async function BusinessTripsPage({
           </p>
         ) : (
           <>
-            {/* Range picker — same shape as /mileage's, plus a YTD
+            {/* Range picker, same shape as /mileage's, plus a YTD
                 preset because the business view is the one users
                 hit for tax-year totals. In single-trip mode the range
                 is irrelevant, so we swap it for a "back to all" link. */}

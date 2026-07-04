@@ -31,7 +31,7 @@ export default function NotFound() {
           </div>
           <p className="mt-4 text-sm text-ink-soft leading-relaxed">
             We couldn&apos;t find what you were looking for. The link may be
-            broken, or the page may have moved — either way, we&apos;ll get
+            broken, or the page may have moved, either way, we&apos;ll get
             you back on track.
           </p>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2">

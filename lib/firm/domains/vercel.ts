@@ -7,7 +7,7 @@
 // optionally VERCEL_TEAM_ID for Team-scoped projects.
 //
 // Failure mode: every helper returns { ok: false, reason } rather
-// than throwing. The UI degrades to "we couldn't reach Vercel —
+// than throwing. The UI degrades to "we couldn't reach Vercel -
 // retry" without surfacing the Vercel-token in error pages.
 
 function teamQuery(): string {

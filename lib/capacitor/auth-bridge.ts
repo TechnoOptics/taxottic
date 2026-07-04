@@ -13,7 +13,7 @@
 //      ("disallowed_useragent"), so it (or the system) punts the
 //      flow to the OS browser.
 //   3. The provider redirects to https://taxottic.com/auth/callback
-//      — which opens/stays in the SYSTEM BROWSER. The Supabase
+//, which opens/stays in the SYSTEM BROWSER. The Supabase
 //      session cookie is written there.
 //   4. The native WebView never sees the session. User is "logged
 //      in" in Safari/Chrome but the app is still on /login.
@@ -32,7 +32,7 @@
 //
 // Everything here is dynamically imported and platform-guarded so
 // the normal web build (also served from taxottic.com to desktop
-// browsers) is completely unaffected — isNativePlatform() is false
+// browsers) is completely unaffected, isNativePlatform() is false
 // there and every native path no-ops.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -75,14 +75,14 @@ export async function nativeOAuthSignIn(
   // @capacitor/browser's native code is compiled INTO the app
   // binary. The web bundle deploys instantly via taxottic.com, but
   // any already-installed build that predates the plugin has no
-  // native Browser implementation — calling Browser.open() there
+  // native Browser implementation, calling Browser.open() there
   // throws "Browser plugin is not implemented on ios", which is
   // STRICTLY WORSE than the old behaviour (it hard-blocks sign-in).
   //
   // isPluginAvailable("Browser") is true only when the running
   // binary actually contains the plugin. If it doesn't, we return
   // { handled: false } so the login page falls back to the standard
-  // web redirect — the original imperfect-but-not-erroring flow —
+  // web redirect, the original imperfect-but-not-erroring flow -
   // until the user installs a rebuilt binary that includes the
   // plugin (at which point the proper custom-scheme flow engages).
   try {
@@ -94,18 +94,18 @@ export async function nativeOAuthSignIn(
     return { handled: false };
   }
 
-  // Stash the post-login destination — the custom-scheme redirect
+  // Stash the post-login destination, the custom-scheme redirect
   // must be the EXACT allow-listed URL (no query string), so we
   // can't pass `next` through redirectTo. localStorage survives the
   // round trip because the in-app browser tab and the WebView share
-  // the same app sandbox but NOT storage — so we read it back in the
+  // the same app sandbox but NOT storage, so we read it back in the
   // appUrlOpen handler which runs in the WebView that set it.
   try {
     if (opts.next) {
       window.localStorage.setItem(NATIVE_NEXT_KEY, opts.next);
     }
   } catch {
-    /* private mode / storage disabled — fall back to default next */
+    /* private mode / storage disabled, fall back to default next */
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -143,7 +143,7 @@ let listenerInstalled = false;
 
 /**
  * Register the global appUrlOpen handler that completes native OAuth.
- * Idempotent — safe to call from a component that may remount.
+ * Idempotent, safe to call from a component that may remount.
  * No-ops on web.
  */
 export async function installNativeAuthListener(

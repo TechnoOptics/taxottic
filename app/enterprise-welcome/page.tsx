@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/Wordmark";
 /**
  * Splash page shown to unauthenticated visitors at the root of
  * `enterprise.taxottic.com`. Added in response to the May 2026 weekly
- * audit's Critical #4 — the subdomain was either 404'ing or silently
+ * audit's Critical #4, the subdomain was either 404'ing or silently
  * redirecting to the consumer dashboard, which read as "Taxottic
  * sells enterprise but doesn't have it." The actual console for
  * super-admins / firm operators lives at /admin/firms inside this
@@ -18,7 +18,7 @@ import { Wordmark } from "@/components/Wordmark";
  * is to make the subdomain feel deliberate, not abandoned.
  */
 export const metadata = {
-  title: "Taxottic Enterprise — Sign in or talk to us",
+  title: "Taxottic Enterprise, Sign in or talk to us",
   description:
     "The Taxottic Enterprise console for accounting firms and operations teams managing multiple client books. Sign in to your firm account or book a 20-minute demo.",
   alternates: { canonical: "/" },

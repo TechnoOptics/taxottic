@@ -20,7 +20,7 @@ import { forecast, type ForecastInput } from "./forecast";
  * Critical #2: Schedule C Line 24b on the export was showing the
  * gross meals amount instead of the post-50% deductible figure. This
  * is enforced via `deductibleAmountForCategory("meals", ...)` always
- * returning half — so the export's category table can never again
+ * returning half, so the export's category table can never again
  * mislabel Line 24b.
  */
 
@@ -128,7 +128,7 @@ describe("computeNetBusinessIncome", () => {
     }));
 
     // The forecast result's `ytdNetBusinessIncomeCents` is the engine's
-    // own "if you closed books today" number — it MUST equal our
+    // own "if you closed books today" number, it MUST equal our
     // standalone helper's result to within rounding.
     expect(fc.ytdNetBusinessIncomeCents).toBe(nbi.netBusinessIncomeCents);
   });

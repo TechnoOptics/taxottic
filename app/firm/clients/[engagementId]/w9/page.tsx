@@ -17,7 +17,7 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 function maskTin(tin: string | null, tinType: string | null): string {
-  if (!tin) return "—";
+  if (!tin) return "-";
   const t = tin.replace(/\D/g, "");
   if (tinType === "ssn") {
     return t.length === 9 ? `XXX-XX-${t.slice(5)}` : "XXX-XX-XXXX";

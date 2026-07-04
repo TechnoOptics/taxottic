@@ -15,7 +15,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 export type CategorizeInput = {
-  /** id is opaque — caller maps results back via this. */
+  /** id is opaque, caller maps results back via this. */
   id: string;
   description: string;
   amount_cents: number;
@@ -34,13 +34,13 @@ export type CategorizeDecision = {
    * For transfer / unsure: null.
    */
   code: string | null;
-  /** 0..1 — caller auto-applies above 0.75. */
+  /** 0..1, caller auto-applies above 0.75. */
   confidence: number;
   /** Short human-readable rationale; surfaced in audit/UI on hover. */
   reason: string;
 };
 
-const SYSTEM = `You categorize U.S. business bank-transaction CSV rows. Output STRICT JSON — an array of objects, one per row, in the SAME ORDER as the input. No prose, no markdown fences.
+const SYSTEM = `You categorize U.S. business bank-transaction CSV rows. Output STRICT JSON, an array of objects, one per row, in the SAME ORDER as the input. No prose, no markdown fences.
 
 Each output row:
 {
@@ -57,7 +57,7 @@ Rules:
 - "transfer": movement between user's own accounts (e.g. credit-card payment, ATM withdrawal, transfer to savings). "code" = null.
 - "unsure": you can't confidently classify. "code" = null. Use sparingly.
 - confidence ≥ 0.85 means "auto-apply this." Below 0.7 means "leave for human review."
-- The amount sign IS NOT a reliable indicator across CSV formats — read the description.
+- The amount sign IS NOT a reliable indicator across CSV formats, read the description.
 - "transfer" examples: "AUTOPAY", "Payment Received - Thank You", "Transfer to Checking", "ATM WITHDRAWAL", "ZELLE TRANSFER FROM <self>".
 - Be conservative with "income": only mark as income when the description clearly indicates revenue (a customer name, "INVOICE", "PAYMENT", a payment-processor like Stripe/Square/PayPal payouts). Bank interest goes to "interest" income source.
 - Spend / fee / fuel / SaaS / restaurant / supplies / etc. → "expense".

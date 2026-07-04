@@ -13,7 +13,7 @@ import { logFirmActivity } from "@/lib/firm/activity";
 //   - resolveComment(id): marks a comment resolved (review done).
 //   - reopenComment(id): undoes a resolve when the reviewer disagrees.
 //
-// We don't expose delete intentionally — comments are part of the
+// We don't expose delete intentionally, comments are part of the
 // engagement audit trail. Firms can soft-resolve when wrong.
 
 export async function postComment(formData: FormData) {

@@ -95,7 +95,7 @@ function isTrialExpired(trialEnd: string | null): boolean {
 
 /**
  * True if the current user is in the forever-allowlist super_admins
- * table. Used by paid endpoints to skip credit consumption — a super
+ * table. Used by paid endpoints to skip credit consumption, a super
  * admin should never be told they're out of credits.
  *
  * Uses the public.is_super_admin() RPC, which itself runs under
@@ -106,7 +106,7 @@ export async function isSuperAdmin(
 ): Promise<boolean> {
   // Delegates to the request-cached check so repeated calls in one render
   // share a single RPC. The client arg is kept for call-site compatibility
-  // but ignored — is_super_admin must run on the user-context client.
+  // but ignored, is_super_admin must run on the user-context client.
   return isSuperAdminCached();
 }
 
@@ -135,7 +135,7 @@ export function normalizePlan(raw: unknown): Plan {
 /**
  * Validate a raw value as one of the six current plan tiers, else null.
  * Unlike normalizePlan (which coerces unknowns to 'free'), this returns
- * null for an absent/invalid value — used by the super-admin plan
+ * null for an absent/invalid value, used by the super-admin plan
  * preview so "unset" is distinguishable from "free".
  */
 export function asPlanOrNull(raw: unknown): Plan | null {

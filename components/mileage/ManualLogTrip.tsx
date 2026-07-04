@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /**
- * Manual drive entry — the backfill path when the tracker missed
+ * Manual drive entry, the backfill path when the tracker missed
  * a drive (app killed, schedule blocked, GPS denied, etc). GPS
  * background capture is best-effort on Android; without a manual
  * entry the user just loses the deduction, which is the wrong
@@ -23,7 +23,7 @@ type Props = {
 };
 
 function defaultDatetimeLocal(d: Date) {
-  // YYYY-MM-DDTHH:MM in local time — the datetime-local input wants
+  // YYYY-MM-DDTHH:MM in local time, the datetime-local input wants
   // exactly this shape and no timezone suffix.
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -42,7 +42,7 @@ export function ManualLogTrip({ action }: Props) {
   const handleSubmit = async (formData: FormData) => {
     setSubmitting(true);
     setError(null);
-    // The form's datetime-local inputs are naive — attach the
+    // The form's datetime-local inputs are naive, attach the
     // browser's current offset so the server can convert to UTC.
     formData.set("tz_offset_min", String(now.getTimezoneOffset()));
     try {

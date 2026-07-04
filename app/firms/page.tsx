@@ -14,7 +14,7 @@ export const metadata = {
   },
 };
 
-// /firms — public marketing landing for accounting firms.
+// /firms, public marketing landing for accounting firms.
 //
 // Sister page to /pricing and /example: gives a firm operator
 // enough signal to decide whether to apply for an account without
@@ -25,12 +25,12 @@ const PHASES = [
   {
     badge: "Live",
     title: "Multi-client cockpit",
-    body: "See every engagement at a glance — pending invitations, active books, tax-ready %, last activity, who's assigned. Urgency sort floats the ones needing a nudge to the top.",
+    body: "See every engagement at a glance, pending invitations, active books, tax-ready %, last activity, who's assigned. Urgency sort floats the ones needing a nudge to the top.",
   },
   {
     badge: "Live",
     title: "Read-only book access",
-    body: "When a client accepts an engagement, your firm gets read-only access to their income, expenses, bank feed, and prior-year documents. Engagement-scoped — no cross-tenant leakage.",
+    body: "When a client accepts an engagement, your firm gets read-only access to their income, expenses, bank feed, and prior-year documents. Engagement-scoped, no cross-tenant leakage.",
   },
   {
     badge: "Live",
@@ -38,9 +38,9 @@ const PHASES = [
     body: "Invite a client by email. We sniff whether they're already on Taxottic and route accordingly. Bulk-import via CSV ships in the next release.",
   },
   {
-    badge: "Phase 5 — in build",
+    badge: "Phase 5, in build",
     title: "Auto-drafted tax forms + e-signature",
-    body: "Schedule C, K-1, 1099-NEC, engagement letters, organizers — auto-populated from the client's books. Documenso for native e-signature, DocuSign on the enterprise tier.",
+    body: "Schedule C, K-1, 1099-NEC, engagement letters, organizers, auto-populated from the client's books. Documenso for native e-signature, DocuSign on the enterprise tier.",
   },
   {
     badge: "Phase 6",
@@ -70,7 +70,7 @@ export default function FirmsLandingPage() {
           <p className="mt-5 text-base sm:text-lg leading-relaxed max-w-2xl text-cream/80">
             One subdomain. One roster. Every client&apos;s books,
             documents, and deadlines in one calm place. Auto-drafted
-            tax forms, e-signature, scheduling, and invoicing — all
+            tax forms, e-signature, scheduling, and invoicing, all
             wired into the engagements your clients already trust you
             with.
           </p>
@@ -153,7 +153,7 @@ export default function FirmsLandingPage() {
             />
             <Pitch
               title="OBBBA + 2026 tax year baked in"
-              body="State brackets, Section 199A, SE-tax wage-base cap, EITC, AOTC, Lifetime Learning, Saver's — all updated for the One Big Beautiful Bill amendments."
+              body="State brackets, Section 199A, SE-tax wage-base cap, EITC, AOTC, Lifetime Learning, Saver's, all updated for the One Big Beautiful Bill amendments."
             />
             <Pitch
               title="Audit-grade activity log"

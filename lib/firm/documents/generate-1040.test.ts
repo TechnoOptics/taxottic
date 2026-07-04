@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderForm1040HTML } from "./generate-1040";
 
 // Smoke tests for the Form 1040 generator. We don't try to assert
-// the entire HTML — that's brittle — but we DO check that the
+// the entire HTML, that's brittle, but we DO check that the
 // computed totals end up on the page, and that taxable income
 // math respects standard deduction + QBI.
 

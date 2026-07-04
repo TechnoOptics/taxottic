@@ -6,14 +6,14 @@ import { forecast, type ForecastInput } from "./forecast";
  *
  * Two strands here:
  *
- *   1. **Fixture-based scenarios** — a small library of realistic
+ *   1. **Fixture-based scenarios**, a small library of realistic
  *      filers (W-2 only, sole prop, W-2 + side hustle, AMT trigger,
  *      LTCG-only retiree) where we've computed the expected outputs
  *      by hand against the published rules. Catches regressions that
  *      individual-credit-module tests miss because they only see one
  *      slice.
  *
- *   2. **Property-based invariants** — invariants that must hold for
+ *   2. **Property-based invariants**, invariants that must hold for
  *      ANY input, asserted with parameterised inputs. Catches
  *      sign-flip / off-by-one / clamping bugs that integration tests
  *      can miss when their fixed inputs happen to avoid the bug.
@@ -251,7 +251,7 @@ describe("Fixture: EITC for low-income filer", () => {
 // Property-based invariants
 // --------------------------------------------------------------------
 
-describe("Invariants — values that must always hold", () => {
+describe("Invariants, values that must always hold", () => {
   // A spread of inputs to test invariants against. Each should
   // produce a consistent result.
   const scenarios: Array<{ name: string; input: ForecastInput }> = [
@@ -463,7 +463,7 @@ describe("Audit regression: SE tax SS-wage-base cap (HIGH-1)", () => {
   });
 
   it("matches 15.3% × net SE when net SE is below the wage base", () => {
-    // At $100k net SE (below the cap), capping is a no-op — SE tax
+    // At $100k net SE (below the cap), capping is a no-op, SE tax
     // should equal the simple 15.3% × 92.35% × net.
     const r = forecast(
       baseInput({
@@ -527,12 +527,12 @@ describe("Audit regression: S-Corp QBI deduction (HIGH-2)", () => {
 
 describe("Audit regression: state-tax base = AGI − state std (HIGH-4)", () => {
   // The Round-2 audit found CA tax for a $50k Single Sole Prop in CA
-  // forecasting at ~$378 — way under the hand-calc range of $900-
+  // forecasting at ~$378, way under the hand-calc range of $900-
   // $1,100. Root cause: state tax was applied to federal taxable
   // income (which had federal std deduction AND federal QBI already
   // subtracted). The fix: compute state tax against AGI − state std
   // deduction. No QBI at state level.
-  it("CA Sole-Prop $50k Single produces state tax in the $900–$1,100 range", () => {
+  it("CA Sole-Prop $50k Single produces state tax in the $900-$1,100 range", () => {
     const r = forecast(
       baseInput({
         entityType: "sole_prop",
@@ -544,7 +544,7 @@ describe("Audit regression: state-tax base = AGI − state std (HIGH-4)", () => 
     expect(r.stateTaxCents).toBeLessThan(cents(1_200));
   });
 
-  it("NY Sole-Prop $100k Single produces state tax in the $3.5k–$4.5k range", () => {
+  it("NY Sole-Prop $100k Single produces state tax in the $3.5k-$4.5k range", () => {
     const r = forecast(
       baseInput({
         entityType: "sole_prop",
@@ -601,7 +601,7 @@ describe("Audit regression: S-Corp wages assumption (HIGH-3)", () => {
 
 // --------------------------------------------------------------------
 // Audit regression: 2026 FIT bracket math, Single, pure W-2 income
-// (MEDIUM-2 in Round-2 audit — pins known-good values at three points
+// (MEDIUM-2 in Round-2 audit, pins known-good values at three points
 // in the schedule so any future bracket / std-deduction regression
 // trips immediately. Uses self_employed_1099 + only W-2 wages so SE
 // tax, QBI, and Schedule C complications are all zero.)
@@ -752,7 +752,7 @@ describe("Audit regression matrix: High-income SE wage-base cap", () => {
     // Net SE = 500,000 × 0.9235 = 461,750
     // SS = 12.4% × min(461,750, 184,500) = 22,878
     // Medicare = 2.9% × 461,750 = 13,391
-    // Expected total SE ≈ 36,269 — without the cap, 0.153 × 461,750
+    // Expected total SE ≈ 36,269, without the cap, 0.153 × 461,750
     // ≈ 70,648, so a regression would jump by $34k. Wide band:
     expect(r.selfEmploymentTaxCents).toBeGreaterThan(cents(35_000));
     expect(r.selfEmploymentTaxCents).toBeLessThan(cents(38_000));
@@ -761,7 +761,7 @@ describe("Audit regression matrix: High-income SE wage-base cap", () => {
   it("SE at $1M is barely higher than at $500k (proves SS plateau)", () => {
     // Δ from $500k → $1M should ≈ 2.9% × (1M - 500k) × 0.9235
     // = ~$13,390. If a regression uncaps SS we'd see Δ ≈ 0.153 × $500k
-    // = $76,500 — an order of magnitude bigger.
+    // = $76,500, an order of magnitude bigger.
     const r500 = forecast(
       baseInput({
         entityType: "sole_prop",
@@ -787,7 +787,7 @@ describe("Audit regression matrix: State sanity at $50k/$100k/$200k", () => {
   // at three income levels and flag any state > 25% off bracketed
   // result. Pin loose bands here for the ones we have bracket
   // tables for. States we don't model (IL, GA) fall through to
-  // flat-rate fallback — separately bounded.
+  // flat-rate fallback, separately bounded.
 
   function soleProp(incomeUsd: number, stateCode: string) {
     return forecast(
@@ -931,7 +931,7 @@ describe("Self-employed health insurance deduction cap", () => {
   };
 
   it("caps the deduction at net business income", () => {
-    // Exactly at the cap vs. far above it — both must deduct only $60k, so
+    // Exactly at the cap vs. far above it, both must deduct only $60k, so
     // the resulting taxable income + total tax are identical.
     const atCap = forecast(
       baseInput({ ...common, selfEmployedHealthInsuranceCents: cents(60_000) }),

@@ -114,9 +114,9 @@ export default function PrivacyPage() {
               screen, and you can turn it off there at any time.
             </p>
             <p>
-              While on, the app records GPS points as you drive — including
+              While on, the app records GPS points as you drive, including
               in the background, so a trip is captured even when the app is
-              closed — and sends them to your own Taxottic account. We use
+              closed, and sends them to your own Taxottic account. We use
               them only to detect trips and calculate your IRS mileage
               deduction. Location data is <strong>never sold, never shared
               with advertisers, and never used for any purpose other than
@@ -247,7 +247,7 @@ export default function PrivacyPage() {
               earlier from the app.
             </p>
             <p>
-              <strong>Companies and bank connections — 30-day recycle
+              <strong>Companies and bank connections, 30-day recycle
               bin.</strong> When you close a company or disconnect a
               bank, the item is moved to a per-user recycle bin at{" "}
               <Link
@@ -258,7 +258,7 @@ export default function PrivacyPage() {
               </Link>
               . During the 30-day grace window you can restore it in one
               click or permanently delete it now. After 30 days, the
-              item is hard-deleted automatically — the company (with all
+              item is hard-deleted automatically, the company (with all
               its income, expenses, and transactions) or the bank
               connection (with its accounts and historical transactions)
               is removed from the database. Encrypted backups age out
@@ -266,7 +266,7 @@ export default function PrivacyPage() {
               separate &ldquo;deleted customer&rdquo; archive.
             </p>
             <p>
-              <strong>Firm activity log — 365-day rolling retention.</strong>{" "}
+              <strong>Firm activity log, 365-day rolling retention.</strong>{" "}
               Firms running on the Taxottic cockpit generate an event
               stream (document uploads, signature dispatches, invoice
               sends, notes added, etc.). To keep the activity inbox
@@ -289,7 +289,7 @@ export default function PrivacyPage() {
               30 to prevent accidental aggressive deletion.
             </p>
             <p>
-              <strong>Cross-tenant access log — indefinite retention.</strong>{" "}
+              <strong>Cross-tenant access log, indefinite retention.</strong>{" "}
               When a Taxottic support engineer accesses a tenant&apos;s
               data on the tenant&apos;s behalf (always recorded against
               the engineer&apos;s identity, never anonymized), the

@@ -5,7 +5,7 @@ import { mintPairCode } from "@/lib/watch/pair-crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/watch/pair/start  (unauthenticated — the watch isn't
+// POST /api/watch/pair/start  (unauthenticated, the watch isn't
 // linked yet). Creates an unbound device + a single-use ~120s code,
 // returns the plaintext code (rendered as the QR) and the deviceId
 // the watch then polls. Storing only the code HASH means a DB row is

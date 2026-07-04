@@ -26,7 +26,7 @@ function Icon({ d }: { d: string }) {
  *
  * The import flow is generic (it categorizes deposits as income and
  * debits as expenses), so both screens point at the same /import + /banks
- * routes — `kind` only tweaks the label so it reads naturally per page.
+ * routes, `kind` only tweaks the label so it reads naturally per page.
  */
 export function ImportConnectActions({
   publicId,

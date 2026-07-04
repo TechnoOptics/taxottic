@@ -82,7 +82,7 @@ describe("expandRowToMonthly", () => {
 
     it("never zeroes a row's own month even if recurrence_end_month is nonsensically earlier", () => {
       // Shouldn't happen from real callers, but the cap is floored at
-      // the row's own start month defensively — bad/stale data must
+      // the row's own start month defensively, bad/stale data must
       // never erase a row's real occurrence.
       const oneOff = expandRowToMonthly({
         month: 3,
@@ -103,7 +103,7 @@ describe("combineMonthly / ytdOfMonthly / totalOfMonthly with a stopped stream",
     const monthly = combineMonthly(rows.map(expandRowToMonthly));
     // Feb, Mar, Apr only = 3 × 9000 = 27000; nothing after.
     expect(totalOfMonthly(monthly)).toBe(27_000);
-    // As of June, YTD should be the same — the stream already ended.
+    // As of June, YTD should be the same, the stream already ended.
     expect(ytdOfMonthly(monthly, 6)).toBe(27_000);
     // As of March (before the row's own end), YTD is just Feb+Mar.
     expect(ytdOfMonthly(monthly, 3)).toBe(18_000);

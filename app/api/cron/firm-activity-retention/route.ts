@@ -9,7 +9,7 @@ export const maxDuration = 300;
  *
  * The activity log is append-only and tends to grow without bound:
  * every page load on a tenant audit surface, every document
- * generation, every invoice send, every signature event — they
+ * generation, every invoice send, every signature event, they
  * all land in `firm_activity_log`. We keep the last `RETENTION_DAYS`
  * rows for hot-query performance; older rows are bulk-deleted on
  * the nightly cron schedule.
@@ -24,7 +24,7 @@ export const maxDuration = 300;
  *
  * Override:
  *   Set FIRM_ACTIVITY_RETENTION_DAYS in the environment to tune.
- *   Default 365 days — covers a full tax cycle plus a buffer for
+ *   Default 365 days, covers a full tax cycle plus a buffer for
  *   amended returns.
  *
  * Auth: same envelope as other crons (Vercel x-vercel-cron OR

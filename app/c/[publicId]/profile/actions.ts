@@ -56,7 +56,7 @@ export async function saveBusinessProfile(formData: FormData) {
     primary_industry: text("primary_industry"),
     // Tax-export details
     legal_name: text("legal_name"),
-    // EIN is sensitive — store encrypted at rest (AES-256-GCM via vault).
+    // EIN is sensitive, store encrypted at rest (AES-256-GCM via vault).
     ein: encryptField(text("ein")),
     address_line1: text("address_line1"),
     address_line2: text("address_line2"),

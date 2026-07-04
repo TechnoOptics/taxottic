@@ -18,7 +18,7 @@
 export type FirmInviteClientArgs = {
   firmName: string;
   firmSlug: string;
-  /** Logo URL — public-readable. Falls back to no logo if absent. */
+  /** Logo URL, public-readable. Falls back to no logo if absent. */
   firmLogoUrl?: string | null;
   /** Optional accent color (hex) used on the CTA button. */
   firmAccentColor?: string | null;

@@ -72,7 +72,7 @@ export async function inviteClient(formData: FormData) {
 
   if (existing?.id) {
     // Look for one of their companies. If they have multiple, we'll
-    // have to ask them which one — for Phase 1 we pick the most
+    // have to ask them which one, for Phase 1 we pick the most
     // recently joined-as-manager company and surface it on the next
     // page. If they have zero companies we fall through to the
     // outreach path.
@@ -165,7 +165,7 @@ export async function inviteClient(formData: FormData) {
     }
   }
 
-  // Outreach path — email is not on Taxottic yet OR doesn't manage
+  // Outreach path, email is not on Taxottic yet OR doesn't manage
   // any company. Drop a `firm_client_outreach` row; the existing
   // `convert_firm_outreach()` RPC will promote it once they sign up.
   const { error: outreachError, data: outreach } = await admin

@@ -72,7 +72,7 @@ export default async function MoneyInHub({ params }: { params: Params }) {
 
         {/* Year-to-date summary.
             (May 2026) Removed `bg-gradient-to-br from-gold-50/60 to-cream`
-            — the cream gradient + dark-mode cream-flipped text was
+, the cream gradient + dark-mode cream-flipped text was
             rendering as cream-on-cream. .card's dark surface handles
             this cleanly. Mirror change to money-out page. */}
         <div className="card mt-6 p-6">

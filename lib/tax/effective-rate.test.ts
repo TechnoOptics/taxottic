@@ -7,7 +7,7 @@ import { neutralForecastInput, toCents } from "@/lib/calculators/base-input";
  *
  * The old `effectiveRate` divided total tax by BUSINESS income only, so a
  * pure-W-2 filer got 0% (business income = 0) and mixed filers were
- * overstated (whole tax ÷ just the business slice) — the May 2026 audit's
+ * overstated (whole tax ÷ just the business slice), the May 2026 audit's
  * "the field name lies about its denominator" finding. `overallEffectiveRate`
  * divides by total gross income (business + W-2 + spouse).
  */

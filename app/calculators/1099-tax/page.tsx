@@ -11,9 +11,9 @@ import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/pa
 
 const SITE = "https://taxottic.com";
 const SLUG = "1099-tax";
-const TITLE = "1099 Tax Calculator (2026) — Free for Contractors";
+const TITLE = "1099 Tax Calculator (2026), Free for Contractors";
 const DESCRIPTION =
-  "Free 1099 tax calculator for independent contractors, gig workers, and freelancers. Estimate your 2026 tax on 1099-NEC / 1099-K income — self-employment tax, federal + state, QBI, and quarterly payments. No sign-up.";
+  "Free 1099 tax calculator for independent contractors, gig workers, and freelancers. Estimate your 2026 tax on 1099-NEC / 1099-K income, self-employment tax, federal + state, QBI, and quarterly payments. No sign-up.";
 const KEYWORDS = [
   "1099 tax calculator",
   "1099 income tax calculator",
@@ -83,7 +83,7 @@ const FAQ_LD = {
       name: "How much tax do I owe on 1099 income?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "On 1099 income you owe self-employment tax (15.3% of net earnings for Social Security and Medicare) plus federal income tax at your bracket, plus state income tax if your state has one — reduced by the QBI deduction and your business write-offs. A rough rule of thumb is 25–30% of net profit set aside, but this calculator gives you the real number for your situation.",
+        text: "On 1099 income you owe self-employment tax (15.3% of net earnings for Social Security and Medicare) plus federal income tax at your bracket, plus state income tax if your state has one, reduced by the QBI deduction and your business write-offs. A rough rule of thumb is 25-30% of net profit set aside, but this calculator gives you the real number for your situation.",
       },
     },
     {
@@ -91,7 +91,7 @@ const FAQ_LD = {
       name: "Do 1099 contractors pay more tax than W-2 employees?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "On the payroll-tax side, yes — a W-2 employee splits the 15.3% Social Security and Medicare tax with their employer, while a 1099 contractor pays both halves as self-employment tax. But contractors can deduct business expenses a W-2 employee usually can't, plus the QBI deduction and half of the self-employment tax, which claws a lot of it back.",
+        text: "On the payroll-tax side, yes, a W-2 employee splits the 15.3% Social Security and Medicare tax with their employer, while a 1099 contractor pays both halves as self-employment tax. But contractors can deduct business expenses a W-2 employee usually can't, plus the QBI deduction and half of the self-employment tax, which claws a lot of it back.",
       },
     },
     {
@@ -99,7 +99,7 @@ const FAQ_LD = {
       name: "What's the difference between a 1099-NEC and a 1099-K?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "A 1099-NEC reports non-employee compensation a client paid you directly. A 1099-K reports payments processed through a platform or card processor (Stripe, PayPal, Uber, Etsy, etc.). Both are self-employment income — enter your total across all of them and subtract your business expenses.",
+        text: "A 1099-NEC reports non-employee compensation a client paid you directly. A 1099-K reports payments processed through a platform or card processor (Stripe, PayPal, Uber, Etsy, etc.). Both are self-employment income, enter your total across all of them and subtract your business expenses.",
       },
     },
     {
@@ -107,7 +107,7 @@ const FAQ_LD = {
       name: "Do I need to pay quarterly taxes on 1099 income?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "If you expect to owe $1,000 or more, the IRS generally wants quarterly estimated payments — nothing is withheld from a 1099 payment the way it is from a paycheck. This calculator shows your next quarterly amount and due date.",
+        text: "If you expect to owe $1,000 or more, the IRS generally wants quarterly estimated payments, nothing is withheld from a 1099 payment the way it is from a paycheck. This calculator shows your next quarterly amount and due date.",
       },
     },
   ],
@@ -174,7 +174,7 @@ export default async function TenNinetyNineTaxCalculatorPage({
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           Independent contractor, gig worker, or freelancer? See what you owe on
-          your 1099-NEC and 1099-K income — self-employment tax, federal and
+          your 1099-NEC and 1099-K income, self-employment tax, federal and
           state income tax, your QBI deduction, and your next quarterly payment.
           Instant, no sign-up.
         </p>
@@ -190,7 +190,7 @@ export default async function TenNinetyNineTaxCalculatorPage({
             What 1099 workers actually owe
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
-            A 1099 payment arrives with nothing taken out — no federal
+            A 1099 payment arrives with nothing taken out, no federal
             withholding, no Social Security, no Medicare. That&rsquo;s yours to
             handle, which is why a surprise bill in April is so common. Your tax
             has three layers:{" "}
@@ -202,7 +202,7 @@ export default async function TenNinetyNineTaxCalculatorPage({
             <strong className="text-forest-800">state income tax</strong> if you
             have it. The good news for contractors: your business expenses, the
             QBI deduction, and half of your self-employment tax all lower the
-            bill — this calculator counts them so the number is the real one,
+            bill, this calculator counts them so the number is the real one,
             not the scary one.
           </p>
         </div>

@@ -2,7 +2,7 @@
  * Savings-goals engine.
  *
  * Generates a personalized list of TAX-SAVINGS GOALS that have nothing
- * to do with new business expenses — retirement contributions, HSAs,
+ * to do with new business expenses, retirement contributions, HSAs,
  * 529 plans, charitable bunching, energy credits, etc. Each goal
  * carries detailed step-by-step instructions so the user can execute
  * without leaving the app.
@@ -36,7 +36,7 @@ export type SavingsGoal = {
   targetContributionCents: number;
   /** Last day to act for the current tax year. */
   deadline: string;
-  /** One sentence — why does THIS user qualify? */
+  /** One sentence, why does THIS user qualify? */
   why: string;
   /** Plain-English step-by-step instructions, ordered. */
   instructions: string[];
@@ -48,7 +48,7 @@ export type SavingsGoal = {
 export type SavingsGoalsInput = {
   result: ForecastResult;
   filingStatus: FilingStatus;
-  /** Owner's age — drives catch-up contributions. */
+  /** Owner's age, drives catch-up contributions. */
   age: number | null;
   /** Two-letter state code; drives 529 deduction logic. */
   state: string | null;
@@ -95,7 +95,7 @@ const LIMITS_2025 = {
 
 /**
  * State 529 plan tax treatment for 2025. Numbers reflect each state's
- * statute as of Dec 2024 — verify with the user's CPA + state plan.
+ * statute as of Dec 2024, verify with the user's CPA + state plan.
  *
  *   deduction: max $/filer (single); MFJ usually doubles unless noted
  *   credit:    flat tax credit instead of a deduction
@@ -177,17 +177,17 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     const target = cap;
     goals.push({
       id: "max_401k",
-      title: `Max your 401(k) — ${formatCents(cap)} contribution cap`,
+      title: `Max your 401(k), ${formatCents(cap)} contribution cap`,
       category: "retirement",
       estimatedSavingsCents: Math.round(target * marginal),
       targetContributionCents: target,
       deadline: DEC31,
       why: `You have W-2 wages of ${formatCents(input.ownerW2WagesCents)} this year. Every pre-tax dollar you defer reduces taxable income at your ${(marginal * 100).toFixed(0)}% marginal rate.`,
       instructions: [
-        "Log into your employer's payroll/benefits portal (ADP, Workday, Gusto, Rippling, Justworks, etc.) — usually labeled \"Benefits\" or \"Retirement\".",
-        `Find the 401(k) elective-deferral percentage. With ${formatCents(input.ownerW2WagesCents)} of wages and ${cap} cap, you'd need to elect roughly ${Math.min(100, Math.ceil((cap / input.ownerW2WagesCents) * 100))}% — but most plans cap individual elections at 75-90% of pay, so set it to the maximum allowed for the rest of the year.`,
+        "Log into your employer's payroll/benefits portal (ADP, Workday, Gusto, Rippling, Justworks, etc.), usually labeled \"Benefits\" or \"Retirement\".",
+        `Find the 401(k) elective-deferral percentage. With ${formatCents(input.ownerW2WagesCents)} of wages and ${cap} cap, you'd need to elect roughly ${Math.min(100, Math.ceil((cap / input.ownerW2WagesCents) * 100))}%, but most plans cap individual elections at 75-90% of pay, so set it to the maximum allowed for the rest of the year.`,
         "If you've contributed nothing year-to-date, calculate the catch-up election: (annual cap − YTD contributions) ÷ remaining paychecks.",
-        "Check your employer match — never leave free money on the table. If they match 4% you should at minimum elect 4%.",
+        "Check your employer match, never leave free money on the table. If they match 4% you should at minimum elect 4%.",
         "Pick a low-cost target-date fund inside the plan (look for an expense ratio under 0.20%) unless you have a specific allocation plan.",
         "Save the change. New deferral takes effect on the next payroll cycle.",
       ],
@@ -200,7 +200,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
         age >= 60 && age <= 63
           ? `SECURE 2.0 super-catch-up: ages 60-63 can defer an extra ${formatCents(LIMITS_2025.k401_catchup_60_63)} instead of the standard $7,500.`
           : "",
-        "Roth 401(k) skips the deduction now but is tax-free in retirement — choose pre-tax for current-year savings.",
+        "Roth 401(k) skips the deduction now but is tax-free in retirement, choose pre-tax for current-year savings.",
       ].filter(Boolean),
     });
   }
@@ -219,30 +219,30 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     const total = employeeDeferral + employerShare;
     goals.push({
       id: "solo_401k",
-      title: `Open a Solo 401(k) — shelter up to ${formatCents(total)}`,
+      title: `Open a Solo 401(k), shelter up to ${formatCents(total)}`,
       category: "retirement",
       estimatedSavingsCents: Math.round(total * marginal),
       targetContributionCents: total,
       deadline: DEC31,
-      why: `Your projected net self-employment income is ${formatCents(input.netSeIncomeCents)}. A Solo 401(k) lets you contribute as both employee (${formatCents(employeeDeferral)}) and employer (${formatCents(employerShare)}) — far higher cap than a SEP-IRA at the same income.`,
+      why: `Your projected net self-employment income is ${formatCents(input.netSeIncomeCents)}. A Solo 401(k) lets you contribute as both employee (${formatCents(employeeDeferral)}) and employer (${formatCents(employerShare)}), far higher cap than a SEP-IRA at the same income.`,
       instructions: [
-        "Open a Solo 401(k) account at Fidelity, Schwab, Vanguard, or E*TRADE — all are free with no setup fees.",
+        "Open a Solo 401(k) account at Fidelity, Schwab, Vanguard, or E*TRADE, all are free with no setup fees.",
         "You'll need your business EIN. If you don't have one, get a free EIN at irs.gov in 5 minutes (search \"EIN online application\").",
         "Pick \"Pre-Tax\" for the deductible bucket (Roth is also offered but skips the current-year deduction).",
-        "Make the EMPLOYEE elective deferral by Dec 31 — fund up to $23,500 (or $31,000 if 50+).",
+        "Make the EMPLOYEE elective deferral by Dec 31, fund up to $23,500 (or $31,000 if 50+).",
         "Make the EMPLOYER profit-sharing contribution by your tax-filing deadline (Apr 15, or Oct 15 with extension). Up to 20% of net SE income.",
-        "If you have a spouse who works in the business, they get their own employee + employer caps — household total can exceed $140K.",
+        "If you have a spouse who works in the business, they get their own employee + employer caps, household total can exceed $140K.",
       ],
       citations: ["IRC §401(c)", "IRS Pub 560 ch. 4"],
       whoToContact: "Fidelity / Schwab / Vanguard plan-setup team",
       caveats: [
-        "If you have any W-2 employees other than your spouse, a Solo 401(k) doesn't work — you need a regular 401(k) plan.",
+        "If you have any W-2 employees other than your spouse, a Solo 401(k) doesn't work, you need a regular 401(k) plan.",
         "Plan must be ESTABLISHED by Dec 31 even if funded later. Don't wait until April.",
       ],
     });
   }
 
-  // 3. SEP-IRA — alternative to Solo 401(k), simpler but lower cap
+  // 3. SEP-IRA, alternative to Solo 401(k), simpler but lower cap
   if (
     input.netSeIncomeCents > 15_000_00 &&
     input.ytdRetirementContributionsCents === 0
@@ -253,16 +253,16 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     );
     goals.push({
       id: "sep_ira",
-      title: `SEP-IRA — contribute up to ${formatCents(sepIra)}`,
+      title: `SEP-IRA, contribute up to ${formatCents(sepIra)}`,
       category: "retirement",
       estimatedSavingsCents: Math.round(sepIra * marginal),
       targetContributionCents: sepIra,
       deadline: APR15_NEXT,
-      why: `On ${formatCents(input.netSeIncomeCents)} of net business income you can stash 20% in a SEP. Simpler than a Solo 401(k) — no separate plan document, no Form 5500, just a regular IRA.`,
+      why: `On ${formatCents(input.netSeIncomeCents)} of net business income you can stash 20% in a SEP. Simpler than a Solo 401(k), no separate plan document, no Form 5500, just a regular IRA.`,
       instructions: [
         "Open a SEP-IRA at Fidelity, Schwab, Vanguard, or your existing brokerage. No employer paperwork needed if you're a sole proprietor.",
-        "Funding deadline is your tax-filing deadline next year (Apr 15, or Oct 15 with extension) — this is FLEXIBLE unlike Solo 401(k) elective deferrals.",
-        "Allocate to a low-cost index fund — VTSAX (Vanguard total US) and VTIAX (international) are common SEP defaults.",
+        "Funding deadline is your tax-filing deadline next year (Apr 15, or Oct 15 with extension), this is FLEXIBLE unlike Solo 401(k) elective deferrals.",
+        "Allocate to a low-cost index fund, VTSAX (Vanguard total US) and VTIAX (international) are common SEP defaults.",
         "Deduct the contribution on Schedule 1, Line 16 of Form 1040 next year.",
       ],
       citations: ["IRC §408(k)", "IRS Pub 560"],
@@ -270,7 +270,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       caveats: [
         "If you have employees other than yourself, you must contribute the SAME percentage of compensation for them too.",
         `${formatCents(sepIra)} is the cap on YOUR contribution; you may want to leave headroom for next year if income drops.`,
-        "If you're considering both SEP-IRA and Solo 401(k), the Solo 401(k) usually shelters more at the same income. Pick one — they don't combine cleanly.",
+        "If you're considering both SEP-IRA and Solo 401(k), the Solo 401(k) usually shelters more at the same income. Pick one, they don't combine cleanly.",
       ],
     });
   }
@@ -284,18 +284,18 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     if (totalHsa > 0) {
       goals.push({
         id: "max_hsa",
-        title: `Max your HSA — ${formatCents(totalHsa)} more deductible this year`,
+        title: `Max your HSA, ${formatCents(totalHsa)} more deductible this year`,
         category: "health",
         estimatedSavingsCents: Math.round(totalHsa * (marginal + 0.0765)), // income tax + FICA savings if pre-tax
         targetContributionCents: totalHsa,
         deadline: APR15_NEXT,
-        why: `If you have an HSA-eligible high-deductible health plan, every dollar contributed is pre-tax now AND tax-free in retirement when used for medical expenses. Triple tax advantage — better than any other vehicle.`,
+        why: `If you have an HSA-eligible high-deductible health plan, every dollar contributed is pre-tax now AND tax-free in retirement when used for medical expenses. Triple tax advantage, better than any other vehicle.`,
         instructions: [
           "Confirm you have an HSA-eligible HDHP (deductible ≥ $1,650 self / $3,300 family for 2025). Look at your insurance card or call HR.",
           "If your employer offers HSA contributions through payroll: increase the per-paycheck contribution. Pre-tax payroll contributions ALSO skip FICA tax (an extra 7.65% savings).",
           "If contributing outside payroll: open an HSA at Fidelity (no fees, full investment options) and direct-deposit before the Apr 15 deadline.",
-          "INVEST the balance — most HSAs default to a 0.05% money-market sweep. Move it into a low-cost stock index fund. The HSA's compound-tax-free advantage is wasted if you leave it in cash.",
-          "Save medical receipts permanently — you can reimburse yourself decades later, with the HSA having compounded tax-free.",
+          "INVEST the balance, most HSAs default to a 0.05% money-market sweep. Move it into a low-cost stock index fund. The HSA's compound-tax-free advantage is wasted if you leave it in cash.",
+          "Save medical receipts permanently, you can reimburse yourself decades later, with the HSA having compounded tax-free.",
         ],
         citations: ["IRC §223", "IRS Pub 969"],
         whoToContact: "Your HR or HSA custodian (Fidelity, Lively, HealthEquity)",
@@ -304,7 +304,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
             ? `You're 55+ so add the ${formatCents(LIMITS_2025.hsa_catchup_55)} catch-up.`
             : "",
           "If you're on Medicare you cannot contribute to an HSA. Stop contributions the month Medicare starts.",
-          "FSA contributions (different vehicle) typically disqualify HSA contributions — pick one.",
+          "FSA contributions (different vehicle) typically disqualify HSA contributions, pick one.",
         ].filter(Boolean),
       });
     }
@@ -318,24 +318,24 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     const target = LIMITS_2025.ira_traditional_roth + (isCatchupAge ? LIMITS_2025.ira_catchup_50 : 0);
     goals.push({
       id: "backdoor_roth",
-      title: `Backdoor Roth IRA — ${formatCents(target)} into tax-free growth`,
+      title: `Backdoor Roth IRA, ${formatCents(target)} into tax-free growth`,
       category: "retirement",
       estimatedSavingsCents: 0, // current-year impact is $0 (after-tax in, after-tax out); long-term value
       targetContributionCents: target,
       deadline: APR15_NEXT,
-      why: `Your AGI exceeds the Roth direct-contribution phaseout. The Backdoor Roth is the IRS-blessed workaround — contribute to a Traditional IRA, immediately convert to Roth.`,
+      why: `Your AGI exceeds the Roth direct-contribution phaseout. The Backdoor Roth is the IRS-blessed workaround, contribute to a Traditional IRA, immediately convert to Roth.`,
       instructions: [
         `Open a Traditional IRA at the same brokerage where you have your Roth IRA (Fidelity, Schwab, Vanguard).`,
-        `Make a NONDEDUCTIBLE contribution of up to ${formatCents(target)} to the Traditional IRA. Don't invest it — leave it as cash.`,
+        `Make a NONDEDUCTIBLE contribution of up to ${formatCents(target)} to the Traditional IRA. Don't invest it, leave it as cash.`,
         "After 1-2 days (let the cash settle), convert the entire Traditional IRA balance to your Roth IRA.",
-        "File Form 8606 with your tax return next year. This is critical — it tracks the basis so you don't get taxed twice.",
+        "File Form 8606 with your tax return next year. This is critical, it tracks the basis so you don't get taxed twice.",
         "Watch out for the PRO-RATA RULE: if you have OTHER pre-tax IRAs (rollover IRA, SEP, SIMPLE), the conversion will be partly taxable. Roll those into your 401(k) first if possible.",
       ],
       citations: ["IRC §408", "IRS Notice 2014-54"],
       whoToContact: "Your brokerage's IRA department",
       caveats: [
         "Pro-rata rule: aggregate balance across all your traditional / SEP / SIMPLE IRAs determines the taxable portion. SE owners with SEP-IRAs are most affected.",
-        "Roth conversions are reported in the YEAR converted, not the year contributed — convert by Dec 31 to count for this tax year.",
+        "Roth conversions are reported in the YEAR converted, not the year contributed, convert by Dec 31 to count for this tax year.",
       ],
     });
   }
@@ -349,7 +349,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     const target = LIMITS_2025.ira_traditional_roth + (isCatchupAge ? LIMITS_2025.ira_catchup_50 : 0);
     goals.push({
       id: "spousal_ira",
-      title: `Spousal IRA — ${formatCents(target)} for your spouse`,
+      title: `Spousal IRA, ${formatCents(target)} for your spouse`,
       category: "retirement",
       estimatedSavingsCents: Math.round(target * marginal),
       targetContributionCents: target,
@@ -357,7 +357,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       why: `One spouse with little or no income can still contribute the full IRA limit if the working spouse has enough earnings. Doubles your household IRA capacity.`,
       instructions: [
         "Open a Traditional IRA in the non-working spouse's name (separate from yours).",
-        `Contribute up to ${formatCents(target)} from joint funds — the IRS treats the working spouse's income as the source.`,
+        `Contribute up to ${formatCents(target)} from joint funds, the IRS treats the working spouse's income as the source.`,
         "If household AGI is below the deduction phaseout (~$236K MFJ), it's fully tax-deductible. Above that, do a Backdoor Roth instead.",
         "File jointly to claim the deduction.",
       ],
@@ -376,8 +376,8 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     why: `Realize losing positions in your taxable brokerage account before year-end. Up to $3,000 of net losses offsets ordinary income; anything beyond carries forward forever.`,
     instructions: [
       "Log into your brokerage (Fidelity, Schwab, Vanguard, Robinhood, etc.) and pull a year-to-date realized + unrealized P&L.",
-      "Identify positions held in your TAXABLE account that are down. (Do NOT touch losses in IRA / 401(k) — they don't count.)",
-      "Sell the losers. Replace with a similar-but-not-identical fund to maintain market exposure (e.g. sell VTI, buy ITOT — both are total-market US ETFs from different issuers).",
+      "Identify positions held in your TAXABLE account that are down. (Do NOT touch losses in IRA / 401(k), they don't count.)",
+      "Sell the losers. Replace with a similar-but-not-identical fund to maintain market exposure (e.g. sell VTI, buy ITOT, both are total-market US ETFs from different issuers).",
       "Wait 31 days before re-buying the EXACT same security to avoid the wash-sale rule, which voids the loss.",
       "Capital losses first offset capital gains, then up to $3,000 of ordinary income, then carry forward.",
     ],
@@ -385,7 +385,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     whoToContact: "Your brokerage; consider asking for a free tax-loss-harvesting service (Wealthfront, Betterment, Schwab Intelligent automate this)",
     caveats: [
       "Wash-sale rule: buying the same or a substantially identical security within 30 days before OR after the sale invalidates the loss.",
-      "Don't tail-wag-the-dog — only harvest losses if you'd hold the replacement; don't sell winners just to harvest.",
+      "Don't tail-wag-the-dog, only harvest losses if you'd hold the replacement; don't sell winners just to harvest.",
     ],
   });
 
@@ -395,7 +395,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     const bunchTarget = Math.max(stdEst - input.ytdItemizedCents, 5_000_00) * 2;
     goals.push({
       id: "bunch_charitable",
-      title: `Bunch charitable giving — donate ${formatCents(bunchTarget)} this year, $0 next year`,
+      title: `Bunch charitable giving, donate ${formatCents(bunchTarget)} this year, $0 next year`,
       category: "charitable",
       estimatedSavingsCents: Math.round(bunchTarget * marginal * 0.4), // half the bunched donation is "extra" deduction over standard
       targetContributionCents: bunchTarget,
@@ -403,16 +403,16 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       why: `Your itemized total is close to the standard deduction. Bunching two years of giving into one creates an itemized year that beats standard, while next year you take the standard.`,
       instructions: [
         "Open a Donor-Advised Fund (DAF) at Fidelity Charitable, Schwab Charitable, or Vanguard Charitable. No fee to open; minimum $0-$5K depending on provider.",
-        `Contribute ${formatCents(bunchTarget)} to the DAF before Dec 31 — this is the deductible event.`,
+        `Contribute ${formatCents(bunchTarget)} to the DAF before Dec 31, this is the deductible event.`,
         "From the DAF, you grant out to your favorite charities over the next 1-3 years on whatever schedule you want.",
-        "Donate APPRECIATED STOCK instead of cash — you avoid the capital-gains tax AND get the full market-value deduction. Double-dip.",
+        "Donate APPRECIATED STOCK instead of cash, you avoid the capital-gains tax AND get the full market-value deduction. Double-dip.",
         "Itemize this year (Schedule A); take the standard deduction next year.",
       ],
       citations: ["IRC §170", "IRS Pub 526"],
       whoToContact: "Fidelity Charitable / Schwab Charitable / Vanguard Charitable",
       caveats: [
         "Cash to public charities is deductible up to 60% of AGI; appreciated stock up to 30%. Above those caps, carries forward 5 years.",
-        "Donor-advised funds aren't required — you can also bunch with direct gifts. DAFs just give you flexibility on the timing of payouts.",
+        "Donor-advised funds aren't required, you can also bunch with direct gifts. DAFs just give you flexibility on the timing of payouts.",
       ],
     });
   }
@@ -429,15 +429,15 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     const reductionNeeded = Math.max(0, householdAgi - qbiThreshold);
     goals.push({
       id: "qbi_threshold",
-      title: `Stay under the QBI cliff — drop AGI by ${formatCents(reductionNeeded || 20_000_00)}`,
+      title: `Stay under the QBI cliff, drop AGI by ${formatCents(reductionNeeded || 20_000_00)}`,
       category: "retirement",
       estimatedSavingsCents: Math.round(input.netSeIncomeCents * 0.2 * marginal),
       targetContributionCents: reductionNeeded || 20_000_00,
       deadline: DEC31,
-      why: `Your AGI is near the §199A QBI threshold of ${formatCents(qbiThreshold)}. Below the cliff, you get a flat 20% QBI deduction. Above, the calculation depends on W-2 wages + qualified property — Specified Service Trades + Businesses (SSTBs) lose it entirely above the phase-out.`,
+      why: `Your AGI is near the §199A QBI threshold of ${formatCents(qbiThreshold)}. Below the cliff, you get a flat 20% QBI deduction. Above, the calculation depends on W-2 wages + qualified property, Specified Service Trades + Businesses (SSTBs) lose it entirely above the phase-out.`,
       instructions: [
         `Lower AGI by maxing pre-tax retirement: 401(k), Solo 401(k), HSA, and SEP all reduce AGI.`,
-        "Defer December income — push invoices to January to stay under threshold.",
+        "Defer December income, push invoices to January to stay under threshold.",
         "Accelerate January expenses into December (subscriptions, supplies, deposits).",
         "If you sell stock with gains, sell some losers first to neutralize.",
         "Below the threshold the QBI math is dead simple: 20% of net business income = deduction.",
@@ -445,7 +445,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       citations: ["IRC §199A", "Treas. Reg. §1.199A"],
       caveats: [
         "If your business is an SSTB (consulting, accounting, law, health, financial services, etc.), the QBI deduction phases out completely above the cliff.",
-        "Non-SSTB above-threshold businesses can still get partial QBI, limited by W-2 wages paid + qualified property — talk to a CPA.",
+        "Non-SSTB above-threshold businesses can still get partial QBI, limited by W-2 wages paid + qualified property, talk to a CPA.",
       ],
     });
   }
@@ -454,24 +454,24 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
   if (input.netSeIncomeCents > 300_000_00) {
     goals.push({
       id: "defined_benefit",
-      title: "Defined Benefit Plan — shelter $50K-$300K/yr",
+      title: "Defined Benefit Plan, shelter $50K-$300K/yr",
       category: "retirement",
       estimatedSavingsCents: Math.round(150_000_00 * marginal), // illustrative
       targetContributionCents: 150_000_00,
       deadline: DEC31,
-      why: `Your projected SE income is over $300K. A defined-benefit (cash balance / pension) plan can shelter $50K-$300K+ per year — far more than any other vehicle.`,
+      why: `Your projected SE income is over $300K. A defined-benefit (cash balance / pension) plan can shelter $50K-$300K+ per year, far more than any other vehicle.`,
       instructions: [
-        "Hire a third-party administrator (TPA) — these are specialized: Schwab Personal Defined Benefit, EGPS, Pinnacle, Independent Actuaries.",
+        "Hire a third-party administrator (TPA), these are specialized: Schwab Personal Defined Benefit, EGPS, Pinnacle, Independent Actuaries.",
         "Plan must be ESTABLISHED by Dec 31 (some flexibility under SECURE Act).",
         "TPA runs an actuarial calculation based on your age and target retirement income; produces your annual contribution amount.",
-        "Older entrepreneurs (50s+) get the largest contributions — the math is age-weighted.",
+        "Older entrepreneurs (50s+) get the largest contributions, the math is age-weighted.",
         "Combine with a Solo 401(k) for an additional $23,500 elective deferral.",
         "Annual cost: $1,500-$3,500 in TPA fees. Worth it only if you're confident you can fund $50K+ for 3+ years (DBs require minimum contributions).",
       ],
       citations: ["IRC §415(b)", "IRC §404(o)", "IRS Pub 560"],
-      whoToContact: "A defined-benefit TPA (Schwab Personal Defined Benefit, EGPS, etc.) — talk to them before Dec 1",
+      whoToContact: "A defined-benefit TPA (Schwab Personal Defined Benefit, EGPS, etc.), talk to them before Dec 1",
       caveats: [
-        "DB plans require COMMITTED ANNUAL FUNDING. If your income drops, you may have to keep contributing — much less flexible than a 401(k).",
+        "DB plans require COMMITTED ANNUAL FUNDING. If your income drops, you may have to keep contributing, much less flexible than a 401(k).",
         "Best for: stable high-income SE owners 45+ with a 5+ year horizon.",
       ],
     });
@@ -493,7 +493,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
         : Math.round(cap * stateRate);
     goals.push({
       id: "state_529",
-      title: `${input.state} 529 plan — ${stateRule.kind === "credit" ? `up to ${formatCents(cap)} state tax credit` : `${formatCents(cap)} state tax deduction`}`,
+      title: `${input.state} 529 plan, ${stateRule.kind === "credit" ? `up to ${formatCents(cap)} state tax credit` : `${formatCents(cap)} state tax deduction`}`,
       category: "education",
       estimatedSavingsCents: savings,
       targetContributionCents: cap,
@@ -501,19 +501,19 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       why: `${input.state} offers a state ${stateRule.kind} for 529 contributions. ${stateRule.notes}`,
       instructions: [
         stateRule.anyState
-          ? "Open a 529 account at any state's plan — the deduction works for ANY state's 529. Compare expense ratios; Utah's my529, NY's 529, and CA's ScholarShare are usually top picks for low fees."
-          : `Open a 529 account specifically at ${input.state}'s state-sponsored plan — only that plan's contributions qualify for ${input.state}'s tax benefit.`,
+          ? "Open a 529 account at any state's plan, the deduction works for ANY state's 529. Compare expense ratios; Utah's my529, NY's 529, and CA's ScholarShare are usually top picks for low fees."
+          : `Open a 529 account specifically at ${input.state}'s state-sponsored plan, only that plan's contributions qualify for ${input.state}'s tax benefit.`,
         "Name your child / dependent as the beneficiary. Account owner can stay in your name (you control the money).",
         `Contribute up to ${formatCents(cap)} before Dec 31 to lock in this year's ${stateRule.kind}.`,
         "Pick an age-based portfolio (auto-de-risks as the kid approaches college) unless you have a specific allocation plan.",
-        "Claim the contribution on your state tax return next year — your state's tax software walks you through it.",
+        "Claim the contribution on your state tax return next year, your state's tax software walks you through it.",
       ],
       citations: ["IRC §529", `${input.state} Department of Revenue`],
       whoToContact: `${input.state} 529 plan customer service`,
       caveats: [
         stateRule.notes,
         "529 funds withdrawn for non-qualified use are subject to a 10% federal penalty + ordinary income tax on earnings.",
-        "Excess contributions (above the state cap) earn no extra deduction but are still allowable per IRS rules — just check your state's annual cap.",
+        "Excess contributions (above the state cap) earn no extra deduction but are still allowable per IRS rules, just check your state's annual cap.",
       ],
     });
   }
@@ -522,7 +522,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
   if (input.ownerW2WagesCents > 0 && input.ytdHsaContributionsCents === 0) {
     goals.push({
       id: "health_fsa",
-      title: `Health FSA — ${formatCents(LIMITS_2025.fsa_health)} pre-tax for medical expenses`,
+      title: `Health FSA, ${formatCents(LIMITS_2025.fsa_health)} pre-tax for medical expenses`,
       category: "health",
       estimatedSavingsCents: Math.round(LIMITS_2025.fsa_health * (marginal + 0.0765)),
       targetContributionCents: LIMITS_2025.fsa_health,
@@ -530,14 +530,14 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       why: `If your employer offers a Health FSA and you don't have an HSA-qualified high-deductible health plan, this is the next-best pre-tax medical bucket. Saves income tax + FICA.`,
       instructions: [
         "Wait for your employer's open-enrollment window (usually Nov-Dec for the following calendar year).",
-        `Elect ${formatCents(LIMITS_2025.fsa_health)} for 2026 — the limit is set IN THE BENEFITS PORTAL, not via Plaid or anywhere else.`,
+        `Elect ${formatCents(LIMITS_2025.fsa_health)} for 2026, the limit is set IN THE BENEFITS PORTAL, not via Plaid or anywhere else.`,
         "Use it during the plan year for prescription co-pays, glasses, dental, OTC drugs (since 2020), period products, sunscreen.",
-        "Most plans have a $640 carryover or a 2.5-month grace period — the rest of unused balance is forfeited.",
+        "Most plans have a $640 carryover or a 2.5-month grace period, the rest of unused balance is forfeited.",
       ],
       citations: ["IRC §125", "IRS Notice 2024-71"],
       whoToContact: "Your HR / benefits administrator",
       caveats: [
-        "Use it or lose it — only ~$640 carries over to next year.",
+        "Use it or lose it, only ~$640 carries over to next year.",
         "Cannot have both an HSA and a Health FSA in the same year (limited-purpose FSAs are an exception, just for dental/vision).",
       ],
     });
@@ -551,7 +551,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
         : LIMITS_2025.fsa_dependent_care;
     goals.push({
       id: "dependent_care_fsa",
-      title: `Dependent Care FSA — ${formatCents(cap)} pre-tax for childcare`,
+      title: `Dependent Care FSA, ${formatCents(cap)} pre-tax for childcare`,
       category: "health",
       estimatedSavingsCents: Math.round(cap * (marginal + 0.0765)),
       targetContributionCents: cap,
@@ -560,12 +560,12 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       instructions: [
         "During open enrollment, elect up to $5,000 (or $2,500 if MFS) into your employer's Dependent Care FSA.",
         "Submit reimbursement claims with receipts from your daycare provider during the year.",
-        "Keep your provider's tax ID — needed for the Form 2441 you'll file next April.",
+        "Keep your provider's tax ID, needed for the Form 2441 you'll file next April.",
         "Cannot also claim the same expenses for the Child & Dependent Care Tax Credit. Pick whichever's bigger.",
       ],
       citations: ["IRC §129", "IRS Pub 503"],
       caveats: [
-        "Strictly 'use it or lose it' — funds don't carry over (unlike Health FSAs).",
+        "Strictly 'use it or lose it', funds don't carry over (unlike Health FSAs).",
         "Only qualifies if BOTH spouses work (or are full-time students). Stay-at-home parent generally disqualifies.",
       ],
     });
@@ -574,47 +574,47 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
   // 14. Energy Efficient Home Improvement Credit
   goals.push({
     id: "energy_credit",
-    title: `Energy Efficient Home Improvement Credit — up to ${formatCents(LIMITS_2025.energy_efficient_home)}/yr`,
+    title: `Energy Efficient Home Improvement Credit, up to ${formatCents(LIMITS_2025.energy_efficient_home)}/yr`,
     category: "energy",
     estimatedSavingsCents: LIMITS_2025.energy_efficient_home,
     targetContributionCents: 5_000_00, // typical install cost
     deadline: DEC31,
-    why: `IRC §25C credit for qualifying home upgrades — heat pumps, insulation, windows, doors, electrical panel upgrades, energy audit. 30% of cost up to specific caps.`,
+    why: `IRC §25C credit for qualifying home upgrades, heat pumps, insulation, windows, doors, electrical panel upgrades, energy audit. 30% of cost up to specific caps.`,
     instructions: [
       "Audit candidates for upgrade: heat pump ($2,000 max credit), heat-pump water heater ($2,000), insulation/air-sealing ($1,200), exterior windows ($600), doors ($500), electrical panel ($600), home energy audit ($150).",
       "Hire a licensed contractor for the install (DIY equipment qualifies but DIY labor doesn't).",
-      "Save the manufacturer's certification statement — IRS asks for it on audit.",
+      "Save the manufacturer's certification statement, IRS asks for it on audit.",
       "File Form 5695 with next year's return.",
-      "Credit is non-refundable but renews every year — you can take the $1,200 max again next year for different upgrades.",
+      "Credit is non-refundable but renews every year, you can take the $1,200 max again next year for different upgrades.",
     ],
     citations: ["IRC §25C", "IRS Form 5695 instructions"],
     caveats: [
       "Equipment must be installed at your PRIMARY RESIDENCE in the U.S. Vacation homes don't qualify for most items.",
-      "Solar panels and geothermal use the bigger Residential Clean Energy Credit (§25D) instead — 30% with no annual cap.",
+      "Solar panels and geothermal use the bigger Residential Clean Energy Credit (§25D) instead, 30% with no annual cap.",
     ],
   });
 
   // 15. EV tax credit
   goals.push({
     id: "ev_credit",
-    title: `EV tax credit — ${formatCents(LIMITS_2025.ev_credit_new)} new / ${formatCents(LIMITS_2025.ev_credit_used)} used`,
+    title: `EV tax credit, ${formatCents(LIMITS_2025.ev_credit_new)} new / ${formatCents(LIMITS_2025.ev_credit_used)} used`,
     category: "energy",
     estimatedSavingsCents: LIMITS_2025.ev_credit_new,
     targetContributionCents: 30_000_00, // typical EV cost
     deadline: DEC31,
     why: `If you're considering an EV anyway, do the purchase before year-end. Direct $7,500 (new) or $4,000 (used) tax credit, transferable to the dealer at point of sale.`,
     instructions: [
-      "Check the IRS-qualified vehicle list at fueleconomy.gov/feg/tax2023.shtml — must be on the list AND meet the battery-mineral / assembly rules.",
+      "Check the IRS-qualified vehicle list at fueleconomy.gov/feg/tax2023.shtml, must be on the list AND meet the battery-mineral / assembly rules.",
       `Income caps: ${formatCents(150_000_00)} single / ${formatCents(300_000_00)} MFJ for new EVs; ${formatCents(75_000_00)} / ${formatCents(150_000_00)} for used. Above these you get nothing.`,
       "MSRP caps: $80K SUVs/trucks, $55K cars (new only).",
-      "AT THE DEALERSHIP: the IRS allows the credit to be TRANSFERRED — the dealer applies it as a discount, you don't have to wait until tax time.",
+      "AT THE DEALERSHIP: the IRS allows the credit to be TRANSFERRED, the dealer applies it as a discount, you don't have to wait until tax time.",
       "If transferring, you sign IRS Form 15400 at delivery.",
       "Claim on Form 8936 next April if you didn't transfer at the dealer.",
     ],
     citations: ["IRC §30D (new)", "IRC §25E (used)"],
     caveats: [
-      "Income cap is on AGI in the year of purchase OR the year prior — pick the lower.",
-      "Credit is non-refundable if not transferred — if you owe less than $7,500 in tax, you don't get the rest as a refund.",
+      "Income cap is on AGI in the year of purchase OR the year prior, pick the lower.",
+      "Credit is non-refundable if not transferred, if you owe less than $7,500 in tax, you don't get the rest as a refund.",
     ],
   });
 
@@ -627,17 +627,17 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
     );
     goals.push({
       id: "fix_underpayment",
-      title: `Avoid the underpayment penalty — bump withholding by ${formatCents(shortfall)}`,
+      title: `Avoid the underpayment penalty, bump withholding by ${formatCents(shortfall)}`,
       category: "compliance",
       estimatedSavingsCents: Math.round(shortfall * 0.08), // ~8% IRS penalty rate
       targetContributionCents: shortfall,
       deadline: DEC31,
       why: `Your withholding + estimated payments are below the 90%-of-current-year safe harbor. Without action, the IRS will assess an underpayment penalty (~8% APR on the shortfall).`,
       instructions: [
-        "If you have W-2 wages: ask your HR to update Form W-4 — Step 4(c) lets you ADD extra withholding per paycheck. Set this to (shortfall) ÷ remaining paychecks.",
+        "If you have W-2 wages: ask your HR to update Form W-4, Step 4(c) lets you ADD extra withholding per paycheck. Set this to (shortfall) ÷ remaining paychecks.",
         "If self-employed: send a quarterly estimated payment via IRS Direct Pay (irs.gov/payments). Do this before Jan 15 of next year for the Q4 deadline.",
         "Confirm in your payroll portal that the change took effect on the next paycheck.",
-        "Bonus: withholding (W-4 box 4c) is treated as if paid evenly across the year — even a December bump dodges underpayment penalties on Q1-Q3 shortfalls. Estimated payments don't get this benefit.",
+        "Bonus: withholding (W-4 box 4c) is treated as if paid evenly across the year, even a December bump dodges underpayment penalties on Q1-Q3 shortfalls. Estimated payments don't get this benefit.",
       ],
       citations: ["IRC §6654", "IRS Form W-4 instructions"],
       whoToContact: "Your HR / payroll team",
@@ -651,7 +651,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
       (isCatchupAge ? LIMITS_2025.simple_ira_catchup_50 : 0);
     goals.push({
       id: "simple_ira",
-      title: `SIMPLE IRA — ${formatCents(target)} elective deferral`,
+      title: `SIMPLE IRA, ${formatCents(target)} elective deferral`,
       category: "retirement",
       estimatedSavingsCents: Math.round(target * marginal),
       targetContributionCents: target,
@@ -661,11 +661,11 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
         "Establish the SIMPLE IRA plan by Oct 1 (for current year). Most brokerages have 1-page forms.",
         "Contribute as the EMPLOYEE: up to $16,000 ($19,500 with 50+ catch-up) by Dec 31.",
         "EMPLOYER match: required at 3% of compensation OR 2% non-elective. For sole-prop, you ARE the employer.",
-        "Lower limit than a 401(k) but minimal paperwork — no Form 5500, no nondiscrimination testing.",
+        "Lower limit than a 401(k) but minimal paperwork, no Form 5500, no nondiscrimination testing.",
       ],
       citations: ["IRC §408(p)", "IRS Pub 560"],
       caveats: [
-        "Must be the only retirement plan you offer — no Solo 401(k) AND SIMPLE IRA in the same year.",
+        "Must be the only retirement plan you offer, no Solo 401(k) AND SIMPLE IRA in the same year.",
         "Withdrawals within the first 2 years are subject to a 25% penalty (vs. the standard 10%).",
       ],
     });
@@ -675,7 +675,7 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
   if (input.ownerW2WagesCents > 100_000_00) {
     goals.push({
       id: "mega_backdoor_roth",
-      title: "Mega Backdoor Roth — up to $46,500 extra Roth contribution",
+      title: "Mega Backdoor Roth, up to $46,500 extra Roth contribution",
       category: "retirement",
       estimatedSavingsCents: 0, // current-year impact $0; long-term huge
       targetContributionCents: 46_500_00,
@@ -703,17 +703,17 @@ export function buildSavingsGoals(input: SavingsGoalsInput): SavingsGoal[] {
   ) {
     goals.push({
       id: "savers_credit",
-      title: "Saver's Credit — up to $2,000 tax credit for retirement contributions",
+      title: "Saver's Credit, up to $2,000 tax credit for retirement contributions",
       category: "retirement",
       estimatedSavingsCents: 2_000_00,
       targetContributionCents: 4_000_00,
       deadline: DEC31,
-      why: `Your AGI qualifies you for the Saver's Credit — a non-refundable credit of 10-50% of retirement contributions, up to $2,000 ($4,000 MFJ).`,
+      why: `Your AGI qualifies you for the Saver's Credit, a non-refundable credit of 10-50% of retirement contributions, up to $2,000 ($4,000 MFJ).`,
       instructions: [
         "Make ANY retirement contribution: 401(k), Traditional IRA, Roth IRA, SEP, SIMPLE.",
-        "AGI brackets (2025): 50% credit at $24K MFJ / $12K single, 20% at $26K/$13K, 10% at $39K/$19.5K. Above $76,500 MFJ / $38,250 single — no credit.",
+        "AGI brackets (2025): 50% credit at $24K MFJ / $12K single, 20% at $26K/$13K, 10% at $39K/$19.5K. Above $76,500 MFJ / $38,250 single, no credit.",
         "File Form 8880 with your tax return.",
-        "Stacks WITH the regular deduction — you get the deduction AND the credit.",
+        "Stacks WITH the regular deduction, you get the deduction AND the credit.",
       ],
       citations: ["IRC §25B"],
       caveats: [

@@ -194,13 +194,13 @@ const BANK_SYNC_EVENTS = new Set<string>([
  * If this event belongs to a connected Stripe account that a user has
  * linked as a transaction source, run an immediate incremental sync.
  *
- * force:true bypasses syncStripeConnection's monthly cost throttle —
+ * force:true bypasses syncStripeConnection's monthly cost throttle -
  * same rationale as the Plaid SYNC_UPDATES_AVAILABLE webhook: the event
  * only fires when there's genuinely new activity, so the throttle (which
  * exists to stop the blind weekly cron from redundant calls) must not
  * swallow it. The cursor in syncStripeConnection makes duplicate events
  * (e.g. charge.succeeded + a later balance.available for the same
- * payment) cheap no-ops — zero new rows. Errors are swallowed onto the
+ * payment) cheap no-ops, zero new rows. Errors are swallowed onto the
  * connection row so we still ack the webhook (a 500 would make Stripe
  * retry the whole event, including the firm-invoice handling).
  */

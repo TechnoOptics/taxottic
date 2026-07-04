@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-// StudioFamilyFAB — a floating cross-product launcher that lives in
+// StudioFamilyFAB, a floating cross-product launcher that lives in
 // the bottom-LEFT corner (sibling to the Bella FAB on the bottom-
 // right). Clicking it opens a card that lists the Techno Optics
 // family of products with one-click jumps to each.
@@ -16,8 +16,8 @@ import { createPortal } from "react-dom";
 //   2. The user (founder of Techno Optics) asked for design cohesion
 //      with Advottic. Advottic's signature visual element is its
 //      sticky forest header + the Bella floating button; mirroring
-//      that with a SECOND floating button in the same style — but
-//      for cross-product nav — makes the relationship between
+//      that with a SECOND floating button in the same style, but
+//      for cross-product nav, makes the relationship between
 //      Taxottic, Advottic, and the studio site visible without a
 //      hard nav bar refactor.
 //
@@ -182,7 +182,7 @@ export function StudioFamilyFAB() {
 
   return (
     <>
-      {/* Same .bella-fab visual chain — animated gold conic ring around
+      {/* Same .bella-fab visual chain, animated gold conic ring around
           a forest core. We're not USING the BellaFAB component because
           this is a different action (open the family flyout, not chat),
           but the CSS class makes the two FABs visually a matching

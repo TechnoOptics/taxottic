@@ -39,7 +39,7 @@ export default async function MileageSchedulePage(props: {
         <p className="mt-2 text-sm text-ink-soft max-w-2xl">
           Configure when the auto-mileage tracker is allowed to run.
           Outside the window, your phone won&apos;t use Location even
-          if the toggle is on — so your battery + privacy match your
+          if the toggle is on, so your battery + privacy match your
           actual workdays.
         </p>
 

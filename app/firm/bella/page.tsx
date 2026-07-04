@@ -10,12 +10,12 @@ import { requireFirmContext } from "@/lib/firm/context";
 // asked for the same assistant scoped to their cockpit so they
 // can ask "what changed in §174 R&D capitalization for tax year
 // 2026" without flipping out of their workflow. We reuse the same
-// BellaChat component + API route — the auth check on /api/bella
+// BellaChat component + API route, the auth check on /api/bella
 // is just "is the user logged in," so this page works as-is. The
 // firm chrome around it sets context.
 
 export const metadata = {
-  title: "Bella — Firm cockpit",
+  title: "Bella, Firm cockpit",
   description:
     "Ask Bella about tax code, deductions, and engagement issues from inside the firm cockpit.",
   robots: { index: false, follow: false },
@@ -50,7 +50,7 @@ export default async function FirmBellaPage({
         <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-xl">
           Bella is your in-cockpit research partner. Ask about IRS
           publications, deductions, entity changes, multi-state
-          allocations — she cites her sources when the knowledge
+          allocations, she cites her sources when the knowledge
           base applies. Your firm tier ({ctx.firm.tier}) controls
           which Bella model you reach.
         </p>

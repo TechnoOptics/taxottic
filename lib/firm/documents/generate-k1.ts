@@ -13,7 +13,7 @@
 //   - Ordinary business income (Line 1 of either K-1)
 //   - Net rental income, interest, dividends (Lines 2/5/6)
 //   - §179 deduction (Line 12)
-//   - Self-employment earnings — partnership only (Line 14a)
+//   - Self-employment earnings, partnership only (Line 14a)
 //
 // What's left to the preparer:
 //   - Capital account analysis (Item L on Partnership K-1)
@@ -71,9 +71,9 @@ export type K1Input = {
 
 const ENTITY_HEADER: Record<K1Variant, string> = {
   partnership:
-    "Schedule K-1 (Form 1065) — Partner's Share of Income, Deductions, Credits, etc.",
+    "Schedule K-1 (Form 1065), Partner's Share of Income, Deductions, Credits, etc.",
   s_corp:
-    "Schedule K-1 (Form 1120-S) — Shareholder's Share of Income, Deductions, Credits, etc.",
+    "Schedule K-1 (Form 1120-S), Shareholder's Share of Income, Deductions, Credits, etc.",
 };
 
 export async function loadK1Data(
@@ -129,7 +129,7 @@ export async function loadK1Data(
     }
   }
 
-  // Expense rollup — for K-1 we only need the totals that feed
+  // Expense rollup, for K-1 we only need the totals that feed
   // ordinary business income (everything that hits Schedule C
   // Lines 8-26) and §179 (Line 13).
   let ordinaryExpense = 0;
@@ -186,7 +186,7 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>K-1 draft — ${escapeHtml(partner.name)} (${escapeHtml(input.company.name)} ${input.taxYear})</title>
+<title>K-1 draft, ${escapeHtml(partner.name)} (${escapeHtml(input.company.name)} ${input.taxYear})</title>
 <style>
   @page { margin: 0.75in; }
   body { font-family: Georgia, "Times New Roman", serif; color: #18181B; font-size: 11pt; line-height: 1.5; }
@@ -214,21 +214,21 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
       <div style="font-weight: bold; color: ${cta};">${escapeHtml(input.firm.name)}</div>
     </div>
     <div class="meta" style="text-align: right;">
-      <div>${isPartnership ? "Form 1065" : "Form 1120-S"} — Tax year ${input.taxYear}</div>
+      <div>${isPartnership ? "Form 1065" : "Form 1120-S"}, Tax year ${input.taxYear}</div>
       <div>Generated ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date())}</div>
     </div>
   </div>
 
-  <div class="draft-badge">Draft — for preparer review</div>
+  <div class="draft-badge">Draft, for preparer review</div>
 
   <h1>${ENTITY_HEADER[input.variant]}</h1>
   <p class="meta">${pct === 1 ? "100% allocation" : `${(pct * 100).toFixed(2)}% allocation`} of entity-level results.</p>
 
-  <h2>Part I — Information About the ${isPartnership ? "Partnership" : "Corporation"}</h2>
+  <h2>Part I, Information About the ${isPartnership ? "Partnership" : "Corporation"}</h2>
   <div class="info-grid">
     <div>
       <label>A. ${isPartnership ? "Partnership" : "Corporation"} EIN</label>
-      <value>${escapeHtml(input.company.ein ?? "—")}</value>
+      <value>${escapeHtml(input.company.ein ?? "-")}</value>
     </div>
     <div>
       <label>B. Name, address</label>
@@ -249,7 +249,7 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
     </div>
   </div>
 
-  <h2>Part II — Information About the ${isPartnership ? "Partner" : "Shareholder"}</h2>
+  <h2>Part II, Information About the ${isPartnership ? "Partner" : "Shareholder"}</h2>
   <div class="info-grid">
     <div>
       <label>E. ${isPartnership ? "Partner" : "Shareholder"} name</label>
@@ -257,7 +257,7 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
     </div>
     <div>
       <label>F. Tax ID</label>
-      <value style="font-family: 'Courier New', monospace;">${escapeHtml(partner.tin_placeholder ?? "▢▢▢ – ▢▢ – ▢▢▢▢")}</value>
+      <value style="font-family: 'Courier New', monospace;">${escapeHtml(partner.tin_placeholder ?? "▢▢▢, ▢▢, ▢▢▢▢")}</value>
     </div>
     ${partner.address ? `<div><label>G. Address</label><value>${escapeHtml(partner.address)}</value></div>` : ""}
     ${
@@ -271,7 +271,7 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
     </div>
   </div>
 
-  <h2>Part III — ${isPartnership ? "Partner's" : "Shareholder's"} Share of Current-Year Income, Deductions, Credits, and Other Items</h2>
+  <h2>Part III, ${isPartnership ? "Partner's" : "Shareholder's"} Share of Current-Year Income, Deductions, Credits, and Other Items</h2>
   <table>
     <tr>
       <td class="line">Line 1</td>
@@ -281,34 +281,34 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
     <tr>
       <td class="line">Line 2</td>
       <td class="label">Net rental real estate income (loss)</td>
-      <td class="amount">${rentalRE !== 0 ? formatCents(rentalRE) : "—"}</td>
+      <td class="amount">${rentalRE !== 0 ? formatCents(rentalRE) : "-"}</td>
     </tr>
     <tr>
       <td class="line">Line 5</td>
       <td class="label">Interest income</td>
-      <td class="amount">${interest !== 0 ? formatCents(interest) : "—"}</td>
+      <td class="amount">${interest !== 0 ? formatCents(interest) : "-"}</td>
     </tr>
     <tr>
       <td class="line">Line 6a</td>
       <td class="label">Ordinary dividends</td>
-      <td class="amount">${dividends !== 0 ? formatCents(dividends) : "—"}</td>
+      <td class="amount">${dividends !== 0 ? formatCents(dividends) : "-"}</td>
     </tr>
     <tr>
       <td class="line">Line 7</td>
       <td class="label">Royalties</td>
-      <td class="amount">${royalties !== 0 ? formatCents(royalties) : "—"}</td>
+      <td class="amount">${royalties !== 0 ? formatCents(royalties) : "-"}</td>
     </tr>
     <tr>
       <td class="line">Line 12</td>
       <td class="label">Section 179 deduction</td>
-      <td class="amount">${section179 !== 0 ? formatCents(section179) : "—"}</td>
+      <td class="amount">${section179 !== 0 ? formatCents(section179) : "-"}</td>
     </tr>
     ${
       isPartnership
         ? `<tr>
             <td class="line">Line 14a</td>
             <td class="label">Net earnings from self-employment</td>
-            <td class="amount">${seEarnings !== 0 ? formatCents(seEarnings) : "—"}</td>
+            <td class="amount">${seEarnings !== 0 ? formatCents(seEarnings) : "-"}</td>
           </tr>`
         : ""
     }
@@ -332,7 +332,7 @@ export function renderK1HTML(input: K1Input, partner: K1Partner): {
   </div>
 
   <p class="small" style="margin-top: 24pt;">
-    Generated by Taxottic for ${escapeHtml(input.firm.name)}. Draft only —
+    Generated by Taxottic for ${escapeHtml(input.firm.name)}. Draft only -
     not filed with the IRS. The preparer is solely responsible for the
     accuracy of the return.
   </p>

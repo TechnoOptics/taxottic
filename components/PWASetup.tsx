@@ -24,9 +24,9 @@ export function PWASetup() {
   const [waitingWorker, setWaitingWorker] =
     useState<ServiceWorker | null>(null);
   // Hydration safety. The server renders `null` (no waitingWorker, no
-  // installed, no deferred prompt — all initial state is falsey). The
+  // installed, no deferred prompt, all initial state is falsey). The
   // SW-registration effect below can synchronously promote those to
-  // truthy on the first client tick — e.g. when a service worker is
+  // truthy on the first client tick, e.g. when a service worker is
   // already waiting after a deploy, or when the PWA is opened in
   // standalone mode. If the first paint of this component differs
   // from the SSR HTML, React throws Minified React error #418 (the
@@ -36,7 +36,7 @@ export function PWASetup() {
   const [mounted, setMounted] = useState(false);
   // True inside the Capacitor native shell. The whole "Install
   // Taxottic" / iOS "Add to Home Screen" prompt is nonsensical there
-  // — the user is already in the installed app. Suppress all
+  //, the user is already in the installed app. Suppress all
   // install UI when native (the SW "Refresh" update toast still
   // applies because the shell loads the remote site).
   const [isNative, setIsNative] = useState(false);
@@ -119,7 +119,7 @@ export function PWASetup() {
     }
 
     // Native shell: no install prompts at all. Checked directly
-    // (not via the `isNative` state — this effect's closure would
+    // (not via the `isNative` state, this effect's closure would
     // capture the stale initial value).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nativeShell = (window as any).Capacitor?.isNativePlatform?.() === true;
@@ -164,7 +164,7 @@ export function PWASetup() {
     // controllerchange listener (above) will reload once the new SW activates.
   }
 
-  // Before hydration completes, render nothing — the SSR-rendered
+  // Before hydration completes, render nothing, the SSR-rendered
   // output is also `null`, so first commit cannot mismatch. See the
   // `mounted` comment up top.
   if (!mounted) return null;

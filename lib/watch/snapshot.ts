@@ -6,7 +6,7 @@ import type {
 } from "./types";
 import { EMPTY_WATCH_SNAPSHOT } from "./types";
 
-// Rough blended marginal rate for the "≈ tax saved" line — a
+// Rough blended marginal rate for the "≈ tax saved" line, a
 // deliberately conservative ESTIMATE shown with "≈", consistent with
 // Taxottic's forecasts-not-advice posture. Not the forecast engine's
 // precise number; the watch is a glance.
@@ -37,13 +37,13 @@ export type SnapshotInput = {
     savedCents: number;
     targetCents: number;
   }>;
-  /** TRUE total across every outstanding-tasks source — see
+  /** TRUE total across every outstanding-tasks source, see
    *  WatchSnapshot.outstandingCount. The route computes this
    *  separately from `pendingTrips`/`pendingExpenses` above, which are
    *  capped preview lists for the swipe deck. */
   outstandingCount: number;
   deductions: WatchDeduction[];
-  /** Server-derived "is the phone tracking right now?" — true when
+  /** Server-derived "is the phone tracking right now?", true when
    *  the user has emitted a GPS point in the last 5 minutes. Lets
    *  the watch's Auto-track toggle survive snapshot-pull overrides
    *  instead of flipping back to off after each 60s sync. */
@@ -59,8 +59,8 @@ export type SnapshotInput = {
   reward: { title: string; detail: string } | null;
 };
 
-/** A trip that started on a weekend or outside ~8am–6pm is more
- *  likely personal — surface it so the user double-checks. */
+/** A trip that started on a weekend or outside ~8am-6pm is more
+ *  likely personal, surface it so the user double-checks. */
 function afterHours(iso: string): boolean {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return false;

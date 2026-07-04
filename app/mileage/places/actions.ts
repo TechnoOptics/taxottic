@@ -16,7 +16,7 @@ type ActionResult = { ok: true } | { ok: false; error: string };
  * future trips that start or end nearby. Office / client places make
  * a touching trip "business" automatically. Home places make a
  * home-to-home trip "personal". This is the existing
- * lib/mileage/segmentation.ts heuristic — this UI just lets the user
+ * lib/mileage/segmentation.ts heuristic, this UI just lets the user
  * feed it.
  *
  * Form fields:
@@ -42,7 +42,7 @@ export async function addMileagePlace(
   const radiusRaw = Number(formData.get("radius_m") ?? DEFAULT_RADIUS_M);
   // Hidden inputs populated by AddressAutocomplete when the user
   // picked a suggestion (geometry came back from Places). If
-  // present we skip geocodeAddress entirely — saves a network
+  // present we skip geocodeAddress entirely, saves a network
   // round-trip AND avoids "not_found" when the typed text was
   // ambiguous. Manual typers fall through to the server geocode.
   const pickedLatRaw = String(formData.get("picked_lat") ?? "");
@@ -82,7 +82,7 @@ export async function addMileagePlace(
         geo.error.code === "no_key"
           ? "Address lookup isn't configured yet (server missing Maps key)."
           : geo.error.code === "not_found"
-            ? "Couldn't find that address. Try a more specific one — include city and state."
+            ? "Couldn't find that address. Try a more specific one, include city and state."
             : geo.error.code === "rate_limited"
               ? "Address lookup is busy. Wait a moment and try again."
               : "Address lookup failed. Check your connection.";

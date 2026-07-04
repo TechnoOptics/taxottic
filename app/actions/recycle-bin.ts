@@ -14,7 +14,7 @@ import { logCompanyActivity } from "@/lib/activity/log";
 //
 // Authorization rule: only the company's manager (which on every
 // existing tenant is the user who created the company) can move it to
-// the bin. For bank connections, same — the manager of the connection's
+// the bin. For bank connections, same, the manager of the connection's
 // owning company.
 
 const RECYCLE_BIN_PATH = "/settings/recycle-bin";
@@ -69,14 +69,14 @@ export async function disconnectBank(formData: FormData) {
     .maybeSingle();
   if (!conn) throw new Error("Bank connection not found");
   if (conn.deleted_at) {
-    // Idempotent — clicking Disconnect again on an already-disconnected
+    // Idempotent, clicking Disconnect again on an already-disconnected
     // connection is fine. Send the user to the recycle bin.
     redirect(RECYCLE_BIN_PATH);
   }
   await assertCompanyManager(admin, user.id, conn.company_id);
 
   // Best-effort upstream revocation. We don't gate the soft-delete on
-  // this — even if Plaid returns an error, the user's view of "this
+  // this, even if Plaid returns an error, the user's view of "this
   // bank is disconnected from Taxottic" should still take effect. The
   // last_error column captures the upstream failure so support can
   // retry later.
@@ -144,7 +144,7 @@ export async function disconnectBank(formData: FormData) {
 /**
  * Restore a soft-deleted bank connection. Clears `deleted_at` and
  * marks status `needs_reauth` because the upstream Plaid token was
- * revoked when we disconnected — the user will need to re-link the
+ * revoked when we disconnected, the user will need to re-link the
  * institution to resume syncing. The restored row keeps its historical
  * transactions so they don't have to re-categorize.
  */
@@ -185,7 +185,7 @@ export async function restoreBank(formData: FormData) {
  * Permanently delete a bank connection NOW, bypassing the 30-day
  * wait. Cascades to accounts + transactions via the connection FK.
  * Requires the connection to already be soft-deleted (you can't
- * skip the recycle-bin step from active state — UI defends against
+ * skip the recycle-bin step from active state, UI defends against
  * misclick, this is the second layer).
  */
 export async function purgeBank(formData: FormData) {
@@ -201,7 +201,7 @@ export async function purgeBank(formData: FormData) {
   if (!conn) throw new Error("Bank connection not found");
   if (!conn.deleted_at) {
     throw new Error(
-      "Disconnect first — permanent delete is only available from the recycle bin.",
+      "Disconnect first, permanent delete is only available from the recycle bin.",
     );
   }
   await assertCompanyManager(admin, user.id, conn.company_id);
@@ -265,7 +265,7 @@ export async function closeCompany(formData: FormData) {
 
 /**
  * Restore a soft-deleted company. Clears `deleted_at`. Any bank
- * connections that were also soft-deleted remain so — restore those
+ * connections that were also soft-deleted remain so, restore those
  * separately from the recycle bin.
  */
 export async function restoreCompany(formData: FormData) {
@@ -304,7 +304,7 @@ export async function purgeCompany(formData: FormData) {
   if (!company) throw new Error("Company not found");
   if (!company.deleted_at) {
     throw new Error(
-      "Close the company first — permanent delete is only available from the recycle bin.",
+      "Close the company first, permanent delete is only available from the recycle bin.",
     );
   }
 
@@ -321,7 +321,7 @@ export async function purgeCompany(formData: FormData) {
 
 /**
  * Hard-delete every soft-deleted item whose grace window has expired.
- * Safe to call repeatedly — the 30-day cutoff is enforced inside the
+ * Safe to call repeatedly, the 30-day cutoff is enforced inside the
  * SQL function. The dashboard render calls this lazily on every load
  * so even without a real cron the recycle bin stays accurate. A real
  * cron (Supabase pg_cron or Vercel Cron) should call this nightly as

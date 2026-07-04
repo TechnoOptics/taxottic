@@ -14,15 +14,15 @@ import {
 const PLATFORM_DESCRIPTION: Record<string, { label: string; body: string }> = {
   user: {
     label: "User",
-    body: "Consumer dashboard — companies, forecast, expenses, Bella, savings playbook. The default for everyone.",
+    body: "Consumer dashboard, companies, forecast, expenses, Bella, savings playbook. The default for everyone.",
   },
   enterprise: {
     label: "Enterprise",
-    body: "Firms operations — preparer center, client list, engagement workflow.",
+    body: "Firms operations, preparer center, client list, engagement workflow.",
   },
   hq: {
     label: "HQ",
-    body: "Super-admin operations — security pulse, user management, feedback queue, firm onboarding.",
+    body: "Super-admin operations, security pulse, user management, feedback queue, firm onboarding.",
   },
 };
 
@@ -36,7 +36,7 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .maybeSingle();
 
-  // For the per-company "message" (company_members.bio) — most users
+  // For the per-company "message" (company_members.bio), most users
   // belong to one company, but list every membership so nobody's
   // message is hidden just because they're on more than one team.
   const { data: memberships } = await admin
@@ -56,7 +56,7 @@ export default async function SettingsPage() {
   const showSmartSearch = profile?.show_smart_search === true;
   // Note: watch pairing + paired-devices list moved to
   // /settings/security (May 2026). It sits with passkeys + 2FA under
-  // "Sign-in and devices" — that's where users intuitively look for
+  // "Sign-in and devices", that's where users intuitively look for
   // device-linked credentials, and it kept this page focused on
   // platform + display preferences.
 
@@ -109,7 +109,7 @@ export default async function SettingsPage() {
                     Message for {m.companyName}
                   </label>
                   <p className="text-xs text-ink-muted mt-0.5">
-                    Shows to your manager and teammates on the roster — e.g.
+                    Shows to your manager and teammates on the roster, e.g.
                     your role, availability, or a short status.
                   </p>
                   <form
@@ -122,7 +122,7 @@ export default async function SettingsPage() {
                       rows={2}
                       maxLength={280}
                       defaultValue={m.bio ?? ""}
-                      placeholder="e.g. Lead photographer — usually out on shoots Tue/Thu"
+                      placeholder="e.g. Lead photographer, usually out on shoots Tue/Thu"
                       className="input py-2"
                     />
                     <div>
@@ -206,7 +206,7 @@ export default async function SettingsPage() {
           </h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
             A Bella-powered search input pinned to the top of every page
-            — ask anything about your business, deductions, or
+, ask anything about your business, deductions, or
             forecast and get an answer with citations. Off by default
             for a quieter header; flip it on when you want it.
           </p>
@@ -224,7 +224,7 @@ export default async function SettingsPage() {
             </label>
             <p className="text-xs text-ink-muted">
               Visible on desktop widths (≥ 1024 px). On phones the
-              header stays uncluttered either way — open Bella from
+              header stays uncluttered either way, open Bella from
               the full chat page instead.
             </p>
             <div>
@@ -297,7 +297,7 @@ export default async function SettingsPage() {
             Device diagnostics
           </h2>
           <p className="mt-2 text-sm text-ink-soft">
-            Something look misplaced on this device — content under the
+            Something look misplaced on this device, content under the
             status bar, buttons behind system controls? This page reads
             the device&apos;s real layout numbers so support can fix it
             precisely.

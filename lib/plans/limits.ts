@@ -8,7 +8,7 @@
  *   scale    - mid-market with bookkeeping needs
  *   practice - CPA / preparer firms (priced separately per # clients)
  *
- * `free` is preserved as a synonym for "no active subscription" — anyone
+ * `free` is preserved as a synonym for "no active subscription", anyone
  * without a paid tier defaults to free, which has the lowest caps and
  * cannot create a company. `team` is preserved as a legacy alias for
  * `studio` so old subscription rows don't break.
@@ -43,7 +43,7 @@ export type Plan = "free" | "filer" | "solo" | "studio" | "scale" | "practice";
  * etc. are graduated unlocks that justify higher tiers.
  */
 export type FeatureGates = {
-  /** Personal/W-2 forecast at /personal/forecast — no company. */
+  /** Personal/W-2 forecast at /personal/forecast, no company. */
   personalForecast: boolean;
   /** Schedule C / business-side forecast at /c/[publicId]/forecast. */
   businessForecast: boolean;
@@ -78,7 +78,7 @@ export type FeatureGates = {
 };
 
 /**
- * Bella model tier — controls which model the assistant can call.
+ * Bella model tier, controls which model the assistant can call.
  * Higher tiers unlock larger models. This is enforced server-side
  * regardless of credit balance.
  */
@@ -267,7 +267,7 @@ export const PLAN_LIMITS = {
 export type PlanLimits = (typeof PLAN_LIMITS)[Plan];
 
 /**
- * Subscription pricing — monthly + yearly per tier. Yearly = ~17% off
+ * Subscription pricing, monthly + yearly per tier. Yearly = ~17% off
  * (≈ two months free) which is the conventional anchor users expect.
  */
 export const PLAN_PRICING = {
@@ -419,7 +419,7 @@ export function formatLimit(n: number): string {
 
 /**
  * Order tiers from cheapest to most premium. Used for "your plan
- * doesn't include X — upgrade to Y" prompts where we want the
+ * doesn't include X, upgrade to Y" prompts where we want the
  * smallest tier that unlocks the missing feature.
  */
 export const PLAN_ORDER: readonly Plan[] = [

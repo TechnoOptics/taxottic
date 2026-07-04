@@ -7,7 +7,7 @@ import type { FilingStatus } from "@/lib/tax/constants-2025";
  * The forecast engine (lib/tax/forecast.ts) takes ~25 fields; a public
  * calculator only asks the visitor a handful. This returns everything
  * zeroed / off so a calculator can spread it and override just the
- * inputs it collects — keeping each calculator component free of the
+ * inputs it collects, keeping each calculator component free of the
  * big boilerplate object and keeping them consistent with each other.
  *
  * Pure + client-safe (forecast.ts only imports pure tax-math modules).

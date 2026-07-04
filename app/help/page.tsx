@@ -4,14 +4,14 @@ import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
-  title: "Help & FAQ — Taxottic quickstart and common questions",
+  title: "Help & FAQ, Taxottic quickstart and common questions",
   description:
     "Set up Taxottic in 5 minutes. FAQ on bank connections (Plaid), forecasts, deductions, billing, accounts, and security. Talk to a human at contact@taxottic.com.",
   alternates: { canonical: "/help" },
   openGraph: {
     title: "Taxottic Help & FAQ",
     description:
-      "Quickstart, common questions, and human support — no sign-in required.",
+      "Quickstart, common questions, and human support, no sign-in required.",
     url: "/help",
     type: "website",
   },
@@ -28,7 +28,7 @@ export const metadata = {
 };
 
 // FAQPage JSON-LD. EVERY question + answer below MUST mirror a
-// visible Q&A on the page exactly — Google rejects FAQ schema where
+// visible Q&A on the page exactly, Google rejects FAQ schema where
 // the structured data diverges from what users see. When you add a
 // new FAQ to the JSX below, add the matching entry here and vice
 // versa.
@@ -41,7 +41,7 @@ const HELP_FAQ_LD = {
       name: "What is Taxottic?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Taxottic is tax-forecasting software for freelancers, contractors, sole proprietors, and small businesses in the US. It connects to your bank, keeps a running quarterly estimated-tax forecast in step with your income, and surfaces 1,025 IRS-cited deductions — so you can set money aside before it's due and claim what you're legally owed. It's a forecasting and organization tool, not a filing service, and not a substitute for a licensed CPA.",
+        text: "Taxottic is tax-forecasting software for freelancers, contractors, sole proprietors, and small businesses in the US. It connects to your bank, keeps a running quarterly estimated-tax forecast in step with your income, and surfaces 1,025 IRS-cited deductions, so you can set money aside before it's due and claim what you're legally owed. It's a forecasting and organization tool, not a filing service, and not a substitute for a licensed CPA.",
       },
     },
     {
@@ -49,7 +49,7 @@ const HELP_FAQ_LD = {
       name: "Who is Taxottic for?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Self-employed people and small businesses — 1099 contractors, freelancers, gig workers, sole proprietors, single-member LLCs, and S-corps — plus the accounting firms that serve them. If you owe quarterly estimated taxes or file a Schedule C, Taxottic is built for you.",
+        text: "Self-employed people and small businesses, 1099 contractors, freelancers, gig workers, sole proprietors, single-member LLCs, and S-corps, plus the accounting firms that serve them. If you owe quarterly estimated taxes or file a Schedule C, Taxottic is built for you.",
       },
     },
     {
@@ -57,7 +57,7 @@ const HELP_FAQ_LD = {
       name: "How is Taxottic different from regular tax-filing software?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Tax-filing software helps you file once a year, after the year is over. Taxottic runs all year: it forecasts what you'll owe as you earn, tracks deductions in real time, and reminds you about quarterly estimates — so April holds no surprises. You hand the Schedule C export to your CPA or filing tool at year end.",
+        text: "Tax-filing software helps you file once a year, after the year is over. Taxottic runs all year: it forecasts what you'll owe as you earn, tracks deductions in real time, and reminds you about quarterly estimates, so April holds no surprises. You hand the Schedule C export to your CPA or filing tool at year end.",
       },
     },
     {
@@ -65,12 +65,12 @@ const HELP_FAQ_LD = {
       name: "Is there really no credit card to try?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Correct — the Free tier doesn't take a card. Paid tiers offer a 14-day trial that you can cancel before you're charged.",
+        text: "Correct, the Free tier doesn't take a card. Paid tiers offer a 14-day trial that you can cancel before you're charged.",
       },
     },
     {
       "@type": "Question",
-      name: "W-2 employee — do I need a company?",
+      name: "W-2 employee, do I need a company?",
       acceptedAnswer: {
         "@type": "Answer",
         text: "No. Pick \"Personal forecast\" on the filer-type screen and we'll skip the company-setup flow entirely. You'll land on the personal forecast at /personal/forecast.",
@@ -81,7 +81,7 @@ const HELP_FAQ_LD = {
       name: "Can I see what the product looks like before signing up?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes — read-only sample data lives at /example. No signup needed.",
+        text: "Yes, read-only sample data lives at /example. No signup needed.",
       },
     },
     {
@@ -102,7 +102,7 @@ const HELP_FAQ_LD = {
     },
     {
       "@type": "Question",
-      name: "My bank isn't in the Plaid list — what now?",
+      name: "My bank isn't in the Plaid list, what now?",
       acceptedAnswer: {
         "@type": "Answer",
         text: "Use CSV import. Drag any standard transaction export onto the upload zone and we'll categorize it. CSV imports are available from the Solo tier and up.",
@@ -121,7 +121,7 @@ const HELP_FAQ_LD = {
       name: "Why does my dashboard show 13% tax-ready on day one?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The tax-ready meter measures how many starter deduction categories you've claimed and how much of your bank feed you've triaged. A brand-new company hasn't done either yet — log one expense or connect a bank and the number starts climbing.",
+        text: "The tax-ready meter measures how many starter deduction categories you've claimed and how much of your bank feed you've triaged. A brand-new company hasn't done either yet, log one expense or connect a bank and the number starts climbing.",
       },
     },
     {
@@ -169,7 +169,7 @@ const HELP_FAQ_LD = {
       name: "Where is the changelog?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "/changelog — public, updated as we ship.",
+        text: "/changelog, public, updated as we ship.",
       },
     },
   ],
@@ -196,7 +196,7 @@ const HELP_BREADCRUMB_LD = {
 
 // Public /help page. The May 2026 audit P2 cluster flagged "no public
 // /help, /docs, /support" as a conversion-blocker for a tax product.
-// This is the lightweight v1 — quickstart + common questions + how to
+// This is the lightweight v1, quickstart + common questions + how to
 // reach a human. Later, /help/<topic> sub-pages can be added as we
 // learn what users hit hardest.
 //
@@ -214,7 +214,7 @@ export default function HelpPage() {
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          // Native iOS overlays the WebView under the status bar — pad by
+          // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
           paddingTop:
@@ -267,7 +267,7 @@ export default function HelpPage() {
           <Step
             n={2}
             title="Add your first company"
-            body="Schedule C, S-corp, or LLC — pick the entity type and we'll set up the right forms. W-2 only? Pick Filer instead."
+            body="Schedule C, S-corp, or LLC, pick the entity type and we'll set up the right forms. W-2 only? Pick Filer instead."
           />
           <Step
             n={3}
@@ -284,15 +284,15 @@ export default function HelpPage() {
             contractors, sole proprietors, and small businesses in the US.
             It connects to your bank, keeps a running quarterly
             estimated-tax forecast in step with your income, and surfaces
-            1,025 IRS-cited deductions — so you can set money aside before
+            1,025 IRS-cited deductions, so you can set money aside before
             it&apos;s due and claim what you&apos;re legally owed. It&apos;s
             a forecasting and organization tool, not a filing service, and
             not a substitute for a licensed CPA.
           </Faq>
           <Faq q="Who is Taxottic for?">
-            Self-employed people and small businesses — 1099 contractors,
+            Self-employed people and small businesses, 1099 contractors,
             freelancers, gig workers, sole proprietors, single-member LLCs,
-            and S-corps — plus the accounting firms that serve them. If you
+            and S-corps, plus the accounting firms that serve them. If you
             owe quarterly estimated taxes or file a Schedule C, Taxottic is
             built for you.
           </Faq>
@@ -300,7 +300,7 @@ export default function HelpPage() {
             Tax-filing software helps you file once a year, after the year
             is over. Taxottic runs all year: it forecasts what you&apos;ll
             owe as you earn, tracks deductions in real time, and reminds you
-            about quarterly estimates — so April holds no surprises. You
+            about quarterly estimates, so April holds no surprises. You
             hand the Schedule C export to your CPA or filing tool at year
             end.
           </Faq>
@@ -308,11 +308,11 @@ export default function HelpPage() {
 
         <FaqCategory title="Getting started">
           <Faq q="Is there really no credit card to try?">
-            Correct — the Free tier doesn&apos;t take a card. Paid tiers
+            Correct, the Free tier doesn&apos;t take a card. Paid tiers
             offer a 14-day trial that you can cancel before you&apos;re
             charged.
           </Faq>
-          <Faq q="W-2 employee — do I need a company?">
+          <Faq q="W-2 employee, do I need a company?">
             No. Pick &ldquo;Personal forecast&rdquo; on the
             filer-type screen and we&apos;ll skip the company-setup flow
             entirely. You&apos;ll land on the personal forecast at{" "}
@@ -322,7 +322,7 @@ export default function HelpPage() {
             .
           </Faq>
           <Faq q="Can I see what the product looks like before signing up?">
-            Yes — read-only sample data lives at{" "}
+            Yes, read-only sample data lives at{" "}
             <Link href="/example" className="underline hover:text-forest-900">
               /example
             </Link>
@@ -346,7 +346,7 @@ export default function HelpPage() {
             Open the company, then <em>Banks &raquo; Disconnect</em>.
             We&apos;ll revoke the Plaid token and stop syncing.
           </Faq>
-          <Faq q="My bank isn't in the Plaid list — what now?">
+          <Faq q="My bank isn't in the Plaid list, what now?">
             Use CSV import. Drag any standard transaction export onto
             the upload zone and we&apos;ll categorize it. CSV imports
             are available from the Solo tier and up.
@@ -370,7 +370,7 @@ export default function HelpPage() {
             The tax-ready meter measures how many starter deduction
             categories you&apos;ve claimed and how much of your bank
             feed you&apos;ve triaged. A brand-new company hasn&apos;t
-            done either yet — log one expense or connect a bank and the
+            done either yet, log one expense or connect a bank and the
             number starts climbing.
           </Faq>
           <Faq q="Where do the deduction amounts come from?">
@@ -411,7 +411,7 @@ export default function HelpPage() {
             Google / Microsoft account picker so you explicitly pick
             which identity to use.
           </Faq>
-          <Faq q="I signed in with Google by mistake — same Google account also signed me into Advottic. Is that a session leak?">
+          <Faq q="I signed in with Google by mistake, same Google account also signed me into Advottic. Is that a session leak?">
             No. See{" "}
             <Link
               href="/legal/security"
@@ -431,7 +431,7 @@ export default function HelpPage() {
             >
               /changelog
             </Link>{" "}
-            — public, updated as we ship.
+, public, updated as we ship.
           </Faq>
         </FaqCategory>
       </section>

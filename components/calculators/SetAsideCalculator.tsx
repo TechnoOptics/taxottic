@@ -18,7 +18,7 @@ import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
  * Same verified forecast engine as the other tools, but the OUTPUT is
  * reframed as an action: the single percentage of every payment a
  * self-employed person should move to savings, plus dollars per $1,000
- * earned. That's what people actually search for and act on — a rule
+ * earned. That's what people actually search for and act on, a rule
  * they can apply to each invoice, not a year-end tax bill.
  */
 
@@ -54,7 +54,7 @@ export function SetAsideCalculator({
       ytdBusinessExpensesCents: toCents(expensesNum),
     };
     const r = forecast(input);
-    // Set-aside % is of GROSS income — that's the number you apply to
+    // Set-aside % is of GROSS income, that's the number you apply to
     // each payment as it lands, before you've subtracted expenses.
     const pct = grossNum > 0 ? r.totalTaxCents / toCents(grossNum) : 0;
     return {
@@ -189,7 +189,7 @@ export function SetAsideCalculator({
               <span className="font-medium text-forest-800">
                 {formatCents(result.perThousandCents)} for every $1,000
               </span>{" "}
-              you get paid — about{" "}
+              you get paid, about{" "}
               <span className="font-medium text-forest-800">
                 {formatCents(result.totalTaxCents)}
               </span>{" "}
@@ -201,21 +201,21 @@ export function SetAsideCalculator({
                 A percentage is a guess that drifts as your income changes.
                 Taxottic keeps the number{" "}
                 <span className="text-gold-300 font-medium">exact and live</span>
-                , synced to your bank — so you set aside the right amount, not a
+                , synced to your bank, so you set aside the right amount, not a
                 rule of thumb.
               </div>
               <Link
                 href="/login?intent=signup"
                 className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
               >
-                Get my exact number — free →
+                Get my exact number, free →
               </Link>
             </div>
 
             <p className="mt-4 text-[11px] text-ink-muted leading-relaxed">
               Estimate for planning, using {TAX_YEAR} federal + state rules.
               Covers self-employment tax and income tax. Not tax advice. Your
-              figures stay in your browser — nothing is sent anywhere.
+              figures stay in your browser, nothing is sent anywhere.
             </p>
           </div>
         ) : (
@@ -226,7 +226,7 @@ export function SetAsideCalculator({
               </div>
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your income to see the percentage of each payment to move
-                into savings — so April is never a surprise.
+                into savings, so April is never a surprise.
               </p>
             </div>
           </div>

@@ -7,12 +7,12 @@ import { FEATURE_GATES, type FeatureGates, type Plan } from "./limits";
  * intent, so any accidental edit to FEATURE_GATES fails loudly with the
  * offending feature named:
  *
- *   1. MONOTONICITY — once a feature unlocks at some tier, every higher
+ *   1. MONOTONICITY, once a feature unlocks at some tier, every higher
  *      tier keeps it (you can never pay MORE and lose a capability).
- *   2. UNLOCK POINT — each feature turns on at exactly its intended tier.
+ *   2. UNLOCK POINT, each feature turns on at exactly its intended tier.
  *
  * Adding a new gate to FeatureGates without recording its unlock tier in
- * UNLOCKS_AT below fails the "no untracked gates" test — so new features
+ * UNLOCKS_AT below fails the "no untracked gates" test, so new features
  * can't ship with an unreviewed pricing decision.
  */
 
@@ -56,11 +56,11 @@ describe("plan feature-gate matrix", () => {
     // FEATURE_GATES.practice enables everything, so its keys == the full set.
     expect(
       Object.keys(UNLOCKS_AT).sort(),
-      "A gate in FeatureGates has no intended unlock tier — add it to UNLOCKS_AT (a pricing decision).",
+      "A gate in FeatureGates has no intended unlock tier, add it to UNLOCKS_AT (a pricing decision).",
     ).toEqual(Object.keys(FEATURE_GATES.practice).sort());
   });
 
-  it("is monotonic — a feature never turns OFF at a higher tier", () => {
+  it("is monotonic, a feature never turns OFF at a higher tier", () => {
     for (const f of ALL_FEATURES) {
       let unlocked = false;
       for (const plan of LADDER) {

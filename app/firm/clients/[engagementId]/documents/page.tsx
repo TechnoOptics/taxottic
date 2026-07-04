@@ -14,7 +14,7 @@ import {
   archiveDocument,
 } from "./actions";
 
-// /firm/clients/{engagementId}/documents — every doc on this
+// /firm/clients/{engagementId}/documents, every doc on this
 // engagement. Two columns: the action panel (generate / upload /
 // send for signature) and the document list.
 
@@ -341,7 +341,7 @@ export default async function DocumentsPage({
                 Schedule D capital gains, Schedule L balance sheet,
                 Form 4562 depreciation detail, and QBI phaseouts
                 above the threshold still need preparer attention.
-                Each output is watermarked DRAFT — verify line-by-
+                Each output is watermarked DRAFT, verify line-by-
                 line against the IRS-issued form before signing.
               </div>
               <form action={generateForm1040Draft}>

@@ -6,7 +6,7 @@ import { requireFirmAdmin } from "@/lib/firm/context";
 // Tier 2 #3: Tenant audit-log viewer.
 //
 // What this page is:
-//   The firm-facing window into `admin_cross_tenant_access_log` —
+//   The firm-facing window into `admin_cross_tenant_access_log` -
 //   the table that records every time a Taxottic super-admin reads
 //   or writes data on behalf of one of your clients. Tenant trust
 //   begins with "who looked at my data and when," and we already
@@ -16,7 +16,7 @@ import { requireFirmAdmin } from "@/lib/firm/context";
 // Why the firm sees this and not the underlying company directly:
 //   The consumer side (`/c/{publicId}/audit-log`) already exists for
 //   the company owner. But when an accounting firm holds the
-//   engagement, the firm is the trust anchor for their client base —
+//   engagement, the firm is the trust anchor for their client base -
 //   they want to verify their own SLA to *their* clients, and they
 //   want the rollup across all of them in one place. So this page
 //   joins on every company the firm has an engagement with.
@@ -31,7 +31,7 @@ import { requireFirmAdmin } from "@/lib/firm/context";
 //   visibility. If a firm ever needs to *suppress* a former client
 //   from the viewer (e.g., the client requested data portability +
 //   deletion), the right place is a per-engagement "suppressed_from_
-//   audit_log" flag — not implemented yet but documented here so
+//   audit_log" flag, not implemented yet but documented here so
 //   the reasoning survives.
 //
 // Scope:
@@ -59,7 +59,7 @@ export default async function FirmAuditLogPage() {
   const ctx = await requireFirmAdmin();
 
   // Every company that the firm has an active engagement on. We
-  // intentionally include completed/terminated engagements too — a
+  // intentionally include completed/terminated engagements too, a
   // firm wants to keep auditing their former clients' historical
   // access for the year after engagement end, since IRS retention
   // and discovery rules can ask about it.
@@ -181,10 +181,10 @@ export default async function FirmAuditLogPage() {
                         r.company_id.slice(0, 8)}
                     </td>
                     <td className="py-2 pr-3 text-ink-soft font-mono text-xs">
-                      {r.path ?? "—"}
+                      {r.path ?? "-"}
                     </td>
                     <td className="py-2 pr-3 text-ink-soft">
-                      {r.reason ?? <span className="text-ink-muted">—</span>}
+                      {r.reason ?? <span className="text-ink-muted">-</span>}
                     </td>
                   </tr>
                 ))}

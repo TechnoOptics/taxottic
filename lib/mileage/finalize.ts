@@ -13,7 +13,7 @@ import { notify } from "@/lib/push";
  *
  * Extracted from app/api/mileage/ingest so the live ingest route AND
  * the mileage-finalize cron run IDENTICAL segmentation + overlap-dedup
- * + consume-by-range logic. Divergence here is dangerous — the dedup
+ * + consume-by-range logic. Divergence here is dangerous, the dedup
  * path is what stops a single drive becoming 9 duplicate trips, and the
  * consume-by-range path is what stops a finished drive being
  * re-segmented forever. Keep this as the single source of truth.
@@ -30,7 +30,7 @@ type FinalizeOpts = {
    *  so a periodic run can NEVER sever a still-active drive. */
   forceClose: boolean;
   /** Push a per-trip notification. Live ingest: true. The backfill
-   *  cron: false — recovering weeks of stranded drives at once must not
+   *  cron: false, recovering weeks of stranded drives at once must not
    *  spray the lock screen with dozens of pings. */
   push: boolean;
 };

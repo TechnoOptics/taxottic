@@ -17,7 +17,7 @@ import { computeSaversCreditCents } from "./savers";
  *   MFJ:        50% ≤ $48,000; 20% ≤ $52,000; 10% ≤ $80,000
  */
 
-describe("Saver's Credit — 2026 brackets", () => {
+describe("Saver's Credit, 2026 brackets", () => {
   it("single, $20k AGI, $2k contribution → 50% × $2,000 = $1,000 max", () => {
     const res = computeSaversCreditCents({
       retirementContributionsCents: 2_000 * 100,
@@ -104,7 +104,7 @@ describe("Saver's Credit — 2026 brackets", () => {
   });
 });
 
-describe("Saver's Credit — disqualifiers", () => {
+describe("Saver's Credit, disqualifiers", () => {
   it("zero contribution → zero credit (silent, no warning)", () => {
     const res = computeSaversCreditCents({
       retirementContributionsCents: 0,
@@ -142,7 +142,7 @@ describe("Saver's Credit — disqualifiers", () => {
   });
 });
 
-describe("Saver's Credit — 2025 brackets (back-year coverage)", () => {
+describe("Saver's Credit, 2025 brackets (back-year coverage)", () => {
   it("MFJ, $46k AGI, $4k → 2025 figure: 50% × $4k = $2,000", () => {
     // 2025 MFJ 50% bracket caps at $46,000 (lower than 2026's $48,000).
     const res = computeSaversCreditCents({

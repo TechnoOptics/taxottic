@@ -34,7 +34,7 @@ export async function dismissReminder(formData: FormData) {
 // "3 overdue reminders" banner in one click without drilling into
 // /reminders (Round-2 audit Low: banner had no dismiss). Individual
 // reminders can still be opened back up from /reminders by querying
-// the dismissed-state filter — this only flips dismissed_at, never
+// the dismissed-state filter, this only flips dismissed_at, never
 // deletes.
 export async function dismissAllOverdueReminders() {
   const { admin, user } = await requireUserWithAdmin();

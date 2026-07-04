@@ -16,7 +16,7 @@
 
 // Time-of-day buckets used to live here, but the May 2026 weekly
 // audit observed "Working late" / "Burning the midnight oil" rendered
-// at 7:40 PM PT — the Vercel server's UTC clock was past 03:00 the
+// at 7:40 PM PT, the Vercel server's UTC clock was past 03:00 the
 // next day, hitting the LATE bucket while the user's wall clock said
 // early evening. Until we capture the user's timezone offset, the
 // only way to guarantee the greeting reads correctly is to use
@@ -25,7 +25,7 @@
 // We keep the MORNING/MIDDAY/EVENING buckets so a future
 // TZ-aware caller can still differentiate, but the lines inside
 // each bucket are now safe to read at *any* hour. The LATE bucket
-// is gone — its specifically-after-dark phrases were the source
+// is gone, its specifically-after-dark phrases were the source
 // of the audit finding.
 const MORNING = [
   "Welcome back",

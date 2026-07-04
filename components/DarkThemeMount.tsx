@@ -7,7 +7,7 @@ export const THEME_CHANGE_EVENT = "taxottic-theme-change";
 
 /**
  * Mounts a theme on every authenticated page (kept the legacy name
- * "DarkThemeMount" so existing imports don't churn — but it now
+ * "DarkThemeMount" so existing imports don't churn, but it now
  * reads a user preference from localStorage and falls back to "dark"
  * for backward compatibility with the previous always-dark behaviour).
  *
@@ -30,7 +30,7 @@ export const THEME_CHANGE_EVENT = "taxottic-theme-change";
 export function DarkThemeMount() {
   useEffect(() => {
     const apply = () => {
-      // Default to LIGHT — the app reads cleaner / more professional on a
+      // Default to LIGHT, the app reads cleaner / more professional on a
       // light surface. Users who explicitly picked dark keep it.
       let theme: "dark" | "light" = "light";
       try {
@@ -38,7 +38,7 @@ export function DarkThemeMount() {
         if (pref === "dark") theme = "dark";
         else if (pref === "light") theme = "light";
       } catch {
-        /* private mode — keep default */
+        /* private mode, keep default */
       }
       document.documentElement.dataset.theme = theme;
     };

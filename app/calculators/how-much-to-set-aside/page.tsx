@@ -9,9 +9,9 @@ import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/pa
 
 const SITE = "https://taxottic.com";
 const SLUG = "how-much-to-set-aside";
-const TITLE = "How Much to Set Aside for Taxes (Self-Employed) — Calculator";
+const TITLE = "How Much to Set Aside for Taxes (Self-Employed), Calculator";
 const DESCRIPTION =
-  "Free calculator: how much of every payment to set aside for taxes when you're self-employed. Get the exact percentage — covering self-employment tax plus federal & state income tax. No sign-up.";
+  "Free calculator: how much of every payment to set aside for taxes when you're self-employed. Get the exact percentage, covering self-employment tax plus federal & state income tax. No sign-up.";
 const KEYWORDS = [
   "how much to set aside for taxes",
   "how much to save for taxes self employed",
@@ -79,7 +79,7 @@ const FAQ_LD = {
       name: "What percentage should I set aside for taxes if I'm self-employed?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "A common starting point is 25–30% of your income, but the right number depends on how much you make, your filing status, and your state. It has to cover self-employment tax (15.3%) plus federal and state income tax. Enter your numbers above for your exact percentage instead of a rule of thumb.",
+        text: "A common starting point is 25-30% of your income, but the right number depends on how much you make, your filing status, and your state. It has to cover self-employment tax (15.3%) plus federal and state income tax. Enter your numbers above for your exact percentage instead of a rule of thumb.",
       },
     },
     {
@@ -87,7 +87,7 @@ const FAQ_LD = {
       name: "Should I set aside a percentage of gross or net income?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The easiest habit is a percentage of each gross payment as it lands, before you've tallied expenses — that's the number this calculator gives. It slightly over-saves, which is a feature: you'd rather end the year with a small cushion than a shortfall.",
+        text: "The easiest habit is a percentage of each gross payment as it lands, before you've tallied expenses, that's the number this calculator gives. It slightly over-saves, which is a feature: you'd rather end the year with a small cushion than a shortfall.",
       },
     },
     {
@@ -176,12 +176,12 @@ export default async function SetAsidePage({
             Why a set-aside habit beats a shoebox
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
-            The reason self-employment taxes feel brutal isn&rsquo;t the rate —
+            The reason self-employment taxes feel brutal isn&rsquo;t the rate -
             it&rsquo;s the timing. No employer withholds anything, so the whole
             bill lands at once unless you&rsquo;ve been quietly setting money
             aside all year. The fix is a single number: a percentage of every
             payment that goes straight into a separate savings account the
-            moment it clears. Do that, and quarterly taxes stop being an event —
+            moment it clears. Do that, and quarterly taxes stop being an event -
             the money&rsquo;s already there. This calculator gives you the
             percentage for your income, filing status, and state, covering both{" "}
             <strong className="text-forest-800">self-employment tax</strong> and{" "}

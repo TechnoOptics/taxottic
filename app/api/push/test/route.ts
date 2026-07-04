@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // POST /api/push/test
 //
 // Fires a one-off test push to the calling user. Useful for verifying
-// FCM/APNs credentials AFTER the user provisions them in Vercel — no
+// FCM/APNs credentials AFTER the user provisions them in Vercel, no
 // real drive required.
 //
 // Returns a structured diagnostic so the UI can show EXACTLY what
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 // "tell me what's missing" surface the user asked for when push wasn't
 // landing on their phone before the demo drive.
 //
-// Authentication: requires the current session. No admin-mode gate —
+// Authentication: requires the current session. No admin-mode gate -
 // every signed-in user can fire a push to their OWN devices.
 
 type Diagnostic = {
@@ -65,7 +65,7 @@ export async function POST() {
   };
 
   // Decide WHY the user might not see a banner, in priority order.
-  // This is the "honest error UX" the user asked for — short, specific.
+  // This is the "honest error UX" the user asked for, short, specific.
   let hint = "";
   if (!providers.apnsConfigured && !providers.fcmConfigured) {
     hint =
@@ -75,10 +75,10 @@ export async function POST() {
       "No device tokens registered yet. Open the Taxottic native app on your phone, accept the Notifications prompt, and ensure NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED=1 in Vercel (then redeploy so the gate flag bakes into the JS bundle).";
   } else if (tokens.active === 0) {
     hint =
-      "All your device tokens are revoked (the provider rejected them on a previous send — usually means the app was uninstalled or signed out). Reopen the Taxottic native app on your phone to re-register.";
+      "All your device tokens are revoked (the provider rejected them on a previous send, usually means the app was uninstalled or signed out). Reopen the Taxottic native app on your phone to re-register.";
   }
 
-  // Use the existing trip_logged payload kind for the test — privacy-
+  // Use the existing trip_logged payload kind for the test, privacy-
   // compliant body, dedupe key uses the timestamp so a second test
   // call goes through (instead of being silently de-duped).
   const tripId = `test-${Date.now()}`;

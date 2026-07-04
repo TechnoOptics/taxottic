@@ -5,7 +5,7 @@ import { requireFirmContext } from "@/lib/firm/context";
 import { bulkInviteClients } from "./actions";
 import { CsvImportPreview } from "@/components/firm/CsvImportPreview";
 
-// /firm/clients/import — bulk CSV onboarding.
+// /firm/clients/import, bulk CSV onboarding.
 //
 // One page. The firm pastes a CSV (or types up to 200 rows) and
 // hits Import. The action loops through every row, sniffs each
@@ -158,7 +158,7 @@ function Column({
           required
         </span>
       ) : null}
-      {hint ? <span className="text-ink-muted"> — {hint}</span> : null}
+      {hint ? <span className="text-ink-muted">, {hint}</span> : null}
     </div>
   );
 }

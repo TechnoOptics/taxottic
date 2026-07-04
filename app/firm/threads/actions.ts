@@ -38,7 +38,7 @@ export async function postMessage(formData: FormData) {
   if (!body || body.length > 8000) {
     throw new Error("Message must be 1-8000 characters.");
   }
-  // Extract @mentions from body — pattern @{firstname.lastname} or
+  // Extract @mentions from body, pattern @{firstname.lastname} or
   // @email. For v1 we leave the array empty and let the UI parse
   // later; the column exists for future routing.
   const { data: msg, error } = await admin

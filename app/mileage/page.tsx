@@ -24,7 +24,7 @@ import {
   moveTripCompany,
 } from "./actions";
 
-// TripThumbnail is no longer imported at this layer — the new
+// TripThumbnail is no longer imported at this layer, the new
 // TripList client component imports it directly per-row.
 
 // Employee mileage dashboard. Their own driving trails for a
@@ -80,7 +80,7 @@ export default async function MileagePage({
   if (company && isManager) {
     // company_members.user_id has NO foreign key to profiles (it points
     // at auth.users), so PostgREST can't resolve an embedded
-    // `profile:profiles(...)` select — it silently returns null (same
+    // `profile:profiles(...)` select, it silently returns null (same
     // gotcha documented in manage/page.tsx). Fetch profiles separately.
     const { data: memberRows } = await admin
       .from("company_members")
@@ -148,7 +148,7 @@ export default async function MileagePage({
       .eq("driver_user_id", viewingDriverId)
       .gte("started_at", sinceIso);
     // Privacy: a manager reviewing a TEAMMATE's log only sees the drives
-    // that teammate marked BUSINESS — their personal + unclassified drives
+    // that teammate marked BUSINESS, their personal + unclassified drives
     // are nobody else's business. Viewing your OWN log still shows
     // everything (you triage your own unclassified drives there).
     if (!viewingSelf) tripQuery = tripQuery.eq("classification", "business");
@@ -178,12 +178,12 @@ export default async function MileagePage({
       .eq("company_id", company.id);
     places = (placeData ?? []) as unknown as MapPlace[];
 
-    // Tracker-status diagnostic — most recent GPS point ingested by
+    // Tracker-status diagnostic, most recent GPS point ingested by
     // THIS user, across any company they belong to. mileage_points
     // doesn't have driver_user_id; join through the trip. Using a
     // single 1-row fetch so the page render cost is constant
     // regardless of how many points exist. Only computed for the
-    // self view — "is YOUR tracker running" is meaningless when a
+    // self view, "is YOUR tracker running" is meaningless when a
     // manager is reviewing another driver's log (TrackerStatus is
     // hidden in that case).
     if (viewingSelf) {
@@ -228,7 +228,7 @@ export default async function MileagePage({
       .map((p) => ({ lat: p.lat, lng: p.lng })),
   }));
 
-  // Tracking-health check (self only — you can't fix another driver's
+  // Tracking-health check (self only, you can't fix another driver's
   // phone). When drives aren't being captured, warn + offer recovery.
   let health: Awaited<ReturnType<typeof assessMileageTrackingHealth>> | null =
     null;
@@ -298,20 +298,20 @@ export default async function MileagePage({
               </div>
             ) : null}
 
-            {/* Auto-track toggle + tracker diagnostics are self-only —
+            {/* Auto-track toggle + tracker diagnostics are self-only -
                 you can't flip another driver's phone tracker. */}
             {viewingSelf ? (
               <div className="mt-4">
                 <MobileOnly
                   title="Automatic mileage tracking"
-                  description="Taxottic uses your phone's GPS to detect drives and log them in the background — this runs only in the Taxottic mobile app. On the web you can still add drives by hand below."
+                  description="Taxottic uses your phone's GPS to detect drives and log them in the background, this runs only in the Taxottic mobile app. On the web you can still add drives by hand below."
                 >
                   <AutoTrackToggle companyId={company.id} />
                 </MobileOnly>
               </div>
             ) : null}
 
-            {/* "Is the tracker actually running?" — the diagnostic
+            {/* "Is the tracker actually running?", the diagnostic
                 strip the user asked for after their first real
                 drive-day produced zero GPS points. Green when active,
                 red with a checklist + manual-log pointer when not. */}
@@ -400,7 +400,7 @@ export default async function MileagePage({
               </Link>
               {/* New (May 2026): saved places. Adding a "work" place
                   here means every future trip that touches it
-                  auto-classifies as business — the auto-deduct hook
+                  auto-classifies as business, the auto-deduct hook
                   the user asked for. Surface it next to the
                   breadcrumb link so the discovery path is obvious. */}
               <Link
@@ -453,7 +453,7 @@ export default async function MileagePage({
               moveTripCompany={moveTripCompany}
             />
 
-            {/* Stat tiles moved below the map/trip list (May 2026) — the
+            {/* Stat tiles moved below the map/trip list (May 2026), the
                 user asked for the map and logged drives to be the first
                 thing visible on this page, not stats. Kept compact under
                 a small "Details" label rather than the full-size cards
@@ -477,7 +477,7 @@ export default async function MileagePage({
                 />
                 {/* Same "needs review" count, but when it's > 0 we wrap
                     it in a Link to the swipe deck so the stat itself is
-                    the tap target (mirroring the amber banner above —
+                    the tap target (mirroring the amber banner above -
                     some users tap the stat instead of the banner). */}
                 {viewingSelf && unclassifiedCount > 0 ? (
                   <Link
@@ -506,14 +506,14 @@ export default async function MileagePage({
               </div>
             </div>
 
-            {/* Manual backfill entry — collapsed by default. The user
+            {/* Manual backfill entry, collapsed by default. The user
                 ALWAYS has a way to log a drive even if the tracker
                 missed it (the realistic scenario, given GPS background
                 capture on Android is best-effort). Self-only: a manual
                 trip is always logged under the current user, so it's
                 hidden when reviewing another driver. */}
             {viewingSelf ? <ManualLogTrip action={addManualTrip} /> : null}
-            {/* Route reconstruction — the "phone died mid-drive" recovery.
+            {/* Route reconstruction, the "phone died mid-drive" recovery.
                 Enter the stops; we compute the driving distance. */}
             {viewingSelf ? (
               <CompleteDriveFromStops action={addRouteTrip} />
@@ -523,7 +523,7 @@ export default async function MileagePage({
               Deduction uses the IRS standard mileage rate for the
               trip&apos;s tax year and applies only to trips marked
               business. Standard-mileage and actual-vehicle-expense
-              methods are mutually exclusive per vehicle per year —
+              methods are mutually exclusive per vehicle per year -
               confirm your method with your preparer.
             </p>
           </>

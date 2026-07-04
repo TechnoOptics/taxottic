@@ -84,7 +84,7 @@ export function ReceiptUploader({
     };
   }, [previewUrl]);
 
-  // Single entry point for "a file was chosen" — sets the file AND builds its
+  // Single entry point for "a file was chosen", sets the file AND builds its
   // viewer preview, so the two never drift. Everything (camera, web capture,
   // file picker) routes through here.
   const attach = (f: File | null) => {
@@ -138,7 +138,7 @@ export function ReceiptUploader({
       const noteParts = [json.vendor, json.description].filter(
         (s): s is string => !!s && s.length > 0,
       );
-      if (noteParts.length > 0) setNotes(noteParts.join(" — "));
+      if (noteParts.length > 0) setNotes(noteParts.join(", "));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
@@ -373,7 +373,7 @@ export function ReceiptUploader({
         </div>
       )}
 
-      {/* Full-screen lightbox for image receipts — tap anywhere to close. */}
+      {/* Full-screen lightbox for image receipts, tap anywhere to close. */}
       {zoom && previewUrl && previewKind === "image" ? (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-forest-950/80 p-4"
@@ -403,7 +403,7 @@ export function ReceiptUploader({
 }
 
 // Receipt viewer panel: shows the uploaded image (click to enlarge) or an
-// embedded PDF, framed to match the app's cards. Pure presentational — the
+// embedded PDF, framed to match the app's cards. Pure presentational, the
 // object URL + zoom state live in ReceiptUploader.
 function ReceiptPreview({
   url,

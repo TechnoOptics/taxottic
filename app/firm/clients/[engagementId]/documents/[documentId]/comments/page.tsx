@@ -142,7 +142,7 @@ export default async function DocumentCommentsPage({
                 name="page_number"
                 min={1}
                 max={9999}
-                placeholder="—"
+                placeholder="-"
                 className="input text-sm"
               />
             </label>
@@ -188,7 +188,7 @@ export default async function DocumentCommentsPage({
                     <span className="inline-flex items-center px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
                       Resolved
                       {c.resolved_by
-                        ? ` · ${resolverName.get(c.resolved_by) ?? "—"}`
+                        ? ` · ${resolverName.get(c.resolved_by) ?? "-"}`
                         : ""}
                     </span>
                   ) : null}

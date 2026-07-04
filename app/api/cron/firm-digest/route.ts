@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Hourly cron — sends daily / weekly digest emails to firm
+ * Hourly cron, sends daily / weekly digest emails to firm
  * members whose preferred send hour matches the current UTC hour.
  *
  * Why hourly: the prefs let users pick `digest_hour_utc` from 0-23.
@@ -21,7 +21,7 @@ export const maxDuration = 300;
  * older than the cadence window (24h for daily, 7d for weekly).
  * Retries are safe.
  *
- * Auth: same envelope as plaid-sync — accepts the Vercel cron
+ * Auth: same envelope as plaid-sync, accepts the Vercel cron
  * header OR an Authorization: Bearer $CRON_SECRET.
  */
 export async function GET(req: NextRequest) {
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
         .limit(50);
 
       if (!activity || activity.length === 0) {
-        // Nothing to report — still bump the cursor so we don't
+        // Nothing to report, still bump the cursor so we don't
         // re-evaluate this user for another window.
         await admin
           .from("firm_activity_reads")
@@ -146,13 +146,13 @@ export async function GET(req: NextRequest) {
           (a) =>
             `<li style="margin-bottom: 8px; color: #18181B; font-size: 14px; line-height: 1.5;">${escapeHtml(
               a.summary ?? a.kind,
-            )} <span style="color: #71717A;">— ${formatLocal(a.created_at)}</span></li>`,
+            )} <span style="color: #71717A;">- ${formatLocal(a.created_at)}</span></li>`,
         )
         .join("");
       const subject =
         row.digest_cadence === "weekly"
-          ? `${firm.name} — your weekly summary (${activity.length} updates)`
-          : `${firm.name} — today's summary (${activity.length} updates)`;
+          ? `${firm.name}, your weekly summary (${activity.length} updates)`
+          : `${firm.name}, today's summary (${activity.length} updates)`;
       const html = `<!doctype html><html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F5EDD6; margin: 0; padding: 32px 16px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
           <table role="presentation" width="560" style="background-color: #FFFFFF; border-radius: 16px; max-width: 560px;"><tr><td style="padding: 32px;">
@@ -173,7 +173,7 @@ export async function GET(req: NextRequest) {
       const text =
         `${firm.name}\n\n${activity.length} event${activity.length === 1 ? "" : "s"} since your last digest:\n\n` +
         activity
-          .map((a) => `• ${a.summary ?? a.kind} — ${formatLocal(a.created_at)}`)
+          .map((a) => `• ${a.summary ?? a.kind}, ${formatLocal(a.created_at)}`)
           .join("\n") +
         `\n\nOpen the inbox: ${portalUrl}\nChange cadence: ${portalUrl.replace("/inbox", "/settings/notifications")}\n`;
 

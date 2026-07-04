@@ -5,7 +5,7 @@ import type {
   EnvelopeStatus,
 } from "./provider";
 
-// DocuSign adapter — enterprise-tier-only. Talks to the DocuSign
+// DocuSign adapter, enterprise-tier-only. Talks to the DocuSign
 // REST API v2.1 via JWT user-token auth.
 //
 // Env required:

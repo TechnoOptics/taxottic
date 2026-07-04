@@ -4,7 +4,7 @@
 // Typed-confirmation delete button for irreversible super-admin actions.
 //
 // The submit button stays disabled until the user types `requireText`
-// exactly into the input — so a stray click can't nuke an account or a
+// exactly into the input, so a stray click can't nuke an account or a
 // company. Defense‑in‑depth: the SERVER ACTIONS also re-check the typed
 // value against the live record (this client guard is purely UX).
 //
@@ -36,7 +36,7 @@ export function TypedConfirmDelete({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Case-insensitive match for emails; case-sensitive otherwise — the
+  // Case-insensitive match for emails; case-sensitive otherwise, the
   // server is the source of truth and re-validates either way.
   const isEmail = inputName === "confirm_email";
   const match = isEmail

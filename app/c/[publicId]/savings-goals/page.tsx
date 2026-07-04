@@ -63,11 +63,11 @@ const CATEGORY_INTRO: Record<GoalCategory, string> = {
   investment:
     "Year-end portfolio moves to capture losses, defer gains, and bunch deductions across years.",
   charitable:
-    "Strategies that turn your existing giving into a bigger deduction — bunching, donor-advised funds, appreciated stock.",
+    "Strategies that turn your existing giving into a bigger deduction, bunching, donor-advised funds, appreciated stock.",
   energy:
-    "Federal credits for energy-efficient home upgrades and EV purchases — direct dollar-for-dollar reductions, not deductions.",
+    "Federal credits for energy-efficient home upgrades and EV purchases, direct dollar-for-dollar reductions, not deductions.",
   compliance:
-    "Stay on the right side of the IRS — withholding, safe harbors, and underpayment-penalty avoidance.",
+    "Stay on the right side of the IRS, withholding, safe harbors, and underpayment-penalty avoidance.",
 };
 
 export default async function SavingsGoalsPage({
@@ -80,7 +80,7 @@ export default async function SavingsGoalsPage({
   const taxYear = new Date().getUTCFullYear();
   const currentMonth = new Date().getUTCMonth() + 1;
 
-  // Run the forecast — same shape as the forecast page so the goal
+  // Run the forecast, same shape as the forecast page so the goal
   // engine sees real numbers (marginal rate, AGI, SE income, etc.).
   const [
     { data: taxProfile },
@@ -180,7 +180,7 @@ export default async function SavingsGoalsPage({
   // The forward-looking savings target only needs the year-end
   // figure. resolveAutoMileageCents lets the GPS tracker's classified-
   // business trips (an IRS-grade log) override the manual estimate,
-  // gated by the standard-vs-actual-expense election — see that helper.
+  // gated by the standard-vs-actual-expense election, see that helper.
   // Null/unset method defaults to standard; only an explicit "actual"
   // election opts out (matches company-forecast + the forecast page).
   const onStandardVehicle =
@@ -310,7 +310,7 @@ export default async function SavingsGoalsPage({
         </h1>
         <p className="mt-2 text-sm text-ink-soft max-w-2xl leading-relaxed">
           Personalized goals based on your filing status, income, and tax
-          profile — none of these are new business expenses. They&apos;re
+          profile, none of these are new business expenses. They&apos;re
           retirement contributions, health accounts, 529 plans, charitable
           strategies, and federal credits that can absorb your projected tax
           bill of{" "}
@@ -331,7 +331,7 @@ export default async function SavingsGoalsPage({
             Calculated at your projected marginal rate of{" "}
             {(result.marginalRate * 100).toFixed(1)}%. Some goals overlap (you
             can&apos;t do both SEP-IRA and Solo 401(k)), so the practical
-            ceiling is lower — pick the largest in each category.
+            ceiling is lower, pick the largest in each category.
           </p>
           <div className="mt-4 flex items-center gap-3 flex-wrap">
             <Link

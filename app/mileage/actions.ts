@@ -106,7 +106,7 @@ export async function reclassifyTrip(formData: FormData) {
  * (the tracker captures to whichever company was active at the time).
  *
  * Auth: the caller must be the driver OR a manager of the trip's
- * CURRENT company, AND a member of the TARGET company — you can't shove
+ * CURRENT company, AND a member of the TARGET company, you can't shove
  * a drive into a business you don't belong to. The IRS deduction is
  * rate-based and company-independent, so only company_id changes; the
  * classification, distance, and deduction carry over untouched.
@@ -224,11 +224,11 @@ export async function deleteTrip(formData: FormData) {
 }
 
 /**
- * Route-reconstructed drive — the "my phone died mid-drive" recovery path.
+ * Route-reconstructed drive, the "my phone died mid-drive" recovery path.
  *
  * When the tracker misses a long drive (phone died, background location
  * killed, no signal on a road trip), the driver enters where they actually
- * went — start, destination, and any stops in between — and the client
+ * went, start, destination, and any stops in between, and the client
  * computes the driving distance with the Google Directions service (road
  * miles, not straight-line) plus the route polyline. This action just
  * persists that: the trip + its path points. It's the honest, IRS-defensible
@@ -263,7 +263,7 @@ export async function addRouteTrip(formData: FormData) {
       : "straight_line";
   const stopsSummary = String(formData.get("stops_summary") ?? "").slice(0, 300);
 
-  // Route polyline — validated & clamped. Never trust the client's array
+  // Route polyline, validated & clamped. Never trust the client's array
   // shape or size; keep only well-formed coordinates, cap the count.
   let path: { lat: number; lng: number }[] = [];
   try {
@@ -282,7 +282,7 @@ export async function addRouteTrip(formData: FormData) {
         .map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }));
     }
   } catch {
-    /* malformed path — save the trip without a drawn line */
+    /* malformed path, save the trip without a drawn line */
   }
 
   if (!startedLocal || !endedLocal) throw new Error("Pick a start and an end time.");
@@ -317,7 +317,7 @@ export async function addRouteTrip(formData: FormData) {
     `Reconstructed from entered stops${stopsSummary ? ` (${stopsSummary})` : ""}. ` +
     (method === "directions"
       ? "Road distance via Google Directions."
-      : "Straight-line estimate — may under-count road miles.") +
+      : "Straight-line estimate, may under-count road miles.") +
     " Verify before claiming.";
 
   const { data: insertedTrip, error } = await admin
@@ -380,7 +380,7 @@ export async function addRouteTrip(formData: FormData) {
 }
 
 /**
- * Manual drive entry — the backfill option when the tracker missed
+ * Manual drive entry, the backfill option when the tracker missed
  * a drive (no GPS captured, app was killed, schedule blocked, etc).
  * Required because GPS background capture is best-effort on Android
  * and a user who's been on a real drive deserves a "log it
@@ -469,7 +469,7 @@ export async function addManualTrip(formData: FormData) {
     throw new Error("Couldn't save. Please try again.");
   }
 
-  // Notify the driver that a drive was saved — same contract as the
+  // Notify the driver that a drive was saved, same contract as the
   // GPS-tracked path in /api/mileage/ingest, so "any saved drive
   // notifies you" holds for hand-entered trips too. notify() never
   // throws and is idempotent (deduped on tripId), so it's safe to

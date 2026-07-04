@@ -75,7 +75,7 @@ export default async function ActivityPage({ params }: { params: Params }) {
           <span />
         </div>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed">
-          A record of changes to this company&rsquo;s books — who added, edited,
+          A record of changes to this company&rsquo;s books, who added, edited,
           or removed income and expenses, updated the profile, or connected a
           bank. The 100 most recent events are shown.
         </p>

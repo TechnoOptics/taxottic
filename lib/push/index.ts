@@ -14,7 +14,7 @@ export type { PushEvent } from "./payloads";
 /**
  * Notify a user of an event across all their devices, exactly once.
  * Safe to call from a server action / route after the underlying
- * write commits. Never throws — a notification failure must not fail
+ * write commits. Never throws, a notification failure must not fail
  * the business operation that triggered it.
  *
  * Logs a structured `[push]` line on every call so docs/PUSH_NOTIFICATIONS_SETUP.md

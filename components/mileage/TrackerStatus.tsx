@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * "Is the tracker actually running?" — the diagnostic strip the user
+ * "Is the tracker actually running?", the diagnostic strip the user
  * needs after the May 23 2026 drive-day where they reported "the
  * phone and the watch did not track my miles" and we found
  * point_count=0 across every trip in the DB.
@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
  *                                              show the diagnostics
  *
  * Client-only piece is the relative time + the native-plugin
- * availability check (Capacitor + @capgo) — the server can't see
+ * availability check (Capacitor + @capgo), the server can't see
  * either of those.
  */
 
@@ -65,7 +65,7 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
     })();
   }, []);
 
-  // Pick the more recent of point + trip — a trip with no point
+  // Pick the more recent of point + trip, a trip with no point
   // (manual entry) still indicates "something happened recently."
   const lastActivityISO =
     lastPointISO && lastTripISO
@@ -146,12 +146,12 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
                 >
                   /mileage/schedule
                 </a>{" "}
-                — the schedule decides when auto-resume is allowed.
+, the schedule decides when auto-resume is allowed.
               </li>
               {native.isNative === false ? (
                 <li className="text-rose-700">
                   <strong>Where you are now:</strong> the web. Background
-                  capture only runs in the installed Taxottic app —
+                  capture only runs in the installed Taxottic app -
                   open the app on your phone.
                 </li>
               ) : native.bgAvailable === false ? (
@@ -169,12 +169,12 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
                 >
                   Open /mileage/diagnose
                 </a>{" "}
-                — one tap, runs the GPS plugin live, shows exactly
+, one tap, runs the GPS plugin live, shows exactly
                 which step fails on YOUR device. Screenshot and send.
               </li>
               <li>
                 Or use <strong>“Log it manually”</strong> below to
-                backfill the drive — same deduction either way.
+                backfill the drive, same deduction either way.
               </li>
             </ul>
           ) : null}

@@ -5,7 +5,7 @@ import { neutralForecastInput, toCents, US_STATES } from "./base-input";
  * Per-state data for the programmatic "self-employment tax in {state}"
  * pages. The numbers are COMPUTED from the same forecast engine as the
  * calculators (real per-state brackets), so each page carries unique,
- * accurate figures — not a templated shell. That's what keeps 50+
+ * accurate figures, not a templated shell. That's what keeps 50+
  * generated pages substantive instead of thin doorway pages.
  */
 
@@ -13,7 +13,7 @@ const TAX_YEAR = 2026;
 
 // Authoritative list of states with NO personal income tax on earned
 // income (2026). NH taxes only interest/dividends (not wages/SE income)
-// and TN repealed its Hall tax — both belong here for a self-employment
+// and TN repealed its Hall tax, both belong here for a self-employment
 // page. Deriving this from the engine is unreliable: the engine can
 // return a small non-income state figure (e.g. WA's business tax) that
 // would wrongly flag a no-income-tax state, so we use the known list and
@@ -64,7 +64,7 @@ export type StateExample = {
 export type StateSnapshot = {
   hasIncomeTax: boolean;
   /** The state's income-tax bite on a $100k single self-employed
-   *  filer, as a percentage of income — a single comparable headline. */
+   *  filer, as a percentage of income, a single comparable headline. */
   stateBiteAt100k: number;
   examples: StateExample[];
 };

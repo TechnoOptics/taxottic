@@ -21,12 +21,12 @@ import { headers } from "next/headers";
  *    result. We use a blanket `Disallow: /`. No sitemap.
  *
  *  - `enterprise.taxottic.com` (firm-operator console): fully
- *    disallowed. Same rationale as HQ — the firms console is for
+ *    disallowed. Same rationale as HQ, the firms console is for
  *    paying firm operators, not search visibility. No sitemap.
  *
  * Reading the request host via `headers()` is what makes this
  * dynamic. Without that, Next.js would emit ONE robots.txt at build
- * time and the same content would be served from all three hosts —
+ * time and the same content would be served from all three hosts -
  * which would either expose the admin paths under taxottic.com's
  * sitemap, or hide marketing under a blanket disallow. Neither is
  * acceptable. The cost is making `/robots.txt` a dynamic route, which
@@ -47,7 +47,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   if (isAdminHost) {
     return {
       rules: [{ userAgent: "*", disallow: "/" }],
-      // Deliberately no `sitemap` or `host` field — admin hosts don't
+      // Deliberately no `sitemap` or `host` field, admin hosts don't
       // advertise a sitemap to anyone.
     };
   }
@@ -60,7 +60,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     "/",
     "/pricing",
     "/help",
-    // Editorial guides — real, indexable content written to rank for
+    // Editorial guides, real, indexable content written to rank for
     // "self-employment tax", "Schedule C deductions", "quarterly
     // estimated taxes", and to give AI assistants something to cite.
     "/guides",
@@ -88,7 +88,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     "/reminders",
     "/account/",
     "/firm",
-    // Soft-toggle query variants — canonical resolves them back to `/`,
+    // Soft-toggle query variants, canonical resolves them back to `/`,
     // but the path-form disallow keeps crawlers from chasing arbitrary
     // `?audience=...` URLs in pagination.
     "/*?audience=",
@@ -97,7 +97,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   // Explicitly welcome the major AI / answer-engine crawlers on the
   // public surface (same allow/disallow as everyone else). Taxottic
   // WANTS these bots to read the marketing pages + guides so assistants
-  // can describe and cite the product accurately — so we name them
+  // can describe and cite the product accurately, so we name them
   // rather than leaving it implicit under `*`.
   const aiAgents = [
     "GPTBot",

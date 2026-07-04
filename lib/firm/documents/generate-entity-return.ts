@@ -15,12 +15,12 @@
 //   - Gross receipts (Line 1a) from monthly_income
 //   - Total deductions by Schedule C-mapped lines aggregated to the
 //     1065/1120 line numbering (we re-label, not re-compute)
-//   - Tax due (Form 1120 only — C-Corp pays a flat 21% federal rate
+//   - Tax due (Form 1120 only, C-Corp pays a flat 21% federal rate
 //     under TCJA; Forms 1065 and 1120-S pass through and owe zero
 //     at the entity level for federal income tax)
 //
 // What's left to the preparer:
-//   - Schedule L (Balance Sheet) — requires book balances we don't
+//   - Schedule L (Balance Sheet), requires book balances we don't
 //     yet capture in monthly_income/monthly_expenses.
 //   - Schedule M-1 / M-2 reconciliation
 //   - Form 4562 depreciation detail beyond §179
@@ -48,7 +48,7 @@ export type EntityReturnInput = {
   totals: {
     grossReceiptsCents: number;
     returnsCents: number;
-    /** Cost of goods sold — left at 0 unless captured separately. */
+    /** Cost of goods sold, left at 0 unless captured separately. */
     cogsCents: number;
     /** Interest, dividends, royalty income separated out. */
     interestCents: number;
@@ -72,9 +72,9 @@ export type EntityReturnInput = {
 };
 
 const FORM_TITLE: Record<EntityForm, string> = {
-  "1065": "Form 1065 — U.S. Return of Partnership Income",
-  "1120": "Form 1120 — U.S. Corporation Income Tax Return",
-  "1120-S": "Form 1120-S — U.S. Income Tax Return for an S Corporation",
+  "1065": "Form 1065, U.S. Return of Partnership Income",
+  "1120": "Form 1120, U.S. Corporation Income Tax Return",
+  "1120-S": "Form 1120-S, U.S. Income Tax Return for an S Corporation",
 };
 
 const FORM_FILENAME_PREFIX: Record<EntityForm, string> = {
@@ -151,7 +151,7 @@ export async function loadEntityReturnTotals(
       continue;
     }
     if (cat.schedule_c_line === "Line 26") {
-      // Schedule C Line 26 is "Wages" — we re-bucket to salaries.
+      // Schedule C Line 26 is "Wages", we re-bucket to salaries.
       salaries += cents;
     }
     if (cat.schedule_c_line === "Line 13") section179 += cents;
@@ -215,7 +215,7 @@ export function renderEntityReturnHTML(input: EntityReturnInput): {
     .map(
       ([name, cents]) =>
         `<tr>
-          <td class="line">—</td>
+          <td class="line">-</td>
           <td class="label">${escapeHtml(name)}</td>
           <td class="amount">${formatCents(cents)}</td>
         </tr>`,
@@ -228,7 +228,7 @@ export function renderEntityReturnHTML(input: EntityReturnInput): {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>${FORM_TITLE[input.form]} draft — ${escapeHtml(input.company.name)} ${input.taxYear}</title>
+<title>${FORM_TITLE[input.form]} draft, ${escapeHtml(input.company.name)} ${input.taxYear}</title>
 <style>
   @page { margin: 0.75in; }
   body { font-family: Georgia, "Times New Roman", serif; color: #18181B; font-size: 11pt; line-height: 1.5; }
@@ -247,43 +247,43 @@ export function renderEntityReturnHTML(input: EntityReturnInput): {
 </style>
 </head>
 <body>
-  <div class="draft-badge">DRAFT — for preparer review</div>
+  <div class="draft-badge">DRAFT, for preparer review</div>
   <h1>${escapeHtml(FORM_TITLE[input.form])}</h1>
   <div class="small">Tax year ${input.taxYear} · prepared by ${escapeHtml(input.firm.name)}</div>
 
   <h2>Entity</h2>
   <table>
-    <tr><td class="line">—</td><td class="label">Name of partnership / corporation</td><td class="amount">${escapeHtml(input.company.legal_name ?? input.company.name)}</td></tr>
-    <tr><td class="line">—</td><td class="label">EIN</td><td class="amount">${escapeHtml(input.company.ein ?? "—")}</td></tr>
-    <tr><td class="line">—</td><td class="label">Entity type</td><td class="amount">${escapeHtml(input.company.entity_type ?? "—")}</td></tr>
-    ${input.company.incorporated_state ? `<tr><td class="line">—</td><td class="label">State of incorporation</td><td class="amount">${escapeHtml(input.company.incorporated_state)}</td></tr>` : ""}
-    <tr><td class="line">—</td><td class="label">Number of ${isPartnership ? "partners" : "shareholders"}</td><td class="amount">${input.ownerCount}</td></tr>
+    <tr><td class="line">-</td><td class="label">Name of partnership / corporation</td><td class="amount">${escapeHtml(input.company.legal_name ?? input.company.name)}</td></tr>
+    <tr><td class="line">-</td><td class="label">EIN</td><td class="amount">${escapeHtml(input.company.ein ?? "-")}</td></tr>
+    <tr><td class="line">-</td><td class="label">Entity type</td><td class="amount">${escapeHtml(input.company.entity_type ?? "-")}</td></tr>
+    ${input.company.incorporated_state ? `<tr><td class="line">-</td><td class="label">State of incorporation</td><td class="amount">${escapeHtml(input.company.incorporated_state)}</td></tr>` : ""}
+    <tr><td class="line">-</td><td class="label">Number of ${isPartnership ? "partners" : "shareholders"}</td><td class="amount">${input.ownerCount}</td></tr>
   </table>
 
   <h2>Income</h2>
   <table>
     <tr><td class="line">1a</td><td class="label">Gross receipts or sales</td><td class="amount">${formatCents(input.totals.grossReceiptsCents)}</td></tr>
-    <tr><td class="line">1b</td><td class="label">Returns and allowances</td><td class="amount">${input.totals.returnsCents > 0 ? formatCents(input.totals.returnsCents) : "—"}</td></tr>
+    <tr><td class="line">1b</td><td class="label">Returns and allowances</td><td class="amount">${input.totals.returnsCents > 0 ? formatCents(input.totals.returnsCents) : "-"}</td></tr>
     <tr><td class="line">1c</td><td class="label">Subtract Line 1b from 1a</td><td class="amount">${formatCents(grossIncome)}</td></tr>
-    <tr><td class="line">2</td><td class="label">Cost of goods sold (Schedule A — Form 1125-A)</td><td class="amount">${input.totals.cogsCents > 0 ? formatCents(input.totals.cogsCents) : "—"}</td></tr>
+    <tr><td class="line">2</td><td class="label">Cost of goods sold (Schedule A, Form 1125-A)</td><td class="amount">${input.totals.cogsCents > 0 ? formatCents(input.totals.cogsCents) : "-"}</td></tr>
     <tr><td class="line">3</td><td class="label">Gross profit (Line 1c − Line 2)</td><td class="amount">${formatCents(grossProfit)}</td></tr>
-    <tr><td class="line">4</td><td class="label">Ordinary dividends</td><td class="amount">${input.totals.dividendsCents > 0 ? formatCents(input.totals.dividendsCents) : "—"}</td></tr>
-    <tr><td class="line">5</td><td class="label">Interest income</td><td class="amount">${input.totals.interestCents > 0 ? formatCents(input.totals.interestCents) : "—"}</td></tr>
-    <tr><td class="line">6</td><td class="label">Gross rents</td><td class="amount">${input.totals.rentalCents > 0 ? formatCents(input.totals.rentalCents) : "—"}</td></tr>
-    <tr><td class="line">7</td><td class="label">Gross royalties</td><td class="amount">${input.totals.royaltyCents > 0 ? formatCents(input.totals.royaltyCents) : "—"}</td></tr>
-    <tr class="totals"><td class="line">${isC ? "11" : "8"}</td><td class="label">Total income (combine Lines 3–7)</td><td class="amount">${formatCents(totalIncomeLine)}</td></tr>
+    <tr><td class="line">4</td><td class="label">Ordinary dividends</td><td class="amount">${input.totals.dividendsCents > 0 ? formatCents(input.totals.dividendsCents) : "-"}</td></tr>
+    <tr><td class="line">5</td><td class="label">Interest income</td><td class="amount">${input.totals.interestCents > 0 ? formatCents(input.totals.interestCents) : "-"}</td></tr>
+    <tr><td class="line">6</td><td class="label">Gross rents</td><td class="amount">${input.totals.rentalCents > 0 ? formatCents(input.totals.rentalCents) : "-"}</td></tr>
+    <tr><td class="line">7</td><td class="label">Gross royalties</td><td class="amount">${input.totals.royaltyCents > 0 ? formatCents(input.totals.royaltyCents) : "-"}</td></tr>
+    <tr class="totals"><td class="line">${isC ? "11" : "8"}</td><td class="label">Total income (combine Lines 3-7)</td><td class="amount">${formatCents(totalIncomeLine)}</td></tr>
   </table>
 
   <h2>Deductions</h2>
   <table>
     ${
       isC
-        ? `<tr><td class="line">12</td><td class="label">Compensation of officers</td><td class="amount">${input.totals.officerCompCents > 0 ? formatCents(input.totals.officerCompCents) : "—"}</td></tr>
-           <tr><td class="line">13</td><td class="label">Salaries and wages (excluding officers)</td><td class="amount">${input.totals.salariesCents > 0 ? formatCents(input.totals.salariesCents) : "—"}</td></tr>`
-        : `<tr><td class="line">${isPartnership ? "9" : "7"}</td><td class="label">Salaries and wages</td><td class="amount">${input.totals.salariesCents > 0 ? formatCents(input.totals.salariesCents) : "—"}</td></tr>`
+        ? `<tr><td class="line">12</td><td class="label">Compensation of officers</td><td class="amount">${input.totals.officerCompCents > 0 ? formatCents(input.totals.officerCompCents) : "-"}</td></tr>
+           <tr><td class="line">13</td><td class="label">Salaries and wages (excluding officers)</td><td class="amount">${input.totals.salariesCents > 0 ? formatCents(input.totals.salariesCents) : "-"}</td></tr>`
+        : `<tr><td class="line">${isPartnership ? "9" : "7"}</td><td class="label">Salaries and wages</td><td class="amount">${input.totals.salariesCents > 0 ? formatCents(input.totals.salariesCents) : "-"}</td></tr>`
     }
-    <tr><td class="line">—</td><td class="label" colspan="2"><strong>Deduction detail by category:</strong></td></tr>
-    ${deductionRows || `<tr><td class="line">—</td><td class="label" colspan="2"><span style="color:#71717A;">No category-mapped expenses yet.</span></td></tr>`}
+    <tr><td class="line">-</td><td class="label" colspan="2"><strong>Deduction detail by category:</strong></td></tr>
+    ${deductionRows || `<tr><td class="line">-</td><td class="label" colspan="2"><span style="color:#71717A;">No category-mapped expenses yet.</span></td></tr>`}
     <tr class="totals"><td class="line">${isC ? "27" : "20"}</td><td class="label">Total deductions</td><td class="amount">${formatCents(input.totals.totalDeductionsCents)}</td></tr>
   </table>
 
@@ -294,8 +294,8 @@ export function renderEntityReturnHTML(input: EntityReturnInput): {
       isC
         ? `<tr class="totals"><td class="line">31</td><td class="label">Total tax (Line 30 × 21%, TCJA flat rate)</td><td class="amount" style="color: #92400e;">${formatCents(corpTax)}</td></tr>`
         : isPartnership
-          ? `<tr><td class="line">—</td><td class="label" colspan="2"><span class="small">Partnership income passes through to partners via Schedule K-1; no federal tax due at the entity level.</span></td></tr>`
-          : `<tr><td class="line">—</td><td class="label" colspan="2"><span class="small">S-Corp ordinary income passes through to shareholders via Schedule K-1; no federal income tax due at the entity level (built-in gains + LIFO recapture taxes computed separately).</span></td></tr>`
+          ? `<tr><td class="line">-</td><td class="label" colspan="2"><span class="small">Partnership income passes through to partners via Schedule K-1; no federal tax due at the entity level.</span></td></tr>`
+          : `<tr><td class="line">-</td><td class="label" colspan="2"><span class="small">S-Corp ordinary income passes through to shareholders via Schedule K-1; no federal income tax due at the entity level (built-in gains + LIFO recapture taxes computed separately).</span></td></tr>`
     }
   </table>
 
@@ -307,7 +307,7 @@ export function renderEntityReturnHTML(input: EntityReturnInput): {
     </div>
     <div>
       <div class="signature-line">Paid preparer signature</div>
-      <div class="small" style="margin-top: 2pt;">${escapeHtml(input.preparer.full_name ?? "")} · PTIN ${escapeHtml(input.preparer.ptin ?? "—")}</div>
+      <div class="small" style="margin-top: 2pt;">${escapeHtml(input.preparer.full_name ?? "")} · PTIN ${escapeHtml(input.preparer.ptin ?? "-")}</div>
     </div>
   </div>
 

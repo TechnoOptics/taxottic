@@ -8,7 +8,7 @@ import { isNativeApp, nativeOAuthSignIn } from "@/lib/capacitor/auth-bridge";
 
 // Identity providers we render on the login page. Each one needs its
 // OAuth credentials registered in the Supabase dashboard
-// (Authentication → Providers) before the click actually works — see
+// (Authentication → Providers) before the click actually works, see
 // SETUP.md "SSO providers" for the per-provider setup steps. Until a
 // provider is enabled in Supabase, clicking its button surfaces a
 // friendly "this provider isn't set up yet" message instead of a raw
@@ -27,7 +27,7 @@ export default function LoginPage() {
   // ({{ .Token }}) alongside the link, and verifyOtp accepts it. This
   // matters for two audiences: (1) anyone who'd rather type a code than
   // bounce to their inbox, and (2) the App Store / Play reviewer, who
-  // can't click a link delivered to a mailbox they don't control — we
+  // can't click a link delivered to a mailbox they don't control, we
   // pair this with a Supabase test OTP on the review account so they
   // sign in with a fixed code. See the App Review notes in App Store
   // Connect. Tracked separately from `status` so a failed code attempt
@@ -42,7 +42,7 @@ export default function LoginPage() {
   // Reveal the 6-digit code field on demand, independent of whether the
   // magic-link send succeeded. Needed because some valid-format emails are
   // rejected by the provider's deliverability check (e.g. an address whose
-  // mailbox doesn't exist) — and the App Store / Play review demo account is
+  // mailbox doesn't exist), and the App Store / Play review demo account is
   // exactly that. The code itself is verified separately (verifyOtp, or the
   // demo-login route), so the send succeeding isn't a prerequisite.
   const [showCodeEntry, setShowCodeEntry] = useState(false);
@@ -53,7 +53,7 @@ export default function LoginPage() {
   // silently auto-resume the last session.
   const [forcePicker, setForcePicker] = useState(false);
   // True when this login page is being served at hq.taxottic.com OR
-  // enterprise.taxottic.com — the two operator hosts. The May 2026
+  // enterprise.taxottic.com, the two operator hosts. The May 2026
   // audit flagged P3: both the consumer and HQ login pages showed
   // the same "Sign in to forecast your taxes." subtitle, which
   // doesn't tell a super-admin landing on an admin host that they're
@@ -73,7 +73,7 @@ export default function LoginPage() {
       // Server-side errors that came back as ?error=... on the
       // /login redirect from /auth/callback (or the upstream
       // provider). The description, when present, has the actual
-      // Supabase/provider message — we surface it as a second line
+      // Supabase/provider message, we surface it as a second line
       // so users (and we, on support) can see what concretely
       // failed without round-tripping through logs.
       const oauthDesc = url.searchParams.get("error_description") ?? "";
@@ -89,7 +89,7 @@ export default function LoginPage() {
         no_code:
           "Sign-in came back without an authorization code. Usually means the OAuth handshake was interrupted; try again.",
         exchange_failed:
-          "Sign-in came back from your provider OK, but we couldn't complete the session. This is often a cookie / PKCE issue — clear cookies for taxottic.com and try again.",
+          "Sign-in came back from your provider OK, but we couldn't complete the session. This is often a cookie / PKCE issue, clear cookies for taxottic.com and try again.",
         // Legacy code path. Kept so old in-flight redirects don't
         // surface as raw "auth" text.
         auth: "Sign-in failed at the final step. Try again or use a different method below.",
@@ -168,7 +168,7 @@ export default function LoginPage() {
         return;
       }
     } catch {
-      // Network hiccup reaching the demo route — fall through to normal OTP.
+      // Network hiccup reaching the demo route, fall through to normal OTP.
     }
 
     const { error } = await supabase.auth.verifyOtp({
@@ -199,7 +199,7 @@ export default function LoginPage() {
     const url = new URL(window.location.href);
     // Host-aware default `next`. On hq.taxottic.com and
     // enterprise.taxottic.com the consumer path /dashboard doesn't
-    // exist — the middleware rewrites it to /admin/dashboard which
+    // exist, the middleware rewrites it to /admin/dashboard which
     // 404s. Default to "/" instead, which the middleware then routes
     // to the right /admin/** root (hq → /admin, enterprise →
     // /admin/firms). The auditor's Round-2 finding that
@@ -217,7 +217,7 @@ export default function LoginPage() {
     // prompt=select_account so Google/Microsoft show their account picker
     // even if the browser still has a live session for that provider.
     // Both Google and Microsoft honor this OAuth 2.0 prompt value.
-    // (Apple silently ignores it; that's fine — Apple's flow always
+    // (Apple silently ignores it; that's fine, Apple's flow always
     // includes its own picker.)
     const queryParams: Record<string, string> | undefined = forcePicker
       ? { prompt: "select_account" }
@@ -234,7 +234,7 @@ export default function LoginPage() {
     // PR #52: stash `next` in a short-lived same-origin cookie instead
     // of passing it through Supabase's `redirect_to`. Supabase's
     // redirect-URL allowlist is strict about exact matches on the
-    // post-Google leg — passing `?next=/dashboard` caused fall-back to
+    // post-Google leg, passing `?next=/dashboard` caused fall-back to
     // Site URL (taxottic.com), which bypassed our /auth/callback handler
     // entirely and left users on /login?next=/. The cookie-based path
     // means `redirect_to` is always the exact allowlisted URL.
@@ -269,7 +269,7 @@ export default function LoginPage() {
                   ? "Apple"
                   : "Google";
             setError(
-              `${label} sign-in isn't fully set up yet — try Google, a passkey, or a magic link below.`,
+              `${label} sign-in isn't fully set up yet, try Google, a passkey, or a magic link below.`,
             );
           } else {
             setError(r.error);
@@ -305,7 +305,7 @@ export default function LoginPage() {
               ? "Apple"
               : "Google";
         setError(
-          `${label} sign-in isn't fully set up yet — try Google, a passkey, or a magic link below.`,
+          `${label} sign-in isn't fully set up yet, try Google, a passkey, or a magic link below.`,
         );
         return;
       }
@@ -351,7 +351,7 @@ export default function LoginPage() {
               there, clicking takes the user through the consent
               flow. If it isn't enabled yet, the oauth() handler
               catches the error and renders a friendly "Provider X
-              isn't set up yet — try Google or a passkey" message
+              isn't set up yet, try Google or a passkey" message
               inline. We deliberately don't hide unconfigured
               providers behind env flags anymore: rendering them as
               available-options-with-fallbacks is a clearer signal
@@ -449,7 +449,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Always-available code entry — works even if the magic-link
+          {/* Always-available code entry, works even if the magic-link
               send was rejected (e.g. a non-deliverable address like the
               store-review demo account). The code is verified separately. */}
           {!linkSent && !showCodeEntry ? (
@@ -466,7 +466,7 @@ export default function LoginPage() {
             <div className="mt-4 grid gap-3">
               <p className="text-sm text-forest-700">
                 {linkSent
-                  ? "Check your inbox for the sign-in link — or enter the 6-digit code from that email below."
+                  ? "Check your inbox for the sign-in link, or enter the 6-digit code from that email below."
                   : "Enter your 6-digit sign-in code below."}
               </p>
               <form onSubmit={verifyCode} className="grid gap-3" noValidate>
@@ -597,7 +597,7 @@ function SsoGlyph({ kind }: { kind: "google" | "microsoft" | "apple" }) {
       fill="currentColor"
       className="shrink-0"
     >
-      {/* Apple logo — single path. currentColor so it works on
+      {/* Apple logo, single path. currentColor so it works on
           both light (forest text) and dark (cream text) themes. */}
       <path d="M17.05 12.04c-.03-3.04 2.49-4.5 2.6-4.57-1.42-2.07-3.62-2.36-4.4-2.39-1.87-.19-3.65 1.1-4.6 1.1-.95 0-2.42-1.07-3.97-1.04-2.04.03-3.94 1.19-4.99 3.02-2.13 3.69-.54 9.13 1.52 12.13 1.01 1.47 2.21 3.12 3.78 3.06 1.52-.06 2.09-.99 3.92-.99 1.83 0 2.36.99 3.97.96 1.65-.03 2.68-1.49 3.68-2.97 1.17-1.71 1.64-3.36 1.66-3.45-.04-.02-3.18-1.22-3.21-4.85zM14.06 3.51c.83-1 1.39-2.4 1.23-3.79-1.19.05-2.63.79-3.49 1.78-.77.88-1.45 2.29-1.27 3.66 1.33.1 2.69-.67 3.53-1.65z" />
     </svg>

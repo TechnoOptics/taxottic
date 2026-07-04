@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation";
  *
  * The `action` prop must be the non-redirecting batch flavor
  * (`uploadCsvBatch` in app/c/[publicId]/import/actions.ts). The
- * dropzone navigates the user manually after the queue completes — to
+ * dropzone navigates the user manually after the queue completes, to
  * the LAST successful import-review page, or back to the import page
  * with the error inline if anything failed.
  */
@@ -30,7 +30,7 @@ type BatchResult =
 type Props = {
   /** Hidden field value embedded into every upload. */
   companyId: string;
-  /** Non-redirecting batch action — returns a JSON-friendly result. */
+  /** Non-redirecting batch action, returns a JSON-friendly result. */
   action: (formData: FormData) => Promise<BatchResult>;
 };
 
@@ -112,7 +112,7 @@ export function CsvDropZone({ companyId, action }: Props) {
         }
       }
 
-      // After the queue: navigate. Errors get priority — if any file
+      // After the queue: navigate. Errors get priority, if any file
       // failed, land on the import page with the inline banner. If
       // every file succeeded, send the user to the last import's
       // review page (a common pattern: upload 3 months of statements,
@@ -144,24 +144,24 @@ export function CsvDropZone({ companyId, action }: Props) {
           className="input"
         >
           <option value="business_checking">
-            Business checking — negative amounts are expenses
+            Business checking, negative amounts are expenses
           </option>
           <option value="business_savings">
-            Business savings — negative amounts are expenses
+            Business savings, negative amounts are expenses
           </option>
           <option value="checking">
-            Personal checking — negative amounts are expenses
+            Personal checking, negative amounts are expenses
           </option>
           <option value="savings">
-            Personal savings — negative amounts are expenses
+            Personal savings, negative amounts are expenses
           </option>
           <option value="credit">
-            Credit card — positive amounts are charges
+            Credit card, positive amounts are charges
           </option>
           <option value="other">Other</option>
         </select>
         {/* Be explicit about the credit-card sign convention because
-            picking the wrong type silently inflates the deduction —
+            picking the wrong type silently inflates the deduction -
             checking-mode treats negatives as expenses, credit-mode
             treats positives as expenses. Got bit by this on the
             user's "activity (2).csv" upload May 23 2026 where a card
@@ -171,7 +171,7 @@ export function CsvDropZone({ companyId, action }: Props) {
         {accountType === "credit" ? (
           <span className="text-[11px] text-ink-muted leading-relaxed">
             <strong>Credit card:</strong> positive amounts are charges
-            (real expenses). Negative amounts are refunds — held back
+            (real expenses). Negative amounts are refunds, held back
             for your review. &quot;Mobile payments&quot; / &quot;Payment - Thank
             you&quot; rows are your balance being paid from another
             account; we skip those automatically.
@@ -181,7 +181,7 @@ export function CsvDropZone({ companyId, action }: Props) {
             <strong>Checking / savings:</strong> negative amounts are
             expenses (money out), positive amounts are income. If
             you&apos;re importing a credit-card statement, pick
-            &quot;Credit card&quot; instead — the sign convention is
+            &quot;Credit card&quot; instead, the sign convention is
             inverted.
           </span>
         )}

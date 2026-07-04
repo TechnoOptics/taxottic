@@ -13,13 +13,13 @@ const BASE = "/calculators/self-employment-tax";
 
 type Params = Promise<{ state: string }>;
 
-// Static-generate all 50 states + DC at build time — fast, cached, and
+// Static-generate all 50 states + DC at build time, fast, cached, and
 // ideal for SEO (every state URL is a real prerendered page).
 export function generateStaticParams() {
   return CALC_STATES.map((s) => ({ state: s.slug }));
 }
 
-// Only the 51 generated slugs are valid — any other slug returns a real
+// Only the 51 generated slugs are valid, any other slug returns a real
 // 404 from the framework instead of dynamically rendering a shell. Keeps
 // crawlers from ever indexing a garbage state URL.
 export const dynamicParams = false;
@@ -32,11 +32,11 @@ export async function generateMetadata({
   const { state } = await params;
   const st = stateBySlug(state);
   if (!st) return {};
-  const title = `Self-Employment Tax in ${st.name} (2026) — Calculator`;
+  const title = `Self-Employment Tax in ${st.name} (2026), Calculator`;
   const snap = stateSnapshot(st.code);
   const description = snap.hasIncomeTax
-    ? `How much self-employment tax you'll owe in ${st.name}: federal self-employment tax (15.3%) plus federal and ${st.name} state income tax. Free calculator with real ${st.name} numbers — no sign-up.`
-    : `${st.name} has no state income tax, so a self-employed ${st.name} resident owes only federal income tax and self-employment tax (15.3%). Free calculator with real numbers — no sign-up.`;
+    ? `How much self-employment tax you'll owe in ${st.name}: federal self-employment tax (15.3%) plus federal and ${st.name} state income tax. Free calculator with real ${st.name} numbers, no sign-up.`
+    : `${st.name} has no state income tax, so a self-employed ${st.name} resident owes only federal income tax and self-employment tax (15.3%). Free calculator with real numbers, no sign-up.`;
   const ogUrl = `/api/og/calc?calc=se-tax&label=${encodeURIComponent(
     `Self-Employment Tax · ${st.name}`,
   )}`;
@@ -93,11 +93,11 @@ export default async function StateSelfEmploymentTaxPage({
       q: `Does ${st.name} have a state income tax for the self-employed?`,
       a: snap.hasIncomeTax
         ? `Yes. On top of federal income tax and the 15.3% self-employment tax, ${st.name} taxes your self-employment income at its state rates. On a $100,000 self-employed income, ${st.name}'s income tax works out to roughly ${(snap.stateBiteAt100k * 100).toFixed(1)}% of income in this estimate.`
-        : `No. ${st.name} has no personal income tax on earned income, so a self-employed ${st.name} resident owes only federal income tax and the 15.3% self-employment tax — there's no state income tax to add on top.`,
+        : `No. ${st.name} has no personal income tax on earned income, so a self-employed ${st.name} resident owes only federal income tax and the 15.3% self-employment tax, there's no state income tax to add on top.`,
     },
     {
       q: `How much self-employment tax will I owe in ${st.name}?`,
-      a: `Self-employment tax itself is the same everywhere — 15.3% of 92.35% of your net profit, for Social Security and Medicare. What changes by state is the income-tax layer on top. Use the calculator above with your own numbers${
+      a: `Self-employment tax itself is the same everywhere, 15.3% of 92.35% of your net profit, for Social Security and Medicare. What changes by state is the income-tax layer on top. Use the calculator above with your own numbers${
         snap.hasIncomeTax ? `; it already applies ${st.name}'s brackets.` : `; ${st.name} adds no state income tax.`
       }`,
     },
@@ -193,12 +193,12 @@ export default async function StateSelfEmploymentTaxPage({
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           {snap.hasIncomeTax
-            ? `What a freelancer or 1099 contractor really owes in ${st.name} — the 15.3% self-employment tax, federal income tax, and ${st.name}'s state income tax. Real numbers, instant, no sign-up.`
-            : `${st.name} has no state income tax — so a self-employed ${st.name} resident owes only federal income tax and the 15.3% self-employment tax. See your number instantly, no sign-up.`}
+            ? `What a freelancer or 1099 contractor really owes in ${st.name}, the 15.3% self-employment tax, federal income tax, and ${st.name}'s state income tax. Real numbers, instant, no sign-up.`
+            : `${st.name} has no state income tax, so a self-employed ${st.name} resident owes only federal income tax and the 15.3% self-employment tax. See your number instantly, no sign-up.`}
         </p>
       </section>
 
-      {/* Real, per-state computed example table — the substance that makes
+      {/* Real, per-state computed example table, the substance that makes
           each state page unique rather than a templated shell. */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
         <div className="card p-5 sm:p-6">
@@ -256,12 +256,12 @@ export default async function StateSelfEmploymentTaxPage({
             {st.name} self-employment tax, in plain terms
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
-            Self-employment tax — 15.3% of your net earnings for Social Security
-            and Medicare — is federal and the same in every state. What differs
+            Self-employment tax, 15.3% of your net earnings for Social Security
+            and Medicare, is federal and the same in every state. What differs
             in {st.name} is the income-tax layer.{" "}
             {snap.hasIncomeTax
               ? `${st.name} taxes your self-employment profit at its own rates on top of federal income tax, so your all-in effective rate runs a few points higher than in a no-income-tax state. The calculator above already applies ${st.name}'s brackets, so the number you see is the real one.`
-              : `Because ${st.name} has no personal income tax, your only two layers are federal income tax and self-employment tax — nothing at the state level. That makes ${st.name} one of the lighter states for self-employed taxes, though you still owe the full federal SE tax.`}
+              : `Because ${st.name} has no personal income tax, your only two layers are federal income tax and self-employment tax, nothing at the state level. That makes ${st.name} one of the lighter states for self-employed taxes, though you still owe the full federal SE tax.`}
           </p>
         </div>
 

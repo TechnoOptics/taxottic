@@ -14,7 +14,7 @@ import {
  * each one into account_transactions (the same table used by Plaid
  * sync). The existing review-and-apply flow on /c/[publicId]/banks
  * then lets the user categorize Stripe charges as income, Stripe fees
- * as expenses, refunds as adjustments, etc. — without any
+ * as expenses, refunds as adjustments, etc., without any
  * Stripe-specific UI code.
  *
  * Cursor model: we store `bank_connections.cursor` = the last
@@ -22,7 +22,7 @@ import {
  * /v1/balance_transactions accepts `starting_after=<id>` for cursor
  * pagination, so the next sync picks up exactly where we left off.
  * Idempotent because account_transactions.external_transaction_id is
- * UNIQUE — re-syncing the same window inserts zero new rows.
+ * UNIQUE, re-syncing the same window inserts zero new rows.
  *
  * Cost: balance_transactions reads are not separately billed by
  * Stripe; this is just rate-limited API access. We still apply the
@@ -43,7 +43,7 @@ import {
  */
 // Internal Stripe accounting events that don't represent real
 // economic activity for the user. Every type here is a movement
-// inside Stripe's books (or between Stripe and the user's bank) —
+// inside Stripe's books (or between Stripe and the user's bank) -
 // importing them either double-counts revenue or creates
 // equal-and-opposite noise pairs in the review queue.
 //
@@ -99,7 +99,7 @@ export async function syncStripeConnection(
   // stray sync click (or a cron) after Disconnect re-set
   // status="active" on the row, leaving a zombie connection that the
   // consumer page hid (deleted_at filter) but other surfaces still
-  // counted. The disconnect is the canonical signal of intent —
+  // counted. The disconnect is the canonical signal of intent -
   // honour it across every sync pathway.
   if (conn.deleted_at) {
     return { added: 0, skipped: true };
@@ -156,7 +156,7 @@ export async function syncStripeConnection(
   // One-shot recovery: if Stripe rejects the stored cursor, we re-list
   // once from the year start (see the catch in the loop below).
   let retriedWithoutCursor = false;
-  // Only import transactions from the current calendar year — anything
+  // Only import transactions from the current calendar year, anything
   // older would never roll into THIS year's forecast and is pure noise
   // in the review queue. The cutoff slides automatically each Jan 1.
   const yearStartUnix = Math.floor(
@@ -245,8 +245,8 @@ export async function syncStripeConnection(
       // Safety net: if a cursor page still fails (e.g. a stale cursor
       // Stripe can't paginate from), recover ONCE by dropping the cursor
       // and re-listing from the year start. The UNIQUE index on
-      // external_transaction_id makes the re-list idempotent — no
-      // duplicates — so this favours correctness over a wasted call.
+      // external_transaction_id makes the re-list idempotent, no
+      // duplicates, so this favours correctness over a wasted call.
       if (lastSeen && !retriedWithoutCursor) {
         retriedWithoutCursor = true;
         lastSeen = null;
@@ -303,7 +303,7 @@ export async function syncStripeConnection(
       });
 
     if (rows.length > 0) {
-      // ON CONFLICT (external_transaction_id) DO NOTHING — the unique
+      // ON CONFLICT (external_transaction_id) DO NOTHING, the unique
       // index gives us idempotency for free. PostgREST exposes this
       // as upsert with onConflict + ignoreDuplicates.
       const { error: insertErr, count } = await admin
@@ -321,7 +321,7 @@ export async function syncStripeConnection(
     if (!list.has_more) break;
   }
 
-  // Auto-apply pass — bring Stripe into parity with the Plaid sync.
+  // Auto-apply pass, bring Stripe into parity with the Plaid sync.
   // Without this, charge/payment rows sit in account_transactions
   // forever with user_action=null and the user's income page +
   // forecast show NOTHING. Mirror the Plaid pattern: for every
@@ -348,7 +348,7 @@ export async function syncStripeConnection(
 
   // Subscription REVENUE syncs as one row per charge, each tagged with the
   // invoice's billing cadence. Collapse each subscription (recurring_key) so
-  // only its latest charge projects forward — otherwise the same sub is
+  // only its latest charge projects forward, otherwise the same sub is
   // counted once per month it has billed. Idempotent.
   await applyRecurringIncomeDetection(
     admin,
@@ -423,7 +423,7 @@ function enrichedDescription(
 /**
  * After a sync writes raw balance_transactions into
  * account_transactions, this pass routes them into the same
- * monthly_income / monthly_expenses tables the Plaid sync feeds —
+ * monthly_income / monthly_expenses tables the Plaid sync feeds -
  * so the income page and the forecast actually reflect the data.
  *
  * Classification follows the user's rule:
@@ -439,14 +439,14 @@ function enrichedDescription(
  *
  * We only touch rows still in user_action='pending', so re-runs are
  * idempotent. Includes existing pending rows from older syncs, not
- * just freshly-inserted ones — that means a single sync click after
+ * just freshly-inserted ones, that means a single sync click after
  * deploying this feature back-fills everything that was sitting
  * un-applied.
  *
  * NOTE: monthly_expenses.category_code is FK-constrained to
  * deduction_categories(code). The valid codes are the Schedule-C
  * buckets seeded in 20260428000005_seed_deduction_categories.sql
- * ("bank_fees", "taxes_licenses", "other_business", etc.) — NOT the
+ * ("bank_fees", "taxes_licenses", "other_business", etc.), NOT the
  * T-codes from lib/deductions/master.ts. An earlier version of this
  * function wrote "T048" and the FK silently rejected every row, so
  * expenses never showed up. Keep this mapping aligned with the seed.
@@ -460,7 +460,7 @@ function enrichedDescription(
  * Conservative on purpose: returns "one_off" unless it can read a clear
  * weekly / monthly / quarterly interval. An annual subscription (one
  * hit per tax year) and any unreadable shape both stay "one_off", so a
- * mis-read can never OVER-project the forecast — the worst case is we
+ * mis-read can never OVER-project the forecast, the worst case is we
  * miss a recurrence, which the user can still set by hand.
  */
 function subscriptionRecurrence(
@@ -601,7 +601,7 @@ async function autoApplyPendingStripe(args: {
       continue;
     }
 
-    // cents > 0 here — outflow. Per the user's classification rule,
+    // cents > 0 here, outflow. Per the user's classification rule,
     // any non-refund, non-withdrawal outflow is an expense. Map to
     // the best-matching Schedule-C bucket.
     if (cents > 0) {
@@ -646,7 +646,7 @@ async function autoApplyPendingStripe(args: {
  * conservative: known Stripe-fee shapes go to "bank_fees", tax goes
  * to "taxes_licenses", and unknown outflow types fall through to
  * "other_business" so the forecast still reflects them. Note: do NOT
- * return T-codes here — those aren't in the FK target table.
+ * return T-codes here, those aren't in the FK target table.
  */
 function stripeExpenseCode(type: string): string {
   switch (type) {
@@ -712,7 +712,7 @@ function buildIncomeNote(args: {
     (description && !description.startsWith("Stripe ")
       ? description.trim()
       : null);
-  if (what) parts.push(`— ${what}`);
+  if (what) parts.push(`- ${what}`);
   return parts.join(" ");
 }
 
@@ -734,7 +734,7 @@ function buildExpenseNote(args: {
     (description && !description.startsWith("Stripe ")
       ? description.trim()
       : null);
-  if (what) parts.push(`— ${what}`);
+  if (what) parts.push(`- ${what}`);
   return parts.join(" ");
 }
 

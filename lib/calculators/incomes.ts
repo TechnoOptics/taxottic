@@ -5,7 +5,7 @@ import { neutralForecastInput, toCents } from "./base-input";
  * Data for the programmatic "self-employment tax on $X" pages. Each page
  * answers a specific, high-volume query ("how much is self-employment
  * tax on 100k") with a REAL computed breakdown from the same forecast
- * engine as the calculators — so every page carries a unique, accurate
+ * engine as the calculators, so every page carries a unique, accurate
  * number rather than a templated shell.
  *
  * These are the national/federal baseline (no state), because the search
@@ -16,7 +16,7 @@ import { neutralForecastInput, toCents } from "./base-input";
 
 const TAX_YEAR = 2026;
 
-// Curated breakpoints a real self-employed person actually searches for —
+// Curated breakpoints a real self-employed person actually searches for -
 // round numbers spanning side-hustle to high-earner. Kept deliberately
 // finite (and dynamicParams=false on the route) so we generate a bounded
 // set of substantive pages rather than an unbounded doorway-page farm.
@@ -38,7 +38,7 @@ export function parseIncomeSlug(slug: string): number | null {
   return isCalcIncome(n) ? n : null;
 }
 
-/** $100,000 — for headings/copy. No cents; these are round figures. */
+/** $100,000, for headings/copy. No cents; these are round figures. */
 export function formatDollars(n: number): string {
   return `$${n.toLocaleString("en-US")}`;
 }

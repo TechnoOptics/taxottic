@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 /**
- * Compact "Sign in" affordance for the marketing header — a circular
+ * Compact "Sign in" affordance for the marketing header, a circular
  * icon button instead of the text link it replaces. On narrow phone
  * viewports "Sign in" as plain text next to the full wordmark had no
  * room to breathe and wrapped onto two lines ("Sign\nin"), reading as

@@ -46,7 +46,7 @@ const FAQ_LD = {
       name: "Who can claim the home office deduction?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Self-employed people who use part of their home regularly and exclusively as their principal place of business — or to meet clients, or as a separate structure used for the business. W-2 employees generally cannot claim it on their federal return through 2025 under current law. The space must be used only for business: a kitchen table you also eat at doesn't qualify.",
+        text: "Self-employed people who use part of their home regularly and exclusively as their principal place of business, or to meet clients, or as a separate structure used for the business. W-2 employees generally cannot claim it on their federal return through 2025 under current law. The space must be used only for business: a kitchen table you also eat at doesn't qualify.",
       },
     },
     {
@@ -54,7 +54,7 @@ const FAQ_LD = {
       name: "How do I calculate the home office deduction?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Two methods. The simplified method deducts $5 per square foot of office space up to 300 square feet — a maximum of $1,500, no receipts required. The actual-expense method takes the business-use percentage of your home (office square footage ÷ total square footage) and applies it to rent or mortgage interest, utilities, insurance, repairs, and depreciation. Pick whichever gives the bigger deduction; you can switch year to year. See IRS Publication 587 and Form 8829.",
+        text: "Two methods. The simplified method deducts $5 per square foot of office space up to 300 square feet, a maximum of $1,500, no receipts required. The actual-expense method takes the business-use percentage of your home (office square footage ÷ total square footage) and applies it to rent or mortgage interest, utilities, insurance, repairs, and depreciation. Pick whichever gives the bigger deduction; you can switch year to year. See IRS Publication 587 and Form 8829.",
       },
     },
     {
@@ -62,7 +62,7 @@ const FAQ_LD = {
       name: "Can I claim a home office if I'm a W-2 employee?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Generally no, not on your federal return. The unreimbursed-employee home office deduction is suspended for employees through 2025 under the Tax Cuts and Jobs Act. If you're self-employed — even as a side gig — you can still claim it for that business. A few states allow an employee version on the state return, so check your state's rules.",
+        text: "Generally no, not on your federal return. The unreimbursed-employee home office deduction is suspended for employees through 2025 under the Tax Cuts and Jobs Act. If you're self-employed, even as a side gig, you can still claim it for that business. A few states allow an employee version on the state return, so check your state's rules.",
       },
     },
   ],
@@ -88,22 +88,22 @@ export default function Page() {
         <H2>The two-part qualifying test</H2>
         <P>
           To deduct a home office, the space has to pass both halves of one
-          rule — <strong>regular and exclusive use</strong>:
+          rule, <strong>regular and exclusive use</strong>:
         </P>
         <UL>
           <LI>
-            <strong>Regular</strong> — you use it for business on a continuing
+            <strong>Regular</strong>, you use it for business on a continuing
             basis, not just now and then.
           </LI>
           <LI>
-            <strong>Exclusive</strong> — that area is used <em>only</em> for
+            <strong>Exclusive</strong>, that area is used <em>only</em> for
             business. A spare room that&apos;s your office passes; the dining
             table you also eat dinner at does not.
           </LI>
         </UL>
         <P>
-          It also has to be your <strong>principal place of business</strong> —
-          where you do most of your work or your management and admin — or a
+          It also has to be your <strong>principal place of business</strong> -
+          where you do most of your work or your management and admin, or a
           place you regularly meet clients, or a separate structure (like a
           detached studio). A dedicated corner of a room can count if it&apos;s
           used exclusively for work.
@@ -112,7 +112,7 @@ export default function Page() {
         <H2>Method 1: simplified</H2>
         <P>
           Deduct <strong>$5 per square foot</strong> of office space, up to
-          300 sq ft — so a maximum of <strong>$1,500</strong>. No receipts, no
+          300 sq ft, so a maximum of <strong>$1,500</strong>. No receipts, no
           depreciation tracking. Best when your office is small or your home
           costs are modest.
         </P>
@@ -124,7 +124,7 @@ export default function Page() {
         </P>
         <UL>
           <LI>Rent, or mortgage interest and property tax</LI>
-          <LI>Utilities — electricity, gas, water, internet</LI>
+          <LI>Utilities, electricity, gas, water, internet</LI>
           <LI>Homeowners or renters insurance</LI>
           <LI>Repairs and maintenance that benefit the whole home</LI>
           <LI>Depreciation (homeowners)</LI>
@@ -137,7 +137,7 @@ export default function Page() {
         <Callout>
           You can choose whichever method gives the larger deduction each year.
           Taxottic stores your office and total square footage once, then
-          computes both methods and applies the better one to your forecast —
+          computes both methods and applies the better one to your forecast -
           so you don&apos;t leave money on the table.
         </Callout>
 
@@ -145,7 +145,7 @@ export default function Page() {
         <H3FAQ q="Who can claim the home office deduction?">
           Self-employed people who use part of their home{" "}
           <strong>regularly and exclusively</strong> as their principal place
-          of business — or to meet clients, or as a separate structure used for
+          of business, or to meet clients, or as a separate structure used for
           the business. W-2 employees generally cannot claim it on their
           federal return through 2025 under current law. The space must be used
           only for business: a kitchen table you also eat at doesn&apos;t
@@ -153,7 +153,7 @@ export default function Page() {
         </H3FAQ>
         <H3FAQ q="How do I calculate the home office deduction?">
           Two methods. The <strong>simplified method</strong> deducts $5 per
-          square foot of office space up to 300 square feet — a maximum of
+          square foot of office space up to 300 square feet, a maximum of
           $1,500, no receipts required. The <strong>actual-expense method</strong>{" "}
           takes the business-use percentage of your home (office square footage
           ÷ total square footage) and applies it to rent or mortgage interest,
@@ -164,8 +164,8 @@ export default function Page() {
         <H3FAQ q="Can I claim a home office if I'm a W-2 employee?">
           Generally no, not on your federal return. The unreimbursed-employee
           home office deduction is suspended for employees through 2025 under
-          the Tax Cuts and Jobs Act. If you&apos;re self-employed — even as a
-          side gig — you can still claim it for that business. A few states
+          the Tax Cuts and Jobs Act. If you&apos;re self-employed, even as a
+          side gig, you can still claim it for that business. A few states
           allow an employee version on the state return, so check your
           state&apos;s rules.
         </H3FAQ>

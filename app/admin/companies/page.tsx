@@ -5,8 +5,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { deleteCompanyHard } from "../actions";
 import { TypedConfirmDelete } from "@/components/admin/TypedConfirmDelete";
 
-// Super-admin companies list — every company, including soft-deleted
-// (deleted_at not null) — with a per-row Permanently delete action.
+// Super-admin companies list, every company, including soft-deleted
+// (deleted_at not null), with a per-row Permanently delete action.
 //
 // This is the LAST step beyond the recycle bin: soft-deleted companies
 // are still recoverable from /settings/recycle-bin. Hard-delete here is
@@ -65,7 +65,7 @@ export default async function AdminCompaniesPage() {
         {softDeleted.length > 0 ? (
           <>
             <h2 className="display text-xl text-forest-900 mt-8">
-              In recycle bin — soft-deleted ({softDeleted.length})
+              In recycle bin, soft-deleted ({softDeleted.length})
             </h2>
             <p className="text-xs text-ink-muted">
               Still recoverable from the owner&apos;s /settings/recycle-bin.
@@ -97,7 +97,7 @@ function CompanyList({ rows }: { rows: CompanyRow[] }) {
               {c.name || "(unnamed)"}
             </div>
             <div className="text-xs text-ink-muted mt-0.5">
-              {c.entity_type ?? "—"} · created{" "}
+              {c.entity_type ?? "-"} · created{" "}
               {new Date(c.created_at).toLocaleDateString()}
               {c.deleted_at
                 ? ` · soft-deleted ${new Date(

@@ -5,7 +5,7 @@ import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 
 /**
  * Log a charitable donation to a 501(c)(3). Personal §170 giving, stored
- * at the user (donor) level in charitable_donations — deliberately NOT a
+ * at the user (donor) level in charitable_donations, deliberately NOT a
  * business expense, so it never inflates the company forecast. The first
  * logged gift earns the "Philanthropist" badge (awarded by
  * lib/badges/evaluate.ts on the next dashboard render). We encourage
@@ -39,7 +39,7 @@ export async function logCharitableDonation(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath(`/c/${publicId}/deductions`);
-  // The badge engine runs on the dashboard render — revalidate it so the
+  // The badge engine runs on the dashboard render, revalidate it so the
   // Philanthropist medal pops next time the user lands there.
   revalidatePath("/dashboard");
 }

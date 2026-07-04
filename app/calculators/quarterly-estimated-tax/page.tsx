@@ -11,9 +11,9 @@ import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/pa
 
 const SITE = "https://taxottic.com";
 const SLUG = "quarterly-estimated-tax";
-const TITLE = "Quarterly Estimated Tax Calculator (2026) — Free";
+const TITLE = "Quarterly Estimated Tax Calculator (2026), Free";
 const DESCRIPTION =
-  "Free quarterly estimated tax calculator. Estimate your 2026 IRS quarterly payments from your self-employment income — all four due dates, federal + state, self-employment tax, and QBI. No sign-up.";
+  "Free quarterly estimated tax calculator. Estimate your 2026 IRS quarterly payments from your self-employment income, all four due dates, federal + state, self-employment tax, and QBI. No sign-up.";
 const KEYWORDS = [
   "quarterly estimated tax calculator",
   "estimated tax calculator",
@@ -82,7 +82,7 @@ const FAQ_LD = {
       name: "Who has to pay quarterly estimated taxes?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Generally anyone who expects to owe $1,000 or more at filing time and doesn't have enough tax withheld — most freelancers, 1099 contractors, gig workers, sole proprietors, and small-business owners. If all your income is W-2 with adequate withholding, you usually don't need to.",
+        text: "Generally anyone who expects to owe $1,000 or more at filing time and doesn't have enough tax withheld, most freelancers, 1099 contractors, gig workers, sole proprietors, and small-business owners. If all your income is W-2 with adequate withholding, you usually don't need to.",
       },
     },
     {
@@ -90,7 +90,7 @@ const FAQ_LD = {
       name: "When are quarterly estimated taxes due in 2026?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The four federal deadlines are roughly April 15, June 15, September 15, and January 15 of the following year. They don't line up with calendar quarters — Q2 covers only two months — so it's easy to under-save for the June payment. This calculator shows each due date with the amount to send.",
+        text: "The four federal deadlines are roughly April 15, June 15, September 15, and January 15 of the following year. They don't line up with calendar quarters, Q2 covers only two months, so it's easy to under-save for the June payment. This calculator shows each due date with the amount to send.",
       },
     },
     {
@@ -106,7 +106,7 @@ const FAQ_LD = {
       name: "How is each quarterly payment calculated?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Estimate your total tax for the year — self-employment tax plus federal and state income tax, minus credits and any withholding — then divide across the remaining quarters. This calculator does the full-year estimate first, then splits it into the four payments for you.",
+        text: "Estimate your total tax for the year, self-employment tax plus federal and state income tax, minus credits and any withholding, then divide across the remaining quarters. This calculator does the full-year estimate first, then splits it into the four payments for you.",
       },
     },
   ],
@@ -173,7 +173,7 @@ export default async function QuarterlyEstimatedTaxCalculatorPage({
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           Work out what to send the IRS each quarter on your self-employment
-          income — all four payments, each due date, federal and state, so you
+          income, all four payments, each due date, federal and state, so you
           set the money aside before it&rsquo;s due and dodge the underpayment
           penalty. Instant, no sign-up.
         </p>
@@ -190,15 +190,15 @@ export default async function QuarterlyEstimatedTaxCalculatorPage({
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             When you&rsquo;re self-employed, no employer withholds tax from your
-            pay — so the IRS asks you to send it in four times a year instead.
+            pay, so the IRS asks you to send it in four times a year instead.
             The catch: the deadlines don&rsquo;t match calendar quarters (the
             second &ldquo;quarter&rdquo; is only two months long), and if you
             under-pay, you can owe an{" "}
             <strong className="text-forest-800">underpayment penalty</strong> on
-            top of the tax. The fix is boring but bulletproof — estimate the
+            top of the tax. The fix is boring but bulletproof, estimate the
             year, hit the{" "}
             <strong className="text-forest-800">safe harbor</strong> (90% of
-            this year or 100–110% of last year), and move a fixed slice of every
+            this year or 100-110% of last year), and move a fixed slice of every
             payment into savings so the money&rsquo;s already there when the due
             date lands.
           </p>

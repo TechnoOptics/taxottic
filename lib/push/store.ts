@@ -1,4 +1,4 @@
-// Production PushStore — Supabase service client (the standard
+// Production PushStore, Supabase service client (the standard
 // validate-session-then-service-write pattern; RLS still protects
 // direct session-client access). Kept behind the PushStore interface
 // so lib/push/send.ts stays unit-testable with an in-memory fake.
@@ -27,7 +27,7 @@ export function createSupabasePushStore(admin: any): PushStore {
       payload: PushPayload,
     ) {
       // INSERT ... ON CONFLICT (user_id, dedupe_key) DO NOTHING, then
-      // .select() — Supabase returns the inserted row only when this
+      // .select(), Supabase returns the inserted row only when this
       // call actually won the insert. Empty ⇒ already sent. This is
       // the atomic claim; no read-then-write race.
       const { data, error } = await admin
@@ -38,7 +38,7 @@ export function createSupabasePushStore(admin: any): PushStore {
         )
         .select("id");
       if (error) {
-        // A unique violation here means a concurrent claim won — treat
+        // A unique violation here means a concurrent claim won, treat
         // as "already sent" (don't double-notify on the error path).
         return false;
       }

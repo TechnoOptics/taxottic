@@ -9,7 +9,7 @@ import {
 } from "@/lib/firm/oauth/providers";
 import { logFirmActivity } from "@/lib/firm/activity";
 
-// /api/oauth/zoom/callback — receives ?code + ?state from Zoom,
+// /api/oauth/zoom/callback, receives ?code + ?state from Zoom,
 // exchanges code for tokens, persists in
 // firm_calendar_integrations, redirects to the calendar settings
 // page with a success or error flash.

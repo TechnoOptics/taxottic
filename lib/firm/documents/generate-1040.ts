@@ -3,7 +3,7 @@
 // Pulls together the per-tax-year facts we already have on the
 // client and renders an HTML draft that matches the 2025 Form 1040
 // layout closely enough for the preparer to review side-by-side
-// with the IRS form. It is a DRAFT — the watermark is bold on
+// with the IRS form. It is a DRAFT, the watermark is bold on
 // every page so nobody mistakes the output for a filed return.
 //
 // What's automated:
@@ -14,7 +14,7 @@
 //   - Total income (Line 9), AGI (Line 11)
 //   - Standard vs itemized deduction choice (Line 12)
 //   - QBI deduction placeholder (Line 13)
-//   - Federal income tax (Line 16) — bracket math via the same
+//   - Federal income tax (Line 16), bracket math via the same
 //     2025 constants the forecast engine uses
 //   - Federal withholding (Line 25a)
 //   - Estimated payments (Line 26)
@@ -68,7 +68,7 @@ export type Form1040Input = {
     otherIncomeCents: number;
   };
   adjustments: {
-    /** Deductible portion of SE tax — half of SE tax. */
+    /** Deductible portion of SE tax, half of SE tax. */
     halfSeTaxCents: number;
     /** Solo 401k / SEP-IRA contributions. */
     retirementContribCents: number;
@@ -316,7 +316,7 @@ export function renderForm1040HTML(input: Form1040Input): {
           `<tr>
             <td class="line">${escapeHtml(num)}</td>
             <td class="label">${escapeHtml(label)}</td>
-            <td class="amount">${typeof val === "number" ? (val > 0 ? formatCents(val) : "—") : escapeHtml(val)}</td>
+            <td class="amount">${typeof val === "number" ? (val > 0 ? formatCents(val) : "-") : escapeHtml(val)}</td>
           </tr>`,
       )
       .join("");
@@ -325,7 +325,7 @@ export function renderForm1040HTML(input: Form1040Input): {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Form 1040 draft — ${escapeHtml(input.taxpayer.full_name ?? "Taxpayer")} ${input.taxYear}</title>
+<title>Form 1040 draft, ${escapeHtml(input.taxpayer.full_name ?? "Taxpayer")} ${input.taxYear}</title>
 <style>
   @page { margin: 0.75in; }
   body { font-family: Georgia, "Times New Roman", serif; color: #18181B; font-size: 11pt; line-height: 1.5; }
@@ -347,19 +347,19 @@ export function renderForm1040HTML(input: Form1040Input): {
 <body>
   <div class="header">
     <div>
-      <div class="draft-badge">DRAFT — for preparer review</div>
-      <h1>Form 1040 — U.S. Individual Income Tax Return</h1>
+      <div class="draft-badge">DRAFT, for preparer review</div>
+      <h1>Form 1040, U.S. Individual Income Tax Return</h1>
       <div class="small">Tax year ${input.taxYear} · prepared by ${escapeHtml(input.firm.name)}</div>
     </div>
   </div>
 
   <h2>Taxpayer</h2>
   <table>
-    <tr><td class="line">—</td><td class="label">Name</td><td class="amount">${escapeHtml(input.taxpayer.full_name ?? "—")}</td></tr>
-    <tr><td class="line">—</td><td class="label">Social security number</td><td class="amount">${escapeHtml(input.taxpayer.ssn_placeholder)}</td></tr>
-    <tr><td class="line">—</td><td class="label">Filing status</td><td class="amount">${escapeHtml(fsLabel[input.filingStatus])}</td></tr>
-    <tr><td class="line">—</td><td class="label">Dependents</td><td class="amount">${input.dependents}</td></tr>
-    ${input.spouse ? `<tr><td class="line">—</td><td class="label">Spouse</td><td class="amount">${escapeHtml(input.spouse.full_name ?? "—")} · ${escapeHtml(input.spouse.ssn_placeholder)}</td></tr>` : ""}
+    <tr><td class="line">-</td><td class="label">Name</td><td class="amount">${escapeHtml(input.taxpayer.full_name ?? "-")}</td></tr>
+    <tr><td class="line">-</td><td class="label">Social security number</td><td class="amount">${escapeHtml(input.taxpayer.ssn_placeholder)}</td></tr>
+    <tr><td class="line">-</td><td class="label">Filing status</td><td class="amount">${escapeHtml(fsLabel[input.filingStatus])}</td></tr>
+    <tr><td class="line">-</td><td class="label">Dependents</td><td class="amount">${input.dependents}</td></tr>
+    ${input.spouse ? `<tr><td class="line">-</td><td class="label">Spouse</td><td class="amount">${escapeHtml(input.spouse.full_name ?? "-")} · ${escapeHtml(input.spouse.ssn_placeholder)}</td></tr>` : ""}
   </table>
 
   <h2>Income</h2>
@@ -402,7 +402,7 @@ export function renderForm1040HTML(input: Form1040Input): {
   <table>
     ${rows([
       ["16", "Federal income tax (2025 brackets)", incomeTax],
-      ["23", "Other taxes (Schedule SE, etc.) — self-employment tax", input.payments.seTaxCents],
+      ["23", "Other taxes (Schedule SE, etc.), self-employment tax", input.payments.seTaxCents],
       ["24", "Total tax (Line 16 + Line 23)", totalTax],
       ["25a", "Federal income tax withheld from W-2", input.payments.federalWithholdingCents],
       ["26", "2025 estimated tax payments", input.payments.estimatedPaymentsCents],
@@ -413,14 +413,14 @@ export function renderForm1040HTML(input: Form1040Input): {
   ${
     refundCents > 0
       ? `<table class="totals">
-          <tr><td class="line">34</td><td class="label">Amount overpaid — refund</td><td class="amount" style="color: #166534;">${formatCents(refundCents)}</td></tr>
+          <tr><td class="line">34</td><td class="label">Amount overpaid, refund</td><td class="amount" style="color: #166534;">${formatCents(refundCents)}</td></tr>
         </table>`
       : owedCents > 0
         ? `<table class="totals">
             <tr><td class="line">37</td><td class="label">Amount you owe</td><td class="amount" style="color: #92400e;">${formatCents(owedCents)}</td></tr>
           </table>`
         : `<table class="totals">
-            <tr><td class="line">—</td><td class="label">Balance due / refund</td><td class="amount">$0.00</td></tr>
+            <tr><td class="line">-</td><td class="label">Balance due / refund</td><td class="amount">$0.00</td></tr>
           </table>`
   }
 
@@ -432,7 +432,7 @@ export function renderForm1040HTML(input: Form1040Input): {
     </div>
     <div>
       <div class="signature-line">Paid preparer signature</div>
-      <div class="small" style="margin-top: 2pt;">${escapeHtml(input.preparer.full_name ?? "")} · PTIN ${escapeHtml(input.preparer.ptin ?? "—")}</div>
+      <div class="small" style="margin-top: 2pt;">${escapeHtml(input.preparer.full_name ?? "")} · PTIN ${escapeHtml(input.preparer.ptin ?? "-")}</div>
     </div>
   </div>
 

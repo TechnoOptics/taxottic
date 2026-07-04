@@ -4,7 +4,7 @@ import { CALC_STATES } from "@/lib/calculators/states";
 import { CALC_INCOMES } from "@/lib/calculators/incomes";
 
 /**
- * /sitemap.xml — host-aware.
+ * /sitemap.xml, host-aware.
  *
  *   - taxottic.com: full marketing + legal sitemap.
  *   - hq.taxottic.com / enterprise.taxottic.com: empty sitemap.
@@ -14,7 +14,7 @@ import { CALC_INCOMES } from "@/lib/calculators/incomes";
  *     without leaking admin URLs.
  *
  * App routes behind auth (dashboard, settings, /c/[publicId]/*) are
- * intentionally omitted from the consumer sitemap — they redirect to
+ * intentionally omitted from the consumer sitemap, they redirect to
  * /login when unauthed and have no public-search value.
  *
  * lastModified uses build time as a conservative default; we don't
@@ -26,7 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const isAdminHost =
     host === "hq.taxottic.com" || host === "enterprise.taxottic.com";
   if (isAdminHost) {
-    // Empty sitemap on admin hosts — no URLs to advertise.
+    // Empty sitemap on admin hosts, no URLs to advertise.
     return [];
   }
   const baseUrl =
@@ -34,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
   // The two audience toggles aren't separate URLs as far as Google is
-  // concerned — the home page canonical resolves them both back to
+  // concerned, the home page canonical resolves them both back to
   // `/` (May 2026 audit P2). Keep `/` as the single sitemap entry for
   // the marketing root so we don't accidentally signal a separate
   // indexable URL per ?audience=value.
@@ -81,7 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.7,
     },
-    // NB: /firms is intentionally NOT listed — next.config.ts 308-redirects
+    // NB: /firms is intentionally NOT listed, next.config.ts 308-redirects
     // it to /book?for=firm (a vanity URL for firm proposals), and a sitemap
     // must advertise the final destination, not a redirect. The destination
     // is the entry above.
@@ -112,7 +112,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Free interactive calculators. Tool-shaped pages targeting the
   // highest-volume, highest-intent tax queries ("self-employment tax
-  // calculator", "1099 tax calculator"). High priority — interactive
+  // calculator", "1099 tax calculator"). High priority, interactive
   // tools rank well, earn backlinks, and demonstrate the product's
   // value instantly, so this is a top organic-acquisition surface.
   const calculators: MetadataRoute.Sitemap = [

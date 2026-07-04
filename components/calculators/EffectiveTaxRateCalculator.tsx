@@ -14,7 +14,7 @@ import {
 import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
 
 /**
- * Effective tax rate calculator — the general-audience tool.
+ * Effective tax rate calculator, the general-audience tool.
  *
  * Unlike the self-employment calculators, this one accepts W-2 salary
  * OR self-employment income, and its headline is the effective rate
@@ -223,7 +223,7 @@ export function EffectiveTaxRateCalculator({
               Your <strong className="text-forest-800">effective rate</strong>{" "}
               is what you actually pay across all your income. Your{" "}
               <strong className="text-forest-800">marginal rate</strong> is what
-              the next dollar you earn is taxed at — always higher, and the one
+              the next dollar you earn is taxed at, always higher, and the one
               that matters for decisions like a raise or an extra contract.
             </p>
 

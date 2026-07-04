@@ -1,17 +1,17 @@
-// Mileage trip segmentation — the intellectual core.
+// Mileage trip segmentation, the intellectual core.
 //
 // Pure functions: given an ordered stream of GPS points, produce
 // driving "trips" (the breadcrumb trails) using the rule the
 // business described:
 //
-//   - A trip is movement at vehicular speed — faster than a human
+//   - A trip is movement at vehicular speed, faster than a human
 //     can sustainably run.
 //   - A trip ENDS when the device becomes stationary (stays within
 //     a small radius) for >= 5 minutes, OR there is a long capture
 //     gap (GPS off / arrived).
 //   - Tiny noise trips are discarded.
 //
-// No device, no DB, no network — 100% unit-testable. The native
+// No device, no DB, no network, 100% unit-testable. The native
 // background-geolocation layer (a later phase, needs a build) only
 // has to stream raw points to /api/mileage/ingest; ALL the
 // intelligence lives here so it can be proven correct in CI.
@@ -21,7 +21,7 @@ export type GpsPoint = {
   lng: number;
   /** Epoch milliseconds. */
   ts: number;
-  /** Device-reported ground speed, m/s. Optional — we derive it
+  /** Device-reported ground speed, m/s. Optional, we derive it
    *  from consecutive points when absent. */
   speedMps?: number;
   /** Horizontal accuracy in metres, if known (used to ignore
@@ -56,7 +56,7 @@ export type Classification = "business" | "personal" | "unclassified";
 
 /** Above this sustained speed the device is in a vehicle, not a
  *  person walking/running. Elite marathon pace ≈ 5.7 m/s; a short
- *  sprint peaks ~10–12 m/s but never sustains across GPS sampling.
+ *  sprint peaks ~10-12 m/s but never sustains across GPS sampling.
  *  8 m/s ≈ 17.9 mph ≈ 28.8 km/h: comfortably vehicular, robust to
  *  a fast cyclist too. */
 export const DRIVING_SPEED_MPS = 8;
@@ -66,7 +66,7 @@ export const STATIONARY_RADIUS_M = 60;
 
 /** "Parked" threshold used OUTSIDE the segmenter. The ingest/finalizer
  *  treats a live trip as finished (and materializes it) once the most
- *  recent staged point is at least this old — i.e. the phone has gone
+ *  recent staged point is at least this old, i.e. the phone has gone
  *  quiet because the user parked. Kept short (5 min) so a finished
  *  drive shows up promptly. This is NOT what splits a drive mid-stream;
  *  that's TRIP_END_DWELL_MS. */
@@ -75,16 +75,16 @@ export const STATIONARY_DWELL_MS = 5 * 60 * 1000;
 /** In-stream "the trip actually ended here" dwell. While segmenting a
  *  CONTINUOUS point stream, the open trip closes only once the vehicle
  *  has stayed within STATIONARY_RADIUS_M for at least this long. Set
- *  well above a normal traffic stop — gridlock, a long red light, a
- *  train crossing, a drawbridge — so sitting in traffic for several
+ *  well above a normal traffic stop, gridlock, a long red light, a
+ *  train crossing, a drawbridge, so sitting in traffic for several
  *  minutes does NOT chop one drive into several. A real destination
  *  stop lasts longer than this and still splits correctly.
  *
- *  Was 5 min, which mistook ~5–10 min traffic stops for arrivals and
+ *  Was 5 min, which mistook ~5-10 min traffic stops for arrivals and
  *  fragmented a single drive into multiple trips (user report, Jun 2026).
  *  Note: a genuine park where the phone then goes quiet still closes
  *  promptly via the ingest's STATIONARY_DWELL_MS parked-test + the
- *  closeOpenAtEnd tail-close — this longer dwell only matters while
+ *  closeOpenAtEnd tail-close, this longer dwell only matters while
  *  points keep arriving (which is exactly the traffic case). */
 export const TRIP_END_DWELL_MS = 10 * 60 * 1000;
 
@@ -119,7 +119,7 @@ export function haversineMeters(a: LatLng, b: LatLng): number {
  *  IMPORTANT (2026-05-26 forensic finding): the Android @capgo plugin
  *  has been observed to report `speed: 0` for every fix even during
  *  real driving. Production staging captured 195 fixes across 6 hours
- *  with `speed_mps = 0` for 190/195 of them — but the user was
+ *  with `speed_mps = 0` for 190/195 of them, but the user was
  *  actually parked the whole time, so we couldn't tell which way the
  *  bug cut. The risk for the upcoming real drive: if the plugin
  *  reports 0 during movement, the previous version's `cur.speedMps
@@ -158,12 +158,12 @@ function totalMeters(points: GpsPoint[]): number {
  * the caller should sort first for correctness.
  *
  * Options:
- *   closeOpenAtEnd — when true (the default, matches the original
+ *   closeOpenAtEnd, when true (the default, matches the original
  *     behavior), any trip still open after the last point is
  *     force-closed and emitted. Used in test scenarios and when the
  *     caller is sure the stream is "complete". Set to FALSE when
  *     segmenting a still-growing live stream (e.g., a 30s heartbeat
- *     during an active drive) — without this, the same in-progress
+ *     during an active drive), without this, the same in-progress
  *     trip gets emitted on every heartbeat, then re-emitted as a
  *     fragment as new points arrive, producing N tiny pieces instead
  *     of one continuous trip. The ingest endpoint should pass `false`
@@ -235,7 +235,7 @@ export function segmentTrips(
         !stationaryAnchor ||
         haversineMeters(stationaryAnchor, cur) > STATIONARY_RADIUS_M
       ) {
-        // New settle point — restart the dwell clock here.
+        // New settle point, restart the dwell clock here.
         stationaryAnchor = cur;
         // Still tack the point on; the trip's true end is the
         // anchor, trimmed below if the dwell completes.
@@ -280,7 +280,7 @@ export function withinPlace(p: GpsPoint, place: Place): boolean {
 }
 
 /**
- * Suggest a classification from known places. NOT authoritative —
+ * Suggest a classification from known places. NOT authoritative -
  * the driver / account-manager confirms. Heuristic:
  *   - touches an office/client place at either end  → business
  *   - both ends are home                            → personal

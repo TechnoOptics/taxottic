@@ -149,7 +149,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
     (a, t) => a + Number(t.deduction_cents ?? 0),
     0,
   );
-  // Days since the most recent business drive — drives the "log your
+  // Days since the most recent business drive, drives the "log your
   // miles" nudge's recency gate (hide it while they're actively
   // tracking; only resurface after a 7-day lapse). null = none logged.
   // ISO timestamps sort chronologically, so a string max gives the most
@@ -170,7 +170,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
   // The entire YTD/projected assembly + the two forecast() runs now
   // live in lib/tax/company-forecast.ts so the watch glance computes
   // the IDENTICAL numbers (they can't drift). Behaviour-preserving
-  // move — same inputs, same engine calls, same rounding.
+  // move, same inputs, same engine calls, same rounding.
   const {
     ytdResult,
     result,
@@ -204,7 +204,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
   });
 
   // Tiny pure closures the scorecard / year-end blocks below use.
-  // Rebuilt from the helper's returned rows (no logic duplication —
+  // Rebuilt from the helper's returned rows (no logic duplication -
   // identical predicates, same isRecurring).
   const sumOneOff = (
     rows: ExpenseRow[],
@@ -264,7 +264,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
   // user is actually likely to capture for the year.
   //
   // The May 2026 audit's High #5: the scorecard was showing GROSS
-  // captured dollars for meals — but the meals category is labelled
+  // captured dollars for meals, but the meals category is labelled
   // "Meals (50% deductible)" and elsewhere on the page we report the
   // post-50% number. Run every captured amount through
   // `deductibleAmountForCategory` so the scorecard tracks DEDUCTIBLE
@@ -295,13 +295,13 @@ export default async function ForecastPage({ params }: { params: Params }) {
   // applies Home Office via the Quick Apply modal (or sets Vehicle
   // in Profile), business_profiles.has_home_office / has_vehicle
   // flips true, the forecast pipeline ALREADY includes the
-  // deduction — but the scorecard tile stayed empty because
+  // deduction, but the scorecard tile stayed empty because
   // nothing landed in capturedByCode.
   //
   // Home Office: simplified-method floor ($5/sqft, cap 300 sqft →
   // max $1,500/yr). Same figure /my-deductions surfaces. Sentinel
   // of 1¢ only if sqft is genuinely 0/null AND has_home_office is
-  // true — keep the binary "captured?" honest in the degenerate
+  // true, keep the binary "captured?" honest in the degenerate
   // case.
   if (businessProfile?.has_home_office) {
     const existing = capturedByCode.get("home_office") ?? 0;
@@ -316,7 +316,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
   // Vehicle / car_truck: the EARLIER version of this fix planted a
   // 1¢ sentinel any time has_vehicle was true. That ticked the
   // tile as captured even when the user had zero classified-
-  // business mileage AND zero monthly_expenses on car_truck —
+  // business mileage AND zero monthly_expenses on car_truck -
   // i.e., the deduction had genuinely captured $0. The user
   // rightly flagged this ("how can it be awarded when it has a
   // zero for car / truck expense?").
@@ -411,7 +411,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
       monthlyForExpenses((r) => r.category_code === "self_employed_health"),
       currentMonth,
     );
-  // Charitable giving logged this year (personal §170) — drives the
+  // Charitable giving logged this year (personal §170), drives the
   // "give back / earn the Philanthropist medal" year-end suggestion.
   const { data: donationRows } = await supabase
     .from("charitable_donations")
@@ -471,7 +471,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
         {/* This page is always the whole-company forecast. Managers get
             a link to the full department/employee breakdown; a
             department lead gets the same link but only sees their own
-            department there — instead of duplicating either view
+            department there, instead of duplicating either view
             inline here. */}
         {isManager || role === "lead" ? (
           <div className="mt-4">
@@ -487,7 +487,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </div>
         ) : null}
 
-        {/* Fixed top-right pill — out of flow so it never pushes content down. */}
+        {/* Fixed top-right pill, out of flow so it never pushes content down. */}
         {hasConnections ? (
           <SyncFreshness
             publicId={publicId}
@@ -508,7 +508,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             Banner copy is conditional on whether the user actually has
             data that paces (recurring rows). When everything logged is
             one-off and there's no recurring data, "if you keep up at
-            this pace" is misleading — the math doesn't pace one-offs,
+            this pace" is misleading, the math doesn't pace one-offs,
             it counts them once. Resolves the May 2026 audit's Critical
             #3 framing concern (the math behind each panel is correct;
             the labels just over-promised). */}
@@ -733,7 +733,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
           </div>
         </div>
 
-        {/* Month by month — kept visible directly under the estimate as the
+        {/* Month by month, kept visible directly under the estimate as the
             clearest single overview. Everything more detailed is collapsed
             below to keep the center uncluttered. */}
         <div className="mt-6 card p-5 sm:p-7">
@@ -776,7 +776,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
         {/* Breakdown */}
         <Collapsible
           title="Tax breakdown"
-          subtitle="Federal income tax, self-employment tax, and state — line by line."
+          subtitle="Federal income tax, self-employment tax, and state, line by line."
         >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card title="Federal income tax">
@@ -793,7 +793,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             ) : null}
             <RowKV label="Marginal rate" value={pct(result.marginalRate)} />
             {/* "Effective rate" under the FIT tile is FIT / taxable
-                income — the audit's High #4 caught the UI rendering
+                income, the audit's High #4 caught the UI rendering
                 the combined total/gross figure here, which produced
                 things like "Federal income tax $0, Effective rate 11%".
                 Combined effective rate moved to its own row below
@@ -850,7 +850,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
         {result.taxableIncomeCents > 0 && company.entity_type !== "c_corp" ? (
           <Collapsible
             title="Your federal tax brackets"
-            subtitle={`How your projected taxable income fills the ${taxYear} brackets — only income in each band is taxed at that band's rate.`}
+            subtitle={`How your projected taxable income fills the ${taxYear} brackets, only income in each band is taxed at that band's rate.`}
           >
             <BracketLadder
               brackets={federalBrackets}
@@ -896,9 +896,9 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 Open the tax-savings playbook
               </h2>
               <p className="mt-1 text-sm text-ink-soft leading-relaxed max-w-2xl">
-                A personalized list of goals — 401(k) maxing, HSA, SEP-IRA,
+                A personalized list of goals, 401(k) maxing, HSA, SEP-IRA,
                 Solo 401(k), Backdoor Roth, 529 plans, charitable bunching, EV
-                credits, energy upgrades — each with step-by-step instructions
+                credits, energy upgrades, each with step-by-step instructions
                 on exactly how to execute. None of these are new business
                 expenses; they&apos;re strategies that absorb your tax bill.
               </p>
@@ -911,7 +911,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
         {/* Quarterly estimated payment schedule.
             A quarter that ended BEFORE this company was created should
-            not surface as "Past — you missed $X." The business didn't
+            not surface as "Past, you missed $X." The business didn't
             exist; there's no catch-up to do. The May 2026 audit
             (Medium #2) caught a today-created company showing Q1 as
             "PAST $629" with a "Catch up on Q1" prompt; that was
@@ -922,7 +922,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
           <Collapsible
             kicker="Quarterly estimates"
             title="Pay-as-you-go schedule"
-            subtitle="The IRS expects taxes throughout the year — what to send each quarter (W-2 withholding counts as paid evenly)."
+            subtitle="The IRS expects taxes throughout the year, what to send each quarter (W-2 withholding counts as paid evenly)."
           >
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {result.quarterlyEstimates.map((q) => {
@@ -964,7 +964,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
                     </div>
                     {isPreFormation ? (
                       <div className="text-[10px] text-ink-muted mt-1 leading-snug">
-                        Company was created after this quarter — no catch-up
+                        Company was created after this quarter, no catch-up
                         needed.
                       </div>
                     ) : null}
@@ -983,7 +983,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 IRS Direct Pay
               </a>
               . Past-quarter amounts (other than pre-formation quarters)
-              are what you should have paid by then — if you missed them,
+              are what you should have paid by then, if you missed them,
               sending the catch-up before the next due date trims any
               underpayment penalty.
             </p>
@@ -1073,7 +1073,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             className="mt-8 lg:mt-0 lg:sticky lg:max-h-[calc(100vh_-_var(--app-header-h,4rem)_-_3rem)] lg:overflow-y-auto space-y-4"
             style={{ top: "calc(var(--app-header-h, 4rem) + 1.5rem)" }}
           >
-            {/* Year-end summary — promoted to the top of the right rail so
+            {/* Year-end summary, promoted to the top of the right rail so
                 it's one tap away (also linked from the collapsed "Work with a
                 CPA" section further down). This is the CPA-ready export. */}
             <div className="card p-5 border-gold-300/60">
@@ -1084,8 +1084,8 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 Year-end summary
               </h2>
               <p className="text-xs text-ink-muted mt-1 leading-relaxed">
-                A clean, CPA-ready breakdown — income, expenses by Schedule C
-                line, and IRC citations — ready to hand off or export.
+                A clean, CPA-ready breakdown, income, expenses by Schedule C
+                line, and IRC citations, ready to hand off or export.
               </p>
               <Link
                 href={`/c/${publicId}/export?year=${taxYear}`}
@@ -1312,7 +1312,7 @@ function Stat({
   );
 }
 
-// Collapsible titled section — native <details> (no client JS, works in this
+// Collapsible titled section, native <details> (no client JS, works in this
 // server component). Used to compress the secondary forecast sections so the
 // center column stays uncluttered; the user expands what they want to see.
 function Collapsible({
@@ -1383,10 +1383,10 @@ function RowKV({ label, value }: { label: string; value: string }) {
 // Bar colours as explicit hex (not Tailwind bg-* classes): the forecast
 // renders on the dark navy theme where the primary brand navy (#243150)
 // was nearly the same as the card, making income bars invisible. Income
-// uses the brand's LIGHTER blue (forest-400) — on-brand and legible on the
+// uses the brand's LIGHTER blue (forest-400), on-brand and legible on the
 // dark card; expenses use brand gold.
 const BAR_INCOME = "#5e6f9c"; // forest-400 (brand blue)
-const BAR_EXPENSE = "#c4a25d"; // gold-500 (deeper — reads on white and dark)
+const BAR_EXPENSE = "#c4a25d"; // gold-500 (deeper, reads on white and dark)
 
 function MonthlyBars({
   income,
@@ -1450,14 +1450,14 @@ function compactCents(cents: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Deduction pie — SVG ring of where the write-offs come from + a legend.
+// Deduction pie, SVG ring of where the write-offs come from + a legend.
 // Lives in the (narrow, ~20rem) sidebar, so it stacks: ring on top, legend
 // below. Raw SVG fills aren't touched by the dark-theme remap, so every
 // colour is a LIGHT tone that reads on the dark card. DISTINCT HUES (not
 // shades of the same two colours) so adjacent slices never look alike.
 // ---------------------------------------------------------------------------
 const DONUT_COLORS = [
-  "#c4a25d", // gold (deeper — reads on white + dark)
+  "#c4a25d", // gold (deeper, reads on white + dark)
   "#3f95ad", // teal
   "#d1728d", // rose
   "#5fae72", // green
@@ -1477,12 +1477,12 @@ function DeductionDonut({
   const rawFracs = slices.map((s) => s.cents / total);
 
   // Real deduction mixes are often lopsided (one dominant category, several
-  // small ones) — at a 22px stroke width, a true-proportion slice under a
+  // small ones), at a 22px stroke width, a true-proportion slice under a
   // few percent shrinks to a hairline that's invisible or unclickable-
   // looking, which read as "the chart is broken." Give every non-zero
   // slice a MINIMUM visual arc width, borrowed proportionally from the
   // larger slices, so nothing disappears. The legend's percentages/dollar
-  // amounts stay tied to the TRUE fractions — only the ring's arc widths
+  // amounts stay tied to the TRUE fractions, only the ring's arc widths
   // are adjusted.
   const MIN_FRAC = 0.045;
   const deficit = rawFracs.reduce((a, f) => a + Math.max(0, MIN_FRAC - f), 0);
@@ -1563,7 +1563,7 @@ function DeductionDonut({
 }
 
 // ---------------------------------------------------------------------------
-// Bracket ladder — how taxable income fills the federal ordinary brackets.
+// Bracket ladder, how taxable income fills the federal ordinary brackets.
 // ---------------------------------------------------------------------------
 function BracketLadder({
   brackets,
@@ -1595,7 +1595,7 @@ function BracketLadder({
       rangeLabel:
         upper == null
           ? `${compactCents(lower)}+`
-          : `${compactCents(lower)} – ${compactCents(upper)}`,
+          : `${compactCents(lower)}, ${compactCents(upper)}`,
       fillPct: Math.max(0, Math.min(100, fillPct)),
       isMarginal,
       taxedHere: filled,
@@ -1637,7 +1637,7 @@ function BracketLadder({
             </span>
           </div>
           <span className="text-[11px] text-right tabular-nums text-ink-muted">
-            {r.taxedHere > 0 ? compactCents(r.taxedHere) : "—"}
+            {r.taxedHere > 0 ? compactCents(r.taxedHere) : "-"}
           </span>
         </div>
       ))}

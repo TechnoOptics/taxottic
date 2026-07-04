@@ -77,7 +77,7 @@ function buildCard(sp: URLSearchParams): Card {
         eyebrow: "Quarterly Estimated Tax · 2026",
         emptyHeadline: ["Free Quarterly", "Estimated Tax Calculator"],
         emptyBlurb:
-          "Work out what to send the IRS each quarter on your self-employment income — all four payments and due dates.",
+          "Work out what to send the IRS each quarter on your self-employment income, all four payments and due dates.",
         path: "calculators/quarterly-estimated-tax",
         result: null,
       };
@@ -97,7 +97,7 @@ function buildCard(sp: URLSearchParams): Card {
         eyebrow: "1099 Tax · 2026",
         emptyHeadline: ["Free 1099", "Tax Calculator"],
         emptyBlurb:
-          "See what you owe on 1099-NEC and 1099-K income — self-employment tax, federal + state, and quarterly payments.",
+          "See what you owe on 1099-NEC and 1099-K income, self-employment tax, federal + state, and quarterly payments.",
         path: "calculators/1099-tax",
         result: null,
       };
@@ -117,7 +117,7 @@ function buildCard(sp: URLSearchParams): Card {
         eyebrow: "Mileage Deduction · 2026",
         emptyHeadline: ["Free Mileage", "Deduction Calculator"],
         emptyBlurb:
-          "Turn your business miles into a tax deduction at the 2026 IRS rate — and see roughly what it saves you.",
+          "Turn your business miles into a tax deduction at the 2026 IRS rate, and see roughly what it saves you.",
         path: "calculators/mileage-deduction",
         result: null,
       };
@@ -162,7 +162,7 @@ function buildCard(sp: URLSearchParams): Card {
         eyebrow: "Effective Tax Rate · 2026",
         emptyHeadline: ["Free Effective", "Tax Rate Calculator"],
         emptyBlurb:
-          "See what you actually pay — effective rate, marginal bracket, and after-tax take-home. W-2 or self-employment.",
+          "See what you actually pay, effective rate, marginal bracket, and after-tax take-home. W-2 or self-employment.",
         path: "calculators/effective-tax-rate",
         result: null,
       };
@@ -202,7 +202,7 @@ function buildCard(sp: URLSearchParams): Card {
         eyebrow: "Self-Employment Tax · 2026",
         emptyHeadline: ["Free Self-Employment", "Tax Calculator"],
         emptyBlurb:
-          "See what you'll owe on 1099 income — self-employment tax, federal + state, and quarterly payments. No sign-up.",
+          "See what you'll owe on 1099 income, self-employment tax, federal + state, and quarterly payments. No sign-up.",
         path: "calculators/self-employment-tax",
         result: null,
       };
@@ -222,7 +222,7 @@ function buildCard(sp: URLSearchParams): Card {
 
 export function GET(req: NextRequest) {
   const card = buildCard(req.nextUrl.searchParams);
-  // Optional eyebrow override — used by the per-state pages to show
+  // Optional eyebrow override, used by the per-state pages to show
   // "Self-Employment Tax · California" instead of the generic label.
   const labelOverride = req.nextUrl.searchParams.get("label");
   if (labelOverride) card.eyebrow = labelOverride.slice(0, 60);

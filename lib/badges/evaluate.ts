@@ -10,11 +10,11 @@ import { BADGES } from "./catalog";
  * Returns the codes that should pop the celebration overlay ONCE:
  *   1. Insert any newly-earned badges (no-op if already present).
  *   2. UPDATE … SET celebrated_at = now() WHERE celebrated_at IS NULL
- *      RETURNING badge_code — atomically claim the celebration window.
+ *      RETURNING badge_code, atomically claim the celebration window.
  *
  * The celebrated_at column was added in
  * 20260520000001_badges_celebrated_at. Before that, the contract relied
- * on "newly inserted = newly celebrated" — which silently re-fired on
+ * on "newly inserted = newly celebrated", which silently re-fired on
  * every dashboard render if the insert ever raced or returned cached
  * existence in an unexpected order. The explicit flag makes the
  * one-shot semantics atomic and survives reload mid-celebration.
@@ -84,7 +84,7 @@ export async function evaluateBadges(
       .from("invitations")
       .select("*", { count: "exact", head: true })
       .eq("invited_by", userId),
-    // A logged BUSINESS drive — the actual mileage-deduction milestone,
+    // A logged BUSINESS drive, the actual mileage-deduction milestone,
     // distinct from the "vehicle" badge which only checks the profile
     // flag. Keyed on driver_user_id (mileage_trips has no user_id).
     supabase
@@ -129,7 +129,7 @@ export async function evaluateBadges(
     .filter((e) => !have.has(e.badge_code))
     .map((e) => ({ user_id: userId, badge_code: e.badge_code }));
 
-  // Phase 1 — insert any newly-earned badges. Best-effort: if the
+  // Phase 1, insert any newly-earned badges. Best-effort: if the
   // insert fails (RLS quirk in a page-render context, transient DB
   // error, etc.) we still want to claim+return whatever's
   // uncelebrated below, so don't bail out here.
@@ -144,11 +144,11 @@ export async function evaluateBadges(
         });
       }
     } catch {
-      // ignore — atomic claim below is the source of truth
+      // ignore, atomic claim below is the source of truth
     }
   }
 
-  // Phase 2 — atomically claim the celebration window. PostgREST's
+  // Phase 2, atomically claim the celebration window. PostgREST's
   // update().select() returns the rows it just touched, so we get
   // exactly the codes that transitioned from "uncelebrated" to
   // "celebrated" on THIS call. Concurrent renders racing the same

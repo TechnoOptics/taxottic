@@ -92,13 +92,13 @@ export async function unblockUser(formData: FormData) {
 }
 
 /**
- * Permanently delete a user account — hard delete from auth.users.
+ * Permanently delete a user account, hard delete from auth.users.
  *
  * Safety rails (in order):
  *   1. Super-admin gate (requireSuperAdmin).
- *   2. Forever-admin shield — the super_admins allowlist cannot be deleted.
- *   3. Self-delete guard — you cannot delete the account you're signed in as.
- *   4. Typed-email confirmation — the form must include the target's email
+ *   2. Forever-admin shield, the super_admins allowlist cannot be deleted.
+ *   3. Self-delete guard, you cannot delete the account you're signed in as.
+ *   4. Typed-email confirmation, the form must include the target's email
  *      verbatim so a stray button click can't nuke an account.
  *
  * Cascades: the codebase pattern is `references auth.users(id) on delete
@@ -107,7 +107,7 @@ export async function unblockUser(formData: FormData) {
  * auth.admin.deleteUser also revokes refresh tokens and identities.
  *
  * Recovery: NONE. The user must sign up afresh. This is the intended
- * "let me start fresh" affordance — there's no Undo. We log the action
+ * "let me start fresh" affordance, there's no Undo. We log the action
  * to admin_actions for audit.
  */
 export async function deleteUserHard(formData: FormData) {
@@ -142,14 +142,14 @@ export async function deleteUserHard(formData: FormData) {
     throw new Error("This account is on the forever-admin allowlist.");
   }
 
-  // Typed-email confirmation — case-insensitive exact match.
+  // Typed-email confirmation, case-insensitive exact match.
   if (confirmEmail !== targetEmail) {
     throw new Error(
       "Confirmation email does not match. Re-type the user's email exactly.",
     );
   }
 
-  // Hard delete via Supabase Auth admin API — cascades to public.profiles
+  // Hard delete via Supabase Auth admin API, cascades to public.profiles
   // and every other table with `references auth.users(id) on delete cascade`.
   const { error } = await admin.auth.admin.deleteUser(targetId);
   if (error) throw new Error(`Auth delete failed: ${error.message}`);
@@ -162,18 +162,18 @@ export async function deleteUserHard(formData: FormData) {
   });
 
   revalidatePath("/admin");
-  // The target user record no longer exists — redirect away from /admin/user/[id].
+  // The target user record no longer exists, redirect away from /admin/user/[id].
   redirect("/admin");
 }
 
 /**
- * Permanently delete a company — and (via FK cascades) every row that
+ * Permanently delete a company, and (via FK cascades) every row that
  * belongs to it (bank_transactions, mileage_trips, deductions, goals,
  * expenses, income, firm_invoices, firm_stripe_accounts, etc.).
  *
  * Safety rails:
  *   1. Super-admin gate.
- *   2. Typed-name confirmation — the form must include the company's
+ *   2. Typed-name confirmation, the form must include the company's
  *      name verbatim.
  *
  * Cascades: relies on the established `references public.companies(id)

@@ -8,7 +8,7 @@ import { requireFirmContext } from "@/lib/firm/context";
 import { computeReadiness } from "@/lib/dashboard/readiness";
 import { formatCents } from "@/lib/tax/forecast";
 
-// /firm/clients/{engagementId} — deep view of one engaged client.
+// /firm/clients/{engagementId}, deep view of one engaged client.
 //
 // Renders inside the firm cockpit chrome (not the company chrome at
 // /c/{publicId}/*), so the preparer always sees "I'm viewing this
@@ -86,7 +86,7 @@ export default async function FirmClientPage({
     .maybeSingle();
   if (!company || company.deleted_at) notFound();
 
-  // Books snapshot — YTD income + expenses + readiness. Reuses the
+  // Books snapshot, YTD income + expenses + readiness. Reuses the
   // existing helper. Reading the engagement's tax_year so an audit-
   // support engagement on tax year 2024 doesn't accidentally show
   // 2026 income.
@@ -273,7 +273,7 @@ export default async function FirmClientPage({
             sub={
               readiness.hasBankFeed
                 ? `${readiness.triagedTx}/${readiness.totalTx} tx triaged · ${readiness.categoriesUsed}/${readiness.targetCategories} categories`
-                : `${readiness.categoriesUsed}/${readiness.targetCategories} categories — no bank feed`
+                : `${readiness.categoriesUsed}/${readiness.targetCategories} categories, no bank feed`
             }
           />
         </div>
@@ -371,7 +371,7 @@ export default async function FirmClientPage({
           </aside>
         </div>
 
-        {/* Phase-roadmap shortcuts — surfaces that will land in later
+        {/* Phase-roadmap shortcuts, surfaces that will land in later
             phases. We render them now as disabled cards so firms see
             the planned scope without thinking the page is half-built. */}
         <section className="mt-8">

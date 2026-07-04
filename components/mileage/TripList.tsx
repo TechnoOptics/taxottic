@@ -284,7 +284,7 @@ function TripCard({
             />
           ) : null}
         </div>
-        {/* Delete affordance. Two-tap with confirm — destructive
+        {/* Delete affordance. Two-tap with confirm, destructive
             actions should never be one click on a touch device. */}
         {confirmingDelete ? (
           <div className="flex gap-1 shrink-0">
@@ -334,7 +334,7 @@ function TripCard({
             is the trip's actual classification. An unclassified drive
             shows NOTHING selected (the ask: the pill must never be
             pre-selected). Tapping one sets the classification.
-          - "Review" is NOT a classification — it's an action that loads
+          - "Review" is NOT a classification, it's an action that loads
             this trip's route onto the shared map and scrolls there. It
             fills in only while THIS trip is the one being reviewed, and
             only one trip can be in review at a time (the parent owns
@@ -399,7 +399,7 @@ function TripCard({
         </button>
       </div>
 
-      {/* Business picker — only when the user belongs to more than one
+      {/* Business picker, only when the user belongs to more than one
           company. Routes this drive to the right business; the IRS
           deduction is unchanged (rate-based). Auto-submits on change. */}
       {companies.length > 1 ? (

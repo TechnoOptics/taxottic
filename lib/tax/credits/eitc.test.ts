@@ -6,7 +6,7 @@ import { computeEitcCents } from "./eitc";
  *
  * Sources for the expected values:
  *   - IRS Rev. Proc. 2025-32 § 4.06 (2026 EITC parameters)
- *   - IRS Pub 596 (worked examples — typically the 2024 edition for
+ *   - IRS Pub 596 (worked examples, typically the 2024 edition for
  *     2025 tax year; for 2026 we cross-check against the phase-in /
  *     plateau / phase-out formula directly)
  *   - The phase-in math: credit_at_plateau = max_credit
@@ -33,7 +33,7 @@ const ZERO_EI = {
   earnedIncomeCents: 0,
 };
 
-describe("EITC — 2026 maximum credit (plateau)", () => {
+describe("EITC, 2026 maximum credit (plateau)", () => {
   it("single, 0 kids, earned income at the plateau → $664 max credit", () => {
     const res = computeEitcCents({
       earnedIncomeCents: 8_680 * 100,
@@ -96,7 +96,7 @@ describe("EITC — 2026 maximum credit (plateau)", () => {
   });
 });
 
-describe("EITC — 2026 phase-in (linear ramp)", () => {
+describe("EITC, 2026 phase-in (linear ramp)", () => {
   it("single, 1 kid, EI = half of phase-in amount → half of max credit", () => {
     // phase-in for 1 kid: max_credit / earned_income_amount = 4427 / 13020 = 34%
     // At earned income = $6,510 (half of $13,020), credit should be
@@ -131,7 +131,7 @@ describe("EITC — 2026 phase-in (linear ramp)", () => {
   });
 });
 
-describe("EITC — 2026 phase-out", () => {
+describe("EITC, 2026 phase-out", () => {
   it("single, 1 kid, AGI exactly at threshold → max credit (no phase-out yet)", () => {
     // Threshold phaseout for 1 kid (single) is $23,890.
     // At earned income $13,020 plateau but AGI right at threshold,
@@ -183,7 +183,7 @@ describe("EITC — 2026 phase-out", () => {
   });
 });
 
-describe("EITC — disqualifiers", () => {
+describe("EITC, disqualifiers", () => {
   it("zero earned income → no credit", () => {
     const res = computeEitcCents({
       ...ZERO_EI,
@@ -234,7 +234,7 @@ describe("EITC — disqualifiers", () => {
   });
 });
 
-describe("EITC — 2025 figures (back-year coverage)", () => {
+describe("EITC, 2025 figures (back-year coverage)", () => {
   // The 2025 max for 3+ kids per Rev. Proc. 2024-40 § 4.06 is $8,046,
   // which is what the engine should return for a 2025 forecast.
   it("HoH, 3 kids, 2025 plateau → $8,046 (not the 2026 $8,231)", () => {

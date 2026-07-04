@@ -1,9 +1,9 @@
-// Client-side reverse geocoding for trip endpoints — turns a raw
+// Client-side reverse geocoding for trip endpoints, turns a raw
 // lat/lng into a human "City, ST ZIP" label so the drive log reads
 // "Shakopee, MN 55379 → Mounds View, MN 55112" for reporting.
 //
 // Uses the Google Maps JS Geocoder that's already loaded for the
-// breadcrumb map (no new key, no new script — the existing referrer-
+// breadcrumb map (no new key, no new script, the existing referrer-
 // restricted NEXT_PUBLIC key permits the geocoder, verified on-device).
 //
 // Heavily cached: results are deduped in-memory AND persisted to
@@ -16,9 +16,9 @@
 import { loadGoogleMaps } from "@/lib/maps/google-maps-loader";
 
 export type PlaceLabel = {
-  /** "Shakopee, MN 55379" — the short reporting label. */
+  /** "Shakopee, MN 55379", the short reporting label. */
   short: string;
-  /** "3700 Molina St, Shakopee, MN 55379, USA" — full address, tooltip. */
+  /** "3700 Molina St, Shakopee, MN 55379, USA", full address, tooltip. */
   full: string;
   /** Business / POI name when the endpoint is at one ("Walmart",
    *  "Starbucks", a client's office). null for a residential street or
@@ -40,7 +40,7 @@ function cacheKey(lat: number, lng: number): string {
 
 /** Nearest prominent establishment to a coordinate, via the Places
  *  library (already loaded for the breadcrumb map + address
- *  autocomplete — no new key/script). Lets a trip endpoint read
+ *  autocomplete, no new key/script). Lets a trip endpoint read
  *  "Walmart" instead of just "Shakopee, MN". Returns null when there's
  *  nothing named within ~100 m (a residential street, a highway), so
  *  the caller falls back to the city label. */
@@ -102,7 +102,7 @@ export function reverseGeocode(
       return p;
     }
   } catch {
-    /* private mode / quota — fall through to a live lookup */
+    /* private mode / quota, fall through to a live lookup */
   }
 
   const p = (async (): Promise<PlaceLabel | null> => {
@@ -154,7 +154,7 @@ export function reverseGeocode(
         try {
           window.localStorage.setItem(LS_PREFIX + k, JSON.stringify(label));
         } catch {
-          /* quota — in-memory cache still helps this session */
+          /* quota, in-memory cache still helps this session */
         }
       }
       return label;

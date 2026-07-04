@@ -18,7 +18,7 @@ import { requireFirmContext } from "@/lib/firm/context";
 // destinations from each step.
 
 export const metadata = {
-  title: "Get started — Firm cockpit",
+  title: "Get started, Firm cockpit",
   description: "Set up your firm cockpit in four short steps.",
   robots: { index: false, follow: false },
 };
@@ -128,7 +128,7 @@ export default async function FirmOnboardingPage() {
         </h1>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-xl">
           Four short steps. You can do them in any order, and you
-          can come back later — we&apos;ll keep track of where you
+          can come back later, we&apos;ll keep track of where you
           are.
         </p>
 
@@ -141,7 +141,7 @@ export default async function FirmOnboardingPage() {
           </div>
           <div className="text-sm text-ink-soft">
             {completed === 4
-              ? "All four steps complete — you're ready to invite clients at scale."
+              ? "All four steps complete, you're ready to invite clients at scale."
               : `${4 - completed} ${
                   4 - completed === 1 ? "step" : "steps"
                 } to go before your cockpit is fully wired.`}
@@ -196,7 +196,7 @@ export default async function FirmOnboardingPage() {
           >
             contact@taxottic.com
           </a>
-          {" "}— most setup questions are answered same business
+          {" "}- most setup questions are answered same business
           day.
         </p>
       </section>

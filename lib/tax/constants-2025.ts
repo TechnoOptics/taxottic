@@ -237,7 +237,7 @@ export const QUARTERLY_DUE_DATES_2025: ReadonlyArray<{
   month: number;
   /** Day of month. */
   day: number;
-  /** True for Q4 — falls in the year after the tax year. */
+  /** True for Q4, falls in the year after the tax year. */
   inFollowingYear: boolean;
 }> = [
   { quarter: 1, month: 4, day: 15, inFollowingYear: false },
@@ -249,8 +249,8 @@ export const QUARTERLY_DUE_DATES_2025: ReadonlyArray<{
 // Safe-harbor for avoiding the underpayment-penalty: pay at least
 // the LESSER of (a) 90% of this year's total tax or (b) 100% of
 // last year's tax (110% if prior-year AGI > $150K). We don't have
-// reliable last-year numbers for new users, so we lean on (a) — the
-// 90%-of-current-year rule — and surface a hint when withholding +
+// reliable last-year numbers for new users, so we lean on (a), the
+// 90%-of-current-year rule, and surface a hint when withholding +
 // estimates fall short.
 export const UNDERPAYMENT_SAFE_HARBOR_2025 = {
   currentYearShare: 0.9,

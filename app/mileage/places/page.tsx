@@ -19,7 +19,7 @@ const KIND_LABEL: Record<string, { name: string; rule: string }> = {
   },
   other: {
     name: "Other",
-    rule: "Saved — no auto-classification",
+    rule: "Saved, no auto-classification",
   },
 };
 
@@ -61,7 +61,7 @@ export default async function MileagePlacesPage() {
           · Saved places
         </div>
         <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
-          Save your work places — drives there deduct themselves
+          Save your work places, drives there deduct themselves
         </h1>
         <p className="mt-3 max-w-xl text-sm text-ink-soft leading-relaxed">
           Add the offices, client sites, and other work locations you drive
@@ -70,13 +70,13 @@ export default async function MileagePlacesPage() {
           <span className="font-semibold text-forest-900">business</span>{" "}
           drive automatically and rolls the IRS mileage rate straight into
           your Schedule C deduction. Walks and short hops don&apos;t trigger
-          — only real drives (≥ 200 m, ≥ ~18 mph segments).
+, only real drives (≥ 200 m, ≥ ~18 mph segments).
         </p>
 
         <div className="card mt-8 p-6 sm:p-7">
           <h2 className="display text-xl text-forest-900">Add a place</h2>
           <p className="mt-1 text-sm text-ink-soft">
-            Office, client site, or home — pick the category that matches.
+            Office, client site, or home, pick the category that matches.
           </p>
           <div className="mt-5">
             <AddPlaceForm addPlaceAction={addMileagePlace} />

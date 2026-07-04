@@ -9,7 +9,7 @@ import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
  * and types each digit into one of six tightly-spaced inputs. Each
  * input accepts exactly one digit, advances focus on entry, and
  * Backspace on an empty input falls back to the previous box. When
- * all six are filled we POST `/api/watch/pair/redeem` — the watch
+ * all six are filled we POST `/api/watch/pair/redeem`, the watch
  * polls `/pair/poll` every few seconds and pulls down its token.
  *
  * Session auth happens at the API; this form does not touch any
@@ -160,7 +160,7 @@ export function WatchPairForm() {
   return (
     <div>
       <p className="text-sm text-ink-soft">
-        Open the Taxottic app on your watch — the &quot;Pair watch&quot; screen
+        Open the Taxottic app on your watch, the &quot;Pair watch&quot; screen
         shows a six-digit code. Type it in here.
       </p>
       <div

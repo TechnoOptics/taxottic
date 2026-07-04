@@ -9,11 +9,11 @@ import { Wordmark } from "@/components/Wordmark";
  *
  * Typographic helpers (H2/H3/P/UL/LI/Callout) are exported so each
  * article writes semantic, consistently-styled prose without repeating
- * class strings — and so the rendered text mirrors the FAQ/Article
+ * class strings, and so the rendered text mirrors the FAQ/Article
  * JSON-LD the article ships (Google rejects schema that diverges from
  * visible content).
  */
-/** A matching free calculator to surface inline at the top of a guide —
+/** A matching free calculator to surface inline at the top of a guide -
  *  sends the high-intent mid-article reader straight to the tool and
  *  interlinks the editorial + tool clusters for topical authority. */
 export type GuideCalc = { href: string; label: string; blurb: string };
@@ -40,7 +40,7 @@ export function GuideShell({
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          // Native iOS overlays the WebView under the status bar — pad by
+          // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
           paddingTop:
@@ -60,7 +60,7 @@ export function GuideShell({
       </header>
 
       <article className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-8">
-        {/* Breadcrumb — mirrors the BreadcrumbList JSON-LD each article ships. */}
+        {/* Breadcrumb, mirrors the BreadcrumbList JSON-LD each article ships. */}
         <nav
           aria-label="Breadcrumb"
           className="text-xs text-ink-muted flex items-center gap-1.5"
@@ -87,7 +87,7 @@ export function GuideShell({
           <span />
         </div>
 
-        {/* Matching free-calculator card — the in-content path from a
+        {/* Matching free-calculator card, the in-content path from a
             search reader to the interactive tool. */}
         {calc ? (
           <Link
@@ -137,7 +137,7 @@ export function GuideShell({
 
         <div className="mt-8 grid gap-5">{children}</div>
 
-        {/* End-of-article CTA — the conversion path from a search visitor. */}
+        {/* End-of-article CTA, the conversion path from a search visitor. */}
         <aside className="card mt-12 p-6 sm:p-7">
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
             See it on your own numbers

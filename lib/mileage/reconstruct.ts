@@ -4,7 +4,7 @@ import { haversineMeters } from "./segmentation";
 // Approximate-trip recovery.
 //
 // When background capture is degraded (see lib/mileage/health), the staging
-// pool has no drive traces to segment — only stop-to-stop "teleport" jumps.
+// pool has no drive traces to segment, only stop-to-stop "teleport" jumps.
 // This turns each qualifying jump into an APPROXIMATE trip using the
 // straight-line distance between the two stops.
 //
@@ -14,15 +14,15 @@ import { haversineMeters } from "./segmentation";
 //   - Trips are created "unclassified" (deduction_cents = 0) so nothing is
 //     asserted as a business deduction until the user reviews + classifies.
 //   - The notes field flags each one as approximate.
-// It is opt-in (the user taps "Recover") — never automatic.
+// It is opt-in (the user taps "Recover"), never automatic.
 
 const METERS_PER_MILE = 1609.344;
 const MIN_JUMP_M = 1000; // < 1 km = jitter / a short walk, not a drive
 const MAX_JUMP_M = 250_000; // > 250 km between two fixes = data glitch, skip
 const MIN_DT_S = 120; // 2 min
-const MAX_DT_S = 4 * 3600; // 4 h — beyond this we can't assume a single drive
+const MAX_DT_S = 4 * 3600; // 4 h, beyond this we can't assume a single drive
 const NOTE =
-  "Approximate drive — reconstructed from stop-to-stop GPS after a background-tracking gap. Straight-line distance may under-count road miles; verify before claiming.";
+  "Approximate drive, reconstructed from stop-to-stop GPS after a background-tracking gap. Straight-line distance may under-count road miles; verify before claiming.";
 
 type RawPt = { id: string; ts: number; lat: number; lng: number };
 
@@ -83,7 +83,7 @@ export async function countRecoverableApproxTrips(
 
 /**
  * Create approximate trips from stop-to-stop jumps, then mark the whole
- * processed window consumed (leftover stationary heartbeats are discarded —
+ * processed window consumed (leftover stationary heartbeats are discarded -
  * they carry no drive value). Returns the number of trips created.
  */
 export async function reconstructApproximateTrips(
@@ -114,7 +114,7 @@ export async function reconstructApproximateTrips(
         distance_miles: Number((meters / METERS_PER_MILE).toFixed(3)),
         classification: "unclassified",
         tax_year: new Date(a.ts).getUTCFullYear(),
-        deduction_cents: 0, // unclassified — nothing claimed until reviewed
+        deduction_cents: 0, // unclassified, nothing claimed until reviewed
         notes: NOTE,
       })
       .select("id")
@@ -124,7 +124,7 @@ export async function reconstructApproximateTrips(
       continue;
     }
     // Give the trip its two endpoint points so the map can draw it (a
-    // straight line between the two stops — honest for an approximate trip).
+    // straight line between the two stops, honest for an approximate trip).
     await admin.from("mileage_points").insert([
       { trip_id: ins.id, captured_at: startedAt, lat: a.lat, lng: a.lng },
       { trip_id: ins.id, captured_at: endedAt, lat: b.lat, lng: b.lng },

@@ -39,14 +39,14 @@ const baseInput = (form: "1065" | "1120" | "1120-S") => ({
 });
 
 describe("renderEntityReturnHTML", () => {
-  it("Form 1065 — emits pass-through note (no entity-level tax)", () => {
+  it("Form 1065, emits pass-through note (no entity-level tax)", () => {
     const { html, filename } = renderEntityReturnHTML(baseInput("1065"));
     expect(filename).toMatch(/form-1065-draft/);
     expect(html).toContain("Form 1065");
     expect(html).toMatch(/passes through to partners/i);
   });
 
-  it("Form 1120 — applies 21% C-Corp tax rate", () => {
+  it("Form 1120, applies 21% C-Corp tax rate", () => {
     const input = baseInput("1120");
     input.company.entity_type = "c_corp";
     const { html } = renderEntityReturnHTML(input);
@@ -55,7 +55,7 @@ describe("renderEntityReturnHTML", () => {
     expect(html).toContain("$63,525.00");
   });
 
-  it("Form 1120-S — emits pass-through note", () => {
+  it("Form 1120-S, emits pass-through note", () => {
     const input = baseInput("1120-S");
     input.company.entity_type = "s_corp";
     const { html } = renderEntityReturnHTML(input);

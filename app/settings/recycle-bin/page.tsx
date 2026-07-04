@@ -22,18 +22,18 @@ export const metadata = {
 // signed-in user owns, with a 30-day countdown until permanent
 // deletion. The action buttons:
 //
-//   Restore       — clears deleted_at; the item is active again
+//   Restore, clears deleted_at; the item is active again
 //                   (banks come back in `needs_reauth` because the
 //                   Plaid token was revoked on disconnect).
 //
-//   Delete now    — bypasses the 30-day wait and hard-deletes
+//   Delete now, bypasses the 30-day wait and hard-deletes
 //                   immediately. Cascades to every dependent row.
 //                   Two-step: the action throws if the item isn't
 //                   already soft-deleted, and the button label makes
 //                   the irreversibility clear.
 //
 // We also call the purge sweep lazily on every page render so the
-// list stays accurate even if the cron isn't wired yet — anything
+// list stays accurate even if the cron isn't wired yet, anything
 // past 30 days hard-deletes BEFORE we read the recycle_bin view.
 //
 // The view is defined in migration 20260513000001_recycle_bin.sql.

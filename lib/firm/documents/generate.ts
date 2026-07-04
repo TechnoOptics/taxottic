@@ -41,7 +41,7 @@ export type EngagementLetterInput = {
     scope_summary: string | null;
     fee_estimate_cents: number | null;
   };
-  /** Effective date — typically today. */
+  /** Effective date, typically today. */
   effective_date: string;
 };
 
@@ -88,7 +88,7 @@ export function generateEngagementLetterHTML(
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Engagement letter — ${escapeHtml(input.firm.name)} for ${escapeHtml(input.client.business_name || input.client.full_name || input.client.email)}</title>
+<title>Engagement letter, ${escapeHtml(input.firm.name)} for ${escapeHtml(input.client.business_name || input.client.full_name || input.client.email)}</title>
 <style>
   @page { margin: 1in; }
   body { font-family: Georgia, "Times New Roman", serif; color: #18181B; line-height: 1.6; font-size: 12pt; }

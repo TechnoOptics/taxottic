@@ -13,21 +13,21 @@ import {
 // JSON-LD structured data for the home page.
 //
 // Four blobs:
-//   1. Organization      — who's behind Taxottic (Techno Optics LLC).
+//   1. Organization, who's behind Taxottic (Techno Optics LLC).
 //                          Shows up in knowledge panels.
-//   2. WebSite           — site identity + the sitelinks searchbox
+//   2. WebSite, site identity + the sitelinks searchbox
 //                          target (?q=...). Lets Google render a
 //                          search box under the homepage SERP card.
-//   3. SoftwareApplication — that we're a finance SaaS, with the full
+//   3. SoftwareApplication, that we're a finance SaaS, with the full
 //                          subscription tier list as Offers. Eligible
 //                          for the rich "app" treatment Google gives
 //                          finance products.
-//   4. SiteNavigationElement — the primary nav so Google can build
+//   4. SiteNavigationElement, the primary nav so Google can build
 //                          sitelinks correctly.
 //
 // Schemas tested in https://search.google.com/test/rich-results before
 // shipping. Don't add aggregateRating or review schema until we have
-// real review sources to cite — fabricating either is a guidelines
+// real review sources to cite, fabricating either is a guidelines
 // violation that risks a manual action.
 // -------------------------------------------------------------------
 
@@ -36,7 +36,7 @@ const SITE_ORIGIN = "https://taxottic.com";
 function buildSoftwareApplicationOffers() {
   // Surface every paid tier as an Offer so Google sees the price range
   // accurately. The Free tier is omitted from Offers (price 0 with a
-  // payment vehicle is a guidelines violation — Free isn't a
+  // payment vehicle is a guidelines violation, Free isn't a
   // commercial offer in schema.org terms). It's covered separately
   // by `freeTrial` semantics on the SoftwareApplication.
   const keys: SubscriptionPriceKey[] = [
@@ -138,7 +138,7 @@ const WEBSITE_LD = {
   // Sitelinks searchbox: when this site has an internal search at
   // /search?q=..., this would tell Google to render a search box
   // under the SERP card. We don't ship a public site search yet,
-  // so this is commented out — uncomment when /help-style site
+  // so this is commented out, uncomment when /help-style site
   // search is live.
   //
   // potentialAction: {
@@ -165,7 +165,7 @@ const SOFTWARE_APP_LD = {
   // No aggregateRating until we have real reviews to cite.
   // No award until awards exist.
   publisher: { "@id": `${SITE_ORIGIN}/#organization` },
-  // `offers` (plural) when there's more than one — Google handles
+  // `offers` (plural) when there's more than one, Google handles
   // either form.
   offers: buildSoftwareApplicationOffers(),
   // A 14-day free trial on every paid tier; the consumer voice line
@@ -200,7 +200,7 @@ const NAV_LD = {
   ],
 };
 
-// DefinedTerm — the closest legitimate equivalent of a "dictionary
+// DefinedTerm, the closest legitimate equivalent of a "dictionary
 // entry" for a brand. It states, in machine-readable schema.org terms,
 // that "Taxottic" is a defined term meaning a specific tax-forecasting
 // product, with its pronunciation and a plain-language definition.
@@ -266,7 +266,7 @@ export default async function Home({
           // Native iOS draws the WebView UNDER the status bar
           // (capacitor.config.ts StatusBar.overlaysWebView), so without
           // a top inset the wordmark/"Sign in" land beneath the notch /
-          // Dynamic Island. Pad by the real safe-area inset — same
+          // Dynamic Island. Pad by the real safe-area inset, same
           // device-aware expression the authenticated AppHeader uses
           // (--app-safe-top is the natively-measured floor published by
           // CapacitorNativeInit; env() wins via max() wherever WKWebView
@@ -1115,7 +1115,7 @@ function Footer() {
           {/* Two columns: "Product" (live, conversion-critical pages)
               and "Legal" (compliance surface). Surfaces every page the
               May 2026 audit said should be discoverable from the home
-              page — pricing, help, changelog, example, plus the legal
+              page, pricing, help, changelog, example, plus the legal
               hub items. */}
           <div className="grid gap-2 sm:order-1">
             <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">

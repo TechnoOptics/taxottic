@@ -4,14 +4,14 @@ import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
-  title: "Guides — self-employment taxes, deductions & quarterly estimates",
+  title: "Guides, self-employment taxes, deductions & quarterly estimates",
   description:
     "Plain-English guides for freelancers and small businesses: how much to set aside for self-employment tax, Schedule C deductions you can claim, and how quarterly estimated taxes work.",
   alternates: { canonical: "/guides" },
   openGraph: {
     title: "Taxottic Guides",
     description:
-      "Plain-English guides on self-employment tax, deductions, and quarterly estimates — no sign-in required.",
+      "Plain-English guides on self-employment tax, deductions, and quarterly estimates, no sign-in required.",
     url: "/guides",
     type: "website",
     images: [
@@ -28,7 +28,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "Taxottic Guides",
     description:
-      "Plain-English guides on self-employment tax, deductions, and quarterly estimates — no sign-in required.",
+      "Plain-English guides on self-employment tax, deductions, and quarterly estimates, no sign-in required.",
     images: [
       `/api/og/guide?title=${encodeURIComponent(
         "Guides for freelancers & small business",
@@ -52,13 +52,13 @@ const GUIDES = [
     slug: "self-employment-tax-how-much-to-set-aside",
     title: "How much should I set aside for taxes when self-employed?",
     blurb:
-      "A simple way to size your tax set-aside — self-employment tax plus income tax — and why a flat percentage of every payment keeps April calm.",
+      "A simple way to size your tax set-aside, self-employment tax plus income tax, and why a flat percentage of every payment keeps April calm.",
   },
   {
     slug: "schedule-c-deductions",
     title: "Schedule C deductions: what self-employed people can write off",
     blurb:
-      "The everyday business expenses that lower your taxable income — home office, mileage, software, phone, and more — each tied to its IRS source.",
+      "The everyday business expenses that lower your taxable income, home office, mileage, software, phone, and more, each tied to its IRS source.",
   },
   {
     slug: "quarterly-estimated-taxes-explained",
@@ -100,13 +100,13 @@ const GUIDES = [
     slug: "qbi-deduction",
     title: "The QBI deduction: a 20% break for small-business income",
     blurb:
-      "Deduct up to 20% of qualified business income — who qualifies, the income limits, and the service-business phase-out.",
+      "Deduct up to 20% of qualified business income, who qualifies, the income limits, and the service-business phase-out.",
   },
   {
     slug: "self-employed-health-insurance-deduction",
     title: "The self-employed health insurance deduction",
     blurb:
-      "Deduct premiums for you and your family — who qualifies, what counts, and why it's an adjustment, not a Schedule C expense.",
+      "Deduct premiums for you and your family, who qualifies, what counts, and why it's an adjustment, not a Schedule C expense.",
   },
   {
     slug: "what-is-a-1099-k",
@@ -148,7 +148,7 @@ export default function GuidesIndex() {
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          // Native iOS overlays the WebView under the status bar — pad by
+          // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
           paddingTop:
@@ -174,7 +174,7 @@ export default function GuidesIndex() {
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Short, practical guides for freelancers, contractors, and small
-          businesses — what to set aside, what you can deduct, and how
+          businesses, what to set aside, what you can deduct, and how
           quarterly taxes work. Written by the team behind Taxottic.
         </p>
       </section>
@@ -211,7 +211,7 @@ export default function GuidesIndex() {
             Prefer to just see the number?
           </h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-            Try the free self-employment tax calculator — estimate your
+            Try the free self-employment tax calculator, estimate your
             self-employment tax, income tax, and quarterly payments instantly,
             no sign-up.
           </p>

@@ -14,13 +14,13 @@ import { logFirmActivity } from "@/lib/firm/activity";
 // Server actions for /firm/settings/payments.
 //
 // Three operations:
-//   1. startStripeConnect — if no account exists yet, create one;
+//   1. startStripeConnect, if no account exists yet, create one;
 //      then mint an Account Link and redirect the firm into Stripe's
 //      hosted onboarding.
-//   2. refreshStripeStatus — re-read the live status from Stripe
+//   2. refreshStripeStatus, re-read the live status from Stripe
 //      and patch the local mirror. Called when the firm returns
 //      from onboarding; also exposed as a manual button.
-//   3. (webhook keeps the mirror fresh between manual refreshes —
+//   3. (webhook keeps the mirror fresh between manual refreshes -
 //      see /api/webhooks/stripe-connect)
 
 function origin(): string {

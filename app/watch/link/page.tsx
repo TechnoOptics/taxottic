@@ -4,7 +4,7 @@ import { WatchLinkConfirm } from "@/components/WatchLinkConfirm";
 
 export const dynamic = "force-dynamic";
 
-// /watch/link?code=…  — the destination the watch's pairing QR
+// /watch/link?code=…, the destination the watch's pairing QR
 // encodes. Opened on the signed-in phone (in-app WebView or any
 // browser). Session-gated: the watch binds to whoever is signed in
 // here, so the QR itself never carries a credential.

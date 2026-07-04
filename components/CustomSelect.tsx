@@ -8,13 +8,13 @@ export type SelectOption = { value: string; label: string };
  * Drop-in replacement for a native `<select>` that submits identically
  * (a hidden input carries the value, so any surrounding
  * `<form action={...}>` server action needs zero changes) but renders
- * its own dropdown entirely in the DOM/CSS — no native
+ * its own dropdown entirely in the DOM/CSS, no native
  * AlertDialog/Spinner involved.
  *
  * Why this exists: on at least one real device (Samsung Galaxy Z
  * Fold5, confirmed via `uiautomator dump` + a deliberate drawable
  * swap), the native `<select>` popup rendered the app's launch splash
- * drawable behind its option rows — traced to Android's own
+ * drawable behind its option rows, traced to Android's own
  * "starting window" preview snapshot (keyed off the manifest's static
  * splash theme, unaffected by any runtime theme/window changes) most
  * likely combined with a foldable-specific oversized list-row quirk.
@@ -61,7 +61,7 @@ export function CustomSelect({
   return (
     // min-w-0: this is typically a grid/flex item; without it, the
     // truncated (white-space: nowrap) label below can force this whole
-    // element — and its parent grid track — wider than the viewport on
+    // element, and its parent grid track, wider than the viewport on
     // mobile instead of actually truncating.
     <div ref={rootRef} className="relative min-w-0">
       <input type="hidden" name={name} value={value} />

@@ -15,7 +15,7 @@ type Company = {
  *
  * (May 25 2026 redesign) The opener is now a BOTTOM-LEFT FAB. The
  * previous middle-left tab anchored to the header row read as if it
- * was "on" the brand strip — user feedback "the menu opener is
+ * was "on" the brand strip, user feedback "the menu opener is
  * overlaying the header". A bottom-left FAB sits in thumb territory,
  * never touches the header, and matches the mental model of a
  * standard mobile "open menu" affordance.
@@ -99,7 +99,7 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
             // EVERYTHING, but the menu itself is anchored to the
             // bottom-left corner (above the FAB) and grows upward.
             // User feedback (May 25 2026): "make the menu open from
-            // the bottom left corner of the screen not the top" —
+            // the bottom left corner of the screen not the top" -
             // the previous full-width-from-below-header sheet read
             // as "the whole app got replaced by a menu", which was
             // disorienting.
@@ -138,13 +138,13 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
         )
       : null;
 
-  // Portal the FAB to document.body — same as the drawer. AppHeader
+  // Portal the FAB to document.body, same as the drawer. AppHeader
   // mounts <LeftRailMobile> INSIDE the .app-header element, and
   // .app-header carries `backdrop-filter: blur()` for its frosted look.
   // A filter / backdrop-filter makes that element the containing block
   // for `position: fixed` descendants (CSS Containing Block spec), so
   // the FAB's `bottom/left` were measured against the ~52px header
-  // instead of the viewport — it rendered stuck in the top-left status
+  // instead of the viewport, it rendered stuck in the top-left status
   // bar instead of the bottom-left corner. Mounting on <body> (no
   // filtered ancestor) restores true viewport-fixed positioning.
   const fab = mounted
@@ -156,7 +156,7 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
           aria-expanded={open}
           // Bottom-left FAB. Sits above the safe-bottom inset (gesture
           // bar on Android, home-indicator on iOS) so it never gets
-          // covered. 56 px square is the standard FAB size — large
+          // covered. 56 px square is the standard FAB size, large
           // enough for a thumb tap, small enough to not crowd content.
           // z-50 sits above the header (z-30) but below the sheet
           // (z-60) when open.
@@ -176,7 +176,7 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
             transition-transform
           "
         >
-          {/* Hamburger icon — bigger and more recognizable than the
+          {/* Hamburger icon, bigger and more recognizable than the
               previous 3-dot grab handle. */}
           <svg
             viewBox="0 0 24 24"

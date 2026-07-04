@@ -2,7 +2,7 @@
 //
 // Split out from the server-action file so the cron route (which
 // is a separate compilation unit) can import the helper without
-// pulling in the rest of the `"use server"` module — server-action
+// pulling in the rest of the `"use server"` module, server-action
 // files can only export async functions.
 
 export type Cadence = "monthly" | "quarterly" | "annual";

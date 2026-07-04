@@ -25,7 +25,7 @@ import { ClearInviteLinkOnMount } from "@/components/ClearInviteLinkOnMount";
 type Params = Promise<{ publicId: string }>;
 
 // This page is per-user and auth-gated (roster, role chip, invites). Never
-// serve a cached render — a stale build/edge copy was showing an empty roster
+// serve a cached render, a stale build/edge copy was showing an empty roster
 // and mislabeling the manager as a plain "member".
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ export default async function ManageCompanyPage({
 
   // NOTE: company_members.user_id has NO foreign key to profiles (it points
   // at auth.users), so PostgREST cannot resolve an embedded
-  // `profile:profiles(...)` select — that query errored and returned null,
+  // `profile:profiles(...)` select, that query errored and returned null,
   // which silently blanked the entire roster (and made the manager look like
   // a plain "member"). Fetch the member rows and their profiles separately,
   // then stitch them together by user_id.
@@ -111,7 +111,7 @@ export default async function ManageCompanyPage({
   const lastInviteLink = isManager ? await peekLastInviteLink() : null;
 
   // Per-member financials so the roster doubles as a "who's expensing /
-  // driving what" summary. Managers only. Mileage is BUSINESS-only — an
+  // driving what" summary. Managers only. Mileage is BUSINESS-only, an
   // employee's personal + unclassified drives stay private, matching the
   // /mileage manager view.
   const taxYear = new Date().getUTCFullYear();
@@ -164,7 +164,7 @@ export default async function ManageCompanyPage({
         </div>
 
         {/* If we just created an invite, show a one-time copy-link card.
-            The email-sent state is surfaced explicitly — previously a
+            The email-sent state is surfaced explicitly, previously a
             manager saw this exact same "ready" card whether or not the
             invite email actually went out, with no way to tell the two
             apart. */}
@@ -190,7 +190,7 @@ export default async function ManageCompanyPage({
                   <span className="font-medium text-amber-800">
                     the welcome email couldn&apos;t be sent automatically
                   </span>{" "}
-                  — please share this link with your new teammate yourself
+, please share this link with your new teammate yourself
                   (email, text, whatever they actually open).
                 </p>
                 <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -226,7 +226,7 @@ export default async function ManageCompanyPage({
           </span>
         </div>
 
-        {/* Departments — manager-only, flat (no nesting). Rendered above
+        {/* Departments, manager-only, flat (no nesting). Rendered above
             Add an employee so a freshly-created department is already
             available in that form's department picker on the same page
             load (both sections share the `departments` array fetched
@@ -458,7 +458,7 @@ export default async function ManageCompanyPage({
           ) : null}
         </section>
 
-        {/* Close company — manager-only "danger zone" at the bottom
+        {/* Close company, manager-only "danger zone" at the bottom
             of the manage page. Soft-delete; the company moves to
             /settings/recycle-bin for 30 days. The user can Restore in
             one click during that window, or Permanently delete from
@@ -479,8 +479,8 @@ export default async function ManageCompanyPage({
               firm/portfolio view right away. Bank connections stay
               attached during the grace window in case you change your
               mind. After 30 days, the company and everything inside it
-              — bank connections, transactions, monthly entries, business
-              profile — is permanently deleted and cannot be recovered.
+, bank connections, transactions, monthly entries, business
+              profile, is permanently deleted and cannot be recovered.
             </p>
             <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-prose">
               Want a copy of the data first?{" "}
@@ -558,7 +558,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    // min-w-0 overrides the grid item default of min-width: auto — without
+    // min-w-0 overrides the grid item default of min-width: auto, without
     // it, a truncated (white-space: nowrap) child like CustomSelect's
     // closed-button label can force this column, and the whole card, wider
     // than the viewport on mobile instead of actually truncating.

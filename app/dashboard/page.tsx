@@ -59,7 +59,7 @@ export default async function DashboardPage() {
   // before the first paint, which compounded with Vercel cold starts to
   // make dashboard clicks feel sluggish. Promise.all collapses them
   // into one parallel batch since none of them depend on each other's
-  // result. The redirect checks happen after — once everything has
+  // result. The redirect checks happen after, once everything has
   // landed.
   // evaluateBadges returns the codes that were JUST awarded (empty
   // on subsequent renders thanks to the unique constraint), so we
@@ -86,7 +86,7 @@ export default async function DashboardPage() {
   ]);
   const profile = profileResult.data;
 
-  // Legal disclaimer gate — the very first onboarding step. Before a
+  // Legal disclaimer gate, the very first onboarding step. Before a
   // new user picks W-2 vs business (or a w2 user is bounced to the
   // personal forecast) they must acknowledge that Taxottic produces
   // forecasts/estimates, not a filed return. One-shot: cleared once
@@ -172,7 +172,7 @@ export default async function DashboardPage() {
             </h1>
             <p className="mt-3 text-sm text-ink-soft">
               {isSuperAdmin
-                ? `Hi ${user.email}. This is the consumer dashboard. Super-admin work lives in HQ / Enterprise — pick a portal from the profile menu.`
+                ? `Hi ${user.email}. This is the consumer dashboard. Super-admin work lives in HQ / Enterprise, pick a portal from the profile menu.`
                 : `You're signed in as ${user.email}.`}
             </p>
 
@@ -264,7 +264,7 @@ export default async function DashboardPage() {
 
   // Plain-member dashboard: a user with zero manager memberships doesn't
   // need the owner-oriented tax forecast, tax-savings playbook, or active
-  // goals — those are financial-strategy tools for whoever owns the
+  // goals, those are financial-strategy tools for whoever owns the
   // business. What a member DOES need day to day: a quick way to log an
   // expense/drive, a look at their own recent activity, and the same
   // outstanding-tasks/reminders/achievements every user gets. Skipping
@@ -301,10 +301,10 @@ export default async function DashboardPage() {
     supabase
       .from("reminders")
       .select("id, kind, title, due_at")
-      // Explicit owner filter — belt-and-braces, same as getMyCompanies.
+      // Explicit owner filter, belt-and-braces, same as getMyCompanies.
       // RLS lets a super-admin read EVERY user's reminders, so without
       // this the consumer dashboard recap showed (and counted) other
-      // people's overdue reminders for super-admin accounts — and the
+      // people's overdue reminders for super-admin accounts, and the
       // dismiss-X (correctly scoped to user_id) could never clear them.
       .eq("user_id", user.id)
       .is("dismissed_at", null)
@@ -322,7 +322,7 @@ export default async function DashboardPage() {
     supabase
       .from("goals")
       .select("id, title, target_cents, saved_cents, status, deadline")
-      // Owner filter — same RLS-super-admin caveat as the reminders
+      // Owner filter, same RLS-super-admin caveat as the reminders
       // queries above; without it a super-admin's dashboard would list
       // other users' goals.
       .eq("user_id", user.id)
@@ -363,7 +363,7 @@ export default async function DashboardPage() {
   // product, we return to the original urgent treatment.
   // `dismissAction` is the server-action ID a small "X" button on the
   // card invokes when the user wants to clear it. Only the overdue-
-  // reminders card sets it today — the audit's Low finding was that
+  // reminders card sets it today, the audit's Low finding was that
   // the banner had no way to be dismissed. Other recap entries are
   // recoverable by the underlying state (logging an expense clears
   // "No expenses logged this month" automatically), so we don't need
@@ -405,7 +405,7 @@ export default async function DashboardPage() {
       recap.push({
         title: `${overdueReminders.length} earlier-quarter reminder${overdueReminders.length === 1 ? "" : "s"} on your calendar`,
         body:
-          "Welcome — these are the standard quarterly tax dates that fell before today. Open the list to mark off ones you already handled.",
+          "Welcome, these are the standard quarterly tax dates that fell before today. Open the list to mark off ones you already handled.",
         href: "/reminders",
         tone: "info",
         dismissAction: "overdue-reminders",
@@ -425,7 +425,7 @@ export default async function DashboardPage() {
   if ((thisMonthExpenseCount ?? 0) === 0 && companies.length > 0) {
     recap.push({
       title: treatAsFirstVisit
-        ? "Log your first expense — your forecast comes alive after this"
+        ? "Log your first expense, your forecast comes alive after this"
         : "No expenses logged this month",
       body: treatAsFirstVisit
         ? "Even one expense (or one bank connection) gives the tax-ready meter and forecast something to chew on. You can paste a single transaction or import a CSV."
@@ -548,7 +548,7 @@ export default async function DashboardPage() {
       // hq./enterprise.taxottic.com ejects the Capacitor app to the
       // system browser (the WebView is pinned to taxottic.com), which
       // is exactly the "kicked out to Chrome" bug. The portals are the
-      // same codebase under /admin/** — render them here, no
+      // same codebase under /admin/**, render them here, no
       // cross-origin hop, so the app (and web) stay put. Subdomains
       // still resolve if visited directly on the web.
       redirect(ap === "hq" ? "/admin" : "/admin/firms");
@@ -562,7 +562,7 @@ export default async function DashboardPage() {
       .eq("id", user.id);
   }
 
-  // Trial-fraud guard runs lazily on the FIRST dashboard load — if
+  // Trial-fraud guard runs lazily on the FIRST dashboard load, if
   // this device already used a trial under another account, the
   // current user's subscription is flipped to free before we read
   // the trial state below. Subsequent loads short-circuit on
@@ -584,7 +584,7 @@ export default async function DashboardPage() {
   }
   const trial = await getTrialState(supabase, user.id);
 
-  // Mileage at-a-glance — YTD business-drive deduction across all of the
+  // Mileage at-a-glance, YTD business-drive deduction across all of the
   // user's companies, surfaced in the hero stat band rather than buried
   // in /mileage.
   let mileageYtdCents = 0;
@@ -638,7 +638,7 @@ export default async function DashboardPage() {
       )
     : null;
 
-  // Outstanding tasks — unclassified drives + transactions awaiting a
+  // Outstanding tasks, unclassified drives + transactions awaiting a
   // business/personal or category call. Best-effort: a tally failure
   // must never break the dashboard render. Follows the same "first
   // company" convention this page already uses elsewhere (line below,
@@ -686,7 +686,7 @@ export default async function DashboardPage() {
 
         <TrialBanner trial={trial} />
 
-        {/* Hero stat band — three glanceable figures (readiness ring,
+        {/* Hero stat band, three glanceable figures (readiness ring,
             mileage YTD, next deadline) so the dashboard opens on "where
             do I stand" instead of a stack of equal cards. On mobile the
             readiness tile takes the full row with the two figures
@@ -734,7 +734,7 @@ export default async function DashboardPage() {
             <div className="kicker-sm">Next deadline</div>
             <div className="display text-2xl sm:text-3xl text-forest-900 mt-1">
               {nextDeadlineDays === null ? (
-                "—"
+                "-"
               ) : nextDeadlineDays === 0 ? (
                 "Today"
               ) : (
@@ -775,7 +775,7 @@ export default async function DashboardPage() {
                   className="absolute inset-0 rounded-[1.125rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
                 />
                 {/* One accent: every recap dot is gold. Urgency is
-                    carried by copy + sort order, not a second colour —
+                    carried by copy + sort order, not a second colour -
                     keeps the surface calm (redesign rule). */}
                 <div className="mt-1.5 size-2 rounded-full shrink-0 bg-gold-400" />
                 <div className="min-w-0 flex-1 pr-6">
@@ -800,7 +800,7 @@ export default async function DashboardPage() {
             same quarterly-estimate reminder rendered once per company
             (audit's Low finding: three identical "Q2 estimated tax
             (2026)" rows at "in 33 days"). Dedupe in render by
-            (title, due_at) — the user only needs to see the deadline
+            (title, due_at), the user only needs to see the deadline
             once. The deeper /reminders page can still split by company
             if a power user wants the per-company view. */}
         {upcomingReminders && upcomingReminders.length > 0 ? (
@@ -875,7 +875,7 @@ export default async function DashboardPage() {
                 + New company
               </Link>
             ) : (
-              // 3.1.1: the upgrade upsell links to billing — web only. In
+              // 3.1.1: the upgrade upsell links to billing, web only. In
               // the native app, state the free-plan limit without a route
               // to purchase.
               <WebOnly
@@ -1025,7 +1025,7 @@ export default async function DashboardPage() {
           </ul>
         </section>
 
-        {/* Tax-savings playbook tile — links into the company's goal page. */}
+        {/* Tax-savings playbook tile, links into the company's goal page. */}
         {companies.length > 0 ? (
           <section className="mt-10">
             <Link
@@ -1043,7 +1043,7 @@ export default async function DashboardPage() {
                   </h2>
                   <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-2xl">
                     Personalized retirement, health, education, and energy
-                    moves with step-by-step instructions — built from your
+                    moves with step-by-step instructions, built from your
                     actual filing status, income, and state. None are new
                     business expenses.
                   </p>
@@ -1148,7 +1148,7 @@ export default async function DashboardPage() {
 }
 
 /**
- * Dashboard for a user with zero manager memberships — a plain team
+ * Dashboard for a user with zero manager memberships, a plain team
  * member. Skips the owner-oriented tax forecast, tax-savings playbook,
  * and active-goals sections entirely (and the two expensive per-company
  * fetches that back them: computeReadiness + goals) in favor of what a
@@ -1179,7 +1179,7 @@ async function renderMemberDashboard(args: {
     newlyEarnedCodes,
   } = args;
 
-  // "Primary" company for quick-add links + recent activity — the first
+  // "Primary" company for quick-add links + recent activity, the first
   // one the user joined, same "first company" convention the owner
   // dashboard uses for its hero forecast link.
   const primary = companies[0]?.company ?? null;
@@ -1288,7 +1288,7 @@ async function renderMemberDashboard(args: {
         ) : null}
         <OutstandingTasksPopup count={outstanding.count} items={outstanding.items} />
 
-        {/* Quick actions — the three things a member actually does day
+        {/* Quick actions, the three things a member actually does day
             to day. Big, obvious tap targets rather than nav-menu hunting. */}
         <section className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Link
@@ -1335,7 +1335,7 @@ async function renderMemberDashboard(args: {
           </Link>
         </section>
 
-        {/* Your activity — spending + mileage this user has personally
+        {/* Your activity, spending + mileage this user has personally
             logged, plus the next reminder. Mirrors the owner dashboard's
             hero stat band shape but scoped to this one person. */}
         <section className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1367,7 +1367,7 @@ async function renderMemberDashboard(args: {
             <div className="kicker-sm">Next deadline</div>
             <div className="display text-2xl text-forest-900 mt-1">
               {nextDeadlineDays === null
-                ? "—"
+                ? "-"
                 : nextDeadlineDays <= 0
                   ? "Today"
                   : `${nextDeadlineDays}d`}
@@ -1378,7 +1378,7 @@ async function renderMemberDashboard(args: {
           </Link>
         </section>
 
-        {/* Recent activity — this user's own last few logged expenses,
+        {/* Recent activity, this user's own last few logged expenses,
             so "what have I been logging" is answerable at a glance
             without leaving the dashboard. */}
         {recentExpenses && recentExpenses.length > 0 ? (
@@ -1433,7 +1433,7 @@ async function renderMemberDashboard(args: {
 }
 
 /**
- * Gold progress ring for the dashboard readiness stat — the visual
+ * Gold progress ring for the dashboard readiness stat, the visual
  * anchor of the hero band. Pure SVG: a faint gold track with the value
  * arc drawn over it, starting at 12 o'clock. The centre label uses
  * fill="currentColor" + .text-forest-900 so it inherits the same
@@ -1488,7 +1488,7 @@ function StatRing({ score }: { score: number }) {
 }
 
 /**
- * Collapse reminder rows that share the same (title, due_at) — typical
+ * Collapse reminder rows that share the same (title, due_at), typical
  * shape: one quarterly-estimate reminder seeded per company. On the
  * dashboard the user sees a single coalesced card; the `/reminders`
  * page can still break them out per company if a power user wants

@@ -29,7 +29,7 @@ export function buildCalcMetadata(opts: {
   title: string;
   description: string;
   keywords: string[];
-  /** OG image variant — matches the `calc` switch in /api/og/calc. */
+  /** OG image variant, matches the `calc` switch in /api/og/calc. */
   calc: string;
   sp: Record<string, string | string[] | undefined>;
   /** Which query keys to forward into the OG image URL. */

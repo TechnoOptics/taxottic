@@ -25,7 +25,7 @@ import {
  * balance app, so monthly granularity is enough for the user's needs
  * and keeps Plaid TRANSACTIONS:SYNC spend predictable. Pass
  * `{ force: true }` for user-initiated refreshes (the manual "Sync
- * now" button) and the very first sync after a new connection — both
+ * now" button) and the very first sync after a new connection, both
  * legitimate cases where the throttle would otherwise be wrong.
  *
  * Returns counts for telemetry plus a `skipped` flag set when the
@@ -370,7 +370,7 @@ async function upsertTx(
   //
   // Plaid's t.date is "yyyy-mm-dd" (ISO date-only) so lexicographic
   // comparison is correct here. We do this client-side because
-  // /transactions/sync doesn't accept a start_date — the date window
+  // /transactions/sync doesn't accept a start_date, the date window
   // is implicit in the cursor.
   const yearStartIso = `${new Date().getUTCFullYear()}-01-01`;
   // Plaid returns positive amount for outflow; we store cents with

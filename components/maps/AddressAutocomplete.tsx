@@ -45,7 +45,7 @@ export function AddressAutocomplete({
   className?: string;
   /** If provided, picking a suggestion writes the city into the form
    *  field with this `name=` AND writes only the street ("123 Main St")
-   *  into the main input — the multi-field address pattern. If
+   *  into the main input, the multi-field address pattern. If
    *  omitted, the main input gets the FULL formatted address
    *  ("123 Main St, City, ST 12345") instead, which is what
    *  single-address-field forms (like /mileage/places) want. */
@@ -93,7 +93,7 @@ export function AddressAutocomplete({
           // expects the full address visible in the one box they
           // see, so use `formatted_address`. This is the
           // /mileage/places case the user reported as broken on
-          // May 23 2026 — picking a suggestion was overwriting
+          // May 23 2026, picking a suggestion was overwriting
           // their input with just "1234 Maple St" and losing the
           // city/state/zip.
           if (cityInputName) {
@@ -147,7 +147,7 @@ export function AddressAutocomplete({
         });
       })
       .catch(() => {
-        /* no key / blocked — stays a plain input */
+        /* no key / blocked, stays a plain input */
       });
 
     return () => {

@@ -7,10 +7,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * drive, classification='business', deduction_cents stored at the IRS
  * rate when the trip materialized). This is the single source the
  * Expenses list, the Dashboard tile, and the My Deductions month-by-
- * month breakdown all read so the figure is consistent everywhere — the
+ * month breakdown all read so the figure is consistent everywhere, the
  * deduction was previously siloed off the expenses/dashboard views.
  *
- * Month is derived from started_at (UTC) — good enough for tax-year
+ * Month is derived from started_at (UTC), good enough for tax-year
  * grouping; the trips are already tax_year-scoped.
  */
 export type MileageMonth = {
@@ -37,7 +37,7 @@ export type MileageSummary = {
   byMonth: MileageMonth[];
   /** Quick lookup month → rollup. */
   monthMap: Map<number, MileageMonth>;
-  /** Every business drive, most-recent first — for per-day lines. */
+  /** Every business drive, most-recent first, for per-day lines. */
   trips: MileageTrip[];
   ytdCents: number;
   ytdMiles: number;

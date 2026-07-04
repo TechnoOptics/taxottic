@@ -20,7 +20,7 @@ export type SETaxInitial = {
  * Public, no-login self-employment tax calculator.
  *
  * The whole point: it runs the EXACT SAME forecast engine the paid app
- * uses (`lib/tax/forecast.ts` — a pure function, safe client-side), so
+ * uses (`lib/tax/forecast.ts`, a pure function, safe client-side), so
  * the free tool a stranger finds via "self-employment tax calculator"
  * gives the same IRS-aligned math (SE tax, QBI, brackets, quarterly
  * estimates) they'd get inside Taxottic. That accuracy is the wedge:
@@ -81,7 +81,7 @@ function toCents(dollars: number): number {
   return Math.round((Number.isFinite(dollars) ? dollars : 0) * 100);
 }
 
-/** Neutral ForecastInput — everything the visitor didn't tell us is 0
+/** Neutral ForecastInput, everything the visitor didn't tell us is 0
  *  or off, so the number reflects self-employment income alone. */
 function baseInput(): ForecastInput {
   return {
@@ -120,7 +120,7 @@ export function SelfEmploymentTaxCalculator({
   initial,
 }: {
   /** When true, the result shows all four quarterly payments + due
-   *  dates instead of just the next one — used by the quarterly-
+   *  dates instead of just the next one, used by the quarterly-
    *  estimated-tax calculator page, where the schedule IS the point. */
   showFullQuarterlySchedule?: boolean;
   /** Pre-fill values from the URL (a shared link). */
@@ -151,7 +151,7 @@ export function SelfEmploymentTaxCalculator({
       ytdBusinessExpensesCents: toCents(expensesNum),
       ownerW2WagesCents: w2,
       // Assume the W-2 wages were all Social-Security-taxable and that a
-      // typical ~11% was already withheld — a reasonable default so the
+      // typical ~11% was already withheld, a reasonable default so the
       // "already paid" side isn't wildly off. Users refine inside the app.
       ownerW2SsWagesCents: w2,
       ownerW2WithheldCents: Math.round(w2 * 0.11),
@@ -283,7 +283,7 @@ export function SelfEmploymentTaxCalculator({
             <span>
               I also have a W-2 day job
               <span className="block text-xs text-ink-muted">
-                Changes your Social Security wage base and bracket — worth
+                Changes your Social Security wage base and bracket, worth
                 including if you moonlight.
               </span>
             </span>
@@ -413,21 +413,21 @@ export function SelfEmploymentTaxCalculator({
               <div className="text-sm leading-relaxed text-cream/90">
                 This is a snapshot. Taxottic keeps this forecast{" "}
                 <span className="text-gold-300 font-medium">live all year</span>
-                , synced to your bank — so the number is always current and
+                , synced to your bank, so the number is always current and
                 you&rsquo;re never surprised in April.
               </div>
               <Link
                 href="/login?intent=signup"
                 className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
               >
-                Track it automatically — free →
+                Track it automatically, free →
               </Link>
             </div>
 
             <p className="mt-4 text-[11px] text-ink-muted leading-relaxed">
               Estimate only, for planning. Uses {TAX_YEAR} federal rules and
               your state&rsquo;s brackets. Not tax advice or a substitute for a
-              licensed CPA. Your figures stay in your browser — nothing is
+              licensed CPA. Your figures stay in your browser, nothing is
               sent anywhere.
             </p>
           </div>
@@ -440,7 +440,7 @@ export function SelfEmploymentTaxCalculator({
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your self-employment income to see your estimated
                 federal + state tax, self-employment tax, and quarterly
-                payments — instantly.
+                payments, instantly.
               </p>
             </div>
           </div>

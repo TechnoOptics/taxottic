@@ -7,13 +7,13 @@ import { useEffect } from "react";
  * <PWASetup /> and <CapacitorAuth />. Pure no-op on web
  * (isNativePlatform() false). Two jobs:
  *
- *  1. StatusBar — belt-and-suspenders with capacitor.config.ts:
+ *  1. StatusBar, belt-and-suspenders with capacitor.config.ts:
  *     overlay the WebView + light (white) text, so the dark-green
  *     header extends behind the status bar with readable white
  *     clock/battery/signal. Config sets this at launch; doing it
  *     again at runtime survives any plugin re-init.
  *
- *  2. Push notifications — request permission + register so the
+ *  2. Push notifications, request permission + register so the
  *     OS prompt actually appears and the device gets a token.
  *
  * NOTE (honest scope): registering for push is the CLIENT half.
@@ -21,7 +21,7 @@ import { useEffect } from "react";
  * an APNs key, Android google-services.json + FCM, and a server to
  * send. This wires the prompt + registration; delivery infra is a
  * separate task. Until a build includes these plugins natively the
- * calls below simply no-op (isPluginAvailable guard — the lesson
+ * calls below simply no-op (isPluginAvailable guard, the lesson
  * from the #69 "Browser plugin not implemented" regression: never
  * call a native plugin that may be absent from the running binary).
  */
@@ -47,7 +47,7 @@ export function CapacitorNativeInit() {
 
       // --- StatusBar: per-platform so the header never overlaps it ---
       // iOS: overlay the WebView; the header's env(safe-area-inset-top)
-      //   padding clears the notch WHEN WKWebView reports it — but that
+      //   padding clears the notch WHEN WKWebView reports it, but that
       //   reporting has proven flaky (June 2026: hamburger/header "lost
       //   in the status bar"), so we ALSO measure the true insets
       //   natively below and publish them as CSS-var floors.
@@ -65,7 +65,7 @@ export function CapacitorNativeInit() {
           // Each call gets its own guard: setOverlaysWebView is
           // platform/version dependent (e.g. "not available on
           // Android 15+"), and a throw here used to abort the WHOLE
-          // block — skipping setStyle and leaving dark-on-dark
+          // block, skipping setStyle and leaving dark-on-dark
           // status-bar text. Never let one cosmetic call sink the rest.
           await StatusBar.setOverlaysWebView({ overlay: !isAndroid }).catch(
             () => {},
@@ -79,7 +79,7 @@ export function CapacitorNativeInit() {
             // is not trustworthy in every state (contentInset "never"
             // + overlay combinations have shipped builds where env()
             // returned 0). Symptom: "the hamburger is lost in the
-            // status bar" — header chrome under the clock, FAB under
+            // status bar", header chrome under the clock, FAB under
             // the home indicator. Belt-and-suspenders like Android:
             // read the exact insets from the native side
             // (capacitor-plugin-safe-area) and publish them as CSS
@@ -110,16 +110,16 @@ export function CapacitorNativeInit() {
                   applyInsets(data.insets.top, data.insets.bottom);
                 }).catch(() => {});
               } catch {
-                /* plugin call failed — fall through to the floor */
+                /* plugin call failed, fall through to the floor */
               }
             }
             if (!measured) {
               // Binary predates the SafeArea plugin (or the call
               // failed). Conservative floors so the chrome clears the
               // system bars on every iPhone: tall narrow screens are
-              // the notch/Dynamic-Island family (~47–59pt top), classic
+              // the notch/Dynamic-Island family (~47-59pt top), classic
               // ones need ~20pt; home indicator is 34pt where present.
-              // Overshoot lands as a few px of extra navy band —
+              // Overshoot lands as a few px of extra navy band -
               // invisible against the brand background; undershoot is
               // a button under the clock. env() still wins via max()
               // wherever it does report.
@@ -133,7 +133,7 @@ export function CapacitorNativeInit() {
             // status-bar strip (overlay=false) blends into the header
             // instead of showing a hard dark band ("green bar")
             // between the clock and the header. (#121a2a is the
-            // BOTTOM of the header gradient — wrong end for the strip.)
+            // BOTTOM of the header gradient, wrong end for the strip.)
             await StatusBar.setBackgroundColor({ color: "#2a3a5e" }).catch(
               () => {},
             );
@@ -151,7 +151,7 @@ export function CapacitorNativeInit() {
             //    API 35): now that the header is truly position:fixed
             //    it pins to the physical top and sits behind the
             //    clock/battery. env() is 0 here so CSS can't rescue it
-            //    — reserve a conservative strip from JS instead.
+            //, reserve a conservative strip from JS instead.
             //
             // getInfo().overlays reflects the actual window state, so
             // this self-corrects: fresh builds report not-overlaying →
@@ -167,7 +167,7 @@ export function CapacitorNativeInit() {
                 (info as { overlays?: boolean })?.overlays,
               );
             } catch {
-              /* getInfo missing in this binary — leave overlaying false */
+              /* getInfo missing in this binary, leave overlaying false */
             }
             document.documentElement.style.setProperty(
               "--app-safe-top",
@@ -175,7 +175,7 @@ export function CapacitorNativeInit() {
             );
           }
         } catch {
-          /* plugin shape changed / not in this binary — ignore */
+          /* plugin shape changed / not in this binary, ignore */
         }
       }
 
@@ -208,14 +208,14 @@ export function CapacitorNativeInit() {
           await PushNotifications.addListener(
             "registrationError",
             () => {
-              /* APNs/FCM not provisioned yet — nothing to store */
+              /* APNs/FCM not provisioned yet, nothing to store */
             },
           );
           // Phase 2: a tapped action button (Business / Personal, or
           // the body itself). Hand the action + data to the server,
           // which re-auths and dispatches (reclassify a trip, etc.).
           // The interactive BUTTONS still need native category
-          // registration to appear on-device (see the spec) — this
+          // registration to appear on-device (see the spec), this
           // listener also fires for the default "tap" so the routing
           // is correct the moment categories land.
           await PushNotifications.addListener(
@@ -243,7 +243,7 @@ export function CapacitorNativeInit() {
           // CRITICAL: register() on Android calls into FirebaseMessaging
           // which throws IllegalStateException ON THE NATIVE THREAD if
           // google-services.json hasn't been installed. The native
-          // throw is NOT caught by this JS try/catch — it propagates
+          // throw is NOT caught by this JS try/catch, it propagates
           // up through the Capacitor plugin worker and crashes the
           // entire app process before the WebView finishes loading.
           // Diagnosed on emulator-5554 May 22, 2026.
@@ -253,7 +253,7 @@ export function CapacitorNativeInit() {
           // android/app/, GoogleService-Info.plist for iOS, env var
           // flipped). The other PushNotifications APIs (listeners,
           // checkPermissions) don't touch Firebase so they're safe to
-          // keep running unconditionally — they're just no-ops without
+          // keep running unconditionally, they're just no-ops without
           // a registered token.
           const pushEnabled =
             process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1";
@@ -261,7 +261,7 @@ export function CapacitorNativeInit() {
             await PushNotifications.register();
           }
         } catch {
-          /* not in this binary / no APNs entitlement yet — ignore */
+          /* not in this binary / no APNs entitlement yet, ignore */
         }
       }
 
@@ -276,7 +276,7 @@ export function CapacitorNativeInit() {
       // kills the @capgo foreground service silently while the app
       // is backgrounded. When the user opens the app again, the
       // plugin's tracking session is dead but our flag still says
-      // "on" — we need to call start() again. resumeMileage handles
+      // "on", we need to call start() again. resumeMileage handles
       // both that AND the "no-op if already running" case (tracking
       // boolean in native-tracker.ts gates the second call).
       if (!cancelled) {
@@ -296,10 +296,10 @@ export function CapacitorNativeInit() {
               void resumeMileageTrackingIfEnabled().catch(() => {});
             });
           } catch {
-            /* @capacitor/app missing in this binary — best-effort */
+            /* @capacitor/app missing in this binary, best-effort */
           }
         } catch {
-          /* plugin absent in this binary — no-op */
+          /* plugin absent in this binary, no-op */
         }
       }
 
@@ -315,7 +315,7 @@ export function CapacitorNativeInit() {
           await startWatchBridge();
           await syncWatch();
         } catch {
-          /* bridge plugin absent in this binary — no-op */
+          /* bridge plugin absent in this binary, no-op */
         }
       }
 
@@ -332,7 +332,7 @@ export function CapacitorNativeInit() {
           await startWidgetBridge();
           await syncWidget();
         } catch {
-          /* widget plugin absent in this binary — no-op */
+          /* widget plugin absent in this binary, no-op */
         }
       }
     })();

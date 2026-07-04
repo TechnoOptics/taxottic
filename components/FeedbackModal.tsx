@@ -18,7 +18,7 @@ type Props = {
 };
 
 /**
- * Feedback modal — kind / subject / body form that POSTs to the
+ * Feedback modal, kind / subject / body form that POSTs to the
  * submitFeedback server action.
  *
  * Previously this lived inside FeedbackButton.tsx and the trigger

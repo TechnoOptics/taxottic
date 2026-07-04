@@ -1,9 +1,9 @@
 /**
- * Education credits — IRC § 25A.
+ * Education credits, IRC § 25A.
  *
  * Two flavors, claimed on Form 8863:
  *
- *   American Opportunity Tax Credit (§ 25A(b)) — the better credit
+ *   American Opportunity Tax Credit (§ 25A(b)), the better credit
  *   when the student qualifies. 100% of the first $2,000 of qualified
  *   expenses + 25% of the next $2,000 = maximum $2,500 per student.
  *   Forty percent of the credit is REFUNDABLE (up to $1,000 in cash
@@ -14,13 +14,13 @@
  *     - No felony drug conviction
  *     - AOTC hasn't been claimed for the student in any 4 prior years
  *
- *   Lifetime Learning Credit (§ 25A(c)) — broader eligibility, smaller
+ *   Lifetime Learning Credit (§ 25A(c)), broader eligibility, smaller
  *   ceiling. 20% of up to $10,000 of qualified expenses = maximum
  *   $2,000 PER RETURN (not per student). Non-refundable. Available
  *   for any post-secondary education including job-skill courses;
  *   no degree-seeking requirement, no four-year limit.
  *
- * Phase-out thresholds (both credits use the same range — these are
+ * Phase-out thresholds (both credits use the same range, these are
  * statutory and NOT inflation-adjusted, frozen since TCJA):
  *   Single / HoH / Qualifying Widow / MFS:  $80,000  →  $90,000
  *   MFJ:                                    $160,000 → $180,000

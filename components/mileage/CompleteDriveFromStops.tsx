@@ -6,7 +6,7 @@
 // The GPS tracker is best-effort: a dead battery, a killed background
 // process, or a no-signal stretch on a road trip leaves a hole in the
 // breadcrumb and the drive never lands. Rather than lose the deduction,
-// the driver reconstructs the drive here by entering WHERE they went —
+// the driver reconstructs the drive here by entering WHERE they went -
 // start, destination, and any stops along the way. We geocode each stop
 // (Google Places) and compute the DRIVING distance + route with the
 // Directions service (real road miles, not straight-line), then hand it
@@ -16,7 +16,7 @@
 // can reconcile against their odometer), the trip lands "unclassified"
 // until reviewed, and the note records that it was reconstructed. If the
 // Directions service is unavailable we fall back to a straight-line
-// estimate from the picked coordinates and say so — it can only
+// estimate from the picked coordinates and say so, it can only
 // under-count, never inflate.
 
 import { useEffect, useRef, useState } from "react";
@@ -106,7 +106,7 @@ function StopRow({
         });
       })
       .catch(() => {
-        /* no key / blocked — stays a plain text input, Directions geocodes it */
+        /* no key / blocked, stays a plain text input, Directions geocodes it */
       });
     return () => {
       cancelled = true;
@@ -263,7 +263,7 @@ export function CompleteDriveFromStops({
         setComputed(result);
         setMilesEdit(result.miles.toFixed(1));
       } else {
-        // Directions unavailable — straight-line fallback needs coordinates
+        // Directions unavailable, straight-line fallback needs coordinates
         // from picked suggestions.
         const coords = filled
           .filter((s) => s.lat != null && s.lng != null)
@@ -349,7 +349,7 @@ export function CompleteDriveFromStops({
       </div>
       <p className="text-[11px] text-ink-muted leading-relaxed">
         For drives the tracker missed (phone died, no signal, app killed).
-        Enter where you started, where you ended, and any stops in between —
+        Enter where you started, where you ended, and any stops in between -
         we&apos;ll calculate the driving distance for you. Start typing and
         pick from the suggestions for the most accurate result.
       </p>
@@ -419,7 +419,7 @@ export function CompleteDriveFromStops({
           {computed.method === "straight_line" ? (
             <p className="text-[10px] text-ink-muted leading-snug">
               Directions weren&apos;t available, so this is the straight-line
-              distance between your stops — it under-counts real road miles.
+              distance between your stops, it under-counts real road miles.
               Adjust upward to match your actual drive.
             </p>
           ) : null}
@@ -479,7 +479,7 @@ export function CompleteDriveFromStops({
             disabled={submitting}
             className="btn-primary h-10 text-sm disabled:opacity-60"
           >
-            {submitting ? "Saving…" : `Save this ${milesEdit || "—"}-mile drive`}
+            {submitting ? "Saving…" : `Save this ${milesEdit || "-"}-mile drive`}
           </button>
         </div>
       ) : null}

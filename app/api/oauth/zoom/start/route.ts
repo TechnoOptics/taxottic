@@ -4,7 +4,7 @@ import { getFirmContext } from "@/lib/firm/context";
 import { signOauthState } from "@/lib/firm/oauth/state";
 import { getProvider, siteOrigin } from "@/lib/firm/oauth/providers";
 
-// /api/oauth/zoom/start — initiates the Zoom OAuth flow for the
+// /api/oauth/zoom/start, initiates the Zoom OAuth flow for the
 // currently signed-in firm member.
 //
 // Flow:

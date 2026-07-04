@@ -305,7 +305,7 @@ export default async function InvoicesPage({
                     <input
                       type="text"
                       name="line_desc"
-                      placeholder={i === 0 ? "Tax preparation — 2026" : "Description"}
+                      placeholder={i === 0 ? "Tax preparation, 2026" : "Description"}
                       className="input text-sm"
                     />
                     <input

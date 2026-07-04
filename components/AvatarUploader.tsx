@@ -18,10 +18,10 @@ const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
  * Personal avatar upload + preview + replace + remove. Same shape as
  * CompanyLogoUploader (client-side supabase-js upload, then a server
  * action persists the resolved URL) but scoped to the caller's own
- * user id instead of a manager's company — every signed-in user can
+ * user id instead of a manager's company, every signed-in user can
  * manage their own avatar, no role gate needed.
  *
- * Path convention: <user_id>/avatar-<timestamp>.<ext> — the leading
+ * Path convention: <user_id>/avatar-<timestamp>.<ext>, the leading
  * folder is what the "avatars" bucket's storage RLS checks against
  * auth.uid() (see 20260702150900_avatars_storage.sql).
  */

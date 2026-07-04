@@ -15,13 +15,13 @@ const KIND_ICON: Record<OutstandingItem["kind"], string> = {
   bank_transaction: "🏦",
 };
 
-// One popup per browser SESSION (not per page nav) — sessionStorage
+// One popup per browser SESSION (not per page nav), sessionStorage
 // survives client-side navigation but clears when the tab/app closes,
 // so the user sees this again next time they open the app, but not on
 // every internal link click during the same visit.
 const DISMISS_KEY = "taxottic.outstanding.popup.dismissed";
 
-// Per-item "not now, and don't ask again" — separate from DISMISS_KEY
+// Per-item "not now, and don't ask again", separate from DISMISS_KEY
 // above (which hides the WHOLE popup for the rest of the session).
 // localStorage (not sessionStorage) because dismissing one specific
 // item is a standing preference ("this one's just informational, stop
@@ -42,14 +42,14 @@ function saveDismissedItems(ids: Set<string>) {
   try {
     localStorage.setItem(ITEM_DISMISS_KEY, JSON.stringify(Array.from(ids)));
   } catch {
-    /* private mode / quota — the x still hides it for this render */
+    /* private mode / quota, the x still hides it for this render */
   }
 }
 
 /**
  * On-load "you have outstanding items" popup. Surfaces once per
  * session when there's anything needing review. Closing it does NOT
- * lose the items — they stay live in the header bell (and the slim
+ * lose the items, they stay live in the header bell (and the slim
  * banner) for the rest of the session; this popup just doesn't nag
  * again until the next fresh session.
  */
@@ -62,7 +62,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
     try {
       if (sessionStorage.getItem(DISMISS_KEY) === "1") return;
     } catch {
-      /* private mode — show it anyway, no memory across reloads either */
+      /* private mode, show it anyway, no memory across reloads either */
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on-load surfacing, condition depends on browser storage only readable client-side
     setDismissedIds(loadDismissedItems());
@@ -70,7 +70,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
   }, [count]);
 
   // The mobile "open menu" FAB (LeftRailMobile) is portaled straight to
-  // document.body with its own fixed positioning + z-index — verified on a
+  // document.body with its own fixed positioning + z-index, verified on a
   // real device (Galaxy Z Fold5) that it was rendering ON TOP of this
   // modal's Review/Not-now buttons despite a numerically lower z-index,
   // i.e. it isn't a simple stacking-order fix. Toggling a body class the
@@ -87,7 +87,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
     try {
       sessionStorage.setItem(DISMISS_KEY, "1");
     } catch {
-      /* private mode — will simply show again next reload, acceptable */
+      /* private mode, will simply show again next reload, acceptable */
     }
   }
 
@@ -106,7 +106,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
     (it) => !dismissedIds.has(`${it.kind}:${it.id}`),
   );
   // The server-computed `count` includes items past the preview cap
-  // AND anything just dismissed locally — knock off local dismissals so
+  // AND anything just dismissed locally, knock off local dismissals so
   // the heading stays honest about what's actually still showing.
   const visibleCount = Math.max(0, count - dismissedIds.size);
 
@@ -184,7 +184,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
                   type="button"
                   onClick={(e) => dismissItem(e, key)}
                   aria-label={`Dismiss ${it.title}`}
-                  title="Just informational — stop showing this"
+                  title="Just informational, stop showing this"
                   // Always visible, not hover-only: this app is primarily used
                   // on touchscreens, which have no hover state, so an
                   // opacity-0-until-:hover button is invisible AND

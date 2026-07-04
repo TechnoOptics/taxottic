@@ -1,4 +1,4 @@
-// Google Static Maps URL builder — server-safe, zero-JS.
+// Google Static Maps URL builder, server-safe, zero-JS.
 //
 // Used for the lightweight trip thumbnails in the mileage list (a
 // full interactive <MileageMap> is overkill per row). Pure string
@@ -11,7 +11,7 @@
 // API must be enabled on that key and the referrer allow-list must
 // include taxottic.com + the Capacitor WebView origin. The key is
 // only ever interpolated into an <img> src the browser requests
-// directly — never logged, never committed.
+// directly, never logged, never committed.
 
 export type StaticMapPoint = { lat: number; lng: number };
 

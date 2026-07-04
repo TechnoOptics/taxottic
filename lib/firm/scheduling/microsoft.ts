@@ -4,7 +4,7 @@ import type {
   CreateMeetingResult,
 } from "./provider";
 
-// Microsoft Graph adapter — creates a Teams meeting + posts a
+// Microsoft Graph adapter, creates a Teams meeting + posts a
 // Calendar event in the user's primary calendar. Two API calls:
 //   1. POST /me/onlineMeetings  → returns joinWebUrl
 //   2. POST /me/events          → posts the calendar invite with
@@ -93,7 +93,7 @@ export const microsoftProvider: CalendarProvider = {
         },
       );
       if (!eventRes.ok) {
-        // Don't fail outright — the meeting exists, just no
+        // Don't fail outright, the meeting exists, just no
         // calendar event. Surface the warning to the caller.
          
         console.warn(

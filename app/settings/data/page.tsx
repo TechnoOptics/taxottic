@@ -33,7 +33,7 @@ export default async function DataPage() {
         </div>
         <h1 className="display mt-2 text-3xl text-forest-900">Your data</h1>
         <p className="mt-2 text-sm text-ink-soft max-w-2xl leading-relaxed">
-          A copy of everything Taxottic stores about you — companies,
+          A copy of everything Taxottic stores about you, companies,
           transactions, monthly entries, reminders, goals, badges, and
           feedback you&apos;ve sent us. JSON format, machine-readable,
           one file.
@@ -53,7 +53,7 @@ export default async function DataPage() {
             >
               recycle bin
             </Link>{" "}
-            are included — the export is your full history, not just
+            are included, the export is your full history, not just
             what&apos;s active today.
           </p>
           {/* Triggers the download endpoint. Browsers honor the
@@ -69,7 +69,7 @@ export default async function DataPage() {
             </a>
           </p>
           <p className="text-[11px] text-ink-muted leading-relaxed">
-            File size is bounded by your data — typically under a few
+            File size is bounded by your data, typically under a few
             MB. The download is private and not cached anywhere.
           </p>
         </section>
@@ -111,7 +111,7 @@ export default async function DataPage() {
             </li>
             <li>
               <strong>Internal operator tables</strong> (super-admin
-              allowlist, audit logs, feature gates) — not yours.
+              allowlist, audit logs, feature gates), not yours.
             </li>
           </ul>
         </section>
@@ -132,7 +132,7 @@ export default async function DataPage() {
             </li>
             <li>
               The item is hidden from your dashboard, firm cockpit, and
-              every other active view — only the recycle bin sees it.
+              every other active view, only the recycle bin sees it.
             </li>
           </ul>
           <p className="text-sm text-ink-soft leading-relaxed">
@@ -160,7 +160,7 @@ export default async function DataPage() {
           >
             privacy@taxottic.com
           </a>{" "}
-          — we honor GDPR / CCPA / CPRA data-subject requests under the
+, we honor GDPR / CCPA / CPRA data-subject requests under the
           terms in{" "}
           <Link
             href="/legal/privacy"

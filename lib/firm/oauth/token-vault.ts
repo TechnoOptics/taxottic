@@ -2,7 +2,7 @@
 //
 // Phase 10 stored tokens as base64-encoded JSON in the
 // `firm_calendar_integrations.encrypted_token_blob` column. That's
-// not actually encrypted — anyone with read access to the column
+// not actually encrypted, anyone with read access to the column
 // (super-admin or compromised service-role key) sees the
 // access_token. Phase 10.5 upgrades to AEAD authenticated
 // encryption using the AES-256-GCM primitive Node ships natively.
@@ -12,7 +12,7 @@
 // The encrypted blob format is:
 //   v1:base64(iv || ciphertext || authtag)
 // The `v1:` prefix gives us a clean way to roll forward to v2
-// (e.g., when we switch to KMS) — read paths detect the prefix.
+// (e.g., when we switch to KMS), read paths detect the prefix.
 //
 // ── Key rotation ──────────────────────────────────────────────
 // Encryption always uses the PRIMARY key. Decryption tries the
@@ -25,7 +25,7 @@
 //      the old key(s).
 //   3. (Optional housekeeping) Run a backfill that calls
 //      reencryptBlob() over the stored blobs to migrate them onto
-//      the new key — isOnPrimaryKey() lets it skip already-migrated
+//      the new key, isOnPrimaryKey() lets it skip already-migrated
 //      rows.
 //   4. Once nothing decrypts under the old key, drop it from
 //      OAUTH_TOKEN_VAULT_KEYS_OLD.
@@ -118,7 +118,7 @@ export function decryptTokenJson<T = Record<string, unknown>>(
 }
 
 /**
- * True when the blob decrypts under the CURRENT primary key — i.e. it does
+ * True when the blob decrypts under the CURRENT primary key, i.e. it does
  * NOT need re-encryption after a rotation. Legacy v0 (unprefixed) blobs and
  * undecryptable blobs return false.
  */

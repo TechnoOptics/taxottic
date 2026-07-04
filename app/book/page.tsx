@@ -29,7 +29,7 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
-          // Native iOS overlays the WebView under the status bar — pad by
+          // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
           paddingTop:

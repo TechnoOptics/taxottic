@@ -127,7 +127,7 @@ export async function approveFirmRequest(formData: FormData) {
     client: admin,
     firmId: firm.id,
     kind: "firm.member_invited",
-    summary: `Firm provisioned at ${slug}.taxottic.com — owner invitation sent to ${req.contact_email}.`,
+    summary: `Firm provisioned at ${slug}.taxottic.com, owner invitation sent to ${req.contact_email}.`,
     payload: {
       request_id: requestId,
       slug,
@@ -151,7 +151,7 @@ export async function approveFirmRequest(formData: FormData) {
  *   firm_name         (required)
  *   contact_email     (required)
  *   contact_full_name (optional)
- *   slug              (optional — auto-derived from firm_name otherwise)
+ *   slug              (optional, auto-derived from firm_name otherwise)
  */
 export async function createFirmDirect(formData: FormData) {
   await requireSuperAdmin();
@@ -168,7 +168,7 @@ export async function createFirmDirect(formData: FormData) {
     .toLowerCase();
 
   if (!firmName) throw new Error("Firm name is required.");
-  // Minimal email shape check — Supabase + RLS catch the rest.
+  // Minimal email shape check, Supabase + RLS catch the rest.
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
     throw new Error("A valid contact email is required.");
   }
@@ -227,7 +227,7 @@ export async function createFirmDirect(formData: FormData) {
     client: admin,
     firmId: firm.id,
     kind: "firm.member_invited",
-    summary: `Firm provisioned directly at ${slug}.taxottic.com — owner invitation sent to ${contactEmail}.`,
+    summary: `Firm provisioned directly at ${slug}.taxottic.com, owner invitation sent to ${contactEmail}.`,
     payload: {
       direct: true,
       slug,

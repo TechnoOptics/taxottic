@@ -100,7 +100,7 @@ export default function Page() {
         <P>
           The U.S. tax system is &ldquo;pay as you go.&rdquo; Employees have
           tax withheld from every paycheck automatically. When you&apos;re
-          self-employed, nobody does that for you — so you send the IRS
+          self-employed, nobody does that for you, so you send the IRS
           estimated payments through the year instead of one big check in
           April.
         </P>
@@ -121,20 +121,20 @@ export default function Page() {
         </P>
         <UL>
           <LI>
-            <strong>Q1</strong> — about April 15 (income from Jan–Mar)
+            <strong>Q1</strong>, about April 15 (income from Jan-Mar)
           </LI>
           <LI>
-            <strong>Q2</strong> — about June 15 (Apr–May)
+            <strong>Q2</strong>, about June 15 (Apr-May)
           </LI>
           <LI>
-            <strong>Q3</strong> — about September 15 (Jun–Aug)
+            <strong>Q3</strong>, about September 15 (Jun-Aug)
           </LI>
           <LI>
-            <strong>Q4</strong> — about January 15 of next year (Sep–Dec)
+            <strong>Q4</strong>, about January 15 of next year (Sep-Dec)
           </LI>
         </UL>
         <P>
-          Note the periods aren&apos;t even calendar quarters — Q2 covers two
+          Note the periods aren&apos;t even calendar quarters, Q2 covers two
           months, Q4 covers four. That trips up a lot of people.
         </P>
 
@@ -142,13 +142,13 @@ export default function Page() {
         <P>Two ways to size each payment:</P>
         <UL>
           <LI>
-            <strong>Project this year</strong> — estimate your full-year net
+            <strong>Project this year</strong>, estimate your full-year net
             income, figure the income tax plus 15.3% self-employment tax on
             it, subtract any withholding, and split the rest across the
             remaining due dates.
           </LI>
           <LI>
-            <strong>Use last year as a floor (safe harbor)</strong> — pay 100%
+            <strong>Use last year as a floor (safe harbor)</strong>, pay 100%
             of last year&apos;s total tax (110% if your prior-year AGI was over
             $150,000) in equal installments. Simple, and it guarantees no
             penalty.
@@ -165,7 +165,7 @@ export default function Page() {
         </P>
 
         <Callout>
-          The trap isn&apos;t the math — it&apos;s the calendar. Taxottic keeps
+          The trap isn&apos;t the math, it&apos;s the calendar. Taxottic keeps
           a live forecast of what you owe and reminds you before each due
           date with the amount to send, so you pay the right number on time
           without tracking four irregular deadlines yourself.

@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "react";
 // Tiny info popover for the "Tax-ready · NN%" metric on the dashboard
 // company cards. Round-2 audit: the percentage isn't explained in-product,
 // and the native `title` attribute is invisible on touch. This renders a
-// keyboard-focusable info button that toggles a panel on click — works on
-// both pointer and touch — and surfaces both the inputs and the formula.
+// keyboard-focusable info button that toggles a panel on click, works on
+// both pointer and touch, and surfaces both the inputs and the formula.
 //
 // All math is rendered in plain English so the user doesn't have to
 // know that "engagement × 50% + coverage × 50%" is what we mean by

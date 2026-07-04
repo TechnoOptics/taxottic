@@ -1,5 +1,5 @@
 /**
- * Saver's Credit — IRC § 25B.
+ * Saver's Credit, IRC § 25B.
  *
  * Non-refundable credit for low-/moderate-income filers who contribute
  * to qualifying retirement plans (Traditional or Roth IRA, 401(k),

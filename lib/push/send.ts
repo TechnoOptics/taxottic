@@ -1,4 +1,4 @@
-// Send orchestration — dependency-injected so the core (dedupe +
+// Send orchestration, dependency-injected so the core (dedupe +
 // fan-out) is unit-tested with fakes and prod swaps in the Supabase
 // store + the real APNs/FCM provider.
 
@@ -72,7 +72,7 @@ export async function sendToUser(
     try {
       res = await provider.send(t.token, t.platform, payload);
     } catch {
-      // A transport throw is treated as a soft miss, not a crash —
+      // A transport throw is treated as a soft miss, not a crash -
       // the notification_log row stays so we don't retry-storm; a
       // future "retry unconfirmed" job (out of Phase 1 scope) can
       // reconcile if we ever need delivery guarantees.

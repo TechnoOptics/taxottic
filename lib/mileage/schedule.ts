@@ -1,4 +1,4 @@
-// Mileage tracking schedule — when the auto-track service should be
+// Mileage tracking schedule, when the auto-track service should be
 // allowed to run. The user picks a high-level mode ("always" /
 // "weekdays" / "custom") on /mileage/schedule and we persist it on
 // profiles.mileage_schedule as JSONB.
@@ -132,7 +132,7 @@ export function summarise(
 ): string {
   if (!schedule || schedule.mode === "always") return "Always on";
   if (schedule.mode === "weekdays") {
-    return `Weekdays · ${schedule.from} – ${schedule.to}`;
+    return `Weekdays · ${schedule.from}, ${schedule.to}`;
   }
   const activeDays = DAYS.filter((d) => (schedule.windows?.[d] ?? []).length > 0);
   if (activeDays.length === 0) return "Off (no windows set)";

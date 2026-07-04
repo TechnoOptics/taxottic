@@ -56,7 +56,7 @@ export default async function FirmThreadsPage() {
               name="title"
               required
               maxLength={200}
-              placeholder="Q4 prep — Smith Allen partners"
+              placeholder="Q4 prep, Smith Allen partners"
               className="input text-sm"
             />
           </label>

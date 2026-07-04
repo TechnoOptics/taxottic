@@ -9,8 +9,8 @@ const KEY = "taxottic.theme";
  * Dark/Light segmented toggle, persisted to localStorage. Flipping
  * the choice updates html[data-theme] immediately (via the custom
  * event DarkThemeMount listens for) so the page re-skins without a
- * reload. Defaults to dark — same as the previous always-dark
- * behaviour — until the user opts into light.
+ * reload. Defaults to dark, same as the previous always-dark
+ * behaviour, until the user opts into light.
  */
 export function ThemeToggle() {
   // Render-stable initial state for SSR; corrected on mount from
@@ -31,7 +31,7 @@ export function ThemeToggle() {
         initial = dom;
       }
     } catch {
-      /* private mode — keep light */
+      /* private mode, keep light */
     }
     setTheme(initial);
   }, []);
@@ -42,7 +42,7 @@ export function ThemeToggle() {
     try {
       window.localStorage.setItem(KEY, next);
     } catch {
-      /* private mode — visual change still applies for this tab */
+      /* private mode, visual change still applies for this tab */
     }
     document.documentElement.dataset.theme = next;
     window.dispatchEvent(new Event(THEME_CHANGE_EVENT));

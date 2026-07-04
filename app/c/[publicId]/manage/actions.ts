@@ -23,7 +23,7 @@ async function isManagerOf(
 
   // Safety net: the person who created the company is always treated as a
   // manager, so the account creator can never be locked out of inviting or
-  // managing teammates — even if their membership row is somehow missing or
+  // managing teammates, even if their membership row is somehow missing or
   // got demoted. This is what guarantees "whoever creates the account is the
   // account manager". (Only runs when the membership check above didn't
   // already confirm manager, so the common path stays a single query.)
@@ -44,7 +44,7 @@ const INVITE_LINK_COOKIE = "taxottic_last_invite_link";
 // sendEmail() never throws (best-effort transport) and previously its
 // result was discarded entirely, so a manager had no way to tell "the
 // invitee will get an email" from "nothing was sent, share the link
-// yourself" — both looked like an identical success screen. "1" = sent
+// yourself", both looked like an identical success screen. "1" = sent
 // via a real provider; absent/anything else = not sent (no provider
 // configured, or the provider call failed).
 const INVITE_EMAIL_STATUS_COOKIE = "taxottic_last_invite_email_status";
@@ -74,7 +74,7 @@ export async function inviteMember(formData: FormData) {
   }
 
   // Confirm the chosen department actually belongs to this company before
-  // it ever reaches the invitations row — a stray/forged id from another
+  // it ever reaches the invitations row, a stray/forged id from another
   // company should silently drop rather than cross-link departments.
   let verifiedDepartmentId: string | null = null;
   if (departmentId) {
@@ -87,11 +87,11 @@ export async function inviteMember(formData: FormData) {
     verifiedDepartmentId = dept?.id ?? null;
   }
 
-  // A department lead without a department can't review anything —
+  // A department lead without a department can't review anything -
   // the role only means something scoped to one department.
   if (role === "lead" && !verifiedDepartmentId) {
     throw new Error(
-      "Pick a department for a department lead — their review rights are scoped to it.",
+      "Pick a department for a department lead, their review rights are scoped to it.",
     );
   }
 
@@ -174,7 +174,7 @@ export async function inviteMember(formData: FormData) {
   const inviteUrl = `${origin}/invite/${token}`;
 
   // Actually email the invitee. Previously this function only wrote the
-  // invitations row and handed the manager a link to copy/share — no
+  // invitations row and handed the manager a link to copy/share, no
   // email ever went out, so invitees never learned they'd been added
   // unless the manager separately sent them the link by hand.
   let emailSent = false;
@@ -197,7 +197,7 @@ export async function inviteMember(formData: FormData) {
       text: rendered.text,
       tags: { kind: "company-member-invite", role },
     });
-    // "noop" means no provider was configured at all — that's not a
+    // "noop" means no provider was configured at all, that's not a
     // real send, regardless of the ok:true it returns for callers that
     // just want "did this throw." A failed Resend call also isn't sent.
     emailSent = result.ok && result.provider !== "noop";
@@ -230,7 +230,7 @@ export async function inviteMember(formData: FormData) {
 /**
  * Read-only peek: pulls the most recent invite link + whether its email
  * actually sent out of cookies (set by inviteMember) so the manage page
- * can show a share card once. Never mutates cookies — Next.js only allows
+ * can show a share card once. Never mutates cookies, Next.js only allows
  * cookies().set()/delete() during a Server Action or Route Handler
  * response, not a plain page render (this page also renders on a normal
  * GET navigation, where the cookie store is read-only). Clearing happens
@@ -248,8 +248,8 @@ export async function peekLastInviteLink(): Promise<{
 }
 
 /**
- * Clears the invite-link cookies. This is a Server Action, so — unlike
- * peekLastInviteLink — it's allowed to mutate cookies. Call it from a
+ * Clears the invite-link cookies. This is a Server Action, so, unlike
+ * peekLastInviteLink, it's allowed to mutate cookies. Call it from a
  * client component once the share card has been shown, so a page reload
  * doesn't keep re-displaying the same invite.
  */
@@ -348,7 +348,7 @@ export async function createDepartment(formData: FormData) {
     name,
     created_by: user.id,
   });
-  // Unique (company_id, lower(name)) — surface a friendly message on
+  // Unique (company_id, lower(name)), surface a friendly message on
   // conflict instead of the raw Postgres constraint error.
   if (error) {
     throw new Error(

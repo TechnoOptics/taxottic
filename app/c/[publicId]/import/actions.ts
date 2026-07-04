@@ -128,7 +128,7 @@ function uploadErrorMessage(err: unknown): string {
 }
 
 /**
- * Pure import worker — does the auth + parse + insert + categorize
+ * Pure import worker, does the auth + parse + insert + categorize
  * work and returns a result without any redirects. Both the
  * form-bound `uploadCsv` (which redirects on success/error) and the
  * client-callable `uploadCsvBatch` (which returns a result so a
@@ -323,7 +323,7 @@ export async function applyTransactions(formData: FormData) {
     throw new Error("Not a member of this company");
   }
 
-  // Pull the import's account_type — credit-card imports take the
+  // Pull the import's account_type, credit-card imports take the
   // absolute value of every charge as an expense regardless of sign,
   // since issuers don't agree on charge-vs-payment sign conventions.
   const { data: imp } = await admin
@@ -358,8 +358,8 @@ export async function applyTransactions(formData: FormData) {
 
   // Identify any non-Schedule-C scoped categories among the chosen
   // codes. Two scopes never book to monthly_expenses:
-  //   transfer — inter-account moves (credit_card_payment etc.)
-  //   personal — Schedule A items (charity, mortgage interest,
+  //   transfer, inter-account moves (credit_card_payment etc.)
+  //   personal, Schedule A items (charity, mortgage interest,
   //              SALT, volunteer mileage). Surfaced in the picker
   //              so users can tag personal rows that show up on a
   //              business credit-card statement, but they don't
@@ -385,7 +385,7 @@ export async function applyTransactions(formData: FormData) {
             (c as { scope?: string }).scope === "personal" ||
             // 'credit' scope is federal tax credits (Child Tax,
             // EITC, Residential Energy, etc.). They reduce TAX
-            // dollar-for-dollar — not income — so they never
+            // dollar-for-dollar, not income, so they never
             // belong on Schedule C / monthly_expenses. Same
             // ignored=true route as transfers + Schedule A items.
             (c as { scope?: string }).scope === "credit",
@@ -394,7 +394,7 @@ export async function applyTransactions(formData: FormData) {
     );
   }
   // Renamed for clarity; existing loop reference still uses
-  // transferCodes — keep an alias so we don't break the rest of
+  // transferCodes, keep an alias so we don't break the rest of
   // the function in one edit.
   const transferCodes = nonBusinessCodes;
   const transferIds = applicable
@@ -423,7 +423,7 @@ export async function applyTransactions(formData: FormData) {
   const txUpdates: { id: string }[] = [];
 
   for (const tx of applicable) {
-    // Transfers already handled above — skip the expense-insert loop.
+    // Transfers already handled above, skip the expense-insert loop.
     if (transferCodes.has(tx.applied_category_code!)) continue;
     if (!tx.posted_at) continue;
     const posted = new Date(tx.posted_at + "T00:00:00Z");
@@ -444,12 +444,12 @@ export async function applyTransactions(formData: FormData) {
     //     - Everything else negative is a refund → also skip from
     //       auto-apply. A refund offsets an earlier charge that was
     //       already booked; auto-booking it as either a positive expense
-    //       (the prior abs() bug — inflated deductions) or a negative
+    //       (the prior abs() bug, inflated deductions) or a negative
     //       expense (would surface as an income tile, also wrong) gets
     //       it wrong either way. Leave for user review.
     if (isCredit) {
       if (looksLikeCardPayment(tx.description)) continue;
-      if (tx.amount_cents < 0) continue; // refund — surface for review
+      if (tx.amount_cents < 0) continue; // refund, surface for review
       expenseInserts.push({
         company_id: companyId,
         user_id: user.id,
@@ -464,7 +464,7 @@ export async function applyTransactions(formData: FormData) {
     }
 
     // Non-credit (checking/savings/other): keep the existing sign
-    // convention — only negative amounts are expenses. Positive
+    // convention, only negative amounts are expenses. Positive
     // amounts are income or transfers; the user can categorize those
     // manually for now.
     if (tx.amount_cents < 0) {
@@ -515,7 +515,7 @@ export async function applyTransactions(formData: FormData) {
       summary: `Applied ${createdExpenses.length} transaction${createdExpenses.length === 1 ? "" : "s"} from an import`,
       payload: { import_id: importId, count: createdExpenses.length },
     });
-    // Same recurring-stream detector the bank syncs run — a CSV import
+    // Same recurring-stream detector the bank syncs run, a CSV import
     // is just another "updated expense sheet", so a subscription that
     // stops showing up in a newer statement gets caught here too.
     await applyRecurringExpenseDetection(admin, companyId, taxYear);
@@ -555,7 +555,7 @@ export async function setTxCategory(formData: FormData) {
       ignored: false,
     })
     .eq("id", id);
-  // Bug: this was `revalidatePath(\`/c/[publicId]/import/${importId}\`)` —
+  // Bug: this was `revalidatePath(\`/c/[publicId]/import/${importId}\`)` -
   // "[publicId]" as a literal string isn't a real path (a real URL is
   // /c/co_xyz/import/{importId}), so this never actually invalidated the
   // page the user was looking at. The "page" template form revalidates
@@ -563,7 +563,7 @@ export async function setTxCategory(formData: FormData) {
   // since this action only has the internal company_id, not the public one.
   revalidatePath("/c/[publicId]/import/[importId]", "page");
   // The dashboard's outstanding-items bell/banner/popup read this same
-  // table — without this a categorized transaction kept showing there
+  // table, without this a categorized transaction kept showing there
   // until the page's own cache TTL expired.
   revalidatePath("/dashboard");
 }
@@ -615,7 +615,7 @@ export async function ignoreTx(formData: FormData) {
  *      reflects the new entries on the next paint.
  *
  * For credit-card imports, the same card-payment heuristic from
- * applyTransactions applies — those rows get auto-ignored before
+ * applyTransactions applies, those rows get auto-ignored before
  * Bella sees them. We don't pay tokens to classify obvious transfers.
  */
 export async function bellaAutoApply(formData: FormData) {
@@ -639,7 +639,7 @@ export async function bellaAutoApply(formData: FormData) {
     },
   });
   // The action HAS to revalidate or the user clicks "Re-run Bella"
-  // and sees no change — the categorize pass updated
+  // and sees no change, the categorize pass updated
   // bank_transactions but the page's RSC cache holds the old rows.
   // Reported as "rerun bella not working" on May 23 2026.
   const { data: company } = await admin
@@ -660,7 +660,7 @@ export async function bellaAutoApply(formData: FormData) {
  * step finishes with everything categorized).
  *
  * onInsufficientCredits lets the caller decide what happens when the
- * user is out of credits — the manual button throws so the user sees
+ * user is out of credits, the manual button throws so the user sees
  * the error toast; the auto-flow swallows it and lets the user
  * categorize manually on the review page.
  */
@@ -673,8 +673,8 @@ async function runBellaCategorize(args: {
   onInsufficientCredits: (message: string) => void;
 }): Promise<void> {
   const { supabase, admin, userId, importId, companyId } = args;
-  // Local shim so the rest of the function — copied from the
-  // original action body — keeps using `user.id` without churn.
+  // Local shim so the rest of the function, copied from the
+  // original action body, keeps using `user.id` without churn.
   const user = { id: userId };
 
   const { data: imp } = await admin
@@ -697,7 +697,7 @@ async function runBellaCategorize(args: {
 
   // Pre-tag obvious credit-card-payment rows BEFORE Bella sees them.
   // On a credit import, looksLikeCardPayment matches "MOBILE PAYMENT -
-  // THANK YOU" / "AUTOPAY" / etc — these are inter-account transfers,
+  // THANK YOU" / "AUTOPAY" / etc, these are inter-account transfers,
   // not deductions. Tagging them with applied_category_code =
   // credit_card_payment + ignored=true removes them from the review
   // queue cleanly and keeps Bella from spending tokens classifying
@@ -725,7 +725,7 @@ async function runBellaCategorize(args: {
     }
   }
 
-  // Already-applied rows skip — we don't want to double-charge.
+  // Already-applied rows skip, we don't want to double-charge.
   // Card-payment rows we just tagged above are now ignored=true, so
   // the existing filter naturally excludes them; the redundant
   // looksLikeCardPayment guard stays as defense-in-depth.
@@ -744,7 +744,7 @@ async function runBellaCategorize(args: {
 
   // Bella memory: load the user's saved categorization rules. Any
   // candidate whose description matches a rule is categorized for
-  // free — no Anthropic call, no credits charged for that row. The
+  // free, no Anthropic call, no credits charged for that row. The
   // remaining candidates are sent to the model.
   const savedRules = await loadRules(admin, user.id, companyId);
   type RuleHit = {
@@ -834,7 +834,7 @@ async function runBellaCategorize(args: {
   }
   // Inject rule hits as synthetic high-confidence decisions so the
   // downstream apply-loop treats them identically. Map our rule
-  // "ignore" kind to the categorizer's "transfer" kind — both flow
+  // "ignore" kind to the categorizer's "transfer" kind, both flow
   // through the apply loop's ignoreTxIds branch and get marked as
   // ignored in bank_transactions.
   for (const hit of ruleHits) {
@@ -967,7 +967,7 @@ async function runBellaCategorize(args: {
             .eq("id", txId);
         }
       }
-      // Same recurring-stream detector the bank syncs run — Bella's
+      // Same recurring-stream detector the bank syncs run, Bella's
       // auto-apply is just another path new expense rows land through.
       await applyRecurringExpenseDetection(admin, companyId, taxYear);
     }
@@ -1028,7 +1028,7 @@ async function runBellaCategorize(args: {
   // v1 nets EXACT amount pairs from the same merchant within a 120-
   // day window. Partial returns stay in the candidates list (item-
   // level data isn't on the bank statement). Touches only rows that
-  // are still untouched — anything the user already tagged stays
+  // are still untouched, anything the user already tagged stays
   // alone.
   const { data: pairTxs } = await admin
     .from("bank_transactions")
@@ -1071,7 +1071,7 @@ async function runBellaCategorize(args: {
 /**
  * Delete a previously-uploaded import. Allowed for the company's
  * managers and for super admins. Cascades through:
- *   1. Reverse anything we already applied — every monthly_expense
+ *   1. Reverse anything we already applied, every monthly_expense
  *      and monthly_income created by this import gets deleted so the
  *      forecast doesn't keep reporting them.
  *   2. The bank_imports row itself, which CASCADEs to its
@@ -1112,7 +1112,7 @@ export async function deleteImport(formData: FormData) {
   // Find every monthly_expense / monthly_income that was created from
   // this import's transactions, then delete them. The
   // bank_transactions FKs are SET NULL on delete, so dropping the
-  // expenses/income rows leaves the tx pointers dangling — but we
+  // expenses/income rows leaves the tx pointers dangling, but we
   // delete the bank_imports row right after (which CASCADEs to the
   // transactions), so the dangling state never persists.
   const { data: applied } = await admin
@@ -1155,13 +1155,13 @@ export async function deleteImport(formData: FormData) {
  *   pattern         : the merchant string the user wants Bella to remember
  *   pattern_type    : exact | contains | starts_with
  *   kind            : expense | income | ignore | transfer
- *   category_code   : optional — required for expense/income
+ *   category_code   : optional, required for expense/income
  *   company_id      : the company the rule belongs to (or empty for global)
  *   notes           : optional human-readable note
  *
  * The rule fires on the next import (and on the current import if the
  * user re-runs Auto-categorize). Idempotent on
- * (user, pattern_type, pattern) — re-teaching updates the kind/code.
+ * (user, pattern_type, pattern), re-teaching updates the kind/code.
  */
 export async function teachBella(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -1216,7 +1216,7 @@ export async function teachBella(formData: FormData) {
   // that are from the same merchant and expense type." Without this,
   // a 100-row statement with 12 Lowe's charges makes the user retype
   // "Lowe's → Supplies" 12 times. The user still reads each row
-  // (we don't apply expenses to monthly_expenses — that needs the
+  // (we don't apply expenses to monthly_expenses, that needs the
   // Apply button), we just stamp applied_category_code + ignored
   // so the review queue collapses to one decision per merchant.
   if (importId && companyId) {
@@ -1328,7 +1328,7 @@ export async function deleteAccountTransactions(formData: FormData) {
     throw new Error("No transactions selected.");
   }
 
-  // Manager-only — same role required to disconnect a bank.
+  // Manager-only, same role required to disconnect a bank.
   const { data: membership } = await admin
     .from("company_members")
     .select("role")
@@ -1392,7 +1392,7 @@ export async function deleteAccountTransactions(formData: FormData) {
 /**
  * Toggle bank_accounts.is_excluded. An excluded account stays linked
  * (you still see it in the list) but its transactions are filtered
- * out of forecast/deductions/etc. — useful when an owner connects a
+ * out of forecast/deductions/etc., useful when an owner connects a
  * personal card alongside the business one. Manager-only.
  */
 export async function setAccountExcluded(formData: FormData) {
@@ -1406,7 +1406,7 @@ export async function setAccountExcluded(formData: FormData) {
   if (!accountId) throw new Error("Missing account_id.");
   if (!company_id) throw new Error("Missing company_id.");
 
-  // Manager/owner only — same role required for disconnect / delete.
+  // Manager/owner only, same role required for disconnect / delete.
   const { data: membership } = await admin
     .from("company_members")
     .select("role")

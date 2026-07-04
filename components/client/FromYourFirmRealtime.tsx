@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-// FromYourFirmRealtime — sister to components/firm/ActivityList.
+// FromYourFirmRealtime, sister to components/firm/ActivityList.
 // Subscribes to firm_documents / firm_meetings / firm_invoices
 // INSERTs + UPDATEs scoped to the engagement, and triggers
 // `router.refresh()` on each change so the server-rendered

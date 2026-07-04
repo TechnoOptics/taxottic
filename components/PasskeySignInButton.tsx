@@ -77,7 +77,7 @@ export function PasskeySignInButton({ emailHint }: Props) {
         className="btn-ghost w-full"
         onClick={signIn}
         disabled={pending}
-        aria-label="Sign in with passkey — Face ID, Touch ID, Windows Hello, or device PIN"
+        aria-label="Sign in with passkey, Face ID, Touch ID, Windows Hello, or device PIN"
       >
         {/* Fingerprint/biometric glyph so users recognize this as the
             "use my device's unlock" option, not an abstract security

@@ -12,7 +12,7 @@ const SITE = "https://taxottic.com";
 const SLUG = "self-employment-tax-how-much-to-set-aside";
 const TITLE = "How much should I set aside for taxes when self-employed?";
 const DESCRIPTION =
-  "A simple way to size your self-employment tax set-aside: self-employment tax (15.3%) plus federal and state income tax. Why 25–30% of net income is a common starting point, and how to do it without thinking.";
+  "A simple way to size your self-employment tax set-aside: self-employment tax (15.3%) plus federal and state income tax. Why 25-30% of net income is a common starting point, and how to do it without thinking.";
 
 export const metadata = {
   title: TITLE,
@@ -57,7 +57,7 @@ const FAQ_LD = {
       name: "What percentage should I set aside for self-employment taxes?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "A common starting point is 25–30% of your net self-employment income. That has to cover self-employment tax (15.3%) plus federal income tax, and state income tax if your state has one. If you're in a higher bracket or a high-tax state, lean toward the top of that range or above; if you have lots of deductions or a low total income, you may need less. The cleanest habit is to move a fixed percentage of every payment you receive into a separate savings account.",
+        text: "A common starting point is 25-30% of your net self-employment income. That has to cover self-employment tax (15.3%) plus federal income tax, and state income tax if your state has one. If you're in a higher bracket or a high-tax state, lean toward the top of that range or above; if you have lots of deductions or a low total income, you may need less. The cleanest habit is to move a fixed percentage of every payment you receive into a separate savings account.",
       },
     },
     {
@@ -65,7 +65,7 @@ const FAQ_LD = {
       name: "What is the self-employment tax rate?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "15.3% — 12.4% for Social Security plus 2.9% for Medicare. It's charged on 92.35% of your net self-employment earnings. The Social Security portion only applies up to an annual wage base the IRS adjusts each year; above that, only the 2.9% Medicare portion continues (with an extra 0.9% Medicare surtax at higher incomes). You can deduct half of your self-employment tax when figuring your income tax.",
+        text: "15.3%, 12.4% for Social Security plus 2.9% for Medicare. It's charged on 92.35% of your net self-employment earnings. The Social Security portion only applies up to an annual wage base the IRS adjusts each year; above that, only the 2.9% Medicare portion continues (with an extra 0.9% Medicare surtax at higher incomes). You can deduct half of your self-employment tax when figuring your income tax.",
       },
     },
     {
@@ -88,7 +88,7 @@ export default function Page() {
       <GuideShell
         kicker="Set-aside"
         title={TITLE}
-        lead="Short answer: many self-employed people set aside 25–30% of their net income. Here's why, and how to make it automatic so a tax bill never catches you off guard."
+        lead="Short answer: many self-employed people set aside 25-30% of their net income. Here's why, and how to make it automatic so a tax bill never catches you off guard."
         updated="June 2026"
         calc={{
           href: "/calculators/how-much-to-set-aside",
@@ -103,14 +103,14 @@ export default function Page() {
         </P>
         <UL>
           <LI>
-            <strong>Self-employment tax</strong> — Social Security and
+            <strong>Self-employment tax</strong>, Social Security and
             Medicare. It&apos;s a flat <strong>15.3%</strong> (12.4% +
             2.9%) charged on 92.35% of your net business profit. As an
             employee your employer quietly pays half of this; on your own,
             you pay both halves.
           </LI>
           <LI>
-            <strong>Income tax</strong> — federal (and state, in most
+            <strong>Income tax</strong>, federal (and state, in most
             states), charged on your taxable income at your bracket. This
             is the one most people remember.
           </LI>
@@ -124,24 +124,24 @@ export default function Page() {
 
         <H2>A simple rule of thumb</H2>
         <P>
-          Set aside <strong>25–30% of your net self-employment income</strong>{" "}
+          Set aside <strong>25-30% of your net self-employment income</strong>{" "}
           (what&apos;s left after business expenses). For many sole
           proprietors that comfortably covers both taxes. Adjust from there:
         </P>
         <UL>
-          <LI>Higher earners or high-tax states → lean to 30–35%+.</LI>
+          <LI>Higher earners or high-tax states → lean to 30-35%+.</LI>
           <LI>
             Lower total household income, or lots of deductions → you may
             need closer to 20%.
           </LI>
           <LI>
             A working spouse, W-2 withholding, or big credits change the
-            picture — a real forecast beats any flat number.
+            picture, a real forecast beats any flat number.
           </LI>
         </UL>
         <Callout>
           The percentage is a safety habit, not a precise bill. The point is
-          to never spend money that was never really yours — the tax portion
+          to never spend money that was never really yours, the tax portion
           was always going to leave.
         </Callout>
 
@@ -150,7 +150,7 @@ export default function Page() {
         <UL>
           <LI>
             <strong>Half of your self-employment tax is deductible</strong>{" "}
-            against income tax — an above-the-line adjustment you get
+            against income tax, an above-the-line adjustment you get
             automatically.
           </LI>
           <LI>
@@ -162,7 +162,7 @@ export default function Page() {
 
         <H2>Make it automatic</H2>
         <P>
-          The freelancers who never sweat April aren&apos;t better at math —
+          The freelancers who never sweat April aren&apos;t better at math -
           they just removed the decision. The reliable system:
         </P>
         <UL>
@@ -181,13 +181,13 @@ export default function Page() {
         <P>
           This is exactly what Taxottic automates: it watches your income as
           it lands, keeps a running forecast of what you&apos;ll owe (federal
-          and state), and tells you the amount to set aside — so the number
+          and state), and tells you the amount to set aside, so the number
           is based on your real situation, not a guess.
         </P>
 
         <H2>Frequently asked</H2>
         <H3FAQ q="What percentage should I set aside for self-employment taxes?">
-          A common starting point is <strong>25–30% of your net
+          A common starting point is <strong>25-30% of your net
           self-employment income</strong>. That has to cover
           self-employment tax (15.3%) plus federal income tax, and state
           income tax if your state has one. If you&apos;re in a higher
@@ -197,7 +197,7 @@ export default function Page() {
           every payment you receive into a separate savings account.
         </H3FAQ>
         <H3FAQ q="What is the self-employment tax rate?">
-          <strong>15.3%</strong> — 12.4% for Social Security plus 2.9% for
+          <strong>15.3%</strong>, 12.4% for Social Security plus 2.9% for
           Medicare. It&apos;s charged on 92.35% of your net self-employment
           earnings. The Social Security portion only applies up to an annual
           wage base the IRS adjusts each year; above that, only the 2.9%

@@ -3,12 +3,12 @@ import { Wordmark } from "@/components/Wordmark";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "Example dashboard — see Taxottic before you sign up",
+  title: "Example dashboard, see Taxottic before you sign up",
   description:
-    "A read-only sample dashboard for Maple Lane Design Co. (fictional sole proprietor). See bank-synced forecasts, IRS-cited deductions, and Schedule C — no signup needed.",
+    "A read-only sample dashboard for Maple Lane Design Co. (fictional sole proprietor). See bank-synced forecasts, IRS-cited deductions, and Schedule C, no signup needed.",
   alternates: { canonical: "/example" },
   openGraph: {
-    title: "Taxottic — Example dashboard",
+    title: "Taxottic, Example dashboard",
     description:
       "A read-only sample dashboard for a fictional sole proprietor. No signup needed.",
     url: "/example",
@@ -24,7 +24,7 @@ export const metadata = {
 // Data here is all hard-coded and fictional. The mockups in
 // app/page.tsx (Company X) deliberately overlap visually so a prospect
 // who lands on the home page recognises the same product when they
-// click through. Don't share components with /dashboard — we WANT
+// click through. Don't share components with /dashboard, we WANT
 // these to drift from the live UI so a real user can't be tricked
 // into thinking sample data is theirs.
 
@@ -76,14 +76,14 @@ const SAMPLE_TX: SampleTx[] = [
     merchant: "Whole Foods",
     date: "May 5",
     amount: "$72.18",
-    category: "Personal — not deductible",
+    category: "Personal, not deductible",
     applied: false,
   },
 ];
 
 export default async function ExamplePage() {
   // Auth-aware CTAs. The public sample never checked the session, so it
-  // showed "Sign up" + Pricing + sign-in to EVERYONE — including a
+  // showed "Sign up" + Pricing + sign-in to EVERYONE, including a
   // logged-in user (often an existing subscriber) who lands here. Read
   // the session once: signed-in visitors get a path back to their real
   // dashboard instead of prospect CTAs; anonymous visitors still get
@@ -100,7 +100,7 @@ export default async function ExamplePage() {
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          // Native iOS overlays the WebView under the status bar — pad by
+          // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
           paddingTop:
@@ -115,7 +115,7 @@ export default async function ExamplePage() {
           </Link>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             {/* Single, high-contrast CTA. Gold reads clearly on the dark
-                navy header — the old btn-primary navy button blended in.
+                navy header, the old btn-primary navy button blended in.
                 No Pricing link, no "free", and the label/destination flip
                 with auth so a signed-in subscriber isn't told to sign up.
                 "Sign up" / "Open dashboard" are short enough to show at
@@ -140,7 +140,7 @@ export default async function ExamplePage() {
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           The data below belongs to a fictional sole proprietor (
           <em>Maple Lane Design Co.</em>), May 2026. Everything is
-          hard-coded — clicking through doesn&apos;t change anything. When
+          hard-coded, clicking through doesn&apos;t change anything. When
           you&apos;re ready to see your own numbers,{" "}
           <Link
             href="/login"
@@ -173,7 +173,7 @@ export default async function ExamplePage() {
           <RecapCard
             tone="info"
             title="Bella flagged 4 likely deductions"
-            body="Two software subscriptions, a co-working day pass, and a client lunch — all auto-applied with sources."
+            body="Two software subscriptions, a co-working day pass, and a client lunch, all auto-applied with sources."
           />
         </div>
       </section>
@@ -181,7 +181,7 @@ export default async function ExamplePage() {
       {/* Forecast tiles */}
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <h2 className="display text-xl text-forest-900">
-          Live forecast — Tax year 2026
+          Live forecast, Tax year 2026
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <ForecastTile
@@ -299,7 +299,7 @@ export default async function ExamplePage() {
               See your own version.
             </h2>
             <p className="mt-2 text-sm text-ink-soft max-w-xl leading-relaxed">
-              Connect a bank in 90 seconds — your live forecast,
+              Connect a bank in 90 seconds, your live forecast,
               deductions, and reminders populate in minutes. No credit
               card.
             </p>

@@ -7,7 +7,7 @@ import { logFirmActivity } from "@/lib/firm/activity";
 import { sendEmail } from "@/lib/email/transport";
 import { renderFirmInviteClientEmail } from "@/lib/email/templates/firm-invite-client";
 
-// Server actions for /firm/outreach — pending-invitation management.
+// Server actions for /firm/outreach, pending-invitation management.
 //
 // Three verbs:
 //   - resend: refresh expires_at + re-fire the branded invitation

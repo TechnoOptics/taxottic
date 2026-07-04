@@ -19,7 +19,7 @@
 //
 // Webhooks come in at /api/webhooks/documenso (and a future
 // /api/webhooks/docusign) and update firm_documents rows in
-// place — see app/api/webhooks/documenso/route.ts.
+// place, see app/api/webhooks/documenso/route.ts.
 
 export type EnvelopeRecipient = {
   email: string;

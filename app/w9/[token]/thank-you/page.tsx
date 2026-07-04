@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 
 export const metadata = {
-  title: "W-9 received — Taxottic",
+  title: "W-9 received, Taxottic",
   robots: { index: false, follow: false },
 };
 
@@ -19,7 +19,7 @@ export default function W9ThankYouPage() {
             W-9 received.
           </h1>
           <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
-            Your firm will review the form. You can close this tab —
+            Your firm will review the form. You can close this tab -
             no further action required. If they need anything else,
             they&apos;ll reach out directly.
           </p>

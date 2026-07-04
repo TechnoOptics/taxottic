@@ -55,7 +55,7 @@ export async function addCustomDomain(formData: FormData) {
     .single();
   if (insertErr || !row) throw new Error(insertErr?.message ?? "Insert failed.");
 
-  // Call Vercel — if env isn't configured we still keep the row so
+  // Call Vercel, if env isn't configured we still keep the row so
   // the operator can add the domain manually + record verification
   // details by hand.
   const vercel = await addDomainToProject(raw);
@@ -123,7 +123,7 @@ export async function refreshDomainStatus(formData: FormData) {
       payload: { hostname: row.hostname, configured_by: config.configuredBy },
     });
   } else if (config.configuredBy && config.misconfigured) {
-    // DNS pointed at us but something's off — pin status as
+    // DNS pointed at us but something's off, pin status as
     // pending_ssl so the UI surfaces the misconfiguration.
     await admin
       .from("firm_custom_domains")

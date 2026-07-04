@@ -9,7 +9,7 @@ import {
 } from "@/lib/firm/oauth/providers";
 import { logFirmActivity } from "@/lib/firm/activity";
 
-// /api/oauth/google-calendar/callback — uses the path the existing
+// /api/oauth/google-calendar/callback, uses the path the existing
 // Google OAuth client has authorized (per env GOOGLE_CALENDAR_REDIRECT_PATH).
 // Renames the route shape from /google/callback to keep the Calendar
 // flow distinct from any future Google-Drive-or-Sheets flow.

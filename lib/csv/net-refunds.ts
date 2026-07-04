@@ -12,7 +12,7 @@
 // candidates list with a soft hint for the user.
 //
 // Matching:
-//   - same normalized merchant key — FIRST 3 WHITESPACE-SEPARATED
+//   - same normalized merchant key, FIRST 3 WHITESPACE-SEPARATED
 //     TOKENS of the uppercased description. The
 //     "DELTA AIR LINES" / "DELTA AIR LINES ATLANTA" pair (same
 //     statement, one row carries the city, the other doesn't)
@@ -27,7 +27,7 @@
 //     no applied_expense_id, not ignored). Auto-netting a row the
 //     user already touched would be confusing.
 //
-// One charge can only pair with one refund — once paired, both are
+// One charge can only pair with one refund, once paired, both are
 // removed from the candidate pool so a single $11.20 charge can't
 // satisfy two unrelated $11.20 refunds.
 
@@ -78,7 +78,7 @@ function daysBetween(a: string | null, b: string | null): number {
  * them (typically: update both rows with ignored=true +
  * applied_category_code='refunded').
  *
- * Pure function — no DB I/O. Easy to unit-test.
+ * Pure function, no DB I/O. Easy to unit-test.
  */
 export function findRefundPairs(txs: NettableTx[]): RefundPair[] {
   const eligible = txs.filter(

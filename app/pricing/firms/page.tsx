@@ -13,12 +13,12 @@ import { JsonLd } from "@/components/seo/JsonLd";
 // stronger SEO signal than nesting it as a section on /pricing.
 
 export const metadata = {
-  title: "Pricing for accounting firms — Starter, Growth, Firm, Enterprise",
+  title: "Pricing for accounting firms, Starter, Growth, Firm, Enterprise",
   description:
     "Transparent firm-tier pricing for accountants, CPAs, and tax-prep practices. Includes Stripe Connect, e-signature, calendar integrations, and unlimited clients on Enterprise.",
   alternates: { canonical: "/pricing/firms" },
   openGraph: {
-    title: "Taxottic for firms — pricing built for accounting practices",
+    title: "Taxottic for firms, pricing built for accounting practices",
     description:
       "Multi-client cockpit, document signatures, payments, and tax-form auto-drafting. From $99/mo.",
     url: "/pricing/firms",
@@ -215,7 +215,7 @@ export default function FirmPricingPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Faq
               q="Is there a free trial?"
-              a="Yes — every tier ships with a 14-day trial. No card required for Starter; the higher tiers ask for a card on day-1 so the Stripe Customer Portal is wired before you need it."
+              a="Yes, every tier ships with a 14-day trial. No card required for Starter; the higher tiers ask for a card on day-1 so the Stripe Customer Portal is wired before you need it."
             />
             <Faq
               q="Can I bring my existing clients?"

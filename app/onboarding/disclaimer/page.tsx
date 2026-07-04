@@ -7,7 +7,7 @@ import { acceptTaxDisclaimer } from "./actions";
  * The first screen a brand-new user sees (gated in the dashboard
  * before the filer-type fork). Goal: build confidence in Taxottic
  * AND get an affirmative, logged acknowledgement that the numbers are
- * forecasts/estimates — not a filed return or tax advice. One-shot:
+ * forecasts/estimates, not a filed return or tax advice. One-shot:
  * once accepted we redirect out.
  */
 export default async function DisclaimerPage({
@@ -49,13 +49,13 @@ export default async function DisclaimerPage({
           <div className="mt-5 grid gap-3">
             <Point title="What you get">
               A federal + state forecast, deduction guidance, and
-              quarterly-estimate planning that updates as you go — so
+              quarterly-estimate planning that updates as you go, so
               there are no April surprises.
             </Point>
             <Point title="What it is not">
               A forecast is an <strong>estimate</strong>, not a filed
               return and not individualised tax, legal, or accounting
-              advice. Your final return can differ — real returns
+              advice. Your final return can differ, real returns
               depend on records, elections, and rules that can change.
               Edge cases or late IRS/state guidance mean a number can
               occasionally be off despite our best efforts.
@@ -63,7 +63,7 @@ export default async function DisclaimerPage({
             <Point title="How to use it well">
               Use Taxottic to plan and stay ahead, then confirm the
               final filing with a qualified tax professional. If you
-              spot something that looks wrong, tell us — that feedback
+              spot something that looks wrong, tell us, that feedback
               makes the engine better for everyone.
             </Point>
           </div>
@@ -115,7 +115,7 @@ export default async function DisclaimerPage({
               name="submit"
               value="1"
             >
-              I understand — continue
+              I understand, continue
             </button>
             <p className="text-[11px] text-ink-muted leading-relaxed">
               This acknowledgement is recorded with a timestamp on your

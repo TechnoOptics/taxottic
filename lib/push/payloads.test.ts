@@ -105,7 +105,7 @@ describe("buildPayload", () => {
       dayKey: "2026-07-01",
     });
     // Privacy: the count is useful for the in-app badge but must not leak
-    // onto the lock screen — only `data` carries it.
+    // onto the lock screen, only `data` carries it.
     expect(p.body).not.toMatch(/7/);
     expect(p.data.count).toBe("7");
     expect(p.category).toBeUndefined();

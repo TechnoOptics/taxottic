@@ -1,6 +1,6 @@
 // Tiny CSV parser used by the firm client-import flow.
 //
-// We deliberately don't pull in `papaparse` or `csv-parse` — the
+// We deliberately don't pull in `papaparse` or `csv-parse`, the
 // payloads we accept are bounded (one batch ≤ 200 rows, capped
 // server-side) and the spec we honour is the narrow subset most
 // accounting CRMs export:
@@ -10,9 +10,9 @@
 //   - first non-empty line is treated as the header
 //
 // What we do NOT support:
-//   - alternative delimiters (tab, semicolon) — user can re-export
+//   - alternative delimiters (tab, semicolon), user can re-export
 //   - byte-order marks (we strip a leading BOM and move on)
-//   - quoted headers with leading/trailing spaces — header keys
+//   - quoted headers with leading/trailing spaces, header keys
 //     are normalized to lower-snake_case so spaces in the source
 //     header don't matter
 

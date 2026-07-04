@@ -6,7 +6,7 @@ import { useEffect } from "react";
  * Left-edge swipe → go back, for the native shell only.
  *
  * iOS Safari and Android Chrome already have their own edge-back
- * gesture; the Capacitor WKWebView/WebView does NOT — that is exactly
+ * gesture; the Capacitor WKWebView/WebView does NOT, that is exactly
  * why "swipe back" felt missing in the app. So we gate this to the
  * native shell (Capacitor.isNativePlatform()) and stay completely
  * inert on the web, where adding our own would fight the browser's.
@@ -17,7 +17,7 @@ import { useEffect } from "react";
  * horizontal, and finish quickly. We never call preventDefault, so
  * vertical scrolling is untouched.
  *
- * No native rebuild needed — this ships with the web bundle and works
+ * No native rebuild needed, this ships with the web bundle and works
  * on the already-installed binary immediately.
  */
 export function EdgeSwipeBack() {
@@ -82,7 +82,7 @@ export function EdgeSwipeBack() {
 
       // Android's system back GESTURE/button reaches Capacitor as
       // `backButton`; the default behaviour is to exit the app
-      // instantly — which is why "swipe to go back" felt broken on
+      // instantly, which is why "swipe to go back" felt broken on
       // Android. Route it through history so it behaves like every
       // other app, only exiting when there's nowhere left to go.
       let removeBack: (() => void) | null = null;
@@ -97,7 +97,7 @@ export function EdgeSwipeBack() {
         });
         removeBack = () => void h.remove();
       } catch {
-        /* @capacitor/app absent in this binary — edge swipe still works */
+        /* @capacitor/app absent in this binary, edge swipe still works */
       }
 
       detach = () => {

@@ -54,14 +54,14 @@ export default async function ExpensesPage({
 
   // Team roster for the per-employee filter. Members can already read
   // every company expense (RLS: "member read"), so this filter is a
-  // view convenience — it only renders when there are ≥2 members. Names
+  // view convenience, it only renders when there are ≥2 members. Names
   // come from profiles (full_name, falling back to email); department
   // (if assigned) is appended so the admin can see where a drive/expense
   // came from at a glance.
   //
   // company_members.user_id has NO foreign key to profiles (it points at
   // auth.users), so PostgREST can't resolve an embedded
-  // `profile:profiles(...)` select — it silently returns null (see the
+  // `profile:profiles(...)` select, it silently returns null (see the
   // same note in manage/page.tsx, where this exact embed once blanked
   // the roster). Fetch members and profiles separately and stitch by id.
   const admin = createServiceClient();
@@ -91,7 +91,7 @@ export default async function ExpensesPage({
 
   // department_id per teammate, used below to scope a department lead's
   // review controls to just their own department's expense rows (the
-  // server actions re-check this too — this is only for which rows show
+  // server actions re-check this too, this is only for which rows show
   // the review UI at all).
   const departmentIdByUser = new Map(
     (memberRows ?? []).map((m) => [m.user_id as string, m.department_id as string | null]),
@@ -125,13 +125,13 @@ export default async function ExpensesPage({
 
   // Personal-classified rows still show in the list (so a manager can see
   // what got reclassified and why) but never count toward the YTD
-  // deduction total — they're not a business write-off anymore.
+  // deduction total, they're not a business write-off anymore.
   const expensesTotal = (rows ?? [])
     .filter((r) => r.classification !== "personal")
     .reduce((a, r) => a + r.amount_cents, 0);
 
   // Tracked business mileage, rolled up per month, so a logged drive
-  // shows as a deduction line in the month it happened — the user
+  // shows as a deduction line in the month it happened, the user
   // expected to see "mileage expensed to this month" here, not only on
   // the Mileage page. The YTD total now includes it. When the list is
   // filtered to one employee, the mileage rollup is scoped to that
@@ -230,7 +230,7 @@ export default async function ExpensesPage({
               {formatCents(total)}
             </div>
           </div>
-          {/* Per-employee filter — only for companies with a team. Picking
+          {/* Per-employee filter, only for companies with a team. Picking
               a person scopes both the expense rows AND the mileage rollup
               to them via ?emp=. */}
           {multiMember ? (
@@ -240,7 +240,7 @@ export default async function ExpensesPage({
           ) : null}
           {/*
             Group by month. The list used to be flat 12 months × N rows
-            deep — overwhelming for an active business. Each month
+            deep, overwhelming for an active business. Each month
             becomes a <details> with month name, tx count, and the
             monthly total in the <summary>. Current month is open by
             default; the others fold away. <details> is native HTML
@@ -257,7 +257,7 @@ export default async function ExpensesPage({
                   buckets.set(r.month, arr);
                 }
                 // Union of months that have expenses with months that
-                // have tracked mileage, newest first — so a month with
+                // have tracked mileage, newest first, so a month with
                 // ONLY a drive still shows up.
                 const months = Array.from(
                   new Set<number>([
@@ -329,7 +329,7 @@ export default async function ExpensesPage({
                             // expands to the individual drives, instead
                             // of every drive listed flat. Single-drive
                             // days stay as one flat row. The deduction
-                            // amount renders RED — it's money out
+                            // amount renders RED, it's money out
                             // (a Schedule C deduction), so it should not
                             // read as green/income.
                             type Trip = (typeof tripsThisMonth)[number];
@@ -457,7 +457,7 @@ export default async function ExpensesPage({
                             } | null;
                             // A department lead only gets review controls on
                             // rows owned by a teammate in their own
-                            // department — the server actions re-check this
+                            // department, the server actions re-check this
                             // too, but this decides whether to render the
                             // controls at all.
                             const canReviewRow =
@@ -523,7 +523,7 @@ export default async function ExpensesPage({
             // Round-2 audit Section 6 friction: the empty state was a
             // dead end. A user landing here for the first time saw "No
             // expenses entered yet" and had to find the Import tab on
-            // their own. Surface the two real next-steps directly —
+            // their own. Surface the two real next-steps directly -
             // the manual form is already on this page, and the CSV
             // import lives one tab over. Both routes are first-class;
             // we just had to point at them.

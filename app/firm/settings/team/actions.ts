@@ -11,12 +11,12 @@ import { renderFirmMemberInviteEmail } from "@/lib/email/templates/firm-member-i
 // Team-management actions.
 //
 // Three operations:
-//   1. inviteFirmMember — owner/manager invites someone by email +
+//   1. inviteFirmMember, owner/manager invites someone by email +
 //      role. Drops a firm_invitations row with a fresh token,
 //      sends a branded email pointing at /invite/<token>.
-//   2. revokeInvitation — cancels a pending invite before it's
+//   2. revokeInvitation, cancels a pending invite before it's
 //      accepted.
-//   3. removeMember — owner/manager removes a member from the
+//   3. removeMember, owner/manager removes a member from the
 //      firm (the row in firm_members, not their Taxottic account).
 //
 // All three log to firm_activity_log so the audit trail captures
@@ -187,7 +187,7 @@ export async function removeMember(formData: FormData) {
     throw new Error("Use 'leave firm' to remove yourself.");
   }
 
-  // Owner-removing-owner needs careful handling — leaving zero
+  // Owner-removing-owner needs careful handling, leaving zero
   // owners would orphan the firm. Block if we'd be deleting the
   // last owner.
   const { data: target } = await admin

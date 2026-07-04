@@ -3,9 +3,9 @@
 // action is validated in one place; the route just dispatches.
 //
 // `data` is the notification's data payload (built by
-// lib/push/payloads.ts — string-valued). `actionId` is the button
+// lib/push/payloads.ts, string-valued). `actionId` is the button
 // the OS reports the user tapped. Anything we don't recognise maps
-// to "open" (foreground the app, mutate nothing) — a notification
+// to "open" (foreground the app, mutate nothing), a notification
 // action is untrusted and must never be a blind capability.
 
 export type PushActionIntent =
@@ -21,7 +21,7 @@ export function resolvePushAction(
 
   // The two interactive categories both resolve a trip to
   // business/personal. CLARIFY only does so when its subject is a
-  // trip; a meal/expense clarify intentionally just opens the app —
+  // trip; a meal/expense clarify intentionally just opens the app -
   // we never mutate financial rows straight from a lock-screen tap.
   const isTripClassify = d.kind === "trip_classify";
   const isTripClarify = d.kind === "clarify" && d.subject === "trip";

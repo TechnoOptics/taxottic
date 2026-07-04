@@ -297,7 +297,7 @@ function NewGroupDialog({
       // The action redirects on success.
     } catch (err) {
       // Don't flash the redirect-control-flow error as a red "Failed
-      // to create group." toast — the action just succeeded.
+      // to create group." toast, the action just succeeded.
       rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Failed to create group.");
       setSubmitting(false);

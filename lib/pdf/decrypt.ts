@@ -97,7 +97,7 @@ export async function decryptAndRenderPdf(
   }
 
   const pages: RenderedPage[] = [];
-  // Cap pages at 10 — anything more is almost certainly an entire
+  // Cap pages at 10, anything more is almost certainly an entire
   // tax return, and we'd send 5 MB of images per page which gets
   // expensive fast. The caller's existing 8 MB upload cap usually
   // bounds this naturally; the explicit cap is belt-and-suspenders.

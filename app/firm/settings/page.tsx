@@ -3,7 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 
-// /firm/settings — hub page. Settings sub-pages were each shipping
+// /firm/settings, hub page. Settings sub-pages were each shipping
 // independently (Phase 4 notifications, Phase 6 calendar, Phase 7
 // payments); this index page surfaces them all so a firm operator
 // has one place to manage everything firm-wide.
@@ -180,7 +180,7 @@ export default async function FirmSettingsHubPage() {
         <div className="mt-8 text-[11px] text-ink-muted leading-relaxed">
           Subdomain:{" "}
           <code className="font-mono text-forest-800">
-            {ctx.firm.slug ?? "—"}.taxottic.com
+            {ctx.firm.slug ?? "-"}.taxottic.com
           </code>
           {" · "}
           Tier:{" "}

@@ -29,7 +29,7 @@ import { useEffect, useState, type ReactNode } from "react";
  * Reminders, Billing, Security, Your data, Recycle bin) into the same
  * top-level list. Those have moved entirely into the profile-icon
  * dropdown (UserMenu) because they're either account-wide or
- * configuration-grade — not the daily-workflow stuff the sidebar
+ * configuration-grade, not the daily-workflow stuff the sidebar
  * should optimize for.
  *
  * Mileage stays in the per-company list even though its URL is
@@ -37,7 +37,7 @@ import { useEffect, useState, type ReactNode } from "react";
  * internally; the link lives in the per-company group because the
  * user thinks of mileage as "per business" cognitively.
  *
- * "Settings is the new setup" — the old /c/[publicId]/setup route is
+ * "Settings is the new setup", the old /c/[publicId]/setup route is
  * unchanged at the URL layer, only the label is renamed. Renaming the
  * route would have broken bookmarks + every redirect that already
  * encodes /setup.
@@ -50,8 +50,8 @@ type Company = {
 };
 
 // Nav items visible to a plain "member" (not a manager). Members get the
-// day-to-day workflow — add expenses, track mileage, chat, see the team,
-// edit their own profile — not the tax-planning/admin surfaces (Forecast,
+// day-to-day workflow, add expenses, track mileage, chat, see the team,
+// edit their own profile, not the tax-planning/admin surfaces (Forecast,
 // Income, Import, deduction explorer, company-wide Activity feed).
 // Managers see every item in COMPANY_ITEMS, unfiltered.
 const MEMBER_VISIBLE_KEYS = new Set([
@@ -63,7 +63,7 @@ const MEMBER_VISIBLE_KEYS = new Set([
 ]);
 
 // A department lead sees everything a manager does EXCEPT company-wide
-// financial input (Income, Import) — their review/forecast rights are
+// financial input (Income, Import), their review/forecast rights are
 // scoped to their own department at the page/RLS level, but company-wide
 // income entry stays a manager-only surface.
 const LEAD_HIDDEN_KEYS = new Set(["income", "import"]);
@@ -86,7 +86,7 @@ type Props = {
   companies?: Company[];
 };
 
-// Shared icon frame — outline style, 24×24, matched to the app's UI weight.
+// Shared icon frame, outline style, 24×24, matched to the app's UI weight.
 // Use <Icon> for multi-element glyphs (path + circle, etc.); <Path> is the
 // single-path shorthand.
 function Icon({ children }: { children: ReactNode }) {
@@ -164,7 +164,7 @@ const COMPANY_ITEMS: {
   {
     key: "explore",
     label: "Explore deductions",
-    // The deduction explorer — ~1,000 IRS-sourced deductions, searchable
+    // The deduction explorer, ~1,000 IRS-sourced deductions, searchable
     // and filtered to the company's entity type. Promoted to a top-level
     // rail item (was only reachable via inline links from Forecast / My
     // deductions). Compass = "explore what you can claim".
@@ -215,7 +215,7 @@ const COMPANY_ITEMS: {
   {
     key: "settings",
     label: "Settings",
-    // Route name unchanged — only the label was renamed from "Setup".
+    // Route name unchanged, only the label was renamed from "Setup".
     path: "setup",
     icon: (
       <Icon>
@@ -246,7 +246,7 @@ export function LeftRail({
   // route, that wins. Otherwise we fall back to the last-visited company
   // from localStorage so adjacent top-level pages (e.g., /mileage,
   // /goals) keep the company section visible. /dashboard intentionally
-  // hides the company section even if there's a last-visited — that's
+  // hides the company section even if there's a last-visited, that's
   // the user's "blank slate" view.
   const [lastPublicId, setLastPublicId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -281,8 +281,8 @@ export function LeftRail({
   // Previously /dashboard forced this to null as a "blank slate," but
   // that made the menu look empty/confusing on first open (just
   // "Dashboard" + an auto-expanded company list, none of the actual
-  // nav). Showing the active company's section everywhere — including
-  // the dashboard — makes the menu feel complete and consistent. The
+  // nav). Showing the active company's section everywhere, including
+  // the dashboard, makes the menu feel complete and consistent. The
   // switcher still auto-opens only when there's genuinely no active
   // company to fall back on (multi-company users who haven't picked one
   // yet).
@@ -327,7 +327,7 @@ export function LeftRail({
   // globals.css has an UNLAYERED rule `main, footer, nav { position:
   // relative; z-index: 1 }` that wins over `@layer utilities`
   // regardless of specificity. Without the !, the rail ends up
-  // position: relative — in-flow — and scrolls AWAY with the page
+  // position: relative, in-flow, and scrolls AWAY with the page
   // instead of staying pinned. (Discovered 2026-05-25 via Chrome MCP:
   // the rail rendered correctly at scrollY=0 then disappeared the
   // moment the user scrolled.) The same trick is documented for the
@@ -346,7 +346,7 @@ export function LeftRail({
         "px-2 pt-3 pb-3"
       : // Floating sheet: unlike the rail (flush to the screen edge, so
         // only its outer corners round), the sheet sits with a gap on
-        // every side — squaring off its left edge read as unfinished
+        // every side, squaring off its left edge read as unfinished
         // next to the rest of the app's uniformly-rounded `.card`
         // surfaces. Full rounding + a touch more padding brings it in
         // line with that language.
@@ -365,7 +365,7 @@ export function LeftRail({
   // ---- top section: Dashboard + Companies switcher ----
   // Personal / Business workspace toggle. Personal = the individual tax
   // side; Business = the active company. Business unlocks only once the user
-  // belongs to a company (created one or was invited) — item 2.
+  // belongs to a company (created one or was invited), item 2.
   const hasBusiness = companies.length > 0;
   const onBusiness =
     urlPublicId != null || (pathname?.startsWith("/c/") ?? false);

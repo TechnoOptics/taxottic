@@ -1,7 +1,7 @@
 // Friendly relative-time + freshness helpers for "last synced" indicators.
 //
 // Compute these on the SERVER (server components / route handlers) and pass
-// the resulting string/level to client components as props — that avoids a
+// the resulting string/level to client components as props, that avoids a
 // hydration mismatch from Date.now() differing between server and client.
 
 export type Freshness = "fresh" | "stale" | "old" | "never";

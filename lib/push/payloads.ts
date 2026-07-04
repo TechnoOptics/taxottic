@@ -2,7 +2,7 @@
 //
 // Privacy: APNs/FCM payloads are visible on the lock screen before
 // unlock and in transit metadata. The BODY never carries dollar
-// amounts, vendor names, or other detail — only "something happened,
+// amounts, vendor names, or other detail, only "something happened,
 // open to see." The routing detail lives in `data` (not shown) for
 // the action handlers / deep links. This is a deliberate constraint
 // the spec calls out; keep it.
@@ -10,7 +10,7 @@
 export type PushEvent =
   | { kind: "trip_classify"; tripId: string }
   /**
-   * "Trip logged" — fires for every materialized trip that the
+   * "Trip logged", fires for every materialized trip that the
    * segmenter already auto-classified business or personal (the
    * remaining case is `trip_classify`, which asks the user). Body
    * follows the same no-detail privacy rule: "Drive logged" + no
@@ -35,11 +35,11 @@ export type PushEvent =
   /**
    * Periodic nudge for the "outstanding tasks" backlog (unclassified
    * drives + transactions awaiting a category). `count` rides in
-   * `data` only — same no-detail-on-the-lock-screen rule as every
-   * other kind — for the in-app bell/badge to read after the tap.
+   * `data` only, same no-detail-on-the-lock-screen rule as every
+   * other kind, for the in-app bell/badge to read after the tap.
    * `dayKey` (the caller's local YYYY-MM-DD) is folded into the
    * dedupe key so at most one of these fires per user per day,
-   * however often the cron runs — keeps this a pure function (no
+   * however often the cron runs, keeps this a pure function (no
    * Date.now() inside payloads.ts).
    */
   | { kind: "outstanding_reminder"; count: number; dayKey: string };
@@ -47,7 +47,7 @@ export type PushEvent =
 export type PushPayload = {
   title: string;
   body: string;
-  /** iOS UNNotificationCategory id / Android channel — Phase 2 wires
+  /** iOS UNNotificationCategory id / Android channel, Phase 2 wires
    *  the interactive actions to these. */
   category?: string;
   /** Routing only, never displayed. Strings (APNs/FCM data is
@@ -131,7 +131,7 @@ export function buildPayload(e: PushEvent): PushPayload {
       return {
         // Same no-detail privacy rule as every other kind: the count is
         // useful for the in-app bell/badge, but the lock-screen body stays
-        // generic — "something's waiting, open to see" — not a number.
+        // generic, "something's waiting, open to see", not a number.
         title: "A few things need a quick look",
         body: "Some drives or transactions are waiting for a business-or-personal call.",
         data: { kind: e.kind, count: String(e.count) },

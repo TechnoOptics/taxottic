@@ -7,12 +7,12 @@ import { PLAN_LIMITS, PLAN_PRICING, isUnlimited } from "@/lib/plans/limits";
 
 export const metadata = {
   // The title template in app/layout.tsx will append " | Taxottic".
-  title: "Pricing — Free, Filer, Solo, Studio, Scale, Practice",
+  title: "Pricing, Free, Filer, Solo, Studio, Scale, Practice",
   description:
     "Honest pricing for tax forecasting. Free tier with no card. Paid tiers from $4.99/mo. Yearly saves ~17%. 14-day trial on every paid plan.",
   alternates: { canonical: "/pricing" },
   openGraph: {
-    title: "Taxottic Pricing — Free to start, $4.99/mo to scale",
+    title: "Taxottic Pricing, Free to start, $4.99/mo to scale",
     description:
       "Honest tax-forecasting pricing for freelancers, growing businesses, and tax-prep firms. Yearly saves ~17%.",
     url: "/pricing",
@@ -71,7 +71,7 @@ const PRODUCT_LD = {
       price,
       priceCurrency: "USD",
       url: `${PRICING_PAGE_URL}#${key.replace("_", "-")}`,
-      // ItemAvailability — "InStock" maps to "available to subscribe"
+      // ItemAvailability, "InStock" maps to "available to subscribe"
       // for software subscriptions per Google's guidelines.
       availability: "https://schema.org/InStock",
       priceSpecification: {
@@ -87,7 +87,7 @@ const PRODUCT_LD = {
 
 // FAQPage JSON-LD with our own pricing FAQ. Two birds: helps Google
 // render an FAQ accordion under the SERP card, and keeps the answers
-// honest. Mirror the visible Q&A copy below exactly — Google rejects
+// honest. Mirror the visible Q&A copy below exactly, Google rejects
 // FAQ schema where the structured data and visible page diverge.
 const PRICING_FAQ_LD = {
   "@context": "https://schema.org",
@@ -98,7 +98,7 @@ const PRICING_FAQ_LD = {
       name: "Is there a free trial on paid tiers?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes — every paid tier ships with a 14-day trial. No credit card required to start. We send one reminder email three days before the trial converts. Cancel anytime from Billing & plan.",
+        text: "Yes, every paid tier ships with a 14-day trial. No credit card required to start. We send one reminder email three days before the trial converts. Cancel anytime from Billing & plan.",
       },
     },
     {
@@ -114,7 +114,7 @@ const PRICING_FAQ_LD = {
       name: "Can I buy more credits without upgrading?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. Top-up packs are available on every paid tier and are capped at 3x your monthly grant per billing period — enough for a heavy month, not enough to operate at a higher tier on cheap credits.",
+        text: "Yes. Top-up packs are available on every paid tier and are capped at 3x your monthly grant per billing period, enough for a heavy month, not enough to operate at a higher tier on cheap credits.",
       },
     },
     {
@@ -130,7 +130,7 @@ const PRICING_FAQ_LD = {
       name: "Do you offer non-profit or student discounts?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes — 50% off Solo or Studio for verified 501(c)(3) non-profits and full-time students with a valid .edu address. Email contact@taxottic.com with proof and we'll set you up.",
+        text: "Yes, 50% off Solo or Studio for verified 501(c)(3) non-profits and full-time students with a valid .edu address. Email contact@taxottic.com with proof and we'll set you up.",
       },
     },
     {
@@ -138,7 +138,7 @@ const PRICING_FAQ_LD = {
       name: "Is Taxottic a substitute for a CPA?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. Taxottic provides tax forecasting and educational guidance — it is not a substitute for advice from a licensed CPA or tax attorney. When you need one, the Find a tax preparer feature connects you to vetted preparers; we never offer legal advice ourselves.",
+        text: "No. Taxottic provides tax forecasting and educational guidance, it is not a substitute for advice from a licensed CPA or tax attorney. When you need one, the Find a tax preparer feature connects you to vetted preparers; we never offer legal advice ourselves.",
       },
     },
   ],
@@ -184,13 +184,13 @@ function fmtCents(cents: number): string {
 }
 
 // Capture the four primary tiers shown side-by-side. Filer is the
-// secondary entry-paid tier (W-2 only) — we link to it but don't show
+// secondary entry-paid tier (W-2 only), we link to it but don't show
 // it on the main card row, since the most common starting point is
 // Solo or Studio.
 const PRIMARY: TierKey[] = ["free", "solo", "studio", "scale"];
 
 const TAGLINES: Record<TierKey, string> = {
-  free: "Try the calm — no card.",
+  free: "Try the calm, no card.",
   filer: "W-2 employee, single forecast.",
   solo: "Freelancer or sole proprietor.",
   studio: "Growing business, small team.",
@@ -262,7 +262,7 @@ export default function PricingPage() {
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
-          // Native iOS overlays the WebView under the status bar — pad by
+          // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
           paddingTop:
@@ -296,7 +296,7 @@ export default function PricingPage() {
             Honest pricing. <span className="gold-shine">Yearly saves ~17%.</span>
           </h1>
           <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl mx-auto leading-relaxed">
-            No card to try Free. No surprise overages — credits roll over
+            No card to try Free. No surprise overages, credits roll over
             up to 2× your monthly grant. Switch tiers anytime; we pro-rate.
           </p>
         </div>
@@ -332,7 +332,7 @@ export default function PricingPage() {
         <h2 className="display text-2xl text-forest-900">FAQ</h2>
         <div className="mt-6 grid gap-5 text-sm text-ink-soft leading-relaxed">
           <Faq q="Is there a free trial on paid tiers?">
-            Yes — every paid tier ships with a 14-day trial. No credit
+            Yes, every paid tier ships with a 14-day trial. No credit
             card required to start. We send one reminder email three days
             before the trial converts. Cancel anytime from{" "}
             <em>Billing &amp; plan</em>.
@@ -347,7 +347,7 @@ export default function PricingPage() {
           </Faq>
           <Faq q="Can I buy more credits without upgrading?">
             Yes. Top-up packs are available on every paid tier and are
-            capped at 3× your monthly grant per billing period — enough
+            capped at 3× your monthly grant per billing period, enough
             for a heavy month, not enough to operate at a higher tier on
             cheap credits.
           </Faq>
@@ -357,7 +357,7 @@ export default function PricingPage() {
             returns) unlocks at Studio and above.
           </Faq>
           <Faq q="Do you offer non-profit / student discounts?">
-            Yes — 50% off Solo or Studio for verified 501(c)(3) non-
+            Yes, 50% off Solo or Studio for verified 501(c)(3) non-
             profits and full-time students with a valid .edu address.
             Email{" "}
             <a
@@ -370,7 +370,7 @@ export default function PricingPage() {
           </Faq>
           <Faq q="Is Taxottic a substitute for a CPA?">
             No. Taxottic provides tax forecasting and educational
-            guidance — it is not a substitute for advice from a licensed
+            guidance, it is not a substitute for advice from a licensed
             CPA or tax attorney. When you need one, the &ldquo;Find a tax
             preparer&rdquo; feature connects you to vetted preparers; we
             never offer legal advice ourselves.
@@ -479,7 +479,7 @@ function TierCard({ tier, anchor }: { tier: TierKey; anchor?: string }) {
             {isUnlimited(limits.companies)
               ? "Unlimited"
               : limits.companies === 0
-                ? "—"
+                ? "-"
                 : limits.companies}
           </span>
         </span>
@@ -489,7 +489,7 @@ function TierCard({ tier, anchor }: { tier: TierKey; anchor?: string }) {
             {isUnlimited(limits.bankInstitutions)
               ? "Unlimited"
               : limits.bankInstitutions === 0
-                ? "—"
+                ? "-"
                 : limits.bankInstitutions}
           </span>
         </span>
@@ -508,7 +508,7 @@ function TierCard({ tier, anchor }: { tier: TierKey; anchor?: string }) {
           Start free
         </Link>
       ) : (
-        // Paid CTAs funnel to billing — web only (App Store 3.1.1). The
+        // Paid CTAs funnel to billing, web only (App Store 3.1.1). The
         // gate is client-side, so crawlers still index the CTA (SEO); the
         // native app shows a non-tappable note instead.
         <WebOnly

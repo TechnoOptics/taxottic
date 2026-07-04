@@ -10,7 +10,7 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 /**
- * /debug/device — on-device probe for the native shells. Renders the
+ * /debug/device, on-device probe for the native shells. Renders the
  * REAL AppHeader (so its safe-area padding and the hamburger FAB can be
  * measured as ground truth) plus the diagnostics collector. Reached
  * from Settings → Device diagnostics; auth-gated like every app page

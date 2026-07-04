@@ -8,11 +8,11 @@ const PLATFORMS = new Set(["user", "enterprise", "hq"]);
 
 // Each portal now lives on its own real subdomain. The portal
 // switcher hands off across origins, so the redirect target has to be
-// an absolute URL — Next.js's `redirect()` issues a 303 to whatever
+// an absolute URL, Next.js's `redirect()` issues a 303 to whatever
 // you pass it, and the browser follows cross-origin redirects with a
 // fresh request that re-runs the destination host's middleware.
 //
-// Hosts (May 2026 — three-portal split):
+// Hosts (May 2026, three-portal split):
 //   - taxottic.com               → consumer app
 //   - hq.taxottic.com            → super-admin overview
 //   - enterprise.taxottic.com    → firm-operator console
@@ -37,7 +37,7 @@ function siblingSubdomainOrigin(prefix: string): string {
   // Local dev keeps everything on one origin; subdomain routing is a
   // production-only thing because it needs real DNS.
   if (IS_LOCALHOST) return SITE_ORIGIN;
-  // Build "<prefix>.<root>" — e.g. siblingSubdomainOrigin("hq") →
+  // Build "<prefix>.<root>", e.g. siblingSubdomainOrigin("hq") →
   // "https://hq.taxottic.com" given SITE_HOST=taxottic.com.
   return `${SITE_PROTOCOL}://${prefix}.${SITE_HOST}`;
 }
@@ -63,7 +63,7 @@ const ENTERPRISE_HOST_LIVE =
 // enterprise.taxottic.com gets punted to the SYSTEM BROWSER and the
 // user is ejected from the app (signed out, on a marketing page).
 // Routing every portal same-origin keeps the user inside the app on
-// every binary, for every portal, with zero cross-origin hop — using
+// every binary, for every portal, with zero cross-origin hop, using
 // the exact `/admin` + `/admin/firms` paths the code already treats
 // as the canonical fallback. The subdomains still resolve if visited
 // directly on the web. (HOST_LIVE flags / siblingSubdomainOrigin kept
@@ -121,7 +121,7 @@ function resolveSupabaseHost(): string {
 /**
  * Persist the caller's own uploaded avatar URL. Mirrors
  * setCompanyLogoUrl's URL guard (must be our Supabase Storage host)
- * but there's no manager check — every user owns their own avatar.
+ * but there's no manager check, every user owns their own avatar.
  */
 export async function setAvatarUrl(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -175,7 +175,7 @@ export async function saveFullName(formData: FormData) {
 }
 
 /**
- * Update the caller's own "message" for a specific company —
+ * Update the caller's own "message" for a specific company -
  * company_members.bio, a short per-membership blurb (role context,
  * status, etc.) distinct from the profile-wide avatar/name. Scoped to
  * (user_id, company_id) so a user in multiple companies can leave a
@@ -254,14 +254,14 @@ const PREVIEW_PLANS = new Set([
 /**
  * Super-admin QA plan preview. Pins profiles.preview_plan so the admin's
  * effective plan (getActivePlan) resolves to the chosen tier across the
- * whole app — server gates, page gates, and UI — letting them walk each
+ * whole app, server gates, page gates, and UI, letting them walk each
  * plan's gated experience and confirm the gating matches the plan. An
  * empty / unrecognized value clears the override (back to the default
  * 'practice' super-admin experience).
  *
  * Hard-guarded to super-admins: a normal user calling this is Forbidden,
  * and even if the row were somehow set, getActivePlan only consults it
- * inside its super-admin branch — so this can never bypass a paywall.
+ * inside its super-admin branch, so this can never bypass a paywall.
  */
 export async function setPreviewPlan(formData: FormData) {
   const { supabase, admin, user } = await requireUserWithAdmin();

@@ -14,7 +14,7 @@ export const maxDuration = 60;
  *
  * Authorization: the user must be a member of the firm OR a manager
  * of the company the document belongs to. We delegate the gate to
- * RLS on firm_documents — the service-role client used here would
+ * RLS on firm_documents, the service-role client used here would
  * bypass RLS, so we do an explicit membership check using the
  * supabase-from-auth client first.
  */

@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
   if (!checkRateLimit(`prioryear-ocr:${user.id}`, { capacity: 12, refillPerMinute: 12 })) {
     return NextResponse.json(
-      { error: "Too many requests — please slow down." },
+      { error: "Too many requests, please slow down." },
       { status: 429 },
     );
   }

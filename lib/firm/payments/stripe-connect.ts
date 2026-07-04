@@ -12,7 +12,7 @@ import Stripe from "stripe";
 //     earns a platform fee out of every transaction.
 //
 // The application uses STRIPE_SECRET_KEY (existing consumer Stripe
-// key) — the same key can manage Connected Accounts on Connect.
+// key), the same key can manage Connected Accounts on Connect.
 
 const PLATFORM_FEE_BPS_DEFAULT = 300; // 3.00%
 

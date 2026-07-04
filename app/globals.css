@@ -7,11 +7,11 @@
    Without this the app runs two independent dark-mode systems: every
    `dark:` utility (e.g. the LeftRail's `dark:bg-forest-800`) keys off the
    OS, while every other surface + all the text-color overrides key off
-   `data-theme`. When the OS is dark but the app is light they disagree —
+   `data-theme`. When the OS is dark but the app is light they disagree -
    e.g. the rail paints a dark navy background under dark navy nav text,
    so the menu vanishes. Pointing `dark:` at `[data-theme="dark"]` unifies
    the two: a `dark:` utility now fires exactly when the app theme is dark,
-   matching everything else. (Strictly safer — only changes the previously
+   matching everything else. (Strictly safer - only changes the previously
    broken OS≠app states.) */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -34,15 +34,15 @@
   font-display: swap;
 }
 
-/* Force native UA controls — <select> dropdown popups, date/time pickers,
-   scrollbars — to render with a LIGHT color-scheme. Without this, on a
+/* Force native UA controls - <select> dropdown popups, date/time pickers,
+   scrollbars - to render with a LIGHT color-scheme. Without this, on a
    device in dark mode the Android WebView paints every native <select>
    popup SOLID BLACK: tapping any dropdown (e.g. the vehicle-method picker
    on the business profile) blanked the whole screen to black until you
    pressed Back. Reproduced + verified the fix on a Galaxy Z Fold5. The
    app's own dark theme is custom-CSS-driven (html[data-theme="dark"]) and
    never relied on color-scheme, so pinning light here only changes
-   UA-default rendering — every dropdown becomes a normal, readable list. */
+   UA-default rendering - every dropdown becomes a normal, readable list. */
 html {
   color-scheme: light;
 }
@@ -80,7 +80,7 @@ html {
   --color-ink-soft: #3f3f46;
   /* Bumped darker (zinc-500 → zinc-600) for AA contrast on the cream
      surface. The previous #71717a hit ~4.3:1 against #fbf7e9, which
-     fails WCAG AA 4.5:1 for normal-weight body text — the May 2026
+     fails WCAG AA 4.5:1 for normal-weight body text - the May 2026
      weekly audit's "text fades into background" finding. #52525b
      gives ~6.6:1 on cream while still reading as "muted" next to
      the primary ink-soft / forest-900 text. */
@@ -121,15 +121,15 @@ html {
 /* ----------------------------------------------------------------------------
    Status-bar backdrop (native Android/iOS system bar).
 
-   The native status-bar icons (clock / wifi / battery) are LIGHT — set
-   to white via @capacitor/status-bar Style.Dark — because the app's
+   The native status-bar icons (clock / wifi / battery) are LIGHT - set
+   to white via @capacitor/status-bar Style.Dark - because the app's
    AppHeader is navy. The WebView OVERLAYS the status bar
    (overlaysWebView: true), so whatever the page paints in the top
    safe-area inset shows behind those icons.
 
    On app pages the navy fixed header fills that strip and the white
    icons read perfectly. But on CHROMELESS pages (the 404 page, /login,
-   onboarding, marketing) the page background is cream — so the white
+   onboarding, marketing) the page background is cream - so the white
    icons land on cream and effectively vanish. (Reproduced on a Galaxy
    Z Fold5: the clock/battery were invisible on the 404 page.)
 
@@ -269,7 +269,7 @@ body.no-capture img {
 }
 
 html, body {
-  background-color: #fbf7e9; /* cream — default (marketing) */
+  background-color: #fbf7e9; /* cream - default (marketing) */
   color: #18181b;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -313,7 +313,7 @@ body {
 }
 
 /* ============================================================================
-   Dark theme — authenticated app shell (Advottic-style cohesion)
+   Dark theme - authenticated app shell (Advottic-style cohesion)
 
    Applied via `[data-theme="dark"]` on <html>, set by
    components/DarkThemeMount.tsx which renders inside <AppHeader>.
@@ -321,7 +321,7 @@ body {
    /settings, etc.) gets the dark forest treatment automatically;
    public marketing pages keep the cream base.
 
-   Token-level overrides only — individual page components don't
+   Token-level overrides only - individual page components don't
    need to change, because everything is built off the same
    .card / .input / .btn-* / display / forest-* / cream / gold-*
    tokens defined above. Override those tokens and the whole app
@@ -345,7 +345,7 @@ html[data-theme="dark"] body {
    centered content column would overlap the rail on lg+. Push the
    content area right of the rail so the rail never crops it.
    Gate on `[data-theme]` being PRESENT (DarkThemeMount sets it to
-   "light" OR "dark" on every authenticated page) — NOT on the value.
+   "light" OR "dark" on every authenticated page) - NOT on the value.
    Marketing routes don't mount DarkThemeMount, so they have no
    data-theme attribute and keep their full-width centered layout.
    (Previously gated on data-theme="dark"; when the default flipped to
@@ -357,13 +357,13 @@ html[data-theme="dark"] body {
 }
 
 /* Below lg, LeftRailMobile portals a fixed 56px "open menu" FAB to the
-   bottom-left corner (components/LeftRailMobile.tsx) — it has no
+   bottom-left corner (components/LeftRailMobile.tsx) - it has no
    in-flow footprint, so scrollable content ran straight underneath it.
    Confirmed on a real device (Galaxy Z Fold5, every authenticated
    page): the FAB sat on top of card text, form labels, even truncating
    "Amount (USD)" to "unt (USD)" on the Income page. Reserve the same
    clearance the FAB's own drawer already uses above its bottom safe-
-   area inset (5rem — see the drawer's `bottom: calc(... + 5rem)` in
+   area inset (5rem - see the drawer's `bottom: calc(... + 5rem)` in
    LeftRailMobile) as bottom padding on <main>, so the last section on
    every page clears the FAB instead of running behind it. lg+ hides
    the FAB entirely (`lg:hidden`), so this is scoped to below that
@@ -377,7 +377,7 @@ html[data-theme="dark"] body {
 }
 
 /* The mobile FAB rendered ON TOP of the OutstandingTasksPopup's buttons on
-   a real device despite the popup's numerically higher z-index — verified
+   a real device despite the popup's numerically higher z-index - verified
    this isn't a simple stacking-order fix (both are position:fixed direct
    children of <body>, so z-index should have been enough). Whatever the
    exact cause, the guaranteed-correct fix is to hide the FAB outright
@@ -388,7 +388,7 @@ body.modal-open-hide-fab button[aria-label="Open menu"] {
 }
 
 /* Modern thin scrollbars site-wide. Default browser scrollbars (chunky
-   square buttons, grey thumb) read as dated — the user specifically
+   square buttons, grey thumb) read as dated - the user specifically
    flagged them. Replace with a thin gold-tinted thumb on transparent
    track. Works in:
      - Firefox: scrollbar-width / scrollbar-color (CSS standard)
@@ -516,7 +516,7 @@ body {
    bottom-left only. Sister-brand cohesion: this is the same fixed
    ambient gradient that runs across Advottic. We picked the exact
    stop sizes (1200x600 at 90% -10%, 900x500 at -10% 100%) and HSL
-   gold (hsla(42, 51%, 66%, .16) — the brand's gold-400/500 in
+   gold (hsla(42, 51%, 66%, .16) - the brand's gold-400/500 in
    HSL form) so a buyer landing on either product feels the same
    "warm depth, premium SaaS" lighting model. */
 body::before {
@@ -534,7 +534,7 @@ body::before {
 /* Keep page content above the fixed body::before backdrop.
    IMPORTANT: do NOT include `header` here. This rule is UNLAYERED,
    and unlayered CSS wins over @layer utilities regardless of
-   specificity — so `header { position: relative }` was silently
+   specificity - so `header { position: relative }` was silently
    overriding Tailwind's `.fixed` / `.sticky` on the app header,
    which is the real reason the header never pinned (sticky AND
    fixed both lost to this). The app header manages its own
@@ -552,19 +552,19 @@ main, footer, nav {
    Every authenticated page renders its content in a <section> directly
    under <main>, carrying `lg:pl-60` to clear the fixed left rail plus
    `lg:max-w-none` (a past "fill the whole canvas" choice). On an ultrawide
-   display (3000px+) that stretched a single card to ~2,500px — content
+   display (3000px+) that stretched a single card to ~2,500px - content
    stranded left, buttons pushed off-screen, the whole page sprawling.
 
    Cap it to a comfortable column and CENTER it within <main>'s content
    box. <main> ALREADY pads-left by the rail width (the data-theme="dark"
-   rule above), so this rule must NOT re-add the rail clearance — doing so
+   rule above), so this rule must NOT re-add the rail clearance - doing so
    double-counted it (240px main padding + a 288px margin) and left a big
    empty gap between the rail and the content. `margin-inline: auto` centers
    the capped column in the space to the right of the rail and recentres it
    on ultrawide displays, without offsetting it a second time.
 
    Scoped to `[class~="lg:pl-60"]` so it only touches authenticated app
-   sections — marketing/landing pages (no rail) are left alone. Unlayered
+   sections - marketing/landing pages (no rail) are left alone. Unlayered
    so it wins over the Tailwind max-w-none / mx-0 / pl-* utilities (which
    live in @layer utilities) without !important. */
 @media (min-width: 1024px) {
@@ -572,7 +572,7 @@ main, footer, nav {
     /* FLUID fill. Instead of stepped caps that leave dead gaps between
        breakpoints, the content tracks the available canvas (everything to
        the right of the fixed rail, less a small right gutter) and fills it
-       at EVERY size — so a 1440p / 4K / 27–32" monitor uses the space
+       at EVERY size - so a 1440p / 4K / 27-32" monitor uses the space
        rather than showing a narrow centered column. `min()` holds a
        generous ceiling (168rem ≈ 2,688px) so genuinely enormous / ultra-
        wide displays still cap and a single card never sprawls past the
@@ -643,7 +643,7 @@ main, footer, nav {
   }
 
   /* Card: the app-wide card primitive. Calmed in June 2026 to match the
-     dashboard's `.surface` system — a hairline border + a soft two-stop
+     dashboard's `.surface` system - a hairline border + a soft two-stop
      shadow that lifts the card off the page, and NOTHING else. The old
      treatment stacked a gold ring (0 0 0 1px gold), an inset champagne
      highlight, AND a `::before` gold line across the top edge of every
@@ -672,16 +672,16 @@ main, footer, nav {
       0 22px 50px -22px rgba(18, 26, 42, 0.34);
   }
 
-  /* .surface — the redesign's SINGLE card treatment. Quieter than the
+  /* .surface - the redesign's SINGLE card treatment. Quieter than the
      legacy `.card` (gold ring + heavy shadow), but NOT flat: a hairline
      border PLUS a soft two-stop shadow so the card genuinely lifts off
      the page. The first revision was a bare 9%-opacity border with no
-     shadow — on cream the white cards read as ghost rectangles and the
+     shadow - on cream the white cards read as ghost rectangles and the
      whole screen looked unfinished ("plain / cheap"). Live-tuned on the
      real dashboard until the lift read as premium without shouting.
      In dark mode shadows barely register on a navy field, so the card
      is a clearly LIGHTER navy (#202d4d on the #121a2a page) carrying a
-     1px top-light border — separation comes from value + edge, not blur. */
+     1px top-light border - separation comes from value + edge, not blur. */
   .surface {
     background: #ffffff;
     border: 1px solid rgba(18, 26, 42, 0.06);
@@ -790,7 +790,7 @@ main, footer, nav {
   }
 
   /* Premium, accessible keyboard focus: one crisp on-brand gold ring, shown
-     ONLY for keyboard navigation (:focus-visible) — never on mouse click, so
+     ONLY for keyboard navigation (:focus-visible) - never on mouse click, so
      it never nags pointer users. Modern browsers round the outline to match
      each element's border-radius, so it hugs pills and cards cleanly. Inputs
      keep their own inset ring (above); these are the actionable elements. */
@@ -802,7 +802,7 @@ main, footer, nav {
     outline-offset: 2px;
   }
 
-  /* Branded text selection — a warm gold wash instead of the browser default
+  /* Branded text selection - a warm gold wash instead of the browser default
      blue. A small detail, but the kind that makes the product feel bespoke. */
   ::selection {
     background: rgba(196, 162, 93, 0.28);
@@ -814,7 +814,7 @@ main, footer, nav {
      iOS WKWebView is the reason this targets the bare `select`
      element, not just `select.input`. On iOS a styled <select> still
      paints its own native disclosure chevron unless appearance is
-     reset on the element itself — that's the "two/many arrows in the
+     reset on the element itself - that's the "two/many arrows in the
      box" the user saw. Resetting every <select> (every select in the
      app is .input-styled anyway) guarantees exactly one arrow. The
      `background` shorthand on .input would wipe background-image, so
@@ -938,7 +938,7 @@ main, footer, nav {
      Used on every authenticated page so the brand frames the experience.
      Sister-brand cohesion (May 2026): the background is now slightly
      translucent (96-98% alpha) and pairs with an always-on
-     backdrop-filter blur — Advottic's signature header treatment.
+     backdrop-filter blur - Advottic's signature header treatment.
      Content scrolling past the header gets a soft frosted look without
      the harsh "opaque bar over a gap" feel the original fixed header
      had. */
@@ -975,7 +975,7 @@ main, footer, nav {
       padding-bottom: 0.4rem !important;
     }
     body.app-scrolled .app-header {
-      /* Slightly stronger blur once user scrolls — gives a "settling
+      /* Slightly stronger blur once user scrolls - gives a "settling
          into reading mode" cue. */
       backdrop-filter: blur(18px) saturate(140%);
       -webkit-backdrop-filter: blur(18px) saturate(140%);
@@ -1121,7 +1121,7 @@ main, footer, nav {
   ========================================================================== */
 
   /* Card on dark: a clearly-lifted, SOLID lighter navy (#202d4d on the
-     #121a2a page) — same value-based separation `.surface` uses, with a
+     #121a2a page) - same value-based separation `.surface` uses, with a
      1px top-light edge. Dropped the gold ring + champagne catch-light to
      match the calm system now used app-wide. Solid (was 62% alpha) so
      stacked cards and text stay crisp instead of letting the page bleed
@@ -1137,7 +1137,7 @@ main, footer, nav {
   html[data-theme="dark"] .card-hover:hover {
     border-color: rgba(213, 187, 126, 0.6);
   }
-  /* Opaque variant — for floating menus (UserMenu dropdown, etc.)
+  /* Opaque variant - for floating menus (UserMenu dropdown, etc.)
      where the page beneath would otherwise bleed through the 62%
      alpha and make the menu hard to read. Light mode already uses
      #ffffff, so only the dark override matters. */
@@ -1179,24 +1179,24 @@ main, footer, nav {
 
   /* Tailwind utility overrides for the most common Taxottic colors.
      We only override the SPECIFIC tokens that change meaning in dark
-     mode — text-forest-900 (default ink on light) flips to cream,
+     mode - text-forest-900 (default ink on light) flips to cream,
      bg-cream flips to a semi-transparent dark surface, etc. The full
      forest-* / gold-* palettes themselves stay exactly the same since
      they're brand colors, not theme colors. */
   html[data-theme="dark"] .text-forest-900 { color: #fbf7e9 !important; }
   html[data-theme="dark"] .text-forest-800 { color: rgba(251, 247, 233, 0.92) !important; }
   /* forest-500/600/700 are used as FOREGROUND text (muted body,
-     "Best fit:" detail, chevrons, inline links) — dark green that
+     "Best fit:" detail, chevrons, inline links) - dark green that
      vanishes on the dark surface (the deductions/explorer cards were
      the reported example). Flip them to cream-alpha on the same
      900→800 scale so the hierarchy is preserved and they stay
      legible everywhere at once. (bg-* / border-* palette below is
-     unchanged — only text foregrounds flip.) */
+     unchanged - only text foregrounds flip.) */
   html[data-theme="dark"] .text-forest-700 { color: rgba(251, 247, 233, 0.82) !important; }
   html[data-theme="dark"] .text-forest-600 { color: rgba(251, 247, 233, 0.72) !important; }
   html[data-theme="dark"] .text-forest-500 { color: rgba(251, 247, 233, 0.64) !important; }
   /* Dark golds (gold-600/700) are accent label colours ("Best fit:",
-     kickers) — near-invisible on #121a2a. Lift to the brand's
+     kickers) - near-invisible on #121a2a. Lift to the brand's
      champagne (gold-300) which is the correct gold tone on dark. */
   html[data-theme="dark"] .text-gold-700   { color: var(--color-gold-300) !important; }
   html[data-theme="dark"] .text-gold-600   { color: var(--color-gold-300) !important; }
@@ -1209,7 +1209,7 @@ main, footer, nav {
   html[data-theme="dark"] .bg-cream         { background-color: rgba(29, 40, 67, 0.55) !important; }
   html[data-theme="dark"] .bg-white         { background-color: rgba(29, 40, 67, 0.55) !important; }
   /* Tailwind state-prefixed variants generate a separate class
-     each — `.hover\:bg-cream:hover` is a distinct selector from
+     each - `.hover\:bg-cream:hover` is a distinct selector from
      `.bg-cream`. The plain override above doesn't catch it, which
      left the new LeftRail's hover state rendering as a bright
      cream rectangle on the dark dashboard (May 20 weekly polish).
@@ -1221,7 +1221,7 @@ main, footer, nav {
      `bg-white/60`, `bg-white/70`, `bg-white/80`) bypass the plain
      `.bg-white` override because Tailwind generates a separate class
      per opacity. Without these explicit rules, "list row" / card
-     tiles render as washed-out milky surfaces on dark — the
+     tiles render as washed-out milky surfaces on dark - the
      scorecard's "Still on the table" cards in the May 2026 audit
      screenshot were the obvious example, but the pattern is used in
      dozens of places (income / expense / banks / firm-ops lists,
@@ -1229,7 +1229,7 @@ main, footer, nav {
      opacity tier to a forest tint of the equivalent strength so
      dark-mode "still" / "row" surfaces read as a subtle elevation
      above the page background, not as a transparent overlay. */
-  /* Tile rows nested inside a .card should read as RECESSED — a
+  /* Tile rows nested inside a .card should read as RECESSED - a
      subtle inset, not an elevated overlay. The parent .card sits at
      forest-800 (rgba(29, 40, 67, 0.62)) in dark mode; tiles use
      forest-950 (rgba(18, 26, 42, ...)) so they look like the page
@@ -1260,40 +1260,40 @@ main, footer, nav {
      negative), emerald (success / positive), amber (warning), and
      gold-800. Light theme uses the dark -700/800/900 shade as text,
      often on a pale -50/100 badge. On the dark surface BOTH must flip
-     together — the badge bg/border go dark-translucent AND the text
-     goes to the bright -300/400 shade — so bare coloured text on the
+     together - the badge bg/border go dark-translucent AND the text
+     goes to the bright -300/400 shade - so bare coloured text on the
      page (e.g. red error lines) AND coloured badges both stay
      readable. Same proven pattern as .bg-white / .text-forest-900
      above. This is the remainder of the "text same colour as
      background" the user reported, fixed app-wide. */
-  /* red — errors / amounts owed */
+  /* red - errors / amounts owed */
   html[data-theme="dark"] .text-red-700 { color: #f87171 !important; }
   html[data-theme="dark"] .text-red-800 { color: #fca5a5 !important; }
   html[data-theme="dark"] .text-red-900 { color: #fecaca !important; }
   html[data-theme="dark"] .bg-red-50    { background-color: rgba(248, 113, 113, 0.12) !important; }
   html[data-theme="dark"] .bg-red-100   { background-color: rgba(248, 113, 113, 0.18) !important; }
   html[data-theme="dark"] .border-red-200 { border-color: rgba(248, 113, 113, 0.35) !important; }
-  /* emerald — success / deductions / refunds */
+  /* emerald - success / deductions / refunds */
   html[data-theme="dark"] .text-emerald-700 { color: #34d399 !important; }
   html[data-theme="dark"] .text-emerald-800 { color: #6ee7b7 !important; }
   html[data-theme="dark"] .text-emerald-900 { color: #a7f3d0 !important; }
   html[data-theme="dark"] .bg-emerald-50    { background-color: rgba(52, 211, 153, 0.12) !important; }
   html[data-theme="dark"] .bg-emerald-100   { background-color: rgba(52, 211, 153, 0.18) !important; }
   html[data-theme="dark"] .border-emerald-200 { border-color: rgba(52, 211, 153, 0.35) !important; }
-  /* amber — warnings */
+  /* amber - warnings */
   html[data-theme="dark"] .text-amber-700 { color: #fbbf24 !important; }
   html[data-theme="dark"] .text-amber-800 { color: #fcd34d !important; }
   html[data-theme="dark"] .text-amber-900 { color: #fde68a !important; }
   html[data-theme="dark"] .bg-amber-50    { background-color: rgba(251, 191, 36, 0.12) !important; }
   html[data-theme="dark"] .bg-amber-100   { background-color: rgba(251, 191, 36, 0.18) !important; }
   html[data-theme="dark"] .border-amber-200 { border-color: rgba(251, 191, 36, 0.35) !important; }
-  /* dark gold — consistent with the gold-700/600 flip above */
+  /* dark gold - consistent with the gold-700/600 flip above */
   html[data-theme="dark"] .text-gold-800 { color: var(--color-gold-300) !important; }
 }
 
 /* Global reduced-motion safeguard (WCAG 2.3.3 / 2.2.2). The scoped block
    earlier only stilled the achievement tile; this neutralizes ALL animation
-   + transition for users who ask for reduced motion — the header gold sweep,
+   + transition for users who ask for reduced motion - the header gold sweep,
    .gold-shine, the Bella FAB spin, the mobile-menu slide, and anything added
    later. Top-level + !important so it wins regardless of layer. */
 @media (prefers-reduced-motion: reduce) {

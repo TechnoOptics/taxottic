@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 
-// Pure crypto for watch pairing — no Supabase/import side effects,
+// Pure crypto for watch pairing, no Supabase/import side effects,
 // so it unit-tests in isolation. We persist only HASHES of the code
 // and the token; the plaintexts are short-lived and never stored
 // long-term, so a DB leak is not replayable.
@@ -20,7 +20,7 @@ export function mintWatchToken(): { token: string; tokenHash: string } {
  *
  * Entropy: 10^6 = ~20 bits. That's a LOT less than the old 8-char
  * base-30 QR code (~39 bits), so the redeem endpoint MUST cap
- * attempts per IP/user (see /api/watch/pair/redeem) — otherwise an
+ * attempts per IP/user (see /api/watch/pair/redeem), otherwise an
  * attacker could brute the active code inside its 120-second
  * window. With a 5-req/min cap a guesser gets ~10 tries per code
  * lifetime, so the probability of a successful guess is ~10⁻⁵.

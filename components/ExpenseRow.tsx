@@ -5,7 +5,7 @@ import { RecurrencePicker, type Cadence } from "./RecurrencePicker";
 import { formatCents } from "@/lib/tax/forecast";
 
 // Round-5 audit Medium: expense rows had Remove but no Edit. Same
-// rationale as IncomeRow — power users entering 30+ transactions per
+// rationale as IncomeRow, power users entering 30+ transactions per
 // session hit typos, and "delete + re-add" loses recurrence + notes
 // and risks double-counting. ExpenseRow holds view + inline edit in
 // one component. Delete is wrapped with a confirm() so a mis-click
@@ -67,7 +67,7 @@ export type ExpenseRowProps = {
   addedByLabel?: string | null;
   updateAction: (formData: FormData) => Promise<void>;
   deleteAction: (formData: FormData) => Promise<void>;
-  // Manager-only review controls — reclassify to/from personal, leave a
+  // Manager-only review controls, reclassify to/from personal, leave a
   // note, and stop/resume a recurring charge's forward projection. Only
   // passed by the parent when the viewer is a manager; the note itself
   // still renders for everyone (the point is the teammate sees it).
@@ -283,7 +283,7 @@ export function ExpenseRow({
         </div>
       </div>
 
-      {/* Manager review controls — reclassify, note, stop/resume a
+      {/* Manager review controls, reclassify, note, stop/resume a
           recurring charge. Hidden from non-managers entirely (a member
           still just SEES the note above, if one exists). */}
       {isManager ? (

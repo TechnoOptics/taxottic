@@ -4,7 +4,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmAdmin } from "@/lib/firm/context";
 import { inviteFirmMember, revokeInvitation, removeMember } from "./actions";
 
-// /firm/settings/team — view + manage firm members and pending
+// /firm/settings/team, view + manage firm members and pending
 // invitations. Two sections: active members table on top, pending
 // invites below. Form on the right invites a new member.
 

@@ -3,13 +3,13 @@
    round-trip on a screen we already want to show in milliseconds. */
 
 /**
- * Global loading screen — shown by Next.js during any route segment
+ * Global loading screen, shown by Next.js during any route segment
  * navigation or server-data resolution. The brief: "premium thinking"
  * feel, not a generic spinner.
  *
  * Visuals: full-bleed navy gradient with two soft, blurred radial
  * halos (gold + deeper navy) that give the impression of a blurred
- * screen depth. The icon mark sits centred and breathes — gentle
+ * screen depth. The icon mark sits centred and breathes, gentle
  * scale + opacity pulse with a gold drop-shadow that swells in time
  * with the scale, so it reads as a glow rather than a flashing dot.
  * Reduced-motion users get a still frame.
@@ -31,7 +31,7 @@ export default function Loading() {
     >
       {/* Soft depth halos behind the mark. These used to carry an
           additional `filter: blur(38px)` on top of the gradients' own
-          fade-to-transparent stops — a real device (Galaxy Z Fold5)
+          fade-to-transparent stops, a real device (Galaxy Z Fold5)
           started rendering this whole screen as solid BLACK instead of
           navy, with the pulse animation still visibly driving repaints
           (confirmed via logcat: continuous WebView onDraw calls), which

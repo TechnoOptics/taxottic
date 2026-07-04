@@ -16,7 +16,7 @@ export const maxDuration = 30;
 /**
  * Multipart upload of a single receipt (image or PDF). Returns the
  * structured extraction so the client can pre-fill the add-expense form
- * for user review. We deliberately don't persist anything here — the
+ * for user review. We deliberately don't persist anything here, the
  * user confirms the result and submits via the normal addExpense
  * server action, which gives them a chance to override the category
  * or amount.
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   if (!checkRateLimit(`receipt-ocr:${user.id}`, { capacity: 12, refillPerMinute: 12 })) {
     return NextResponse.json(
-      { error: "Too many requests — please slow down." },
+      { error: "Too many requests, please slow down." },
       { status: 429 },
     );
   }
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   // Credit gate: receipt OCR costs CREDIT_COST.receipt_ocr credits.
   // Consume up-front so a user with 0 credits doesn't get a free OCR
   // when their balance happens to be racing to zero. If extraction
-  // fails after the consume, that's accepted attrition — the balance
+  // fails after the consume, that's accepted attrition, the balance
   // stays debited so abuse via repeated bad uploads doesn't drain the
   // model on us.
   const admin = createServiceClient();

@@ -9,7 +9,7 @@ export const metadata = {
   alternates: { canonical: "/firms/request-account" },
 };
 
-// /firms/request-account — public form. Submits a row into
+// /firms/request-account, public form. Submits a row into
 // firm_access_requests. A super-admin reviews on /admin/firms and
 // either approves (mints the firm + subdomain + owner invitation)
 // or rejects with a note.
@@ -143,9 +143,9 @@ function RequestForm() {
             >
               <option value="">Select…</option>
               <option value="solo">Just me</option>
-              <option value="2-5">2 – 5 preparers</option>
-              <option value="6-15">6 – 15 preparers</option>
-              <option value="16-50">16 – 50 preparers</option>
+              <option value="2-5">2-5 preparers</option>
+              <option value="6-15">6-15 preparers</option>
+              <option value="16-50">16-50 preparers</option>
               <option value="50+">50+ preparers</option>
             </select>
           </label>
@@ -205,7 +205,7 @@ function SuccessPanel() {
       <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
         A member of our team will review your application and provision
         your firm&apos;s subdomain within one business day. Watch your
-        inbox for the welcome email — it will include the sign-in
+        inbox for the welcome email, it will include the sign-in
         link for your firm&apos;s portal.
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">

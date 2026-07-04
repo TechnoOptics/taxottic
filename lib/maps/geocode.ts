@@ -1,10 +1,10 @@
 // Server-side address → lat/lng helper. Uses the same Google Maps
 // API key as the JS loader, just from the server (so the key doesn't
 // leak in client JS for this code path, and the network request is
-// our own — no browser referrer policy to worry about).
+// our own, no browser referrer policy to worry about).
 //
 // Same env var as everything else: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.
-// "Public" is a misnomer for server-side reads — Next.js exposes it
+// "Public" is a misnomer for server-side reads, Next.js exposes it
 // to both runtimes, and the key already ships in client bundles, so
 // re-using it on the server is no leak.
 
@@ -25,7 +25,7 @@ export type GeocodeError =
 /**
  * Geocode a free-form address (or a Places Autocomplete output) to
  * lat/lng using Google's Geocoding API. Returns null + a `code` on
- * any failure — callers translate to a user-facing message. Keeps the
+ * any failure, callers translate to a user-facing message. Keeps the
  * server action stupid: it doesn't need to know about Google error
  * shapes.
  */

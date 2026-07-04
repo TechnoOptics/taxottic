@@ -1,9 +1,9 @@
-// Receipt capture bridge — native camera with a graceful web fallback.
+// Receipt capture bridge, native camera with a graceful web fallback.
 //
 // On the Capacitor native shell we open the real device camera via
 // @capacitor/camera (the iOS NSCameraUsageDescription + Android
-// CAMERA permission ship in the binary). On web — including mobile
-// browsers — there is no plugin; the caller falls back to a
+// CAMERA permission ship in the binary). On web, including mobile
+// browsers, there is no plugin; the caller falls back to a
 // `<input type="file" accept="image/*" capture="environment">`,
 // which on a phone browser still opens the camera.
 //
@@ -16,11 +16,11 @@
 
 export type ReceiptCaptureResult =
   | { kind: "file"; file: File }
-  /** Not the native shell, or the plugin isn't in the running binary —
+  /** Not the native shell, or the plugin isn't in the running binary -
    *  the caller should trigger its web `<input capture>` fallback. */
   | { kind: "unavailable" }
   /** Native shell, plugin present, but the user backed out of the
-   *  camera. Do NOT fall back to a file picker — they chose to stop. */
+   *  camera. Do NOT fall back to a file picker, they chose to stop. */
   | { kind: "cancelled" }
   | { kind: "error"; message: string };
 

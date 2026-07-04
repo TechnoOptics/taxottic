@@ -11,12 +11,12 @@ export const maxDuration = 300;
  * the daily Plaid run at 04:00).
  *
  * Why `force: true`: syncStripeConnection throttles itself to once per
- * calendar month by default (lib/stripe-connect/sync.ts) — the same
+ * calendar month by default (lib/stripe-connect/sync.ts), the same
  * cost-saving default Plaid uses. Plaid bills per transactions-sync, so
  * monthly is right there; Stripe's balance_transactions API is free per
  * call, so there's no budget reason to throttle. Forcing each weekly
  * pass is what actually delivers the weekly cadence the cadence is named
- * for — without `force` a weekly cron would still only sync once a
+ * for, without `force` a weekly cron would still only sync once a
  * month. The soft-delete guard inside the sync runs regardless of force,
  * so a disconnected connection is still skipped.
  *

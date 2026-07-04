@@ -12,7 +12,7 @@ import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
  * Core math is exact: business miles × the IRS standard mileage rate
  * for the year (pulled from the same constants the app uses, so it's
  * never stale). The "tax savings" line multiplies the deduction by a
- * combined marginal rate the visitor picks — labelled as an estimate,
+ * combined marginal rate the visitor picks, labelled as an estimate,
  * because the true saving depends on their full return (which is what
  * the app computes precisely).
  */
@@ -22,7 +22,7 @@ const RATE_CENTS = getTaxYearConstants(TAX_YEAR).MILEAGE_RATE_PER_MILE_CENTS;
 
 // Combined marginal-rate presets. The self-employed default reflects
 // that a mileage deduction lowers BOTH self-employment tax (~14.1% net
-// of the half-SE deduction) AND income tax — so ~30% combined is a fair
+// of the half-SE deduction) AND income tax, so ~30% combined is a fair
 // middle estimate. Employees deducting via an employer plan just use
 // their income bracket.
 const RATE_PRESETS: { value: number; label: string }[] = [
@@ -84,7 +84,7 @@ export function MileageDeductionCalculator({
               className="input"
             />
             <span className="text-xs text-ink-muted">
-              Only the miles driven for work count — commuting to a regular
+              Only the miles driven for work count, commuting to a regular
               workplace doesn&rsquo;t.
             </span>
           </label>
@@ -153,20 +153,20 @@ export function MileageDeductionCalculator({
                 <span className="text-gold-300 font-medium">
                   logs these miles for you automatically
                 </span>{" "}
-                in the background as you drive — an IRS-ready log, no notebook,
+                in the background as you drive, an IRS-ready log, no notebook,
                 folded straight into your live tax forecast.
               </div>
               <Link
                 href="/login?intent=signup"
                 className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
               >
-                Track my miles automatically — free →
+                Track my miles automatically, free →
               </Link>
             </div>
 
             <p className="mt-4 text-[11px] text-ink-muted leading-relaxed">
               The deduction is exact ({TAX_YEAR} IRS rate). The savings figure
-              is an estimate — your real saving depends on your full return.
+              is an estimate, your real saving depends on your full return.
               Estimate only, not tax advice. Nothing is stored; your numbers
               stay in your browser.
             </p>
@@ -179,7 +179,7 @@ export function MileageDeductionCalculator({
               </div>
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your business miles to see your deduction and roughly what
-                it saves you — instantly.
+                it saves you, instantly.
               </p>
             </div>
           </div>

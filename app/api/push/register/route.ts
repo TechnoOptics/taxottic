@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // The native shell calls this from the @capacitor/push-notifications
 // 'registration' listener on every cold start. Auth via session, then
 // upsert via the service-role client scoped to the validated user
-// (the codebase's standard route pattern — @supabase/ssr cookies
+// (the codebase's standard route pattern, @supabase/ssr cookies
 // don't reach PostgREST in a route handler). Idempotent on
 // (user_id, token): a re-register refreshes last_seen_at and clears
 // any prior revoked_at so a recovered token resumes delivery.

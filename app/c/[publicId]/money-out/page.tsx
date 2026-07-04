@@ -39,7 +39,7 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
       // made PostgREST return an error, mileageResp.data fell back
       // to null, and the "Miles driven" tile was hard-coded to 0
       // no matter how many business trips were classified. Same
-      // typo bit the reducer below — fixed there too.
+      // typo bit the reducer below, fixed there too.
       supabase
         .from("mileage_trips")
         .select("distance_miles, deduction_cents")
@@ -156,7 +156,7 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
             mileage is a separate non-dollar metric so we surface it
             in its own card below.
             (May 2026) Dropped `bg-gradient-to-br from-gold-50/60 to-cream`
-            — every authenticated page renders in dark theme, and the
+, every authenticated page renders in dark theme, and the
             cream gradient + cream-flipped text was rendering as
             "cream on cream" → unreadable. .card already has a proper
             dark surface; let it do its job. */}

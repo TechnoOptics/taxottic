@@ -137,7 +137,7 @@ export function HomeOfficeQuickApply({
           sq ft office of{" "}
           <span className="font-medium">{initialTotalSqft.toLocaleString()}</span>{" "}
           sq ft home
-          {" — "}
+          {", "}
           <span className="text-ink-soft">
             {Math.round((initialSqft / initialTotalSqft) * 1000) / 10}% business
             use
@@ -202,7 +202,7 @@ export function HomeOfficeQuickApply({
             </h2>
             <p className="mt-2 text-sm text-ink-soft leading-relaxed">
               Tell us how much of your home is the office. The space has
-              to be used regularly AND exclusively for business — a
+              to be used regularly AND exclusively for business, a
               shared dining table won&apos;t qualify.
             </p>
 
@@ -248,10 +248,10 @@ export function HomeOfficeQuickApply({
                 </div>
                 <div className="mt-1 text-xs text-ink-soft leading-relaxed">
                   {pct < 5
-                    ? "That's small — the simplified method might net more after the deductibility math."
+                    ? "That's small, the simplified method might net more after the deductibility math."
                     : pct > 35
                       ? "Anything over ~30% tends to raise questions at audit. Make sure the room is genuinely used only for business."
-                      : "Healthy range — the deduction will move the forecast meaningfully."}
+                      : "Healthy range, the deduction will move the forecast meaningfully."}
                 </div>
                 <div className="mt-2 text-xs text-ink-soft">
                   Simplified method estimate:{" "}

@@ -9,9 +9,9 @@ import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/pa
 
 const SITE = "https://taxottic.com";
 const SLUG = "effective-tax-rate";
-const TITLE = "Effective Tax Rate Calculator (2026) — Free";
+const TITLE = "Effective Tax Rate Calculator (2026), Free";
 const DESCRIPTION =
-  "Free effective tax rate calculator. See what you actually pay across all your income — effective rate, marginal bracket, total tax, and after-tax take-home — for W-2 or self-employment income. No sign-up.";
+  "Free effective tax rate calculator. See what you actually pay across all your income, effective rate, marginal bracket, total tax, and after-tax take-home, for W-2 or self-employment income. No sign-up.";
 const KEYWORDS = [
   "effective tax rate calculator",
   "marginal tax rate calculator",
@@ -80,7 +80,7 @@ const FAQ_LD = {
       name: "What's the difference between effective and marginal tax rate?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Your effective tax rate is your total tax divided by your total income — the real percentage you pay overall. Your marginal rate is the rate on your next dollar of income, i.e. the top bracket you reach. Because the US uses progressive brackets, your effective rate is always lower than your marginal rate.",
+        text: "Your effective tax rate is your total tax divided by your total income, the real percentage you pay overall. Your marginal rate is the rate on your next dollar of income, i.e. the top bracket you reach. Because the US uses progressive brackets, your effective rate is always lower than your marginal rate.",
       },
     },
     {
@@ -88,7 +88,7 @@ const FAQ_LD = {
       name: "Why is my effective tax rate lower than my tax bracket?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Only the income in each bracket is taxed at that bracket's rate — your first dollars are taxed at the lowest rate, and only the income above each threshold is taxed higher. Add the standard deduction (which is taxed at 0%) and your average, or effective, rate ends up well below the marginal bracket you're 'in.'",
+        text: "Only the income in each bracket is taxed at that bracket's rate, your first dollars are taxed at the lowest rate, and only the income above each threshold is taxed higher. Add the standard deduction (which is taxed at 0%) and your average, or effective, rate ends up well below the marginal bracket you're 'in.'",
       },
     },
     {
@@ -96,7 +96,7 @@ const FAQ_LD = {
       name: "Does this include state tax?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes — pick your state and the effective rate reflects federal plus state income tax. For self-employment income it also includes self-employment tax, which is why a self-employed effective rate runs higher than a W-2 salary at the same income.",
+        text: "Yes, pick your state and the effective rate reflects federal plus state income tax. For self-employment income it also includes self-employment tax, which is why a self-employed effective rate runs higher than a W-2 salary at the same income.",
       },
     },
   ],
@@ -161,7 +161,7 @@ export default async function EffectiveTaxRatePage({
           Effective Tax Rate Calculator
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
-          See what you actually pay — your effective rate across all your
+          See what you actually pay, your effective rate across all your
           income, the marginal bracket on your next dollar, and your after-tax
           take-home. Works for a W-2 salary or self-employment income. Instant,
           no sign-up.
@@ -175,15 +175,15 @@ export default async function EffectiveTaxRatePage({
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8 grid gap-8">
         <div>
           <h2 className="display text-2xl text-forest-900">
-            Effective vs. marginal — why it matters
+            Effective vs. marginal, why it matters
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             People say they&rsquo;re &ldquo;in the 24% bracket&rdquo; and assume
-            they pay 24% of everything — but that&rsquo;s the{" "}
+            they pay 24% of everything, but that&rsquo;s the{" "}
             <strong className="text-forest-800">marginal</strong> rate, the tax
             on the last dollar. Your{" "}
-            <strong className="text-forest-800">effective</strong> rate — total
-            tax over total income — is what you really pay, and it&rsquo;s always
+            <strong className="text-forest-800">effective</strong> rate, total
+            tax over total income, is what you really pay, and it&rsquo;s always
             lower, because the brackets stack: your first dollars are taxed
             least, the standard deduction is taxed at zero, and only income
             above each threshold gets the higher rate. Knowing both is useful:

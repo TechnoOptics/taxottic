@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 
-// Public firm-account request action. No auth required — the
+// Public firm-account request action. No auth required, the
 // firm_access_requests table has an `anon insert` RLS policy. We
 // still validate aggressively here so the table doesn't fill up
 // with junk: rate-limit by email, length-check each field, and

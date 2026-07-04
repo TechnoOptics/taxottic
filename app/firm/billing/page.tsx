@@ -83,7 +83,7 @@ export default async function FirmBillingPage() {
           Your Taxottic plan.
         </h1>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-xl">
-          This page covers your firm&apos;s Taxottic subscription —
+          This page covers your firm&apos;s Taxottic subscription -
           the relationship between {ctx.firm.name} and Taxottic.
           To invoice your clients, head to{" "}
           <Link

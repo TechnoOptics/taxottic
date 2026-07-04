@@ -225,7 +225,7 @@ export function CsvImportPreview({
                     {d.row}
                   </td>
                   <td className="py-1 pr-3 font-mono text-[11px]">
-                    {d.email || <span className="text-red-700">—</span>}
+                    {d.email || <span className="text-red-700">-</span>}
                   </td>
                   <td className="py-1 pr-3 text-ink-soft truncate max-w-[14rem]">
                     {d.business}

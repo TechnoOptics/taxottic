@@ -6,10 +6,10 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 /**
  * Request-deduped super-admin check. is_super_admin() is a security-definer
  * RPC that resolves against auth.uid(), so it MUST run on the user-context
- * client — passing a service-role client returns a false negative. Wrapping
+ * client, passing a service-role client returns a false negative. Wrapping
  * it in React cache() means the many callers in a single render (AppHeader,
  * getActivePlan via the feature gates, the page itself) share ONE round-trip
- * instead of firing the RPC 3–4× per authenticated page.
+ * instead of firing the RPC 3-4× per authenticated page.
  */
 export const isSuperAdminCached = cache(async (): Promise<boolean> => {
   const supabase = await createClient();
@@ -21,7 +21,7 @@ export const isSuperAdminCached = cache(async (): Promise<boolean> => {
 // Hosts that serve the super-admin shell. The middleware rewrites `/`
 // to `/admin` on these. requireSuperAdmin uses this list to decide
 // whether a "not super-admin, go home" redirect should be CROSS-ORIGIN
-// (back to taxottic.com/dashboard) instead of relative — relative would
+// (back to taxottic.com/dashboard) instead of relative, relative would
 // get rewritten to /admin/dashboard on these hosts and 404 with the
 // "personal day" page.
 const ADMIN_HOSTS = new Set(["hq.taxottic.com", "enterprise.taxottic.com"]);
@@ -90,7 +90,7 @@ export async function requireSuperAdmin() {
   if (error || !data) {
     // If we're already on an admin host (hq.taxottic.com or
     // enterprise.taxottic.com), a bare `/dashboard` redirect would be
-    // rewritten by middleware to `/admin/dashboard` — which doesn't
+    // rewritten by middleware to `/admin/dashboard`, which doesn't
     // exist and renders the 404 "personal day" page. The May 2026
     // launch of the three-portal split caught this: super-admins who
     // landed here saw a 404 instead of being bounced back to the
@@ -133,14 +133,14 @@ export async function getMyCompanies(): Promise<CompanyMembership[]> {
   //
   // Without this, super-admins (whose RLS policy on company_members
   // says "you may read any row if you're a super-admin") would see
-  // EVERY membership across every tenant — i.e., the consumer
+  // EVERY membership across every tenant, i.e., the consumer
   // dashboard would list other people's companies. That happened in
   // production for contact@technooptics.com on 2026-05-13.
   //
   // RLS still backstops here for regular users (they can't read
   // other tenants' rows even if we forgot this filter), but
   // getMyCompanies() means "MY companies, not all companies I can
-  // technically see" — so the filter has to be explicit at the query
+  // technically see", so the filter has to be explicit at the query
   // layer too. Belt-and-braces.
   const {
     data: { user },
@@ -148,7 +148,7 @@ export async function getMyCompanies(): Promise<CompanyMembership[]> {
   if (!user) return [];
   // Filter out soft-deleted companies. Anything in the recycle bin
   // (deleted_at is not null) is visible only via /settings/recycle-bin
-  // and the data-export endpoint — every other surface treats it as
+  // and the data-export endpoint, every other surface treats it as
   // gone. The PostgREST `companies.deleted_at.is.null` filter on the
   // joined row keeps the query in one round-trip.
   const { data } = await supabase
@@ -164,7 +164,7 @@ export async function getMyCompanies(): Promise<CompanyMembership[]> {
 
 /**
  * Same shape as getMyCompanies() but for an explicit userId via the
- * service client — for non-session callers (the watch authenticating
+ * service client, for non-session callers (the watch authenticating
  * with a device bearer token). The explicit `.eq("user_id", userId)`
  * is the same belt-and-braces tenant scoping; soft-deleted companies
  * are filtered identically.

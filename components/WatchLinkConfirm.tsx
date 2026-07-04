@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 // The signed-in phone's confirm step: POST the scanned code to
-// /api/watch/pair/redeem (session-authed — the watch joins whoever is
+// /api/watch/pair/redeem (session-authed, the watch joins whoever is
 // signed in here). One tap, clear result, no secrets shown.
 
 type Status = "idle" | "linking" | "done" | "error";

@@ -6,7 +6,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 const SITE = "https://taxottic.com";
 const TITLE = "Free Tax Calculators for the Self-Employed | Taxottic";
 const DESCRIPTION =
-  "Free, instant tax calculators for freelancers, 1099 contractors, and small businesses — estimate self-employment tax, income tax, and quarterly payments. No sign-up. Same IRS-aligned math as Taxottic.";
+  "Free, instant tax calculators for freelancers, 1099 contractors, and small businesses, estimate self-employment tax, income tax, and quarterly payments. No sign-up. Same IRS-aligned math as Taxottic.";
 
 export const metadata = {
   title: TITLE,
@@ -36,47 +36,47 @@ const CALCULATORS = [
     slug: "self-employment-tax",
     title: "Self-Employment Tax Calculator",
     blurb:
-      "See your full 2026 tax on 1099 income — self-employment tax, federal and state income tax, QBI deduction, and your next quarterly payment.",
+      "See your full 2026 tax on 1099 income, self-employment tax, federal and state income tax, QBI deduction, and your next quarterly payment.",
     live: true,
   },
   {
     slug: "quarterly-estimated-tax",
     title: "Quarterly Estimated Tax Calculator",
     blurb:
-      "Work out what to send the IRS each quarter — all four payments and due dates, so you set the money aside and dodge the underpayment penalty.",
+      "Work out what to send the IRS each quarter, all four payments and due dates, so you set the money aside and dodge the underpayment penalty.",
     live: true,
   },
   {
     slug: "1099-tax",
     title: "1099 Tax Calculator",
     blurb:
-      "For independent contractors, gig workers, and freelancers — estimate your tax on 1099-NEC and 1099-K income, including what your write-offs save you.",
+      "For independent contractors, gig workers, and freelancers, estimate your tax on 1099-NEC and 1099-K income, including what your write-offs save you.",
     live: true,
   },
   {
     slug: "mileage-deduction",
     title: "Mileage Deduction Calculator",
     blurb:
-      "Turn business miles into a deduction at the 2026 IRS rate (70¢/mile) and see roughly what it saves you — for anyone who drives for work.",
+      "Turn business miles into a deduction at the 2026 IRS rate (70¢/mile) and see roughly what it saves you, for anyone who drives for work.",
     live: true,
   },
   {
     slug: "how-much-to-set-aside",
     title: "How Much to Set Aside for Taxes",
     blurb:
-      "The exact percentage of every payment to move into savings so quarterly taxes are covered and April is calm — not a rule of thumb.",
+      "The exact percentage of every payment to move into savings so quarterly taxes are covered and April is calm, not a rule of thumb.",
     live: true,
   },
   {
     slug: "effective-tax-rate",
     title: "Effective Tax Rate Calculator",
     blurb:
-      "What you actually pay across all your income — effective rate, marginal bracket, and after-tax take-home. Works for W-2 or self-employment income.",
+      "What you actually pay across all your income, effective rate, marginal bracket, and after-tax take-home. Works for W-2 or self-employment income.",
     live: true,
   },
 ];
 
-// Companion guides — the calculators answer "how much," the guides
+// Companion guides, the calculators answer "how much," the guides
 // answer "why / how." Cross-linking both keeps people on-site and
 // builds topical authority for the whole tax cluster.
 const GUIDES = [
@@ -166,7 +166,7 @@ export default function CalculatorsHubPage() {
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Instant estimates for freelancers, 1099 contractors, and small
-          businesses — no sign-up, nothing stored. Each one runs the same
+          businesses, no sign-up, nothing stored. Each one runs the same
           IRS-aligned engine Taxottic uses to keep your forecast live all year.
         </p>
       </section>
@@ -197,7 +197,7 @@ export default function CalculatorsHubPage() {
         </h2>
         <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-xl">
           The calculators tell you how much. These plain-English guides tell you
-          why — and what you can legally do to owe less.
+          why, and what you can legally do to owe less.
         </p>
         <div className="mt-4 grid sm:grid-cols-2 gap-3">
           {GUIDES.map((g) => (

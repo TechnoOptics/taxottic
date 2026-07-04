@@ -98,7 +98,7 @@ export async function AppHeader({
     // fresh install or a row created before the column existed
     // doesn't silently render the search input.
     showSmartSearch = profile?.show_smart_search === true;
-    // Non-super-admins won't see the portal switcher at all — it's not
+    // Non-super-admins won't see the portal switcher at all, it's not
     // disabled-and-hidden, it's structurally absent.
     isSuperAdmin = superAdmin;
     // QA plan preview is a super-admin-only tool; only surface the
@@ -141,7 +141,7 @@ export async function AppHeader({
         companyPublicId: active?.company.public_id ?? null,
       });
     } catch {
-      /* outstanding-tasks tally is best-effort — never break the header */
+      /* outstanding-tasks tally is best-effort, never break the header */
     }
   }
 
@@ -149,7 +149,7 @@ export async function AppHeader({
     <>
       {/* Set the theme SYNCHRONOUSLY before the page paints so the
           rail-clearance CSS (html[data-theme] main) applies on the first
-          layout — otherwise there's a flash where the fixed rail overlaps
+          layout, otherwise there's a flash where the fixed rail overlaps
           the content before DarkThemeMount's effect runs. Authenticated
           pages only (this header renders only here). */}
       <script
@@ -164,7 +164,7 @@ export async function AppHeader({
           portal-switcher / Bella FAB stack every time. Pairs with the
           `id="main"` we set on every <main> below; for pages whose
           <main> doesn't have that id, the browser scrolls to the
-          top instead — still better than nothing.
+          top instead, still better than nothing.
           Added in response to the May 2026 weekly audit (Quick Win
           #4: "Skip to main content"). */}
       <a
@@ -181,11 +181,11 @@ export async function AppHeader({
       </a>
       {/* Sticky header (was `fixed` pre-May 2026). `sticky top-0` keeps
           the header pinned to the viewport top once it scrolls into
-          view but lets it participate in normal layout — so we no
+          view but lets it participate in normal layout, so we no
           longer need the spacer div that used to push content down.
           Pattern borrowed from Advottic for cross-product cohesion. */}
       {/* position: FIXED, not sticky. `sticky` repeatedly failed in
-          the Capacitor WebView — it breaks if ANY ancestor has
+          the Capacitor WebView, it breaks if ANY ancestor has
           overflow != visible, and we need overflow-x:clip on
           html/body to stop horizontal scroll. A fixed header's
           containing block is the viewport, so it is immune to
@@ -196,7 +196,7 @@ export async function AppHeader({
       <header
         className="app-header fixed top-0 left-0 right-0 z-30"
         style={{
-          // Safe-area handling — pick the LARGER of the Capacitor
+          // Safe-area handling, pick the LARGER of the Capacitor
           // override (--app-safe-top, set by CapacitorNativeInit per
           // OS) and the platform env() inset. Previously the var()
           // default-shadowing meant a Capacitor app that set
@@ -228,7 +228,7 @@ export async function AppHeader({
                        max-w-7xl (1280px) on xl, no cap on 2xl so a
                        27" monitor uses the whole viewport instead
                        of stranding 600px of empty side margin.
-            Height:    h-[3.25rem] (52px) on phone — touch ergonomics
+            Height:    h-[3.25rem] (52px) on phone, touch ergonomics
                        are fine there; bumps to h-14 (56px) on lg
                        and h-16 (64px) on xl so the brand strip
                        reads at a desktop scale.
@@ -241,7 +241,7 @@ export async function AppHeader({
             max-w + mx-auto centered the header content in a box,
             so on a wide monitor the wordmark sat with empty space
             to its LEFT and the user menu sat with empty space to
-            its RIGHT — visually disconnected from the actual
+            its RIGHT, visually disconnected from the actual
             viewport edges. Now: drop max-w + mx-auto entirely on
             lg+; the row spans edge-to-edge with lg:pl-N for rail
             clearance and a small lg:pr-N for the user-menu
@@ -258,7 +258,7 @@ export async function AppHeader({
               sits centered between the wordmark and the user menu
               on lg+ screens; on `< lg` widths it's hidden from the
               header entirely so the mobile top bar stays uncluttered
-              — the user can still hit the search from the full Bella
+, the user can still hit the search from the full Bella
               chat page. Default off keeps the header light for users
               who don't use Bella daily. */}
           {homeHref !== "/" && bellaEnabled && showSmartSearch ? (
@@ -288,14 +288,14 @@ export async function AppHeader({
           />
         </div>
       </header>
-      {/* QA plan preview reminder — only when a super-admin has pinned a
+      {/* QA plan preview reminder, only when a super-admin has pinned a
           lower tier than the default 'practice'. */}
       {isSuperAdmin && previewPlan && previewPlan !== "practice" ? (
         <PlanPreviewBanner plan={previewPlan} resetAction={setPreviewPlan} />
       ) : null}
       {/* Spacer matches the fixed header's height (safe-area inset
           + the 3.25rem single row). The header is now always a
-          single row at every width — smart search is opt-in and
+          single row at every width, smart search is opt-in and
           only renders on lg+ when enabled, so there's never a
           mobile second-row search that needs extra spacer height
           (that mismatch was the May 2026 "header overlaps body"
@@ -314,7 +314,7 @@ export async function AppHeader({
         }}
       />
       {/* Desktop left rail. Hidden on `< lg` widths (LeftRailMobile
-          handles those via the hamburger). Consumer surfaces only —
+          handles those via the hamburger). Consumer surfaces only -
           admin / HQ host doesn't get it because the rail's items
           don't apply. */}
       {homeHref !== "/" ? <LeftRail mode="rail" companies={companies} /> : null}
@@ -324,7 +324,7 @@ export async function AppHeader({
           components/DarkThemeMount.tsx for the full story. */}
       <DarkThemeMount />
       {/* The Bella (bottom-right) and Studio-family (bottom-left)
-          floating circles were removed per product direction — they
+          floating circles were removed per product direction, they
           cluttered the bottom of every screen. Bella can be
           re-surfaced from the UserMenu dropdown later if wanted, the
           same way "Send feedback" was relocated there. */}

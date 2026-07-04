@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // gated to company members).
 //
 // Best-effort: a logging failure must NEVER block the user's action, so we
-// swallow errors — a missing audit row is a reporting bug, not a user-facing
+// swallow errors, a missing audit row is a reporting bug, not a user-facing
 // one.
 
 export type CompanyActivityKind =

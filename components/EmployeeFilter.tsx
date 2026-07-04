@@ -7,7 +7,7 @@ import { SelectMenu, type SelectOption } from "@/components/ui/SelectMenu";
  * "Whose entries am I looking at?" filter for company lists that carry a
  * per-user association (Expenses → monthly_expenses.user_id). A company
  * with W-2 employees / multiple members wants to see one teammate's
- * activity at a time — e.g. "show me just Maria's expenses." The control
+ * activity at a time, e.g. "show me just Maria's expenses." The control
  * only renders when the parent decides there are ≥2 members, so a
  * solo-operator company never sees it.
  *

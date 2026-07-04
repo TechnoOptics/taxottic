@@ -12,16 +12,16 @@ const PUBLIC_PATHS = [
   "/book",
   "/firms",
   // Conversion-critical marketing pages. Previously these redirected
-  // through /login (the May 2026 audit's P1-6 + P2 cluster) — keeping
+  // through /login (the May 2026 audit's P1-6 + P2 cluster), keeping
   // them public lets prospects evaluate Taxottic without creating an
   // account, which is what a 2026 B2B/SMB buyer expects.
   "/pricing",
   "/help",
-  // Editorial guides hub + articles — public marketing content; must
+  // Editorial guides hub + articles, public marketing content; must
   // not bounce anonymous readers (or crawlers) through /login.
   "/guides",
   // Free calculators (+ per-state pages) and competitor comparison
-  // pages — public organic-acquisition surface. Without these, every
+  // pages, public organic-acquisition surface. Without these, every
   // anonymous visitor and search-engine crawler hitting a calculator or
   // comparison URL was 307'd to /login, making the entire suite
   // invisible to search and broken for shared links. The `startsWith`
@@ -38,7 +38,7 @@ const PUBLIC_PATHS = [
   "/account/suspended",
   // SEO routes: robots.txt + sitemap.xml MUST stay public on every
   // host. Without these in the allowlist, the middleware redirected
-  // anonymous /robots.txt and /sitemap.xml requests to /login —
+  // anonymous /robots.txt and /sitemap.xml requests to /login -
   // which broke Google's crawler ("Redirecting..." was the only body
   // crawlers saw). The host-aware logic for the bodies themselves
   // lives in app/robots.ts and app/sitemap.ts; this list is only
@@ -57,7 +57,7 @@ const HQ_HOST = "hq.taxottic.com";
 const ENTERPRISE_HOST = "enterprise.taxottic.com";
 const ROOT_DOMAIN = "taxottic.com";
 
-// Subdomains we treat as reserved (NOT firm portals) — these short-
+// Subdomains we treat as reserved (NOT firm portals), these short-
 // circuit the wildcard logic and fall through to consumer / admin
 // handling. `www` is canonicalized to the root; `dev`/`staging`/
 // `preview` are environment buckets; `assets`/`cdn` are static.
@@ -148,7 +148,7 @@ export async function updateSession(request: NextRequest) {
   // role) and API routes work identically across hosts.
   //
   // We deliberately DON'T look up the firm in the DB from middleware
-  // — that would add a Supabase round-trip to every request. The
+  //, that would add a Supabase round-trip to every request. The
   // firm-context resolver in lib/firm/context.ts does the lookup
   // lazily; if the slug doesn't match a real firm, the page renders
   // a "firm not found" panel and links to /firms/request-account.
@@ -161,7 +161,7 @@ export async function updateSession(request: NextRequest) {
   ) {
     const sub = host.slice(0, -(`.${ROOT_DOMAIN}`.length));
     // Multi-level subdomains (e.g. preview.smithcpa.taxottic.com)
-    // aren't firm portals — only single-level subdomains are.
+    // aren't firm portals, only single-level subdomains are.
     if (
       sub.length >= 3 &&
       sub.length <= 32 &&
@@ -189,14 +189,14 @@ export async function updateSession(request: NextRequest) {
   }
   const isFirmHost = firmSlugFromHost !== null || customFirmHost !== null;
 
-  // Move admin off the customer domain — BUT only when the destination
+  // Move admin off the customer domain, BUT only when the destination
   // subdomain is actually live. The NEXT_PUBLIC_*_HOST_LIVE env flags
   // (same contract as app/settings/actions.ts) tell us whether DNS +
   // Vercel + Supabase OAuth are wired for that subdomain yet.
   //
   // If we redirect to a subdomain that isn't live, the user hits
   // DNS_PROBE_FINISHED_NXDOMAIN with no recovery path. When the
-  // destination isn't live, fall through — the /admin/** route renders
+  // destination isn't live, fall through, the /admin/** route renders
   // on the consumer host instead. Same code, same requireSuperAdmin
   // guard, no DNS dependency.
   //
@@ -226,7 +226,7 @@ export async function updateSession(request: NextRequest) {
   // live.
   //
   // Per-host root: HQ defaults to /admin (the super-admin overview);
-  // Enterprise defaults to /admin/firms (the firms console — what a
+  // Enterprise defaults to /admin/firms (the firms console, what a
   // firm operator wants to see first).
   let rewriteTo: URL | null = null;
   if (isAdminHost) {
@@ -291,7 +291,7 @@ export async function updateSession(request: NextRequest) {
 
   // enterprise.taxottic.com unauth splash. Without this, anonymous
   // visitors to the enterprise root were getting rewritten to
-  // /admin/firms (above), which then redirected to /login — the
+  // /admin/firms (above), which then redirected to /login, the
   // subdomain looked abandoned. The splash explains what the portal
   // is, surfaces Sign In + Book a Demo, and links back to the
   // consumer site. Resolves the May 2026 weekly audit's Critical #4.

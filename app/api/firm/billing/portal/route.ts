@@ -5,8 +5,8 @@ import { requireFirmAdmin } from "@/lib/firm/context";
 export const runtime = "nodejs";
 
 // Mint a Stripe Customer Portal session for the firm. The Portal
-// is Stripe's hosted self-service surface — upgrade, downgrade,
-// change card, cancel — without us having to build any of it.
+// is Stripe's hosted self-service surface, upgrade, downgrade,
+// change card, cancel, without us having to build any of it.
 
 export async function GET(_req: NextRequest) {
   const { admin } = await requireUserWithAdmin();

@@ -70,7 +70,7 @@ export default async function BillingPage({
                 Plan changes and credits are handled at{" "}
                 <span className="font-medium text-forest-800">taxottic.com</span>{" "}
                 in your browser. Anything you buy there unlocks here
-                automatically — just sign in with the same account.
+                automatically, just sign in with the same account.
               </p>
             </div>
           }
@@ -87,7 +87,7 @@ export default async function BillingPage({
           <p className="mt-3 text-sm text-amber-800">Checkout cancelled.</p>
         ) : null}
 
-        {/* Credit balance card — visible to everyone, even free users
+        {/* Credit balance card, visible to everyone, even free users
             (so they see what they're missing). */}
         {plan !== "free" ? (
           <div className="card mt-6 p-6">
@@ -117,7 +117,7 @@ export default async function BillingPage({
             <p className="mt-3 text-[11px] text-ink-muted leading-relaxed">
               Bella runs on{" "}
               <span className="text-forest-800 font-medium">
-                {BELLA_MODEL_BY_PLAN[plan]?.toUpperCase() ?? "—"}
+                {BELLA_MODEL_BY_PLAN[plan]?.toUpperCase() ?? "-"}
               </span>{" "}
               at this tier. Each question costs{" "}
               {plan === "filer"
@@ -130,7 +130,7 @@ export default async function BillingPage({
           </div>
         ) : null}
 
-        {/* Subscription tier ladder — collapsed when on a paid plan. */}
+        {/* Subscription tier ladder, collapsed when on a paid plan. */}
         {plan === "free" ? (
           <PlanLadder />
         ) : (
@@ -144,7 +144,7 @@ export default async function BillingPage({
           </details>
         )}
 
-        {/* Top-up packs — paid plans only. */}
+        {/* Top-up packs, paid plans only. */}
         {plan !== "free" ? (
           <section className="mt-8">
             <div className="flex items-end justify-between flex-wrap gap-3">
@@ -206,7 +206,7 @@ export default async function BillingPage({
               </h2>
               <p className="text-xs text-ink-muted mt-1">
                 When your balance drops below the threshold, we&apos;ll buy a
-                pack for you on file. Off by default — opt in below.
+                pack for you on file. Off by default, opt in below.
               </p>
               <form action={setAutoTopUpAction} className="mt-4 grid sm:grid-cols-3 gap-3">
                 <label className="grid gap-1.5">

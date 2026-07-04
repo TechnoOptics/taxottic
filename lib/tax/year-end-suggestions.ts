@@ -3,7 +3,7 @@
  *
  * Given a forecast result + the inputs that produced it, surface concrete
  * actions a user can still take to lower their tax bill or stay ahead of
- * the IRS. These are personalized — we only show the move when the user's
+ * the IRS. These are personalized, we only show the move when the user's
  * actual numbers say it'll help, and when possible we attach an estimated
  * dollar impact at their marginal rate.
  *
@@ -25,7 +25,7 @@ export type Suggestion = {
   tone: SuggestionTone;
   /** Optional impact estimate (cents). Rendered as "Could save ~$X". */
   estimatedSavingsCents?: number;
-  /** Optional CTA — link the user to the page that fixes it. */
+  /** Optional CTA, link the user to the page that fixes it. */
   cta?: { label: string; href: string };
 };
 
@@ -60,7 +60,7 @@ export type SuggestionInput = {
   currentMonth: number;
   // ISO timestamp of when the company was created. Suggestions that
   // talk about "missed Q1" or safe-harbor shortfalls are misleading
-  // when the company didn't exist before the quarter's due date —
+  // when the company didn't exist before the quarter's due date -
   // there was nothing to estimate. Resolves the May 2026 weekly
   // re-audit finding that the Year-End Moves card kept saying
   // "Catch up Q1" for a company created in May.
@@ -92,7 +92,7 @@ export function buildYearEndSuggestions(
       out.push({
         id: "next_quarterly",
         title: `Q${nextQuarterly.quarter} estimate due ${prettyDate(nextQuarterly.dueDate)}`,
-        body: `Send ~${formatCents(nextQuarterly.amountCents)} to the IRS by ${prettyDate(nextQuarterly.dueDate)} to stay on track for the year. ${daysUntil <= 14 ? "Close to the deadline — pay this week if you can." : `${daysUntil} days to go.`}`,
+        body: `Send ~${formatCents(nextQuarterly.amountCents)} to the IRS by ${prettyDate(nextQuarterly.dueDate)} to stay on track for the year. ${daysUntil <= 14 ? "Close to the deadline, pay this week if you can." : `${daysUntil} days to go.`}`,
         tone: daysUntil <= 14 ? "high" : "medium",
       });
     }
@@ -101,7 +101,7 @@ export function buildYearEndSuggestions(
   // Exclude pre-formation quarters from the "missed estimates" set
   // and from the underpayment-risk math. If the company didn't exist
   // before the quarter's due date, there was no obligation to send an
-  // estimate for that quarter — so neither the "Catch up Q1" Year-End
+  // estimate for that quarter, so neither the "Catch up Q1" Year-End
   // Moves card nor the "below safe-harbor" copy should fire on it.
   // Aligns these surfaces with the Quarterly Estimates panel fix
   // shipped earlier (audit Medium #2 on the re-verification run).
@@ -153,7 +153,7 @@ export function buildYearEndSuggestions(
     const estSavings = Math.round(sepIraTarget * (result.marginalRate || 0.22));
     out.push({
       id: "open_sep_ira",
-      title: `Open a SEP-IRA — contribute up to ${formatCents(sepIraTarget)}`,
+      title: `Open a SEP-IRA, contribute up to ${formatCents(sepIraTarget)}`,
       body: `On ${formatCents(result.projectedNetBusinessIncomeCents)} of net business income you can stash about 20% in a SEP-IRA. Contributions reduce taxable income dollar-for-dollar. You have until the tax-filing deadline next April to fund it for ${result.quarterlyEstimates[0]?.dueDate.slice(0, 4) ?? "this year"}.`,
       tone: "medium",
       estimatedSavingsCents: estSavings,
@@ -167,7 +167,7 @@ export function buildYearEndSuggestions(
   // Only nudge to log miles when the driver has actually LAPSED: no
   // tracked business drive in the last 7 days AND no substantial manual
   // figure on file. A recently-tracked drive (or a real manual number)
-  // means they're already logging, so the reminder just nags — the tile
+  // means they're already logging, so the reminder just nags, the tile
   // kept showing even after the user logged miles today because the old
   // check only looked at the manual `vehicle_business_miles` field and
   // ignored tracked trips entirely.
@@ -185,7 +185,7 @@ export function buildYearEndSuggestions(
     out.push({
       id: "log_mileage",
       title: "Log your business miles before December 31",
-      body: `Standard mileage is $0.70 per business mile this year. Even 5,000 miles is a $3,500 deduction — at your marginal rate that's roughly ${formatCents(Math.round(350_000 * (result.marginalRate || 0.22)))} in saved tax. Update your business profile with year-end miles.`,
+      body: `Standard mileage is $0.70 per business mile this year. Even 5,000 miles is a $3,500 deduction, at your marginal rate that's roughly ${formatCents(Math.round(350_000 * (result.marginalRate || 0.22)))} in saved tax. Update your business profile with year-end miles.`,
       tone: "medium",
       cta: {
         label: "Update business profile",
@@ -218,7 +218,7 @@ export function buildYearEndSuggestions(
     out.push({
       id: "home_office_setup",
       title: "Claim the home-office deduction",
-      body: `If you have a dedicated workspace at home (used regularly + exclusively for the business), the simplified method gives you $5/sq ft up to 300 sq ft — that's a $1,500 deduction with no recordkeeping. Worth ~${formatCents(Math.round(150_000 * (result.marginalRate || 0.22)))} in saved tax at your bracket.`,
+      body: `If you have a dedicated workspace at home (used regularly + exclusively for the business), the simplified method gives you $5/sq ft up to 300 sq ft, that's a $1,500 deduction with no recordkeeping. Worth ~${formatCents(Math.round(150_000 * (result.marginalRate || 0.22)))} in saved tax at your bracket.`,
       tone: "low",
       cta: {
         label: "Update business profile",
@@ -235,7 +235,7 @@ export function buildYearEndSuggestions(
     out.push({
       id: "se_health_premium",
       title: "Deduct your self-employed health-insurance premiums",
-      body: "Premiums you pay for yourself, your spouse, and your dependents are deductible above-the-line on Schedule 1 (IRC §162(l)) — they reduce your AGI. Log monthly premiums under \"Self-employed health insurance.\"",
+      body: "Premiums you pay for yourself, your spouse, and your dependents are deductible above-the-line on Schedule 1 (IRC §162(l)), they reduce your AGI. Log monthly premiums under \"Self-employed health insurance.\"",
       tone: "low",
       cta: {
         label: "Log a premium",
@@ -269,20 +269,20 @@ export function buildYearEndSuggestions(
     out.push({
       id: "year_end_deferral",
       title: "Push December invoices into January",
-      body: `You're projecting ${formatCents(result.totalTaxCents)} in total tax this year. Cash-basis sole props can defer income by waiting to invoice (and accelerate deductions by paying expenses now) — every $1,000 you defer at your bracket saves about ${formatCents(Math.round(100_000 * result.marginalRate))} this year. Only worth it if next year looks similar or smaller.`,
+      body: `You're projecting ${formatCents(result.totalTaxCents)} in total tax this year. Cash-basis sole props can defer income by waiting to invoice (and accelerate deductions by paying expenses now), every $1,000 you defer at your bracket saves about ${formatCents(Math.round(100_000 * result.marginalRate))} this year. Only worth it if next year looks similar or smaller.`,
       tone: "low",
     });
   }
 
-  // Give back. Shown until the user logs a gift this year — then it's
+  // Give back. Shown until the user logs a gift this year, then it's
   // replaced by the earned medal. Framed generosity-first (the deduction
   // is the bonus, and only helps if they itemize) because the goal here
   // is to encourage philanthropy, not to dress up a tax dodge.
   if (input.charitableGivenCents === 0) {
     out.push({
       id: "charitable_giving",
-      title: "Give to a cause — and earn the Philanthropist medal",
-      body: "A gift to a qualified 501(c)(3) is deductible on your Schedule A if you itemize (IRC §170): cash up to 60% of AGI, plus goods and even appreciated stock. Log one to earn the gold Philanthropist medal — generosity that gives a little back.",
+      title: "Give to a cause, and earn the Philanthropist medal",
+      body: "A gift to a qualified 501(c)(3) is deductible on your Schedule A if you itemize (IRC §170): cash up to 60% of AGI, plus goods and even appreciated stock. Log one to earn the gold Philanthropist medal, generosity that gives a little back.",
       tone: "low",
       cta: {
         label: "Log a donation",

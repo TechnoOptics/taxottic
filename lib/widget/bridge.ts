@@ -3,7 +3,7 @@
 // the watch uses and hands it to the native TaxotticWidgetBridge plugin,
 // which persists it (Android SharedPreferences today; iOS App Group
 // later) so the native home-screen widget can render it. The widget
-// itself is a dumb renderer — all the plan/entity adaptation (business
+// itself is a dumb renderer, all the plan/entity adaptation (business
 // vs personal forecast, or an empty state for free) already lives in the
 // server snapshot, so there's no duplicated gating in native code.
 //
@@ -16,7 +16,7 @@ type WidgetBridgePlugin = {
 };
 
 // IMPORTANT (same gotcha as the watch bridge): never return the
-// Capacitor plugin proxy directly from an async function — the proxy
+// Capacitor plugin proxy directly from an async function, the proxy
 // forwards every property access to native, so `await plugin()` would
 // invoke proxy.then(...) and the runtime reports
 // "TaxotticWidgetBridge.then() is not implemented". Wrap it in a plain
@@ -50,7 +50,7 @@ export async function syncWidget(): Promise<void> {
     const snapshot = (await res.json()) as Record<string, unknown>;
     await p.bg.update({ snapshot });
   } catch {
-    /* offline / signed out — leave the widget on its last snapshot */
+    /* offline / signed out, leave the widget on its last snapshot */
   }
 }
 
@@ -76,6 +76,6 @@ export async function startWidgetBridge(): Promise<void> {
       if (isActive) void syncWidget();
     });
   } catch {
-    /* @capacitor/app absent — launch sync still applies */
+    /* @capacitor/app absent, launch sync still applies */
   }
 }

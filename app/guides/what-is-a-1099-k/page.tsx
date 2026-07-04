@@ -5,7 +5,7 @@ const SITE = "https://taxottic.com";
 const SLUG = "what-is-a-1099-k";
 const TITLE = "What is a 1099-K? Thresholds and what to do with it";
 const DESCRIPTION =
-  "What a 1099-K reports, why payment apps and marketplaces send one, the changing reporting threshold, and how to reconcile it on your taxes — including personal payments that shouldn't be there.";
+  "What a 1099-K reports, why payment apps and marketplaces send one, the changing reporting threshold, and how to reconcile it on your taxes, including personal payments that shouldn't be there.";
 
 export const metadata = {
   title: TITLE,
@@ -46,7 +46,7 @@ const FAQ_LD = {
       name: "What is a 1099-K?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "A 1099-K is an information form that payment networks — card processors and apps like PayPal, Venmo, Stripe, Etsy, and similar — send to report the gross payments they processed for you during the year. It's a copy of what they also report to the IRS. It reflects gross amounts before fees, refunds, or chargebacks, so the number rarely equals your actual taxable income.",
+        text: "A 1099-K is an information form that payment networks, card processors and apps like PayPal, Venmo, Stripe, Etsy, and similar, send to report the gross payments they processed for you during the year. It's a copy of what they also report to the IRS. It reflects gross amounts before fees, refunds, or chargebacks, so the number rarely equals your actual taxable income.",
       },
     },
     {
@@ -54,7 +54,7 @@ const FAQ_LD = {
       name: "What is the 1099-K reporting threshold?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "It's been changing. For years the threshold was over $20,000 and 200 transactions; the IRS has been phasing it down toward $600 in stages, with interim amounts along the way. Because the exact figure depends on the tax year, check the current year's threshold. Important: the threshold only controls whether a form is issued — your income is taxable whether or not you receive a 1099-K.",
+        text: "It's been changing. For years the threshold was over $20,000 and 200 transactions; the IRS has been phasing it down toward $600 in stages, with interim amounts along the way. Because the exact figure depends on the tax year, check the current year's threshold. Important: the threshold only controls whether a form is issued, your income is taxable whether or not you receive a 1099-K.",
       },
     },
     {
@@ -62,7 +62,7 @@ const FAQ_LD = {
       name: "What if my 1099-K includes personal payments?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "It happens — a friend repaying you or a personal sale can land on a 1099-K if it ran through a business/goods-and-services channel. Don't ignore it, because the IRS has a copy. Report the form's total, then back out the non-taxable amounts following IRS instructions so you're only taxed on real business income. Going forward, keep personal and business payments on separate accounts.",
+        text: "It happens, a friend repaying you or a personal sale can land on a 1099-K if it ran through a business/goods-and-services channel. Don't ignore it, because the IRS has a copy. Report the form's total, then back out the non-taxable amounts following IRS instructions so you're only taxed on real business income. Going forward, keep personal and business payments on separate accounts.",
       },
     },
   ],
@@ -87,8 +87,8 @@ export default function Page() {
       >
         <H2>What it is</H2>
         <P>
-          A <strong>1099-K</strong> comes from a payment network — card
-          processors and apps like PayPal, Venmo, Stripe, Etsy, and others — and
+          A <strong>1099-K</strong> comes from a payment network, card
+          processors and apps like PayPal, Venmo, Stripe, Etsy, and others, and
           reports the <strong>gross</strong> payments they processed for you,
           with a copy going to the IRS. &ldquo;Gross&rdquo; is the key word: it
           doesn&apos;t subtract platform fees, refunds, or chargebacks, so the
@@ -104,7 +104,7 @@ export default function Page() {
           year.
         </P>
         <Callout>
-          The threshold only decides <em>whether a form is issued</em> — it has
+          The threshold only decides <em>whether a form is issued</em>, it has
           nothing to do with whether the money is taxable. Business income is
           taxable whether or not a 1099-K shows up, so report your income from
           your own records regardless.
@@ -118,11 +118,11 @@ export default function Page() {
           </LI>
           <LI>
             Deduct the platform fees, refunds, and returns as you normally would
-            — your taxable profit is what&apos;s left after legitimate expenses.
+, your taxable profit is what&apos;s left after legitimate expenses.
           </LI>
           <LI>
             If the form includes <strong>personal payments</strong> (a friend
-            repaying you, a personal-item sale), don&apos;t ignore it — report
+            repaying you, a personal-item sale), don&apos;t ignore it, report
             the total, then back out the non-taxable amounts per IRS
             instructions.
           </LI>
@@ -135,8 +135,8 @@ export default function Page() {
 
         <H2>Frequently asked</H2>
         <H3FAQ q="What is a 1099-K?">
-          A 1099-K is an information form that payment networks — card
-          processors and apps like PayPal, Venmo, Stripe, Etsy, and similar —
+          A 1099-K is an information form that payment networks, card
+          processors and apps like PayPal, Venmo, Stripe, Etsy, and similar -
           send to report the gross payments they processed for you during the
           year. It&apos;s a copy of what they also report to the IRS. It
           reflects gross amounts before fees, refunds, or chargebacks, so the
@@ -147,11 +147,11 @@ export default function Page() {
           200 transactions; the IRS has been phasing it down toward $600 in
           stages, with interim amounts along the way. Because the exact figure
           depends on the tax year, check the current year&apos;s threshold.
-          Important: the threshold only controls whether a form is issued — your
+          Important: the threshold only controls whether a form is issued, your
           income is taxable whether or not you receive a 1099-K.
         </H3FAQ>
         <H3FAQ q="What if my 1099-K includes personal payments?">
-          It happens — a friend repaying you or a personal sale can land on a
+          It happens, a friend repaying you or a personal sale can land on a
           1099-K if it ran through a business/goods-and-services channel.
           Don&apos;t ignore it, because the IRS has a copy. Report the
           form&apos;s total, then back out the non-taxable amounts following IRS

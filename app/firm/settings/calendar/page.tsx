@@ -3,7 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 
-// /firm/settings/calendar — connect Zoom / Google / Microsoft.
+// /firm/settings/calendar, connect Zoom / Google / Microsoft.
 //
 // OAuth grant routes (`/api/oauth/{provider}/start` +
 // `/api/oauth/{provider}/callback`) ship in Phase 6.5. For now the
@@ -128,7 +128,7 @@ export default async function CalendarSettingsPage() {
         </ul>
 
         <p className="mt-8 text-[11px] text-ink-muted leading-relaxed">
-          OAuth grant routes wire up in Phase 6.5 — until then the
+          OAuth grant routes wire up in Phase 6.5, until then the
           Connect buttons go to a stub that explains the env-var
           requirements. Meeting records still work; provider auto-mint
           falls back to manual entry.

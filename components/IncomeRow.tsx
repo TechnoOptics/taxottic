@@ -6,7 +6,7 @@ import { formatCents } from "@/lib/tax/forecast";
 
 // Round-5 audit Medium findings:
 //   1. Income rows had Remove but no Edit. To fix a typo, a user had
-//      to delete + re-add — losing recurrence / source / notes and
+//      to delete + re-add, losing recurrence / source / notes and
 //      risking double-counting in the in-between window.
 //   2. Remove had no confirmation. A single mis-click destroys
 //      tax-relevant data.

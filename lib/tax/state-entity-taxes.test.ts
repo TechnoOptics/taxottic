@@ -17,7 +17,7 @@ import {
 //   - PTET availability
 //   - QBI conformity (CO/ND vs everyone else)
 
-describe("computeStateEntityTax — C-Corp", () => {
+describe("computeStateEntityTax, C-Corp", () => {
   it("CA C-Corp: 8.84% on net income", () => {
     const r = computeStateEntityTax({
       stateCode: "CA",
@@ -75,7 +75,7 @@ describe("computeStateEntityTax — C-Corp", () => {
   });
 });
 
-describe("computeStateEntityTax — S-Corp", () => {
+describe("computeStateEntityTax, S-Corp", () => {
   it("CA S-Corp: 1.5% on net income + $800 min franchise", () => {
     const r = computeStateEntityTax({
       stateCode: "CA",
@@ -132,13 +132,13 @@ describe("computeStateEntityTax — S-Corp", () => {
   });
 });
 
-describe("computeStateEntityTax — LLC", () => {
+describe("computeStateEntityTax, LLC", () => {
   it("CA LLC: $800 minimum + $900 tier at $300k receipts", () => {
     const r = computeStateEntityTax({
       stateCode: "CA",
       entityType: "multi_llc",
       netBusinessIncomeCents: 0,
-      grossReceiptsCents: 300_000_00, // $300k — in the $250K-$499K tier
+      grossReceiptsCents: 300_000_00, // $300k, in the $250K-$499K tier
     });
     // $800 minimum + $900 tier fee = $1,700
     expect(r.breakdown.llcFeeCents).toBe(170_000);
@@ -209,7 +209,7 @@ describe("computeStateEntityTax — LLC", () => {
   });
 });
 
-describe("computeStateEntityTax — Sole prop / partnership", () => {
+describe("computeStateEntityTax, Sole prop / partnership", () => {
   it("CA sole prop: no entity-level state tax", () => {
     const r = computeStateEntityTax({
       stateCode: "CA",

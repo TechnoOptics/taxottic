@@ -13,7 +13,7 @@ import { decryptField } from "@/lib/crypto/field-encryption";
 //
 // Implementation notes:
 //   - Uses the service-role client because we want this to succeed
-//     regardless of RLS policies — the user is authenticated via
+//     regardless of RLS policies, the user is authenticated via
 //     requireUser() so we know the identity is real. Each query is
 //     explicitly scoped to user_id or to companies the user belongs to.
 //   - The shape is documented inline below so a downstream importer
@@ -24,7 +24,7 @@ import { decryptField } from "@/lib/crypto/field-encryption";
 //     items still in the recycle bin. The metadata `deleted_at` is
 //     surfaced so a re-importer can preserve grace-window state.
 //   - We deliberately EXCLUDE bank-connection access tokens
-//     (`bank_connection_secrets`) — those are live credentials, not
+//     (`bank_connection_secrets`), those are live credentials, not
 //     user data. The user can re-link to get fresh tokens.
 //
 // Cost: bounded by the number of rows the user owns. Even a power
@@ -86,7 +86,7 @@ export async function GET() {
     .maybeSingle();
 
   // Companies the user is a member of (includes soft-deleted by
-  // design — the export should be the user's full history).
+  // design, the export should be the user's full history).
   const { data: memberships } = await admin
     .from("company_members")
     .select("company_id, role, joined_at")
@@ -225,7 +225,7 @@ export async function GET() {
       created_at: profile?.created_at ?? null,
       gdpr_consented_at: profile?.gdpr_consented_at ?? null,
       notes:
-        "This export includes every row Taxottic stores about you, including items currently in the recycle bin (`deleted_at` will be set on those). Bank-connection ACCESS TOKENS are intentionally excluded — they are live credentials, not user data. Re-link the institution to get fresh tokens.",
+        "This export includes every row Taxottic stores about you, including items currently in the recycle bin (`deleted_at` will be set on those). Bank-connection ACCESS TOKENS are intentionally excluded, they are live credentials, not user data. Re-link the institution to get fresh tokens.",
     },
     companies,
     reminders: reminders ?? [],
@@ -234,8 +234,8 @@ export async function GET() {
     feedback_submissions: feedback ?? [],
     notes: {
       excluded: [
-        "bank_connection_secrets.access_token — live Plaid/Stripe credential",
-        "auth.users.encrypted_password — Supabase-managed, not exposed via this API",
+        "bank_connection_secrets.access_token, live Plaid/Stripe credential",
+        "auth.users.encrypted_password, Supabase-managed, not exposed via this API",
         "internal admin-only tables (super_admins, audit logs)",
       ],
     },
@@ -251,7 +251,7 @@ export async function GET() {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
-      // Don't cache the export — content changes with each new
+      // Don't cache the export, content changes with each new
       // transaction, and we don't want intermediate caches storing
       // a copy.
       "Cache-Control": "private, no-store, max-age=0",

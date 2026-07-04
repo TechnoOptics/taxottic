@@ -5,15 +5,15 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 //
 // Taxottic's email auth is magic-link / email-OTP only: the code is
 // delivered to the user's inbox, which a store reviewer cannot read. This
-// route is the one sanctioned bypass — it signs in a SINGLE, hardwired demo
+// route is the one sanctioned bypass, it signs in a SINGLE, hardwired demo
 // account when the exact configured code is presented, so a reviewer can
 // type a fixed code on the normal login screen (see app/login/page.tsx) and
 // land on a seeded demo. It is NOT a generic password login:
 //
 //   * It is OFF unless BOTH env vars are set (so it never exists in a normal
 //     deploy unless we deliberately turn it on for a review window).
-//   * It only ever mints a session for REVIEW_DEMO_EMAIL — never an
-//     arbitrary account — so the blast radius is one throwaway demo with
+//   * It only ever mints a session for REVIEW_DEMO_EMAIL, never an
+//     arbitrary account, so the blast radius is one throwaway demo with
 //     fake data, even if the code leaked.
 //   * Remove REVIEW_DEMO_CODE (or REVIEW_DEMO_EMAIL) from the environment to
 //     disable it the moment review is done.
@@ -21,7 +21,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 // Mechanism: the service-role client mints a magic-link token_hash for the
 // demo account, then a cookie-bound anon client exchanges it via verifyOtp,
 // which writes the session cookies onto the response. The browser then just
-// navigates and the session is already live — no tokens touch client JS.
+// navigates and the session is already live, no tokens touch client JS.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

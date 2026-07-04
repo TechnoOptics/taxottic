@@ -33,12 +33,12 @@ import { formatCents } from "@/lib/tax/forecast";
  *
  * The server action is wrapped in a client async function so we can
  * sequence: animate first, then RPC. Calling the server action from
- * a client async still hits the revalidatePath behavior — server
+ * a client async still hits the revalidatePath behavior, server
  * actions don't care if their caller is server or client.
  *
  * For "categorize", the row leaves the ACTIVE list and reappears
  * elsewhere on the page in a "tagged" rollup section (rendered by
- * the parent — this component just animates out).
+ * the parent, this component just animates out).
  */
 
 const LEAVE_MS = 350;
@@ -75,7 +75,7 @@ type Props = {
   setTxCategory: (formData: FormData) => Promise<void>;
   ignoreTx: (formData: FormData) => Promise<void>;
   teachBella: (formData: FormData) => Promise<void>;
-  /** Deep-linked from the outstanding-items list (?highlight=<id>) —
+  /** Deep-linked from the outstanding-items list (?highlight=<id>) -
    *  scrolls this row into view and rings it briefly on mount so the
    *  user doesn't have to hunt for it in a long import. */
   highlight?: boolean;
@@ -115,7 +115,7 @@ export function TxRow({
   const isTransfer = cat?.scope === "transfer";
   // 'refunded' category = an auto-netted pair found by the
   // findRefundPairs pass. We render a different prominent badge for
-  // these so the user can see "this isn't an expense — it pairs
+  // these so the user can see "this isn't an expense, it pairs
   // with another row to net zero."
   const isRefundPair = tx.applied_category_code === "refunded";
   const citationParts: string[] = [];
@@ -137,7 +137,7 @@ export function TxRow({
 
   // Wrap a server action: animate first, then commit. The page
   // re-renders without this row on revalidate, unmounting the
-  // component naturally — so we never need to "undo" the leaving
+  // component naturally, so we never need to "undo" the leaving
   // state.
   const leaveAndCommit =
     (action: (fd: FormData) => Promise<void>) => async (fd: FormData) => {
@@ -157,11 +157,11 @@ export function TxRow({
         // Base shell + responsive grid.
         "relative rounded-lg border bg-white/70 px-4 py-3 text-sm " +
         "min-w-0 " + // critical: lets flex children truncate cleanly across browsers (Opera/Safari were overflowing)
-        // Left accent bar — bumps Bella-suggested rows into the
+        // Left accent bar, bumps Bella-suggested rows into the
         // user's attention. Implemented as a 3px-thick left border
         // that color-swaps based on row state. The user reported
         // "Ask Bella suggested looks on the items, it is not
-        // visible" — making the entire LEFT edge gold pulls the
+        // visible", making the entire LEFT edge gold pulls the
         // eye in a way a 11px chip never can.
         (justArrived
           ? "border-l-[3px] border-l-forest-800 ring-2 ring-forest-800/30 "
@@ -218,7 +218,7 @@ export function TxRow({
           {wasBellaSuggested ? (
             // Bigger, higher-contrast chip. Was 11px / gold-50 bg /
             // gold-200 border (essentially gold-on-cream, very low
-            // contrast — user reported "not visible"). Now: white
+            // contrast, user reported "not visible"). Now: white
             // text on saturated gold-600 background, with a small
             // ✦ icon + bold label, so the chip is visually the
             // loudest element in the row.
@@ -349,9 +349,9 @@ export function TxRow({
               defaultValue={selected}
               options={cats}
               frequentCodes={frequentCodes}
-              placeholder="— pick one —"
+              placeholder="- pick one -"
               autoSubmit={false}
-              emptyLabel="— pick one —"
+              emptyLabel="- pick one -"
             />
           </label>
           <div className="sm:col-span-2 flex items-center gap-3">

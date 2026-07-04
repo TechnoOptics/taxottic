@@ -319,7 +319,7 @@ function formatMeetingTime(iso: string, mins: number): string {
     hour: "numeric",
     minute: "2-digit",
   });
-  return `${fmt.format(start)} – ${end.toLocaleTimeString("en-US", {
+  return `${fmt.format(start)}, ${end.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   })}`;

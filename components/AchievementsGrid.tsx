@@ -41,7 +41,7 @@ const HOW_TO_EARN: Record<string, string> = {
   vehicle:
     "Mark a business vehicle in your profile and capture car/truck expenses.",
   first_drive:
-    "Log a business drive — track one with the app or add it by hand on the Mileage page.",
+    "Log a business drive, track one with the app or add it by hand on the Mileage page.",
   team_grower: "Invite at least one teammate to a company you manage.",
 };
 
@@ -58,12 +58,12 @@ export function AchievementsGrid({ earnedCodes }: Props) {
   const all = Object.values(BADGES);
   const focused = selected ? BADGES[selected] : null;
 
-  // "Next up" hint — the easiest unearned bronze badge from the
+  // "Next up" hint, the easiest unearned bronze badge from the
   // ordered catalog. Round-2 audit Section 6 friction: the grid
   // alone doesn't tell the user what to do next. Surfacing one
   // concrete next-step turns the row from decoration into a
   // progression mechanic. We pick bronze first (lowest barrier),
-  // then silver, then gold — so a user who's already cleared
+  // then silver, then gold, so a user who's already cleared
   // bronze still sees something to chase.
   const tierOrder: Badge["tier"][] = ["bronze", "silver", "gold"];
   const nextUp =

@@ -10,7 +10,7 @@ export const maxDuration = 300;
  *
  * Why this exists: a trip only materialises when an ingest call sees the
  * user has parked (last staged point >5 min old). That detection rides
- * on the device's background heartbeats — so when the app is
+ * on the device's background heartbeats, so when the app is
  * backgrounded or killed right after a drive, the heartbeats stop and
  * the just-finished drive sits OPEN in mileage_points_raw, never closing.
  * And because the live ingest only looks back ~24h, any such drive ages
@@ -19,7 +19,7 @@ export const maxDuration = 300;
  * This cron is the server-side safety net: every 10 minutes it finds
  * every driver/company with unconsumed staging points and runs the same
  * segmentation finalizer over a WIDE window. forceClose=false, so it
- * only closes trips whose last point is genuinely >5 min old — it can
+ * only closes trips whose last point is genuinely >5 min old, it can
  * never sever a drive that's still in progress. push=false so a one-time
  * backfill of weeks of stranded drives doesn't spam the lock screen.
  *

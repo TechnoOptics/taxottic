@@ -4,13 +4,13 @@ import { STATE_BASE_SALES_TAX_RATE, ECONOMIC_NEXUS } from "./service-sales-tax";
 
 // Cross-cutting sanity audit on the state rate tables.
 //
-// These tests don't reproduce every published bulletin — that would
-// just duplicate the data — but they DO catch the regression classes
+// These tests don't reproduce every published bulletin, that would
+// just duplicate the data, but they DO catch the regression classes
 // that have bitten us historically:
 //
 //   1. Typo bugs: an extra digit (0.0775 vs 0.076)
 //   2. Wrong-decade ranges: rates outside the historically plausible
-//      0–13% band for state corporate income tax
+//      0-13% band for state corporate income tax
 //   3. Missing states (every test references the canonical 51-row set)
 //   4. Mismatch between sales-tax rate table and the DB-seeded values
 //      (migration 20260430000011)
@@ -24,7 +24,7 @@ const ALL_STATES_PLUS_DC = [
   "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ];
 
-describe("State rate audit — coverage", () => {
+describe("State rate audit, coverage", () => {
   it("C-Corp rate table covers all 51 jurisdictions", () => {
     for (const s of ALL_STATES_PLUS_DC) {
       expect(C_CORP_STATE_RATE[s], `Missing C-Corp rate for ${s}`).toBeDefined();
@@ -50,7 +50,7 @@ describe("State rate audit — coverage", () => {
   });
 });
 
-describe("State rate audit — plausible bounds", () => {
+describe("State rate audit, plausible bounds", () => {
   it("every C-Corp rate is between 0% and 13%", () => {
     // 13% upper bound covers MN (highest at 9.8%) with headroom for
     // a state outlier we haven't seen yet. A rate over 13% almost
@@ -72,7 +72,7 @@ describe("State rate audit — plausible bounds", () => {
   });
 });
 
-describe("State rate audit — no-tax states", () => {
+describe("State rate audit, no-tax states", () => {
   it("states without corporate income tax show rate 0", () => {
     // NV, OH, SD, TX, WA, WY have NO traditional corporate income
     // tax. (They have gross-receipts equivalents we model separately.)
@@ -89,7 +89,7 @@ describe("State rate audit — no-tax states", () => {
   });
 
   it("no-income-tax + no-sales-tax states have 0 economic-nexus threshold", () => {
-    // DE, MT, NH, OR — none have a statewide sales tax, so the
+    // DE, MT, NH, OR, none have a statewide sales tax, so the
     // economic-nexus threshold is functionally meaningless. We
     // record it as 0 so the nexus check returns false correctly.
     for (const s of ["DE", "MT", "NH", "OR"]) {
@@ -98,7 +98,7 @@ describe("State rate audit — no-tax states", () => {
   });
 });
 
-describe("State rate audit — high-impact corrections", () => {
+describe("State rate audit, high-impact corrections", () => {
   it("Oregon C-Corp top rate is 7.6%, not 7.75%", () => {
     // We had a typo (0.0775) before the audit fix. Pin it.
     expect(C_CORP_STATE_RATE.OR.rate).toBeCloseTo(0.076, 4);
@@ -135,7 +135,7 @@ describe("State rate audit — high-impact corrections", () => {
   });
 });
 
-describe("State rate audit — as-of-year metadata", () => {
+describe("State rate audit, as-of-year metadata", () => {
   it("STATE_RATES_AS_OF_YEAR is set to a recent year", () => {
     expect(STATE_RATES_AS_OF_YEAR).toBeGreaterThanOrEqual(2025);
   });

@@ -7,7 +7,7 @@ import type {
 // Zoom adapter. POST /v2/users/me/meetings with the user's OAuth
 // token mints a meeting + join URL. The token must carry the
 // `meeting:write` scope (granted during the OAuth handshake in
-// /app/api/oauth/zoom/* — not in this commit; see runbook).
+// /app/api/oauth/zoom/*, not in this commit; see runbook).
 
 export const zoomProvider: CalendarProvider = {
   id: "zoom",

@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 //
 // The watch glance, assembled from existing well-tested cores. Auth
 // via session; admin client for aggregate reads (same pattern as
-// /api/push/action). EVERY section is best-effort — a failure in one
+// /api/push/action). EVERY section is best-effort, a failure in one
 // field degrades that field to its empty default; the watch must
 // never show an error. forecast / per-deduction $ / unsure
 // expense+income are intentionally left to a follow-up (no fabricated
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
     const active = (profileRow as { active_company_id: string | null } | null)
       ?.active_company_id ?? null;
-    // Validate the active company is still one the user belongs to —
+    // Validate the active company is still one the user belongs to -
     // a stale value from before they were removed from a company
     // shouldn't leak that company's numbers to the wrist.
     const belongs = active
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
     /* today 0 */
   }
 
-  // outstandingCount is the TRUE total across every source below — the
+  // outstandingCount is the TRUE total across every source below, the
   // arrays above/below are all capped preview lists for the swipe deck,
   // but a watch-face complication needs the real number (mirrors the
   // phone's header-bell count; see lib/tasks/outstanding.ts).
@@ -193,11 +193,11 @@ export async function GET(req: NextRequest) {
   );
   if (hitGoal) reward = { title: "Goal reached!", detail: hitGoal.title };
 
-  // Bank-synced transactions awaiting a business-or-personal call —
+  // Bank-synced transactions awaiting a business-or-personal call -
   // the swipe deck's expense cards. Two sources: CSV-imported
   // (bank_transactions, scoped by company_id) and Plaid-synced
   // (account_transactions, RLS-scoped via the account→connection→
-  // company chain — same simplification the header bell uses, since
+  // company chain, same simplification the header bell uses, since
   // account_transactions carries no company_id column directly).
   if (companyId) {
     try {
@@ -290,7 +290,7 @@ export async function GET(req: NextRequest) {
     /* no badges */
   }
 
-  // Real projected forecast — via the SAME buildCompanyForecast the
+  // Real projected forecast, via the SAME buildCompanyForecast the
   // forecast page uses, so the wrist number can't diverge from the
   // app. Best-effort: if the tax profile isn't set up yet (the page
   // would redirect to onboarding) we just omit forecast and the watch
@@ -372,7 +372,7 @@ export async function GET(req: NextRequest) {
         };
       }
     } catch {
-      /* tax profile missing / engine unavailable — omit forecast */
+      /* tax profile missing / engine unavailable, omit forecast */
     }
   }
 
@@ -393,7 +393,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
     trackingActive = !!recentPing;
   } catch {
-    /* no points yet — leave false */
+    /* no points yet, leave false */
   }
 
   // Server-mirrored auto-apply-business preference. Stored alongside
@@ -410,7 +410,7 @@ export async function GET(req: NextRequest) {
       (prof?.mileage_schedule as { autoApplyBusiness?: boolean } | null) ?? null;
     autoApplyBusiness = sched?.autoApplyBusiness === true;
   } catch {
-    /* profile row missing in dev — default to off */
+    /* profile row missing in dev, default to off */
   }
 
   try {

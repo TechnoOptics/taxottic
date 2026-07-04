@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 /**
- * URL-shape compatibility shim — same rationale as ./team/page.tsx.
+ * URL-shape compatibility shim, same rationale as ./team/page.tsx.
  *
  * The CompanyNav exposes a tab labelled "Tax preparer" whose `href`
  * resolves to `/c/{publicId}/preparer`. Round-5 audit caught that

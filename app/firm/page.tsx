@@ -7,17 +7,17 @@ import { getUnreadActivityCount } from "@/lib/firm/notifications";
 import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 
 export const metadata = {
-  title: "Firm cockpit — Taxottic",
+  title: "Firm cockpit, Taxottic",
   description:
     "Every client at a glance: engagement status, tax-ready %, upcoming deadlines, last activity.",
   robots: { index: false, follow: false },
 };
 
-// /firm — firm cockpit, Phase 1 rewrite.
+// /firm, firm cockpit, Phase 1 rewrite.
 //
 // Pre-rewrite: read from `getMyCompanies()` (companies the *user* is a
 // direct member of). That's the wrong shape for an accounting firm
-// whose preparers don't own their clients' companies — they have
+// whose preparers don't own their clients' companies, they have
 // engagements with them. A firm with 30 active clients shouldn't have
 // to add 30 manager memberships to see the roster.
 //
@@ -29,7 +29,7 @@ export const metadata = {
 // pending invitations don't hide behind active clients.
 //
 // Users with no firm membership get redirected to
-// /firms/request-account by `requireFirmContext()` — but this page
+// /firms/request-account by `requireFirmContext()`, but this page
 // uses the softer `getFirmContext()` so users with one foot in the
 // firm world and one in the consumer world (super-admins, internal
 // staff testing) see a graceful "no firm yet" panel with the
@@ -95,7 +95,7 @@ export default async function FirmPage() {
   const taxYear = new Date().getUTCFullYear();
   const nowIso = new Date().toISOString();
 
-  // No firm yet — render a soft onboarding panel. Don't redirect,
+  // No firm yet, render a soft onboarding panel. Don't redirect,
   // because the same /firm URL is the natural place to land a new
   // visitor: it's the surface they searched for, and bouncing them
   // out of context to /firms/request-account is jarring.
@@ -133,7 +133,7 @@ export default async function FirmPage() {
           </div>
           <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-xl">
             Already on an invitation? Open the link in the email we
-            sent — accepting an invitation creates your firm
+            sent, accepting an invitation creates your firm
             membership and lands you back here automatically.
           </p>
         </section>
@@ -147,8 +147,8 @@ export default async function FirmPage() {
   // "50+" without round-tripping that count).
   const unreadCount = await getUnreadActivityCount(supabase, firm.id);
 
-  // Pull every engagement for this firm — including pending and
-  // completed — sorted by urgency below. PostgREST nested select on
+  // Pull every engagement for this firm, including pending and
+  // completed, sorted by urgency below. PostgREST nested select on
   // companies works because the engagement row gives RLS the
   // company_id and `firm_has_active_engagement_with` is satisfied
   // for the active rows; pending/completed rows we hit via the
@@ -197,7 +197,7 @@ export default async function FirmPage() {
     );
   }
 
-  // Compute readiness for active engagements only — pending/completed
+  // Compute readiness for active engagements only, pending/completed
   // doesn't need a per-client score on the cockpit and the readiness
   // query is the heaviest per-row cost.
   const readinessRows = await Promise.all(
@@ -391,7 +391,7 @@ export default async function FirmPage() {
           />
         </div>
 
-        {/* Federal-deadline banner — same UX as the prior cockpit. */}
+        {/* Federal-deadline banner, same UX as the prior cockpit. */}
         {nextReminder ? (
           <section className="mt-4">
             <Link
@@ -409,7 +409,7 @@ export default async function FirmPage() {
                 <div className="text-xs text-ink-muted mt-0.5 leading-relaxed">
                   Next: {nextReminder.title}
                   {nextDeadlineDays !== null
-                    ? ` — in ${nextDeadlineDays} day${nextDeadlineDays === 1 ? "" : "s"}`
+                    ? `, in ${nextDeadlineDays} day${nextDeadlineDays === 1 ? "" : "s"}`
                     : ""}
                   . Tap to open the full reminder list.
                 </div>
@@ -495,7 +495,7 @@ export default async function FirmPage() {
                               <span className="text-forest-800 font-medium">
                                 {r.readiness.hasBankFeed
                                   ? "Connected"
-                                  : "—"}
+                                  : "-"}
                               </span>
                             </span>
                           </>
@@ -536,7 +536,7 @@ export default async function FirmPage() {
             )}
           </section>
 
-          {/* Activity sidebar — Phase 1: empty until events start
+          {/* Activity sidebar, Phase 1: empty until events start
               flowing. Phase 4 adds real-time. */}
           <aside>
             <div className="flex items-end justify-between">
@@ -577,7 +577,7 @@ export default async function FirmPage() {
           The cockpit lists engagements your firm has accepted plus any
           still awaiting action. Pending invitations float to the top
           so you can respond without hunting. Open a row to drill into
-          the client&apos;s books — your firm has read-only access via
+          the client&apos;s books, your firm has read-only access via
           the active engagement.
         </p>
       </section>

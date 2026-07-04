@@ -13,9 +13,9 @@ import { CALC_INCOMES, formatDollars } from "@/lib/calculators/incomes";
 
 const SITE = "https://taxottic.com";
 const SLUG = "self-employment-tax";
-const TITLE = "Self-Employment Tax Calculator (2026) — Free & Instant";
+const TITLE = "Self-Employment Tax Calculator (2026), Free & Instant";
 const DESCRIPTION =
-  "Free self-employment tax calculator. Estimate your 2026 self-employment tax (15.3%), federal & state income tax, QBI deduction, and quarterly payments from your 1099 income — no sign-up. Runs the same IRS-aligned engine as Taxottic.";
+  "Free self-employment tax calculator. Estimate your 2026 self-employment tax (15.3%), federal & state income tax, QBI deduction, and quarterly payments from your 1099 income, no sign-up. Runs the same IRS-aligned engine as Taxottic.";
 
 type Search = Promise<Record<string, string | string[] | undefined>>;
 
@@ -134,7 +134,7 @@ const FAQ_LD = {
       name: "How much is self-employment tax?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Self-employment tax is 15.3% of your net self-employment earnings — 12.4% for Social Security (up to the annual wage base) plus 2.9% for Medicare (no cap). It's calculated on 92.35% of your net profit, and you can deduct half of it as an above-the-line adjustment. This calculator applies all of that automatically, then adds your federal and state income tax on top so you see the full picture.",
+        text: "Self-employment tax is 15.3% of your net self-employment earnings, 12.4% for Social Security (up to the annual wage base) plus 2.9% for Medicare (no cap). It's calculated on 92.35% of your net profit, and you can deduct half of it as an above-the-line adjustment. This calculator applies all of that automatically, then adds your federal and state income tax on top so you see the full picture.",
       },
     },
     {
@@ -142,7 +142,7 @@ const FAQ_LD = {
       name: "Is this self-employment tax calculator accurate?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "It runs the same forecasting engine Taxottic uses inside the paid app — current-year federal brackets, the Social Security wage base, the QBI (Section 199A) deduction, the extra 0.9% Medicare surcharge, and your state's brackets. It's an estimate for planning, not a filed return, and not a substitute for a licensed CPA.",
+        text: "It runs the same forecasting engine Taxottic uses inside the paid app, current-year federal brackets, the Social Security wage base, the QBI (Section 199A) deduction, the extra 0.9% Medicare surcharge, and your state's brackets. It's an estimate for planning, not a filed return, and not a substitute for a licensed CPA.",
       },
     },
     {
@@ -158,7 +158,7 @@ const FAQ_LD = {
       name: "What counts as self-employment income?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Net profit from freelancing, contracting, gig work, a single-member LLC, or a sole proprietorship — generally the income on your 1099-NEC/1099-K minus your ordinary and necessary business expenses. Enter your gross income and expenses above and the calculator uses the net profit.",
+        text: "Net profit from freelancing, contracting, gig work, a single-member LLC, or a sole proprietorship, generally the income on your 1099-NEC/1099-K minus your ordinary and necessary business expenses. Enter your gross income and expenses above and the calculator uses the net profit.",
       },
     },
   ],
@@ -218,7 +218,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
           Self-Employment Tax Calculator
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
-          See what you&rsquo;ll actually owe on your 1099 income — self-employment
+          See what you&rsquo;ll actually owe on your 1099 income, self-employment
           tax, federal and state income tax, your QBI deduction, and your next
           quarterly payment. Instant, no sign-up, and it runs the same
           IRS-aligned engine as Taxottic.
@@ -230,7 +230,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
         <SelfEmploymentTaxCalculator initial={initial} />
       </section>
 
-      {/* Supporting content — real substance for ranking + humans */}
+      {/* Supporting content, real substance for ranking + humans */}
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8 grid gap-8">
         <div>
           <h2 className="display text-2xl text-forest-900">
@@ -238,7 +238,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
             When you work for yourself, no employer splits your payroll taxes
-            with you — so you cover both halves. That&rsquo;s{" "}
+            with you, so you cover both halves. That&rsquo;s{" "}
             <strong className="text-forest-800">self-employment tax</strong>:
             15.3% of your net earnings, made up of 12.4% Social Security (up to
             the annual wage base) and 2.9% Medicare (no cap). It&rsquo;s figured
@@ -250,7 +250,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
             your state has one, minus the{" "}
             <strong className="text-forest-800">QBI deduction</strong> that
             shaves up to 20% off your qualified business income. This calculator
-            does all of it — most free calculators only show the flat 15.3%
+            does all of it, most free calculators only show the flat 15.3%
             slice.
           </p>
         </div>

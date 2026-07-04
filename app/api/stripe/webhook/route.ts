@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     }
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      // Pre-link the customer if missing — the subscription event will
+      // Pre-link the customer if missing, the subscription event will
       // arrive shortly with the same customer id.
       if (typeof session.customer === "string" && session.customer_email) {
         await admin

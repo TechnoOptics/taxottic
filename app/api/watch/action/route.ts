@@ -11,18 +11,18 @@ export const dynamic = "force-dynamic";
 // HTTPS fallback for outbound watch actions. The watch normally pushes
 // actions to the phone over the Wearable Data Layer, and the phone
 // bridge forwards them to /api/watch/confirm. That bridge ONLY works
-// when the phone app is alive and the GMS connection is healthy — at
+// when the phone app is alive and the GMS connection is healthy, at
 // a live demo, on LTE, or with the phone in the user's pocket, the
 // bridge may not be available. This endpoint accepts the same JSON
 // the Data Layer payloads carry, authenticated by the watch's bearer
 // token (the one PairManager persisted after the 6-digit pair), so
 // the swipe ALWAYS resolves to a server write even when no phone is
-// nearby. Same end state either path — actions are keyed by row id
+// nearby. Same end state either path, actions are keyed by row id
 // and last write wins.
 //
 // Body: { type: "confirm", kind: "trip"|"expense"|"income",
 //         id: string, decision: "left"|"right" }
-//   or  { type: "mileage" | "autoApply" | "open", ... }  — accepted
+//   or  { type: "mileage" | "autoApply" | "open", ... }, accepted
 //        but server-no-op; those actions intrinsically need the phone
 //        (start GPS, flip a local pref, open a route). We 200 so the
 //        watch's parallel POST doesn't surface an error.
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, did: "reclassify_trip" });
     }
 
-    // expense / income — a bank_transactions row.
+    // expense / income, a bank_transactions row.
     const { data: tx } = await admin
       .from("bank_transactions")
       .select("id, company_id, suggested_category_code")
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
   }
 
   // mileage / open are phone-side actions (start GPS, foreground a
-  // route) — the server can't start the phone's foreground service
+  // route), the server can't start the phone's foreground service
   // by itself. 200 so the watch's parallel POST is a harmless no-op
   // and the Data Layer delivers when the phone is up.
   if (type === "mileage" || type === "open") {

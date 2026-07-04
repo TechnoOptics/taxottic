@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * On-device diagnostics for the iOS/Android shells — built because an
+ * On-device diagnostics for the iOS/Android shells, built because an
  * iPhone can't be remote-inspected from a Windows dev box (no ADB
  * equivalent; Safari Web Inspector is macOS-only; release WKWebViews
  * aren't inspectable since iOS 16.4). This page turns the phone itself
@@ -41,7 +41,7 @@ async function collect(): Promise<Readings> {
     `top=${ec.paddingTop} bottom=${ec.paddingBottom} left=${ec.paddingLeft} right=${ec.paddingRight}`;
   envProbe.remove();
 
-  // The JS-set overrides (CapacitorNativeInit) — raw expression form.
+  // The JS-set overrides (CapacitorNativeInit), raw expression form.
   const rootStyle = document.documentElement.style;
   r["var.appSafeTop"] =
     rootStyle.getPropertyValue("--app-safe-top").trim() || "(unset)";
@@ -76,7 +76,7 @@ async function collect(): Promise<Readings> {
     r["fab.gapFromBottom"] = `${Math.round(window.innerHeight - fr.bottom)}px`;
     r["fab.gapFromLeft"] = `${Math.round(fr.left)}px`;
   } else {
-    r["fab.gapFromBottom"] = "(no FAB — wide viewport?)";
+    r["fab.gapFromBottom"] = "(no FAB, wide viewport?)";
   }
 
   // Service-worker cache generation (which web bundle is live).
@@ -136,10 +136,10 @@ export function DeviceDiagnostics() {
 
   const refresh = useCallback(() => {
     // Two passes: immediately, and again after CapacitorNativeInit's
-    // async plugin calls have had time to set the CSS overrides — so a
+    // async plugin calls have had time to set the CSS overrides, so a
     // cold open of this page still shows the settled values. setState
     // only happens inside the async continuations (never synchronously
-    // in the effect body — react-hooks/set-state-in-effect).
+    // in the effect body, react-hooks/set-state-in-effect).
     void collect().then((data) => {
       setReadings(data);
       setCopied(false);
@@ -164,7 +164,7 @@ export function DeviceDiagnostics() {
       await navigator.clipboard.writeText(blob);
       setCopied(true);
     } catch {
-      /* clipboard blocked — the textarea below is selectable */
+      /* clipboard blocked, the textarea below is selectable */
     }
   }
 

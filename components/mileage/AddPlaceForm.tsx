@@ -28,7 +28,7 @@ const KINDS: Array<{
   {
     value: "other",
     label: "Other",
-    hint: "Saved place — does not auto-classify on its own.",
+    hint: "Saved place, does not auto-classify on its own.",
   },
 ];
 
@@ -105,7 +105,7 @@ export function AddPlaceForm({
             city/state/zip), and stashes the picked lat/lng into the
             hidden inputs below so the server skips the geocode
             round-trip + can't return "not_found". Manual typing
-            still works — falls through to server-side geocode. */}
+            still works, falls through to server-side geocode. */}
         <AddressAutocomplete
           name="address"
           placeholder="123 Main St, City, ST"

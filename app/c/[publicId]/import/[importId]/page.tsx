@@ -61,7 +61,7 @@ export default async function ImportReviewPage({
       // (those rows are often mixed in with business charges on the
       // same card). applyTransactions routes personal AND transfer
       // picks via ignored=true so they never inflate the Schedule C
-      // deduction — they're labels, not bookings.
+      // deduction, they're labels, not bookings.
       // Pull irc_section + irs_pub so the TxRow can show the
       // citation next to each detected category.
       .select(
@@ -116,7 +116,7 @@ export default async function ImportReviewPage({
     });
   }
 
-  // Most-used category codes for THIS company — used to bubble
+  // Most-used category codes for THIS company, used to bubble
   // already-frequent picks to the top of the searchable list (and
   // gold-star them when the query is empty). Cheap query: a single
   // GROUP BY + ORDER BY count desc + LIMIT 8. Limit 6 months back so
@@ -155,10 +155,10 @@ export default async function ImportReviewPage({
     (t) => t.applied_category_code && !t.applied_expense_id,
   );
 
-  // Bella detection rollup — shown at the top of the review section
+  // Bella detection rollup, shown at the top of the review section
   // so the user can see at a glance "Bella tagged X, you tagged Y,
   // these N are still untouched." Computed from in-memory debits
-  // (already loaded above) — no extra round-trip.
+  // (already loaded above), no extra round-trip.
   const stats = {
     total: debits.length,
     appliedAsExpense: debits.filter((t) => t.applied_expense_id).length,
@@ -212,7 +212,7 @@ export default async function ImportReviewPage({
 
   // Deep-linked from the outstanding-items list (?highlight=<id>): if
   // the target row already got tagged since the item was surfaced,
-  // it lives in the collapsed "Sorted, awaiting Apply" pile — force
+  // it lives in the collapsed "Sorted, awaiting Apply" pile, force
   // that <details> open so TxRow's scrollIntoView can actually reach it.
   const targetInTagged =
     !!targetTxId && taggedDebits.some((t) => t.id === targetTxId);
@@ -292,7 +292,7 @@ export default async function ImportReviewPage({
               Re-run categorization
             </div>
             <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
-              Bella already read this import on upload — high-confidence
+              Bella already read this import on upload, high-confidence
               rows are applied; lower-confidence rows are below with her
               suggested category. Click to re-run if you added new rows or
               changed the account type. Costs 10 credits; super admins
@@ -325,7 +325,7 @@ export default async function ImportReviewPage({
           </form>
         ) : null}
 
-        {/* Bella detection rollup — surfaces "what did the model see"
+        {/* Bella detection rollup, surfaces "what did the model see"
             and "what was applied" without making the user count rows
             manually. The deduction IRC / Pub citation for each picked
             category appears next to the row below. */}
@@ -370,7 +370,7 @@ export default async function ImportReviewPage({
               {activeDebits.length === 0
                 ? debits.length === 0
                   ? "No expense candidates"
-                  : "All caught up — every row sorted"
+                  : "All caught up, every row sorted"
                 : `Expense candidates (${activeDebits.length})`}
             </h2>
             {/* Sneak peek of progress: shrinks as the user works. */}
@@ -429,7 +429,7 @@ export default async function ImportReviewPage({
           )}
         </section>
 
-        {/* Tagged-but-not-applied pile — collapsed by default. Users
+        {/* Tagged-but-not-applied pile, collapsed by default. Users
             picked a category here, the slide-off pulled the row out
             of the Active list, and now it lives here until they hit
             Apply. Open the details to review/change picks before

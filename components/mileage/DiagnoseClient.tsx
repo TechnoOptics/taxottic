@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
  * as a green/red indicator so the user can screenshot the EXACT
  * failure mode on their device.
  *
- * Deliberately does NOT go through lib/mileage/native-tracker.ts —
+ * Deliberately does NOT go through lib/mileage/native-tracker.ts -
  * we want the bare plugin behavior, not the production-toggle's
  * cached-plugin / warming dance. If this self-test works but the
  * toggle doesn't, the bug is in the toggle (we know what to fix).
@@ -99,7 +99,7 @@ export function DiagnoseClient({ companyId }: Props) {
       ({ Capacitor } = await import("@capacitor/core"));
     } catch (e) {
       setStep("native", "fail", `import error: ${String(e)}`);
-      setError("Capacitor core not available — are you on the web?");
+      setError("Capacitor core not available, are you on the web?");
       setRunning(false);
       return;
     }
@@ -107,7 +107,7 @@ export function DiagnoseClient({ companyId }: Props) {
       setStep(
         "native",
         "fail",
-        `platform=${Capacitor.getPlatform()} — open this in the installed Taxottic app, not a browser`,
+        `platform=${Capacitor.getPlatform()}, open this in the installed Taxottic app, not a browser`,
       );
       setError("Open this page inside the installed Taxottic app on your phone.");
       setRunning(false);
@@ -122,7 +122,7 @@ export function DiagnoseClient({ companyId }: Props) {
       setStep(
         "plugin",
         "fail",
-        "BackgroundGeolocation not registered — rebuild + reinstall the app",
+        "BackgroundGeolocation not registered, rebuild + reinstall the app",
       );
       setError(
         "Your installed app predates the GPS plugin. Re-run the build pipeline and sideload / install the new APK or TestFlight.",
@@ -173,7 +173,7 @@ export function DiagnoseClient({ companyId }: Props) {
     bg.start(
       {
         backgroundMessage: "Tracker self-test in progress.",
-        backgroundTitle: "Taxottic — diagnose",
+        backgroundTitle: "Taxottic, diagnose",
         requestPermissions: true,
         stale: false,
         distanceFilter: 0, // capture every fix for the test
@@ -248,7 +248,7 @@ export function DiagnoseClient({ companyId }: Props) {
             <p className="text-xs text-ink-muted mt-1">
               {companyId
                 ? "Tap Start, then walk or drive a short distance. Each step lights up as it happens."
-                : "No company found — set one up first so the test has somewhere to point."}
+                : "No company found, set one up first so the test has somewhere to point."}
             </p>
           </div>
           {running ? (
@@ -309,7 +309,7 @@ export function DiagnoseClient({ companyId }: Props) {
               label="Last fix"
               value={
                 lastFixSec === null
-                  ? "—"
+                  ? "-"
                   : lastFixSec === 0
                     ? "just now"
                     : `${lastFixSec}s ago`
@@ -321,7 +321,7 @@ export function DiagnoseClient({ companyId }: Props) {
               value={
                 lastFix?.accuracyM != null
                   ? `±${Math.round(lastFix.accuracyM)}m`
-                  : "—"
+                  : "-"
               }
             />
           </div>

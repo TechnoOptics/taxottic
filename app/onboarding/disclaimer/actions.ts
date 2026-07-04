@@ -10,7 +10,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
  * once `tax_disclaimer_accepted_at` is set the dashboard gate stops
  * routing here. The "I understand" checkbox is required client-side
  * and re-checked here so a crafted POST can't skip the acknowledgement
- * (this is the line that protects us legally — keep it strict).
+ * (this is the line that protects us legally, keep it strict).
  */
 export async function acceptTaxDisclaimer(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();

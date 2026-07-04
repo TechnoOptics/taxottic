@@ -125,7 +125,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
 
         {/* Cross-link to the canonical "what I've claimed" view. Lives
             HERE because the explorer is the natural place to land
-            after applying something — users want a single click to
+            after applying something, users want a single click to
             see "ok now where's my running tally?" */}
         <div className="mt-6">
           <a
@@ -140,7 +140,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
           </a>
         </div>
 
-        {/* Suggested deductions — quick-apply tiles for the
+        {/* Suggested deductions, quick-apply tiles for the
             big-ticket claims that users miss most. Each tile is
             self-contained (button → modal → server action) and the
             applied state is sticky across reloads. */}
@@ -156,7 +156,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
             these is on. Fill the details once; the forecast updates
             instantly.
           </p>
-          {/* Single quick-apply tile today — constrain its width so it
+          {/* Single quick-apply tile today, constrain its width so it
               reads as one deliberate card instead of a half-empty 2-col
               grid. Widen to a real grid here when a second tile lands. */}
           <div className="mt-4 sm:max-w-md">
@@ -173,7 +173,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
 
         {/* Personal & charitable deductions. The master catalog below is
             business (Schedule C). The deduction users most often ask
-            "where is this?" about — gifts to a 501(c)(3) — is a PERSONAL
+            "where is this?" about, gifts to a 501(c)(3), is a PERSONAL
             Schedule A itemized deduction under §170, which is exactly why
             it never appears on the business Expenses page. Surface it here
             with the real rules + where to record it. */}
@@ -189,7 +189,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
             <span className="font-medium text-forest-800">501(c)(3)</span>{" "}
             charity are deductible on your personal Form 1040{" "}
             <span className="font-medium text-forest-800">Schedule A</span>{" "}
-            when you itemize (IRC §170) — they&apos;re not a business
+            when you itemize (IRC §170), they&apos;re not a business
             expense, which is why they don&apos;t show up on the Expenses
             page. They only lower your tax if your total itemized
             deductions beat the standard deduction.
@@ -216,7 +216,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
                 Goods &amp; property
               </h3>
               <p className="mt-1 text-xs text-ink-soft leading-relaxed">
-                Clothing, equipment, even appreciated stock — deduct fair
+                Clothing, equipment, even appreciated stock, deduct fair
                 market value. Over $500 total needs Form 8283; items over
                 $5,000 need a qualified appraisal.
               </p>
@@ -274,13 +274,13 @@ export default async function DeductionsPage({ params }: { params: Params }) {
               <p className="text-sm text-forest-900">
                 You&apos;ve given{" "}
                 <span className="font-medium">{formatCents(givenCents)}</span>{" "}
-                to charity this year — thank you. The{" "}
+                to charity this year, thank you. The{" "}
                 <span className="font-medium">Philanthropist</span> medal is
                 yours. Log another anytime.
               </p>
             ) : (
               <p className="text-xs text-ink-soft leading-relaxed">
-                Record a gift to a 501(c)(3) you believe in — it earns you the
+                Record a gift to a 501(c)(3) you believe in, it earns you the
                 gold Philanthropist medal, and counts toward your Schedule A if
                 you itemize.
               </p>

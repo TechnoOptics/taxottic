@@ -4,7 +4,7 @@
 
 export type WatchConfirm = {
   id: string;
-  /** trip | expense | income — drives the swipe-deck copy. */
+  /** trip | expense | income, drives the swipe-deck copy. */
   kind: "trip" | "expense" | "income";
   title: string; // "Drive · 12.4 mi" / "Lunch · Sweetgreen"
   subtitle: string; // "today 9:14 AM" / "needs a category"
@@ -27,7 +27,7 @@ export type WatchDeduction = {
 };
 
 export type WatchSnapshot = {
-  /** 0–100 overall tax-readiness (hero dial). */
+  /** 0-100 overall tax-readiness (hero dial). */
   taxReadinessPct: number;
   ytdDeductionCents: number;
   /** Rough marginal-rate estimate of tax saved by deductions. */
@@ -48,7 +48,7 @@ export type WatchSnapshot = {
   confirmations: WatchConfirm[];
 
   /** TRUE total count across every outstanding-tasks source (unclassified
-   *  drives + pending transactions) — NOT capped like `confirmations`,
+   *  drives + pending transactions), NOT capped like `confirmations`,
    *  which only ships a preview page's worth for the swipe deck. This is
    *  the stable primitive a watch-face complication / tile badge binds
    *  to, so it doesn't have to infer a count from an array length that's
@@ -71,14 +71,14 @@ export type WatchSnapshot = {
   };
 
   latestBadge?: { title: string; symbol: string };
-  /** Set to the badge code when a medal was JUST earned — the watch
+  /** Set to the badge code when a medal was JUST earned, the watch
    *  fires the celebration overlay + a haptic, one-shot. */
   newBadgeCode?: string;
-  /** A rewarding moment to celebrate on the wrist — a goal reached,
+  /** A rewarding moment to celebrate on the wrist, a goal reached,
    *  or a new business-deduction category unlocked. One-shot overlay. */
   reward?: { title: string; detail: string };
 
-  /** The user's primary company id. Not shown on the watch — the
+  /** The user's primary company id. Not shown on the watch, the
    *  phone bridge needs it to arm mileage tracking from the wrist. */
   companyId?: string;
 };

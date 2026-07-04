@@ -1,12 +1,12 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { CustomSelect } from "./CustomSelect";
 
-// The access-level roles — the real long labels that once overflowed on
+// The access-level roles, the real long labels that once overflowed on
 // mobile (the Samsung Galaxy Z case in CustomSelect's own comment).
 const ROLE_OPTIONS = [
-  { value: "owner", label: "Owner — full access to everything" },
-  { value: "manager", label: "Manager — manage the team and the books" },
-  { value: "member", label: "Member — expenses, mileage & chat only" },
+  { value: "owner", label: "Owner, full access to everything" },
+  { value: "manager", label: "Manager, manage the team and the books" },
+  { value: "member", label: "Member, expenses, mileage & chat only" },
 ];
 
 // Mirrors how the app styles the access-level field.
@@ -39,7 +39,7 @@ test.describe("CustomSelect", () => {
       </div>,
     );
 
-    // Sanity: confirm the app's theme stylesheet actually loaded — bg-cream
+    // Sanity: confirm the app's theme stylesheet actually loaded, bg-cream
     // must resolve to a real color, else we'd be screenshotting unstyled
     // markup that catches nothing.
     const bg = await component

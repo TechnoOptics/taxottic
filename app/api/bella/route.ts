@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // Per-user rate limit on this LLM endpoint — credits cap spend, but this
+  // Per-user rate limit on this LLM endpoint, credits cap spend, but this
   // stops rapid-fire abuse / runaway clients from hammering the model.
   if (!checkRateLimit(`bella:${user.id}`, { capacity: 15, refillPerMinute: 15 })) {
     return NextResponse.json(
-      { error: "Too many requests — please slow down." },
+      { error: "Too many requests, please slow down." },
       { status: 429 },
     );
   }
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   // Tier-gated model selection. Each plan maps to one Bella model
   // (Filer→Haiku, Solo/Studio→Sonnet, Scale/Practice→Opus). Credits
-  // pay for *more questions at the model your tier unlocks* — they
+  // pay for *more questions at the model your tier unlocks*, they
   // can't buy access to a higher model.
   const plan = await getActivePlan(supabase, user.id);
   const model = BELLA_MODEL_BY_PLAN[plan];
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
   const admin = createServiceClient();
   const cost = bellaCreditCost(model);
-  // Super admins (forever-allowlist) skip credit consumption — they
+  // Super admins (forever-allowlist) skip credit consumption, they
   // have unlimited usage by policy. We still record the action via
   // bella_messages for audit, just not as a paid debit.
   const superAdmin = await isSuperAdmin(supabase);
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       .eq("public_id", body.company_public_id)
       .single();
     // SECURITY: company_public_id comes from the request body. Only attach
-    // this company's context if the caller is actually a member — otherwise a
+    // this company's context if the caller is actually a member, otherwise a
     // user could pass any public_id and bind a Bella conversation (written
     // below with the service-role client, which bypasses RLS) to, and surface
     // the name/profile of, a company they don't belong to.

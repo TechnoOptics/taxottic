@@ -55,7 +55,7 @@ export default async function ImportPage({
           <h2 className="display text-xl text-forest-900">Upload CSVs</h2>
           <p className="mt-2 text-sm text-ink-soft">
             Export transaction CSVs from your bank or card and drop them
-            here — you can pick multiple files at once. We&apos;ll
+            here, you can pick multiple files at once. We&apos;ll
             auto-categorize every row with Bella as soon as each one
             uploads; high-confidence rows apply themselves, the rest land
             on the review page for a one-click confirm. Costs 10 credits

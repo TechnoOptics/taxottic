@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
  * breadcrumb with links (e.g. Mileage → Business trips). Flourish is on
  * by default; pass `flourish={false}` to drop it. Pass `logo` (e.g. a
  * <CompanyLogo/>) for the company-branded screens (Forecast, Deduction
- * explorer) — it sits to the left of the eyebrow/title block so those
+ * explorer), it sits to the left of the eyebrow/title block so those
  * headers keep their identity while still sharing this one primitive.
  */
 export function PageHeader({

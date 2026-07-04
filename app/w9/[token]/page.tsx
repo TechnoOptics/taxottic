@@ -7,7 +7,7 @@ import { submitW9 } from "./actions";
 type Params = Promise<{ token: string }>;
 
 export const metadata = {
-  title: "Form W-9 — Taxottic",
+  title: "Form W-9, Taxottic",
   description: "Securely complete and sign a Form W-9 for your tax preparer.",
   robots: { index: false, follow: false },
 };

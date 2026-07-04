@@ -31,8 +31,8 @@ export type CrossTenantMeta = {
 
 // React's cache() memoizes for the lifetime of a single request, so
 // when both the /c/[publicId]/layout.tsx and the leaf page call
-// loadCompanyByPublicId(slug), only one DB roundtrip — and only one
-// audit-log row — actually happens. Without this, every cross-tenant
+// loadCompanyByPublicId(slug), only one DB roundtrip, and only one
+// audit-log row, actually happens. Without this, every cross-tenant
 // page load would log the access twice (once from the layout, once
 // from the page) and double the supabase round-trips on the hot
 // path.
@@ -40,7 +40,7 @@ export const loadCompanyByPublicId = cache(_loadCompanyByPublicId);
 
 async function _loadCompanyByPublicId(publicId: string) {
   const { supabase, user } = await requireUser();
-  // .is("deleted_at", null) — companies in the recycle bin look like
+  // .is("deleted_at", null), companies in the recycle bin look like
   // a 404 to every /c/[publicId]/* page so users can't accidentally
   // edit data on a company they meant to delete. The recycle bin UI
   // is the only place they should see soft-deleted companies; from
@@ -74,7 +74,7 @@ async function _loadCompanyByPublicId(publicId: string) {
   };
   if (!membership) {
     const admin = createServiceClient();
-    // Pull the manager (preferred) — the first non-soft-deleted member
+    // Pull the manager (preferred), the first non-soft-deleted member
     // with role=manager. If none, fall back to the earliest member.
     const { data: managerRow } = await admin
       .from("company_members")
@@ -113,7 +113,7 @@ async function _loadCompanyByPublicId(publicId: string) {
         p_host: host,
       });
     } catch {
-      // Swallow — the banner is the user-visible signal; the log is
+      // Swallow, the banner is the user-visible signal; the log is
       // a forensic backup.
     }
   }
@@ -126,12 +126,12 @@ async function _loadCompanyByPublicId(publicId: string) {
   //
   // Only set it when the viewer is an ACTUAL member (membership is
   // non-null). A super-admin reading another tenant's data must not
-  // hijack the user's own active company — the read is informational,
+  // hijack the user's own active company, the read is informational,
   // not a navigation event.
   //
   // Fire-and-forget: a stale value just means the watch shows the
   // previous company until the next render. We don't await the
-  // update either — it must not block the page render. Service-role
+  // update either, it must not block the page render. Service-role
   // because profiles.update isn't RLS-permissive for the same user.
   if (membership) {
     const admin = createServiceClient();

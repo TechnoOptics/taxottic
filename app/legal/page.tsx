@@ -2,7 +2,7 @@ import Link from "next/link";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
-  title: "Legal — privacy, security, terms, DPA, DMCA, accessibility",
+  title: "Legal, privacy, security, terms, DPA, DMCA, accessibility",
   description:
     "Plain-English policies for Taxottic. Privacy, security overview, terms of service, DPA, subprocessors, cookies, DMCA, accessibility, acceptable use.",
   alternates: { canonical: "/legal" },

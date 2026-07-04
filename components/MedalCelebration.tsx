@@ -46,7 +46,7 @@ export function MedalCelebration({ newlyEarnedCodes }: Props) {
   // index 0 (deterministic, same on both sides → no React #418), and
   // a useEffect after mount swaps in a real Math.random pick. The
   // overlay only ever flashes for a frame in the worst case, and
-  // only when the user just earned a badge — well worth avoiding
+  // only when the user just earned a badge, well worth avoiding
   // the hydration mismatch that took down the forecast page in
   // production. The index is per-badge so consecutive medals don't
   // repeat the same line.
@@ -65,7 +65,7 @@ export function MedalCelebration({ newlyEarnedCodes }: Props) {
   // line. SSR rendered with empty `messageIndexByCode`, so the
   // server falls through the `?? 0` and the first client render
   // matches. After this effect runs, React commits a new render
-  // with a real random index — *post* hydration, which is fine.
+  // with a real random index, *post* hydration, which is fine.
   useEffect(() => {
     if (queue.length === 0) return;
     const top = queue[0];

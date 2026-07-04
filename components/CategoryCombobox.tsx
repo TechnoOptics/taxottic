@@ -11,12 +11,12 @@ import {
 /**
  * Searchable category picker. Drop-in for the previous plain <select>
  * on the import-review page. The full category list is always
- * visible behind the dropdown — typing in the trigger filters by a
+ * visible behind the dropdown, typing in the trigger filters by a
  * substring match against label + code, ranked smart-first:
  *
  *   1. Exact label start (typed "supp" → "Supplies" before "Office supplies")
  *   2. Frequently-used codes (passed by the parent) bubble up among
- *      otherwise-equal matches — the user's actual hit-rate steering
+ *      otherwise-equal matches, the user's actual hit-rate steering
  *      what shows on top.
  *   3. Then alphabetical by label.
  *
@@ -37,8 +37,8 @@ import {
 export type CategoryOption = {
   code: string;
   label: string;
-  /** Optional grouping hint shown in the dropdown — e.g. Schedule C
-   *  Line 23 — for users who can rattle off line numbers. */
+  /** Optional grouping hint shown in the dropdown, e.g. Schedule C
+   *  Line 23, for users who can rattle off line numbers. */
   hint?: string | null;
   /** scope === "transfer" gets a small subdued treatment so users see
    *  it's a labelling category, not a deduction. */
@@ -50,7 +50,7 @@ export type CategoryOption = {
 };
 
 type Props = {
-  /** Hidden input name — matches the original <select name=...> so
+  /** Hidden input name, matches the original <select name=...> so
    *  the wrapping form action keeps working. */
   name: string;
   /** Currently-applied code (rendered as the trigger label on load). */
@@ -83,7 +83,7 @@ function rankScore(opt: CategoryOption, q: string, freq: Set<string>): number {
   if (label.includes(ql)) return freq.has(opt.code) ? 2 : 3;
   if (opt.code.toLowerCase().includes(ql)) return 4;
   if ((opt.hint ?? "").toLowerCase().includes(ql)) return 5;
-  return 99; // does not match — filtered out before ranking
+  return 99; // does not match, filtered out before ranking
 }
 
 function matches(opt: CategoryOption, q: string): boolean {
@@ -135,7 +135,7 @@ export function CategoryCombobox({
   // When NOT searching, group the visible options under display_group
   // headers (Insurance / Vehicle / Travel-meals-gifts / …) so the
   // user can scan 80+ categories without losing the thread.
-  // When searching, flatten — group headers in a search context
+  // When searching, flatten, group headers in a search context
   // hurt more than help.
   const grouped = useMemo(() => {
     if (query) return null;
@@ -150,7 +150,7 @@ export function CategoryCombobox({
   }, [visible, query]);
 
   // `highlight` is clamped at every read site (see effectiveHighlight
-  // below) rather than via an effect — calling setState in a useEffect
+  // below) rather than via an effect, calling setState in a useEffect
   // when `visible.length` changes triggers a cascading render that
   // both feels janky and trips react-hooks/purity. Read-time clamping
   // gets the same correctness for free.
@@ -184,7 +184,7 @@ export function CategoryCombobox({
     // setTimeout so React applies the value update before form submit;
     // the hidden input reads .value via DOM at submit time.
     if (autoSubmit && hiddenRef.current) {
-      // Update the hidden input DOM value directly first — React's
+      // Update the hidden input DOM value directly first, React's
       // re-render hasn't run yet at this point.
       hiddenRef.current.value = code;
       const form = hiddenRef.current.closest("form");
@@ -292,7 +292,7 @@ export function CategoryCombobox({
               // Grouped view (no query): render section headers
               // between groups so users can scan ~80 categories by
               // bucket. Each item retains its own visible-index for
-              // keyboard-highlight purposes — we maintain a running
+              // keyboard-highlight purposes, we maintain a running
               // counter across groups.
               (() => {
                 let idx = -1;

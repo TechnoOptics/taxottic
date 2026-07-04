@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
  *
  * The CompanyNav exposes a tab labelled "Team" whose `href` resolves
  * to `/c/{publicId}/manage` (the actual page lives there). Round-5
- * audit caught that users who type the URL based on the label —
- * `/c/{publicId}/team` — hit a 404. The 404 page is well-styled but
+ * audit caught that users who type the URL based on the label -
+ * `/c/{publicId}/team`, hit a 404. The 404 page is well-styled but
  * the discrepancy reads as a broken link.
  *
  * Fix: redirect `/team` → `/manage`. Cheap, non-breaking, preserves

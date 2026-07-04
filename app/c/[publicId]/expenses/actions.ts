@@ -23,7 +23,7 @@ async function userBelongsToCompany(
 // A manager can review any teammate's expense; a department lead can
 // review only a teammate in their own department. Mirrors the
 // is_department_lead_of_user() RLS function so app-level authorization
-// and the database policy agree — this check just lets us return a
+// and the database policy agree, this check just lets us return a
 // clear error message instead of a generic RLS failure.
 async function userCanReviewExpenseOwner(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
@@ -222,7 +222,7 @@ export async function updateExpense(formData: FormData) {
 // actions. Reviewing a teammate's logged expenses can leave a note
 // (visible to the teammate, distinct from the teammate's own `notes`)
 // and/or reclassify a miscategorized personal purchase out of the
-// business deduction entirely — without deleting the row, so the
+// business deduction entirely, without deleting the row, so the
 // teammate's own log stays intact.
 export async function setExpenseClassification(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -315,7 +315,7 @@ export async function setExpenseManagerNote(formData: FormData) {
   if (company) revalidatePath(`/c/${company.public_id}/expenses`);
 }
 
-// "Or if the user says so" — the manual half of recurring-expense
+// "Or if the user says so", the manual half of recurring-expense
 // control. The automated bank-sync detector (lib/banking/recurring.ts)
 // catches a subscription that's gone quiet; this lets the person who
 // logged it (or a manager) end the projection immediately, e.g. right

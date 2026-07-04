@@ -6,7 +6,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 const SITE = "https://taxottic.com";
 const TITLE = "Compare Taxottic to Other Self-Employed Tax Tools";
 const DESCRIPTION =
-  "Honest comparisons of Taxottic — a year-round tax-forecasting companion for freelancers and small businesses — against the tools you already know.";
+  "Honest comparisons of Taxottic, a year-round tax-forecasting companion for freelancers and small businesses, against the tools you already know.";
 
 export const metadata = {
   title: TITLE,
@@ -41,7 +41,7 @@ const COMPARISONS = [
     slug: "keeper-alternative",
     title: "Keeper alternative",
     blurb:
-      "Keeper files and tracks deductions; Taxottic forecasts and cites them, for less. Where the two part ways — honestly.",
+      "Keeper files and tracks deductions; Taxottic forecasts and cites them, for less. Where the two part ways, honestly.",
   },
 ];
 
@@ -86,7 +86,7 @@ export default function CompareHubPage() {
           How Taxottic compares.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
-          Straight comparisons — including where the other tools are the better
+          Straight comparisons, including where the other tools are the better
           choice. Taxottic is a year-round tax-forecasting companion; it&rsquo;s
           not a bookkeeping suite and it doesn&rsquo;t file your return. Here&rsquo;s
           where it fits.

@@ -73,7 +73,7 @@ const PLAN_PREVIEW_META: { plan: Plan; label: string; hint: string }[] = [
 ];
 
 // Portal labels for the switcher. We deliberately don't render the
-// destination hostname here anymore — the server action handling the
+// destination hostname here anymore, the server action handling the
 // form (setActivePlatform) decides whether to send the user to the
 // subdomain or fall back to the path-based admin shell on the consumer
 // host, depending on NEXT_PUBLIC_*_HOST_LIVE env flags. The hint is
@@ -187,9 +187,9 @@ export function UserMenu({
               // visual expectation: dropdown drops down from where it
               // was clicked). On phone (<sm) we still center because
               // a corner-anchored sheet is awkward to reach with a
-              // thumb — but on desktop the previous "centered on
+              // thumb, but on desktop the previous "centered on
               // viewport" treatment was straight-up weird ("opens in
-              // the middle of the screen" — May 25 feedback). anchor
+              // the middle of the screen", May 25 feedback). anchor
               // already carries the button rect; just use it.
               position: "fixed",
               top: anchor.top,
@@ -215,7 +215,7 @@ export function UserMenu({
               ) : null}
             </div>
 
-            {/* Theme toggle — Light / Dark. Persisted in localStorage;
+            {/* Theme toggle, Light / Dark. Persisted in localStorage;
                 DarkThemeMount picks up the change without a reload. */}
             <ThemeToggle />
 
@@ -377,7 +377,7 @@ export function UserMenu({
                   <MenuLink href="/reminders" onClick={() => setOpen(false)}>
                     Reminders
                   </MenuLink>
-                  {/* 3.1.1: billing/plan management is web-only — hidden
+                  {/* 3.1.1: billing/plan management is web-only, hidden
                       in the native app (Stripe, not Apple IAP). */}
                   <WebOnly>
                     <MenuLink href="/billing" onClick={() => setOpen(false)}>
@@ -438,7 +438,7 @@ export function UserMenu({
             ) : null}
 
             <div className="border-t border-forest-100 pt-1.5">
-              {/* Refresh app — always-available escape hatch when the
+              {/* Refresh app, always-available escape hatch when the
                   WebView (Capacitor) or PWA is serving stale cached
                   content. Unregisters all service workers, deletes
                   every cache, then force-reloads from network. Users
@@ -492,7 +492,7 @@ export function UserMenu({
                 </svg>
                 Refresh app
               </button>
-              {/* Switch accounts — clears the current session AND tells the
+              {/* Switch accounts, clears the current session AND tells the
                   login page to force Google/Microsoft's account picker (via
                   ?force_picker=1, which the login page translates into
                   prompt=select_account on the OAuth call). Without this,

@@ -18,7 +18,7 @@ import { TripList, type TripRow } from "@/components/mileage/TripList";
  *   - Clicking "Review" loads that trip's route onto the map and moves
  *     screen focus to the map so they can look at the drive.
  *   - Only ONE trip can be in review at a time. The default (no focus)
- *     is the range overview — the one place multiple drives show at
+ *     is the range overview, the one place multiple drives show at
  *     once ("weekly overview").
  *
  * focusedId === null  → overview: the map plots every trip in range.

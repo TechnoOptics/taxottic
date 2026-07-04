@@ -1,5 +1,5 @@
 /**
- * State income tax brackets — real bracket-by-bracket math for the
+ * State income tax brackets, real bracket-by-bracket math for the
  * highest-impact states.
  *
  * The forecast engine has historically applied a single flat rate per
@@ -43,7 +43,7 @@ type StateTable = {
   /** Single / HoH / MFS / Qualifying Widow share a column unless the
    *  state has explicit separate tables. */
   single: StateBracket[];
-  /** MFJ — only present when the state has separate brackets for it. */
+  /** MFJ, only present when the state has separate brackets for it. */
   married_filing_jointly?: StateBracket[];
   /** Optional surcharge for incomes over a high threshold (MA $1M, CA
    *  mental health surcharge, etc.). */
@@ -326,7 +326,7 @@ const BRACKETS_BY_STATE: Record<string, StateTable> = {
  * NONE of them recognise the federal QBI (§199A) deduction at the
  * state level (QBI is a federal-only below-the-line credit). The
  * May 2026 round-2 audit caught CA tax forecasting at ~$378 on a
- * $50k Single Sole Prop — that came from passing federal taxable
+ * $50k Single Sole Prop, that came from passing federal taxable
  * income (which already had a $15k+ federal std deduction AND a
  * $6k QBI deduction subtracted) into the CA bracket table, leaving
  * only ~$24k of state taxable income, when the correct CA base
@@ -338,7 +338,7 @@ const BRACKETS_BY_STATE: Record<string, StateTable> = {
  * §17041(h); other states' figures track similarly). Refresh when
  * each state's department of revenue publishes the next year's
  * figures. For states without a state standard deduction (NJ, MA,
- * CT use personal exemptions instead — different mechanism), the
+ * CT use personal exemptions instead, different mechanism), the
  * entry is 0 and the bracket math runs against full state AGI.
  */
 const STATE_STD_DEDUCTION_BY_STATE: Record<
@@ -494,7 +494,7 @@ export function computeStateTaxFromBrackets(args: {
   const bracketYearNote =
     args.taxYear === BRACKETS_DATA_YEAR
       ? `${BRACKETS_DATA_YEAR} bracket table`
-      : `${BRACKETS_DATA_YEAR} bracket table — placeholder for ${args.taxYear} until ${stateUpper} publishes the year's brackets`;
+      : `${BRACKETS_DATA_YEAR} bracket table, placeholder for ${args.taxYear} until ${stateUpper} publishes the year's brackets`;
   return {
     taxCents: tax,
     note: `State tax computed using ${stateUpper} ${bracketYearNote}${useMfjBrackets ? " (MFJ column)" : ""}.${surchargeNote}`,

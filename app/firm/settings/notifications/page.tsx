@@ -8,7 +8,7 @@ import {
 } from "@/lib/firm/notifications";
 import { updateNotificationPrefs } from "./actions";
 
-// /firm/settings/notifications — per-user digest preferences.
+// /firm/settings/notifications, per-user digest preferences.
 //
 // One firm + one user = one prefs row. Defaults live in
 // lib/firm/notifications.ts so the row only exists once the user
@@ -75,7 +75,7 @@ export default async function NotificationsPage() {
         </h1>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-xl">
           The inbox is always live in-app. This controls the email
-          digest only — how often we send a summary of activity you
+          digest only, how often we send a summary of activity you
           haven&apos;t already opened in the app.
         </p>
 

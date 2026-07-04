@@ -188,7 +188,7 @@ export default function SecurityPage() {
               for the full list of vendors that process customer data
               on our behalf, plus their roles, regions, and certifications.
               Enterprise buyers typically read this page alongside the
-              subprocessors list — we keep them in sync.
+              subprocessors list, we keep them in sync.
             </p>
           </Section>
 
@@ -199,19 +199,19 @@ export default function SecurityPage() {
             </p>
             <ul className="list-disc pl-5 grid gap-2">
               <li>
-                <strong>taxottic.com</strong> — the consumer app.
+                <strong>taxottic.com</strong>, the consumer app.
                 Customers, freelancers, and small-business owners sign
                 in here to see their personal dashboard, forecast, and
                 companies list.
               </li>
               <li>
-                <strong>enterprise.taxottic.com</strong> — the
+                <strong>enterprise.taxottic.com</strong>, the
                 firm-operator console. CPAs and tax-prep firms managing
                 client rosters land here. Same auth menu, separate
                 session cookie.
               </li>
               <li>
-                <strong>hq.taxottic.com</strong> — super-admin
+                <strong>hq.taxottic.com</strong>, super-admin
                 operations for Techno Optics. User and company
                 inventory, plan roll-ups, daily probes. Reserved to
                 the addresses on the immutable{" "}
@@ -226,7 +226,7 @@ export default function SecurityPage() {
               A session on one subdomain does NOT authenticate the
               others. Super-admins switch between portals via the{" "}
               <em>Switch portal</em> section of the profile menu,
-              which performs an explicit cross-origin redirect — each
+              which performs an explicit cross-origin redirect, each
               destination still requires the appropriate role check
               when it loads. There is no shared cookie at the parent
               domain.
@@ -323,7 +323,7 @@ export default function SecurityPage() {
                 Advottic, and vice versa.
               </li>
               <li>
-                What is shared is the upstream identity provider — if
+                What is shared is the upstream identity provider, if
                 you signed into Advottic with a Google account, Google
                 will silently re-issue that same Google identity to
                 Taxottic&apos;s Supabase OAuth flow, because that is how

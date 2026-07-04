@@ -1,13 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// "Tax readiness" is a single 0–100 score blending two things the user can
+// "Tax readiness" is a single 0-100 score blending two things the user can
 // directly act on:
 //   • engagement - how much of their imported bank activity they've actually
 //     triaged (categorized / dismissed / split). Pending-forever is what we're
 //     trying to push back against.
 //   • coverage   - how many distinct deduction categories they've claimed YTD
 //     against a reasonable starter target (TARGET_CATEGORIES). Most active
-//     small businesses naturally hit 6–12; 8 is a comfortable mid-target that
+//     small businesses naturally hit 6-12; 8 is a comfortable mid-target that
 //     reads as "doing well" without being unreachable.
 //
 // If a company has no bank feed, engagement isn't measurable and we fall back
@@ -15,7 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // forever.
 
 export type Readiness = {
-  score: number; // 0–100, rounded
+  score: number; // 0-100, rounded
   triagedTx: number;
   totalTx: number;
   categoriesUsed: number;

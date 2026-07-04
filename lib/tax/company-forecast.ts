@@ -3,7 +3,7 @@
 // This is a behaviour-preserving extraction of the assembly that used
 // to live inline in app/c/[publicId]/forecast/page.tsx. BOTH the
 // forecast page and the watch snapshot endpoint call this, so the two
-// can never diverge. No I/O here — callers fetch the rows (so this
+// can never diverge. No I/O here, callers fetch the rows (so this
 // stays pure + unit-testable); the logic is moved verbatim.
 
 import {
@@ -32,7 +32,7 @@ export type IncomeRow = {
   recurrence: Recurrence | null;
   // Last month (1-12) a recurring row's projection applies to. null =
   // project through December. Lets a cancelled/ended recurring charge
-  // stop inflating the forecast — see lib/tax/recurrence.ts.
+  // stop inflating the forecast, see lib/tax/recurrence.ts.
   recurrence_end_month?: number | null;
 };
 export type ExpenseRow = IncomeRow & { category_code: string };
@@ -91,7 +91,7 @@ export type ForecastCompany = {
 
 export type CompanyForecastArgs = {
   taxYear: number;
-  currentMonth: number; // 1–12 (UTC month + 1)
+  currentMonth: number; // 1-12 (UTC month + 1)
   company: ForecastCompany;
   taxProfile: ForecastTaxProfile;
   businessProfile: ForecastBusinessProfile | null;
@@ -258,7 +258,7 @@ export function buildCompanyForecast(
   // Auto-deductions from business profile.
   //
   // Standard mileage is the DEFAULT method, so treat a null/unset
-  // vehicle_method as standard — only an explicit "actual" election
+  // vehicle_method as standard, only an explicit "actual" election
   // (deducting real car costs instead of per-mile) opts out. The old
   // `=== "standard"` check silently dropped tracked mileage for every
   // profile that had has_vehicle=true but never picked a method, so

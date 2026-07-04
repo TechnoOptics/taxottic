@@ -3,7 +3,7 @@
  *
  * Given an image (or single-page PDF) of a purchase receipt, return the
  * vendor, date, total, and a suggested deduction category code. One
- * Anthropic call per upload — same pattern as extract-tax-doc.
+ * Anthropic call per upload, same pattern as extract-tax-doc.
  *
  * Privacy: bytes flow to Anthropic and are not persisted by us. Caller
  * stores only the structured result.
@@ -88,7 +88,7 @@ Category guidance:
   - client_entertainment  client-facing event costs (deductibility varies)
   - office_furniture chair, desk, monitor mount
 
-Return JSON only — no markdown fences, no commentary.
+Return JSON only, no markdown fences, no commentary.
 
 Schema:
 {

@@ -9,7 +9,7 @@
 //   write:  ein: encryptField(rawEin)          // -> "v1:..." or null
 //   read:   const ein = decryptField(row.ein)  // -> plaintext or null
 //
-// SERVER ONLY — pulls in node:crypto via the token vault. Never import from
+// SERVER ONLY, pulls in node:crypto via the token vault. Never import from
 // a client component; decrypt on the server and pass the plaintext as a prop.
 
 import { encryptTokenJson, decryptTokenJson } from "@/lib/firm/oauth/token-vault";
@@ -30,6 +30,6 @@ export function encryptField(plain: string | null | undefined): string | null {
  */
 export function decryptField(blob: string | null | undefined): string | null {
   if (!blob) return null;
-  if (!blob.startsWith(PREFIX)) return blob; // legacy plaintext — read through
+  if (!blob.startsWith(PREFIX)) return blob; // legacy plaintext, read through
   return decryptTokenJson<{ v: string }>(blob)?.v ?? null;
 }

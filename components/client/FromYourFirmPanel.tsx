@@ -315,7 +315,7 @@ function formatMeetingTime(iso: string, minutes: number): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(start)} – ${end.toLocaleTimeString("en-US", {
+  }).format(start)}, ${end.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   })}`;

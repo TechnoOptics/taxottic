@@ -14,7 +14,7 @@ import {
 // yields 50_000_000 cents.
 const dollars = (n: number) => Math.round(n * 100);
 
-describe("checkStateNexus — Wayfair thresholds", () => {
+describe("checkStateNexus, Wayfair thresholds", () => {
   it("CA: $500K threshold, no transaction count", () => {
     const below = checkStateNexus("CA", dollars(499_999), 1000);
     expect(below.hasEconomicNexus).toBe(false);
@@ -35,7 +35,7 @@ describe("checkStateNexus — Wayfair thresholds", () => {
   });
 
   it("NY: $500K AND 100 transactions (both required)", () => {
-    // BOTH gate — meeting only one shouldn't trigger.
+    // BOTH gate, meeting only one shouldn't trigger.
     // Our current model uses OR semantics for simplicity; verify
     // and document. The note in the table says "BOTH required" but
     // the math here returns OR. This is a known approximation.
@@ -43,20 +43,20 @@ describe("checkStateNexus — Wayfair thresholds", () => {
     expect(r.hasEconomicNexus).toBe(true);
   });
 
-  it("DE: no sales tax — no nexus", () => {
+  it("DE: no sales tax, no nexus", () => {
     const r = checkStateNexus("DE", dollars(10_000_000), 99999);
     expect(r.hasEconomicNexus).toBe(false);
   });
 
-  it("NH: no sales tax — no nexus", () => {
+  it("NH: no sales tax, no nexus", () => {
     expect(checkStateNexus("NH", dollars(10_000_000), 99999).hasEconomicNexus).toBe(false);
   });
 
-  it("OR: no sales tax — no nexus (CAT applies separately)", () => {
+  it("OR: no sales tax, no nexus (CAT applies separately)", () => {
     expect(checkStateNexus("OR", dollars(10_000_000), 99999).hasEconomicNexus).toBe(false);
   });
 
-  it("MT: no sales tax — no nexus", () => {
+  it("MT: no sales tax, no nexus", () => {
     expect(checkStateNexus("MT", dollars(10_000_000), 99999).hasEconomicNexus).toBe(false);
   });
 
@@ -76,7 +76,7 @@ describe("checkStateNexus — Wayfair thresholds", () => {
 // Service taxability matrix
 // ----------------------------------------------------------------
 
-describe("Service taxability — broad-base service-tax states (HI/NM/SD/WV)", () => {
+describe("Service taxability, broad-base service-tax states (HI/NM/SD/WV)", () => {
   it("HI taxes professional services", () => {
     const r = computeServiceSalesTax({
       homeStateCode: "HI",
@@ -123,7 +123,7 @@ describe("Service taxability — broad-base service-tax states (HI/NM/SD/WV)", (
   });
 });
 
-describe("Service taxability — most states exempt professional services", () => {
+describe("Service taxability, most states exempt professional services", () => {
   for (const state of ["CA", "NY", "TX", "FL", "IL", "OH", "PA", "GA"]) {
     it(`${state} exempts professional services`, () => {
       const r = computeServiceSalesTax({
@@ -144,7 +144,7 @@ describe("Service taxability — most states exempt professional services", () =
   }
 });
 
-describe("Service taxability — SaaS", () => {
+describe("Service taxability, SaaS", () => {
   it("NY taxes SaaS", () => {
     const r = computeServiceSalesTax({
       homeStateCode: "NY",
@@ -192,12 +192,12 @@ describe("Service taxability — SaaS", () => {
 // Cross-state scenarios
 // ----------------------------------------------------------------
 
-describe("computeServiceSalesTax — cross-state scenarios", () => {
+describe("computeServiceSalesTax, cross-state scenarios", () => {
   it("CA-based consultant selling professional services to NY (under threshold)", () => {
     const r = computeServiceSalesTax({
       homeStateCode: "CA",
       salesByState: [
-        // Sales TO NY but under $500K threshold — no nexus, no tax
+        // Sales TO NY but under $500K threshold, no nexus, no tax
         { stateCode: "NY", grossReceiptsCents: dollars(50_000), transactionCount: 5, category: "professional" },
       ],
     });

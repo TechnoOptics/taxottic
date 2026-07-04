@@ -154,7 +154,7 @@ export default async function IncomePage({ params }: { params: Params }) {
               {formatCents(total)}
             </div>
           </div>
-          {/* Group by month — same accordion pattern as Expenses /
+          {/* Group by month, same accordion pattern as Expenses /
               Banks. Current month auto-expands; prior months fold
               away with their month total + count in the summary. */}
           {rows && rows.length > 0 ? (

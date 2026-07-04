@@ -19,7 +19,7 @@ import { saveFilerType } from "./actions";
  *                                          forecasts share the dashboard)
  *   Neither            → form rejects
  *
- * If the user already picked, this page redirects out — it's
+ * If the user already picked, this page redirects out, it's
  * intentionally a one-shot. They can revisit /settings to change
  * later (forthcoming).
  */
@@ -54,7 +54,7 @@ export default async function FilerTypePage({
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
             Pick all that apply. We&apos;ll fit Taxottic to your tax
             situation. If you have W-2 wages AND run a business, check
-            both — the forecast will combine them and show whether
+            both, the forecast will combine them and show whether
             you&apos;ll owe or get a refund.
           </p>
 
@@ -67,11 +67,11 @@ export default async function FilerTypePage({
             <Choice
               value="business"
               title="Business owner / freelancer / 1099"
-              body="I run a business — sole prop, LLC, S-Corp, partnership — or earn 1099 income. I track Schedule C income and expenses and want help with quarterly estimates, deductions, and entity-level tax."
+              body="I run a business, sole prop, LLC, S-Corp, partnership, or earn 1099 income. I track Schedule C income and expenses and want help with quarterly estimates, deductions, and entity-level tax."
             />
             <p className="mt-1 text-xs text-ink-muted">
               Pick one, or both. We&apos;ll combine the math when you
-              do both — your W-2 withholding can offset SE tax owed
+              do both, your W-2 withholding can offset SE tax owed
               from the side, which often turns &quot;owe&quot; into &quot;refund.&quot;
             </p>
             <button

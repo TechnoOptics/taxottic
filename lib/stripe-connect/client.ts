@@ -60,7 +60,7 @@ export function stripeOAuthRedirectUri(): string {
  *
  * Scope: `read_write`. We previously asked for `read_only`, but
  * Stripe deprecated read-only for platforms created after their 2024
- * Connect changes — the authorize endpoint now responds:
+ * Connect changes, the authorize endpoint now responds:
  *   "Please use the `read_write` scope, or contact support … to use
  *    read-only connections."
  * Our code only ever READS the connected account (balanceTransactions
@@ -80,7 +80,7 @@ export function buildAuthorizeUrl(state: string): string {
     redirect_uri: stripeOAuthRedirectUri(),
     // Default ("account picker") locks users into whatever Stripe
     // account their browser is signed into and only offers "Use this
-    // one" or "Open a new account" — no way to pick a DIFFERENT
+    // one" or "Open a new account", no way to pick a DIFFERENT
     // existing Stripe they own. `stripe_landing=login` puts them on
     // the sign-in screen first, so they can authorise any existing
     // Stripe (current session or another). They can still create a
@@ -171,7 +171,7 @@ export function getStripeForAccount(stripeUserId: string): Stripe {
   // Stripe SDK supports passing stripeAccount per-request via
   // { stripeAccount } as the second arg, but for code clarity we
   // mint a per-account client and pin the header. This costs nothing
-  // — the SDK is a thin wrapper over fetch.
+  //, the SDK is a thin wrapper over fetch.
   // We can reuse the same instance and just pass the option per call,
   // but a typed wrapper at the caller is cleaner. The platform client
   // is fine to return; callers pass { stripeAccount } on the request.

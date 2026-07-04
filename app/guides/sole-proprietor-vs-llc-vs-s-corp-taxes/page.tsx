@@ -5,7 +5,7 @@ const SITE = "https://taxottic.com";
 const SLUG = "sole-proprietor-vs-llc-vs-s-corp-taxes";
 const TITLE = "Sole proprietor, LLC, or S-corp: how each is taxed";
 const DESCRIPTION =
-  "How a sole proprietorship, single-member LLC, and S-corp election differ for taxes — pass-through income, self-employment tax, and when an S-corp salary-plus-distributions setup can save money.";
+  "How a sole proprietorship, single-member LLC, and S-corp election differ for taxes, pass-through income, self-employment tax, and when an S-corp salary-plus-distributions setup can save money.";
 
 export const metadata = {
   title: TITLE,
@@ -46,7 +46,7 @@ const FAQ_LD = {
       name: "Does forming an LLC change how I'm taxed?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "By default, no. A single-member LLC is a 'disregarded entity' — the IRS taxes it exactly like a sole proprietorship, on Schedule C, with all profit subject to self-employment tax. An LLC gives you legal liability protection and a more formal business identity, but on its own it doesn't lower your taxes. What can change your taxes is electing to have the LLC taxed as an S-corp.",
+        text: "By default, no. A single-member LLC is a 'disregarded entity', the IRS taxes it exactly like a sole proprietorship, on Schedule C, with all profit subject to self-employment tax. An LLC gives you legal liability protection and a more formal business identity, but on its own it doesn't lower your taxes. What can change your taxes is electing to have the LLC taxed as an S-corp.",
       },
     },
     {
@@ -54,7 +54,7 @@ const FAQ_LD = {
       name: "How does an S-corp save on taxes?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "With an S-corp election, you pay yourself a reasonable salary (W-2 wages, subject to Social Security and Medicare) and take remaining profit as distributions, which are not subject to self-employment tax. That can reduce the 15.3% SE tax you'd otherwise pay on all profit. The catch: you must run payroll, pay yourself a defensible 'reasonable' salary, and file a separate corporate return (Form 1120-S) — added cost and complexity that only pays off above a certain profit level.",
+        text: "With an S-corp election, you pay yourself a reasonable salary (W-2 wages, subject to Social Security and Medicare) and take remaining profit as distributions, which are not subject to self-employment tax. That can reduce the 15.3% SE tax you'd otherwise pay on all profit. The catch: you must run payroll, pay yourself a defensible 'reasonable' salary, and file a separate corporate return (Form 1120-S), added cost and complexity that only pays off above a certain profit level.",
       },
     },
     {
@@ -62,7 +62,7 @@ const FAQ_LD = {
       name: "When should I consider an S-corp?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Usually once your net profit is consistently high enough that the self-employment-tax savings exceed the cost of payroll, bookkeeping, and a separate tax return — often discussed around the $40,000–$80,000+ profit range, but it depends entirely on your numbers and state. Because the reasonable-salary rules and break-even math are situation-specific, this is the decision most worth running past a CPA before you elect.",
+        text: "Usually once your net profit is consistently high enough that the self-employment-tax savings exceed the cost of payroll, bookkeeping, and a separate tax return, often discussed around the $40,000-$80,000+ profit range, but it depends entirely on your numbers and state. Because the reasonable-salary rules and break-even math are situation-specific, this is the decision most worth running past a CPA before you elect.",
       },
     },
   ],
@@ -77,7 +77,7 @@ export default function Page() {
       <GuideShell
         kicker="Entity & tax"
         title={TITLE}
-        lead="Sole proprietor, LLC, and S-corp aren't three flavors of the same thing — they're a mix of legal structure and tax treatment. Here's how each actually affects what you owe."
+        lead="Sole proprietor, LLC, and S-corp aren't three flavors of the same thing, they're a mix of legal structure and tax treatment. Here's how each actually affects what you owe."
         updated="June 2026"
         calc={{
           href: "/calculators/self-employment-tax",
@@ -87,7 +87,7 @@ export default function Page() {
       >
         <H2>Sole proprietorship</H2>
         <P>
-          The default when you start working for yourself — no paperwork
+          The default when you start working for yourself, no paperwork
           required. Your business profit flows onto{" "}
           <strong>Schedule C</strong>, and the full net profit is subject to{" "}
           <strong>self-employment tax</strong> (15.3%) plus income tax. Simple,
@@ -98,7 +98,7 @@ export default function Page() {
         <P>
           An LLC is a <strong>legal</strong> structure, not a tax one. By
           default the IRS treats a single-member LLC as a{" "}
-          <strong>disregarded entity</strong> — taxed identically to a sole
+          <strong>disregarded entity</strong>, taxed identically to a sole
           proprietorship (Schedule C, full self-employment tax). What you gain
           is <strong>liability protection</strong> and a cleaner business
           identity; what you don&apos;t gain, by itself, is a lower tax bill.
@@ -106,14 +106,14 @@ export default function Page() {
 
         <H2>S-corp election</H2>
         <P>
-          An S-corp isn&apos;t a separate kind of company — it&apos;s a{" "}
+          An S-corp isn&apos;t a separate kind of company, it&apos;s a{" "}
           <strong>tax election</strong> a corporation or LLC can make. Here the
           math changes:
         </P>
         <UL>
           <LI>
             You pay yourself a <strong>reasonable salary</strong> as W-2 wages
-            — that part is subject to Social Security and Medicare.
+, that part is subject to Social Security and Medicare.
           </LI>
           <LI>
             Remaining profit comes out as <strong>distributions</strong>, which
@@ -121,7 +121,7 @@ export default function Page() {
           </LI>
           <LI>
             That split can cut the 15.3% you&apos;d otherwise pay on all
-            profit — the core S-corp tax benefit.
+            profit, the core S-corp tax benefit.
           </LI>
         </UL>
         <P>The trade-offs are real:</P>
@@ -129,12 +129,12 @@ export default function Page() {
           <LI>You must run actual payroll and withhold on your salary.</LI>
           <LI>
             The salary has to be <strong>&ldquo;reasonable&rdquo;</strong> for
-            your role — the IRS scrutinizes artificially low salaries used to
+            your role, the IRS scrutinizes artificially low salaries used to
             dodge payroll tax.
           </LI>
           <LI>
             You file a separate return (Form 1120-S) and typically pay for
-            payroll and bookkeeping — costs that only pay off above a certain
+            payroll and bookkeeping, costs that only pay off above a certain
             profit level.
           </LI>
         </UL>
@@ -143,12 +143,12 @@ export default function Page() {
           A common path: start as a sole proprietor, form an LLC when you want
           liability protection, and consider the S-corp election once profit is
           consistently high. The S-corp break-even depends entirely on your
-          numbers — run it past a CPA before electing.
+          numbers, run it past a CPA before electing.
         </Callout>
 
         <H2>The common thread</H2>
         <P>
-          All three are <strong>pass-through</strong> — the business itself
+          All three are <strong>pass-through</strong>, the business itself
           doesn&apos;t pay federal income tax; profit passes to your personal
           return. So good forecasting matters regardless of structure: you
           still need to know what you&apos;ll owe and set it aside. Taxottic
@@ -158,7 +158,7 @@ export default function Page() {
         <H2>Frequently asked</H2>
         <H3FAQ q="Does forming an LLC change how I'm taxed?">
           By default, no. A single-member LLC is a{" "}
-          <strong>disregarded entity</strong> — the IRS taxes it exactly like a
+          <strong>disregarded entity</strong>, the IRS taxes it exactly like a
           sole proprietorship, on Schedule C, with all profit subject to
           self-employment tax. An LLC gives you legal liability protection and a
           more formal business identity, but on its own it doesn&apos;t lower
@@ -173,14 +173,14 @@ export default function Page() {
           self-employment tax. That can reduce the 15.3% SE tax you&apos;d
           otherwise pay on all profit. The catch: you must run payroll, pay
           yourself a defensible &ldquo;reasonable&rdquo; salary, and file a
-          separate corporate return (Form 1120-S) — added cost and complexity
+          separate corporate return (Form 1120-S), added cost and complexity
           that only pays off above a certain profit level.
         </H3FAQ>
         <H3FAQ q="When should I consider an S-corp?">
           Usually once your net profit is consistently high enough that the
           self-employment-tax savings exceed the cost of payroll, bookkeeping,
-          and a separate tax return — often discussed around the
-          $40,000–$80,000+ profit range, but it depends entirely on your numbers
+          and a separate tax return, often discussed around the
+          $40,000-$80,000+ profit range, but it depends entirely on your numbers
           and state. Because the reasonable-salary rules and break-even math are
           situation-specific, this is the decision most worth running past a CPA
           before you elect.

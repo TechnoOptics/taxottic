@@ -44,7 +44,7 @@ import { decryptField } from "@/lib/crypto/field-encryption";
 const STORAGE_BUCKET = "firm-documents";
 
 // The EIN lives on the company's tax-year `business_profiles` row (encrypted
-// at rest with the `v1:` vault prefix) — NOT on `companies`, which has no `ein`
+// at rest with the `v1:` vault prefix), NOT on `companies`, which has no `ein`
 // column. Resolve the profile for (company_id, tax_year) and decrypt before
 // handing the plaintext to a document renderer.
 async function loadCompanyEin(
@@ -443,7 +443,7 @@ export async function sendDocumentForSignature(formData: FormData) {
     );
   }
   if (!doc.storage_path) {
-    throw new Error("Document has no stored content yet — regenerate first.");
+    throw new Error("Document has no stored content yet, regenerate first.");
   }
 
   // Fetch the stored HTML.
@@ -896,7 +896,7 @@ export async function archiveDocument(formData: FormData) {
 
 // Tier 4 #1: Form 1040 generator. Only meaningful when the
 // engagement's company is a sole proprietorship or single-member
-// LLC — partnership / corp returns flow through Forms 1065 /
+// LLC, partnership / corp returns flow through Forms 1065 /
 // 1120 / 1120-S below.
 export async function generateForm1040Draft(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
@@ -936,7 +936,7 @@ export async function generateForm1040Draft(formData: FormData) {
   const ownerUserId = ownerRow?.user_id;
   if (!ownerUserId) {
     throw new Error(
-      "Cannot draft Form 1040 — no manager found for the client's company.",
+      "Cannot draft Form 1040, no manager found for the client's company.",
     );
   }
 

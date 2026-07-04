@@ -9,15 +9,15 @@ import { join } from "path";
 // the layout's metadataBase resolves the convention path. twitter-image
 // reuses the same artwork through the Twitter Card metadata.
 //
-// Refreshed to the current positioning — "Know what you'll owe. Maximize
-// your deductions." — matching the app-store feature graphic, and now uses
+// Refreshed to the current positioning, "Know what you'll owe. Maximize
+// your deductions.", matching the app-store feature graphic, and now uses
 // the real cream brand mark instead of a placeholder letter tile.
 
-// Node runtime so we can inline the brand mark from disk as a data URI —
+// Node runtime so we can inline the brand mark from disk as a data URI -
 // reliable at build/request time on Vercel (public/ ships with the bundle),
 // with no remote fetch that could fail and break the preview image.
 export const alt =
-  "Taxottic — know what you'll owe and maximize your deductions. Year-round tax forecasts, automatic mileage tracking, and 1,025 IRS-cited deductions, synced to your bank.";
+  "Taxottic, know what you'll owe and maximize your deductions. Year-round tax forecasts, automatic mileage tracking, and 1,025 IRS-cited deductions, synced to your bank.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -115,7 +115,7 @@ export default function OpengraphImage() {
             }}
           >
             Year-round tax forecasts, automatic mileage tracking, and 1,025
-            IRS-cited deductions — synced to your bank.
+            IRS-cited deductions, synced to your bank.
           </div>
         </div>
 

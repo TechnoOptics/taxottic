@@ -169,7 +169,7 @@ export const QBI_2026 = {
 // 2026 business standard mileage rate: 72.5¢/mile, set by IRS Notice
 // 2026-10 (up 2.5¢ from the 2025 rate of 70¢). Verified against irs.gov,
 // Jul 2026. The 2026 medical/moving (20.5¢) and charitable (14¢) rates
-// are not modeled — the forecast only applies the business rate.
+// are not modeled, the forecast only applies the business rate.
 export const MILEAGE_RATE_2026_PER_MILE_CENTS = 72.5;
 
 // ---------- Child Tax Credit (§ 4.05; OBBBA § 70104) ----------

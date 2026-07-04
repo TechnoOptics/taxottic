@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createServiceClient();
 
-  // Top-up cap check before we ever spin up a Stripe session — saves a
+  // Top-up cap check before we ever spin up a Stripe session, saves a
   // refund cycle when a user hits 3× their monthly grant.
   if (isTopUp) {
     const plan = await getActivePlan(supabase, user.id);

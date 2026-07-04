@@ -40,8 +40,8 @@ export function DeductionScorecard({
               ? "Legend status. You are using your tax code."
               : "Every captured deduction lowers what you owe."}
           </h2>
-          {/* Captured totals here are PROJECTED year-end amounts — one-offs
-              counted once + recurring rows expanded to full year — so the
+          {/* Captured totals here are PROJECTED year-end amounts, one-offs
+              counted once + recurring rows expanded to full year, so the
               scorecard answers "if you keep this pace, what does year-end
               look like?" rather than "what's logged today?" Flagged
               explicitly so the numbers don't read as a contradiction with

@@ -2,7 +2,7 @@
  * Trial-fraud guard.
  *
  * Defends the 7-day Solo trial from "make a new account every Monday"
- * abuse. Approach is intentionally LIGHTWEIGHT — we don't license
+ * abuse. Approach is intentionally LIGHTWEIGHT, we don't license
  * FingerprintJS Pro; we just stack a few server-side signals into a
  * stable hash and look it up in a `device_fingerprints` table.
  *
@@ -14,7 +14,7 @@
  * If the same device fingerprint already consumed a trial under a
  * different user, the new user's trial is revoked: subscriptions row
  * flips to plan='free', status='active', trial_end=null. Their data
- * stays — they just don't get the bonus 400 credits or Solo features
+ * stays, they just don't get the bonus 400 credits or Solo features
  * for free.
  *
  * Runs LAZILY on the first authenticated dashboard load, gated by
@@ -62,7 +62,7 @@ export async function computeDeviceFingerprint(): Promise<{
 
 /**
  * Run the lazy guard. Returns the outcome so the caller can surface a
- * banner if needed. Idempotent — safe to call on every dashboard
+ * banner if needed. Idempotent, safe to call on every dashboard
  * render; cheap because the first run sets `trial_validated_at` and
  * subsequent runs early-return `noop`.
  *
@@ -75,7 +75,7 @@ export async function runTrialGuard(args: {
 }): Promise<TrialGuardResult> {
   const { admin, userId } = args;
 
-  // Already validated? Skip — this is the hot path on every dashboard load.
+  // Already validated? Skip, this is the hot path on every dashboard load.
   const { data: profile } = await admin
     .from("profiles")
     .select("trial_validated_at")
@@ -114,7 +114,7 @@ export async function runTrialGuard(args: {
       trial_consumed_user_id: userId,
     });
   }
-  // else: same user revisiting from same device — no-op.
+  // else: same user revisiting from same device, no-op.
 
   // Mark profile validated so future dashboard hits skip this whole flow.
   await admin

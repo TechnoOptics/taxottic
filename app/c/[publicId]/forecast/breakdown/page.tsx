@@ -20,14 +20,14 @@ type SP = Promise<{ view?: string }>;
 
 // Admin-only breakdown of the SAME whole-company forecast (main
 // /forecast page) by department and by employee. This deliberately
-// does NOT re-run buildCompanyForecast() per slice — federal tax
+// does NOT re-run buildCompanyForecast() per slice, federal tax
 // brackets are non-linear, so summing N independent per-slice
 // forecasts would NOT add back up to the company total, which would
 // read as broken math to anyone comparing the two pages. Instead: the
 // whole-company forecast is computed once (identical numbers to
 // /forecast), and each department/employee gets a plain contribution
-// breakdown — income logged, expenses logged, mileage deduction,
-// net — plus its % share of the company total. That's the accurate,
+// breakdown, income logged, expenses logged, mileage deduction,
+// net, plus its % share of the company total. That's the accurate,
 // explainable version of "forecasting for each and the business as a
 // whole."
 export default async function ForecastBreakdownPage({
@@ -42,7 +42,7 @@ export default async function ForecastBreakdownPage({
 
   // A department lead can see this page too, but scoped to just their
   // own department below (see the filtering after departmentSummaries /
-  // employeeRows are built) — everyone else (plain members) gets
+  // employeeRows are built), everyone else (plain members) gets
   // bounced back to the regular forecast.
   const isLead = role === "lead";
   if (!isManager && !isLead) redirect(`/c/${publicId}/forecast`);
@@ -71,7 +71,7 @@ export default async function ForecastBreakdownPage({
       .eq("company_id", company.id)
       .eq("tax_year", taxYear)
       .maybeSingle(),
-    // Company-wide only — income belongs to the business, never a
+    // Company-wide only, income belongs to the business, never a
     // slice of it, so it's never bucketed per department/employee below
     // (see the file-header note and the whole-company summary tiles).
     supabase
@@ -124,7 +124,7 @@ export default async function ForecastBreakdownPage({
   };
   // company_members.user_id has NO foreign key to profiles (it points at
   // auth.users), so PostgREST can't resolve an embedded
-  // `profile:profiles(...)` select — it silently returns null (same
+  // `profile:profiles(...)` select, it silently returns null (same
   // gotcha documented in manage/page.tsx). Fetch profiles separately and
   // stitch by id.
   const rawMemberRows = (memberRows ?? []) as Omit<MemberRow, "profile">[];
@@ -140,7 +140,7 @@ export default async function ForecastBreakdownPage({
   }));
   const departments = (departmentRows ?? []) as { id: string; name: string }[];
 
-  // Whole-company forecast — identical inputs/engine call to the main
+  // Whole-company forecast, identical inputs/engine call to the main
   // /forecast page, so the "whole business" numbers here always match.
   const trackedYtdMileageCents = trips.reduce(
     (a, t) => a + Number(t.deduction_cents ?? 0),
@@ -162,13 +162,13 @@ export default async function ForecastBreakdownPage({
     trackedTripCount: trips.length,
   });
 
-  // Per-employee raw contribution — expenses + tracked mileage ONLY.
+  // Per-employee raw contribution, expenses + tracked mileage ONLY.
   // Income belongs to the business as a whole, never a slice of it: a
   // teammate's job is to log what they spent or drove, not to "generate
   // revenue" in the system's model, so income is deliberately excluded
   // from this per-employee/per-department breakdown (it still appears,
   // company-wide, in the summary tiles above). Deliberately NOT a re-run
-  // of the tax engine either — see file header.
+  // of the tax engine either, see file header.
   type Slice = {
     expenseCents: number;
     mileageCents: number;
@@ -216,7 +216,7 @@ export default async function ForecastBreakdownPage({
     })
     .sort((a, b) => b.totalCents - a.totalCents);
 
-  // Company-wide total — kept as the "% of company" denominator even
+  // Company-wide total, kept as the "% of company" denominator even
   // for a department lead (whose visible rows get filtered below), so
   // their department card still reads as "your dept is N% of company
   // spend" rather than a meaningless 100%.
@@ -243,7 +243,7 @@ export default async function ForecastBreakdownPage({
     .sort((a, b) => b.totalCents - a.totalCents);
 
   // A department lead (not a manager) only ever sees their OWN
-  // department's slice — never the full company breakdown. Managers see
+  // department's slice, never the full company breakdown. Managers see
   // everything, unfiltered.
   const myDepartmentName = isLead
     ? (() => {
@@ -290,13 +290,13 @@ export default async function ForecastBreakdownPage({
 
         {isLead && !isManager ? (
           <div className="mt-4 rounded-lg border border-gold-300/60 bg-cream/60 px-3 py-2 text-xs text-forest-800">
-            You&apos;re a department lead — showing{" "}
+            You&apos;re a department lead, showing{" "}
             <span className="font-medium">{myDepartmentName}</span> only. The
             summary tiles below are still company-wide, for context.
           </div>
         ) : null}
 
-        {/* Whole-company summary — identical numbers to /forecast, shown
+        {/* Whole-company summary, identical numbers to /forecast, shown
             here as the baseline every slice's % share is measured against. */}
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MiniStat label="YTD income" value={formatCents(ytdResult.projectedIncomeCents)} />
@@ -316,7 +316,7 @@ export default async function ForecastBreakdownPage({
         <h2 className="display mt-10 text-xl text-forest-900">By department</h2>
         <p className="mt-1 text-xs text-ink-muted max-w-2xl">
           Expenses logged by each department&apos;s members, plus their
-          tracked business mileage deduction. Income isn&apos;t sliced here —
+          tracked business mileage deduction. Income isn&apos;t sliced here -
           it belongs to the business as a whole, not to any one department
           or employee (see the company-wide tile above). Percent-of-company
           shows each department&apos;s share of total logged spend.
@@ -345,7 +345,7 @@ export default async function ForecastBreakdownPage({
         <p className="mt-1 text-xs text-ink-muted max-w-2xl">
           Every teammate who has logged an expense or a business drive this
           tax year, sorted by total contribution. Employees log spend and
-          mileage — they don&apos;t generate income in Taxottic&apos;s model,
+          mileage, they don&apos;t generate income in Taxottic&apos;s model,
           so there&apos;s no income column here.
         </p>
         <div className="mt-4 overflow-x-auto rounded-2xl border border-forest-100">
@@ -399,7 +399,7 @@ export default async function ForecastBreakdownPage({
         </div>
 
         <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
-          This breakdown shows what each department and employee logged — it
+          This breakdown shows what each department and employee logged, it
           is not a separate tax forecast per slice. Federal tax brackets are
           non-linear, so per-slice forecasts wouldn&apos;t sum back to the
           company total shown above and on the main forecast page. Income is

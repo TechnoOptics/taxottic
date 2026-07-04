@@ -4,7 +4,7 @@
 // few GPS fixes, so the mileage list degrades cleanly to text-only
 // exactly like it did before Maps was configured.
 //
-// Plain <img> on purpose — next/image would need a remotePatterns
+// Plain <img> on purpose, next/image would need a remotePatterns
 // entry for maps.googleapis.com (a config + CI surface we don't want
 // for a 64px decoration). loading="lazy" keeps long trip lists cheap.
 

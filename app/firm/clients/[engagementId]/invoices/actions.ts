@@ -12,9 +12,9 @@ import {
 import { sendEmail } from "@/lib/email/transport";
 
 // Two server actions:
-//   1. createInvoice — draft an invoice. Line items + recipient
+//   1. createInvoice, draft an invoice. Line items + recipient
 //      are validated; we DON'T touch Stripe yet. Status = draft.
-//   2. sendInvoice — mint a Stripe Checkout Session on the firm's
+//   2. sendInvoice, mint a Stripe Checkout Session on the firm's
 //      Connected Account, email the hosted URL to the recipient,
 //      flip status to 'sent'.
 //

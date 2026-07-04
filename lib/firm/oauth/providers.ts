@@ -3,7 +3,7 @@
 //
 // All three providers we support (Zoom, Google, Microsoft Graph)
 // use OAuth 2.0 authorization-code flow with PKCE-optional. We do
-// not currently use PKCE — the state JWT covers CSRF — but
+// not currently use PKCE, the state JWT covers CSRF, but
 // providers that require it can be wired without changing the
 // route shape.
 

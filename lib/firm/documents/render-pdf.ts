@@ -15,7 +15,7 @@
 // Production (Vercel): no env var needed; @sparticuz handles it.
 //
 // The rendered PDF uses the same HTML templates the firm reviews
-// in the browser — no parallel template tree to keep in sync.
+// in the browser, no parallel template tree to keep in sync.
 
 import type { Browser } from "puppeteer-core";
 

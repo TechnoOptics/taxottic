@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireUserWithAdmin } from "@/lib/auth";
 
 /**
- * Adopt a tax-savings goal — copy the recommendation into the user's
+ * Adopt a tax-savings goal, copy the recommendation into the user's
  * goals table so it shows up on /goals and the dashboard. Idempotent:
  * if the user has already adopted this goal_id for the same tax year,
  * we no-op and redirect to /goals.

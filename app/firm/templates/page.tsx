@@ -108,7 +108,7 @@ export default async function FirmTemplatesPage() {
         <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-2xl">
           Define a retainer once and we&apos;ll mint a fresh invoice
           on schedule. The cron runs hourly and creates a draft
-          invoice when the next cadence has elapsed — you still get
+          invoice when the next cadence has elapsed, you still get
           to review and send each one from the engagement&apos;s
           invoice page.
         </p>
@@ -126,7 +126,7 @@ export default async function FirmTemplatesPage() {
                 name="name"
                 required
                 maxLength={200}
-                placeholder="Smith Allen — monthly retainer"
+                placeholder="Smith Allen, monthly retainer"
                 className="input text-sm"
               />
             </label>
@@ -139,7 +139,7 @@ export default async function FirmTemplatesPage() {
                 defaultValue=""
                 className="input text-sm"
               >
-                <option value="">— Not linked —</option>
+                <option value="">- Not linked -</option>
                 {activeEngs.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.company.name}
@@ -289,7 +289,7 @@ export default async function FirmTemplatesPage() {
                             ? ` · day ${t.issue_day_of_month}`
                             : ""}
                           {t.engagement_id
-                            ? ` · ${engagementLabel.get(t.engagement_id) ?? "—"}`
+                            ? ` · ${engagementLabel.get(t.engagement_id) ?? "-"}`
                             : ""}
                           {" · to "}
                           {t.recipient_name ?? t.recipient_email}
@@ -354,7 +354,7 @@ export default async function FirmTemplatesPage() {
         <p className="mt-8 text-[11px] text-ink-muted max-w-2xl leading-relaxed">
           When the cron fires, new invoices land in draft status on
           the linked engagement&apos;s invoice page. Review and send
-          them like any other invoice — Stripe Connect handles the
+          them like any other invoice, Stripe Connect handles the
           payment rail.
         </p>
       </section>

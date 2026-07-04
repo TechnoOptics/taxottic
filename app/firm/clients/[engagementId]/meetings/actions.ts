@@ -20,7 +20,7 @@ import {
 //     leaves it blank for an in-person meeting). The row is still
 //     recorded so the engagement timeline has it.
 //
-// We never block on provider API failures — the row is created
+// We never block on provider API failures, the row is created
 // either way; provider_event_id stays NULL when auto-mint fails
 // and the organizer can paste the URL manually as a follow-up.
 
@@ -118,7 +118,7 @@ export async function scheduleMeeting(formData: FormData) {
         } else {
            
           console.warn(
-            `[meetings] provider auto-mint failed: ${res.reason ?? "unknown"} — falling through to manual.`,
+            `[meetings] provider auto-mint failed: ${res.reason ?? "unknown"}, falling through to manual.`,
           );
         }
       }

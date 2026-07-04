@@ -18,10 +18,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 //   - Cost of Goods Sold (Part III). Most service-business
 //     clients don't need it; we render the section blank with
 //     a "fill in if applicable" callout.
-//   - Vehicle expense breakout (Part IV) — requires standard-
+//   - Vehicle expense breakout (Part IV), requires standard-
 //     mileage vs actual-expense choice we'd need to ask the
 //     preparer.
-//   - Form 8829 (home office) — we surface the line item but
+//   - Form 8829 (home office), we surface the line item but
 //     don't compute the allocated portion.
 //
 // The output is HTML (print-to-PDF in the browser). Real
@@ -44,7 +44,7 @@ export type ScheduleCInput = {
     address_postal_code: string | null;
   };
   taxYear: number;
-  /** Sole prop owner (the company's manager) — Schedule C is
+  /** Sole prop owner (the company's manager), Schedule C is
    *  filed under the owner's name + SSN, not the business EIN. */
   owner: {
     full_name: string | null;
@@ -53,7 +53,7 @@ export type ScheduleCInput = {
   income: {
     /** Sum of all monthly_income for the company + tax_year. */
     grossReceiptsCents: number;
-    /** Returns + allowances — we don't track separately yet; 0 today. */
+    /** Returns + allowances, we don't track separately yet; 0 today. */
     returnsCents: number;
     /** Other income (interest, rebates not part of gross receipts). */
     otherIncomeCents: number;
@@ -84,8 +84,8 @@ const SCHEDULE_C_LINE_DEFS: { line: string; label: string }[] = [
   { line: "Line 17", label: "Legal and professional services" },
   { line: "Line 18", label: "Office expense" },
   { line: "Line 19", label: "Pension and profit-sharing plans" },
-  { line: "Line 20a", label: "Rent — vehicles, machinery, equipment" },
-  { line: "Line 20b", label: "Rent — other business property" },
+  { line: "Line 20a", label: "Rent, vehicles, machinery, equipment" },
+  { line: "Line 20b", label: "Rent, other business property" },
   { line: "Line 21", label: "Repairs and maintenance" },
   { line: "Line 22", label: "Supplies" },
   { line: "Line 23", label: "Taxes and licenses" },
@@ -189,7 +189,7 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
     return `<tr>
       <td style="padding: 6px 8px; border-bottom: 1px solid #E5E5E5; font-family: 'Courier New', monospace; font-size: 10pt; color: #555;">${escapeHtml(line.line)}</td>
       <td style="padding: 6px 8px; border-bottom: 1px solid #E5E5E5;">${escapeHtml(line.label)}</td>
-      <td style="padding: 6px 8px; border-bottom: 1px solid #E5E5E5; text-align: right; font-variant-numeric: tabular-nums;">${cents > 0 ? formatCents(cents) : "—"}</td>
+      <td style="padding: 6px 8px; border-bottom: 1px solid #E5E5E5; text-align: right; font-variant-numeric: tabular-nums;">${cents > 0 ? formatCents(cents) : "-"}</td>
     </tr>`;
   }).join("");
 
@@ -197,7 +197,7 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Schedule C draft — ${escapeHtml(input.company.name)} ${input.taxYear}</title>
+<title>Schedule C draft, ${escapeHtml(input.company.name)} ${input.taxYear}</title>
 <style>
   @page { margin: 0.75in; }
   body { font-family: Georgia, "Times New Roman", serif; color: #18181B; font-size: 11pt; line-height: 1.5; }
@@ -227,9 +227,9 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
     </div>
   </div>
 
-  <div class="draft-badge">Draft — for preparer review</div>
+  <div class="draft-badge">Draft, for preparer review</div>
 
-  <h1>Schedule C — Profit or Loss From Business (Sole Proprietorship)</h1>
+  <h1>Schedule C, Profit or Loss From Business (Sole Proprietorship)</h1>
   <p class="meta">Form 1040 attachment. This draft is auto-populated from the client's books; the preparer must review, complete Part III/IV/V as applicable, and verify before filing.</p>
 
   <h2>Filing information</h2>
@@ -244,7 +244,7 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
     </tr>
     <tr>
       <td style="padding: 6px 8px; vertical-align: top; color: #555;">D. EIN</td>
-      <td style="padding: 6px 8px; font-family: 'Courier New', monospace;">${escapeHtml(input.company.ein ?? "—")}</td>
+      <td style="padding: 6px 8px; font-family: 'Courier New', monospace;">${escapeHtml(input.company.ein ?? "-")}</td>
     </tr>
     <tr>
       <td style="padding: 6px 8px; vertical-align: top; color: #555;">E. Business address</td>
@@ -260,20 +260,20 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
             .join(" "),
         ]
           .filter(Boolean)
-          .join(", ") || "—",
+          .join(", ") || "-",
       )}</td>
     </tr>
     <tr>
       <td style="padding: 6px 8px; vertical-align: top; color: #555;">Proprietor</td>
-      <td style="padding: 6px 8px;">${escapeHtml(input.owner.full_name ?? "—")}</td>
+      <td style="padding: 6px 8px;">${escapeHtml(input.owner.full_name ?? "-")}</td>
     </tr>
     <tr>
       <td style="padding: 6px 8px; vertical-align: top; color: #555;">Proprietor SSN</td>
-      <td style="padding: 6px 8px; font-family: 'Courier New', monospace;">▢▢▢ – ▢▢ – ▢▢▢▢ &nbsp;<span class="small">(preparer enters)</span></td>
+      <td style="padding: 6px 8px; font-family: 'Courier New', monospace;">▢▢▢, ▢▢, ▢▢▢▢ &nbsp;<span class="small">(preparer enters)</span></td>
     </tr>
   </table>
 
-  <h2>Part I — Income</h2>
+  <h2>Part I, Income</h2>
   <table>
     <tr>
       <td style="width: 12%; padding: 4pt 8pt; font-family: 'Courier New', monospace; font-size: 10pt; color: #555;">Line 1</td>
@@ -292,8 +292,8 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
     </tr>
     <tr>
       <td style="padding: 4pt 8pt; font-family: 'Courier New', monospace; font-size: 10pt; color: #555;">Line 4</td>
-      <td style="padding: 4pt 8pt;">Cost of goods sold (Part III) <span class="small">— complete if applicable</span></td>
-      <td style="padding: 4pt 8pt; text-align: right; color: #71717A;">—</td>
+      <td style="padding: 4pt 8pt;">Cost of goods sold (Part III) <span class="small">- complete if applicable</span></td>
+      <td style="padding: 4pt 8pt; text-align: right; color: #71717A;">-</td>
     </tr>
     <tr>
       <td style="padding: 4pt 8pt; font-family: 'Courier New', monospace; font-size: 10pt; color: #555;">Line 5</td>
@@ -312,7 +312,7 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
     </tr>
   </table>
 
-  <h2>Part II — Expenses</h2>
+  <h2>Part II, Expenses</h2>
   <table>
     ${expenseRows}
     <tr style="background: #f8f6e8;">
@@ -331,8 +331,8 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
     </tr>
     <tr>
       <td style="font-family: 'Courier New', monospace; font-size: 10pt; color: #555;">Line 30</td>
-      <td>Home office (Form 8829) — preparer to compute</td>
-      <td style="text-align: right; color: #71717A;">—</td>
+      <td>Home office (Form 8829), preparer to compute</td>
+      <td style="text-align: right; color: #71717A;">-</td>
     </tr>
     <tr style="background: ${cta}; color: #F5EDD6;">
       <td style="font-family: 'Courier New', monospace; font-size: 10pt;">Line 31</td>
@@ -369,7 +369,7 @@ export function renderScheduleCHTML(input: ScheduleCInput): {
     Generated by Taxottic for ${escapeHtml(input.firm.name)} on ${new Intl.DateTimeFormat(
     "en-US",
     { dateStyle: "long", timeStyle: "short" },
-  ).format(new Date())}. Draft only — not filed with the IRS. The
+  ).format(new Date())}. Draft only, not filed with the IRS. The
     preparer is solely responsible for the accuracy of the return.
   </p>
 </body>

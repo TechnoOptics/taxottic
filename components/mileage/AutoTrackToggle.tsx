@@ -15,7 +15,7 @@ type DenialPath = "settings" | "retry";
  * every platform: on the native app it actually arms the background
  * watcher; on web it shows the same control disabled with a short
  * "use the app" note, so the feature is discoverable everywhere. The
- * privacy disclosure is always shown — Apple/Google review and basic
+ * privacy disclosure is always shown, Apple/Google review and basic
  * good faith both require the purpose to be stated at the toggle.
  */
 export function AutoTrackToggle({ companyId }: { companyId: string }) {
@@ -28,11 +28,11 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
   // When the user wants to enable, show an explainer modal BEFORE
   // we call into the native plugin. The OS permission dialog comes
   // up cold otherwise, with no context about why Taxottic is asking.
-  // The explainer is dismissable — pressing "Continue" arms the
+  // The explainer is dismissable, pressing "Continue" arms the
   // actual start (which triggers the OS dialog); "Cancel" leaves
   // the toggle off.
   const [showExplainer, setShowExplainer] = useState(false);
-  // The engineering diagnostic crumb is hidden in normal use — a raw
+  // The engineering diagnostic crumb is hidden in normal use, a raw
   // "diag: ready=true sup=true …" string in the main mileage card looks
   // unfinished. It now renders only when explicitly opted in
   // (localStorage taxottic.debug=1, or ?diag=1 on the URL), so the
@@ -55,7 +55,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
         setShowDiag(true);
       }
     } catch {
-      /* private mode — keep hidden */
+      /* private mode, keep hidden */
     }
   }, []);
 
@@ -64,13 +64,13 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     // Lightweight init: just check Capacitor availability + plugin
     // registration (both synchronous once @capacitor/core is in the
     // chunk graph). DO NOT pre-load the @capgo/background-geolocation
-    // chunk here — that import has been observed to hang silently
+    // chunk here, that import has been observed to hang silently
     // on Samsung WebViews after a fresh install, blocking the
     // toggle from ever becoming interactive. We lazy-load it inside
     // start() instead, where any failure is visible to the user.
     //
     // localStorage gives us the persisted "on/off" preference from
-    // the last session — we don't need to ask the native side what
+    // the last session, we don't need to ask the native side what
     // it thinks; the foreground service either resumed (re-armed on
     // launch via resumeMileageTrackingIfEnabled) or didn't.
     import("@capacitor/core")
@@ -120,7 +120,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
 
   // Subscribe to the tracker's start-settle callback so the toggle
   // can flip BACK OFF if the native bg.start() rejects after the
-  // optimistic flip. Previously this rejection was silent — toggle
+  // optimistic flip. Previously this rejection was silent, toggle
   // looked ON forever; user only learned on reload that localStorage
   // had been written to "0".
   useEffect(() => {
@@ -138,7 +138,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     });
   }, []);
 
-  // Optimistic on/off — the toggle flips IMMEDIATELY when tapped
+  // Optimistic on/off, the toggle flips IMMEDIATELY when tapped
   // and the native call fires in the background. If the native side
   // rejects, onTrackerStartSettle (above) flips us back off and
   // surfaces a real error message. So the visible-response-without-
@@ -189,7 +189,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
 
   const onToggle = () => {
     if (enabled) {
-      // Turning OFF — flip visually, stop in background.
+      // Turning OFF, flip visually, stop in background.
       setEnabled(false);
       setError(null);
       setDenialPath(null);
@@ -203,7 +203,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
       });
       return;
     }
-    // Turning ON — show explainer first, then start when user
+    // Turning ON, show explainer first, then start when user
     // confirms.
     setShowExplainer(true);
   };
@@ -217,7 +217,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     // plain instruction.
     if (typeof window === "undefined") return;
     try {
-      // Android intent — Capacitor's WebView understands intent: URIs.
+      // Android intent, Capacitor's WebView understands intent: URIs.
       window.location.href =
         "intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;package=com.taxottic.app;end";
       return;
@@ -267,12 +267,12 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
             "transition-all duration-200 ring-1 ring-inset shadow-sm " +
             "disabled:opacity-50 disabled:cursor-not-allowed " +
             (enabled
-              ? // ON — brand gold gradient. gold-300 → gold-500 reads
+              ? // ON, brand gold gradient. gold-300 → gold-500 reads
                 // as warm and premium, with gold-600 ring for the
                 // edge definition. Matches the CompanyNav and FAB
                 // gold accents elsewhere on the page.
                 "bg-gradient-to-r from-gold-300 to-gold-500 ring-gold-600"
-              : // OFF — red so it's immediately obvious the tracker
+              : // OFF, red so it's immediately obvious the tracker
                 // isn't running. User feedback: when drives went
                 // unlogged on real-drive day, the previous gray-on-
                 // gray off-state read as "neutral / fine" rather than
@@ -295,7 +295,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           you can add drives manually below.
         </p>
       ) : null}
-      {/* Diagnostic crumb — gated behind the debug flag (see showDiag
+      {/* Diagnostic crumb, gated behind the debug flag (see showDiag
           above). The trackerDiag object is updated by guard() on every
           call, so these fields reflect what the native shim saw. */}
       {showDiag ? (
@@ -329,7 +329,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
           ) : null}
         </div>
       ) : null}
-      {/* Explainer modal — appears between the toggle tap and the
+      {/* Explainer modal, appears between the toggle tap and the
           native OS permission dialog. Without it, users see a cold
           system prompt with no context about why Taxottic is asking
           for Location. */}
@@ -367,7 +367,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
                   ✓
                 </span>
                 <span>
-                  Location is used only to compute the deduction —{" "}
+                  Location is used only to compute the deduction -{" "}
                   <span className="font-medium text-forest-900">
                     never sold, never shared.
                   </span>

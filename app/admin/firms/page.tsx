@@ -70,7 +70,7 @@ export default async function AdminFirmsPage() {
             Provision firm directly
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Skip the public request form — creates the firm, sends the
+            Skip the public request form, creates the firm, sends the
             owner an invitation magic link, and the slug becomes the
             firm&apos;s subdomain.
           </p>
@@ -117,7 +117,7 @@ export default async function AdminFirmsPage() {
             </label>
             <label className="grid gap-1.5 sm:col-span-2">
               <span className="text-sm font-medium text-forest-800">
-                Slug (optional — defaults to a unique slug derived from
+                Slug (optional, defaults to a unique slug derived from
                 the firm name)
               </span>
               <input
@@ -240,7 +240,7 @@ export default async function AdminFirmsPage() {
                         </span>
                       ) : (
                         <span className="text-amber-700">
-                          No slug — backfill required
+                          No slug, backfill required
                         </span>
                       )}{" "}
                       · {f.public_id} · tier {f.tier} · {f.status}

@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * Hourly cron — refreshes OAuth access tokens that are about to
+ * Hourly cron, refreshes OAuth access tokens that are about to
  * expire. Walks every firm_calendar_integrations row where
  * expires_at < now() + 15 min AND we have a refresh_token in the
  * stored blob, calls the provider's token endpoint with the

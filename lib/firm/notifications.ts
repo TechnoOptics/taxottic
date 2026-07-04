@@ -26,7 +26,7 @@ export async function markActivityRead(
   try {
     await client.rpc("mark_firm_activity_read", { p_firm_id: firmId });
   } catch {
-    // Swallow — failing to bump the cursor is non-fatal; the user
+    // Swallow, failing to bump the cursor is non-fatal; the user
     // will still see the items, they just stay "unread" on this
     // visit.
   }
@@ -34,7 +34,7 @@ export async function markActivityRead(
 
 // Event kinds to surface in the daily/weekly digest by default.
 // Anything that's a system / housekeeping event (member_invited,
-// member_joined) stays out — the digest is for "what did my
+// member_joined) stays out, the digest is for "what did my
 // clients + engagements DO since I last looked."
 export const DIGEST_INTERESTING_KINDS: readonly string[] = [
   "client.company_created",
@@ -66,6 +66,6 @@ export type DigestPreferences = {
 
 export const DEFAULT_DIGEST_PREFS: Omit<DigestPreferences, "user_id" | "firm_id"> = {
   digest_cadence: "daily",
-  digest_hour_utc: 13, // 9am ET, 6am PT — a defensible default
+  digest_hour_utc: 13, // 9am ET, 6am PT, a defensible default
   excluded_kinds: [],
 };

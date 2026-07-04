@@ -26,7 +26,7 @@ const ROLE_NARRATIVE: Record<
   manager: {
     headline: "as a manager",
     rights:
-      "Managers can invite team members, manage all client engagements, send invoices, and configure firm settings — but can't transfer ownership.",
+      "Managers can invite team members, manage all client engagements, send invoices, and configure firm settings, but can't transfer ownership.",
   },
   preparer: {
     headline: "as a preparer",

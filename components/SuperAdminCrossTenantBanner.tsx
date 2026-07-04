@@ -6,7 +6,7 @@ import type { CrossTenantMeta } from "@/lib/tax/company-context";
 // Round-2 governance audit recommendation: make cross-tenant access
 // visible. Without this banner, support agents and engineers could
 // be looking at a customer's data without realizing they're not on
-// their own dashboard — and the tenant has no signal that it
+// their own dashboard, and the tenant has no signal that it
 // happened.
 //
 // The matching audit-log row is written from

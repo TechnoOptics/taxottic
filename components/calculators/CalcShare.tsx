@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
  * Shared "shareable calculator" plumbing, used by every calculator:
  *
  * - useCalcShare keeps the URL query string in sync with the current
- *   inputs (via history.replaceState — no navigation / server round-trip),
+ *   inputs (via history.replaceState, no navigation / server round-trip),
  *   so the address bar always reproduces the calculation and a shared
  *   link opens a pre-filled, already-computed calculator with a matching
  *   OG preview. It also returns a `share()` that uses the native share
@@ -49,14 +49,14 @@ export function useCalcShare(
         return;
       }
     } catch {
-      /* user cancelled the native sheet — fall through to copy */
+      /* user cancelled the native sheet, fall through to copy */
     }
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      /* clipboard blocked — nothing more we can do gracefully */
+      /* clipboard blocked, nothing more we can do gracefully */
     }
   }
 

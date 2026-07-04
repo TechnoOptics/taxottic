@@ -1,11 +1,11 @@
 /**
- * Categorization rules — Bella's memory.
+ * Categorization rules, Bella's memory.
  *
  * Each rule is "every time you see <pattern> in a transaction
  * description, treat it as <kind> with <category_code>". Rules fire
  * BEFORE Anthropic so repeat vendors are categorized for free and
  * instantly. The user creates rules from the import-review page via
- * "Teach Bella" — also automatically created when the user manually
+ * "Teach Bella", also automatically created when the user manually
  * applies a transaction (we offer "Save as a rule?").
  *
  * Pattern matching is intentionally simple: exact, contains, or
@@ -43,7 +43,7 @@ export type RuleMatch = {
 };
 
 /**
- * Load all rules for a user — both company-scoped and user-global.
+ * Load all rules for a user, both company-scoped and user-global.
  * Sorted by pattern length (longer = more specific match) and
  * recency. Single query; we filter in memory.
  */
@@ -126,7 +126,7 @@ async function getCurrentHits(
 
 /**
  * Create a rule. Idempotent on (user_id, company_id, pattern_type,
- * pattern) — re-teaching the same vendor just updates the kind/code.
+ * pattern), re-teaching the same vendor just updates the kind/code.
  */
 export async function upsertRule(
   admin: SupabaseClient,

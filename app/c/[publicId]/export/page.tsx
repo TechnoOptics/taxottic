@@ -85,7 +85,7 @@ export default async function ExportPage({
 
   // Build the per-category rollup via the single source of truth
   // (`lib/tax/net-business-income.ts`). This is the same helper the
-  // forecast page calls — guaranteeing that "Net business income" on
+  // forecast page calls, guaranteeing that "Net business income" on
   // this export matches the headline number on /c/{id}/forecast, and
   // that Schedule C Line 24b carries the post-50% meals figure (not
   // the gross). Resolves the May 2026 audit's Critical #1 + Critical
@@ -93,7 +93,7 @@ export default async function ExportPage({
   const categoryTotals = expensesByCategory(expenseRows ?? []);
   // Sort by deductible amount (what actually goes on Schedule C),
   // descending. Above-the-line categories drop to the bottom (their
-  // deductibleCents is 0 by definition — they're Schedule 1
+  // deductibleCents is 0 by definition, they're Schedule 1
   // adjustments, not Schedule C expenses).
   const orderedCategories = [...categoryTotals].sort(
     (a, b) => b.deductibleCents - a.deductibleCents,
@@ -108,7 +108,7 @@ export default async function ExportPage({
     byCategory: categoryTotals,
   });
   // "Total expenses" in the page-level summary uses the deductible
-  // figure, not the gross — that's the line that has to reconcile with
+  // figure, not the gross, that's the line that has to reconcile with
   // Net Business Income. The expense-detail section below still shows
   // the gross per-row figure (footnoted) so users can audit their own
   // entries against bank/receipts.
@@ -119,7 +119,7 @@ export default async function ExportPage({
 
   return (
     <main className="export-page bg-white text-forest-900 min-h-screen">
-      {/* Centered document — this page renders standalone (no app rail), so it
+      {/* Centered document, this page renders standalone (no app rail), so it
           reads like a proper letter-width workpaper a CPA can print, not a
           full-bleed app screen. */}
       <div className="mx-auto max-w-4xl px-5 sm:px-10 py-8 sm:py-12">
@@ -224,7 +224,7 @@ export default async function ExportPage({
           />
         </section>
 
-        {/* Schedule C reconciliation — the tax-ready headline. Maps the
+        {/* Schedule C reconciliation, the tax-ready headline. Maps the
             logged totals straight onto the Schedule C (Form 1040) lines a
             preparer transcribes, so the handoff is transcribe-not-interpret.
             "Total expenses" is the *deductible* figure (meals halved per IRC
@@ -304,7 +304,7 @@ export default async function ExportPage({
                       {r.notes ?? ""}
                     </td>
                     <td className="py-1.5 text-right tabular-nums">
-                      {/* Cents on individual rows — audit Medium #1.
+                      {/* Cents on individual rows, audit Medium #1.
                           A user looking at "$7,501" cannot tell if their
                           $7,500.50 entry was saved or rounded. Per-line
                           gets full precision; the page-top rollup keeps
@@ -441,7 +441,7 @@ export default async function ExportPage({
                       {r.notes ?? ""}
                     </td>
                     <td className="py-1.5 text-right tabular-nums">
-                      {/* Gross figure — what the user actually spent.
+                      {/* Gross figure, what the user actually spent.
                           The 50% meals haircut is applied at the
                           category-rollup level (above) and visible in
                           the "Logged X / 50% deductible" footnote. */}
@@ -501,7 +501,7 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-// Numbered section header — gives the workpaper a clean, scannable "01 / 02
+// Numbered section header, gives the workpaper a clean, scannable "01 / 02
 // / 03" spine and a consistent baseline rule under each title.
 function SectionTitle({
   n,

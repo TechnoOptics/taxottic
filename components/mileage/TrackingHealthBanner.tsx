@@ -65,7 +65,7 @@ export function TrackingHealthBanner({ reason, recoverable, recoverAction }: Pro
           {recoverable > 0 ? (
             <p className="mt-2 text-[11px] text-amber-800/80 leading-snug">
               Recovered drives are approximate (straight-line, likely an
-              under-count) and start <b>unclassified</b> with no deduction —
+              under-count) and start <b>unclassified</b> with no deduction -
               review and classify each one before claiming.
             </p>
           ) : null}

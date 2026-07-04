@@ -32,7 +32,7 @@ export function useIsNativeApp(): boolean | null {
  * browser it renders a tasteful "this lives in the app" card instead.
  *
  * Use it for features that depend on native device APIs the website
- * genuinely can't offer — background-location mileage tracking, the
+ * genuinely can't offer, background-location mileage tracking, the
  * paired-watch flow, etc. Beyond the cleaner UX, this is what keeps
  * the iOS app clear of App Store Review Guideline 4.2 (Minimum
  * Functionality): the app visibly does things taxottic.com cannot, so

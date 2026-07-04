@@ -25,7 +25,7 @@ import {
 //     style email. The existing convert_firm_outreach() RPC promotes
 //     it to an engagement once the prospect signs up.
 //
-// Errors are collected per row rather than throwing — the action
+// Errors are collected per row rather than throwing, the action
 // returns a summary message via redirect to /firm/outreach where the
 // firm can see what happened. Emails are sent best-effort (failures
 // are logged but don't roll back the DB writes).

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { getTaxYearConstants } from "./constants";
 
 /**
- * Fail-fast guard on the standard mileage rate — the one outright
+ * Fail-fast guard on the standard mileage rate, the one outright
  * ACCURACY risk flagged in the audit. The 2026 rate shipped as a 70¢
  * placeholder (the carried-forward 2025 value) with
  * isMileageRateProvisional=true, silently understating every 2026
@@ -10,7 +10,7 @@ import { getTaxYearConstants } from "./constants";
  * 2026-10 (72.5¢/mile).
  *
  * These tests pin the IRS-published values AND assert that no bundled
- * tax year is still on a provisional placeholder — so a future year
+ * tax year is still on a provisional placeholder, so a future year
  * can't quietly ship the wrong rate through a filing season.
  */
 describe("IRS standard mileage rate", () => {
@@ -26,7 +26,7 @@ describe("IRS standard mileage rate", () => {
     for (const year of [2025, 2026]) {
       expect(
         getTaxYearConstants(year).isMileageRateProvisional,
-        `${year} mileage rate is still marked provisional — verify the IRS Notice and finalize MILEAGE_RATE_${year}_PER_MILE_CENTS before this year is used for filing.`,
+        `${year} mileage rate is still marked provisional, verify the IRS Notice and finalize MILEAGE_RATE_${year}_PER_MILE_CENTS before this year is used for filing.`,
       ).toBe(false);
     }
   });

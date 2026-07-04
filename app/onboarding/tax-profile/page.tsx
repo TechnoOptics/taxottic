@@ -299,7 +299,7 @@ export default async function TaxProfilePage({
                 here and the math there agree. The previous import
                 pinned this to STANDARD_DEDUCTION_2025 (`$15,000`
                 Single) while the engine for taxYear=2026 was using
-                $16,100 — the May 2026 round-2 audit caught the gap. */}
+                $16,100, the May 2026 round-2 audit caught the gap. */}
             <p className="text-xs text-ink-muted leading-relaxed">
               Most filers take the standard deduction (
               {formatCents(
@@ -394,7 +394,7 @@ export default async function TaxProfilePage({
             <div className="grid sm:grid-cols-2 gap-3">
               <DollarField
                 name="solo_401k_contribution"
-                label="Solo 401(k) — total (employee + employer)"
+                label="Solo 401(k), total (employee + employer)"
                 defaultCents={
                   existing?.solo_401k_contribution_cents ?? 0
                 }

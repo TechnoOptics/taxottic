@@ -72,7 +72,7 @@ export function DeductionExplorer({ deductions, totalCount }: Props) {
           </p>
         </div>
       ) : (
-        // Two INDEPENDENT column stacks on lg+ — NOT a CSS grid. A grid forces
+        // Two INDEPENDENT column stacks on lg+, NOT a CSS grid. A grid forces
         // both columns to share row heights, so expanding one category left a
         // ~5,700px blank gap beside its collapsed neighbour and shoved every
         // later row down. Splitting the categories into two self-contained
@@ -148,7 +148,7 @@ function DeductionRow({
   deduction: MasterDeduction;
   highlight: string;
 }) {
-  // The IRS publication / form the source URL points at — the "which tax
+  // The IRS publication / form the source URL points at, the "which tax
   // reference applies" answer, surfaced as a chip on wide screens.
   const ref = irsRef(deduction.source);
   return (
@@ -177,7 +177,7 @@ function DeductionRow({
         ) : null}
       </div>
 
-      {/* Tax details — fills the wide-screen blank space. Hidden below lg. */}
+      {/* Tax details, fills the wide-screen blank space. Hidden below lg. */}
       <div className="hidden min-w-0 text-[11px] leading-relaxed lg:flex lg:flex-col lg:gap-1.5">
         {ref ? (
           <div>
@@ -261,7 +261,7 @@ function escapeRegExp(s: string): string {
 // Turn an IRS source URL into a short, human "which reference applies" label,
 // e.g. .../publications/p15b -> "IRS Pub 15-B", /instructions/i7206 ->
 // "IRS Instr. 7206", a Schedule C link -> "Schedule C". Falls back to a
-// generic label so the chip is always meaningful. Pure string parsing — no
+// generic label so the chip is always meaningful. Pure string parsing, no
 // network, matches the catalog's known irs.gov URL shapes.
 function irsRef(url: string): string | null {
   if (!url) return null;

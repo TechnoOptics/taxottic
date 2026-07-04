@@ -205,7 +205,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
             style={{ borderColor: "#b91c1c33" }}
           >
             <h2 className="display text-xl" style={{ color: "#b91c1c" }}>
-              Danger zone — delete account
+              Danger zone, delete account
             </h2>
             <p className="mt-2 text-sm text-ink-muted">
               Permanently removes this user from auth and cascades through
@@ -221,7 +221,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
               label={`Type the user's email to confirm: ${profile.email ?? ""}`}
               placeholder="user@example.com"
               buttonText="Delete account permanently"
-              destructiveCopy="No recycle bin, no restore — the row is gone the moment you click. Logged to admin_actions."
+              destructiveCopy="No recycle bin, no restore, the row is gone the moment you click. Logged to admin_actions."
             />
           </section>
         ) : null}

@@ -14,11 +14,11 @@ const fraunces = Fraunces({
   display: "swap",
 });
 
-// Body / UI typeface. Hanken Grotesk — a humanist grotesque with warmth
-// and precise numerals — replaces Inter so the app reads as a bespoke
+// Body / UI typeface. Hanken Grotesk, a humanist grotesque with warmth
+// and precise numerals, replaces Inter so the app reads as a bespoke
 // product rather than the default modern-SaaS look. Pairs with Fraunces
 // (both humanist) for a cohesive, premium voice. Variable font: the full
-// 100–900 axis loads, so every weight the UI uses is covered.
+// 100-900 axis loads, so every weight the UI uses is covered.
 const hanken = Hanken_Grotesk({
   variable: "--font-hanken",
   subsets: ["latin"],
@@ -30,11 +30,11 @@ const hanken = Hanken_Grotesk({
 //
 // Title and description below are tuned for the search intent we want
 // to capture in 2026:
-//   - "tax forecast" / "tax estimator" — high-intent commercial
-//   - "1099 / freelancer / sole proprietor" — audience qualifiers
-//   - "Schedule C deductions" — specific deduction-discovery search
-//   - "quarterly estimated tax" — recurring seasonal traffic
-//   - "IRS-cited" / "OBBBA" — current-cycle differentiator
+//   - "tax forecast" / "tax estimator", high-intent commercial
+//   - "1099 / freelancer / sole proprietor", audience qualifiers
+//   - "Schedule C deductions", specific deduction-discovery search
+//   - "quarterly estimated tax", recurring seasonal traffic
+//   - "IRS-cited" / "OBBBA", current-cycle differentiator
 //
 // Brand voice rules: keep "calmer way" as the lead because it's the
 // brand line we've consistently surfaced (audit explicitly praised
@@ -46,7 +46,7 @@ const hanken = Hanken_Grotesk({
 //   - Page title ≤ 60 chars (Google truncates at ~580px wide ≈ 55-60)
 //   - Description ≤ 158 chars (Google truncates at ~158-160)
 // --------------------------------------------------------------------
-const SITE_TITLE = "Taxottic — Tax forecasting for freelancers & small business";
+const SITE_TITLE = "Taxottic, Tax forecasting for freelancers & small business";
 const SITE_DESCRIPTION =
   "Bank-synced quarterly tax forecasts, 1,025 IRS-cited deductions, Schedule C export, multi-state. Calm, accurate, and built for self-employed filers.";
 
@@ -87,7 +87,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     // Icons intentionally omitted: Next.js picks up app/favicon.ico,
     // app/icon.png, and app/apple-icon.png via the file convention.
-    // Likewise we don't set `openGraph.images` here — Next.js picks
+    // Likewise we don't set `openGraph.images` here, Next.js picks
     // up app/opengraph-image.tsx automatically.
   };
 
@@ -103,7 +103,7 @@ export async function generateMetadata(): Promise<Metadata> {
         default: "Taxottic cockpit",
         template: "%s | Taxottic cockpit",
       },
-      description: "Operator console — not for public access.",
+      description: "Operator console, not for public access.",
       robots: {
         index: false,
         follow: false,
@@ -119,7 +119,7 @@ export async function generateMetadata(): Promise<Metadata> {
       },
       openGraph: {
         title: "Taxottic cockpit",
-        description: "Operator console — not for public access.",
+        description: "Operator console, not for public access.",
         url: "/",
         siteName: "Taxottic",
         type: "website",
@@ -127,7 +127,7 @@ export async function generateMetadata(): Promise<Metadata> {
     };
   }
 
-  // Consumer host — full SEO payload.
+  // Consumer host, full SEO payload.
   return {
     ...base,
     // Default canonical at the root. Page-level metadata
@@ -151,7 +151,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary_large_image",
       title: SITE_TITLE,
       description: SITE_DESCRIPTION,
-      // No @taxottic handle yet — when we own one, drop it in:
+      // No @taxottic handle yet, when we own one, drop it in:
       //   site: "@taxottic",
       //   creator: "@taxottic",
     },
@@ -174,7 +174,7 @@ export async function generateMetadata(): Promise<Metadata> {
     //   NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION  → Google Search Console
     //   NEXT_PUBLIC_BING_SITE_VERIFICATION    → Bing Webmaster Tools
     // Each key is only emitted when its env var is set, so an unset
-    // var produces NO tag (Next.js skips undefined) — never a broken
+    // var produces NO tag (Next.js skips undefined), never a broken
     // empty <meta>. To verify: add the property in Search Console /
     // Bing, copy the token into the matching Vercel env var, redeploy.
     verification: {
@@ -187,7 +187,7 @@ export async function generateMetadata(): Promise<Metadata> {
     keywords: [
       // Keywords are mostly ignored by Google but used by some other
       // engines (DuckDuckGo, Brave Search, internal site search). Keep
-      // them tight and honest — no keyword stuffing.
+      // them tight and honest, no keyword stuffing.
       "tax forecasting",
       "self-employed tax software",
       "1099 tax estimator",
@@ -214,7 +214,7 @@ export const viewport: Viewport = {
   // rely on browser-native zoom. The May 2026 audit flagged the prior
   // `maximumScale: 5` as P1; the safe Next.js default (no cap) is what
   // ships now. If a specific screen genuinely needs a zoom cap (e.g.,
-  // a canvas-based editor), set it on that screen — not globally.
+  // a canvas-based editor), set it on that screen, not globally.
   viewportFit: "cover",
 };
 

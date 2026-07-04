@@ -14,7 +14,7 @@ type AnchorRect = { top: number; left: number; width: number };
 
 // Base panel width (matches the old w-80 / 20rem). On very narrow phones
 // (verified on a real device: a Galaxy Z Fold5's cover screen) the panel
-// was overflowing past the LEFT edge of the viewport — it was positioned
+// was overflowing past the LEFT edge of the viewport, it was positioned
 // via `right: <offset from the button>` with only a CSS max-width safety
 // net, which shrinks the panel but doesn't reposition it, so a
 // wide-enough panel anchored too far right still spills off-screen.
@@ -30,7 +30,7 @@ const KIND_ICON: Record<OutstandingItem["kind"], string> = {
 };
 
 /**
- * Header notification bell — the durable, always-truthful indicator of
+ * Header notification bell, the durable, always-truthful indicator of
  * outstanding tasks (unclassified drives + transactions awaiting a
  * category). Unlike the popup/banner, the bell is never dismissible:
  * it always reflects the live count so the user has one place they can

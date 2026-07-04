@@ -28,7 +28,7 @@ export function RetirementSavingsTile({ result }: Props) {
   return (
     <div className="card p-6 sm:p-7 border-emerald-200/60 bg-emerald-50/40">
       <div className="text-[10px] uppercase tracking-[0.32em] text-emerald-800 font-medium">
-        Retirement — you&apos;re saving
+        Retirement, you&apos;re saving
       </div>
       <h3 className="display mt-1.5 text-2xl text-forest-900">
         {formatCents(result.retirementTaxSavingsCents)} in federal tax
@@ -44,7 +44,7 @@ export function RetirementSavingsTile({ result }: Props) {
           {formatCents(result.retirementTaxSavingsCents)}
         </strong>{" "}
         in federal tax at your marginal rate. Roth contributions
-        don&apos;t deduct now but still grow tax-free — they
+        don&apos;t deduct now but still grow tax-free, they
         don&apos;t show up in this savings number.
       </p>
     </div>
@@ -273,7 +273,7 @@ export function EducationCreditTile({ result }: Props) {
         ) : (
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
             §&nbsp;25A(c). 20% of qualified expenses up to $10,000.
-            Non-refundable — reduces tax dollar-for-dollar but the
+            Non-refundable, reduces tax dollar-for-dollar but the
             unused portion isn&apos;t refundable. Broader eligibility
             than AOTC: any post-secondary education, no four-year
             limit, no half-time enrollment requirement. Claim on Form
@@ -320,7 +320,7 @@ export function SaversCreditTile({ result }: Props) {
           <strong className="text-forest-900">
             {Math.round(result.saversCreditRate * 100)}% bracket
           </strong>{" "}
-          for the Saver&apos;s Credit (IRC § 25B). Non-refundable —
+          for the Saver&apos;s Credit (IRC § 25B). Non-refundable -
           reduces your fed tax dollar-for-dollar but the unused
           portion isn&apos;t refundable. Claim on Form 8880. Requires
           you to be 18+, not a full-time student, and not claimed as
@@ -395,7 +395,7 @@ export function W4NudgeTile({ result }: Props) {
             <strong className="text-forest-900">
               {formatCents(result.w4Recommendation.annualDeltaCents)}
             </strong>{" "}
-            refund — that&apos;s your money the IRS is holding without
+            refund, that&apos;s your money the IRS is holding without
             interest. Reducing withholding by about{" "}
             <strong className="text-forest-900">
               {formatCents(result.w4Recommendation.perPaycheckDeltaCents)}

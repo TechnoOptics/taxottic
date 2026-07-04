@@ -2,7 +2,7 @@
  * Single source of truth for "net business income" math across the
  * product. Forecast and export both call this so their headline numbers
  * agree, and Schedule C Line 24b is rendered with the post-50%
- * deductible meals figure — not the gross.
+ * deductible meals figure, not the gross.
  *
  * Why this file exists. The May 2026 audit (`docs/audits/2026-05-13-
  * company-creation-income-expenses.md`) found a $100 disagreement on
@@ -63,7 +63,7 @@ export function deductibleAmountForCategory(
 export type CategoryTotals = {
   /** Stable category code (matches `monthly_expenses.category_code`). */
   code: string;
-  /** Raw user-logged cents — useful for "Logged: $X" detail rows. */
+  /** Raw user-logged cents, useful for "Logged: $X" detail rows. */
   grossCents: number;
   /**
    * Cents that flow to Schedule C / the net-business-income subtraction.
@@ -156,7 +156,7 @@ export function computeNetBusinessIncome(
     // Above-the-line codes don't belong on Schedule C in either column.
     // They've already been excluded by `deductibleAmountForCategory`
     // returning 0 for them, but we also skip the gross to keep the
-    // export's "Total expenses" line honest — those dollars aren't a
+    // export's "Total expenses" line honest, those dollars aren't a
     // business expense, they're a Schedule 1 adjustment.
     if (ABOVE_THE_LINE_CODES.has(t.code)) continue;
     grossExpensesCents += t.grossCents;

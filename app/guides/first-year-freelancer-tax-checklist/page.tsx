@@ -77,7 +77,7 @@ export default function Page() {
       <GuideShell
         kicker="First year"
         title={TITLE}
-        lead="Going out on your own? Do these few things from day one and your first tax season will be boring — in the best way."
+        lead="Going out on your own? Do these few things from day one and your first tax season will be boring, in the best way."
         updated="June 2026"
         calc={{
           href: "/calculators/self-employment-tax",
@@ -93,7 +93,7 @@ export default function Page() {
             an audit defense almost effortless.
           </LI>
           <LI>
-            <strong>Set aside 25–30% of every payment.</strong> Move it to a
+            <strong>Set aside 25-30% of every payment.</strong> Move it to a
             dedicated tax savings account the moment a client pays. Treat it as
             already spent.
           </LI>
@@ -104,7 +104,7 @@ export default function Page() {
           </LI>
           <LI>
             <strong>Learn your deductions.</strong> Home office, mileage,
-            software, phone, supplies, and more all lower your taxable income —
+            software, phone, supplies, and more all lower your taxable income -
             see our{" "}
             <a href="/guides/schedule-c-deductions" className="text-gold-800 underline">
               Schedule C deductions guide
@@ -113,7 +113,7 @@ export default function Page() {
           </LI>
           <LI>
             <strong>Plan for quarterly estimated taxes.</strong> Four payments
-            a year keep you current and penalty-free — see our{" "}
+            a year keep you current and penalty-free, see our{" "}
             <a href="/guides/quarterly-estimated-taxes-explained" className="text-gold-800 underline">
               quarterly taxes guide
             </a>
@@ -130,7 +130,7 @@ export default function Page() {
           </LI>
           <LI>
             <strong>Open a retirement account.</strong> A SEP-IRA or Solo 401(k)
-            lets you deduct contributions and shelter profit — one of the
+            lets you deduct contributions and shelter profit, one of the
             biggest tax savers available to the self-employed.
           </LI>
           <LI>
@@ -144,7 +144,7 @@ export default function Page() {
           The whole checklist comes down to one habit: separate the money and
           set aside the tax portion the instant you&apos;re paid. Everything
           else is bookkeeping. Taxottic does the bookkeeping and the forecast
-          for you — connect a bank and it tracks income, flags deductions, and
+          for you, connect a bank and it tracks income, flags deductions, and
           tells you what to set aside and when to pay.
         </Callout>
 
@@ -152,7 +152,7 @@ export default function Page() {
         <P>
           Your profit and expenses flow onto Schedule C, self-employment tax
           onto Schedule SE, and the totals onto your 1040. If you kept clean
-          records all year, this is a quick assembly — and a great moment to
+          records all year, this is a quick assembly, and a great moment to
           hand a tidy export to a CPA for anything complex.
         </P>
 

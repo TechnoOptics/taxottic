@@ -12,7 +12,7 @@ import { createServerClient } from "@supabase/ssr";
  *   3. We call `exchangeCodeForSession(code)` server-side. That reads
  *      the PKCE code_verifier from cookies and asks Supabase for the
  *      session. Supabase writes the `sb-<ref>-auth-token` cookies onto
- *      THIS response (see the response-mutating pattern below — this
+ *      THIS response (see the response-mutating pattern below, this
  *      is the critical bit; using next/headers cookieStore can drop
  *      cookies on NextResponse.redirect in some Next 16 runtimes,
  *      which is what was leaving users at /login after a "successful"
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     }
   }
   // Host-aware fallback. On the operator subdomains the consumer path
-  // `/dashboard` doesn't exist — middleware rewrites it to
+  // `/dashboard` doesn't exist, middleware rewrites it to
   // `/admin/dashboard`, which 404s. Use "/" instead so the host's
   // own root rewrite (hq → /admin, enterprise → /admin/firms) picks
   // up the correct destination. Mirrors the same defaulting we do
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
   // CRITICAL: we use the response-mutating cookie pattern (NOT the
   // next/headers cookieStore pattern) for this handler. In Next 16 +
   // Turbopack, cookies set via `cookies().set()` are not reliably
-  // propagated to NextResponse.redirect() — the Supabase auth-token
+  // propagated to NextResponse.redirect(), the Supabase auth-token
   // cookies were going missing on the final redirect, even though
   // `auth.sessions` had a fresh row, leaving users back at /login
   // immediately after a "successful" OAuth flow. Pinning the response
@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  // Exchange failed — log the real Supabase error server-side so we
+  // Exchange failed, log the real Supabase error server-side so we
   // have it in Vercel logs the next time a user reports "OAuth doesn't
   // work", and surface the message in the URL so /login can render a
   // helpful explanation.

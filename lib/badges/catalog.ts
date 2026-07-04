@@ -86,7 +86,7 @@ export const BADGES: Record<string, Badge> = {
     code: "first_drive",
     title: "First drive logged",
     description:
-      "Logged a business drive — it counts toward your mileage deduction.",
+      "Logged a business drive, it counts toward your mileage deduction.",
     icon: "🧭",
     tier: "silver",
   },
@@ -101,7 +101,7 @@ export const BADGES: Record<string, Badge> = {
     code: "philanthropist",
     title: "Philanthropist",
     description:
-      "Gave to a 501(c)(3) cause that matters. Generosity is its own reward — and it's deductible.",
+      "Gave to a 501(c)(3) cause that matters. Generosity is its own reward, and it's deductible.",
     icon: "🤍",
     tier: "gold",
   },

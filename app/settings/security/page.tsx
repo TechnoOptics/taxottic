@@ -16,7 +16,7 @@ export default async function SecuritySettingsPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  // Paired watches — moved here from /settings in May 2026 so all
+  // Paired watches, moved here from /settings in May 2026 so all
   // device-linked credentials (passkeys, 2FA, watch tokens) live
   // under one "Sign-in and devices" roof. Service-role read because
   // watch_devices RLS is policyless by design (token-bearer auth +
@@ -101,7 +101,7 @@ export default async function SecuritySettingsPage() {
           )}
         </div>
 
-        {/* Wear OS pairing — lives here with the other device-linked
+        {/* Wear OS pairing, lives here with the other device-linked
             credentials. Moved from /settings in May 2026 so the
             mental model is "Sign-in and devices = anything that
             authenticates as you on a piece of hardware". */}
@@ -109,7 +109,7 @@ export default async function SecuritySettingsPage() {
           <h2 className="display text-xl text-forest-900">Pair your watch</h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
             Open the Taxottic app on your Wear OS watch. It shows a
-            six-digit code — type it below to link the watch to your
+            six-digit code, type it below to link the watch to your
             account. Codes expire in about two minutes.
           </p>
           <div className="mt-5">
@@ -163,7 +163,7 @@ export default async function SecuritySettingsPage() {
           ) : null}
         </div>
 
-        {/* Push notifications self-test — fires the existing notify()
+        {/* Push notifications self-test, fires the existing notify()
             pipeline for the current user and returns a structured
             diagnostic ("no providers configured", "no tokens
             registered", or "delivered ok"). Lives here under
@@ -179,7 +179,7 @@ export default async function SecuritySettingsPage() {
           <p className="mt-2 text-sm text-ink-soft">
             Send a test push to this account so you can verify
             notifications are wired before taking a real drive. The
-            response tells you exactly what&apos;s missing — APNs/FCM
+            response tells you exactly what&apos;s missing, APNs/FCM
             credentials in Vercel, an unregistered device, or a
             successful delivery.
           </p>

@@ -5,7 +5,7 @@ import type {
   EnvelopeStatus,
 } from "./provider";
 
-// Documenso adapter — talks to a self-hosted Documenso instance via
+// Documenso adapter, talks to a self-hosted Documenso instance via
 // the v1 REST API. Two env vars:
 //   - DOCUMENSO_API_URL: e.g. https://documenso.taxottic.com/api/v1
 //   - DOCUMENSO_API_KEY: bearer token from the admin dashboard

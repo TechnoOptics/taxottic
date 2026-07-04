@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 // ignore), scoped to a company the user belongs to.
 export async function POST(req: NextRequest) {
   // Dual auth: phone session OR the watch's bearer device token
-  // (QR-pairing). The watch action is still untrusted — every target
+  // (QR-pairing). The watch action is still untrusted, every target
   // row is re-authorised below against the resolved account.
   const supabase = await createClient();
   const {
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, did: "reclassify_trip" });
   }
 
-  // expense / income — a bank_transactions row.
+  // expense / income, a bank_transactions row.
   const { data: tx } = await admin
     .from("bank_transactions")
     .select("id, company_id, suggested_category_code")
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 
   if (business) {
     // Mirrors setTxCategory: keep it, staged with its suggested
-    // deduction category (null is allowed — leaves it for the
+    // deduction category (null is allowed, leaves it for the
     // in-app apply step, but un-ignored).
     await admin
       .from("bank_transactions")

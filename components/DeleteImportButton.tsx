@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Manager / super-admin only — delete a previous CSV import.
+ * Manager / super-admin only, delete a previous CSV import.
  *
  * Wraps the deleteImport server action with a native confirm() so the
  * user can't blow away an import on a single misclick. The action

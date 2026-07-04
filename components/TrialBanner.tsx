@@ -7,7 +7,7 @@ import { WebOnly } from "@/components/WebOnly";
  *
  * Active trial: cream pill with days remaining + "Upgrade to keep
  * access" CTA.
- * Expired:    red-tinted pill with "Trial ended — choose a plan"
+ * Expired:    red-tinted pill with "Trial ended, choose a plan"
  *             CTA. The user is technically on free now (getActivePlan
  *             returns 'free' once trial_end passes) but seeing this
  *             explicitly cued helps them remember why their AI just
@@ -15,7 +15,7 @@ import { WebOnly } from "@/components/WebOnly";
  *
  * The whole banner links to /billing, so on native (App Store
  * Guideline 3.1.1) we swap it for a plain, non-tappable status line via
- * <WebOnly> — the user still sees their trial state, with no in-app
+ * <WebOnly>, the user still sees their trial state, with no in-app
  * route to a purchase.
  */
 export function TrialBanner({ trial }: { trial: TrialState }) {

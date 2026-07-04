@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/watch/pair/poll?deviceId=…  (unauthenticated — the watch
+// GET /api/watch/pair/poll?deviceId=…  (unauthenticated, the watch
 // has no token yet; possession of the freshly-issued deviceId is the
 // only thing it can present). While unbound: { paired:false }. Once
 // the phone has redeemed, returns the token EXACTLY ONCE and clears
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   }
 
   const token = device.pending_token as string;
-  // Clear before responding — single delivery. If this update fails
+  // Clear before responding, single delivery. If this update fails
   // we do NOT hand out the token (avoid a re-readable plaintext).
   const { data: cleared } = await admin
     .from("watch_devices")

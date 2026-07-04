@@ -1,5 +1,5 @@
 /**
- * Earned Income Tax Credit (EITC) — IRC § 32.
+ * Earned Income Tax Credit (EITC), IRC § 32.
  *
  * The EITC is a REFUNDABLE credit for low-/moderate-income working
  * filers, sized by number of qualifying children. It can be sizable:

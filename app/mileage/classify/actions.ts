@@ -6,7 +6,7 @@ import { reclassifyTripCore } from "@/lib/mileage/reclassify";
 
 /**
  * Classify one mileage_trips row from the phone-side /mileage/classify
- * deck. Mirrors what /api/watch/confirm does from the watch swipe —
+ * deck. Mirrors what /api/watch/confirm does from the watch swipe -
  * same core fn, same authorization gate.
  *
  * Form fields:
@@ -25,7 +25,7 @@ export async function classifyTrip(formData: FormData) {
   // Every page that aggregates `mileage_trips`. Without these, the
   // /c/{id}/money-out "Miles driven" tile, the my-deductions YTD
   // mileage card, and the forecast scorecard's Vehicle line all
-  // stay stale until their per-page cache TTL expires — exactly
+  // stay stale until their per-page cache TTL expires, exactly
   // the "doesn't update the other places" symptom the user hit.
   // Using the dynamic-route form so all publicId variants drop.
   revalidatePath("/mileage/classify");
@@ -36,7 +36,7 @@ export async function classifyTrip(formData: FormData) {
   revalidatePath("/c/[publicId]/forecast", "page");
   revalidatePath("/c/[publicId]/savings-goals", "page");
   // The dashboard's outstanding-items bell/banner/popup all read the same
-  // tally — without this, a classified trip kept showing there until the
+  // tally, without this, a classified trip kept showing there until the
   // page's own cache TTL expired, even though the classify deck itself
   // had already advanced past it.
   revalidatePath("/dashboard");

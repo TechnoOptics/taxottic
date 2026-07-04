@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Hourly cron — mints draft `firm_invoices` rows from active
+ * Hourly cron, mints draft `firm_invoices` rows from active
  * `firm_invoice_templates` whose `next_issue_at` has elapsed.
  *
  * Why hourly:
@@ -33,7 +33,7 @@ export const maxDuration = 300;
  *   invoice. Vercel Cron retries a failed run, but our WHERE clause
  *   filters by `next_issue_at <= now()` so a retry that fires a
  *   second too late won't double-mint. The cron is not transactional
- *   across rows — if we crash mid-batch, the rows we already
+ *   across rows, if we crash mid-batch, the rows we already
  *   advanced stay advanced and the rest get picked up next hour.
  *
  * Output:
@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
           .eq("id", t.id);
         if (advanceErr) {
           // We minted an invoice but failed to advance the
-          // template — without the advance, next tick would
+          // template, without the advance, next tick would
           // re-mint. Log loudly but keep going; ops can
           // reconcile.
           failed++;

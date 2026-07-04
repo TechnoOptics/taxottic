@@ -10,7 +10,7 @@ import { useIsNativeApp } from "@/components/MobileOnly";
  * Inverse of <MobileOnly>, and the enforcement point for App Store
  * Review Guideline 3.1.1 (In-App Purchase). The native app is a WebView
  * over taxottic.com and our subscriptions/credits run through Stripe,
- * not Apple IAP — so the app must NOT surface any purchase, upgrade,
+ * not Apple IAP, so the app must NOT surface any purchase, upgrade,
  * pricing, or billing-management control. Wrap every such control in
  * <WebOnly>; existing subscribers still sign in and use their plan in
  * the app, and purchasing happens on the web (outside the app).

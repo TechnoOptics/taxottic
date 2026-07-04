@@ -170,7 +170,7 @@ export type ForecastInput = {
 
   // Investment income (year-to-date): interest, dividends, capital
   // gains, passive rental. Drives the Net Investment Income Tax (3.8%
-  // surtax) when modified AGI is above the threshold. Optional —
+  // surtax) when modified AGI is above the threshold. Optional -
   // callers without investment data pass 0 and NIIT computes to 0.
   ytdInvestmentIncomeCents?: number;
 
@@ -402,7 +402,7 @@ export type ForecastResult = {
   /**
    * Total tax ÷ total gross income (business + W-2 + spouse), or 0 when
    * there's no income. The honest "your overall effective rate" figure.
-   * Renamed from `effectiveRate`, which divided by BUSINESS income only —
+   * Renamed from `effectiveRate`, which divided by BUSINESS income only -
    * that returned 0% for a pure-W-2 filer and overstated the rate for
    * mixed filers (the field name lied about its denominator).
    */
@@ -410,7 +410,7 @@ export type ForecastResult = {
   /**
    * Federal income tax / taxable income (or 0 when taxable income is
    * 0). The UI shows this as "Effective rate" under the Federal Income
-   * Tax tile — distinct from `overallEffectiveRate` which is the
+   * Tax tile, distinct from `overallEffectiveRate` which is the
    * combined total/gross figure used in overall "you'll keep ~X%" copy.
    * Introduced in response to the May 2026 audit's High #4 finding
    * that the FIT tile was rendering 11% on a $0 federal income tax.
@@ -450,7 +450,7 @@ const SE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
 ]);
 
 // Entities whose owner gets the §199A QBI deduction on net pass-
-// through income. Same set as `SE_ENTITY_TYPES` PLUS `s_corp` — S-Corp
+// through income. Same set as `SE_ENTITY_TYPES` PLUS `s_corp`, S-Corp
 // distributions to owners ARE QBI-eligible under IRC §199A even
 // though the entity itself pays no SE tax. The May 2026 round-2
 // audit caught the engine returning QBI = 0 for every S-Corp because
@@ -504,7 +504,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     requestedSection179 > section179Applied
   ) {
     hints.push(
-      `Your § 179 election exceeds the ${k.year} cap of $${(SECTION_179_2026_CAP_CENTS / 100).toLocaleString()}. The excess will need to depreciate normally over the asset's class life — confirm with a CPA.`,
+      `Your § 179 election exceeds the ${k.year} cap of $${(SECTION_179_2026_CAP_CENTS / 100).toLocaleString()}. The excess will need to depreciate normally over the asset's class life, confirm with a CPA.`,
     );
   }
   const ytdMealsDeductible = Math.round(input.ytdMealsCents * 0.5);
@@ -529,7 +529,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     // that so a user comparing to their own bookkeeping software
     // doesn't think we miscoded - we're a placeholder that will refresh.
     // Render as cents (e.g. "72.5¢") so half-cent rates like the 2026
-    // 72.5¢/mile show correctly — a dollar `.toFixed(2)` would round
+    // 72.5¢/mile show correctly, a dollar `.toFixed(2)` would round
     // $0.725 down to "$0.72".
     const ratePerMile = `${k.MILEAGE_RATE_PER_MILE_CENTS}¢`;
     if (k.isMileageRateProvisional) {
@@ -557,7 +557,7 @@ export function forecast(input: ForecastInput): ForecastResult {
 
   // Denominator for the OVERALL effective rate (total tax ÷ total gross
   // income). Includes W-2 + spouse income so the rate is correct for W-2
-  // and mixed filers — the old business-only denominator returned 0% for
+  // and mixed filers, the old business-only denominator returned 0% for
   // a pure-W-2 filer and overstated the rate for anyone with W-2 wages
   // (May 2026 audit). A pure self-employed filer has no W-2/spouse income,
   // so this equals projectedIncome and their displayed rate is unchanged.
@@ -614,7 +614,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   );
   const netBiz = Math.max(0, projectedIncome - projectedExpenses);
   // SE health insurance (IRC §162(l)) is deductible only up to the
-  // business's earnings — you can't deduct more in health premiums than
+  // business's earnings, you can't deduct more in health premiums than
   // the business made. Cap at net business income so a large premium on a
   // small- or zero-profit business can't over-reduce AGI. (The assumption
   // text already promised this cap; it just wasn't being applied.)
@@ -694,7 +694,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       // C-Corps don't have an ordinary FIT tile to label, but keep the
       // field shape uniform so the UI doesn't have to branch on
       // entity type. Use the flat federal rate as the "FIT effective
-      // rate" — same value the UI shows as the marginal rate.
+      // rate", same value the UI shows as the marginal rate.
       federalIncomeTaxEffectiveRate: netBiz > 0 ? cTax / netBiz : 0,
       marginalRate: C_CORP_RATE,
       quarterlyEstimates,
@@ -704,7 +704,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       ytdNetBusinessIncomeCents: ytdNetBiz,
       assumptions,
       hints,
-      // C-Corps don't have these — they live on the owner's separate
+      // C-Corps don't have these, they live on the owner's separate
       // 1040, not on the entity return. Default to zero so the result
       // shape is uniform across entity types.
       amtAddOnCents: 0,
@@ -795,7 +795,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       );
     } else {
       hints.push(
-        "S-Corp: this forecast assumes $0 owner W-2 wages, which is NOT a defensible position with the IRS — every S-Corp owner-employee must take reasonable compensation before distributions. The forecast over-states the SE-tax savings until you record your owner wages on the tax-profile page (Owner W-2 wages field). If you take $0 wages this year the IRS can re-characterise distributions as wages and assess back FICA + penalties.",
+        "S-Corp: this forecast assumes $0 owner W-2 wages, which is NOT a defensible position with the IRS, every S-Corp owner-employee must take reasonable compensation before distributions. The forecast over-states the SE-tax savings until you record your owner wages on the tax-profile page (Owner W-2 wages field). If you take $0 wages this year the IRS can re-characterise distributions as wages and assess back FICA + penalties.",
       );
       assumptions.push(
         "S-Corp owner-employees pay payroll tax (FICA) on reasonable W-2 wages instead of SE tax on the same dollars. The whole-amount-as-distribution treatment below is provisional until owner wages are recorded.",
@@ -1380,7 +1380,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     let residentGrossTax = 0;
     const residentRow = input.stateNexus.find((r) => r.isResident);
     if (!residentRow) {
-      // No resident state declared — treat the first row as resident
+      // No resident state declared, treat the first row as resident
       // and warn.
       hints.push(
         "Multi-state nexus declared but no resident state flagged. Pick a home state under the company profile.",
@@ -1462,7 +1462,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     // deduction; NONE of them recognise the federal QBI deduction. If
     // we pass `taxableIncome` (which has both federal std deduction
     // and federal QBI removed) into the bracket math we under-state
-    // state tax — the May 2026 round-2 audit caught this on CA at
+    // state tax, the May 2026 round-2 audit caught this on CA at
     // ~$378 vs ~$1,033 hand-calc. Use the AGI-based helper instead.
     const stateBase = stateTaxableIncomeFromAgi({
       agiCents: agi,
@@ -1492,7 +1492,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       }
     } else {
       // Fall back to the curated flat rate against the SAME state-
-      // taxable base — using `taxableIncome` (federal) would under-
+      // taxable base, using `taxableIncome` (federal) would under-
       // state state tax for the same reason described above.
       const stRate = stateRate(input.stateCode);
       stTax = Math.round(stateBase * stRate);
@@ -1519,7 +1519,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   // C-Corps are handled in the dedicated short-circuit earlier in
   // this function; this block runs for sole_prop / single_llc /
   // multi_llc / partnership / s_corp / self_employed_1099. The 1099
-  // self-employed case has no registered entity at the state level —
+  // self-employed case has no registered entity at the state level -
   // map it to sole_prop so the gross-receipts taxes (which apply
   // regardless of entity registration) still fire if applicable.
   {
@@ -1540,7 +1540,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     for (const h of entityTax.hints) hints.push(h);
   }
 
-  // Net Investment Income Tax (NIIT). IRC §1411 — 3.8% on the lesser
+  // Net Investment Income Tax (NIIT). IRC §1411-3.8% on the lesser
   // of net investment income or modified AGI over the threshold.
   // Investment income: interest, dividends, capital gains, passive
   // rental. Caller passes ytdInvestmentIncomeCents; we project it the
@@ -1607,7 +1607,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
   // Bidirectional balance: positive = still owe, negative = refund.
   // The combined-filer (W-2 + Schedule C) case is exactly where this
-  // matters most — the user's W-2 withholding can easily exceed total
+  // matters most, the user's W-2 withholding can easily exceed total
   // tax once SE deductions and credits are applied, and they should
   // see the refund amount, not a flat $0 next to a "Refund" label.
   const balance = totalTax - alreadyPaid;
@@ -1621,13 +1621,13 @@ export function forecast(input: ForecastInput): ForecastResult {
   // Overall effective rate: total tax (federal income + SE + state +
   // additional Medicare + NIIT, less credits) over gross projected
   // income. This is the "you'll lose ~X% of every dollar to tax"
-  // number — useful as a top-line stat.
+  // number, useful as a top-line stat.
   const effective =
     totalGrossIncomeCents > 0 ? totalTax / totalGrossIncomeCents : 0;
   // Federal-income-tax-specific effective rate: federal income tax over
   // TAXABLE income. The May 2026 audit (High #4) caught the UI showing
   // the combined `effective` under a tile labelled "Federal income tax
-  // — Effective rate" with $0 federal income tax. That label promised
+  //, Effective rate" with $0 federal income tax. That label promised
   // FIT/taxable but the value was total/gross. Split it out so the UI
   // can show the right number under the right label.
   const federalIncomeTaxEffectiveRate =

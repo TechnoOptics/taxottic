@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-// ActivityList — client component that subscribes to firm_activity_log
+// ActivityList, client component that subscribes to firm_activity_log
 // changes via Supabase Realtime. On mount it shows the server-rendered
 // rows; any subsequent INSERT for the same firm gets prepended live.
 // The page re-renders the initial slice on next navigation, so a

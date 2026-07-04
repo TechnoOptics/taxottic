@@ -27,11 +27,11 @@
 // to keep the bundle small.
 
 export type MefEnvelopeArgs = {
-  /** ETIN — Electronic Transmitter Identification Number issued
+  /** ETIN, Electronic Transmitter Identification Number issued
    *  by the IRS when the firm completes their e-file Provider
    *  application. 5 digits. */
   etin: string;
-  /** EFIN — Electronic Filer Identification Number, also issued
+  /** EFIN, Electronic Filer Identification Number, also issued
    *  by the IRS after the firm completes Form 8633. 6 digits. */
   efin: string;
   /** Submission ID. Format: EFIN (6) + 7 chars (sequence) +
@@ -61,7 +61,7 @@ export type MefEnvelopeArgs = {
  * Generate a fresh MeF Submission ID per IRS Pub 4164. Pattern:
  * `{EFIN}{YYYYDDD}{seq6}` where seq6 is a 6-digit sequence the
  * caller increments. The full ID is 16 digits (EFIN=6, date=7,
- * sequence=6 — but only seq up to 999999 per day per EFIN). Each
+ * sequence=6, but only seq up to 999999 per day per EFIN). Each
  * submission must have a unique ID; collisions reject the file.
  */
 export function generateSubmissionId(efin: string, seq: number): string {
@@ -75,7 +75,7 @@ export function generateSubmissionId(efin: string, seq: number): string {
 }
 
 /**
- * Build the SubmissionManifest XML — the wrapping envelope IRS
+ * Build the SubmissionManifest XML, the wrapping envelope IRS
  * MeF requires around every form submission. Includes the
  * SubmissionId, ETIN, the form type, the tax year, and a
  * SubmissionCategory ("ITX" for individual, "CORP" for corporate,
@@ -154,7 +154,7 @@ export function buildSubmissionXml(args: MefEnvelopeArgs): string {
 export function buildMefSubmission(args: MefEnvelopeArgs): {
   manifestXml: string;
   submissionXml: string;
-  /** Filename hint for the ZIP — `{submissionId}.zip` per IRS. */
+  /** Filename hint for the ZIP, `{submissionId}.zip` per IRS. */
   zipFilename: string;
 } {
   return {

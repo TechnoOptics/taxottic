@@ -11,7 +11,7 @@ type Props = {
  * Mirror of PlaidSyncButton but pointed at /api/banks/stripe/sync.
  * Two separate buttons (rather than one polymorphic one) keeps each
  * connection card unambiguous and lets us evolve the two routes
- * independently — Stripe sync is balance-transaction cursor based
+ * independently, Stripe sync is balance-transaction cursor based
  * vs Plaid's transactions/sync, so the result shapes diverge.
  */
 export function StripeSyncButton({ connectionId }: Props) {
