@@ -57,6 +57,16 @@ export default async function ForecastPage({ params }: { params: Params }) {
   const { supabase, user, company, isManager, role } =
     await loadCompanyByPublicId(publicId);
 
+  // Privacy: the company forecast is a manager / department-lead surface.
+  // Plain members and expensers only get their own expenses, mileage, and
+  // chat, so bounce them to their expenses view (their nav already hides
+  // this link; this guards the URL too). RLS additionally scopes the
+  // underlying income/expense rows to their own, so even a direct hit can't
+  // read the whole company's numbers.
+  if (role !== "manager" && role !== "lead") {
+    redirect(`/c/${publicId}/expenses`);
+  }
+
   const taxYear = new Date().getUTCFullYear();
 
   // Pull tax profile, business profile, monthly entries.
