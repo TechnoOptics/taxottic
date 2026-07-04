@@ -25,6 +25,7 @@ import {
   StudentLoanInterestTile,
   W4NudgeTile,
 } from "@/components/forecast/BenefitTiles";
+import { sumPersonalExpenses } from "@/lib/tax/personal-expense-categories";
 
 /**
  * Personal-mode forecast for W-2 / wage-earner users.
@@ -52,6 +53,17 @@ export default async function PersonalForecastPage() {
   if (!taxProfile) {
     redirect(`/onboarding/tax-profile?next=/personal/forecast`);
   }
+
+  // Item 14: fold the personal expense tracker into the forecast. When the
+  // user has logged expenses in a deduction category, that live total takes
+  // precedence over the static figure typed into the tax profile (an override,
+  // not a sum, so tracked + typed can't double-count).
+  const { data: personalExpenseRows } = await admin
+    .from("personal_expenses")
+    .select("category, amount_cents")
+    .eq("user_id", user.id)
+    .eq("tax_year", taxYear);
+  const tracked = sumPersonalExpenses(personalExpenseRows ?? []);
 
   const input: ForecastInput = {
     // Items 14-16: this is the individual side. Scope it explicitly to
@@ -105,17 +117,28 @@ export default async function PersonalForecastPage() {
     foreignEarnedIncomeCents:
       taxProfile.foreign_earned_income_cents ?? 0,
     studentLoanInterestCents:
-      taxProfile.student_loan_interest_cents ?? 0,
+      tracked.studentLoanInterestCents ??
+      taxProfile.student_loan_interest_cents ??
+      0,
     qualifiedEducationExpensesCents:
-      taxProfile.qualified_education_expenses_cents ?? 0,
+      tracked.qualifiedEducationExpensesCents ??
+      taxProfile.qualified_education_expenses_cents ??
+      0,
     claimAotc: taxProfile.claim_aotc ?? false,
-    itemizedSaltCents: taxProfile.itemized_salt_cents ?? undefined,
+    itemizedSaltCents:
+      tracked.itemizedSaltCents ?? taxProfile.itemized_salt_cents ?? undefined,
     itemizedMortgageInterestCents:
-      taxProfile.itemized_mortgage_interest_cents ?? undefined,
+      tracked.itemizedMortgageInterestCents ??
+      taxProfile.itemized_mortgage_interest_cents ??
+      undefined,
     itemizedCharityCents:
-      taxProfile.itemized_charity_cents ?? undefined,
+      tracked.itemizedCharityCents ??
+      taxProfile.itemized_charity_cents ??
+      undefined,
     itemizedMedicalCents:
-      taxProfile.itemized_medical_cents ?? undefined,
+      tracked.itemizedMedicalCents ??
+      taxProfile.itemized_medical_cents ??
+      undefined,
     section179ExpenseCents: taxProfile.section_179_expense_cents ?? 0,
     residentialEnergyCreditCents:
       taxProfile.residential_energy_credit_cents ?? 0,
@@ -252,6 +275,21 @@ export default async function PersonalForecastPage() {
         ) : null}
 
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link
+            href="/personal/expenses"
+            className="card card-hover p-5 flex items-start gap-3"
+          >
+            <div>
+              <div className="display text-base text-forest-900">
+                Track your deductions
+              </div>
+              <p className="mt-1 text-xs text-ink-muted leading-relaxed">
+                Log charitable, medical, mortgage, SALT, student loan, and
+                education expenses. They flow straight into this forecast.
+              </p>
+            </div>
+            <span className="ml-auto text-ink-muted">→</span>
+          </Link>
           <Link
             href="/onboarding/tax-profile?next=/personal/forecast"
             className="card card-hover p-5 flex items-start gap-3"
