@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isSuperAdminCached } from "@/lib/auth";
 import {
   FEATURE_GATES,
   type FeatureGates,
@@ -25,7 +26,7 @@ export async function getActivePlan(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<Plan> {
-  const { data: superAdmin } = await supabase.rpc("is_super_admin");
+  const superAdmin = await isSuperAdminCached();
   if (superAdmin) {
     // QA plan preview: a super-admin can pin their effective plan to any
     // tier from the profile menu, to walk each plan's gated experience
@@ -101,11 +102,12 @@ function isTrialExpired(trialEnd: string | null): boolean {
  * security definer and joins auth.users by email to super_admins.
  */
 export async function isSuperAdmin(
-  supabase: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<boolean> {
-  const { data, error } = await supabase.rpc("is_super_admin");
-  if (error) return false;
-  return !!data;
+  // Delegates to the request-cached check so repeated calls in one render
+  // share a single RPC. The client arg is kept for call-site compatibility
+  // but ignored — is_super_admin must run on the user-context client.
+  return isSuperAdminCached();
 }
 
 /**

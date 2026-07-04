@@ -1,6 +1,22 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+
+/**
+ * Request-deduped super-admin check. is_super_admin() is a security-definer
+ * RPC that resolves against auth.uid(), so it MUST run on the user-context
+ * client — passing a service-role client returns a false negative. Wrapping
+ * it in React cache() means the many callers in a single render (AppHeader,
+ * getActivePlan via the feature gates, the page itself) share ONE round-trip
+ * instead of firing the RPC 3–4× per authenticated page.
+ */
+export const isSuperAdminCached = cache(async (): Promise<boolean> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("is_super_admin");
+  if (error) return false;
+  return !!data;
+});
 
 // Hosts that serve the super-admin shell. The middleware rewrites `/`
 // to `/admin` on these. requireSuperAdmin uses this list to decide

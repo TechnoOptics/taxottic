@@ -13,7 +13,7 @@ import { setActivePlatform, setPreviewPlan } from "@/app/settings/actions";
 import { getActiveFeatureGates, asPlanOrNull } from "@/lib/plans/usage";
 import type { Plan } from "@/lib/plans/limits";
 import { PlanPreviewBanner } from "./PlanPreviewBanner";
-import { getMyCompanies } from "@/lib/auth";
+import { getMyCompanies, isSuperAdminCached } from "@/lib/auth";
 import { getOutstandingTasks, type OutstandingItem } from "@/lib/tasks/outstanding";
 
 type AppHeaderProps = {
@@ -85,8 +85,7 @@ export async function AppHeader({
     // shows the portal switcher to users who can actually use it.
     // Non-super-admins won't see the section at all - it's not
     // disabled-and-hidden, it's structurally absent.
-    const { data: sa } = await supabase.rpc("is_super_admin");
-    isSuperAdmin = Boolean(sa);
+    isSuperAdmin = await isSuperAdminCached();
     // QA plan preview is a super-admin-only tool; only surface the
     // pinned tier (and the banner) for them so a stray column value
     // could never affect a normal user's chrome.
