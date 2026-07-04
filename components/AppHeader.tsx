@@ -1,6 +1,7 @@
 import { Wordmark } from "./Wordmark";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
+import { WebOnly } from "./WebOnly";
 import { DarkThemeMount } from "./DarkThemeMount";
 import { LeftRail } from "./LeftRail";
 import { LeftRailMobile } from "./LeftRailMobile";
@@ -328,7 +329,14 @@ export async function AppHeader({
           cluttered the bottom of every screen. Bella can be
           re-surfaced from the UserMenu dropdown later if wanted, the
           same way "Send feedback" was relocated there. */}
-      {needsConsent ? <GdprBanner acceptAction={recordGdprConsent} /> : null}
+      {/* Item 13: GDPR consent is folded into the legal acknowledgement, so
+          it is never a separate banner in the mobile app. On web it stays as
+          a fallback for accounts created before the fold. */}
+      {needsConsent ? (
+        <WebOnly>
+          <GdprBanner acceptAction={recordGdprConsent} />
+        </WebOnly>
+      ) : null}
     </>
   );
 }

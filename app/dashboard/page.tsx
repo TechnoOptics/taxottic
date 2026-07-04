@@ -105,6 +105,16 @@ export default async function DashboardPage() {
     ? undefined
     : "Free plan supports 1 company. Upgrade to Pro for unlimited.";
 
+  // Item 13: an invited employee's workspace is the company they joined,
+  // not a personal tax setup. Don't force them through the W-2-vs-business
+  // filer-type fork; send them straight to their company. A manager (who
+  // created a company) still completes their own filer-type below.
+  const memberOnly =
+    companies.length > 0 && companies.every((m) => m.role !== "manager");
+  if (profile && !profile.tax_filer_type && memberOnly) {
+    redirect(`/c/${companies[0].company.public_id}/expenses`);
+  }
+
   // Personalized greeting + filer-type fork. New signups land on the
   // dashboard before they've picked W-2 vs business; route them to
   // /onboarding/filer-type. W-2 users get sent to the personal-mode

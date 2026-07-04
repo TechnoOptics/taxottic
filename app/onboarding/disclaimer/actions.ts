@@ -20,11 +20,19 @@ export async function acceptTaxDisclaimer(formData: FormData) {
     redirect("/onboarding/disclaimer?error=Please%20check%20the%20box%20to%20continue");
   }
 
+  const nowIso = new Date().toISOString();
   await admin
     .from("profiles")
-    .update({ tax_disclaimer_accepted_at: new Date().toISOString() })
+    .update({
+      tax_disclaimer_accepted_at: nowIso,
+      // Item 13: fold GDPR consent into this single legal acknowledgement
+      // so it isn't a separate banner (especially on mobile).
+      gdpr_consented_at: nowIso,
+    })
     .eq("id", user.id);
 
   revalidatePath("/dashboard");
-  redirect("/onboarding/filer-type");
+  // Route through the dashboard gate, which sends invited members to their
+  // company instead of the personal filer-type fork (item 13).
+  redirect("/dashboard");
 }
