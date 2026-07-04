@@ -12,7 +12,6 @@ import {
   type ForecastInput,
   type ForecastResult,
 } from "@/lib/tax/forecast";
-import type { FilingStatus } from "@/lib/tax/constants-2025";
 import {
   AmtTile,
   CapitalGainsTile,
@@ -25,7 +24,7 @@ import {
   StudentLoanInterestTile,
   W4NudgeTile,
 } from "@/components/forecast/BenefitTiles";
-import { sumPersonalExpenses } from "@/lib/tax/personal-expense-categories";
+import { buildPersonalForecastInput } from "@/lib/tax/personal-forecast-input";
 
 /**
  * Personal-mode forecast for W-2 / wage-earner users.
@@ -63,89 +62,11 @@ export default async function PersonalForecastPage() {
     .select("category, amount_cents")
     .eq("user_id", user.id)
     .eq("tax_year", taxYear);
-  const tracked = sumPersonalExpenses(personalExpenseRows ?? []);
-
-  const input: ForecastInput = {
-    // Items 14-16: this is the individual side. Scope it explicitly to
-    // "personal" so only individual deductions and credits apply (child tax
-    // credit, EITC, education, savers) and no business-only treatment can
-    // ever leak in. The business side sets scope "business" (item 17).
-    scope: "personal",
+  const input: ForecastInput = buildPersonalForecastInput(
+    taxProfile,
+    personalExpenseRows ?? [],
     taxYear,
-    filingStatus: taxProfile.filing_status as FilingStatus,
-    stateCode: taxProfile.state_code,
-    age: taxProfile.age,
-    isBlind: taxProfile.is_blind,
-    itemize: taxProfile.itemize,
-    dependents: taxProfile.dependents,
-    dependentsUnder17: taxProfile.dependents_under_17 ?? 0,
-    spouseIncomeCents: taxProfile.spouse_income_cents ?? 0,
-    estimatedPaymentsCents: taxProfile.estimated_payments_cents ?? 0,
-    ownerW2WagesCents: taxProfile.owner_w2_wages_cents ?? 0,
-    ownerW2WithheldCents: taxProfile.owner_w2_withheld_cents ?? 0,
-    ownerW2SsWagesCents: taxProfile.owner_w2_ss_wages_cents ?? 0,
-    spouseW2WagesCents: taxProfile.spouse_w2_wages_cents ?? 0,
-    spouseW2WithheldCents: taxProfile.spouse_w2_withheld_cents ?? 0,
-    spouseW2SsWagesCents: taxProfile.spouse_w2_ss_wages_cents ?? 0,
-    entityType: "self_employed_1099",
-    ytdIncomeCents: 0,
-    ytdBusinessExpensesCents: 0,
-    ytdMealsCents: 0,
-    ytdAboveTheLineCents: 0,
-    ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
-    autoMileageCents: 0,
-    autoHomeOfficeCents: 0,
-    monthsEntered: 12,
-    ytdInvestmentIncomeCents: 0,
-    // Structured benefit fields (items #1-#15 in the audit). Pulled
-    // straight from tax_profiles; pass undefined / 0 when the column
-    // is null so the engine treats them as "not applicable."
-    retirementSolo401kCents:
-      taxProfile.solo_401k_contribution_cents ?? 0,
-    retirementSepIraCents: taxProfile.sep_ira_contribution_cents ?? 0,
-    retirementTraditionalIraCents:
-      taxProfile.traditional_ira_contribution_cents ?? 0,
-    retirementRothIraCents:
-      taxProfile.roth_ira_contribution_cents ?? 0,
-    retirementHsaCents: taxProfile.hsa_contribution_cents ?? 0,
-    selfEmployedHealthInsuranceCents:
-      taxProfile.se_health_insurance_cents ?? 0,
-    longTermCapitalGainsCents:
-      taxProfile.long_term_capital_gains_cents ?? 0,
-    qualifiedDividendsCents:
-      taxProfile.qualified_dividends_cents ?? 0,
-    foreignEarnedIncomeCents:
-      taxProfile.foreign_earned_income_cents ?? 0,
-    studentLoanInterestCents:
-      tracked.studentLoanInterestCents ??
-      taxProfile.student_loan_interest_cents ??
-      0,
-    qualifiedEducationExpensesCents:
-      tracked.qualifiedEducationExpensesCents ??
-      taxProfile.qualified_education_expenses_cents ??
-      0,
-    claimAotc: taxProfile.claim_aotc ?? false,
-    itemizedSaltCents:
-      tracked.itemizedSaltCents ?? taxProfile.itemized_salt_cents ?? undefined,
-    itemizedMortgageInterestCents:
-      tracked.itemizedMortgageInterestCents ??
-      taxProfile.itemized_mortgage_interest_cents ??
-      undefined,
-    itemizedCharityCents:
-      tracked.itemizedCharityCents ??
-      taxProfile.itemized_charity_cents ??
-      undefined,
-    itemizedMedicalCents:
-      tracked.itemizedMedicalCents ??
-      taxProfile.itemized_medical_cents ??
-      undefined,
-    section179ExpenseCents: taxProfile.section_179_expense_cents ?? 0,
-    residentialEnergyCreditCents:
-      taxProfile.residential_energy_credit_cents ?? 0,
-    evCreditCents: taxProfile.ev_credit_cents ?? 0,
-    ptcAdvancePaymentsCents:
-      taxProfile.ptc_advance_payments_cents ?? 0,
-  };
+  );
 
   const result: ForecastResult = forecast(input);
 
@@ -286,6 +207,21 @@ export default async function PersonalForecastPage() {
               <p className="mt-1 text-xs text-ink-muted leading-relaxed">
                 Log charitable, medical, mortgage, SALT, student loan, and
                 education expenses. They flow straight into this forecast.
+              </p>
+            </div>
+            <span className="ml-auto text-ink-muted">→</span>
+          </Link>
+          <Link
+            href="/personal/export"
+            className="card card-hover p-5 flex items-start gap-3"
+          >
+            <div>
+              <div className="display text-base text-forest-900">
+                Export annual summary
+              </div>
+              <p className="mt-1 text-xs text-ink-muted leading-relaxed">
+                A print-ready year-end sheet with your forecast and every logged
+                deduction. Save as PDF for your preparer.
               </p>
             </div>
             <span className="ml-auto text-ink-muted">→</span>

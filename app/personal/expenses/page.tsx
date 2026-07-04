@@ -65,6 +65,14 @@ export default async function PersonalExpensesPage() {
           </Link>
           , so your refund or balance stays current all year.
         </p>
+        <div className="mt-4">
+          <Link
+            href="/personal/export"
+            className="btn-ghost text-sm h-9 px-4 inline-flex items-center"
+          >
+            Export annual summary
+          </Link>
+        </div>
 
         <div className="card mt-7 p-6 sm:p-8">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
