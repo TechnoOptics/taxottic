@@ -138,3 +138,46 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  visual-baselines:
+    # Manual only (Actions → this workflow → "Run workflow"). Regenerates
+    # the LINUX visual-regression baselines the `visual` job compares
+    # against. Screenshot baselines are OS/font-rendering specific, so they
+    # must be produced on the same ubuntu image CI runs on — never on a
+    # dev's Mac. Download the "visual-baselines-linux" artifact this
+    # produces and commit the *-linux.png files. Re-run whenever the UI
+    # intentionally changes (or the runner image bumps and rendering shifts).
+    name: visual baselines (manual — regenerate Linux snapshots)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Regenerate visual baselines
+        run: npm run e2e:visual:update
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-dummy-anon-not-a-secret"
+          SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-service-role-not-a-secret"
+
+      - name: Upload Linux baselines
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: e2e/visual.spec.ts-snapshots/*-linux.png
+          if-no-files-found: error
+          retention-days: 7
