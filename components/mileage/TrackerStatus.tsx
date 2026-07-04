@@ -123,7 +123,17 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
           <div className="text-sm font-medium text-forest-900">{headline}</div>
           <div className="text-xs text-ink-muted mt-0.5">{subline}</div>
           {tone === "red" ? (
-            <ul className="mt-2 text-[11px] text-ink-soft leading-relaxed grid gap-1">
+            <details className="mt-2 group">
+              <summary className="flex items-center gap-1 cursor-pointer select-none list-none text-[11px] font-medium text-forest-800">
+                <span
+                  aria-hidden="true"
+                  className="inline-block transition-transform group-open:rotate-90"
+                >
+                  ›
+                </span>
+                Why isn&apos;t it tracking?
+              </summary>
+              <ul className="mt-2 text-[11px] text-ink-soft leading-relaxed grid gap-1">
               <li>
                 <strong>Toggle:</strong> turn{" "}
                 <span className="text-forest-900 font-medium">
@@ -176,7 +186,8 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
                 Or use <strong>“Log it manually”</strong> below to
                 backfill the drive, same deduction either way.
               </li>
-            </ul>
+              </ul>
+            </details>
           ) : null}
         </div>
       </div>
