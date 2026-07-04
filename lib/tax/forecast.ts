@@ -33,11 +33,7 @@
  *   running personal brackets.
  */
 
-import {
-  QUARTERLY_DUE_DATES_2025,
-  stateRate,
-  type FilingStatus,
-} from "./constants-2025";
+import { stateRate, type FilingStatus } from "./constants-2025";
 import { getTaxYearConstants, type TaxYearConstants } from "./constants";
 import { computeEitcCents } from "./credits/eitc";
 import { computeSaversCreditCents } from "./credits/savers";
@@ -47,6 +43,34 @@ import {
   stateTaxableIncomeFromAgi,
 } from "./state-brackets";
 import { computeStateEntityTax } from "./state-entity-taxes";
+
+// Engine helpers extracted from this file; forecast() orchestrates them.
+import { round, formatCents, parseDollarsToCents } from "./engine/money";
+import {
+  computeStandardDeduction,
+  computeFederalIncomeTax,
+  marginalFederalRate,
+} from "./engine/federal-income-tax";
+import { computeSelfEmploymentTax } from "./engine/self-employment-tax";
+import {
+  buildQuarterlyEstimates,
+  remainingMonthsToFilingDeadline,
+} from "./engine/quarterly";
+import {
+  computeMileageDeductionCents,
+  computeHomeOfficeSimplifiedCents,
+  computeFamilyCredits,
+} from "./engine/line-items";
+
+// Public helpers re-exported so existing `@/lib/tax/forecast` imports keep
+// working now that their implementations live under ./engine.
+export {
+  formatCents,
+  parseDollarsToCents,
+  computeMileageDeductionCents,
+  computeHomeOfficeSimplifiedCents,
+  computeFamilyCredits,
+};
 
 export type EntityType =
   | "sole_prop"
@@ -1883,265 +1907,3 @@ export function forecast(input: ForecastInput): ForecastResult {
   };
 }
 
-// ----------------------------------------------------------------------------
-// Helpers
-// ----------------------------------------------------------------------------
-
-/**
- * Compute mileage deduction in cents, annualized from year-to-date miles.
- * If business profile only stores YTD miles, we project to year-end.
- */
-export function computeMileageDeductionCents(args: {
-  ytdMiles: number;
-  monthsEntered: number;
-  /**
-   * Tax year so the helper picks the right IRS mileage rate. Optional
-   * for backward-compat with callers from before the tax-year-aware
-   * refactor; defaults to the current UTC year, which is what every
-   * existing call site implicitly assumed.
-   */
-  taxYear?: number;
-}): number {
-  if (!args.ytdMiles || args.ytdMiles <= 0) return 0;
-  const projectionFactor =
-    args.monthsEntered > 0 ? 12 / Math.min(12, args.monthsEntered) : 1;
-  const projectedMiles = args.ytdMiles * projectionFactor;
-  const taxYear = args.taxYear ?? new Date().getUTCFullYear();
-  const k = getTaxYearConstants(taxYear);
-  return Math.round(projectedMiles * k.MILEAGE_RATE_PER_MILE_CENTS);
-}
-
-/**
- * Simplified home-office deduction: $5/sqft up to 300 sqft, max $1,500.
- * Returns 0 if either field is missing.
- */
-export function computeHomeOfficeSimplifiedCents(args: {
-  homeOfficeSqft: number | null;
-  hasHomeOffice: boolean;
-}): number {
-  if (!args.hasHomeOffice) return 0;
-  const sqft = args.homeOfficeSqft ?? 0;
-  if (sqft <= 0) return 0;
-  const eligibleSqft = Math.min(sqft, 300);
-  return eligibleSqft * 500; // $5.00 per sqft = 500 cents
-}
-
-function computeStandardDeduction(
-  input: ForecastInput,
-  k: TaxYearConstants,
-): number {
-  let base = k.STANDARD_DEDUCTION[input.filingStatus];
-  const isMarried =
-    input.filingStatus === "married_filing_jointly" ||
-    input.filingStatus === "married_filing_separately" ||
-    input.filingStatus === "qualifying_widow";
-  const additional = isMarried
-    ? k.ADDITIONAL_STD_DEDUCTION.married
-    : k.ADDITIONAL_STD_DEDUCTION.single;
-  if (input.age !== null && input.age >= 65) base += additional;
-  if (input.isBlind) base += additional;
-  return base;
-}
-
-function computeFederalIncomeTax(
-  taxableIncomeCents: number,
-  filingStatus: FilingStatus,
-  k: TaxYearConstants,
-): number {
-  const brackets = k.FEDERAL_BRACKETS[filingStatus];
-  let remaining = taxableIncomeCents;
-  let lowerBound = 0;
-  let tax = 0;
-  for (const b of brackets) {
-    const upper = b.upTo ?? Number.MAX_SAFE_INTEGER;
-    const slice = Math.max(0, Math.min(remaining, upper - lowerBound));
-    tax += Math.round(slice * b.rate);
-    remaining -= slice;
-    lowerBound = upper;
-    if (remaining <= 0) break;
-  }
-  return tax;
-}
-
-function marginalFederalRate(
-  taxableIncomeCents: number,
-  filingStatus: FilingStatus,
-  k: TaxYearConstants,
-): number {
-  const brackets = k.FEDERAL_BRACKETS[filingStatus];
-  for (const b of brackets) {
-    if (b.upTo === null || taxableIncomeCents < b.upTo) return b.rate;
-  }
-  return brackets[brackets.length - 1].rate;
-}
-
-function computeSelfEmploymentTax(args: {
-  netBizCents: number;
-  ownerW2SsWagesCents: number;
-  k: TaxYearConstants;
-}): { totalSeTax: number; seEarnings: number } {
-  const seEarnings = Math.round(
-    args.netBizCents * args.k.SE_TAX.netEarningsFactor,
-  );
-  if (seEarnings <= 0) return { totalSeTax: 0, seEarnings: 0 };
-
-  // SS portion is capped at the wage base, but the wage base is shared
-  // with W-2 SS wages already earned in the year. Whatever's left of the
-  // base is what SE earnings can be taxed against.
-  const ssCap = args.k.SE_TAX.socialSecurityWageBase;
-  const ssRemaining = Math.max(
-    0,
-    ssCap - Math.max(0, args.ownerW2SsWagesCents),
-  );
-  const ssBase = Math.min(seEarnings, ssRemaining);
-  const ssTax = Math.round(ssBase * args.k.SE_TAX.socialSecurityRate);
-
-  const medicareTax = Math.round(seEarnings * args.k.SE_TAX.medicareRate);
-
-  // The 0.9% additional Medicare surtax used to live here, but it
-  // applies to COMBINED W-2 wages + SE earnings above the threshold —
-  // not SE earnings in isolation. It's now computed at the household
-  // level in forecast() and added to total tax separately.
-  return { totalSeTax: ssTax + medicareTax, seEarnings };
-}
-
-/**
- * Split annual liability into Q1-Q4 estimated payments. Each quarter
- * is responsible for a quarter of the annual total minus the slice
- * of W-2 withholding the IRS treats as paid evenly through the year.
- * Estimated payments the user has already made are subtracted from
- * the earliest still-due quarter so the schedule reflects "how much
- * more you should send."
- */
-function buildQuarterlyEstimates(args: {
-  taxYear: number;
-  totalTaxCents: number;
-  w2WithheldCents: number;
-  estimatedPaymentsCents: number;
-}): QuarterlyEstimate[] {
-  const today = new Date();
-  // Quarter target: total annual tax / 4 minus the quarter's share of
-  // W-2 withholding (treated as paid throughout the year).
-  const perQuarterGross = Math.round(args.totalTaxCents / 4);
-  const perQuarterWithholdingCredit = Math.round(args.w2WithheldCents / 4);
-  const baseQuarterCents = Math.max(
-    0,
-    perQuarterGross - perQuarterWithholdingCredit,
-  );
-
-  // Spread previously-made estimated payments against the earliest
-  // quarters so the user sees future quarters as the catch-up.
-  let estimatesRemaining = Math.max(0, args.estimatedPaymentsCents);
-  return QUARTERLY_DUE_DATES_2025.map((d) => {
-    const dueYear = d.inFollowingYear ? args.taxYear + 1 : args.taxYear;
-    const dueDate = new Date(Date.UTC(dueYear, d.month - 1, d.day));
-    const isPast = dueDate.getTime() < today.getTime();
-    let amount = baseQuarterCents;
-    const credit = Math.min(estimatesRemaining, amount);
-    amount -= credit;
-    estimatesRemaining -= credit;
-    return {
-      quarter: d.quarter,
-      dueDate: dueDate.toISOString().slice(0, 10),
-      amountCents: Math.max(0, amount),
-      isPast,
-    };
-  });
-}
-
-/**
- * Non-refundable family credits: Child Tax Credit ($2,000 / qualifying
- * child under 17) and Credit for Other Dependents ($500 each), reduced
- * by $50 per $1,000 (or fraction thereof) of AGI above the phase-out
- * threshold. The reduction applies to the COMBINED credit.
- */
-export function computeFamilyCredits(args: {
-  dependents: number;
-  dependentsUnder17: number;
-  filingStatus: FilingStatus;
-  agiCents: number;
-  /**
-   * Tax year so the helper picks the right CTC maximum. The OBBBA
-   * raised the CTC from $2,000 to $2,200 for 2025+ tax years; without
-   * threading the year through, callers would silently keep computing
-   * the pre-OBBBA $2,000 cap. Optional for callers that haven't
-   * migrated; defaults to the current UTC year.
-   */
-  taxYear?: number;
-}): number {
-  const totalDependents = Math.max(0, args.dependents);
-  const ctcChildren = Math.min(
-    Math.max(0, args.dependentsUnder17),
-    totalDependents,
-  );
-  const odcChildren = Math.max(0, totalDependents - ctcChildren);
-
-  const taxYear = args.taxYear ?? new Date().getUTCFullYear();
-  const k = getTaxYearConstants(taxYear);
-
-  const baseCredit =
-    ctcChildren * k.CHILD_TAX_CREDIT.ctcPerChildCents +
-    odcChildren * k.CHILD_TAX_CREDIT.odcPerOtherCents;
-  if (baseCredit <= 0) return 0;
-
-  const phaseOutStart =
-    k.CHILD_TAX_CREDIT.phaseOutStart[args.filingStatus] ?? 0;
-  if (args.agiCents <= phaseOutStart) return baseCredit;
-
-  // Reduction: $50 per $1,000 (or fraction) over threshold. Math in
-  // cents: each $1,000 = 100,000 cents.
-  const overCents = args.agiCents - phaseOutStart;
-  const stepsOver = Math.ceil(overCents / 100_000);
-  const reduction = stepsOver * k.CHILD_TAX_CREDIT.phaseOutReductionPer1000;
-  return Math.max(0, baseCredit - reduction);
-}
-
-/**
- * Number of months from today until the federal filing deadline (Apr 15
- * of the following calendar year). Used to spread "still owed" into a
- * monthly save-target.
- */
-function remainingMonthsToFilingDeadline(taxYear: number): number {
-  const now = new Date();
-  const currentYear = now.getUTCFullYear();
-  const currentMonth = now.getUTCMonth() + 1;
-  if (taxYear > currentYear) return 12;
-  // Months left in the calendar tax year + Jan/Feb/Mar/Apr of next year (4)
-  return Math.max(1, 12 - currentMonth + 4);
-}
-
-function round(n: number): number {
-  return Math.round(n);
-}
-
-// ----------------------------------------------------------------------------
-// Currency formatting helpers (UI side)
-// ----------------------------------------------------------------------------
-
-export function formatCents(
-  cents: number,
-  options: { showCents?: boolean } = {},
-): string {
-  const dollars = cents / 100;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: options.showCents ? 2 : 0,
-    maximumFractionDigits: options.showCents ? 2 : 0,
-  }).format(dollars);
-}
-
-// Upper bound on a single entered amount. JS integers are exact only below
-// ~9e15, so an absurd input (e.g. "9999999999999999") would lose precision
-// once converted to cents and later render as "$NaN" / corrupt the forecast.
-// $1T is orders of magnitude beyond any real small-business figure and keeps
-// amount_cents safely exact. Callers treat null as "invalid input".
-const MAX_ENTRY_DOLLARS = 1_000_000_000_000;
-
-export function parseDollarsToCents(input: string): number | null {
-  const cleaned = input.replace(/[$,\s]/g, "");
-  if (!cleaned) return null;
-  const n = Number.parseFloat(cleaned);
-  if (!Number.isFinite(n) || n < 0 || n > MAX_ENTRY_DOLLARS) return null;
-  return Math.round(n * 100);
-}

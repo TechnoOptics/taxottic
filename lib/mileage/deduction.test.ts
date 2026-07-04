@@ -14,8 +14,8 @@ describe("businessMileageDeductionCents", () => {
     expect(businessMileageDeductionCents(100, 2025)).toBe(7000);
   });
 
-  it("2026 uses the 2026 bundled rate", () => {
-    expect(businessMileageDeductionCents(100, 2026)).toBe(7000);
+  it("100 business miles @ 2026 rate = $72.50 (7250¢, IRS Notice 2026-10)", () => {
+    expect(businessMileageDeductionCents(100, 2026)).toBe(7250);
   });
 
   it("rounds to the nearest cent", () => {
