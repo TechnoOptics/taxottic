@@ -44,7 +44,16 @@ export default async function PersonalExportPage({
 }) {
   const { admin, user } = await requireUserWithAdmin();
   const { year } = await searchParams;
-  const taxYear = year ? Number(year) : new Date().getUTCFullYear();
+  const currentYear = new Date().getUTCFullYear();
+  // Clamp ?year= to a sane range; NaN / junk / out-of-range falls back to the
+  // current year rather than rendering an empty or broken workpaper.
+  const parsedYear = year ? Number(year) : currentYear;
+  const taxYear =
+    Number.isInteger(parsedYear) &&
+    parsedYear >= 2000 &&
+    parsedYear <= currentYear
+      ? parsedYear
+      : currentYear;
 
   const [{ data: taxProfile }, { data: profile }, { data: expenseData }] =
     await Promise.all([

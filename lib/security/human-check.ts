@@ -98,9 +98,17 @@ export function verifySolve(
 }
 
 /**
- * Re-verify a pass token (nonce + expiry + signature). Server-side callers
- * that gate a real mutation on humanity can use this; the login form gates in
- * the UI, but the signing here means the pass is genuine, not a flipped flag.
+ * Re-verify a pass token (nonce + expiry + signature).
+ *
+ * IMPORTANT: the current login integration is CLIENT-SIDE deterrence only.
+ * Supabase's magic-link / OTP send happens directly from the browser, so the
+ * login form gates on a client boolean and this pass token is not yet checked
+ * in the sign-in path. The challenge round-trip still forces a real,
+ * server-issued interaction (friction against naive bots), but a determined
+ * script that calls supabase.auth directly bypasses it. To make the gate
+ * server-enforced, route the OTP/magic-link request through a first-party
+ * endpoint that calls verifyPass() before proxying to Supabase. This helper
+ * exists for exactly that hardening step; keep it until then.
  */
 export function verifyPass(nonce: string, token: string, exp: number, now: number): boolean {
   if (now > exp) return false;

@@ -9,6 +9,7 @@ import { decryptAndRenderPdf, PdfPasswordError } from "@/lib/pdf/decrypt";
 import { consume } from "@/lib/plans/credits";
 import { getActivePlan, isSuperAdmin } from "@/lib/plans/usage";
 import { CREDIT_COST } from "@/lib/plans/limits";
+import { issueReceiptToken } from "@/lib/security/receipt-token";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -119,7 +120,15 @@ export async function POST(req: NextRequest) {
           | "application/pdf",
       });
     }
-    return NextResponse.json(result);
+    // Signed proof that this user just completed a real scan. addExpense
+    // verifies this to satisfy the manager receipt threshold, so the policy
+    // can't be skipped with a self-asserted flag (item 10 hardening).
+    const receipt = issueReceiptToken(user.id, Date.now());
+    return NextResponse.json({
+      ...result,
+      receipt_token: receipt.token,
+      receipt_token_exp: receipt.exp,
+    });
   } catch (err) {
     if (err instanceof PdfPasswordError) {
       return NextResponse.json(

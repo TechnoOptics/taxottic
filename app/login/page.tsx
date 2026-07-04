@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { PasskeySignInButton } from "@/components/PasskeySignInButton";
 import { HumanCheck } from "@/components/HumanCheck";
-import { WebOnly } from "@/components/WebOnly";
 import { useIsNativeApp } from "@/components/MobileOnly";
 import { isNativeApp, nativeOAuthSignIn } from "@/lib/capacitor/auth-bridge";
 
@@ -422,14 +421,14 @@ export default function LoginPage() {
           {/* Item 18: our own human check, browser only. It gates the email
               sign-in below; passkey and the OAuth providers above bounce to
               their own strong-auth flows and aren't part of the magic-link
-              abuse surface, so they stay ungated. */}
-          <WebOnly>
-            {!humanVerified ? (
-              <div className="mb-3">
-                <HumanCheck onVerified={() => setHumanVerified(true)} />
-              </div>
-            ) : null}
-          </WebOnly>
+              abuse surface, so they stay ungated. Shown whenever we're not
+              confirmed-native (web OR the brief unknown-platform window) so the
+              email button is never disabled with no visible reason. */}
+          {isNative !== true && !humanVerified ? (
+            <div className="mb-3">
+              <HumanCheck onVerified={() => setHumanVerified(true)} />
+            </div>
+          ) : null}
 
           <form
             onSubmit={sendMagicLink}

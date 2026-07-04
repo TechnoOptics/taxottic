@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { parseDollarsToCents } from "@/lib/tax/forecast";
 import { RecurrencePicker } from "./RecurrencePicker";
 
 const MONTH_LABELS = [
@@ -75,15 +76,11 @@ export function AddExpenseForm({
     false;
   const vendorsListId = useId();
 
-  // Live check against the manager's receipt threshold. Parse the same way
-  // the server does (digits + one dot), so the client warning matches the
-  // server's decision and we never let an over-threshold manual entry submit.
-  const amountCents = (() => {
-    const cleaned = amount.replace(/[^0-9.]/g, "");
-    if (!cleaned) return null;
-    const n = Number.parseFloat(cleaned);
-    return Number.isFinite(n) ? Math.round(n * 100) : null;
-  })();
+  // Live check against the manager's receipt threshold. Use the SAME parser
+  // the server (addExpense) uses, so the client warning / disabled-button
+  // state can never disagree with the server's decision on odd inputs like
+  // "1e3" or "12abc34".
+  const amountCents = parseDollarsToCents(amount);
   const needsReceipt =
     receiptThreshold != null &&
     amountCents != null &&
@@ -196,9 +193,14 @@ export function AddExpenseForm({
             role="alert"
             className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[12px] text-amber-800 leading-relaxed"
           >
-            A receipt is required for expenses over {thresholdLabel}. Use{" "}
-            <strong>Scan a receipt</strong> above to capture one, and it will
-            file itself.
+            A receipt is required for expenses over {thresholdLabel}.{" "}
+            <a
+              href="#scan-receipt"
+              className="font-semibold underline underline-offset-2 hover:text-amber-900"
+            >
+              Scan a receipt
+            </a>{" "}
+            to capture one, and it will file itself.
           </span>
         ) : null}
       </label>

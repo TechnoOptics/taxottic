@@ -77,6 +77,7 @@ export function PersonalExpenseForm({
           type="date"
           required
           defaultValue={defaultDate}
+          min={`${defaultDate.slice(0, 4)}-01-01`}
           max={defaultDate}
           className="input"
         />

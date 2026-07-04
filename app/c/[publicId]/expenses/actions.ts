@@ -5,6 +5,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents, formatCents } from "@/lib/tax/forecast";
 import { logCompanyActivity } from "@/lib/activity/log";
 import { notify } from "@/lib/push";
+import { verifyReceiptToken } from "@/lib/security/receipt-token";
 
 async function userBelongsToCompany(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
@@ -71,10 +72,16 @@ export async function addExpense(formData: FormData) {
   const recurrence = VALID_RECURRENCES.has(recurrenceRaw)
     ? recurrenceRaw
     : "one_off";
-  // The receipt-scan flow (ReceiptUploader) stamps this; the manual
-  // "Add an expense" form never can, which is what makes the manager's
-  // receipt threshold below enforceable.
-  const receiptCaptured = String(formData.get("receipt_captured") ?? "") === "1";
+  // A receipt counts as captured only when the request carries a valid signed
+  // token minted by /api/receipts/extract (i.e. a real OCR scan actually ran
+  // on the server for this user). This is what makes the manager's receipt
+  // threshold below unforgeable: the manual "Add an expense" form has no
+  // token, and the token can't be fabricated without the server secret.
+  const receiptToken = String(formData.get("receipt_token") ?? "");
+  const receiptTokenExp = Number(formData.get("receipt_token_exp") ?? 0);
+  const receiptCaptured =
+    receiptToken !== "" &&
+    verifyReceiptToken(user.id, receiptToken, receiptTokenExp, Date.now());
 
   if (
     !companyId ||

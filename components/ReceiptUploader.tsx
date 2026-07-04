@@ -67,6 +67,13 @@ export function ReceiptUploader({
   const [category, setCategory] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  // Signed proof (from /api/receipts/extract) that this scan really ran on the
+  // server, so the committed expense can satisfy the manager receipt threshold
+  // without a forgeable flag (item 10 hardening).
+  const [receiptToken, setReceiptToken] = useState<{
+    token: string;
+    exp: number;
+  } | null>(null);
   const webCamInputRef = useRef<HTMLInputElement | null>(null);
 
   // Receipt viewer: a live preview of the uploaded file so the user can
@@ -102,6 +109,7 @@ export function ReceiptUploader({
     setCategory("");
     setNotes("");
     setZoom(false);
+    setReceiptToken(null);
   };
 
   const onUpload = async (explicitFile?: File) => {
@@ -116,12 +124,22 @@ export function ReceiptUploader({
         method: "POST",
         body: fd,
       });
-      const json: Extraction & { error?: string } = await res.json();
+      const json: Extraction & {
+        error?: string;
+        receipt_token?: string;
+        receipt_token_exp?: number;
+      } = await res.json();
       if (!res.ok) {
         setError(json.error || "Couldn't read this receipt.");
         return;
       }
       setDraft(json);
+      if (json.receipt_token && typeof json.receipt_token_exp === "number") {
+        setReceiptToken({
+          token: json.receipt_token,
+          exp: json.receipt_token_exp,
+        });
+      }
       // Pre-fill the editable form from the extraction.
       if (json.date) {
         const d = new Date(`${json.date}T00:00:00Z`);
@@ -253,9 +271,23 @@ export function ReceiptUploader({
           <input type="hidden" name="company_id" value={companyId} />
           <input type="hidden" name="tax_year" value={taxYear} />
           <input type="hidden" name="recurrence" value="one_off" />
-          {/* Item 10: proves this expense came through the receipt scan,
-             so it satisfies the manager's receipt-required threshold. */}
-          <input type="hidden" name="receipt_captured" value="1" />
+          {/* Item 10: the signed token proves this scan really ran on the
+             server, so addExpense can satisfy the manager's receipt threshold
+             without trusting a forgeable flag. */}
+          {receiptToken ? (
+            <>
+              <input
+                type="hidden"
+                name="receipt_token"
+                value={receiptToken.token}
+              />
+              <input
+                type="hidden"
+                name="receipt_token_exp"
+                value={receiptToken.exp}
+              />
+            </>
+          ) : null}
 
           <div className="rounded-lg border border-forest-100 bg-cream/40 p-3 text-xs text-ink-soft">
             <div className="flex items-center gap-2 flex-wrap">

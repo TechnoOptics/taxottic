@@ -33,6 +33,17 @@ export async function addPersonalExpense(formData: FormData) {
   if (!date) throw new Error("Pick the date the expense was incurred.");
   const taxYear = Number(date.slice(0, 4));
 
+  // Guard against the silent black hole: the tracker page and the personal
+  // forecast only read the CURRENT tax year, so an entry dated to another year
+  // would save but never appear. Reject it with a clear message (mirrors the
+  // company-side addExpense guard) instead of losing the row.
+  const currentYear = new Date().getUTCFullYear();
+  if (taxYear !== currentYear) {
+    throw new Error(
+      `You can only log expenses dated in ${currentYear}. Use the annual export to view other years.`,
+    );
+  }
+
   const { error } = await supabase.from("personal_expenses").insert({
     user_id: user.id,
     tax_year: taxYear,

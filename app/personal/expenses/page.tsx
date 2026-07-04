@@ -7,6 +7,7 @@ import {
   PERSONAL_EXPENSE_CATEGORIES,
   personalCategory,
 } from "@/lib/tax/personal-expense-categories";
+import { PersonalExpenseDeleteButton } from "@/components/PersonalExpenseDeleteButton";
 import { addPersonalExpense, deletePersonalExpense } from "./actions";
 
 type Row = {
@@ -33,6 +34,7 @@ export default async function PersonalExpensesPage() {
   const { data } = await supabase
     .from("personal_expenses")
     .select("id, category, amount_cents, incurred_on, notes")
+    .eq("user_id", user.id)
     .eq("tax_year", taxYear)
     .order("incurred_on", { ascending: false });
   const rows = (data as Row[] | null) ?? [];
@@ -136,16 +138,11 @@ export default async function PersonalExpensesPage() {
                         {r.notes ? ` · ${r.notes}` : ""}
                       </div>
                     </div>
-                    <form action={deletePersonalExpense}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <button
-                        type="submit"
-                        className="text-xs text-ink-muted hover:text-red-700"
-                        aria-label="Delete expense"
-                      >
-                        Remove
-                      </button>
-                    </form>
+                    <PersonalExpenseDeleteButton
+                      action={deletePersonalExpense}
+                      id={r.id}
+                      label={(cat?.label ?? "expense").toLowerCase()}
+                    />
                   </li>
                 );
               })}

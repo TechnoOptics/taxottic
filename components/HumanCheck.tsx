@@ -151,7 +151,7 @@ export function HumanCheck({
             <span className="size-3 animate-spin rounded-full border-2 border-forest-300 border-t-forest-700" />
           ) : null}
         </span>
-        <span className="font-medium text-forest-900">
+        <span className="font-medium text-forest-900" aria-live="polite">
           {verified
             ? "You're verified"
             : state === "checking"
