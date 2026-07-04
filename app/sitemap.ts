@@ -81,12 +81,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.7,
     },
-    {
-      url: `${baseUrl}/firms`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.7,
-    },
+    // NB: /firms is intentionally NOT listed — next.config.ts 308-redirects
+    // it to /book?for=firm (a vanity URL for firm proposals), and a sitemap
+    // must advertise the final destination, not a redirect. The destination
+    // is the entry above.
   ];
 
   // Editorial guides hub + articles. Real long-form content targeting

@@ -19,11 +19,12 @@ test.describe("Public marketing", () => {
     expect(errors.filter((e) => /Minified React error #418/.test(e))).toHaveLength(0);
   });
 
-  test("/firms marketing renders + signup CTA links to request-account", async ({ page }) => {
+  test("/firms 308-redirects to the firm-audience booking form", async ({ page }) => {
+    // next.config.ts intentionally redirects the /firms vanity URL to
+    // /book?for=firm (firm audience pre-selected). This asserts the real
+    // behavior; the marketing component at app/firms is shadowed by it.
     await page.goto("/firms");
-    await expect(page.locator("h1")).toContainText(/firm cockpit/i);
-    const cta = page.locator("a[href='/firms/request-account']").first();
-    await expect(cta).toBeVisible();
+    await expect(page).toHaveURL(/\/book\?for=firm\b/);
   });
 
   test("/firms/request-account form renders the four required fields", async ({ page }) => {
