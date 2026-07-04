@@ -1,4 +1,4 @@
-name: CI — tests + typecheck + lint
+name: CI — tests + typecheck + lint + e2e
 
 # Layer 7 of the tax-math verification stack (see docs/forecast-accuracy.md).
 #
@@ -86,3 +86,55 @@ jobs:
         # Flip this to false once the backlog is cleared.
         continue-on-error: true
         run: npm run lint
+
+  e2e:
+    name: e2e (Playwright — public surfaces)
+    runs-on: ubuntu-latest
+    # Browser download + `next dev` boot dominate; 15 min is a safe ceiling.
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        # Both functional projects use Chromium; --with-deps pulls the Linux
+        # system libraries the headless browser links against.
+        run: npx playwright install --with-deps chromium
+
+      - name: Run functional e2e
+        # `npm run e2e` scopes to the chromium + mobile-chrome projects; the
+        # visual-regression project is excluded (its baselines are macOS-
+        # specific — regenerate on Linux to add VR here later).
+        #
+        # THIS is the gate that makes the sitemap-200 guard automatic — the
+        # check that would have caught the /calculators + /compare
+        # PUBLIC_PATHS regression before it shipped.
+        #
+        # Every functional spec runs UNAUTHENTICATED by design: public pages
+        # return 200, auth-gated routes redirect to /login, cron routes 401
+        # without an Authorization header. None query Supabase for content,
+        # so dummy connection env is enough to boot the app (verified: with
+        # only these values, public pages serve 200 and /firm/* 307s to
+        # /login). These are NOT secrets — no real connection is ever made.
+        run: npm run e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-dummy-anon-not-a-secret"
+          SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-service-role-not-a-secret"
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
