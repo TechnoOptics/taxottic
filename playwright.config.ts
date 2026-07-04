@@ -20,7 +20,12 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    // Visual-regression tolerance: a hair of anti-aliasing variance is
+    // fine; anything structural (layout shift, broken style) exceeds it.
+    toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: "disabled" },
+  },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -33,12 +38,29 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   projects: [
+    // Functional e2e — everything EXCEPT the visual-regression spec, which
+    // has its own opt-in projects below.
     {
       name: "chromium",
+      testIgnore: /visual\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
     {
       name: "mobile-chrome",
+      testIgnore: /visual\.spec\.ts/,
+      use: { ...devices["Pixel 7"] },
+    },
+    // Visual regression (opt-in via `npm run e2e:visual`). Kept out of the
+    // default run because screenshot baselines are OS/font-rendering
+    // specific — regenerate them on the platform you compare on.
+    {
+      name: "visual-desktop",
+      testMatch: /visual\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "visual-mobile",
+      testMatch: /visual\.spec\.ts/,
       use: { ...devices["Pixel 7"] },
     },
   ],

@@ -14,9 +14,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "e2e": "playwright test",
-    "e2e:headed": "playwright test --headed",
+    "e2e": "playwright test --project=chromium --project=mobile-chrome",
+    "e2e:headed": "playwright test --project=chromium --project=mobile-chrome --headed",
     "e2e:ui": "playwright test --ui",
+    "e2e:visual": "playwright test --project=visual-desktop --project=visual-mobile",
+    "e2e:visual:update": "playwright test --project=visual-desktop --project=visual-mobile --update-snapshots",
     "audits:monthly": "node scripts/audits/run-monthly.mjs",
     "postinstall": "patch-package"
   },
