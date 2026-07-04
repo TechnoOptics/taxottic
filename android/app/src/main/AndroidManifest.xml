@@ -55,6 +55,21 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_taxottic" />
+
+        <!-- Home-screen forecast widget. exported=true so the launcher /
+             widget host can bind it. Reads the snapshot that
+             TaxotticWidgetBridgePlugin persists; no network of its own. -->
+        <receiver
+            android:name=".TaxotticForecastWidget"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_forecast_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

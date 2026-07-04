@@ -14,4 +14,8 @@
          standard apps. Point it at the transparent white "T" silhouette
          so the status-bar glyph is clean and background-less. -->
     <string name="capacitor_background_geolocation_notification_icon">drawable/ic_stat_taxottic</string>
+    <!-- Home-screen forecast widget. -->
+    <string name="widget_brand">TAXOTTIC</string>
+    <string name="widget_name">Taxottic Forecast</string>
+    <string name="widget_description">Your projected tax, effective rate, and deductions at a glance.</string>
 </resources>

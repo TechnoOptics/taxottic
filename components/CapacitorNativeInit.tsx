@@ -318,6 +318,23 @@ export function CapacitorNativeInit() {
           /* bridge plugin absent in this binary — no-op */
         }
       }
+
+      // --- Home-screen widget: push the latest forecast snapshot and
+      // keep it fresh on resume. Self-guards on the TaxotticWidgetBridge
+      // plugin, so web + binaries built before the widget was added are
+      // a clean no-op. Independent of the watch bridge so the widget
+      // works on a phone with no paired watch.
+      if (!cancelled) {
+        try {
+          const { syncWidget, startWidgetBridge } = await import(
+            "@/lib/widget/bridge"
+          );
+          await startWidgetBridge();
+          await syncWidget();
+        } catch {
+          /* widget plugin absent in this binary — no-op */
+        }
+      }
     })();
 
     return () => {

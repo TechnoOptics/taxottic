@@ -18,9 +18,11 @@ public class MainActivity extends BridgeActivity {
         // https://developer.android.com/develop/ui/views/launch/splash-screen/migrate
         setTheme(R.style.AppTheme_NoActionBar);
 
-        // Register the Wear OS bridge before the WebView bridge boots
-        // so window.Capacitor exposes the TaxotticWatchBridge plugin.
+        // Register the native bridges before the WebView bridge boots so
+        // window.Capacitor exposes them: the Wear OS watch bridge and the
+        // home-screen widget bridge.
         registerPlugin(TaxotticWatchBridgePlugin.class);
+        registerPlugin(TaxotticWidgetBridgePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

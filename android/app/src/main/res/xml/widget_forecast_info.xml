@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AppWidgetProviderInfo for the forecast widget. updatePeriodMillis=0
+     because the app pushes fresh snapshots on open/resume (a widget
+     can't fetch authenticated data itself); the system minimum would be
+     30 min anyway. previewLayout/description are API 31+ (ignored on
+     older releases, which fall back to previewImage). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:maxResizeWidth="360dp"
+    android:maxResizeHeight="220dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_forecast"
+    android:previewLayout="@layout/widget_forecast"
+    android:previewImage="@mipmap/ic_launcher"
+    android:description="@string/widget_description" />
