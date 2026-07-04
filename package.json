@@ -19,6 +19,8 @@
     "e2e:ui": "playwright test --ui",
     "e2e:visual": "playwright test --project=visual-desktop --project=visual-mobile",
     "e2e:visual:update": "playwright test --project=visual-desktop --project=visual-mobile --update-snapshots",
+    "test:ct": "playwright test -c playwright-ct.config.ts",
+    "test:ct:update": "playwright test -c playwright-ct.config.ts --update-snapshots",
     "audits:monthly": "node scripts/audits/run-monthly.mjs",
     "postinstall": "patch-package"
   },
@@ -57,6 +59,7 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.3.4",
+    "@playwright/experimental-ct-react": "^1.60.0",
     "@playwright/test": "^1.49.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

@@ -207,17 +207,24 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Regenerate visual baselines
+      - name: Regenerate page-VR baselines
         run: npm run e2e:visual:update
         env:
           NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-dummy-anon-not-a-secret"
           SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-service-role-not-a-secret"
 
+      - name: Regenerate component-VR baselines
+        # Component tests render in an isolated Vite harness — no app server,
+        # no Supabase — so no env is needed.
+        run: npm run test:ct:update
+
       - name: Upload Linux baselines
         uses: actions/upload-artifact@v4
         with:
           name: visual-baselines-linux
-          path: e2e/visual.spec.ts-snapshots/*-linux.png
+          path: |
+            e2e/visual.spec.ts-snapshots/*-linux.png
+            __ct-snapshots__/**/*-linux.png
           if-no-files-found: error
           retention-days: 7
