@@ -54,6 +54,11 @@ export default async function PersonalForecastPage() {
   }
 
   const input: ForecastInput = {
+    // Items 14-16: this is the individual side. Scope it explicitly to
+    // "personal" so only individual deductions and credits apply (child tax
+    // credit, EITC, education, savers) and no business-only treatment can
+    // ever leak in. The business side sets scope "business" (item 17).
+    scope: "personal",
     taxYear,
     filingStatus: taxProfile.filing_status as FilingStatus,
     stateCode: taxProfile.state_code,
