@@ -363,8 +363,50 @@ export function LeftRail({
       : undefined;
 
   // ---- top section: Dashboard + Companies switcher ----
+  // Personal / Business workspace toggle. Personal = the individual tax
+  // side; Business = the active company. Business unlocks only once the user
+  // belongs to a company (created one or was invited) — item 2.
+  const hasBusiness = companies.length > 0;
+  const onBusiness =
+    urlPublicId != null || (pathname?.startsWith("/c/") ?? false);
+  const businessHref = effectivePublicId
+    ? `/c/${effectivePublicId}/forecast`
+    : "/companies/new";
+  const segBase =
+    "rounded-lg px-2 py-1.5 text-[13px] font-medium text-center transition-colors ";
+  const segActive =
+    "bg-white dark:bg-forest-800 text-forest-900 dark:text-cream shadow-sm";
+  const segIdle = "text-forest-700 dark:text-cream/70 hover:text-forest-900";
+
   const topSection = (
     <div className="grid gap-1">
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-cream/70 dark:bg-forest-700/60 p-1 mb-1">
+        <Link
+          href="/personal/forecast"
+          onClick={onDismiss}
+          aria-current={!onBusiness ? "true" : undefined}
+          className={segBase + (!onBusiness ? segActive : segIdle)}
+        >
+          Personal
+        </Link>
+        <Link
+          href={hasBusiness ? businessHref : "/companies/new"}
+          onClick={onDismiss}
+          aria-current={onBusiness ? "true" : undefined}
+          title={
+            hasBusiness
+              ? undefined
+              : "Create or join a company to unlock the business side"
+          }
+          className={
+            segBase +
+            (onBusiness ? segActive : segIdle) +
+            (hasBusiness ? "" : " opacity-60")
+          }
+        >
+          Business
+        </Link>
+      </div>
       <Link
         href="/dashboard"
         onClick={onDismiss}
