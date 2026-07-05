@@ -71,6 +71,8 @@ export function WelcomeTour({ show, completeAction, displayName }: Props) {
   const [index, setIndex] = useState(0);
   const [reduced, setReduced] = useState(false);
   const touchX = useRef<number | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const last = TILES.length - 1;
 
   useEffect(() => {
@@ -86,11 +88,38 @@ export function WelcomeTour({ show, completeAction, displayName }: Props) {
       if (e.key === "Escape") finish();
       if (e.key === "ArrowRight") next();
       if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
+      // Focus trap: keep Tab / Shift+Tab inside the dialog card so keyboard
+      // and screen-reader users can't wander into the page behind the backdrop.
+      if (e.key === "Tab" && cardRef.current) {
+        const focusable = cardRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const lastEl = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && active === lastEl) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, index]);
+
+  // Remember what had focus when the tour opened, so we can restore it on close.
+  useEffect(() => {
+    if (!open) return;
+    restoreFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+  }, [open]);
 
   function next() {
     if (index < last) setIndex(index + 1);
@@ -99,6 +128,8 @@ export function WelcomeTour({ show, completeAction, displayName }: Props) {
 
   function finish() {
     setOpen(false);
+    // Return focus to wherever it was before the tour hijacked it.
+    restoreFocusRef.current?.focus?.();
     completeAction().catch(() => {});
   }
 
@@ -127,7 +158,7 @@ export function WelcomeTour({ show, completeAction, displayName }: Props) {
     >
       <div className="absolute inset-0 bg-forest-900/55 backdrop-blur-md" />
       <div className="relative max-w-md w-full">
-        <div className="card p-7 sm:p-9 overflow-hidden">
+        <div ref={cardRef} className="card p-7 sm:p-9 overflow-hidden">
           <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
             {index === 0 && displayName
               ? `Welcome, ${displayName}`

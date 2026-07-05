@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { parseDollarsToCents } from "@/lib/tax/forecast";
 import { PERSONAL_EXPENSE_CATEGORIES } from "@/lib/tax/personal-expense-categories";
 
 /**
@@ -17,9 +18,13 @@ export function PersonalExpenseForm({
   defaultDate: string;
 }) {
   const [category, setCategory] = useState<string>("");
+  const [amount, setAmount] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const hint = PERSONAL_EXPENSE_CATEGORIES.find((c) => c.code === category)?.hint;
+  // Live-validate the amount with the SAME parser the server uses, so the user
+  // gets inline guidance instead of a round-trip error on "12,50" or "$1 2".
+  const amountInvalid = amount.trim() !== "" && parseDollarsToCents(amount) === null;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -29,6 +34,7 @@ export function PersonalExpenseForm({
       await action(new FormData(e.currentTarget));
       e.currentTarget.reset();
       setCategory("");
+      setAmount("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save.");
     } finally {
@@ -67,7 +73,15 @@ export function PersonalExpenseForm({
           required
           placeholder="$0.00"
           className="input"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          aria-invalid={amountInvalid || undefined}
         />
+        {amountInvalid ? (
+          <span className="text-[11px] text-red-700">
+            Enter a dollar amount, like 42.50.
+          </span>
+        ) : null}
       </label>
 
       <label className="grid gap-1.5">
@@ -105,7 +119,7 @@ export function PersonalExpenseForm({
       <div className="sm:col-span-2">
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || amountInvalid}
           className="btn-primary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? "Saving..." : "Add expense"}
