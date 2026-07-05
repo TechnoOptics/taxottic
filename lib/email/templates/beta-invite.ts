@@ -9,6 +9,9 @@
 // a hardcoded canonical domain is safe here the same way it is in
 // app/robots.ts and app/sitemap.ts.
 const TAXOTTIC_LOGO_URL = "https://taxottic.com/brand/full-logo.png";
+// The tester checklist page (app/beta). Canonical prod domain, same rationale
+// as the logo URL above.
+const BETA_CHECKLIST_URL = "https://taxottic.com/beta";
 
 export type BetaInviteArgs = {
   /** Recipient's name, for the greeting. */
@@ -148,6 +151,10 @@ export function renderBetaInviteEmail(
         </td></tr>
         <tr><td style="padding: 22px 40px 0;">
           ${focusBlock}
+          <p style="margin: 0 0 12px; color: ${inkSoft}; font-size: 14px; line-height: 1.7;">
+            Once you&rsquo;re in, we put together a short checklist of what to try:
+            <a href="${escapeAttr(BETA_CHECKLIST_URL)}" style="color: ${navy}; font-weight: 600; text-decoration: underline;">taxottic.com/beta</a>.
+          </p>
           <p style="margin: 0; color: ${inkSoft}; font-size: 14px; line-height: 1.7;">
             To send feedback, take a screenshot inside the app and you'll be prompted to add a note, or just reply to this email.
           </p>
@@ -175,6 +182,7 @@ export function renderBetaInviteEmail(
     (args.focusAreas && args.focusAreas.length > 0
       ? `A few things to look at:\n${args.focusAreas.map((f) => `- ${f}`).join("\n")}\n\n`
       : "") +
+    `Once you're in, a short checklist of what to try:\n${BETA_CHECKLIST_URL}\n\n` +
     `To send feedback, take a screenshot in the app and add a note, or reply to this email.\n\n` +
     `Beta builds expire after 90 days. If you weren't expecting this, you can ignore it.`;
 
