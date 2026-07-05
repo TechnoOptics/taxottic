@@ -138,6 +138,9 @@ export default async function AdminPage() {
             <Link href="/companies" className="btn-ghost">
               Companies
             </Link>
+            <Link href="/beta-invite" className="btn-ghost">
+              Beta invite
+            </Link>
             <Link href="/feedback" className="btn-ghost">
               Feedback{" "}
               {(pendingFeedback ?? 0) > 0 ? (
