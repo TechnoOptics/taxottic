@@ -6,6 +6,7 @@ import {
   type CompanyMembership,
 } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
+import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
@@ -670,6 +671,7 @@ export default async function DashboardPage() {
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
+      <AppDownloadBanner />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12">
         <header>
           <div className="kicker-sm">Tax year {taxYear}</div>

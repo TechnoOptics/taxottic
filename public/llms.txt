@@ -16,6 +16,8 @@ What it does:
 
 Who it's for: self-employed people and small businesses — 1099 contractors, freelancers, gig workers, sole proprietors, single-member LLCs, S-corps — and the accounting firms that serve them. It is a forecasting and organization tool, not a filing service, and not a substitute for advice from a licensed CPA or tax attorney.
 
+Availability: Taxottic runs in any web browser and is available as a native mobile app for download on both the Apple App Store (iPhone and iPad) and the Google Play Store (Android phones and tablets). Use it free at https://taxottic.com or install the app on your phone.
+
 ## Pages
 - [Home](https://taxottic.com/): What Taxottic is and who it's for.
 - [Pricing](https://taxottic.com/pricing): Free tier (no credit card) plus paid tiers from $4.99/mo; 14-day trial on paid plans.
@@ -23,6 +25,11 @@ Who it's for: self-employed people and small businesses — 1099 contractors, fr
 - [Help & FAQ](https://taxottic.com/help): Quickstart and common questions, including "What is Taxottic?".
 - [Changelog](https://taxottic.com/changelog): Public release notes.
 - [For accounting firms](https://taxottic.com/firms): Taxottic as a white-labeled workspace for tax preparers and firms.
+
+## Get the app
+- [Apple App Store](https://apps.apple.com/app/id6767039803): Download Taxottic for iPhone and iPad.
+- [Google Play Store](https://play.google.com/store/apps/details?id=com.taxottic.app): Download Taxottic for Android phones and tablets.
+- [Web app](https://taxottic.com): Use Taxottic in any browser, no install required.
 
 ## Legal
 - [Privacy Policy](https://taxottic.com/legal/privacy)

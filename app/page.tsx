@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { AppDownloadBanner } from "@/components/AppDownloadBanner";
+import { AppStoreBadges } from "@/components/AppStoreBadges";
+import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/app-stores";
 import {
   PLAN_PRICING,
   type SubscriptionPriceKey,
@@ -160,8 +163,13 @@ const SOFTWARE_APP_LD = {
   applicationSubCategory: "Tax forecasting and preparation",
   operatingSystem: "Web, iOS, Android",
   url: SITE_ORIGIN,
+  // Native apps are available on both stores; surface the concrete download
+  // targets so search + assistants know it's installable, not web-only.
+  downloadUrl: [APP_STORE_URL, PLAY_STORE_URL],
+  installUrl: [APP_STORE_URL, PLAY_STORE_URL],
+  availableOnDevice: "iPhone, iPad, Android phone, Android tablet",
   description:
-    "Tax forecasting software for freelancers, sole proprietors, and small businesses. Bank-synced quarterly estimates, 1,025 IRS-cited deductions, Schedule C export, AMT and QBI math, multi-state.",
+    "Tax forecasting software for freelancers, sole proprietors, and small businesses. Available on the web, the App Store, and Google Play. Bank-synced quarterly estimates, 1,025 IRS-cited deductions, Schedule C export, AMT and QBI math, multi-state.",
   // No aggregateRating until we have real reviews to cite.
   // No award until awards exist.
   publisher: { "@id": `${SITE_ORIGIN}/#organization` },
@@ -252,6 +260,10 @@ export default async function Home({
       <JsonLd data={SOFTWARE_APP_LD} />
       <JsonLd data={NAV_LD} />
       <JsonLd data={DEFINED_TERM_LD} />
+
+      {/* Web-only, dismissible "get the mobile app" banner (App Store +
+          Google Play). Hidden inside the native shell. */}
+      <AppDownloadBanner />
 
       {/* Forest header band - visually merges into the Hero gradient below
           so the page opens with one continuous premium-green field. Same
@@ -1109,6 +1121,12 @@ function Footer() {
               </span>
             </span>
           </p>
+          <div className="mt-5">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-gold-700 mb-2">
+              Get the app
+            </div>
+            <AppStoreBadges />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-ink-muted sm:justify-self-end sm:text-right">
