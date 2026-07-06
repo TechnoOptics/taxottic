@@ -297,6 +297,25 @@ export default function LoginPage() {
         }
         return;
       }
+      // Native shell, but the in-app browser plugin isn't in this installed
+      // build, so the native bridge couldn't run. Do NOT fall through to the
+      // web signInWithOAuth redirect below: inside the app that flow strands
+      // the session in the system browser and drops the user on the website
+      // instead of the native app. Keep them in-app and send them to the email
+      // sign-in (magic link / 6-digit code), which completes entirely inside
+      // the WebView. Google/Apple start working again once a rebuilt binary
+      // with @capacitor/browser is installed (the native bridge then handles
+      // it and returns via the appUrlOpen deep link).
+      setError(
+        `${
+          provider === "azure"
+            ? "Microsoft"
+            : provider === "apple"
+              ? "Apple"
+              : "Google"
+        } sign-in needs an app update on this device. For now, use the email sign-in below (magic link or 6-digit code), which stays in the app.`,
+      );
+      return;
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
