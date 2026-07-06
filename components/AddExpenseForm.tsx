@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { parseDollarsToCents } from "@/lib/tax/forecast";
 import { RecurrencePicker } from "./RecurrencePicker";
 
 const MONTH_LABELS = [
@@ -33,6 +34,7 @@ export function AddExpenseForm({
   action,
   recentVendors = [],
   lastExpense = null,
+  receiptThreshold = null,
 }: {
   companyId: string;
   taxYear: number;
@@ -44,6 +46,11 @@ export function AddExpenseForm({
     is_typically_recurring: boolean;
   }[];
   action: (formData: FormData) => Promise<void>;
+  /** Manager receipt policy (item 10): the amount, in cents, ABOVE which a
+   *  receipt is mandatory. null = no requirement. The manual form can't
+   *  attach a receipt, so over-threshold amounts are blocked here and the
+   *  user is pointed at the "Scan a receipt" flow above. */
+  receiptThreshold?: number | null;
   /** Unique trimmed `notes` strings from recent expenses in this company,
    *  newest first. Threaded into a native <datalist> for vendor
    *  autocomplete (no extra JS, free keyboard support). Capped server-
@@ -68,6 +75,23 @@ export function AddExpenseForm({
     categories.find((c) => c.code === categoryCode)?.is_typically_recurring ??
     false;
   const vendorsListId = useId();
+
+  // Live check against the manager's receipt threshold. Use the SAME parser
+  // the server (addExpense) uses, so the client warning / disabled-button
+  // state can never disagree with the server's decision on odd inputs like
+  // "1e3" or "12abc34".
+  const amountCents = parseDollarsToCents(amount);
+  const needsReceipt =
+    receiptThreshold != null &&
+    amountCents != null &&
+    amountCents > receiptThreshold;
+  const thresholdLabel =
+    receiptThreshold != null
+      ? `$${(receiptThreshold / 100).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : null;
 
   function repeatLast() {
     if (!lastExpense) return;
@@ -159,6 +183,26 @@ export function AddExpenseForm({
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
+        {thresholdLabel && !needsReceipt ? (
+          <span className="text-[11px] text-ink-muted">
+            Receipts are required for expenses over {thresholdLabel}.
+          </span>
+        ) : null}
+        {needsReceipt ? (
+          <span
+            role="alert"
+            className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[12px] text-amber-800 leading-relaxed"
+          >
+            A receipt is required for expenses over {thresholdLabel}.{" "}
+            <a
+              href="#scan-receipt"
+              className="font-semibold underline underline-offset-2 hover:text-amber-900"
+            >
+              Scan a receipt
+            </a>{" "}
+            to capture one, and it will file itself.
+          </span>
+        ) : null}
       </label>
 
       <label className="grid gap-1.5 sm:col-span-2">
@@ -185,7 +229,17 @@ export function AddExpenseForm({
       </label>
 
       <div className="sm:col-span-2">
-        <button className="btn-primary w-full sm:w-auto">Add expense</button>
+        <button
+          className="btn-primary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={needsReceipt}
+          title={
+            needsReceipt
+              ? `A receipt is required over ${thresholdLabel}`
+              : undefined
+          }
+        >
+          Add expense
+        </button>
       </div>
     </form>
   );

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { PasskeySignInButton } from "@/components/PasskeySignInButton";
+import { HumanCheck } from "@/components/HumanCheck";
+import { useIsNativeApp } from "@/components/MobileOnly";
 import { isNativeApp, nativeOAuthSignIn } from "@/lib/capacitor/auth-bridge";
 
 // Identity providers we render on the login page. Each one needs its
@@ -62,6 +64,14 @@ export default function LoginPage() {
   // enterprise.taxottic.com went live so the cockpit subhead fires
   // for both admin subdomains.
   const [isAdminHost, setIsAdminHost] = useState(false);
+  // Item 18: our own human check gates the email sign-in on the browser only.
+  // Native (Capacitor) is a trusted first-party client, so the gate never
+  // applies there. `isNative === true` → no gate; web (or the brief unknown
+  // window) requires a verified check before the magic-link / code buttons
+  // become active.
+  const isNative = useIsNativeApp();
+  const [humanVerified, setHumanVerified] = useState(false);
+  const humanOk = isNative === true || humanVerified;
   const supabase = createClient();
 
   // Surface server-side OAuth errors that came back as ?error=... on the
@@ -85,6 +95,8 @@ export default function LoginPage() {
         oauth_missing_id_token: "Provider didn't return an ID token.",
         oauth_not_configured:
           "That sign-in provider isn't set up yet. Try Google, passkey, or magic link instead.",
+        oauth_no_return:
+          "Sign-in opened but didn't return to the app. This usually means the app's sign-in redirect isn't fully set up yet. Use the email code below to sign in now.",
         access_denied: "You cancelled the sign-in.",
         no_code:
           "Sign-in came back without an authorization code. Usually means the OAuth handshake was interrupted; try again.",
@@ -123,6 +135,11 @@ export default function LoginPage() {
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
+    if (!humanOk) {
+      setError("Please complete the human check first.");
+      setStatus("error");
+      return;
+    }
     setStatus("sending");
     setError(null);
     const { error } = await supabase.auth.signInWithOtp({
@@ -147,6 +164,11 @@ export default function LoginPage() {
   // would after a link click.
   async function verifyCode(e: React.FormEvent) {
     e.preventDefault();
+    if (!humanOk) {
+      setCodeError("Please complete the human check first.");
+      setCodeStatus("error");
+      return;
+    }
     setCodeStatus("verifying");
     setCodeError(null);
     const url = new URL(window.location.href);
@@ -277,6 +299,25 @@ export default function LoginPage() {
         }
         return;
       }
+      // Native shell, but the in-app browser plugin isn't in this installed
+      // build, so the native bridge couldn't run. Do NOT fall through to the
+      // web signInWithOAuth redirect below: inside the app that flow strands
+      // the session in the system browser and drops the user on the website
+      // instead of the native app. Keep them in-app and send them to the email
+      // sign-in (magic link / 6-digit code), which completes entirely inside
+      // the WebView. Google/Apple start working again once a rebuilt binary
+      // with @capacitor/browser is installed (the native bridge then handles
+      // it and returns via the appUrlOpen deep link).
+      setError(
+        `${
+          provider === "azure"
+            ? "Microsoft"
+            : provider === "apple"
+              ? "Apple"
+              : "Google"
+        } sign-in needs an app update on this device. For now, use the email sign-in below (magic link or 6-digit code), which stays in the app.`,
+      );
+      return;
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -398,6 +439,18 @@ export default function LoginPage() {
             <div className="h-px flex-1 bg-forest-200/60" />
           </div>
 
+          {/* Item 18: our own human check, browser only. It gates the email
+              sign-in below; passkey and the OAuth providers above bounce to
+              their own strong-auth flows and aren't part of the magic-link
+              abuse surface, so they stay ungated. Shown whenever we're not
+              confirmed-native (web OR the brief unknown-platform window) so the
+              email button is never disabled with no visible reason. */}
+          {isNative !== true && !humanVerified ? (
+            <div className="mb-3">
+              <HumanCheck onVerified={() => setHumanVerified(true)} />
+            </div>
+          ) : null}
+
           <form
             onSubmit={sendMagicLink}
             className="grid gap-3"
@@ -442,8 +495,8 @@ export default function LoginPage() {
             ) : null}
             <button
               type="submit"
-              disabled={status === "sending"}
-              className="btn-primary w-full"
+              disabled={status === "sending" || !humanOk}
+              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {status === "sending" ? "Sending..." : "Send magic link"}
             </button>
@@ -508,8 +561,8 @@ export default function LoginPage() {
                 ) : null}
                 <button
                   type="submit"
-                  disabled={codeStatus === "verifying"}
-                  className="btn-primary w-full"
+                  disabled={codeStatus === "verifying" || !humanOk}
+                  className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {codeStatus === "verifying" ? "Verifying..." : "Verify code"}
                 </button>

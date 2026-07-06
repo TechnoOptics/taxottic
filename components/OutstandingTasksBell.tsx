@@ -29,6 +29,26 @@ const KIND_ICON: Record<OutstandingItem["kind"], string> = {
   bank_transaction: "🏦",
 };
 
+// Per-item "stop showing this" dismissals. Shared with the on-load popup via
+// the SAME localStorage key, so an item X'd in either surface stays hidden in
+// both. A standing preference (localStorage), not a per-session snooze.
+const ITEM_DISMISS_KEY = "taxottic.outstanding.items.dismissed";
+function loadDismissedItems(): Set<string> {
+  try {
+    const raw = localStorage.getItem(ITEM_DISMISS_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveDismissedItems(ids: Set<string>) {
+  try {
+    localStorage.setItem(ITEM_DISMISS_KEY, JSON.stringify(Array.from(ids)));
+  } catch {
+    /* private mode / quota; the x still hides it for this render */
+  }
+}
+
 /**
  * Header notification bell, the durable, always-truthful indicator of
  * outstanding tasks (unclassified drives + transactions awaiting a
@@ -41,13 +61,34 @@ export function OutstandingTasksBell({ count, items }: Props) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: createPortal needs document
     setMounted(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read persisted dismissals once (client-only)
+    setDismissedIds(loadDismissedItems());
   }, []);
+
+  function dismissItem(e: React.MouseEvent, key: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDismissedIds((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      saveDismissedItems(next);
+      return next;
+    });
+  }
+
+  // Hide anything the user X'd out (in the bell or the popup), and keep the
+  // badge honest by knocking those off the server-computed count.
+  const visibleItems = items.filter(
+    (it) => !dismissedIds.has(`${it.kind}:${it.id}`),
+  );
+  const visibleCount = Math.max(0, count - dismissedIds.size);
 
   useEffect(() => {
     if (!open || !buttonRef.current) return;
@@ -117,33 +158,66 @@ export function OutstandingTasksBell({ count, items }: Props) {
                 Needs your review
               </div>
               <div className="text-xs text-ink-muted">
-                {count} item{count === 1 ? "" : "s"} waiting on a quick call
+                {visibleCount} item{visibleCount === 1 ? "" : "s"} waiting on a
+                quick call
               </div>
             </div>
             <div className="py-1">
-              {items.map((it) => (
-                <Link
-                  key={`${it.kind}:${it.id}`}
-                  href={it.href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-start gap-2.5 rounded-lg px-3 py-2 hover:bg-forest-50/60 transition-colors"
-                >
-                  <span aria-hidden="true" className="text-base leading-none mt-0.5">
-                    {KIND_ICON[it.kind]}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-forest-900 truncate">
-                      {it.title}
-                    </span>
-                    <span className="block text-[11px] text-ink-muted truncate">
-                      {it.subtitle}
-                    </span>
-                  </span>
-                </Link>
-              ))}
-              {count > items.length ? (
+              {visibleItems.length === 0 ? (
+                <div className="px-3 py-4 text-center text-[12px] text-ink-muted">
+                  You&apos;re all caught up.
+                </div>
+              ) : (
+                visibleItems.map((it) => {
+                  const key = `${it.kind}:${it.id}`;
+                  return (
+                    <div key={key} className="relative">
+                      <Link
+                        href={it.href}
+                        onClick={() => setOpen(false)}
+                        className="flex items-start gap-2.5 rounded-lg pl-3 pr-9 py-2 hover:bg-forest-50/60 transition-colors"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="text-base leading-none mt-0.5"
+                        >
+                          {KIND_ICON[it.kind]}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-forest-900 truncate">
+                            {it.title}
+                          </span>
+                          <span className="block text-[11px] text-ink-muted truncate">
+                            {it.subtitle}
+                          </span>
+                        </span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => dismissItem(e, key)}
+                        aria-label={`Dismiss ${it.title}`}
+                        title="Just informational, stop showing this"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 size-7 rounded-full grid place-items-center text-ink-muted/70 hover:bg-forest-50 hover:text-forest-900 transition-colors"
+                      >
+                        <svg
+                          viewBox="0 0 16 16"
+                          width="12"
+                          height="12"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                        >
+                          <path d="M3 3 L13 13 M13 3 L3 13" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+              {visibleCount > visibleItems.length ? (
                 <div className="px-3 py-2 text-[11px] text-ink-muted">
-                  +{count - items.length} more
+                  +{visibleCount - visibleItems.length} more
                 </div>
               ) : null}
             </div>
@@ -159,8 +233,8 @@ export function OutstandingTasksBell({ count, items }: Props) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={
-          count > 0
-            ? `${count} outstanding item${count === 1 ? "" : "s"} need review`
+          visibleCount > 0
+            ? `${visibleCount} outstanding item${visibleCount === 1 ? "" : "s"} need review`
             : "Notifications"
         }
         aria-expanded={open}
@@ -169,12 +243,12 @@ export function OutstandingTasksBell({ count, items }: Props) {
         <span aria-hidden="true" className="text-base leading-none">
           🔔
         </span>
-        {count > 0 ? (
+        {visibleCount > 0 ? (
           <span
             aria-hidden="true"
             className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-gold-500 px-1 text-[9px] font-semibold leading-none text-forest-950"
           >
-            {count > 99 ? "99+" : count}
+            {visibleCount > 99 ? "99+" : visibleCount}
           </span>
         ) : null}
       </button>

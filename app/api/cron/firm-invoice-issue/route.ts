@@ -114,33 +114,48 @@ export async function GET(req: NextRequest) {
           0,
         );
         const platformFeeCents = Math.round((subtotal * 300) / 10000); // 3 %
-        const invoiceNumber = `REC-${new Date().getUTCFullYear()}-${Math.floor(
-          Math.random() * 9000 + 1000,
-        )}`;
+        const genNumber = () =>
+          `REC-${new Date().getUTCFullYear()}-${Math.floor(
+            Math.random() * 9000 + 1000,
+          )}`;
 
-        const { data: inv, error } = await admin
-          .from("firm_invoices")
-          .insert({
-            firm_id: t.firm_id,
-            engagement_id: t.engagement_id,
-            company_id: t.company_id,
-            invoice_number: invoiceNumber,
-            line_items: lineItems,
-            subtotal_cents: subtotal,
-            tax_cents: 0,
-            total_cents: subtotal,
-            currency: "usd",
-            platform_fee_bps: 300,
-            platform_fee_cents: platformFeeCents,
-            recipient_email: t.recipient_email,
-            recipient_name: t.recipient_name,
-            status: "draft",
-            notes: t.notes
-              ? `${t.notes}\n\n(Auto-generated from template "${t.name}".)`
-              : `Auto-generated from template "${t.name}".`,
-          })
-          .select("id, invoice_number")
-          .single();
+        // Retry on the firm_invoices unique-index collision (REC-YYYY-#### has
+        // only 9000 values/firm/year, so a busy firm's cron run would otherwise
+        // randomly fail to mint the recurring invoice).
+        let inv: { id: string; invoice_number: string } | null = null;
+        let insertErr: { message: string; code?: string } | null = null;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const { data, error } = await admin
+            .from("firm_invoices")
+            .insert({
+              firm_id: t.firm_id,
+              engagement_id: t.engagement_id,
+              company_id: t.company_id,
+              invoice_number: genNumber(),
+              line_items: lineItems,
+              subtotal_cents: subtotal,
+              tax_cents: 0,
+              total_cents: subtotal,
+              currency: "usd",
+              platform_fee_bps: 300,
+              platform_fee_cents: platformFeeCents,
+              recipient_email: t.recipient_email,
+              recipient_name: t.recipient_name,
+              status: "draft",
+              notes: t.notes
+                ? `${t.notes}\n\n(Auto-generated from template "${t.name}".)`
+                : `Auto-generated from template "${t.name}".`,
+            })
+            .select("id, invoice_number")
+            .single();
+          if (!error && data) {
+            inv = data;
+            break;
+          }
+          insertErr = error;
+          if (error?.code !== "23505") break;
+        }
+        const error = inv ? null : (insertErr ?? { message: "insert failed" });
         if (error || !inv) {
           failed++;
           console.error(
@@ -181,7 +196,7 @@ export async function GET(req: NextRequest) {
           companyId: t.company_id,
           engagementId: t.engagement_id,
           kind: "firm.invoice_sent",
-          summary: `Auto-drafted ${invoiceNumber} from "${t.name}".`,
+          summary: `Auto-drafted ${inv.invoice_number} from "${t.name}".`,
           payload: {
             invoice_id: inv.id,
             template_id: t.id,

@@ -11,6 +11,9 @@ export type CompanyRow = {
   entity_type: string | null;
   state_code: string | null;
   logo_url: string | null;
+  // Manager receipt policy (item 10): cents above which an expense needs a
+  // scanned receipt. null = no requirement.
+  receipt_required_above_cents: number | null;
   // Surfaced so callers can suppress noise like "missed Q1 estimate"
   // for companies that didn't exist before the quarter's due date
   // (audit Medium #2).
@@ -49,7 +52,7 @@ async function _loadCompanyByPublicId(publicId: string) {
   const { data: company } = await supabase
     .from("companies")
     .select(
-      "id, public_id, name, entity_type, state_code, logo_url, created_at",
+      "id, public_id, name, entity_type, state_code, logo_url, receipt_required_above_cents, created_at",
     )
     .eq("public_id", publicId)
     .is("deleted_at", null)

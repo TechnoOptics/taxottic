@@ -28,6 +28,9 @@ type Props = {
     zip: string | null;
     phone: string | null;
     businessEmail: string | null;
+    /** Manager receipt policy (item 10): cents above which a receipt is
+     *  mandatory on new expenses. null = no requirement. */
+    receiptRequiredAboveCents: number | null;
   };
   // The server action passed in from the page (a Server Action reference).
   action: (formData: FormData) => Promise<void>;
@@ -103,6 +106,29 @@ export function BusinessProfileForm({
           defaultValue={initial.primaryIndustry ?? ""}
           placeholder="e.g. Photography, Software, Consulting"
         />
+      </label>
+
+      <label className="grid gap-1.5">
+        <span className="text-sm font-medium text-forest-800">
+          Require a receipt above (USD)
+        </span>
+        <input
+          name="receipt_required_above"
+          type="text"
+          inputMode="decimal"
+          className="input"
+          disabled={!isManager}
+          defaultValue={
+            initial.receiptRequiredAboveCents != null
+              ? (initial.receiptRequiredAboveCents / 100).toFixed(2)
+              : ""
+          }
+          placeholder="No receipt required"
+        />
+        <span className="text-[11px] text-ink-muted">
+          Expenses above this amount must be entered by scanning a receipt.
+          Leave blank to never require one.
+        </span>
       </label>
 
       <div className="grid gap-3">

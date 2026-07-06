@@ -635,7 +635,11 @@
 // send to succeed. Fixes store-review sign-in: the demo account's address
 // isn't deliverable, so signInWithOtp 400s, but the code (verified by the
 // demo-login route) must still be enterable.
-const CACHE_VERSION = "v95";
+// v96: Web Push. Added `push` + `notificationclick` handlers below so
+// browsers/desktop PWAs can receive the same notifications the native
+// apps do (VAPID subscription created client-side in lib/push/web.ts).
+// No caching change; the bump ships the new handlers to existing clients.
+const CACHE_VERSION = "v96";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
@@ -734,4 +738,97 @@ self.addEventListener("fetch", (event) => {
         }),
     );
   }
+});
+
+// --- Web Push (v96) ---------------------------------------------------
+// Parity with the native apps' push: the server's Phase-3 send path will
+// POST a Web Push message (via VAPID) to the subscription stored in
+// device_tokens (platform:"web"). The payload shape is shared across all
+// three platforms: { title, body, url?, data? }.
+//
+// Defensive parsing: a payload-less push (some providers send an empty
+// "ping" to wake the SW) still shows a generic notification rather than
+// throwing; a push handler that throws makes the browser show its own
+// "This site has been updated in the background" fallback, which is worse.
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    // Non-JSON body (plain text): use it as the body.
+    try {
+      payload = { body: event.data ? event.data.text() : "" };
+    } catch {
+      payload = {};
+    }
+  }
+
+  const title = payload.title || "Taxottic";
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || "/icon-192.png",
+    badge: payload.badge || "/icon-192.png",
+    // Coalesce updates about the same thing (e.g. a quarterly reminder)
+    // instead of stacking duplicates.
+    tag: payload.tag || undefined,
+    renotify: Boolean(payload.tag),
+    // Carried through to notificationclick so the tap can route + attribute.
+    data: {
+      url: payload.url || "/",
+      actionId: payload.actionId || "",
+      ...(payload.data || {}),
+    },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const targetUrl = new URL(data.url || "/", self.location.origin).href;
+
+  event.waitUntil(
+    (async () => {
+      // Best-effort server attribution, mirrors the native
+      // pushNotificationActionPerformed → /api/push/action call. Fire and
+      // forget; navigation must not wait on it.
+      if (data.actionId || (data.data && Object.keys(data.data).length)) {
+        try {
+          await fetch("/api/push/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              actionId: data.actionId || "",
+              data: data.data || {},
+            }),
+          });
+        } catch {
+          /* offline / logged out; the navigation below still happens */
+        }
+      }
+
+      // Focus an already-open Taxottic tab if one exists, else open a new
+      // one. Match on origin so any of our tabs can be reused.
+      const clientList = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of clientList) {
+        if (new URL(client.url).origin === self.location.origin) {
+          await client.focus();
+          if ("navigate" in client) {
+            try {
+              await client.navigate(targetUrl);
+            } catch {
+              /* cross-origin nav guard; focus alone is enough */
+            }
+          }
+          return;
+        }
+      }
+      await self.clients.openWindow(targetUrl);
+    })(),
+  );
 });

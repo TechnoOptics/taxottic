@@ -5,6 +5,7 @@ import { PWASetup } from "@/components/PWASetup";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
 import { CapacitorNativeInit } from "@/components/CapacitorNativeInit";
 import { EdgeSwipeBack } from "@/components/EdgeSwipeBack";
+import { IOS_APP_ID } from "@/lib/app-stores";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -184,6 +185,10 @@ export async function generateMetadata(): Promise<Metadata> {
         : {},
     },
     category: "finance",
+    // iOS Safari Smart App Banner: shows a native "Taxottic - Get" strip at
+    // the top of the page on iPhone/iPad so web visitors can install the App
+    // Store build in one tap. No-op on other browsers.
+    itunes: { appId: IOS_APP_ID },
     keywords: [
       // Keywords are mostly ignored by Google but used by some other
       // engines (DuckDuckGo, Brave Search, internal site search). Keep

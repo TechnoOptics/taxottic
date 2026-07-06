@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { rethrowIfRedirect } from "@/lib/next/redirect-error";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 const KINDS = [
   { value: "idea", label: "Idea" },
@@ -37,6 +38,8 @@ export function FeedbackModal({ open, onClose, submitAction }: Props) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -92,6 +95,7 @@ export function FeedbackModal({ open, onClose, submitAction }: Props) {
     >
       <div className="absolute inset-0 bg-forest-900/40 backdrop-blur-sm" />
       <div
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         className="relative card p-6 max-w-md w-full"
       >

@@ -7,6 +7,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { computeReadiness } from "@/lib/dashboard/readiness";
 import { formatCents } from "@/lib/tax/forecast";
+import { respondToEngagement } from "./respond/actions";
 
 // /firm/clients/{engagementId}, deep view of one engaged client.
 //
@@ -243,23 +244,25 @@ export default async function FirmClientPage({
             {statusBannerCopy(eng.status, eng.requested_by_side)}
           </div>
           {eng.status === "pending_firm" ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {/* Accept / decline buttons land in Phase 1.4's actions
-                  file. For now they navigate to a placeholder so the
-                  UI shape is testable. */}
-              <Link
-                href={`/firm/clients/${engagementId}/respond?action=accept`}
+            <form action={respondToEngagement} className="mt-3 flex flex-wrap gap-2">
+              <input type="hidden" name="engagement_id" value={engagementId} />
+              <button
+                type="submit"
+                name="action"
+                value="accept"
                 className="btn-primary text-xs px-3 h-9"
               >
                 Accept engagement
-              </Link>
-              <Link
-                href={`/firm/clients/${engagementId}/respond?action=decline`}
+              </button>
+              <button
+                type="submit"
+                name="action"
+                value="decline"
                 className="btn-ghost text-xs px-3 h-9"
               >
                 Decline
-              </Link>
-            </div>
+              </button>
+            </form>
           ) : null}
         </div>
 
@@ -371,29 +374,6 @@ export default async function FirmClientPage({
           </aside>
         </div>
 
-        {/* Phase-roadmap shortcuts, surfaces that will land in later
-            phases. We render them now as disabled cards so firms see
-            the planned scope without thinking the page is half-built. */}
-        <section className="mt-8">
-          <h2 className="display text-xl text-forest-900">Coming up</h2>
-          <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <ComingSoonCard
-              title="Documents + e-signature"
-              body="Send engagement letters, organizers, K-1s, 1099 prep. Documenso-backed signature; DocuSign on the enterprise tier."
-              phase="Phase 5"
-            />
-            <ComingSoonCard
-              title="Schedule a call"
-              body="Book a Zoom or Microsoft Teams meeting straight from the engagement page. Calendar sync per preparer."
-              phase="Phase 6"
-            />
-            <ComingSoonCard
-              title="Invoice + collect"
-              body="Itemized invoices for tax-prep + advisory. Client pays via Stripe; you keep the platform-fee margin transparent."
-              phase="Phase 7"
-            />
-          </ul>
-        </section>
 
         <div className="mt-8">
           <ForecastDisclaimer variant="card" />
@@ -473,26 +453,6 @@ function DescRow({ label, value }: { label: string; value: string }) {
       </dt>
       <dd className="mt-0.5 text-forest-900">{value}</dd>
     </div>
-  );
-}
-
-function ComingSoonCard({
-  title,
-  body,
-  phase,
-}: {
-  title: string;
-  body: string;
-  phase: string;
-}) {
-  return (
-    <article className="card p-4 opacity-90">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-        {phase}
-      </div>
-      <div className="display text-base text-forest-900 mt-1">{title}</div>
-      <p className="mt-1 text-xs text-ink-soft leading-relaxed">{body}</p>
-    </article>
   );
 }
 

@@ -5,6 +5,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { parseDollarsToCents, formatCents } from "@/lib/tax/forecast";
 import { logCompanyActivity } from "@/lib/activity/log";
 import { notify } from "@/lib/push";
+import { verifyReceiptToken } from "@/lib/security/receipt-token";
 
 async function userBelongsToCompany(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
@@ -71,6 +72,16 @@ export async function addExpense(formData: FormData) {
   const recurrence = VALID_RECURRENCES.has(recurrenceRaw)
     ? recurrenceRaw
     : "one_off";
+  // A receipt counts as captured only when the request carries a valid signed
+  // token minted by /api/receipts/extract (i.e. a real OCR scan actually ran
+  // on the server for this user). This is what makes the manager's receipt
+  // threshold below unforgeable: the manual "Add an expense" form has no
+  // token, and the token can't be fabricated without the server secret.
+  const receiptToken = String(formData.get("receipt_token") ?? "");
+  const receiptTokenExp = Number(formData.get("receipt_token_exp") ?? 0);
+  const receiptCaptured =
+    receiptToken !== "" &&
+    verifyReceiptToken(user.id, receiptToken, receiptTokenExp, Date.now());
 
   if (
     !companyId ||
@@ -96,6 +107,21 @@ export async function addExpense(formData: FormData) {
     throw new Error("Not a member of this company");
   }
 
+  // Manager receipt policy (item 10): fetch the company once for both the
+  // threshold check and the later revalidate.
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id, receipt_required_above_cents")
+    .eq("id", companyId)
+    .single();
+
+  const threshold = company?.receipt_required_above_cents ?? null;
+  if (threshold !== null && cents > threshold && !receiptCaptured) {
+    throw new Error(
+      `A receipt is required for expenses over ${formatCents(threshold)}. Use "Scan a receipt" above to capture one.`,
+    );
+  }
+
   const { data: inserted, error } = await admin
     .from("monthly_expenses")
     .insert({
@@ -107,6 +133,7 @@ export async function addExpense(formData: FormData) {
       category_code: categoryCode,
       recurrence,
       notes,
+      receipt_captured: receiptCaptured,
     })
     .select("id")
     .single();
@@ -132,11 +159,6 @@ export async function addExpense(formData: FormData) {
     payload: { month, amount_cents: cents, category_code: categoryCode, recurrence },
   });
 
-  const { data: company } = await admin
-    .from("companies")
-    .select("public_id")
-    .eq("id", companyId)
-    .single();
   if (company) {
     revalidatePath(`/c/${company.public_id}/expenses`);
     revalidatePath(`/c/${company.public_id}/forecast`);

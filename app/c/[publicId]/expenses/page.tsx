@@ -165,7 +165,7 @@ export default async function ExpensesPage({
 
         <ImportConnectActions publicId={publicId} kind="expenses" />
 
-        <div className="card mt-6 p-6">
+        <div id="scan-receipt" className="card mt-6 p-6 scroll-mt-24">
           <div className="flex items-end justify-between gap-3 flex-wrap">
             <div>
               <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
@@ -203,6 +203,7 @@ export default async function ExpensesPage({
             currentMonth={currentMonth}
             categories={(categories as CategoryRow[] | null) ?? []}
             action={addExpense}
+            receiptThreshold={company.receipt_required_above_cents}
             recentVendors={Array.from(
               new Set(
                 (rows ?? [])

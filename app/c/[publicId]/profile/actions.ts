@@ -67,6 +67,26 @@ export async function saveBusinessProfile(formData: FormData) {
   });
   if (error) throw new Error(error.message);
 
+  // Manager receipt policy (item 10): the price point above which team
+  // members must attach a scanned receipt. Empty/blank clears it (no
+  // requirement). Lives on companies because it's a company-wide policy,
+  // not a per-tax-year figure.
+  const receiptThresholdRaw = String(
+    formData.get("receipt_required_above") ?? "",
+  ).trim();
+  const parsedThreshold =
+    receiptThresholdRaw === "" ? null : parseDollarsToCents(receiptThresholdRaw);
+  // Treat blank, zero, or negative as "no requirement" rather than "require a
+  // receipt for every expense". A manager typing 0 means no minimum, not
+  // "always." Only a positive threshold turns the policy on.
+  const receiptThresholdCents =
+    parsedThreshold !== null && parsedThreshold > 0 ? parsedThreshold : null;
+  const { error: policyError } = await admin
+    .from("companies")
+    .update({ receipt_required_above_cents: receiptThresholdCents })
+    .eq("id", companyId);
+  if (policyError) throw new Error(policyError.message);
+
   await logCompanyActivity(admin, {
     companyId,
     actorUserId: user.id,

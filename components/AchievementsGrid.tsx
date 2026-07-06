@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { BADGES, type Badge } from "@/lib/badges/catalog";
 import { BadgeMedal } from "./BadgeMedal";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 type Props = {
   earnedCodes: string[];
@@ -177,6 +178,8 @@ function BadgeDialog({
   howToEarn: string;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
   return (
     <div
       role="dialog"
@@ -187,6 +190,7 @@ function BadgeDialog({
     >
       <div className="absolute inset-0 bg-forest-900/45 backdrop-blur-sm" />
       <div
+        ref={dialogRef}
         className="relative max-w-sm w-full"
         onClick={(e) => e.stopPropagation()}
         style={{

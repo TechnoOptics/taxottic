@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { startRegistration } from "@simplewebauthn/browser";
+import {
+  startRegistration,
+  browserSupportsWebAuthn,
+} from "@simplewebauthn/browser";
 
 export function PasskeyRegisterButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null = not yet determined (SSR / first paint); false = this runtime has no
+  // WebAuthn (notably the Android/iOS Capacitor WebView, which doesn't expose
+  // PublicKeyCredential), so passkeys genuinely can't be created here.
+  const [supported, setSupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- window-only capability check, not available during SSR
+    setSupported(browserSupportsWebAuthn());
+  }, []);
 
   async function register() {
     setError(null);
@@ -42,6 +54,19 @@ export function PasskeyRegisterButton() {
     } finally {
       setPending(false);
     }
+  }
+
+  // No WebAuthn here (the installed app's WebView): explain calmly and point at
+  // the methods that DO work in the app, instead of a red "not supported" error.
+  if (supported === false) {
+    return (
+      <p className="text-sm text-ink-soft leading-relaxed max-w-sm">
+        Passkeys can only be added from a web browser. To create one, open{" "}
+        <span className="font-medium text-forest-900">taxottic.com</span> in
+        Chrome or Safari and add it there. In the app, sign in with a magic link
+        or a 6-digit email code, which are just as quick.
+      </p>
+    );
   }
 
   return (
