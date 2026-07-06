@@ -118,15 +118,40 @@ const ApnsProvider: PushProvider = {
 };
 
 // ---------------------------------------------------------------------------
-// FCM v1 (Android), service-account JWT → OAuth2 access token →
-// HTTPS POST. Env: FCM_SERVICE_ACCOUNT_JSON (the full SA JSON).
+// FCM v1 (Android) → OAuth2 access token → HTTPS POST. Two auth modes, in
+// priority order:
+//   "sa":  FCM_SERVICE_ACCOUNT_JSON, the classic downloaded service-account
+//           key. Simplest, but needs a key file, which some GCP orgs forbid
+//           via the iam.disableServiceAccountKeyCreation policy.
+//   "wif": keyless Workload Identity Federation. Vercel mints an OIDC token
+//           (VERCEL_OIDC_TOKEN) per invocation; GCP STS exchanges it for a
+//           federated token that then impersonates the Firebase SA. Nothing
+//           to store or leak, and it sidesteps the key-creation org policy.
+//           Env: GCP_WIF_AUDIENCE, GCP_WIF_SERVICE_ACCOUNT, FCM_PROJECT_ID.
+//           One-time GCP setup: docs/PUSH_FCM_WORKLOAD_IDENTITY.md.
 // ---------------------------------------------------------------------------
+type FcmAuthMode = "sa" | "wif";
+function fcmAuthMode(): FcmAuthMode | null {
+  if (process.env.FCM_SERVICE_ACCOUNT_JSON) return "sa";
+  if (
+    process.env.GCP_WIF_AUDIENCE &&
+    process.env.GCP_WIF_SERVICE_ACCOUNT &&
+    process.env.FCM_PROJECT_ID &&
+    process.env.VERCEL_OIDC_TOKEN
+  ) {
+    return "wif";
+  }
+  return null;
+}
 function fcmConfigured() {
-  return !!process.env.FCM_SERVICE_ACCOUNT_JSON;
+  return fcmAuthMode() !== null;
 }
 
+// One cache slot: only one mode is ever active per deployment.
 let fcmAccess: { token: string; exp: number } | null = null;
-async function fcmAccessToken(sa: {
+
+// "sa" mode: sign a JWT with the SA private key, exchange for an OAuth token.
+async function fcmAccessTokenFromSaKey(sa: {
   client_email: string;
   private_key: string;
   token_uri: string;
@@ -169,17 +194,76 @@ async function fcmAccessToken(sa: {
   return json.access_token;
 }
 
+// "wif" mode: Vercel OIDC token → GCP STS federated token → SA impersonation.
+// Cached ~55 min (the impersonated token's lifetime), independent of the
+// per-request Vercel OIDC token.
+async function fcmAccessTokenViaWif(): Promise<string> {
+  if (fcmAccess && Date.now() < fcmAccess.exp - 60_000) {
+    return fcmAccess.token;
+  }
+  // 1. Exchange the Vercel OIDC JWT for a federated Google access token.
+  const stsRes = await fetch("https://sts.googleapis.com/v1/token", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      audience: process.env.GCP_WIF_AUDIENCE,
+      grantType: "urn:ietf:params:oauth:grant-type:token-exchange",
+      requestedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+      subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
+      subjectToken: process.env.VERCEL_OIDC_TOKEN,
+    }),
+  });
+  const sts = (await stsRes.json()) as { access_token?: string };
+  if (!sts.access_token) {
+    throw new Error("wif: STS token exchange returned no access_token");
+  }
+  // 2. Impersonate the Firebase SA for a messaging-scoped access token.
+  const impRes = await fetch(
+    `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${process.env.GCP_WIF_SERVICE_ACCOUNT}:generateAccessToken`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sts.access_token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        scope: ["https://www.googleapis.com/auth/firebase.messaging"],
+        lifetime: "3600s",
+      }),
+    },
+  );
+  const imp = (await impRes.json()) as { accessToken?: string };
+  if (!imp.accessToken) {
+    throw new Error("wif: SA impersonation returned no accessToken");
+  }
+  fcmAccess = { token: imp.accessToken, exp: Date.now() + 3600 * 1000 };
+  return imp.accessToken;
+}
+
 const FcmProvider: PushProvider = {
   async send(deviceToken, _platform, payload: PushPayload) {
-    const sa = JSON.parse(process.env.FCM_SERVICE_ACCOUNT_JSON as string) as {
-      project_id: string;
-      client_email: string;
-      private_key: string;
-      token_uri: string;
-    };
-    const access = await fcmAccessToken(sa);
+    const mode = fcmAuthMode();
+    if (!mode) return { delivered: false };
+    let projectId: string;
+    let access: string;
+    if (mode === "sa") {
+      const sa = JSON.parse(
+        process.env.FCM_SERVICE_ACCOUNT_JSON as string,
+      ) as {
+        project_id: string;
+        client_email: string;
+        private_key: string;
+        token_uri: string;
+      };
+      projectId = sa.project_id;
+      access = await fcmAccessTokenFromSaKey(sa);
+    } else {
+      projectId = process.env.FCM_PROJECT_ID as string;
+      access = await fcmAccessTokenViaWif();
+    }
     const res = await fetch(
-      `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
+      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
       {
         method: "POST",
         headers: {

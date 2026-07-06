@@ -65,7 +65,15 @@ export async function POST() {
       process.env.APNS_PRIVATE_KEY &&
       process.env.APNS_BUNDLE_ID
     ),
-    fcmConfigured: !!process.env.FCM_SERVICE_ACCOUNT_JSON,
+    // FCM is configured via EITHER a service-account key OR keyless
+    // Workload Identity Federation (Vercel OIDC → GCP STS → SA impersonation).
+    fcmConfigured: !!(
+      process.env.FCM_SERVICE_ACCOUNT_JSON ||
+      (process.env.GCP_WIF_AUDIENCE &&
+        process.env.GCP_WIF_SERVICE_ACCOUNT &&
+        process.env.FCM_PROJECT_ID &&
+        process.env.VERCEL_OIDC_TOKEN)
+    ),
     webConfigured: !!(
       process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
     ),
