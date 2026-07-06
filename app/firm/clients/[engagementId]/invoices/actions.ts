@@ -71,8 +71,13 @@ export async function createInvoice(formData: FormData) {
     throw new Error("Provide a valid recipient email.");
   }
   const recipientName = String(formData.get("recipient_name") ?? "").trim() || null;
-  const invoiceNumber =
-    String(formData.get("invoice_number") ?? "").trim() ||
+  // A user-supplied number is used verbatim; otherwise we auto-generate and
+  // (below) retry on a unique-index collision, since INV-YYYY-#### has only
+  // 9000 values per firm per year and would otherwise randomly throw as volume
+  // grows.
+  const suppliedNumber = String(formData.get("invoice_number") ?? "").trim();
+  const genInvoiceNumber = () =>
+    suppliedNumber ||
     `INV-${new Date().getUTCFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`;
   const dueAtRaw = String(formData.get("due_at") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
@@ -99,30 +104,48 @@ export async function createInvoice(formData: FormData) {
     .maybeSingle();
   if (!eng) throw new Error("Engagement not found.");
 
-  const { data: inv, error } = await admin
-    .from("firm_invoices")
-    .insert({
-      firm_id: ctx.firm.id,
-      engagement_id: engagementId,
-      company_id: eng.company_id,
-      invoice_number: invoiceNumber,
-      line_items: lineItems,
-      subtotal_cents: subtotalCents,
-      tax_cents: taxCents,
-      total_cents: totalCents,
-      currency: "usd",
-      platform_fee_bps: 300,
-      platform_fee_cents: platform_fee,
-      recipient_email: recipientEmail,
-      recipient_name: recipientName,
-      due_at: dueAtRaw,
-      status: "draft",
-      notes,
-      created_by: user.id,
-    })
-    .select("id, invoice_number")
-    .single();
-  if (error || !inv) throw new Error(error?.message ?? "Insert failed.");
+  let inv: { id: string; invoice_number: string } | null = null;
+  let lastErr: string | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error } = await admin
+      .from("firm_invoices")
+      .insert({
+        firm_id: ctx.firm.id,
+        engagement_id: engagementId,
+        company_id: eng.company_id,
+        invoice_number: genInvoiceNumber(),
+        line_items: lineItems,
+        subtotal_cents: subtotalCents,
+        tax_cents: taxCents,
+        total_cents: totalCents,
+        currency: "usd",
+        platform_fee_bps: 300,
+        platform_fee_cents: platform_fee,
+        recipient_email: recipientEmail,
+        recipient_name: recipientName,
+        due_at: dueAtRaw,
+        status: "draft",
+        notes,
+        created_by: user.id,
+      })
+      .select("id, invoice_number")
+      .single();
+    if (!error && data) {
+      inv = data;
+      break;
+    }
+    lastErr = error?.message ?? "Insert failed.";
+    // Self-heal an auto-generated number that collided with the firm's unique
+    // index; a user-supplied number that collides is a real conflict to report.
+    if (error?.code !== "23505" || suppliedNumber) break;
+  }
+  if (!inv) {
+    throw new Error(
+      suppliedNumber
+        ? `Invoice number "${suppliedNumber}" is already used. Pick another.`
+        : lastErr ?? "Insert failed.",
+    );
+  }
 
   await logFirmActivity({
     client: admin,
