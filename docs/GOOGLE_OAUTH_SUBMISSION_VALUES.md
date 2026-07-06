@@ -40,8 +40,15 @@ taxottic.com
 (Homepage `https://taxottic.com`, Privacy `https://taxottic.com/legal/privacy`,
 Terms `https://taxottic.com/legal/terms` — all live.)
 
-**OAuth consent screen → App logo:** `public/brand/icon-mark-512.png`
-(now navy, square, 512x512 — meets the 120px minimum).
+**OAuth consent screen → App logo:** upload **`public/icon-512.png`** (the navy
+square tile with the white+gold logo, 512x512, meets the 120px minimum).
+- The logo shown to users lives in Google Cloud Console and must be
+  **re-uploaded there** to change it — recoloring repo files does not update it.
+  The one currently on the consent screen is the OLD green tile; replace it with
+  `public/icon-512.png`.
+- Do NOT use `public/brand/icon-mark-512.png` for this: its "T" is white on a
+  transparent background, so on Google's white consent card it disappears and
+  only the gold bars show. Use the filled navy tile.
 
 **Supabase → Auth → URL Configuration → Redirect URLs** must already include
 (these are the app's own post-auth targets, not Google's concern, but required
