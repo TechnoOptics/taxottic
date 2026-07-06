@@ -14,7 +14,7 @@ No long-lived key is ever created or stored. Below is the one-time setup. The
 code path activates automatically once the four env vars at the end are set
 (and `FCM_SERVICE_ACCOUNT_JSON` is absent).
 
-## 1. Turn on Vercel OIDC — DONE (2026-07-06)
+## 1. Turn on Vercel OIDC (DONE 2026-07-06)
 
 Vercel → Project `taxottic` → Settings → Security → **Secure Backend Access
 with OIDC Federation** is enabled in **Team** issuer mode. Every serverless
