@@ -2,6 +2,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { PasskeyRegisterButton } from "@/components/PasskeyRegisterButton";
 import { TestPushButton } from "@/components/TestPushButton";
+import { EnableWebPushButton } from "@/components/EnableWebPushButton";
 import { WatchPairForm } from "@/components/WatchPairForm";
 import { MobileOnly } from "@/components/MobileOnly";
 import { deletePasskey } from "./actions";
@@ -177,12 +178,15 @@ export default async function SecuritySettingsPage() {
             Push notifications
           </h2>
           <p className="mt-2 text-sm text-ink-soft">
-            Send a test push to this account so you can verify
-            notifications are wired before taking a real drive. The
-            response tells you exactly what&apos;s missing, APNs/FCM
-            credentials in Vercel, an unregistered device, or a
-            successful delivery.
+            In a web browser, turn notifications on below (the native
+            apps ask on first launch). Then send a test push to verify
+            everything is wired. The response tells you exactly
+            what&apos;s missing, APNs/FCM/web credentials in Vercel, an
+            unregistered device, or a successful delivery.
           </p>
+          <div className="mt-4">
+            <EnableWebPushButton />
+          </div>
           <div className="mt-4">
             <TestPushButton />
           </div>

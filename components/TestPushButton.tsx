@@ -19,7 +19,11 @@ type Diagnostic = {
   ok: boolean;
   hint: string;
   tokens: { active: number; revoked: number };
-  providers: { apnsConfigured: boolean; fcmConfigured: boolean };
+  providers: {
+    apnsConfigured: boolean;
+    fcmConfigured: boolean;
+    webConfigured: boolean;
+  };
   result?: { sent: boolean; delivered: number; revoked: number };
 };
 
@@ -80,7 +84,8 @@ export function TestPushButton() {
             tokens: active={diag.tokens.active} revoked=
             {diag.tokens.revoked} · apns=
             {diag.providers.apnsConfigured ? "yes" : "no"} · fcm=
-            {diag.providers.fcmConfigured ? "yes" : "no"}
+            {diag.providers.fcmConfigured ? "yes" : "no"} · web=
+            {diag.providers.webConfigured ? "yes" : "no"}
             {diag.result
               ? ` · sent=${String(diag.result.sent)} delivered=${diag.result.delivered} prov_revoked=${diag.result.revoked}`
               : ""}
