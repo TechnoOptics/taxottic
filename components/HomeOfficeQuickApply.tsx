@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 type Props = {
   publicId: string;
@@ -38,6 +39,8 @@ export function HomeOfficeQuickApply({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLFormElement | null>(null);
+  useFocusTrap(dialogRef, open);
 
   // Compute business-use % live for the user. The whole point of
   // showing this is that they can see immediately whether they're
@@ -189,6 +192,7 @@ export function HomeOfficeQuickApply({
         >
           <div className="absolute inset-0 bg-forest-900/60 backdrop-blur-md" />
           <form
+            ref={dialogRef}
             onSubmit={onSubmit}
             onClick={(e) => e.stopPropagation()}
             className="card relative w-full max-w-md p-6 sm:p-7"
