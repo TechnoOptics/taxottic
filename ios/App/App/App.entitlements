@@ -10,5 +10,20 @@
     <array>
         <string>group.com.taxottic.app</string>
     </array>
+    <!-- Push Notifications (APNs). @capacitor/push-notifications registers
+         with APNs directly on iOS (no Firebase on this target, the app is
+         SPM-based with no GoogleService-Info.plist), so register() returns a
+         raw APNs device token that CapacitorNativeInit POSTs to
+         /api/push/register as platform:"ios".
+         `development` is the conventional checked-in value; a distribution
+         (TestFlight / App Store) build's provisioning profile promotes this
+         to `production` automatically at archive time.
+         REQUIRES: the "Push Notifications" capability enabled on the
+         com.taxottic.app App ID in the Apple Developer portal, otherwise
+         signing fails with "provisioning profile doesn't include the
+         aps-environment entitlement". Same portal-side step the
+         application-groups entitlement above needed. -->
+    <key>aps-environment</key>
+    <string>development</string>
 </dict>
 </plist>

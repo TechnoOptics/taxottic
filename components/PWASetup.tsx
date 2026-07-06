@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ensureWebPushSubscribed } from "@/lib/push/web";
 
 type DeferredPrompt = Event & {
   prompt: () => Promise<void>;
@@ -108,6 +109,13 @@ export function PWASetup() {
     }
 
     registerSW();
+
+    // Web Push: refresh/create the browser subscription (parity with the
+    // native shells' cold-start re-register). Self-guards on config, the
+    // enable flag, native shell, and existing notification permission.
+    // It never prompts here. A settings toggle calls enableWebPush() from a
+    // user gesture to request permission the first time.
+    void ensureWebPushSubscribed();
 
     // Already installed?
     const standalone =
