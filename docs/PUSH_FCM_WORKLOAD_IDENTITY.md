@@ -14,15 +14,16 @@ No long-lived key is ever created or stored. Below is the one-time setup. The
 code path activates automatically once the four env vars at the end are set
 (and `FCM_SERVICE_ACCOUNT_JSON` is absent).
 
-## 1. Turn on Vercel OIDC
+## 1. Turn on Vercel OIDC — DONE (2026-07-06)
 
-Vercel → Project `taxottic` → Settings → Security → **OIDC Federation** → enable
-(Team-level issuer). Every serverless function then receives a `VERCEL_OIDC_TOKEN`
-env var automatically (no need to set it yourself). Note the token's:
+Vercel → Project `taxottic` → Settings → Security → **Secure Backend Access
+with OIDC Federation** is enabled in **Team** issuer mode. Every serverless
+function receives a `VERCEL_OIDC_TOKEN` env var automatically (do not set it
+yourself). The token's confirmed claims (used below):
 
-- **Issuer**: `https://oidc.vercel.com/<team-slug>`
-- **Audience** (default): `https://vercel.com/<team-slug>`
-- **Subject**: `owner:<team>:project:taxottic:environment:production`
+- **Issuer**: `https://oidc.vercel.com/technooptics-projects`
+- **Audience**: `https://vercel.com/technooptics-projects`
+- **Subject**: `owner:technooptics-projects:project:taxottic:environment:production`
 
 ## 2. Create a Workload Identity Pool + provider (GCP console)
 
@@ -32,11 +33,11 @@ GCP Console → IAM & Admin → **Workload Identity Federation** → Create pool
 - Pool ID: `vercel-pool`
 - Add provider → **OIDC**:
   - Provider ID: `vercel`
-  - Issuer (URL): `https://oidc.vercel.com/<team-slug>`
-  - Allowed audiences: `https://vercel.com/<team-slug>`
+  - Issuer (URL): `https://oidc.vercel.com/technooptics-projects`
+  - Allowed audiences: `https://vercel.com/technooptics-projects`
   - Attribute mapping: `google.subject = assertion.sub`
   - (Recommended) Attribute condition to lock it to this project + prod:
-    `assertion.sub == "owner:<team>:project:taxottic:environment:production"`
+    `assertion.sub == "owner:technooptics-projects:project:taxottic:environment:production"`
 
 ## 3. Let the federated identity impersonate the Firebase SA
 
