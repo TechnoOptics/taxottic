@@ -35,7 +35,7 @@ export async function respondToEngagement(formData: FormData) {
     redirect("/firm/clients");
   }
   if (eng.status !== "pending_firm") {
-    // Already actioned (or not the firm's turn) — bounce back with a note
+    // Already actioned (or not the firm's turn), so bounce back with a note
     // rather than double-flipping.
     redirect(`/firm/clients/${engagementId}?already=1`);
   }

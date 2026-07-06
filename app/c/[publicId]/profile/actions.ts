@@ -77,7 +77,7 @@ export async function saveBusinessProfile(formData: FormData) {
   const parsedThreshold =
     receiptThresholdRaw === "" ? null : parseDollarsToCents(receiptThresholdRaw);
   // Treat blank, zero, or negative as "no requirement" rather than "require a
-  // receipt for every expense" — a manager typing 0 means no minimum, not
+  // receipt for every expense". A manager typing 0 means no minimum, not
   // "always." Only a positive threshold turns the policy on.
   const receiptThresholdCents =
     parsedThreshold !== null && parsedThreshold > 0 ? parsedThreshold : null;
