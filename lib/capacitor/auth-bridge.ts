@@ -44,6 +44,17 @@ export const NATIVE_OAUTH_REDIRECT = "com.taxottic.app://auth-callback";
 
 const NATIVE_NEXT_KEY = "__taxottic_oauth_next_native";
 
+// Watchdog flag: set (with a timestamp) the moment we open the OAuth browser,
+// cleared the moment our custom-scheme deep link comes back. If the app
+// resumes with this still set and no session, the redirect never returned,
+// which is the silent failure mode when the redirect URL isn't allow-listed in
+// Supabase. The watchdog turns that into a clear, actionable error instead of
+// leaving the user stranded in the browser tab.
+const OAUTH_PENDING_KEY = "__taxottic_oauth_pending";
+// How long a pending flag stays meaningful. Beyond this we assume it's stale
+// (app reopened days later) and clear it silently.
+const OAUTH_PENDING_TTL_MS = 5 * 60 * 1000;
+
 /** True only inside the Capacitor native shell. Safe on SSR + web. */
 export async function isNativeApp(): Promise<boolean> {
   if (typeof window === "undefined") return false;
@@ -124,6 +135,14 @@ export async function nativeOAuthSignIn(
 
   try {
     const { Browser } = await import("@capacitor/browser");
+    // Arm the watchdog just before we hand off to the browser. The
+    // appUrlOpen handler clears it on a successful return; if it's still
+    // set when the app next resumes, the redirect never came back.
+    try {
+      window.localStorage.setItem(OAUTH_PENDING_KEY, String(Date.now()));
+    } catch {
+      /* storage disabled; watchdog just won't fire, no harm */
+    }
     // presentationStyle popover keeps the iOS dismiss gesture sane;
     // Android ignores it.
     await Browser.open({ url: data.url, presentationStyle: "popover" });
@@ -159,6 +178,14 @@ export async function installNativeAuthListener(
     // Only act on OUR auth callback scheme. Other deep links
     // (Stripe return, Plaid, universal links) pass through untouched.
     if (!url || !url.startsWith(NATIVE_OAUTH_REDIRECT)) return;
+
+    // The redirect came back, so disarm the watchdog regardless of whether
+    // the exchange below succeeds (a failed exchange has its own error path).
+    try {
+      window.localStorage.removeItem(OAUTH_PENDING_KEY);
+    } catch {
+      /* ignore */
+    }
 
     let code: string | null = null;
     let providerError: string | null = null;
@@ -217,5 +244,55 @@ export async function installNativeAuthListener(
       return;
     }
     await finish(next);
+  });
+
+  // Watchdog: catches the silent failure where OAuth opens the browser but the
+  // redirect never comes back (the classic cause is a missing Supabase
+  // redirect-URL allow-list entry for com.taxottic.app://auth-callback). When
+  // the app resumes with the pending flag still set and no session, we surface
+  // a concrete error on /login instead of leaving the user stranded.
+  await App.addListener("appStateChange", async ({ isActive }) => {
+    if (!isActive) return;
+    let pending: string | null = null;
+    try {
+      pending = window.localStorage.getItem(OAUTH_PENDING_KEY);
+    } catch {
+      return;
+    }
+    if (!pending) return;
+
+    // Stale flag from a long-abandoned attempt: clear and ignore.
+    if (Date.now() - Number(pending) > OAUTH_PENDING_TTL_MS) {
+      try {
+        window.localStorage.removeItem(OAUTH_PENDING_KEY);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
+    // Give appUrlOpen a moment to fire + exchange on a genuine success (it
+    // clears the flag and navigates away, so this timer never resolves there).
+    await new Promise((r) => setTimeout(r, 2500));
+    let stillPending = false;
+    try {
+      stillPending = window.localStorage.getItem(OAUTH_PENDING_KEY) === pending;
+    } catch {
+      return;
+    }
+    if (!stillPending) return; // appUrlOpen handled it → real success
+
+    // Redirect never returned. Clear the flag and, only if the user isn't
+    // already signed in and is still on the login screen, show why.
+    try {
+      window.localStorage.removeItem(OAUTH_PENDING_KEY);
+    } catch {
+      /* ignore */
+    }
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return; // signed in after all; nothing to do
+    if (window.location.pathname.startsWith("/login")) {
+      window.location.assign("/login?error=oauth_no_return");
+    }
   });
 }

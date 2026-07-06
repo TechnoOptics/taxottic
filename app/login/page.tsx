@@ -95,6 +95,8 @@ export default function LoginPage() {
         oauth_missing_id_token: "Provider didn't return an ID token.",
         oauth_not_configured:
           "That sign-in provider isn't set up yet. Try Google, passkey, or magic link instead.",
+        oauth_no_return:
+          "Sign-in opened but didn't return to the app. This usually means the app's sign-in redirect isn't fully set up yet. Use the email code below to sign in now.",
         access_denied: "You cancelled the sign-in.",
         no_code:
           "Sign-in came back without an authorization code. Usually means the OAuth handshake was interrupted; try again.",
