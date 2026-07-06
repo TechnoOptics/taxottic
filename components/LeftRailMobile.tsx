@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LeftRail } from "./LeftRail";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 type Company = {
   publicId: string;
@@ -36,6 +37,8 @@ type Company = {
 export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(sheetRef, open && mounted);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: createPortal needs document, which only exists post-mount
@@ -92,6 +95,7 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
     open && mounted
       ? createPortal(
           <div
+            ref={sheetRef}
             role="dialog"
             aria-modal="true"
             aria-label="Main menu"

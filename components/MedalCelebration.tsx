@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BADGES, type Badge } from "@/lib/badges/catalog";
 import { BadgeMedal } from "./BadgeMedal";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 type Props = {
   /** Codes earned in the most recent dashboard render. Each one
@@ -53,6 +54,9 @@ export function MedalCelebration({ newlyEarnedCodes }: Props) {
   const [messageIndexByCode, setMessageIndexByCode] = useState<
     Record<string, number>
   >({});
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
 
   useEffect(() => {
     setReduceMotion(
@@ -123,6 +127,7 @@ export function MedalCelebration({ newlyEarnedCodes }: Props) {
       ) : null}
 
       <div
+        ref={dialogRef}
         className="relative max-w-sm w-full"
         onClick={(e) => e.stopPropagation()}
       >
