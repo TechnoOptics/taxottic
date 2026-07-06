@@ -27,7 +27,11 @@ type Diagnostic = {
   ok: boolean;
   hint: string;
   tokens: { active: number; revoked: number };
-  providers: { apnsConfigured: boolean; fcmConfigured: boolean };
+  providers: {
+    apnsConfigured: boolean;
+    fcmConfigured: boolean;
+    webConfigured: boolean;
+  };
   result?: {
     sent: boolean;
     delivered: number;
@@ -62,14 +66,21 @@ export async function POST() {
       process.env.APNS_BUNDLE_ID
     ),
     fcmConfigured: !!process.env.FCM_SERVICE_ACCOUNT_JSON,
+    webConfigured: !!(
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+    ),
   };
 
   // Decide WHY the user might not see a banner, in priority order.
   // This is the "honest error UX" the user asked for, short, specific.
   let hint = "";
-  if (!providers.apnsConfigured && !providers.fcmConfigured) {
+  if (
+    !providers.apnsConfigured &&
+    !providers.fcmConfigured &&
+    !providers.webConfigured
+  ) {
     hint =
-      "No push provider configured in Vercel. Set FCM_SERVICE_ACCOUNT_JSON (Android) and/or APNS_KEY_ID + APNS_TEAM_ID + APNS_PRIVATE_KEY + APNS_BUNDLE_ID (iOS), then redeploy. See docs/PUSH_NOTIFICATIONS_SETUP.md.";
+      "No push provider configured in Vercel. Set FCM_SERVICE_ACCOUNT_JSON (Android), APNS_KEY_ID + APNS_TEAM_ID + APNS_PRIVATE_KEY + APNS_BUNDLE_ID (iOS), and/or NEXT_PUBLIC_VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY (web), then redeploy. See docs/PUSH_NOTIFICATIONS_SETUP.md.";
   } else if (tokens.active === 0 && tokens.revoked === 0) {
     hint =
       "No device tokens registered yet. Open the Taxottic native app on your phone, accept the Notifications prompt, and ensure NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED=1 in Vercel (then redeploy so the gate flag bakes into the JS bundle).";

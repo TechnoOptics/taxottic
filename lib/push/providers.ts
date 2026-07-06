@@ -204,16 +204,105 @@ const FcmProvider: PushProvider = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Web Push (browsers / desktop PWAs), VAPID + RFC 8291 payload
+// encryption. Env: NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
+// VAPID_SUBJECT (optional, defaults to a mailto:). The device "token"
+// for platform:"web" is the JSON-stringified PushSubscription that
+// lib/push/web.ts stored via /api/push/register.
+//
+// Unlike APNs/FCM above (hand-rolled on node built-ins), web push uses
+// the `web-push` library: the aes128gcm content encryption (RFC 8188)
+// over an ECDH/HKDF-derived key (RFC 8291) is security-sensitive and
+// not worth reimplementing. This is the one intentional dependency in
+// this file.
+// ---------------------------------------------------------------------------
+function webPushConfigured() {
+  return !!(
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+  );
+}
+
+let vapidReady = false;
+function ensureVapid(webpush: typeof import("web-push")) {
+  if (vapidReady) return;
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || "mailto:contact@technooptics.com",
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY as string,
+    process.env.VAPID_PRIVATE_KEY as string,
+  );
+  vapidReady = true;
+}
+
+// Deep-link target per event kind, read by sw.js's notificationclick
+// handler. Conservative: only routes we know exist, else the app root.
+function webUrlFromData(data: Record<string, string>): string {
+  switch (data.kind) {
+    case "trip_classify":
+    case "trip_logged":
+      return "/mileage";
+    case "clarify":
+      return data.subject === "trip" ? "/mileage" : "/expenses";
+    case "expense_applied":
+      return "/expenses";
+    case "badge_awarded":
+      return "/achievements";
+    default:
+      return "/";
+  }
+}
+
+const WebPushProvider: PushProvider = {
+  async send(subJson, _platform, payload: PushPayload) {
+    const webpush = (await import("web-push")).default;
+    ensureVapid(webpush);
+    let subscription: {
+      endpoint: string;
+      keys: { p256dh: string; auth: string };
+    };
+    try {
+      subscription = JSON.parse(subJson);
+    } catch {
+      // A token that isn't a subscription JSON is unusable; treat it as
+      // invalid so it gets revoked rather than retried forever.
+      return { delivered: false, invalidToken: true };
+    }
+    // The service worker's `push` handler (public/sw.js v96) reads
+    // exactly these fields.
+    const swPayload = JSON.stringify({
+      title: payload.title,
+      body: payload.body,
+      data: payload.data,
+      url: webUrlFromData(payload.data),
+      tag: payload.data.kind,
+    });
+    try {
+      await webpush.sendNotification(subscription, swPayload, {
+        TTL: 60 * 60 * 24,
+      });
+      return { delivered: true };
+    } catch (err) {
+      // 404/410 → the subscription is gone (unsubscribed / expired);
+      // ask the caller to revoke it. Other statuses are soft misses.
+      const status = (err as { statusCode?: number })?.statusCode;
+      return {
+        delivered: false,
+        invalidToken: status === 404 || status === 410,
+      };
+    }
+  },
+};
+
 /**
  * Resolve the provider for the current environment. Routes per
  * platform; any platform without configured credentials falls back
- * to Noop (clean no-op, not a crash). web → Noop in Phase 1 (web
- * push needs VAPID + a service worker, out of scope).
+ * to a clean no-op (not a crash) for that platform.
  */
 export function resolveProvider(): PushProvider {
   const apnsOn = apnsConfigured();
   const fcmOn = fcmConfigured();
-  if (!apnsOn && !fcmOn) return NoopProvider;
+  const webOn = webPushConfigured();
+  if (!apnsOn && !fcmOn && !webOn) return NoopProvider;
   return {
     async send(token: string, platform: Platform, payload: PushPayload) {
       if (platform === "ios" && apnsOn) {
@@ -221,6 +310,9 @@ export function resolveProvider(): PushProvider {
       }
       if (platform === "android" && fcmOn) {
         return FcmProvider.send(token, platform, payload);
+      }
+      if (platform === "web" && webOn) {
+        return WebPushProvider.send(token, platform, payload);
       }
       return { delivered: false };
     },
