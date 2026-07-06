@@ -202,19 +202,28 @@ async function fcmAccessTokenViaWif(): Promise<string> {
     return fcmAccess.token;
   }
   // 1. Exchange the Vercel OIDC JWT for a federated Google access token.
+  //    STS wants application/x-www-form-urlencoded with snake_case fields
+  //    (the documented format used by every google-auth client). An earlier
+  //    JSON/camelCase body was silently rejected, so the whole FCM send
+  //    failed with delivered=0 and no visible error.
   const stsRes = await fetch("https://sts.googleapis.com/v1/token", {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      audience: process.env.GCP_WIF_AUDIENCE,
-      grantType: "urn:ietf:params:oauth:grant-type:token-exchange",
-      requestedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      audience: process.env.GCP_WIF_AUDIENCE as string,
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+      requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
       scope: "https://www.googleapis.com/auth/cloud-platform",
-      subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
-      subjectToken: process.env.VERCEL_OIDC_TOKEN,
+      subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
+      subject_token: process.env.VERCEL_OIDC_TOKEN as string,
     }),
   });
-  const sts = (await stsRes.json()) as { access_token?: string };
+  const stsText = await stsRes.text();
+  if (!stsRes.ok) {
+    console.log(`[push-fcm] STS ${stsRes.status}: ${stsText.slice(0, 400)}`);
+    throw new Error(`wif: STS exchange failed (${stsRes.status})`);
+  }
+  const sts = JSON.parse(stsText) as { access_token?: string };
   if (!sts.access_token) {
     throw new Error("wif: STS token exchange returned no access_token");
   }
@@ -233,7 +242,14 @@ async function fcmAccessTokenViaWif(): Promise<string> {
       }),
     },
   );
-  const imp = (await impRes.json()) as { accessToken?: string };
+  const impText = await impRes.text();
+  if (!impRes.ok) {
+    console.log(
+      `[push-fcm] impersonate ${impRes.status}: ${impText.slice(0, 400)}`,
+    );
+    throw new Error(`wif: SA impersonation failed (${impRes.status})`);
+  }
+  const imp = JSON.parse(impText) as { accessToken?: string };
   if (!imp.accessToken) {
     throw new Error("wif: SA impersonation returned no accessToken");
   }
@@ -283,6 +299,10 @@ const FcmProvider: PushProvider = {
       },
     );
     if (res.ok) return { delivered: true };
+    // Surface WHY a send failed (403 permission, 404 unregistered, etc.)
+    // instead of failing silently.
+    const errText = await res.text().catch(() => "");
+    console.log(`[push-fcm] send ${res.status}: ${errText.slice(0, 400)}`);
     // UNREGISTERED / invalid token → 404.
     return { delivered: false, invalidToken: res.status === 404 };
   },
