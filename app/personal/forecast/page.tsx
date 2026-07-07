@@ -227,6 +227,22 @@ export default async function PersonalForecastPage() {
             <span className="ml-auto text-ink-muted">→</span>
           </Link>
           <Link
+            href="/personal/playbook"
+            className="card card-hover p-5 flex items-start gap-3 border-gold-300/60"
+          >
+            <div>
+              <div className="display text-base text-forest-900">
+                Open your savings playbook
+              </div>
+              <p className="mt-1 text-xs text-ink-muted leading-relaxed">
+                Personalized, IRS-cited moves that lower this bill — IRA and
+                HSA room, credits, harvesting — each with the dollars it
+                saves at your bracket.
+              </p>
+            </div>
+            <span className="ml-auto text-ink-muted">→</span>
+          </Link>
+          <Link
             href="/onboarding/tax-profile?next=/personal/forecast"
             className="card card-hover p-5 flex items-start gap-3"
           >

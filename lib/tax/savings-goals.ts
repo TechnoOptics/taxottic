@@ -61,7 +61,8 @@ export type SavingsGoalsInput = {
   itemize: boolean;
   dependents: number;
   dependentsUnder17: number;
-  publicId: string;
+  /** Company context; unused by goal logic, optional for the personal playbook. */
+  publicId?: string;
 };
 
 // 2025 federal contribution limits.

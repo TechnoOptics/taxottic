@@ -33,7 +33,9 @@ export function SavingsGoalCard({
   adoptAction,
 }: {
   goal: SavingsGoal;
-  companyId: string;
+  /** Company context for business goals; null on the personal playbook
+   *  (the adopt action then writes a personal goal, company_id null). */
+  companyId: string | null;
   taxYear: number;
   alreadyAdopted: boolean;
   adoptAction: (formData: FormData) => Promise<void>;
@@ -148,7 +150,7 @@ export function SavingsGoalCard({
           {!alreadyAdopted ? (
             <form action={adoptAction} className="mt-2">
               <input type="hidden" name="goal_id" value={goal.id} />
-              <input type="hidden" name="company_id" value={companyId} />
+              <input type="hidden" name="company_id" value={companyId ?? ""} />
               <input type="hidden" name="tax_year" value={taxYear} />
               <input type="hidden" name="title" value={goal.title} />
               <input
