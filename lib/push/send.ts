@@ -71,13 +71,23 @@ export async function sendToUser(
     let res: { delivered: boolean; invalidToken?: boolean };
     try {
       res = await provider.send(t.token, t.platform, payload);
-    } catch {
+    } catch (e) {
       // A transport throw is treated as a soft miss, not a crash -
       // the notification_log row stays so we don't retry-storm; a
       // future "retry unconfirmed" job (out of Phase 1 scope) can
-      // reconcile if we ever need delivery guarantees.
+      // reconcile if we ever need delivery guarantees. Log the throw so
+      // a silent per-token failure (e.g. a WIF/parse error the provider
+      // didn't catch) is visible in the runtime logs.
+      console.log(
+        `[push] ${t.platform} threw: ${
+          (e as Error)?.message ?? String(e)
+        }`.slice(0, 200),
+      );
       continue;
     }
+    console.log(
+      `[push] ${t.platform} delivered=${res.delivered} invalid=${!!res.invalidToken}`,
+    );
     if (res.delivered) delivered++;
     if (res.invalidToken) {
       revoked++;
