@@ -15,6 +15,13 @@ import { consume } from "@/lib/plans/credits";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { applyRecurringExpenseDetection } from "@/lib/banking/recurring";
 import {
+  isSubscriptionLike,
+  subscriptionFallbackKey,
+  findCoveringRecurringRow,
+  chargeFingerprint,
+  type CoverCandidate,
+} from "@/lib/banking/subscription-dedupe";
+import {
   loadRules,
   matchRule,
   recordRuleHits,
@@ -232,9 +239,46 @@ async function runCsvImport(formData: FormData): Promise<
       };
     });
 
+    // Exact-charge dedupe: a re-uploaded statement (or an overlapping
+    // export) must not book the same charge twice. Identity = posted
+    // date + exact cents + normalized description (chargeFingerprint) —
+    // "master the dates so we know it's the exact same charge". Compare
+    // against every prior import for this company in the batch's date
+    // range and drop matches before insert.
+    const dates = transactions
+      .map((t) => t.posted_at)
+      .filter((d): d is string => !!d)
+      .sort();
+    let toInsert = transactions;
+    if (dates.length > 0) {
+      const { data: priorRows } = await admin
+        .from("bank_transactions")
+        .select("posted_at, amount_cents, description")
+        .eq("company_id", companyId)
+        .gte("posted_at", dates[0])
+        .lte("posted_at", dates[dates.length - 1])
+        .limit(10_000);
+      const seen = new Set(
+        (priorRows ?? []).map((r) =>
+          chargeFingerprint(
+            String(r.posted_at ?? ""),
+            r.amount_cents as number,
+            r.description as string | null,
+          ),
+        ),
+      );
+      toInsert = transactions.filter(
+        (t) =>
+          !t.posted_at ||
+          !seen.has(
+            chargeFingerprint(t.posted_at, t.amount_cents, t.description),
+          ),
+      );
+    }
+
     const BATCH = 500;
-    for (let i = 0; i < transactions.length; i += BATCH) {
-      const slice = transactions.slice(i, i + BATCH);
+    for (let i = 0; i < toInsert.length; i += BATCH) {
+      const slice = toInsert.slice(i, i + BATCH);
       const { error } = await admin.from("bank_transactions").insert(slice);
       if (error) throw new Error(error.message);
     }
@@ -417,6 +461,7 @@ export async function applyTransactions(formData: FormData) {
     month: number;
     amount_cents: number;
     category_code: string;
+    recurrence: string;
     notes: string;
   }> = [];
 
@@ -457,6 +502,9 @@ export async function applyTransactions(formData: FormData) {
         month: txMonth,
         amount_cents: absCents,
         category_code: tx.applied_category_code!,
+        // "Subscription" in the statement line → monthly from day one
+        // (user rule) instead of waiting for 3-month pattern detection.
+        recurrence: isSubscriptionLike(tx.description) ? "monthly" : "one_off",
         notes: tx.description,
       });
       txUpdates.push({ id: tx.id });
@@ -475,6 +523,7 @@ export async function applyTransactions(formData: FormData) {
         month: txMonth,
         amount_cents: absCents,
         category_code: tx.applied_category_code!,
+        recurrence: isSubscriptionLike(tx.description) ? "monthly" : "one_off",
         notes: tx.description,
       });
       txUpdates.push({ id: tx.id });
@@ -861,6 +910,7 @@ async function runBellaCategorize(args: {
     month: number;
     amount_cents: number;
     category_code: string;
+    recurrence: string;
     notes: string;
   };
   type IncInsert = {
@@ -870,6 +920,8 @@ async function runBellaCategorize(args: {
     month: number;
     amount_cents: number;
     source: string;
+    recurrence: string;
+    recurring_key: string | null;
     notes: string;
   };
 
@@ -877,6 +929,17 @@ async function runBellaCategorize(args: {
   const expenseTxIds: string[] = [];
   const incomeInserts: IncInsert[] = [];
   const incomeTxIds: string[] = [];
+  // INCOME double-count guard (same rationale as the bank syncs): a
+  // recurring income row already projects future months, so an uploaded
+  // charge its projection covers links to it instead of becoming a
+  // second countable row.
+  const { data: recIncome } = await admin
+    .from("monthly_income")
+    .select("id, tax_year, month, amount_cents, recurrence, recurring_key")
+    .eq("company_id", companyId)
+    .neq("recurrence", "one_off");
+  const incomeCandidates = (recIncome ?? []) as CoverCandidate[];
+  const coveredIncomeLinks: Array<{ txId: string; incomeId: string }> = [];
   const ignoreTxIds: string[] = [];
   const suggestionUpdates: Array<{
     id: string;
@@ -928,12 +991,30 @@ async function runBellaCategorize(args: {
         month: txMonth,
         amount_cents: absCents,
         category_code: d.code,
+        // "Subscription" in the line → monthly from day one (user rule).
+        recurrence: isSubscriptionLike(tx.description) ? "monthly" : "one_off",
         notes: tx.description ?? "",
       });
       expenseTxIds.push(tx.id);
     } else if (d.kind === "income" && d.code && !isCredit) {
       // Income on a credit account is always a payment-back; don't
       // create a phantom revenue line.
+      const subLike = isSubscriptionLike(tx.description);
+      const incKey =
+        subLike && tx.description
+          ? subscriptionFallbackKey(tx.description, absCents)
+          : null;
+      const covering = findCoveringRecurringRow(incomeCandidates, {
+        tax_year: taxYear,
+        month: txMonth,
+        amount_cents: absCents,
+        recurring_key: incKey,
+      });
+      if (covering) {
+        // Already forecast by a recurring row — link, don't double-count.
+        coveredIncomeLinks.push({ txId: tx.id, incomeId: covering.id });
+        continue;
+      }
       incomeInserts.push({
         company_id: companyId,
         user_id: user.id,
@@ -941,6 +1022,8 @@ async function runBellaCategorize(args: {
         month: txMonth,
         amount_cents: absCents,
         source: d.code,
+        recurrence: subLike ? "monthly" : "one_off",
+        recurring_key: incKey,
         notes: tx.description ?? "",
       });
       incomeTxIds.push(tx.id);
@@ -991,6 +1074,15 @@ async function runBellaCategorize(args: {
         }
       }
     }
+  }
+
+  // Link uploads that were absorbed by an existing recurring row's
+  // projection (no new monthly_income row created for them).
+  for (const link of coveredIncomeLinks) {
+    await admin
+      .from("bank_transactions")
+      .update({ applied_income_id: link.incomeId })
+      .eq("id", link.txId);
   }
 
   // Bulk-update suggestions for the rows that ended up below
