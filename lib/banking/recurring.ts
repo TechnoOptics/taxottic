@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *   "monthly" row from ITS month through December. If we marked all six
  *   of an Adobe-$90 stream (months 1-6) "monthly", each would re-project
  *   forward and the year would be wildly over-counted. Instead we mark
- *   exactly ONE anchor — the latest occurrence — "monthly", and leave the
+ *   exactly ONE anchor, the latest occurrence, "monthly", and leave the
  *   earlier ones "one_off" (they're real past charges). Net effect:
  *   actuals for the months already seen + a forward projection from the
  *   latest month. Re-running each sync simply walks the anchor forward as
@@ -19,7 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * Grouping key = category + whole-dollar amount. A fixed subscription
  * bills the same amount in the same category each period; variable-amount
- * charges (e.g. usage-based AWS) won't group and stay one_off — which is
+ * charges (e.g. usage-based AWS) won't group and stay one_off, which is
  * the safe outcome (we don't invent a fixed projection for a variable
  * cost). Conservative threshold: a stream must appear in >= 3 distinct
  * months before we call it recurring.
@@ -44,7 +44,7 @@ export type RecurrenceUpdate = {
   id: string;
   recurrence: RecurrenceValue;
   // Set when the stream is detected as STOPPED (see "stopped stream"
-  // detection below) — caps the forecast projection right after the
+  // detection below), caps the forecast projection right after the
   // last real occurrence instead of projecting through December.
   // Present with value `null` means "clear any previous end month"
   // (the stream resumed), so it must be written even when null.
@@ -60,7 +60,7 @@ export const MIN_RECURRING_MONTHS = 3;
  * since a bank pull landing a few days late is common. Quarterly gets 1
  * full cycle (3 months): with MIN_RECURRING_MONTHS = 3, the earliest a
  * quarterly stream can even qualify as recurring is 3 occurrences spread
- * across 6 months (e.g. months 1, 4, 7 — anchor month 7) — at 2 cycles
+ * across 6 months (e.g. months 1, 4, 7, anchor month 7), at 2 cycles
  * (6 more months) the stopped-check would need asOfMonth >= 13, which is
  * impossible within a single tax year, so quarterly would never fire.
  * 1 cycle (3 months) keeps it reachable while still requiring a full
@@ -89,13 +89,13 @@ function inferCadence(sortedMonths: number[]): "monthly" | "quarterly" {
  * CHANGES needed (rows already at the right value are omitted).
  *
  * `asOfMonth` is the latest month we actually have synced/entered data
- * for (1-12) — used to detect a stream that's gone quiet: if the
+ * for (1-12), used to detect a stream that's gone quiet: if the
  * anchor's cadence says another occurrence should have shown up by now
  * and it's been silent for STOPPED_AFTER_CYCLES full cycles, we cap the
  * anchor's recurrence_end_month at its own month instead of letting the
  * forecast keep projecting a cancelled subscription through December.
  * Omit `asOfMonth` to skip stopped-stream detection entirely (existing
- * behaviour) — every current caller passes it.
+ * behaviour), every current caller passes it.
  */
 export function computeRecurrenceUpdates(
   rows: ExpenseRowForRecurrence[],
@@ -115,7 +115,7 @@ export function computeRecurrenceUpdates(
       (a, b) => a - b,
     );
     const want = new Map<string, RecurrenceValue>();
-    // recurrence_end_month to write per row id — undefined = "don't touch
+    // recurrence_end_month to write per row id, undefined = "don't touch
     // it" (avoids clobbering a manual "user says so" stop set elsewhere),
     // null = "clear it" (stream resumed), a number = "cap it here".
     const wantEndMonth = new Map<string, number | null>();
@@ -134,7 +134,7 @@ export function computeRecurrenceUpdates(
         const stopped = silentSince >= cadenceStep * STOPPED_AFTER_CYCLES[cadence];
         // Cap right at the anchor's own month when stopped (its real
         // occurrence still counts; nothing projects past it). Clear
-        // (null) when the anchor is current again — the stream resumed.
+        // (null) when the anchor is current again, the stream resumed.
         // Only touch it if that's an actual change from what's stored,
         // so a re-run doesn't keep rewriting the same value.
         const nextEndMonth = stopped ? anchor.month : null;
@@ -143,8 +143,16 @@ export function computeRecurrenceUpdates(
         }
       }
     } else {
-      // Too few to be recurring — ensure none are left marked recurring.
-      for (const r of group) want.set(r.id, "one_off");
+      // Too few DISTINCT months for auto-detection. Do NOT force these to
+      // one_off: that was silently demoting a user's MANUAL recurring pick
+      // on every sync (e.g. a just-connected subscription that only has
+      // 1-2 months of history yet). Leave each row's recurrence exactly as
+      // it is, so a manual pick survives and no spurious update is written.
+      // (The >= 3-month branch above still anchor-walks, so real streams
+      // are unaffected.)
+      for (const r of group) {
+        want.set(r.id, (r.recurrence ?? "one_off") as RecurrenceValue);
+      }
     }
     for (const r of group) {
       const target = want.get(r.id)!;
@@ -212,7 +220,7 @@ async function persistRecurrenceUpdates(
 /**
  * Run the detector against a company's expenses for a tax year and
  * persist the recurrence changes. Returns the number of rows updated.
- * Safe to call after every sync — it's idempotent.
+ * Safe to call after every sync, it's idempotent.
  */
 export async function applyRecurringExpenseDetection(
   admin: SupabaseClient,
@@ -227,7 +235,7 @@ export async function applyRecurringExpenseDetection(
     .eq("company_id", companyId)
     .eq("tax_year", taxYear)
     // A manager who already marked an expense "personal" made an explicit
-    // call the detector shouldn't second-guess — leave it out of both the
+    // call the detector shouldn't second-guess, leave it out of both the
     // recurrence inference and the stopped-stream check entirely.
     .eq("classification", "business");
   if (error) {
@@ -237,7 +245,7 @@ export async function applyRecurringExpenseDetection(
   if (!rows || rows.length === 0) return 0;
 
   // "As of" the freshest month actually present in this sheet/bank pull
-  // — i.e. relative to the data we really have, not wall-clock "today",
+  //, i.e. relative to the data we really have, not wall-clock "today",
   // so a sync that hasn't caught up yet never falsely reads as silence.
   const asOfMonth = rows.reduce((max, r) => Math.max(max, r.month), 0);
   const updates = computeRecurrenceUpdates(
@@ -256,7 +264,7 @@ export async function applyRecurringExpenseDetection(
 //   1. Identity is known, not inferred. Stripe subscription charges carry
 //      their true cadence (set from the invoice billing interval at sync
 //      time) AND a stable subscription id (recurring_key). So we neither
-//      infer a cadence nor require a >= 3-month history — Stripe already
+//      infer a cadence nor require a >= 3-month history, Stripe already
 //      told us it's a subscription and how often it bills.
 //
 //   2. Amount is NOT a safe grouping key. Many customers pay the same plan
@@ -266,7 +274,7 @@ export async function applyRecurringExpenseDetection(
 // The only job here is to stop the SAME subscription projecting forward once
 // per charge: for each recurring_key keep the cadence on the latest-month
 // charge (the anchor) and demote every earlier charge to one_off (real past
-// revenue, already realized — not re-projected). Rows without a
+// revenue, already realized, not re-projected). Rows without a
 // recurring_key (one-off sales, manual entries) are ignored entirely.
 
 export type IncomeRowForRecurrence = {
@@ -286,7 +294,7 @@ function latestOf<T extends { month: number; id: string }>(group: T[]): T {
 /**
  * The cadence to carry forward for a subscription stream: the most recent
  * non-one_off recurrence seen on it (Stripe can change a plan's interval, so
- * trust the latest charge). Returns null if the whole stream is one_off —
+ * trust the latest charge). Returns null if the whole stream is one_off -
  * nothing to anchor.
  */
 function streamCadence(group: IncomeRowForRecurrence[]): RecurrenceValue | null {
@@ -324,7 +332,7 @@ export function computeIncomeRecurrenceUpdates(
   const updates: RecurrenceUpdate[] = [];
   for (const group of groups.values()) {
     const cadence = streamCadence(group);
-    if (!cadence) continue; // stream is all one_off — leave it be
+    if (!cadence) continue; // stream is all one_off, leave it be
     const anchor = latestOf(group);
     for (const r of group) {
       const target: RecurrenceValue = r.id === anchor.id ? cadence : "one_off";
