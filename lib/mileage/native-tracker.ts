@@ -64,6 +64,46 @@ const LS_BUFFER = "taxottic.mileage.buffer";
  *  start(). "1" enables eco; anything else (including missing) is
  *  the default full-fidelity mode. */
 const LS_ECO = "taxottic.mileage.eco";
+/** Set when the background watcher reports a permission/authorization
+ *  failure (location not set to "Always", or denied). The UI reads this
+ *  to FORCE a fix instead of letting tracking fail silently. Self-clears
+ *  the moment a real GPS fix arrives (permission is fine again). */
+const LS_PERM = "taxottic.mileage.permBlocked";
+
+function dispatchPermEvent(): void {
+  try {
+    window.dispatchEvent(new Event("taxottic:mileage-perm"));
+  } catch {
+    /* SSR / no window */
+  }
+}
+function setPermBlocked(blocked: boolean): void {
+  try {
+    if (blocked) window.localStorage.setItem(LS_PERM, "1");
+    else window.localStorage.removeItem(LS_PERM);
+  } catch {
+    /* private mode */
+  }
+  dispatchPermEvent();
+}
+/** A watcher error means "background tracking can't run": iOS "While
+ *  Using" instead of "Always", location denied, or services off. Match
+ *  broadly by code AND message so plugin-version differences don't slip
+ *  a permission failure through as a silent stop. */
+function isPermissionError(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  const c = String(error.code ?? "").toUpperCase();
+  const m = String(error.message ?? "").toLowerCase();
+  return (
+    c === "NOT_AUTHORIZED" ||
+    c === "PERMISSION_DENIED" ||
+    c.includes("AUTH") ||
+    c.includes("PERMISSION") ||
+    /authoriz|permission|denied|always|location services|not enabled/.test(m)
+  );
+}
 
 // Battery vs. fidelity. The segmentation core tolerates sparse points
 // (it derives speed/dwell from gaps), so a 25 m filter is plenty for
@@ -499,10 +539,25 @@ export async function startMileageTracking(
         if (error) {
           trackerDiag.cbLastError =
             String(error.code ?? "") + ":" + String(error.message ?? "");
-          if (error.code === "NOT_AUTHORIZED") void stopMileageTracking();
+          // Permission problem (not "Always", denied, services off):
+          // flag it so the UI forces a fix, then stop so we don't spin.
+          if (isPermissionError(error)) {
+            setPermBlocked(true);
+            void stopMileageTracking();
+          }
           return;
         }
         if (!location) return;
+        // A real fix arrived → permission is fine. Clear any stale
+        // warning (only touch storage when it was actually set, so we
+        // aren't writing localStorage on every 2-second fix).
+        try {
+          if (window.localStorage.getItem(LS_PERM) === "1") {
+            setPermBlocked(false);
+          }
+        } catch {
+          /* private mode */
+        }
         const pt = toPoint(location);
         if (!pt) return;
         buffer.push(pt);
@@ -583,6 +638,54 @@ export async function stopMileageTracking(): Promise<void> {
   // 5-min stationary dwell, i.e. nearly every real drive, where you
   // park and immediately toggle off.
   await flush({ sessionEnded: true }); // best-effort final upload
+}
+
+/** UI snapshot for the "Location must be Always" banner. `enabled` is
+ *  the user's tracking intent; `permBlocked` is set once the watcher has
+ *  reported a permission failure. */
+export function getMileageTrackingUiState(): {
+  enabled: boolean;
+  permBlocked: boolean;
+} {
+  if (typeof window === "undefined") {
+    return { enabled: false, permBlocked: false };
+  }
+  try {
+    return {
+      enabled: window.localStorage.getItem(LS_ENABLED) === "1",
+      permBlocked: window.localStorage.getItem(LS_PERM) === "1",
+    };
+  } catch {
+    return { enabled: false, permBlocked: false };
+  }
+}
+
+/** Open the OS location-settings screen for this app (plugin-native). */
+export async function openMileageLocationSettings(): Promise<void> {
+  const bg = await guard();
+  try {
+    await (bg as { openSettings?: () => Promise<void> } | null)?.openSettings?.();
+  } catch {
+    /* openSettings unavailable in this binary */
+  }
+}
+
+/** Re-arm tracking after the user fixes the permission (banner action).
+ *  Reuses the saved company; startMileageTracking re-requests permission
+ *  and, on the first successful fix, clears the permBlocked flag. */
+export async function retryMileageTracking(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  if (typeof window === "undefined") return { ok: false };
+  let company = "";
+  try {
+    company = window.localStorage.getItem(LS_COMPANY) ?? "";
+  } catch {
+    /* private mode */
+  }
+  if (!company) return { ok: false, error: "no_company" };
+  return startMileageTracking(company);
 }
 
 /**
