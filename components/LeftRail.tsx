@@ -251,6 +251,32 @@ const PERSONAL_ITEMS: {
     icon: <Path d="M6 4h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1zM14 4v5h5M9 13h6M9 17h6" />,
   },
   {
+    key: "playbook",
+    // Personal tax-savings playbook: IRS-cited individual moves
+    // (401k/IRA/HSA/FSA/529/harvesting/credits), same engine as the
+    // company playbook but fed only personal inputs.
+    label: "Playbook",
+    href: "/personal/playbook",
+    icon: (
+      <Icon>
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      </Icon>
+    ),
+  },
+  {
+    key: "goals",
+    label: "Goals",
+    href: "/goals",
+    icon: (
+      <Icon>
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </Icon>
+    ),
+  },
+  {
     key: "export",
     label: "Export",
     href: "/personal/export",
