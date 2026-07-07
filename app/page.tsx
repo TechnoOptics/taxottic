@@ -232,7 +232,7 @@ const DEFINED_TERM_LD = {
   url: SITE_ORIGIN,
 };
 
-type Audience = "personal" | "enterprise";
+type Audience = "personal" | "business" | "firm";
 
 export default async function Home({
   searchParams,
@@ -246,8 +246,14 @@ export default async function Home({
   if (user) redirect("/dashboard");
 
   const sp = await searchParams;
+  // "enterprise" kept as an alias for "firm" so any old shared link still
+  // lands on the firm view.
   const audience: Audience =
-    sp.audience === "enterprise" ? "enterprise" : "personal";
+    sp.audience === "firm" || sp.audience === "enterprise"
+      ? "firm"
+      : sp.audience === "business"
+        ? "business"
+        : "personal";
 
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
@@ -270,7 +276,7 @@ export default async function Home({
           gradient + gold underline as the authenticated AppHeader, so the
           marketing site feels like the same product the user signs into. */}
       <header
-        className="relative"
+        className="fixed top-0 left-0 right-0 z-30"
         style={{
           background:
             "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
@@ -289,7 +295,7 @@ export default async function Home({
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[4.25rem] flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
           <SignInIconLink />
         </div>
@@ -303,10 +309,22 @@ export default async function Home({
           }}
         />
       </header>
+      {/* Spacer for the now-fixed header. `sticky` can't be used: the
+          Capacitor WebView needs overflow-x:clip on html/body, which
+          breaks position:sticky, so the header is fixed + a matching
+          spacer (same pattern as the authenticated AppHeader). Height =
+          safe-area top inset + the 4.25rem header row. */}
+      <div
+        aria-hidden="true"
+        style={{
+          height:
+            "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + 4.25rem)",
+        }}
+      />
 
       <Hero audience={audience} />
       <Capabilities audience={audience} />
-      <ProductTour />
+      <ProductTour audience={audience} />
       <ProofBand />
       <FomoBand audience={audience} />
       <FinalCta audience={audience} />
@@ -319,8 +337,84 @@ export default async function Home({
 // Hero
 // ---------------------------------------------------------------------------
 
+const HERO: Record<
+  Audience,
+  {
+    head: React.ReactNode;
+    sub: React.ReactNode;
+    ctaHref: string;
+    ctaLabel: string;
+    pricingHref: string;
+    footnote: string;
+  }
+> = {
+  personal: {
+    head: (
+      <>
+        A calmer way to handle{" "}
+        <span className="gold-shine">your personal taxes.</span>
+      </>
+    ),
+    sub: (
+      <>
+        Taxottic tracks the personal deductions you&apos;ve already earned,
+        keeps a live federal + state forecast in step with your accounts, and
+        nudges you to set money aside before you need it. For W-2 earners,
+        freelancers, and side-hustlers.
+      </>
+    ),
+    ctaHref: "/example",
+    ctaLabel: "Take a look around",
+    pricingHref: "/pricing",
+    footnote:
+      "No credit card. No commitment. Visit and leave at your own pace.",
+  },
+  business: {
+    head: (
+      <>
+        A calmer way to run{" "}
+        <span className="gold-shine">your business&apos;s taxes.</span>
+      </>
+    ),
+    sub: (
+      <>
+        Bank-synced expenses auto-matched to IRS codes, business miles tracked
+        automatically, a forecast that keeps pace with your books, and a
+        ready-to-file Schedule C waiting at year-end. For sole props, LLCs,
+        S-corps, and their teams.
+      </>
+    ),
+    ctaHref: "/example",
+    ctaLabel: "Take a look around",
+    pricingHref: "/pricing",
+    footnote:
+      "No credit card. No commitment. Visit and leave at your own pace.",
+  },
+  firm: {
+    head: (
+      <>
+        A calmer view of{" "}
+        <span className="gold-shine">every client&apos;s books.</span>
+      </>
+    ),
+    sub: (
+      <>
+        A shared workspace where your clients keep their books in order on
+        their own time, and your team picks up where they left off. Bulk
+        exports, engagement workflow, firm-wide analytics. Branded as your
+        firm, never as ours.
+      </>
+    ),
+    ctaHref: "/book?for=firm",
+    ctaLabel: "Have a quick chat",
+    pricingHref: "/pricing#practice",
+    footnote:
+      "White-glove migration. Branded portal. Per-seat or per-client.",
+  },
+};
+
 function Hero({ audience }: { audience: Audience }) {
-  const personal = audience === "personal";
+  const h = HERO[audience];
   return (
     <section className="relative overflow-hidden">
       {/* Forest gradient backdrop with subtle gold radial */}
@@ -344,50 +438,21 @@ function Hero({ audience }: { audience: Audience }) {
         <AudienceToggle audience={audience} />
 
         <h1 className="display mt-8 text-4xl sm:text-6xl lg:text-7xl text-cream max-w-4xl leading-[1.05]">
-          {personal ? (
-            <>
-              A calmer way to{" "}
-              <span className="gold-shine">handle your taxes.</span>
-            </>
-          ) : (
-            <>
-              A calmer view of{" "}
-              <span className="gold-shine">every client&apos;s books.</span>
-            </>
-          )}
+          {h.head}
         </h1>
 
         <p className="mt-6 text-lg sm:text-xl text-cream/80 max-w-2xl leading-relaxed">
-          {personal ? (
-            <>
-              Taxottic quietly tracks the deductions your business has already
-              earned, keeps a running forecast in step with your bank, and
-              gives you a gentle nudge to set money aside before you need it.
-              Built for freelancers, contractors, and small businesses.
-            </>
-          ) : (
-            <>
-              A shared workspace where your clients keep their books in order
-              on their own time, and your team picks up where they left off.
-              Branded as your firm, never as ours.
-            </>
-          )}
+          {h.sub}
         </p>
 
         <div className="mt-10 flex flex-wrap gap-3">
-          {/* "Take a look around" used to point at /login, which the
-              May 2026 audit (P2) flagged as a soft-claim: the copy
-              promises a tour, the link asks for a sign-up. /example is
-              now a real read-only sample dashboard so the CTA matches
-              its words. Firm-side keeps booking as the right CTA. */}
-          <Link
-            href={personal ? "/example" : "/book?for=firm"}
-            className="btn-primary"
-          >
-            {personal ? "Take a look around" : "Have a quick chat"}
+          {/* /example is a real read-only sample dashboard so the "take a
+              look" CTAs match their words; firm keeps booking as the CTA. */}
+          <Link href={h.ctaHref} className="btn-primary">
+            {h.ctaLabel}
           </Link>
           <Link
-            href={personal ? "/pricing" : "/pricing#practice"}
+            href={h.pricingHref}
             className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] border border-gold-300/30 text-cream hover:bg-white/5 transition-colors text-sm"
           >
             See pricing
@@ -401,9 +466,7 @@ function Hero({ audience }: { audience: Audience }) {
         </div>
 
         <p className="mt-6 text-xs uppercase tracking-[0.2em] text-gold-300">
-          {personal
-            ? "No credit card. No commitment. Visit and leave at your own pace."
-            : "White-glove migration. Branded portal. Per-seat or per-client."}
+          {h.footnote}
         </p>
       </div>
     </section>
@@ -413,7 +476,8 @@ function Hero({ audience }: { audience: Audience }) {
 function AudienceToggle({ audience }: { audience: Audience }) {
   const segments: { id: Audience; label: string }[] = [
     { id: "personal", label: "For me" },
-    { id: "enterprise", label: "For my firm" },
+    { id: "business", label: "For my business" },
+    { id: "firm", label: "For my firm" },
   ];
   return (
     <div
@@ -483,7 +547,34 @@ const PERSONAL: Capability[] = [
   },
 ];
 
-const ENTERPRISE: Capability[] = [
+const BUSINESS: Capability[] = [
+  {
+    kicker: "Automatic Expensing",
+    title: "Your bank feed becomes your books.",
+    body: "Every business transaction syncs hourly and lands pre-matched to an IRS deduction code, cited to the publication. Mixed personal/business? Reclassify in a tap. No receipts to shoebox, no month-end catch-up.",
+    pull: "The books keep themselves.",
+  },
+  {
+    kicker: "Automatic Mileage",
+    title: "Every business mile, captured on its own.",
+    body: "The app logs drives in the background by GPS, separates business from personal, and turns them into an IRS-rate deduction with a defensible map + log. Track a whole team and see each driver in their own colour.",
+    pull: "Miles you'd have left on the table.",
+  },
+  {
+    kicker: "1,025 Deductions + Live Forecast",
+    title: "What you owe, and what you've earned back.",
+    body: "Federal + state brackets applied to live income and the deductions you've claimed against 1,025 IRS-cited items. QBI, home office, vehicle, meals, all handled, all moving in step with your bank.",
+    pull: "A number you can trust, always current.",
+  },
+  {
+    kicker: "Year-End, Done for You",
+    title: "A ready-to-file Schedule C, plus a plan.",
+    body: "Every applied transaction lands on its proper Schedule C line, meals at 50%, vehicle split correctly, exported to PDF + CSV for your CPA. A savings playbook shows the moves still worth making before December.",
+    pull: "December feels like any other month.",
+  },
+];
+
+const FIRM: Capability[] = [
   {
     kicker: "Multi-Client Console",
     title: "Every client, in one calm place.",
@@ -510,17 +601,24 @@ const ENTERPRISE: Capability[] = [
   },
 ];
 
+const CAP_HEADING: Record<Audience, string> = {
+  personal:
+    "Built so the tax part of your year stops feeling like the scary part.",
+  business:
+    "Built so running the business is the part you think about, not the tax.",
+  firm: "Built so your firm operates the way clients already think it does.",
+};
+
 function Capabilities({ audience }: { audience: Audience }) {
-  const items = audience === "personal" ? PERSONAL : ENTERPRISE;
+  const items =
+    audience === "personal" ? PERSONAL : audience === "business" ? BUSINESS : FIRM;
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
       <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
         What you get
       </div>
       <h2 className="display mt-3 text-3xl sm:text-5xl text-forest-900 max-w-3xl">
-        {audience === "personal"
-          ? "Built so the tax part of your business stops feeling like the scary part."
-          : "Built so your firm operates the way clients already think it does."}
+        {CAP_HEADING[audience]}
       </h2>
 
       <div className="mt-12 grid gap-4 sm:grid-cols-2">
@@ -554,54 +652,160 @@ function Capabilities({ audience }: { audience: Audience }) {
 // rather than a generic illustration.
 // ---------------------------------------------------------------------------
 
-function ProductTour() {
+type TourRow = {
+  mockup: React.ReactNode;
+  kicker: string;
+  title: string;
+  body: string;
+  tags: string[];
+};
+
+const TOUR: Record<
+  Audience,
+  { eyebrow: string; heading: React.ReactNode; intro: string; rows: TourRow[] }
+> = {
+  personal: {
+    eyebrow: "See it on your return",
+    heading: (
+      <>
+        Your taxes, <span className="gold-shine">quietly handled.</span>
+      </>
+    ),
+    intro:
+      "Connect the accounts you already have. Taxottic finds the personal deductions hiding in them, keeps a live forecast, and lays out the moves still worth making, without a spreadsheet in sight.",
+    rows: [
+      {
+        mockup: <BankFeedMockup />,
+        kicker: "Every day - Automatic expensing",
+        title: "Your accounts do the sorting.",
+        body: "New transactions sync on their own and land pre-matched to a deductible category, IRC section cited, source one tap away. Charitable gifts, medical, education, student-loan interest, tagged the moment they clear. One tap to keep, dismiss, or split.",
+        tags: ["Hourly sync", "IRS-cited", "Auto-applied"],
+      },
+      {
+        mockup: <DeductionCatalogMockup />,
+        kicker: "Always on - 1,025 IRS codes",
+        title: "Every deduction, cited to the source.",
+        body: "The full 1,025-item catalog from IRS Pub 502, 526, 970, and more, filtered to what actually applies to you. Each one links to the IRC section and the publication that explains it, so nothing you claim is a guess.",
+        tags: ["1,025 deductions", "IRC + Pub cited", "Filtered to you"],
+      },
+      {
+        mockup: <ForecastMockup />,
+        kicker: "Live - Forecast",
+        title: "A number that keeps pace.",
+        body: "Federal and state brackets applied to your live income and the deductions you've claimed. The figure in the corner of every screen moves with the math, with a two-weeks-early nudge before each quarterly date.",
+        tags: ["Federal + state", "Quarterly reminders", "Updated automatically"],
+      },
+      {
+        mockup: <PlaybookMockup />,
+        kicker: "Any time - Savings playbook",
+        title: "The moves still worth making.",
+        body: "A short, personalized list of legitimate ways to lower the bill, IRA and HSA room, energy credits, timing, each with the dollars it would save at your bracket. Adopt one and watch the forecast respond.",
+        tags: ["Personalized", "Dollar impact", "IRS-backed"],
+      },
+    ],
+  },
+  business: {
+    eyebrow: "See it on Company X",
+    heading: (
+      <>
+        A real business, <span className="gold-shine">the calm way.</span>
+      </>
+    ),
+    intro:
+      "Company X connected one bank account on a Tuesday. By Friday their Q4 forecast, categorized expenses, tracked mileage, and a ready-to-file Schedule C were quietly waiting, no spreadsheet opened, no inbox checked twice.",
+    rows: [
+      {
+        mockup: <BankFeedMockup />,
+        kicker: "Hour 1 - Automatic expensing",
+        title: "The bank feed becomes the books.",
+        body: "Every active account stays in step every hour. New transactions land tagged against the 1,025-item IRS deduction catalog, IRC section cited. Meals at 50%, software, travel, home office, all applied automatically. One tap to dismiss or split.",
+        tags: ["Hourly bank sync", "1,025 IRS-cited deductions", "Auto-applied"],
+      },
+      {
+        mockup: <MileageMockup />,
+        kicker: "In the background - Mileage",
+        title: "Every business mile logs itself.",
+        body: "The app detects drives by GPS, tells business from personal, and turns each into an IRS-standard-rate deduction with a map and a defensible log. Managers see the whole team, every driver in their own colour.",
+        tags: ["GPS auto-track", "$0.70 / mi", "Team map"],
+      },
+      {
+        mockup: <ForecastMockup />,
+        kicker: "Live - Forecast",
+        title: "The forecast keeps pace, quietly.",
+        body: "Federal and state brackets applied to live YTD income and the deductions claimed, QBI, SE tax, and safe-harbor all handled. The number in the corner moves with the math, no nightly recompute, no refresh.",
+        tags: ["Federal + state", "QBI + SE tax", "Updated automatically"],
+      },
+      {
+        mockup: <ScheduleCMockup />,
+        kicker: "December - Year-end, done for you",
+        title: "One click assembles the whole Schedule C.",
+        body: "Every applied transaction lands on its proper Schedule C line. Meals 50% rule applied, vehicle split between standard and actual, everything cited to the IRS publication and exported to PDF + CSV, ready for your CPA.",
+        tags: ["Schedule C", "IRS-cited", "PDF + CSV"],
+      },
+    ],
+  },
+  firm: {
+    eyebrow: "See it across your book",
+    heading: (
+      <>
+        Every client, <span className="gold-shine">one calm console.</span>
+      </>
+    ),
+    intro:
+      "Your clients keep their own books in order on their own time, bank-synced and pre-categorized. Your team opens one console to see where every engagement stands and export the whole book at once, branded as your firm.",
+    rows: [
+      {
+        mockup: <ClientRosterMockup />,
+        kicker: "The console - Every client",
+        title: "Who's filed, who's gathering, at a glance.",
+        body: "Multi-company, multi-engagement, one roster. See readiness, deductions claimed, and the next action for every client without juggling tabs, and let automatic follow-ups chase the ones who've gone quiet.",
+        tags: ["Multi-client", "Engagement workflow", "Auto follow-ups"],
+      },
+      {
+        mockup: <ScheduleCMockup />,
+        kicker: "Reports - Data sheets",
+        title: "Export the whole book in one pass.",
+        body: "Bulk Schedule C exports, monthly income/expense data sheets, and firm-wide deduction analytics, every line cited to its IRS publication. PDF for the client, CSV for your workpapers.",
+        tags: ["Bulk export", "PDF + CSV", "IRS-cited"],
+      },
+      {
+        mockup: <ForecastMockup />,
+        kicker: "Per client - Live forecast",
+        title: "Advise from a number that's already right.",
+        body: "Each client's federal + state forecast is current the moment you open it, no data entry, no reconciliation first. Your most thoughtful hours go to advising, not to catching the books up.",
+        tags: ["Always current", "Federal + state", "Branded as you"],
+      },
+    ],
+  },
+};
+
+function ProductTour({ audience }: { audience: Audience }) {
+  const t = TOUR[audience];
   return (
     <section className="bg-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
         <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          See it on Company X
+          {t.eyebrow}
         </div>
         <h2 className="display mt-3 text-3xl sm:text-5xl text-forest-900 max-w-3xl">
-          A real software company,{" "}
-          <span className="gold-shine">the calm way.</span>
+          {t.heading}
         </h2>
         <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
-          Company X connected one bank account on a Tuesday. By Friday,
-          their Q4 forecast, deductible expenses, and a ready-to-file
-          Schedule C were quietly waiting in the dashboard. No spreadsheet
-          opened, no inbox checked twice.
+          {t.intro}
         </p>
 
         <div className="mt-14 grid gap-16">
-          <Row reverse={false}>
-            <BankFeedMockup />
-            <Caption
-              kicker="Hour 1 - Bank sync"
-              title="The bank does the heavy lifting."
-              body="Your bank feed keeps every active account in step every hour. New transactions land tagged against the full 1,025-item IRS deduction catalog, IRC section cited, source URL one tap away. One tap to apply, dismiss, or split when you have the moment."
-              tags={["Hourly bank sync", "1,025 IRS-cited deductions", "Auto-applied"]}
-            />
-          </Row>
-
-          <Row reverse={true}>
-            <Caption
-              kicker="Hour 2 - Live forecast"
-              title="The forecast keeps pace, quietly."
-              body="Federal and state brackets, applied to live YTD income and the deductions Company X has claimed. The number in the corner of every screen moves with the math; no nightly recompute, no refreshing required."
-              tags={["Federal + state", "Quarterly safe-harbor", "Updated automatically"]}
-            />
-            <ForecastMockup />
-          </Row>
-
-          <Row reverse={false}>
-            <ScheduleCMockup />
-            <Caption
-              kicker="December - Year-end"
-              title="One click brings the whole Schedule C together."
-              body="Every applied transaction lands on its proper Schedule C line. Bella applies the meals 50% rule. Vehicle expenses split between standard mileage and actual. Everything cited to the IRS publication, ready to hand to your CPA when you're ready."
-              tags={["Schedule C", "IRS-cited", "PDF + CSV"]}
-            />
-          </Row>
+          {t.rows.map((r, i) => (
+            <Row key={r.kicker} reverse={i % 2 === 1}>
+              {r.mockup}
+              <Caption
+                kicker={r.kicker}
+                title={r.title}
+                body={r.body}
+                tags={r.tags}
+              />
+            </Row>
+          ))}
         </div>
       </div>
     </section>
@@ -969,6 +1173,195 @@ function ScheduleCMockup() {
   );
 }
 
+function DeductionCatalogMockup() {
+  const rows = [
+    { code: "IRC §162", label: "Ordinary + necessary business expense", pub: "Pub 535", on: true },
+    { code: "IRC §274(n)", label: "Business meals (50%)", pub: "Pub 463", on: true },
+    { code: "IRC §280A", label: "Home office", pub: "Pub 587", on: true },
+    { code: "IRC §213", label: "Medical + dental", pub: "Pub 502", on: false },
+    { code: "IRC §170", label: "Charitable contributions", pub: "Pub 526", on: true },
+    { code: "IRC §221", label: "Student-loan interest", pub: "Pub 970", on: false },
+  ];
+  return (
+    <MockupFrame label="Deduction catalog">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+          1,025 IRS-cited deductions
+        </div>
+        <div className="text-[11px] text-ink-muted">Filtered to your situation</div>
+      </div>
+      <ul className="mt-4 grid gap-2">
+        {rows.map((r) => (
+          <li
+            key={r.code}
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-white border border-forest-100 px-3 py-2.5"
+          >
+            <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+              <div className="text-sm text-forest-900 truncate">{r.label}</div>
+              <div className="text-[11px] text-ink-muted mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
+                <span className="text-forest-700 font-medium tabular-nums">{r.code}</span>
+                <span className="text-gold-700">·</span>
+                <span>{r.pub}</span>
+                <span className="text-gold-600 underline decoration-dotted">source</span>
+              </div>
+            </div>
+            <span
+              className={
+                "text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5 shrink-0 border " +
+                (r.on
+                  ? "text-emerald-700 bg-emerald-50 border-emerald-100"
+                  : "text-forest-700 bg-forest-50 border-forest-100")
+              }
+            >
+              {r.on ? "applies" : "eligible"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 text-[11px] text-ink-muted">
+        + 1,019 more, each tied to its IRC section and IRS publication.
+      </div>
+    </MockupFrame>
+  );
+}
+
+function MileageMockup() {
+  const trips = [
+    { route: "Office → client site", mi: "18.4", driver: "You", color: "#F2D896" },
+    { route: "Supplier pickup", mi: "9.1", driver: "Grace", color: "#7DD3FC" },
+    { route: "Site visit → home", mi: "22.7", driver: "Marco", color: "#86EFAC" },
+  ];
+  return (
+    <MockupFrame label="Mileage · auto-tracked">
+      {/* Stylised route map: navy dial with a few coloured driver trails. */}
+      <div
+        className="relative rounded-lg overflow-hidden h-32 border border-forest-100"
+        style={{ background: "linear-gradient(180deg,#1d2843,#121a2a)" }}
+        aria-hidden="true"
+      >
+        <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full">
+          <path d="M20 96 C 70 96, 90 40, 150 44" fill="none" stroke="#F2D896" strokeWidth="3" strokeLinecap="round" />
+          <path d="M40 20 C 120 30, 150 90, 250 84" fill="none" stroke="#7DD3FC" strokeWidth="3" strokeLinecap="round" />
+          <path d="M150 100 C 200 96, 220 30, 285 26" fill="none" stroke="#86EFAC" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="20" cy="96" r="4" fill="#34D399" />
+          <circle cx="285" cy="26" r="4" fill="#F2D896" />
+        </svg>
+      </div>
+      <ul className="mt-4 grid gap-2">
+        {trips.map((t) => (
+          <li
+            key={t.route}
+            className="flex items-center justify-between gap-3 rounded-lg bg-white border border-forest-100 px-3 py-2"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="inline-block w-3 h-1.5 rounded shrink-0" style={{ background: t.color }} />
+              <span className="text-sm text-forest-900 truncate">{t.route}</span>
+            </span>
+            <span className="flex items-center gap-3 shrink-0 text-[12px]">
+              <span className="text-ink-muted">{t.driver}</span>
+              <span className="tabular-nums text-forest-900">{t.mi} mi</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 flex items-center justify-between text-[11px]">
+        <span className="text-ink-muted flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Tracking in the background
+        </span>
+        <span className="text-forest-700">
+          312 business mi · <span className="text-forest-900 font-medium tabular-nums">$218 deduction</span>
+        </span>
+      </div>
+    </MockupFrame>
+  );
+}
+
+function PlaybookMockup() {
+  const moves = [
+    { move: "Open + fund a SEP-IRA", note: "up to 20% of net", save: "$3,900" },
+    { move: "Max the HSA", note: "triple tax-free", save: "$1,020" },
+    { move: "Home-office (simplified)", note: "300 sq ft", save: "$330" },
+    { move: "Push Dec invoices to January", note: "defer income", save: "$610" },
+  ];
+  return (
+    <MockupFrame label="Savings playbook">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+          Moves still worth making
+        </div>
+        <div className="text-[11px] text-ink-muted">Est. this year</div>
+      </div>
+      <ul className="mt-4 grid gap-2">
+        {moves.map((m) => (
+          <li
+            key={m.move}
+            className="flex items-center justify-between gap-3 rounded-lg bg-white border border-forest-100 px-3 py-2.5"
+          >
+            <div className="min-w-0">
+              <div className="text-sm text-forest-900 truncate">{m.move}</div>
+              <div className="text-[11px] text-ink-muted mt-0.5">{m.note}</div>
+            </div>
+            <span className="text-sm tabular-nums text-emerald-700 shrink-0">
+              {m.save}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 flex items-center justify-between">
+        <span className="text-[11px] text-ink-muted">Adopt one and the forecast responds.</span>
+        <span className="text-sm text-forest-900 font-medium tabular-nums">
+          ~$5,860 total
+        </span>
+      </div>
+    </MockupFrame>
+  );
+}
+
+function ClientRosterMockup() {
+  const clients = [
+    { name: "Meridian Studio LLC", status: "Ready to file", tone: "good", ready: 100 },
+    { name: "Harbor Coffee Co.", status: "3 to review", tone: "warn", ready: 82 },
+    { name: "Delgado Consulting", status: "Gathering docs", tone: "neutral", ready: 54 },
+    { name: "North & Vine", status: "Ready to file", tone: "good", ready: 96 },
+  ];
+  const dot = (tone: string) =>
+    tone === "good" ? "bg-emerald-500" : tone === "warn" ? "bg-amber-400" : "bg-gold-400";
+  return (
+    <MockupFrame label="Firm console · Clients">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <div className="text-[11px] uppercase tracking-[0.2em] text-gold-700">
+          24 clients · Tax year 2026
+        </div>
+        <div className="text-[11px] text-ink-muted">2 need a nudge</div>
+      </div>
+      <ul className="mt-4 grid gap-2">
+        {clients.map((c) => (
+          <li
+            key={c.name}
+            className="flex items-center justify-between gap-3 rounded-lg bg-white border border-forest-100 px-3 py-2.5"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <span className={"size-2 rounded-full shrink-0 " + dot(c.tone)} />
+              <span className="text-sm text-forest-900 truncate">{c.name}</span>
+            </span>
+            <span className="flex items-center gap-3 shrink-0">
+              <span className="hidden sm:inline-block rounded-full bg-forest-50 overflow-hidden w-16 h-1.5">
+                <span className="block h-full bg-gold-400" style={{ width: `${c.ready}%` }} />
+              </span>
+              <span className="text-[11px] text-forest-700 w-24 text-right">{c.status}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 flex items-center justify-between text-[11px]">
+        <span className="text-ink-muted">Follow-ups sent automatically to the quiet ones.</span>
+        <span className="text-forest-700 uppercase tracking-[0.18em]">Bulk export</span>
+      </div>
+    </MockupFrame>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Proof band - concrete capability list, dark surface
 // ---------------------------------------------------------------------------
@@ -1016,32 +1409,51 @@ function ProofBand() {
 // FOMO band - pointed line + supporting texture
 // ---------------------------------------------------------------------------
 
+const FOMO: Record<Audience, { line: React.ReactNode; sub: string }> = {
+  personal: {
+    line: (
+      <>
+        Most of the deductions you have already earned are sitting{" "}
+        <span className="gold-shine">in your bank statements.</span> We help you
+        find them, gently, before tax day.
+      </>
+    ),
+    sub: "We are not here to scare anyone about April. The tools are calm by design, the cadence is yours, and every number we surface is one you can verify against the IRS in a click.",
+  },
+  business: {
+    line: (
+      <>
+        The deductions your business earned are hiding{" "}
+        <span className="gold-shine">in your bank feed and your glovebox.</span>{" "}
+        Taxottic surfaces them and files them away, all year.
+      </>
+    ),
+    sub: "Running the business is hard enough. The books keep themselves, the miles track themselves, and the year-end return assembles itself, so the tax part is the part you stop thinking about.",
+  },
+  firm: {
+    line: (
+      <>
+        Your firm&apos;s most thoughtful hours{" "}
+        <span className="gold-shine">belong to your clients,</span> not to data
+        entry. Taxottic gives those hours back to your team.
+      </>
+    ),
+    sub: "Built by people who care about the work and the relationships behind it. We will never get between you and your clients. The tooling is yours; we just keep it tidy.",
+  },
+};
+
 function FomoBand({ audience }: { audience: Audience }) {
-  const personal = audience === "personal";
+  const f = FOMO[audience];
   return (
     <section className="max-w-5xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
       <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
         What we believe
       </div>
       <p className="display mt-4 text-3xl sm:text-5xl text-forest-900 leading-tight">
-        {personal ? (
-          <>
-            Most of the deductions you have already earned are sitting{" "}
-            <span className="gold-shine">in your bank statements.</span> We
-            help you find them, gently, before tax day.
-          </>
-        ) : (
-          <>
-            Your firm&apos;s most thoughtful hours{" "}
-            <span className="gold-shine">belong to your clients,</span> not to
-            data entry. Taxottic gives those hours back to your team.
-          </>
-        )}
+        {f.line}
       </p>
       <p className="mt-6 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
-        {personal
-          ? "We are not here to scare anyone about April. The tools are calm by design, the cadence is yours, and every number we surface is one you can verify against the IRS in a click."
-          : "Built by people who care about the work and the relationships behind it. We will never get between you and your clients. The tooling is yours; we just keep it tidy."}
+        {f.sub}
       </p>
     </section>
   );
@@ -1051,37 +1463,75 @@ function FomoBand({ audience }: { audience: Audience }) {
 // Final CTA
 // ---------------------------------------------------------------------------
 
+const FINAL_CTA: Record<
+  Audience,
+  {
+    title: string;
+    body: string;
+    ctaHref: string;
+    ctaLabel: string;
+    others: { id: Audience; label: string }[];
+  }
+> = {
+  personal: {
+    title: "Take a look. Sign up only if it feels right.",
+    body: "Connect an account in about 90 seconds and see your live federal + state forecast on the next page. No card. No commitment. Leave any time.",
+    ctaHref: "/login",
+    ctaLabel: "Take a look",
+    others: [
+      { id: "business", label: "I run a business" },
+      { id: "firm", label: "I run a firm" },
+    ],
+  },
+  business: {
+    title: "Connect a bank. Watch the books keep themselves.",
+    body: "About 90 seconds to sync, then your categorized expenses, tracked mileage, and live Schedule C forecast appear on their own. No card, no commitment.",
+    ctaHref: "/login",
+    ctaLabel: "Take a look",
+    others: [
+      { id: "personal", label: "Just my personal taxes" },
+      { id: "firm", label: "I run a firm" },
+    ],
+  },
+  firm: {
+    title: "Tell us about your firm. We will tailor the rest.",
+    body: "A short form, no sign-in required. We will reach out with a 15-minute walkthrough and a migration plan tailored to your client list.",
+    ctaHref: "/book?for=firm",
+    ctaLabel: "Open the form",
+    others: [
+      { id: "personal", label: "Just me" },
+      { id: "business", label: "I run a business" },
+    ],
+  },
+};
+
 function FinalCta({ audience }: { audience: Audience }) {
-  const personal = audience === "personal";
+  const c = FINAL_CTA[audience];
   return (
     <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-20 sm:pb-28">
-      <div className="card p-6 sm:p-8 sm:p-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+      <div className="card p-6 sm:p-8 md:p-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div className="max-w-2xl">
           <h2 className="display text-2xl sm:text-3xl text-forest-900">
-            {personal
-              ? "Take a look. Sign up only if it feels right."
-              : "Tell us about your firm. We will tailor the rest."}
+            {c.title}
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
-            {personal
-              ? "Connect a bank in about 90 seconds and see your live federal + state forecast on the next page. No card. No commitment. Leave any time."
-              : "A short form, no sign-in required. We will reach out with a 15-minute walkthrough and a migration plan tailored to your client list."}
+            {c.body}
           </p>
         </div>
         <div className="flex flex-wrap gap-3 shrink-0">
-          <Link
-            href={personal ? "/login" : "/book?for=firm"}
-            className="btn-primary"
-          >
-            {personal ? "Take a look" : "Open the form"}
+          <Link href={c.ctaHref} className="btn-primary">
+            {c.ctaLabel}
           </Link>
-          <Link
-            href={`/?audience=${personal ? "enterprise" : "personal"}`}
-            className="btn-ghost"
-            scroll={false}
-          >
-            {personal ? "I run a firm" : "I am an individual"}
-          </Link>
+          {c.others.map((o) => (
+            <Link
+              key={o.id}
+              href={`/?audience=${o.id}`}
+              className="btn-ghost"
+              scroll={false}
+            >
+              {o.label}
+            </Link>
+          ))}
         </div>
       </div>
     </section>
