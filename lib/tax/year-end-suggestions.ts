@@ -18,6 +18,16 @@ import {
 
 export type SuggestionTone = "high" | "medium" | "low";
 
+/**
+ * Which tax context a suggestion belongs to (personal/business
+ * separation). "business" moves live on a company forecast (Schedule C /
+ * entity actions); "personal" moves live on the personal 1040 (itemize,
+ * charitable); "shared" applies to whoever owes the tax (quarterly
+ * estimates, underpayment safe-harbor).
+ */
+export type SuggestionScope = "business" | "personal" | "shared";
+export type SuggestionContext = "personal" | "business";
+
 export type Suggestion = {
   id: string;
   title: string;
@@ -65,6 +75,31 @@ export type SuggestionInput = {
   // re-audit finding that the Year-End Moves card kept saying
   // "Catch up Q1" for a company created in May.
   companyCreatedAt?: string | null;
+  // Which contexts to emit advice for (personal/business separation). A
+  // SEPARATE (not-combined) business forecast passes ["business"], so
+  // personal-return moves (itemize, charitable) don't leak onto a
+  // standalone business estimate. A COMBINED forecast passes
+  // ["business","personal"] since its number IS the owner's 1040. A
+  // personal-only surface passes ["personal"]. "Shared" advice
+  // (quarterly, underpayment) always shows regardless.
+  contexts: readonly SuggestionContext[];
+};
+
+// Which context each suggestion belongs to, keyed by its stable id. Kept
+// as a lookup (rather than a field on every pushed object) so the emit
+// logic below stays untouched and the mapping is auditable in one place.
+const SUGGESTION_SCOPE: Record<string, SuggestionScope> = {
+  next_quarterly: "shared",
+  past_due_quarterly: "shared",
+  underpayment_risk: "shared",
+  open_sep_ira: "business",
+  log_mileage: "business",
+  vehicle_method_set: "business",
+  home_office_setup: "business",
+  se_health_premium: "business",
+  year_end_deferral: "business",
+  switch_to_standard: "personal",
+  charitable_giving: "personal",
 };
 
 const SE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set([
@@ -291,8 +326,18 @@ export function buildYearEndSuggestions(
     });
   }
 
-  out.sort(toneRank);
-  return out;
+  // Context scoping (personal/business separation): only emit advice that
+  // belongs to a requested context. "shared" moves always apply; a
+  // business/personal move applies only when that context is requested.
+  // So a standalone (not-combined) business forecast, which passes
+  // ["business"], never surfaces personal-return items like "switch to the
+  // standard deduction" or "give to charity."
+  const scoped = out.filter((s) => {
+    const scope = SUGGESTION_SCOPE[s.id] ?? "shared";
+    return scope === "shared" || input.contexts.includes(scope);
+  });
+  scoped.sort(toneRank);
+  return scoped;
 }
 
 function findNextDueQuarterly(
