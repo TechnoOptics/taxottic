@@ -115,6 +115,10 @@ export default async function FirmMileagePage({
   const mapTrips: MapTrip[] = trips.map((t) => ({
     id: t.id,
     classification: t.classification,
+    // Per-driver colouring on the team map: each teammate's trails get a
+    // unique colour (MileageMap assigns one per driver when 2+ are shown).
+    driverId: t.driver_user_id,
+    driverName: driverLabel.get(t.driver_user_id) ?? null,
     points: [...t.mileage_points]
       .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
       .map((p) => ({ lat: p.lat, lng: p.lng })),
