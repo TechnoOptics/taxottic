@@ -51,7 +51,7 @@ describe("computeRecurrenceUpdates", () => {
     expect(updates).toHaveLength(2);
   });
 
-  it("is idempotent — re-running on already-marked rows yields no changes", () => {
+  it("is idempotent, re-running on already-marked rows yields no changes", () => {
     const rows = [
       row("a1", 1, 8999, "software_subscriptions", "one_off"),
       row("a2", 2, 8999, "software_subscriptions", "one_off"),
@@ -60,15 +60,16 @@ describe("computeRecurrenceUpdates", () => {
     expect(computeRecurrenceUpdates(rows)).toEqual([]);
   });
 
-  it("demotes a stale recurring mark when the stream is no longer recurring", () => {
-    // Was marked monthly but only 2 occurrences now → back to one_off.
+  it("keeps a below-threshold recurring mark (protects a manual pick)", () => {
+    // Only 2 occurrences, so auto-detection wouldn't PROMOTE this. Crucially
+    // it must not DEMOTE it either: the "monthly" could be the user's manual
+    // pick on a just-connected subscription with little history, and forcing
+    // one_off on every sync was exactly what wiped those picks. Leave it be.
     const rows = [
       row("a1", 1, 8999, "software_subscriptions", "monthly"),
       row("a2", 2, 8999, "software_subscriptions", "one_off"),
     ];
-    expect(computeRecurrenceUpdates(rows)).toEqual([
-      { id: "a1", recurrence: "one_off" },
-    ]);
+    expect(computeRecurrenceUpdates(rows)).toEqual([]);
   });
 
   it("moves the anchor forward when a new month arrives", () => {
@@ -87,7 +88,7 @@ describe("computeRecurrenceUpdates", () => {
 
   describe("stopped-stream detection (asOfMonth)", () => {
     it("does nothing when asOfMonth is omitted, even with a stale anchor", () => {
-      // Anchor is month 3, but there's no way to know "now" — no
+      // Anchor is month 3, but there's no way to know "now", no
       // asOfMonth means no stopped-stream inference at all.
       const rows = [1, 2, 3].map((m) =>
         row(`a${m}`, m, 8999, "software_subscriptions", m === 3 ? "monthly" : "one_off"),
@@ -96,7 +97,7 @@ describe("computeRecurrenceUpdates", () => {
     });
 
     it("does NOT flag a stream as stopped within the grace window", () => {
-      // Monthly anchor at month 3, asOfMonth 4 — only one silent cycle,
+      // Monthly anchor at month 3, asOfMonth 4, only one silent cycle,
       // could just be a slightly-late sync. STOPPED_AFTER_CYCLES is 2.
       const rows = [1, 2, 3].map((m) =>
         row(`a${m}`, m, 8999, "software_subscriptions", m === 3 ? "monthly" : "one_off"),
@@ -105,7 +106,7 @@ describe("computeRecurrenceUpdates", () => {
     });
 
     it("caps recurrence_end_month at the anchor's own month after 2 silent monthly cycles", () => {
-      // Monthly anchor at month 3, asOfMonth 5 — two full months of
+      // Monthly anchor at month 3, asOfMonth 5, two full months of
       // silence with no new occurrence → treat as cancelled.
       const rows = [1, 2, 3].map((m) =>
         row(`a${m}`, m, 8999, "software_subscriptions", m === 3 ? "monthly" : "one_off"),
@@ -116,10 +117,10 @@ describe("computeRecurrenceUpdates", () => {
     });
 
     it("does not flag a quarterly stream within its 1-cycle (3-month) grace window", () => {
-      // Quarterly anchor at month 7 (3 occurrences: 1, 4, 7 — the
+      // Quarterly anchor at month 7 (3 occurrences: 1, 4, 7, the
       // earliest a quarterly stream can qualify as recurring at all,
       // since MIN_RECURRING_MONTHS = 3). asOfMonth 9 is only 2 months
-      // of silence — under the 3-month (1-cycle) threshold.
+      // of silence, under the 3-month (1-cycle) threshold.
       const rows = [1, 4, 7].map((m) =>
         row(`q${m}`, m, 20000, "software_subscriptions", m === 7 ? "quarterly" : "one_off"),
       );
@@ -137,8 +138,8 @@ describe("computeRecurrenceUpdates", () => {
 
     it("clears a stale end month if the anchor is within the grace window again", () => {
       // a3 carries a stored recurrence_end_month of 3 from an earlier
-      // run, but THIS run's asOfMonth (4) is within the grace window —
-      // not actually stopped — so the stale cap gets cleared back to
+      // run, but THIS run's asOfMonth (4) is within the grace window -
+      // not actually stopped, so the stale cap gets cleared back to
       // null even though the recurrence value itself doesn't change.
       const rows = [
         row("a1", 1, 8999, "software_subscriptions", "one_off"),
@@ -152,7 +153,7 @@ describe("computeRecurrenceUpdates", () => {
 
     it("does not re-emit an update once the stopped cap is already persisted", () => {
       // a3 already has recurrence "monthly" AND recurrence_end_month 3
-      // stored — a re-run with the same asOfMonth should be a no-op.
+      // stored, a re-run with the same asOfMonth should be a no-op.
       const rows = [
         row("a1", 1, 8999, "software_subscriptions", "one_off"),
         row("a2", 2, 8999, "software_subscriptions", "one_off"),
@@ -184,7 +185,7 @@ const inc = (
 
 describe("computeIncomeRecurrenceUpdates", () => {
   it("keeps only the latest charge of a subscription projecting forward", () => {
-    // One sub billed monthly in months 1,2,3 — all tagged monthly at sync.
+    // One sub billed monthly in months 1,2,3, all tagged monthly at sync.
     const rows = [1, 2, 3].map((m) => inc(`c${m}`, m, "sub_A"));
     const updates = computeIncomeRecurrenceUpdates(rows);
     // months 1,2 demote to one_off; month 3 (anchor) already monthly.
@@ -193,7 +194,7 @@ describe("computeIncomeRecurrenceUpdates", () => {
     expect(updates).toHaveLength(2);
   });
 
-  it("a single charge is already its own anchor — no change", () => {
+  it("a single charge is already its own anchor, no change", () => {
     expect(computeIncomeRecurrenceUpdates([inc("c1", 4, "sub_A")])).toEqual([]);
   });
 
@@ -229,7 +230,7 @@ describe("computeIncomeRecurrenceUpdates", () => {
     // q4 already quarterly → stays the anchor, no update emitted.
   });
 
-  it("is idempotent — re-running on anchored rows yields no changes", () => {
+  it("is idempotent, re-running on anchored rows yields no changes", () => {
     const rows = [
       inc("c1", 1, "sub_A", "one_off"),
       inc("c2", 2, "sub_A", "one_off"),
