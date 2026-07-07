@@ -9,7 +9,9 @@ import {
   clearAvatarUrl,
   saveFullName,
   saveCompanyBio,
+  setCombinePersonalBusiness,
 } from "./actions";
+import { resolveCombine } from "@/lib/tax/combine-setting";
 
 const PLATFORM_DESCRIPTION: Record<string, { label: string; body: string }> = {
   user: {
@@ -32,7 +34,9 @@ export default async function SettingsPage() {
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("active_platform, full_name, avatar_url, show_smart_search")
+    .select(
+      "active_platform, full_name, avatar_url, show_smart_search, combine_personal_business",
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -54,6 +58,37 @@ export default async function SettingsPage() {
 
   const current = (profile?.active_platform as string | null) ?? "user";
   const showSmartSearch = profile?.show_smart_search === true;
+
+  // Combine setting (Phase 3, personal/business separation). Only owners
+  // see it, so fetch the entity types of the companies this user MANAGES,
+  // both to gate the control and to tell them what "Automatic" resolves
+  // to for their setup. resolveCombine keeps the default logic in one
+  // place (lib/tax/combine-setting.ts), the same helper the forecast uses.
+  const { data: managedRows } = await admin
+    .from("company_members")
+    .select("role, company:companies!inner(entity_type, deleted_at)")
+    .eq("user_id", user.id)
+    .eq("role", "manager")
+    .is("company.deleted_at", null);
+  const managedEntityTypes = (managedRows ?? []).map((m) => {
+    const c = Array.isArray(m.company) ? m.company[0] : m.company;
+    return (c?.entity_type as string | null) ?? null;
+  });
+  const managesBusiness = managedEntityTypes.length > 0;
+  // Automatic folds a business into the 1040 unless it's a C-corp; for a
+  // multi-company owner it combines if ANY business is a pass-through,
+  // matching the per-company resolution the forecast applies.
+  const autoCombined = managedEntityTypes.some((e) => resolveCombine(null, e));
+  const combinePref = profile?.combine_personal_business as
+    | boolean
+    | null
+    | undefined;
+  const combineChoice =
+    combinePref === true
+      ? "combined"
+      : combinePref === false
+        ? "separate"
+        : "auto";
   // Note: watch pairing + paired-devices list moved to
   // /settings/security (May 2026). It sits with passkeys + 2FA under
   // "Sign-in and devices", that's where users intuitively look for
@@ -136,6 +171,86 @@ export default async function SettingsPage() {
             </div>
           ) : null}
         </section>
+
+        {managesBusiness ? (
+          <section className="card mt-8 p-6 sm:p-7">
+            <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+              Taxes
+            </div>
+            <h2 className="display mt-1 text-xl text-forest-900">
+              Personal &amp; business taxes
+            </h2>
+            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+              Choose whether your business flows into your personal tax
+              return or is forecast on its own. This drives every company
+              forecast and your personal year-end picture.
+            </p>
+
+            <form
+              action={setCombinePersonalBusiness}
+              className="mt-5 grid gap-3"
+            >
+              {(
+                [
+                  {
+                    value: "auto",
+                    label: "Automatic",
+                    body: `Recommended. Pass-through businesses (sole prop, LLC, S-corp, partnership) fold into your 1040; a C-corp stays separate. For your setup this keeps them ${autoCombined ? "combined" : "separate"}.`,
+                  },
+                  {
+                    value: "combined",
+                    label: "Always combined",
+                    body: "Your business net stacks onto your personal 1040 at your marginal rate. The tax-correct choice for a pass-through where the business is your income.",
+                  },
+                  {
+                    value: "separate",
+                    label: "Always separate",
+                    body: "Each business is forecast as a standalone estimate on a single-filer basis in its own state, independent of your personal return. Its income-tax figure is an estimate, not combined with your 1040.",
+                  },
+                ] as const
+              ).map((opt) => {
+                const checked = combineChoice === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className={
+                      "flex gap-3 p-4 rounded-xl border bg-white cursor-pointer hover:border-gold-300 " +
+                      (checked
+                        ? "border-gold-300 ring-1 ring-gold-200"
+                        : "border-forest-100")
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="combine"
+                      value={opt.value}
+                      defaultChecked={checked}
+                      className="mt-1 size-4 accent-forest-700"
+                    />
+                    <div className="min-w-0">
+                      <div className="display text-base text-forest-900">
+                        {opt.label}
+                        {checked ? (
+                          <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
+                            Current
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-ink-soft mt-1 leading-relaxed">
+                        {opt.body}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+              <div>
+                <button type="submit" className="btn-primary text-sm">
+                  Save
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
 
         {superAdmin ? (
           <section className="card mt-8 p-6 sm:p-7">
