@@ -230,18 +230,14 @@ const COMPANY_ITEMS: {
 // under /c/{publicId}). This is the individual-tax side, deliberately free
 // of anything business: no company, no mileage, no chat, no team. The
 // Business toggle is how you cross over to a company's own nav.
+// (Dashboard is rendered separately as a pinned link above the mode
+// sections, so it shows in BOTH personal and business mode.)
 const PERSONAL_ITEMS: {
   key: string;
   label: string;
   href: string;
   icon: ReactNode;
 }[] = [
-  {
-    key: "dashboard",
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />,
-  },
   {
     key: "forecast",
     label: "Forecast",
@@ -672,6 +668,34 @@ export function LeftRail({
         </div>
       ) : null}
       {toggleSection}
+      {/* Dashboard is pinned in BOTH modes, it's the always-available
+          home. Sits above the mode-specific sections. */}
+      <div className="grid gap-1 mb-1">
+        <Link
+          href="/dashboard"
+          onClick={onDismiss}
+          aria-current={isActive("/dashboard") ? "page" : undefined}
+          className={
+            baseLink +
+            (isActive("/dashboard")
+              ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
+              : " text-forest-800 hover:bg-cream")
+          }
+          title={mode === "rail" ? "Dashboard" : undefined}
+        >
+          <span
+            className={
+              "shrink-0 " +
+              (isActive("/dashboard")
+                ? "text-gold-600"
+                : "text-forest-700 group-hover/item:text-forest-900")
+            }
+          >
+            <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />
+          </span>
+          <span className="min-w-0 truncate">Dashboard</span>
+        </Link>
+      </div>
       {/* Personal mode: individual-tax nav only. No company, no mileage,
           no chat, no team. Static routes, so no hydration gate needed. */}
       {!onBusiness ? <div className="grid gap-1">{personalSection}</div> : null}
