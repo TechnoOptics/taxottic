@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadGoogleMaps,
   MapsKeyMissingError,
@@ -13,6 +13,12 @@ export type MapTrip = {
   id: string;
   classification: "business" | "personal" | "unclassified";
   points: MapPoint[];
+  /** Who drove this trip. When a map shows 2+ distinct drivers, each is
+   *  given a unique line colour (see DRIVER_PALETTE) so the trails are
+   *  told apart at a glance; single-driver maps keep the classification
+   *  colours. Optional so single-user views need pass nothing. */
+  driverId?: string | null;
+  driverName?: string | null;
 };
 export type MapPlace = {
   id: string;
@@ -31,6 +37,43 @@ const TRIP_COLOR: Record<MapTrip["classification"], string> = {
   personal: "#D97706",
   unclassified: "#A78EBF",
 };
+
+// Per-driver palette for multi-driver maps (e.g. the firm / manager team
+// view). Twelve qualitative hues chosen to stay legible against the navy
+// #1d2843 dial and to read as distinct from each other and from the green
+// start dot. Assigned deterministically by sorted driver id, so a given
+// driver keeps the same colour across renders within one map.
+const DRIVER_PALETTE = [
+  "#7DD3FC", // sky
+  "#FCA5A5", // rose
+  "#86EFAC", // green
+  "#FDBA74", // orange
+  "#C4B5FD", // violet
+  "#F9A8D4", // pink
+  "#67E8F9", // cyan
+  "#FDE047", // yellow
+  "#A3E635", // lime
+  "#5EEAD4", // teal
+  "#D8B4FE", // purple
+  "#FED7AA", // peach
+];
+
+/** Build a stable driverId → colour map from the trips on a map. Only
+ *  meaningful when 2+ distinct drivers are present; callers gate on
+ *  `.size >= 2`. Sorted so colour assignment is deterministic regardless
+ *  of trip order. */
+function buildDriverColors(trips: MapTrip[]): Map<string, string> {
+  const ids = Array.from(
+    new Set(
+      trips
+        .map((t) => t.driverId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ).sort();
+  const out = new Map<string, string>();
+  ids.forEach((id, i) => out.set(id, DRIVER_PALETTE[i % DRIVER_PALETTE.length]));
+  return out;
+}
 const PLACE_GLYPH: Record<MapPlace["kind"], string> = {
   home: "🏠",
   office: "🏢",
@@ -200,6 +243,32 @@ export function MileageMap({
   const minZoom = focusMode ? 3 : unlockedMinZoom(longestBusinessMiles);
   const unlockHint = focusMode ? null : nextUnlockHint(longestBusinessMiles);
 
+  // Per-driver colouring. Only kicks in when the map shows 2+ distinct
+  // drivers (the firm / manager team view); a single driver's map keeps
+  // the classification colours. Memoised so the map effect's dep stays
+  // stable between renders when `trips` is unchanged. When active, the
+  // legend below lists each driver + swatch instead of the classification
+  // key, and personal/unreviewed trips are drawn a touch fainter so the
+  // deductible business trails still stand out.
+  const driverColors = useMemo(() => buildDriverColors(trips), [trips]);
+  const colorByDriver = driverColors.size >= 2;
+  // Legend rows for the multi-driver map: name + swatch, sorted by name.
+  const driverLegend = useMemo(
+    () =>
+      colorByDriver
+        ? Array.from(driverColors.entries())
+            .map(([id, color]) => ({
+              id,
+              color,
+              name:
+                trips.find((t) => t.driverId === id)?.driverName?.trim() ||
+                `Driver ${id.slice(0, 4)}`,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+        : [],
+    [colorByDriver, driverColors, trips],
+  );
+
   useEffect(() => {
     let cancelled = false;
     const overlays: any[] = [];
@@ -232,6 +301,17 @@ export function MileageMap({
         for (const t of trips) {
           if (t.points.length < 2) continue;
           const path = t.points.map((p) => ({ lat: p.lat, lng: p.lng }));
+          // Line colour: each driver's own colour on a multi-driver map,
+          // otherwise the classification colour. When colouring by driver
+          // we fade personal / unreviewed trips a touch so the deductible
+          // business trails still read strongest.
+          const driverColor =
+            colorByDriver && t.driverId
+              ? driverColors.get(t.driverId)
+              : undefined;
+          const lineColor = driverColor ?? TRIP_COLOR[t.classification];
+          const lineOpacity =
+            colorByDriver && t.classification !== "business" ? 0.6 : 0.95;
           // Drop a faint dark "shadow" beneath the gold so the line
           // doesn't get lost against the road colour, then the real
           // breadcrumb on top.
@@ -244,8 +324,8 @@ export function MileageMap({
           });
           const line = new maps.Polyline({
             path,
-            strokeColor: TRIP_COLOR[t.classification],
-            strokeOpacity: 0.95,
+            strokeColor: lineColor,
+            strokeOpacity: lineOpacity,
             strokeWeight: 4,
             // Direction of travel: arrowheads riding the breadcrumb at a
             // steady cadence. Same fill as the trip colour with the dark
@@ -256,7 +336,7 @@ export function MileageMap({
                 icon: {
                   path: maps.SymbolPath.FORWARD_CLOSED_ARROW,
                   scale: 2.6,
-                  fillColor: TRIP_COLOR[t.classification],
+                  fillColor: lineColor,
                   fillOpacity: 1,
                   strokeColor: "#0d121f",
                   strokeWeight: 1,
@@ -375,7 +455,7 @@ export function MileageMap({
         }
       });
     };
-  }, [trips, places, minZoom]);
+  }, [trips, places, minZoom, colorByDriver, driverColors]);
 
   if (state === "no-key") {
     return (
@@ -415,29 +495,59 @@ export function MileageMap({
         style={{ height, backgroundColor: "#121a2a" }}
         aria-label="Mileage breadcrumb map"
       />
-      <div className="absolute bottom-3 left-3 card px-3 py-2 text-[11px] flex gap-3">
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-3 h-1.5 rounded"
-            style={{ background: TRIP_COLOR.business }}
-          />
-          Business
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-3 h-1.5 rounded"
-            style={{ background: TRIP_COLOR.personal }}
-          />
-          Personal
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-3 h-1.5 rounded"
-            style={{ background: TRIP_COLOR.unclassified }}
-          />
-          Review
-        </span>
-      </div>
+      {colorByDriver ? (
+        // Multi-driver map: colour = who drove. List each driver + swatch
+        // (capped so the chip can't swallow the map), with a note that
+        // fainter lines are personal / unreviewed drives.
+        <div className="absolute bottom-3 left-3 card px-3 py-2 text-[11px] max-w-[70%]">
+          <div className="text-[10px] uppercase tracking-[0.16em] text-gold-700 mb-1">
+            Drivers
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {driverLegend.slice(0, 8).map((d) => (
+              <span key={d.id} className="flex items-center gap-1 min-w-0">
+                <span
+                  className="inline-block w-3 h-1.5 rounded shrink-0"
+                  style={{ background: d.color }}
+                />
+                <span className="truncate max-w-[8rem]">{d.name}</span>
+              </span>
+            ))}
+            {driverLegend.length > 8 ? (
+              <span className="text-ink-muted">
+                +{driverLegend.length - 8} more
+              </span>
+            ) : null}
+          </div>
+          <div className="text-[10px] text-ink-muted mt-1">
+            Fainter lines are personal / unreviewed.
+          </div>
+        </div>
+      ) : (
+        <div className="absolute bottom-3 left-3 card px-3 py-2 text-[11px] flex gap-3">
+          <span className="flex items-center gap-1">
+            <span
+              className="inline-block w-3 h-1.5 rounded"
+              style={{ background: TRIP_COLOR.business }}
+            />
+            Business
+          </span>
+          <span className="flex items-center gap-1">
+            <span
+              className="inline-block w-3 h-1.5 rounded"
+              style={{ background: TRIP_COLOR.personal }}
+            />
+            Personal
+          </span>
+          <span className="flex items-center gap-1">
+            <span
+              className="inline-block w-3 h-1.5 rounded"
+              style={{ background: TRIP_COLOR.unclassified }}
+            />
+            Review
+          </span>
+        </div>
+      )}
       {/* Gamified unlock chip, top-right corner of the map. Shows the
           next "zoom out" milestone so the bound dial doesn't feel
           arbitrary. Disappears when everything is already unlocked. */}

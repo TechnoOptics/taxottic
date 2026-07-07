@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
-import { type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
+import {
+  MileageMap,
+  type MapTrip,
+  type MapPlace,
+} from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
 import { MobileOnly } from "@/components/MobileOnly";
 import { TrackerStatus } from "@/components/mileage/TrackerStatus";
@@ -9,7 +13,7 @@ import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
-import { DriverPicker } from "@/components/mileage/DriverPicker";
+import { DriverPicker, ALL_DRIVERS } from "@/components/mileage/DriverPicker";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
 import {
   assessMileageTrackingHealth,
@@ -107,17 +111,28 @@ export default async function MileagePage({
   const driverIds = new Set(drivers.map((d) => d.userId));
   // Only honour ?driver= for managers, and only for a real co-member.
   // Everyone else (and any bad id) is pinned to their own drives.
+  // "All drivers" team overlay (managers, ≥2 members). Distinct from
+  // picking a single teammate: the map shows everyone's trails at once,
+  // each a unique colour, as a read-only view.
+  const viewingAll =
+    isManager && driverParam === ALL_DRIVERS && drivers.length >= 2;
   const viewingDriverId =
     isManager && driverParam && driverIds.has(driverParam)
       ? driverParam
       : user.id;
-  const viewingSelf = viewingDriverId === user.id;
+  const viewingSelf = !viewingAll && viewingDriverId === user.id;
   const viewingDriverLabel =
     drivers.find((d) => d.userId === viewingDriverId)?.label ?? null;
   const showDriverPicker = isManager && drivers.length >= 2;
+  // Driver display names for the map legend + rollup (strip the "· you"
+  // / "· Dept" suffixes the picker label carries).
+  const driverNameById = new Map(
+    drivers.map((d) => [d.userId, d.label.split(" · ")[0]]),
+  );
 
   type ServerTripRow = {
     id: string;
+    driver_user_id?: string;
     started_at: string;
     ended_at: string;
     distance_miles: number;
@@ -139,23 +154,53 @@ export default async function MileagePage({
   // route's true start + end.
   const pointsByTrip = new Map<string, Pt[]>();
   if (company) {
-    let tripQuery = admin
-      .from("mileage_trips")
-      .select(
-        "id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents",
-      )
-      .eq("company_id", company.id)
-      .eq("driver_user_id", viewingDriverId)
-      .gte("started_at", sinceIso);
-    // Privacy: a manager reviewing a TEAMMATE's log only sees the drives
-    // that teammate marked BUSINESS, their personal + unclassified drives
-    // are nobody else's business. Viewing your OWN log still shows
-    // everything (you triage your own unclassified drives there).
-    if (!viewingSelf) tripQuery = tripQuery.eq("classification", "business");
-    const { data: tripData } = await tripQuery
-      .order("started_at", { ascending: false })
-      .limit(500);
-    trips = (tripData ?? []) as unknown as ServerTripRow[];
+    const TRIP_SELECT =
+      "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents";
+    if (viewingAll) {
+      // Team overlay: MY drives (all classifications) + every teammate's
+      // BUSINESS drives. Two scoped queries so teammates' personal /
+      // unclassified trips are never read — same privacy rule as the
+      // single-driver review, just applied per-driver.
+      const [ownRes, teamRes] = await Promise.all([
+        admin
+          .from("mileage_trips")
+          .select(TRIP_SELECT)
+          .eq("company_id", company.id)
+          .eq("driver_user_id", user.id)
+          .gte("started_at", sinceIso)
+          .order("started_at", { ascending: false })
+          .limit(500),
+        admin
+          .from("mileage_trips")
+          .select(TRIP_SELECT)
+          .eq("company_id", company.id)
+          .neq("driver_user_id", user.id)
+          .eq("classification", "business")
+          .gte("started_at", sinceIso)
+          .order("started_at", { ascending: false })
+          .limit(500),
+      ]);
+      trips = [
+        ...(ownRes.data ?? []),
+        ...(teamRes.data ?? []),
+      ] as unknown as ServerTripRow[];
+    } else {
+      let tripQuery = admin
+        .from("mileage_trips")
+        .select(TRIP_SELECT)
+        .eq("company_id", company.id)
+        .eq("driver_user_id", viewingDriverId)
+        .gte("started_at", sinceIso);
+      // Privacy: a manager reviewing a TEAMMATE's log only sees the drives
+      // that teammate marked BUSINESS, their personal + unclassified drives
+      // are nobody else's business. Viewing your OWN log still shows
+      // everything (you triage your own unclassified drives there).
+      if (!viewingSelf) tripQuery = tripQuery.eq("classification", "business");
+      const { data: tripData } = await tripQuery
+        .order("started_at", { ascending: false })
+        .limit(500);
+      trips = (tripData ?? []) as unknown as ServerTripRow[];
+    }
 
     if (trips.length > 0) {
       const { data: polyRows } = await admin.rpc("mileage_trip_polylines", {
@@ -222,11 +267,45 @@ export default async function MileagePage({
   const mapTrips: MapTrip[] = trips.map((t) => ({
     id: t.id,
     classification: t.classification,
+    // Driver identity only in the "all drivers" overlay, so single-driver
+    // views keep the business/personal classification colours.
+    driverId: viewingAll ? t.driver_user_id ?? null : null,
+    driverName: viewingAll
+      ? driverNameById.get(t.driver_user_id ?? "") ?? null
+      : null,
     points: (pointsByTrip.get(t.id) ?? [])
       .slice()
       .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
       .map((p) => ({ lat: p.lat, lng: p.lng })),
   }));
+
+  // Per-driver rollup for the team overlay (business miles + deduction per
+  // teammate), largest deduction first. Empty outside "all drivers" mode.
+  const driverRollup = viewingAll
+    ? (() => {
+        const by = new Map<
+          string,
+          { miles: number; deduction: number; trips: number }
+        >();
+        for (const t of trips) {
+          const k = t.driver_user_id ?? "";
+          const cur = by.get(k) ?? { miles: 0, deduction: 0, trips: 0 };
+          cur.trips += 1;
+          if (t.classification === "business") {
+            cur.miles += Number(t.distance_miles);
+            cur.deduction += Number(t.deduction_cents);
+          }
+          by.set(k, cur);
+        }
+        return Array.from(by.entries())
+          .map(([id, agg]) => ({
+            id,
+            label: driverNameById.get(id) ?? "Driver",
+            ...agg,
+          }))
+          .sort((a, b) => b.deduction - a.deduction);
+      })()
+    : [];
 
   // Tracking-health check (self only, you can't fix another driver's
   // phone). When drives aren't being captured, warn + offer recovery.
@@ -279,12 +358,22 @@ export default async function MileagePage({
                 <DriverPicker
                   selfUserId={user.id}
                   drivers={drivers}
-                  current={viewingDriverId}
+                  current={viewingAll ? ALL_DRIVERS : viewingDriverId}
                 />
               </div>
             ) : null}
 
-            {!viewingSelf ? (
+            {viewingAll ? (
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
+                <span aria-hidden="true">🗺️</span>
+                <span>
+                  Team view: every driver&apos;s trails in their own colour.
+                  Your drives show all classifications; teammates&apos; show
+                  business trips only. Pick a single driver to re-classify or
+                  remove their trips.
+                </span>
+              </div>
+            ) : !viewingSelf ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
                 <span aria-hidden="true">👁️</span>
                 <span>
@@ -424,34 +513,69 @@ export default async function MileagePage({
               </Link>
             </div>
 
-            {/* Map + trip list share one client owner so "Review" on a
-                trip focuses that single drive on the map and only ONE
-                trip is ever in review at a time. Default (no focus) is
-                the range overview where all drives plot together. The
-                list is grouped + timezone-aware (local, not Vercel UTC);
-                Business/Personal are exact-match toggles that show
-                nothing selected for an unclassified drive. */}
-            <MileageReview
-              mapTrips={mapTrips}
-              places={places}
-              tripRows={trips.map<TripRow>((t) => ({
-                id: t.id,
-                startedAtISO: t.started_at,
-                endedAtISO: t.ended_at,
-                distanceMiles: Number(t.distance_miles),
-                classification: t.classification,
-                deductionCents: Number(t.deduction_cents),
-                points: pointsByTrip.get(t.id) ?? [],
-                companyId: company.id,
-              }))}
-              reclassify={reclassifyTrip}
-              deleteTrip={deleteTrip}
-              companies={memberships.map((m) => ({
-                id: m.company.id,
-                name: m.company.name,
-              }))}
-              moveTripCompany={moveTripCompany}
-            />
+            {viewingAll ? (
+              // Team overlay: a read-only map of everyone's trails (one
+              // colour per driver) + a per-driver rollup. Per-trip triage
+              // (reclassify / delete) stays on a single driver's log, so
+              // the mixed multi-owner overlay never exposes those actions.
+              <>
+                <div className="mt-4">
+                  <MileageMap trips={mapTrips} places={places} height={460} />
+                </div>
+                {driverRollup.length > 0 ? (
+                  <ul className="mt-4 grid gap-2">
+                    {driverRollup.map((d) => (
+                      <li
+                        key={d.id}
+                        className="card p-4 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-forest-900 truncate">
+                            {d.label}
+                          </div>
+                          <div className="text-xs text-ink-muted mt-0.5">
+                            {d.trips} trip{d.trips === 1 ? "" : "s"} ·{" "}
+                            {fmtMiles(d.miles)} business mi
+                          </div>
+                        </div>
+                        <div className="display text-lg text-forest-900 tabular-nums">
+                          {fmtUsd(d.deduction)}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            ) : (
+              /* Map + trip list share one client owner so "Review" on a
+                 trip focuses that single drive on the map and only ONE
+                 trip is ever in review at a time. Default (no focus) is
+                 the range overview where all drives plot together. The
+                 list is grouped + timezone-aware (local, not Vercel UTC);
+                 Business/Personal are exact-match toggles that show
+                 nothing selected for an unclassified drive. */
+              <MileageReview
+                mapTrips={mapTrips}
+                places={places}
+                tripRows={trips.map<TripRow>((t) => ({
+                  id: t.id,
+                  startedAtISO: t.started_at,
+                  endedAtISO: t.ended_at,
+                  distanceMiles: Number(t.distance_miles),
+                  classification: t.classification,
+                  deductionCents: Number(t.deduction_cents),
+                  points: pointsByTrip.get(t.id) ?? [],
+                  companyId: company.id,
+                }))}
+                reclassify={reclassifyTrip}
+                deleteTrip={deleteTrip}
+                companies={memberships.map((m) => ({
+                  id: m.company.id,
+                  name: m.company.name,
+                }))}
+                moveTripCompany={moveTripCompany}
+              />
+            )}
 
             {/* Stat tiles moved below the map/trip list (May 2026), the
                 user asked for the map and logged drives to be the first

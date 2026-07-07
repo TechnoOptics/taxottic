@@ -13,10 +13,14 @@ import { SelectMenu, type SelectOption } from "@/components/ui/SelectMenu";
  * viewer is a manager AND the company has ≥2 members, so a solo driver
  * never sees it.
  *
- * Unlike the Expenses EmployeeFilter there is no "everyone" option: the
- * map plots one driver's route at a time, and reclassify/delete act on a
- * specific trip's owner. Default selection is always the viewer.
+ * "All drivers" (?driver=all) overlays every teammate's trails on the map,
+ * each in its own colour, as a read-only team view (per-trip reclassify /
+ * delete still happen from a single driver's log, not the overlay).
+ * Otherwise the map plots one driver's route at a time. Default is always
+ * the viewer.
  */
+export const ALL_DRIVERS = "all";
+
 export function DriverPicker({
   selfUserId,
   drivers,
@@ -24,17 +28,17 @@ export function DriverPicker({
 }: {
   selfUserId: string;
   drivers: { userId: string; label: string }[];
-  /** Currently-viewed driver id (defaults to selfUserId). */
+  /** Currently-viewed driver id, or "all" for the team overlay. */
   current: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const options: SelectOption[] = drivers.map((d) => ({
-    value: d.userId,
-    label: d.label,
-  }));
+  const options: SelectOption[] = [
+    { value: ALL_DRIVERS, label: "All drivers" },
+    ...drivers.map((d) => ({ value: d.userId, label: d.label })),
+  ];
 
   function onChange(value: string) {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
