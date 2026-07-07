@@ -145,20 +145,39 @@ export async function syncStripeConnection(
     bankAccountId = newAcct.id as string;
   }
 
-  // Pull pages of balance_transactions, oldest-first via the
-  // `starting_after` cursor pattern. We cap a single sync at 5 pages
-  // (500 rows) to keep an individual request bounded; cron picks up
-  // the remainder on the next pass.
+  // Stripe returns balance_transactions NEWEST-FIRST (descending by
+  // `created`), and `starting_after` pages toward OLDER records. So the
+  // incremental cursor is a HIGH-WATER MARK: bank_connections.cursor holds
+  // the newest balance_transaction.id we imported on the previous run. Each
+  // sync lists from the very top (newest) and walks downward until it reaches
+  // that watermark, importing everything newer, then stores the new newest id.
+  //
+  // The earlier implementation stored the OLDEST id of the page and then
+  // paginated `starting_after` from it every sync, which marched further
+  // backward in history and never saw new charges once the initial backfill
+  // reached the year start. Sync then silently returned added:0 forever with
+  // status="active" - the "connected Stripe account stops updating" bug.
+  //
+  // Idempotent regardless of overlap: account_transactions
+  // .external_transaction_id is UNIQUE, so re-importing a window that spans
+  // the watermark inserts zero duplicate rows.
   const PAGE = 100;
   const MAX_PAGES = 5;
   let added = 0;
-  let lastSeen: string | null = cursor;
-  // One-shot recovery: if Stripe rejects the stored cursor, we re-list
-  // once from the year start (see the catch in the loop below).
-  let retriedWithoutCursor = false;
-  // Only import transactions from the current calendar year, anything
-  // older would never roll into THIS year's forecast and is pure noise
-  // in the review queue. The cutoff slides automatically each Jan 1.
+  let fetched = 0;
+  // Newest id imported previously; the downward walk stops when it reaches it.
+  const watermark: string | null = cursor;
+  // Newest id observed this run - becomes the new watermark.
+  let newestSeen: string | null = null;
+  // Pagination pointer INTO older pages. Only ever an id Stripe just handed
+  // us, so it can never be a "stale cursor" Stripe refuses to paginate from.
+  let startingAfter: string | null = null;
+  let reachedWatermark = false;
+  // One-shot recovery: on a transient page failure, restart the walk from the
+  // newest transaction (see the catch in the loop below).
+  let retriedFromTop = false;
+  // Initial (watermark-less) pull only: bound to the current calendar year so
+  // we don't import last year's noise. The cutoff slides each Jan 1.
   const yearStartUnix = Math.floor(
     Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000,
   );
@@ -194,33 +213,30 @@ export async function syncStripeConnection(
       data: BalanceTx[];
       has_more: boolean;
     };
-    // When paginating from a stored cursor, let `starting_after` bound
-    // the window and DON'T also send `created`. Stripe rejects the
-    // `created` + `starting_after` combination for some connected
-    // accounts with a 400, which wedged every incremental sync (cron,
-    // manual, and the realtime webhook) and left the connection stuck
-    // at status=error pulling nothing. The Jan-1 cutoff is only needed
-    // for the initial, cursor-less pull (to avoid importing last year).
+    // data.source.invoice: lets us see whether a charge came from a
+    // subscription invoice (recurring revenue) vs a one-off payment, so the
+    // auto-apply can set recurrence (see subscriptionRecurrence) and the
+    // forecast projects it.
     const listParams: {
       limit: number;
       starting_after?: string;
       expand?: string[];
       created?: { gte?: number };
-    } = lastSeen
-      ? {
-          limit: PAGE,
-          // data.source.invoice: lets us see whether a charge came from
-          // a subscription invoice (recurring revenue) vs a one-off
-          // payment, so the auto-apply can set recurrence (see
-          // subscriptionRecurrence) and the forecast projects it.
-          expand: ["data.source", "data.source.invoice"],
-          starting_after: lastSeen,
-        }
-      : {
-          limit: PAGE,
-          expand: ["data.source", "data.source.invoice"],
-          created: { gte: yearStartUnix },
-        };
+    } = {
+      limit: PAGE,
+      expand: ["data.source", "data.source.invoice"],
+    };
+    if (startingAfter) {
+      // Continuing the downward (into-older) walk through the current sync.
+      // Never combined with `created`: Stripe rejects `created` +
+      // `starting_after` for some connected accounts with a 400.
+      listParams.starting_after = startingAfter;
+    } else if (!watermark) {
+      // First page of the very first sync: bound to this calendar year.
+      listParams.created = { gte: yearStartUnix };
+    }
+    // First page of an incremental sync (watermark set, no startingAfter yet):
+    // send neither bound, so Stripe returns from the newest transaction down.
 
     const listClient = stripe as unknown as {
       balanceTransactions: {
@@ -242,15 +258,19 @@ export async function syncStripeConnection(
         stripeAccount: stripeUserId,
       })) as ListResp;
     } catch (err) {
-      // Safety net: if a cursor page still fails (e.g. a stale cursor
-      // Stripe can't paginate from), recover ONCE by dropping the cursor
-      // and re-listing from the year start. The UNIQUE index on
-      // external_transaction_id makes the re-list idempotent, no
-      // duplicates, so this favours correctness over a wasted call.
-      if (lastSeen && !retriedWithoutCursor) {
-        retriedWithoutCursor = true;
-        lastSeen = null;
+      // Safety net: recover ONCE from a transient page failure by restarting
+      // the walk from the newest transaction. `starting_after` only ever
+      // carries an id Stripe just handed us, so a "stale cursor" 400 is no
+      // longer possible; this covers transient network/API errors mid-walk.
+      // The UNIQUE index on external_transaction_id keeps the restart
+      // idempotent (no duplicates).
+      if (startingAfter && !retriedFromTop) {
+        retriedFromTop = true;
+        startingAfter = null;
+        newestSeen = null;
         added = 0;
+        fetched = 0;
+        reachedWatermark = false;
         pageIdx = -1; // loop's ++ takes the next iteration back to page 0
         continue;
       }
@@ -258,11 +278,28 @@ export async function syncStripeConnection(
     }
 
     if (!list.data || list.data.length === 0) break;
+    fetched += list.data.length;
+    // The first item of the first page is the newest transaction overall.
+    if (newestSeen === null) newestSeen = list.data[0].id;
 
-    // Build the rows to insert. SKIP_TYPES are no-ops (we still
-    // advance the cursor past them so we don't re-evaluate every
-    // sync).
-    const rows = list.data
+    // Import everything newer than the stored watermark, then stop: the id we
+    // already hold (and every older one below it) is already in the table.
+    // The unique index would drop them anyway; stopping saves the rest of the
+    // walk. On the initial, watermark-less pull nothing trips this, so we page
+    // the full MAX_PAGES back through the year.
+    const fresh: typeof list.data = [];
+    for (const t of list.data) {
+      if (watermark && t.id === watermark) {
+        reachedWatermark = true;
+        break;
+      }
+      fresh.push(t);
+    }
+
+    // Build the rows to insert from the fresh (newer-than-watermark) slice.
+    // SKIP_TYPES are no-ops (internal Stripe movements), but the watermark
+    // still advances past them via newestSeen so we don't re-evaluate them.
+    const rows = fresh
       .filter((t) => !SKIP_TYPES.has(t.type))
       .map((t) => {
         const postedDate = new Date(t.created * 1000)
@@ -317,8 +354,34 @@ export async function syncStripeConnection(
       added += count ?? 0;
     }
 
-    lastSeen = list.data[list.data.length - 1].id;
+    // Hit the watermark inside this page -> everything below is already ours.
+    if (reachedWatermark) break;
+    // Otherwise page toward older records from the last id of this page.
+    startingAfter = list.data[list.data.length - 1].id;
     if (!list.has_more) break;
+  }
+
+  // Diagnostics: this sync used to no-op silently (added:0, status active) when
+  // the cursor had marched past the newest data. Always leave a breadcrumb so a
+  // "Sync did nothing" report is debuggable from logs alone.
+  const newCursor = newestSeen ?? watermark;
+  console.log(
+    `[stripe-sync] connection=${connectionId} acct=${stripeUserId} ` +
+      `force=${options.force ?? false} watermark=${watermark ?? "none"} ` +
+      `fetched=${fetched} added=${added} reachedWatermark=${reachedWatermark} ` +
+      `newCursor=${newCursor ?? "none"}`,
+  );
+  // We walked the full page cap without meeting the previous watermark: there
+  // may be transactions older than the newest `fetched` but newer than the old
+  // watermark that this run didn't reach. The next sync starts from the top
+  // again and will re-cover them (idempotent). Flag it so a genuine gap in a
+  // very high-volume account is visible rather than silent.
+  if (watermark && !reachedWatermark && fetched >= PAGE * MAX_PAGES) {
+    console.warn(
+      `[stripe-sync] connection=${connectionId} walked ${MAX_PAGES} pages ` +
+        `(${fetched} txns) without reaching stored cursor ${watermark}; ` +
+        `high volume since last sync - re-run Sync to continue backfilling.`,
+    );
   }
 
   // Auto-apply pass, bring Stripe into parity with the Plaid sync.
@@ -356,12 +419,13 @@ export async function syncStripeConnection(
     new Date().getUTCFullYear(),
   );
 
-  // Persist new cursor + last_synced_at so the next pass picks up
-  // where we stopped and the throttle ticks.
+  // Persist the new high-water mark (newest id seen) + last_synced_at so the
+  // next sync lists from the top and stops here. Fall back to the old
+  // watermark if this run saw nothing, so we never null it out.
   await admin
     .from("bank_connections")
     .update({
-      cursor: lastSeen,
+      cursor: newCursor,
       last_synced_at: new Date().toISOString(),
       status: "active",
       last_error: null,
