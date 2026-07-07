@@ -11,12 +11,12 @@ import { deleteAccountTransactionsForEngagement } from "./actions";
 //
 // Until now the firm could only see banking activity by hopping into
 // the consumer surface at `/c/{publicId}/banks`. That works, but it
-// flips the chrome — the preparer briefly identifies as the client.
+// flips the chrome, the preparer briefly identifies as the client.
 // This page renders the same data inside the firm cockpit chrome so
 // the preparer never breaks context.
 //
 // Scope:
-//   - Read-only — connecting a bank is a consumer-side action that
+//   - Read-only, connecting a bank is a consumer-side action that
 //     legally must be the company owner (Plaid Link's flow records
 //     consent against the user, not the firm).
 //   - Shows connections, accounts under each connection, and the
@@ -261,7 +261,7 @@ export default async function FirmBanksPage({
                           ) : null}
                         </div>
                         <div className="text-xs text-ink-muted">
-                          {a.account_type ?? "—"}
+                          {a.account_type ?? "-"}
                           {a.account_subtype ? ` · ${a.account_subtype}` : ""}
                         </div>
                       </div>
@@ -318,7 +318,7 @@ export default async function FirmBanksPage({
                         {t.posted_date}
                       </td>
                       <td className="py-2 pr-3 text-forest-900">
-                        {t.merchant_name ?? t.description ?? "—"}
+                        {t.merchant_name ?? t.description ?? "-"}
                         {t.is_pending ? (
                           <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-amber-700">
                             pending

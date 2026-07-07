@@ -20,7 +20,7 @@ export const runtime = "nodejs";
  * Body: { companyId: string }
  *
  * We encode the companyId into the state itself (as JSON in the
- * cookie payload, not in the state token sent to Stripe — that
+ * cookie payload, not in the state token sent to Stripe, that
  * stays opaque). Stripe sends `state` back verbatim on return; we
  * use it solely as a CSRF nonce.
  */

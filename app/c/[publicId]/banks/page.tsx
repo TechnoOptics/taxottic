@@ -219,7 +219,7 @@ export default async function BanksPage({
                 {/* Stripe Connect (Standard OAuth) is an optional
                     bank-data import alternative to Plaid. Only show
                     the button when its OAuth client is configured on
-                    the server — otherwise clicking it just throws
+                    the server, otherwise clicking it just throws
                     "STRIPE_CONNECT_CLIENT_ID not configured" and the
                     user has nothing actionable. Plaid stays as the
                     primary connect path either way. */}
@@ -246,7 +246,7 @@ export default async function BanksPage({
               role="status"
               className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
             >
-              Stripe connected. Your balance transactions are syncing — the
+              Stripe connected. Your balance transactions are syncing, the
               first batch lands in the review queue below within a minute.
             </div>
           ) : null}
@@ -269,7 +269,7 @@ export default async function BanksPage({
                 // (e.g., "Chase" or "Stripe acct_…"). One connection
                 // can hold several accounts under it.
                 conns.length === 0
-                  ? "Banks or Stripe linked. None yet — click to add."
+                  ? "Banks or Stripe linked. None yet, click to add."
                   : `Banks/Stripe linked · ${conns.filter((c) => c.status === "active").length} active · click to edit`
               }
             />
@@ -401,7 +401,7 @@ export default async function BanksPage({
                           </svg>
                         </div>
                       </summary>
-                      {/* Disconnect — manager-only. Routes through
+                      {/* Disconnect, manager-only. Routes through
                           /app/actions/recycle-bin.ts: soft-deletes the
                           connection, revokes the Plaid access token,
                           and the row goes to /settings/recycle-bin
@@ -470,7 +470,7 @@ export default async function BanksPage({
                                       }).format(a.current_balance_cents / 100)
                                     : "-"}
                                 </div>
-                                {/* Include/Exclude toggle — flips
+                                {/* Include/Exclude toggle, flips
                                     bank_accounts.is_excluded. Excluded
                                     accounts stay in the list but their
                                     transactions are filtered out of
@@ -607,7 +607,7 @@ export default async function BanksPage({
                   const isCurrent = y === nowYear && m === nowMonth;
                   // Inflow vs outflow nets: total expense (positive
                   // cents in our convention) minus total income
-                  // (negative cents). Show net only — the cards
+                  // (negative cents). Show net only, the cards
                   // below carry the per-row sign cues.
                   const net = monthTxs.reduce((a, t) => a + t.amount_cents, 0);
                   const netLabel = new Intl.NumberFormat("en-US", {

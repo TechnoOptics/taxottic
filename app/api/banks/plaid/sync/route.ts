@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createServiceClient();
   try {
-    // force:true — this is the user-clicked "Sync now" button; if
+    // force:true, this is the user-clicked "Sync now" button; if
     // they explicitly ask for fresh data, honour it even within the
     // same calendar month.
     const result = await syncPlaidConnection(admin, connectionId, { force: true });

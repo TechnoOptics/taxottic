@@ -21,7 +21,7 @@ export type DeletableTx = {
  * server action re-checks both rules.
  *
  * The actual delete is performed by the `action` server function
- * passed in by the parent — that way the consumer page authenticates
+ * passed in by the parent, that way the consumer page authenticates
  * via company_members (manager/owner role) and the firm-side page
  * authenticates via firm_engagements access, each enforcing its own
  * scope server-side.

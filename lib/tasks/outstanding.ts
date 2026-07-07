@@ -1,12 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatCents } from "@/lib/tax/forecast";
 
-// Outstanding tasks — the single source of truth for "things the user
+// Outstanding tasks, the single source of truth for "things the user
 // needs to make a quick business/personal or category call on." Three
 // surfaces feed from here: the header bell, the on-load popup, the
 // slim banner, the push-reminder cron, and (partially) the watch
 // glance. One tally means the count shown in the bell always matches
-// what the popup lists and what the push nudge claims — no drift.
+// what the popup lists and what the push nudge claims, no drift.
 //
 // Sources of "needs a decision":
 //   1. mileage_trips        classification = 'unclassified' (this driver)
@@ -14,7 +14,7 @@ import { formatCents } from "@/lib/tax/forecast";
 //   3. account_transactions Plaid-synced rows still user_action='pending'
 //
 // Uses the SESSION-scoped Supabase client (RLS-enforced), matching the
-// pattern already used by the banks page and AppHeader — never the
+// pattern already used by the banks page and AppHeader, never the
 // service-role client, since this always runs on behalf of the
 // signed-in user viewing their own data.
 
@@ -28,7 +28,7 @@ export type OutstandingItem = {
 
 export type OutstandingTasks = {
   items: OutstandingItem[];
-  /** True total across all three sources — NOT capped like `items`. */
+  /** True total across all three sources, NOT capped like `items`. */
   count: number;
 };
 
@@ -42,11 +42,11 @@ function monthDayLabel(iso: string): string {
 
 /**
  * Tally + preview list of outstanding items for the CURRENT user,
- * scoped to their active company (for the two transaction sources —
+ * scoped to their active company (for the two transaction sources -
  * mileage is scoped to the driver directly, regardless of company).
  *
  * `companyPublicId` may be null (e.g. user has no company yet), in
- * which case the two transaction sources are skipped — mileage trips
+ * which case the two transaction sources are skipped, mileage trips
  * still surface since they don't require a company context to review.
  */
 export async function getOutstandingTasks(
@@ -89,7 +89,7 @@ export async function getOutstandingTasks(
       }
     }
   } catch {
-    /* mileage source unavailable — skip, don't fail the whole tally */
+    /* mileage source unavailable, skip, don't fail the whole tally */
   }
 
   if (companyId) {
@@ -133,7 +133,7 @@ export async function getOutstandingTasks(
         }
       }
     } catch {
-      /* csv-transaction source unavailable — skip */
+      /* csv-transaction source unavailable, skip */
     }
 
     // 3. Plaid-synced transactions still pending a business/personal call.
@@ -171,11 +171,11 @@ export async function getOutstandingTasks(
         }
       }
     } catch {
-      /* account-transaction source unavailable — skip */
+      /* account-transaction source unavailable, skip */
     }
   }
 
-  // Capped for the preview list (trips, then CSV, then Plaid — each
+  // Capped for the preview list (trips, then CSV, then Plaid, each
   // source is already newest-first within itself).
   return { items: items.slice(0, MAX_ITEMS), count: total };
 }

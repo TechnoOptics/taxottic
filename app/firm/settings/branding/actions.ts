@@ -97,7 +97,7 @@ export async function uploadFirmLogo(formData: FormData) {
       upsert: true,
     });
   if (uploadErr) {
-    // Don't block the firm — the URL update still works once the
+    // Don't block the firm, the URL update still works once the
     // bucket is created.
     throw new Error(`Logo upload failed: ${uploadErr.message}`);
   }

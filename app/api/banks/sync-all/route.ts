@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * "Sync now" for a whole company — refreshes every connected bank / Stripe
+ * "Sync now" for a whole company, refreshes every connected bank / Stripe
  * account in one click, so the user can pull fresh data from where they
  * actually read their numbers (the forecast) instead of visiting the banks
  * page and syncing each connection by hand.

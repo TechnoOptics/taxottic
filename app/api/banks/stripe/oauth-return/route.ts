@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
   // Disconnect, this UPSERT lands on the existing row by
   // external_item_id. We MUST clear every "in the recycle bin" /
   // "previous sync state" field so the reconnect actually behaves
-  // like a fresh one — otherwise the row stays soft-deleted
+  // like a fresh one, otherwise the row stays soft-deleted
   // (post-#148 the sync correctly refuses it) and/or resumes from a
   // stale `cursor`, so the user sees nothing import.
   const { data: connection, error: connErr } = await admin

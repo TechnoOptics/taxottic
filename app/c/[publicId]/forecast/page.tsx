@@ -23,6 +23,7 @@ import {
   W4NudgeTile,
 } from "@/components/forecast/BenefitTiles";
 import { buildYearEndSuggestions } from "@/lib/tax/year-end-suggestions";
+import { resolveCombine } from "@/lib/tax/combine-setting";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
@@ -75,6 +76,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
     { data: businessProfile },
     { data: incomeRows },
     { data: expenseRows },
+    { data: userProfile },
   ] = await Promise.all([
     supabase
       .from("tax_profiles")
@@ -104,11 +106,45 @@ export default async function ForecastPage({ params }: { params: Params }) {
       .eq("classification", "business")
       .eq("company_id", company.id)
       .eq("tax_year", taxYear),
+    supabase
+      .from("profiles")
+      .select("combine_personal_business")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
 
-  if (!taxProfile) {
+  // Personal ↔ business coupling switch. A COMBINED forecast (the default
+  // for pass-through entities) stacks this business's net onto the owner's
+  // personal 1040, so it genuinely needs their personal tax_profiles row and
+  // we bounce them through onboarding if it's missing. A SEPARATE forecast
+  // (a C-corp, or a pass-through owner who has explicitly opted out in
+  // Settings) is a standalone business estimate that must NOT read personal
+  // settings at all, so it neither requires nor consumes the personal row.
+  const combined = resolveCombine(
+    userProfile?.combine_personal_business,
+    company.entity_type ?? null,
+  );
+
+  if (combined && !taxProfile) {
     redirect(`/onboarding/tax-profile?next=/c/${publicId}/forecast`);
   }
+
+  // The individual-tax layer the forecast runs against: the owner's real
+  // personal profile when combined, or a neutral "this business is your only
+  // income" single-filer profile when separate. The neutral profile carries
+  // only the company's own state — zero personal W-2, spouse, IRA, itemized
+  // deductions or dependents — so a separate business forecast is fully
+  // decoupled from anything the user set on their personal return.
+  const forecastTaxProfile: ForecastTaxProfile = combined
+    ? (taxProfile as unknown as ForecastTaxProfile)
+    : {
+        filing_status: "single",
+        state_code: company.state_code ?? "",
+        age: 40,
+        is_blind: false,
+        itemize: false,
+        dependents: 0,
+      };
 
   // Bank-sync freshness: the forecast numbers depend on synced transactions,
   // so surface how fresh that data is (and a one-tap re-sync) right here.
@@ -194,7 +230,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
       state_code: company.state_code ?? null,
       entity_type: company.entity_type ?? null,
     },
-    taxProfile: taxProfile as unknown as ForecastTaxProfile,
+    taxProfile: forecastTaxProfile,
     businessProfile:
       (businessProfile as unknown as ForecastBusinessProfile | null) ?? null,
     incomes,
@@ -425,7 +461,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
   const suggestions = buildYearEndSuggestions({
     result,
-    filingStatus: taxProfile.filing_status as FilingStatus,
+    filingStatus: forecastTaxProfile.filing_status as FilingStatus,
     entityType: (company.entity_type ?? "sole_prop") as EntityType,
     publicId,
     ytdRetirementContributionsCents,
@@ -438,8 +474,8 @@ export default async function ForecastPage({ params }: { params: Params }) {
     daysSinceLastBusinessMile,
     hasHomeOffice: businessProfile?.has_home_office ?? null,
     homeOfficeSqft: businessProfile?.home_office_sqft ?? null,
-    itemize: taxProfile.itemize,
-    ytdItemizedCents: taxProfile.itemized_total_cents ?? 0,
+    itemize: forecastTaxProfile.itemize,
+    ytdItemizedCents: forecastTaxProfile.itemized_total_cents ?? 0,
     charitableGivenCents,
     currentMonth,
     // Pass company creation date so suggestions can suppress
@@ -565,22 +601,40 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 {input.monthsEntered === 1 ? "" : "s"}. {subhead}
               </p>
               {/* Surface the active tax profile so the user doesn't
-                  silently inherit an old default (audit Medium #4). */}
-              <div className="mt-3 text-[11px] text-ink-muted leading-relaxed">
-                Using your saved tax profile:{" "}
-                <span className="text-forest-800 font-medium">
-                  {prettyFilingStatus(taxProfile.filing_status as FilingStatus)}
-                </span>
-                , {taxProfile.dependents} dependent
-                {taxProfile.dependents === 1 ? "" : "s"}
-                {taxProfile.age != null ? `, age ${taxProfile.age}` : ""}.{" "}
-                <Link
-                  href={`/onboarding/tax-profile?next=/c/${publicId}/forecast`}
-                  className="underline decoration-dotted hover:text-forest-900"
-                >
-                  Edit
-                </Link>
-              </div>
+                  silently inherit an old default (audit Medium #4). When
+                  the forecast is SEPARATE (not combined with the personal
+                  return) we say so plainly instead of implying a personal
+                  profile is in play — the numbers use a neutral single-filer
+                  basis, so pointing at the personal profile would mislead. */}
+              {combined ? (
+                <div className="mt-3 text-[11px] text-ink-muted leading-relaxed">
+                  Using your saved tax profile:{" "}
+                  <span className="text-forest-800 font-medium">
+                    {prettyFilingStatus(forecastTaxProfile.filing_status as FilingStatus)}
+                  </span>
+                  , {forecastTaxProfile.dependents} dependent
+                  {forecastTaxProfile.dependents === 1 ? "" : "s"}
+                  {forecastTaxProfile.age != null ? `, age ${forecastTaxProfile.age}` : ""}.{" "}
+                  <Link
+                    href={`/onboarding/tax-profile?next=/c/${publicId}/forecast`}
+                    className="underline decoration-dotted hover:text-forest-900"
+                  >
+                    Edit
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-3 text-[11px] text-ink-muted leading-relaxed">
+                  <span className="text-forest-800 font-medium">
+                    Standalone business estimate.
+                  </span>{" "}
+                  Taxed as if this business were your only income, kept
+                  separate from your personal return. Turn on{" "}
+                  <span className="text-forest-800 font-medium">
+                    Combine personal &amp; business
+                  </span>{" "}
+                  in Settings to fold it into your 1040.
+                </div>
+              )}
             </div>
           );
         })()}
@@ -595,7 +649,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             scenario; surface a warning so the user adds wages on the
             profile page before relying on the forecast. */}
         {(company.entity_type ?? "sole_prop") === "s_corp" &&
-          (taxProfile.owner_w2_wages_cents ?? 0) === 0 && (
+          (forecastTaxProfile.owner_w2_wages_cents ?? 0) === 0 && (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-5 sm:p-6 dark:border-amber-700/40 dark:bg-amber-900/20">
               <div className="flex items-start gap-3">
                 <div
@@ -824,7 +878,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
             <RowKV
               label="State"
               value={
-                company.state_code ?? taxProfile.state_code ?? "Not set"
+                company.state_code ?? forecastTaxProfile.state_code ?? "Not set"
               }
             />
             <RowKV
@@ -833,11 +887,11 @@ export default async function ForecastPage({ params }: { params: Params }) {
             />
             <p className="mt-3 text-xs text-ink-muted leading-relaxed">
               State estimate uses the company&apos;s state of operation
-              {company.state_code && taxProfile.state_code && company.state_code !== taxProfile.state_code ? (
+              {company.state_code && forecastTaxProfile.state_code && company.state_code !== forecastTaxProfile.state_code ? (
                 <>
                   {" "}
                   ({company.state_code}, not your personal profile state{" "}
-                  {taxProfile.state_code})
+                  {forecastTaxProfile.state_code})
                 </>
               ) : null}
               . Real bracketed math for all 50 states is on the roadmap.
@@ -1045,7 +1099,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
 
             <FindCpaCard
               zip={businessProfile?.zip ?? null}
-              stateCode={company.state_code ?? taxProfile.state_code ?? null}
+              stateCode={company.state_code ?? forecastTaxProfile.state_code ?? null}
               city={businessProfile?.city ?? null}
             />
           </div>

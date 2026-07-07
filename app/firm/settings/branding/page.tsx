@@ -4,7 +4,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmAdmin } from "@/lib/firm/context";
 import { updateFirmBranding, uploadFirmLogo } from "./actions";
 
-// /firm/settings/branding — firm-wide identity. Logo, accent color,
+// /firm/settings/branding, firm-wide identity. Logo, accent color,
 // legal name, contact + address. The values flow into every
 // invitation email + engagement letter, so they're worth filling
 // in early.
