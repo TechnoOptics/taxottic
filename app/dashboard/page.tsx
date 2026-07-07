@@ -22,6 +22,14 @@ import {
   type ForecastResult,
 } from "@/lib/tax/forecast";
 import { buildPersonalForecastInput } from "@/lib/tax/personal-forecast-input";
+import {
+  buildCompanyForecast,
+  type IncomeRow,
+  type ExpenseRow,
+  type ForecastTaxProfile,
+  type ForecastBusinessProfile,
+} from "@/lib/tax/company-forecast";
+import { resolveCombine } from "@/lib/tax/combine-setting";
 import { buildGreeting } from "@/lib/dashboard/greeting";
 import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 import { checkCompanyLimit } from "@/lib/plans/usage";
@@ -85,7 +93,7 @@ export default async function DashboardPage() {
     admin
       .from("profiles")
       .select(
-        "full_name, tour_completed_at, tax_filer_type, tax_disclaimer_accepted_at",
+        "full_name, tour_completed_at, tax_filer_type, tax_disclaimer_accepted_at, combine_personal_business",
       )
       .eq("id", user.id)
       .maybeSingle(),
@@ -653,6 +661,84 @@ export default async function DashboardPage() {
         ),
       )
     : null;
+
+  // "incl. business" line: when the owner's business is COMBINED into their
+  // personal return, surface the with-business bottom line under the
+  // personal-only figure (rather than replacing it). Scoped to the primary
+  // company they manage and labeled with its name, so it's honest about
+  // exactly what's folded in. Uses the same engine + real personal profile
+  // as that company's own forecast, so the number matches /c/.../forecast.
+  const primaryManaged = companies.find((m) => m.role === "manager") ?? null;
+  let combinedBusiness:
+    | { companyName: string; result: ForecastResult }
+    | null = null;
+  if (primaryManaged && personalTaxProfile) {
+    const cid = primaryManaged.company_id;
+    const [
+      { data: bizCompany },
+      { data: bizProfile },
+      { data: bizIncome },
+      { data: bizExpenses },
+      { data: bizTrips },
+    ] = await Promise.all([
+      admin
+        .from("companies")
+        .select("entity_type, state_code")
+        .eq("id", cid)
+        .maybeSingle(),
+      admin
+        .from("business_profiles")
+        .select("*")
+        .eq("company_id", cid)
+        .eq("tax_year", taxYear)
+        .maybeSingle(),
+      admin
+        .from("monthly_income")
+        .select("amount_cents, month, recurrence")
+        .eq("company_id", cid)
+        .eq("tax_year", taxYear),
+      admin
+        .from("monthly_expenses")
+        .select(
+          "amount_cents, month, category_code, recurrence, recurrence_end_month",
+        )
+        .eq("classification", "business")
+        .eq("company_id", cid)
+        .eq("tax_year", taxYear),
+      admin
+        .from("mileage_trips")
+        .select("deduction_cents")
+        .eq("company_id", cid)
+        .eq("classification", "business")
+        .eq("tax_year", taxYear),
+    ]);
+    const combined = resolveCombine(
+      profile?.combine_personal_business,
+      bizCompany?.entity_type ?? null,
+    );
+    if (combined) {
+      const trips = (bizTrips ?? []) as { deduction_cents: number }[];
+      const { result } = buildCompanyForecast({
+        taxYear,
+        currentMonth: new Date().getUTCMonth() + 1,
+        company: {
+          state_code: bizCompany?.state_code ?? null,
+          entity_type: bizCompany?.entity_type ?? null,
+        },
+        taxProfile: personalTaxProfile as unknown as ForecastTaxProfile,
+        businessProfile:
+          (bizProfile as unknown as ForecastBusinessProfile | null) ?? null,
+        incomes: (bizIncome ?? []) as IncomeRow[],
+        expenses: (bizExpenses ?? []) as ExpenseRow[],
+        trackedYtdMileageCents: trips.reduce(
+          (a, t) => a + Number(t.deduction_cents ?? 0),
+          0,
+        ),
+        trackedTripCount: trips.length,
+      });
+      combinedBusiness = { companyName: primaryManaged.company.name, result };
+    }
+  }
   // Nearest upcoming deadline, in whole days, for the third stat tile.
   const nextReminder =
     upcomingReminders && upcomingReminders.length
@@ -741,6 +827,17 @@ export default async function DashboardPage() {
                   Projected 1040 ·{" "}
                   {formatCents(personalForecast.totalTaxCents)} total tax
                 </div>
+                {/* Combine is on: show the with-business bottom line under
+                    the personal-only figure, clearly labeled with the
+                    company folded in. */}
+                {combinedBusiness ? (
+                  <div className="text-[13px] text-gold-700 mt-1 truncate">
+                    incl. {combinedBusiness.companyName}:{" "}
+                    {combinedBusiness.result.refundCents > 0
+                      ? `${formatCents(combinedBusiness.result.refundCents)} back`
+                      : `${formatCents(combinedBusiness.result.stillOwedCents)} owed`}
+                  </div>
+                ) : null}
               </>
             ) : (
               <>
