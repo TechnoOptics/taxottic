@@ -195,7 +195,7 @@ export default async function IncomePage({ params }: { params: Params }) {
                                   d="M7 5l6 5-6 5"
                                 />
                               </svg>
-                              <span className="display text-base text-forest-900 truncate">
+                              <span className="display text-base text-forest-900 truncate min-w-0">
                                 {MONTH_LABELS[month - 1]}
                                 {isCurrent ? (
                                   <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
