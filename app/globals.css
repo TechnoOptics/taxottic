@@ -777,6 +777,8 @@ main, footer, nav {
     border: 1px solid rgba(29, 40, 67, 0.18);
     border-radius: 0.625rem;
     color: #18181b;
+    /* Crisp, intentional text caret (was the low-contrast UA default). */
+    caret-color: #1d2843;
     font-size: 1rem;
     outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -1150,6 +1152,8 @@ main, footer, nav {
     background: rgba(18, 26, 42, 0.85);
     border-color: rgba(213, 187, 126, 0.22);
     color: #fbf7e9;
+    /* Gold caret pops on the dark surface (cream on near-dark was faint). */
+    caret-color: #d5bb7e;
   }
   html[data-theme="dark"] .input::placeholder {
     color: rgba(251, 247, 233, 0.45);
