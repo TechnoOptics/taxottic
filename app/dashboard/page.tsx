@@ -6,6 +6,7 @@ import {
   type CompanyMembership,
 } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
+import { PersonalDashboard } from "./PersonalDashboard";
 import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
@@ -131,14 +132,22 @@ export default async function DashboardPage() {
 
   // Personalized greeting + filer-type fork. New signups land on the
   // dashboard before they've picked W-2 vs business; route them to
-  // /onboarding/filer-type. W-2 users get sent to the personal-mode
-  // forecast since the company-centric dashboard wouldn't show them
-  // anything useful.
+  // /onboarding/filer-type. Individual (W-2 / personal) filers get
+  // their OWN dashboard — personal readiness, 1040 snapshot, goals,
+  // playbook — fully independent of the business side (they used to be
+  // bounced to /personal/forecast and never had a home).
   if (profile && !profile.tax_filer_type) {
     redirect("/onboarding/filer-type");
   }
   if (profile?.tax_filer_type === "w2") {
-    redirect("/personal/forecast");
+    return (
+      <PersonalDashboard
+        admin={admin}
+        supabase={supabase}
+        user={user}
+        fullName={profile?.full_name ?? null}
+      />
+    );
   }
   const greeting = buildGreeting({
     fullName: profile?.full_name,
