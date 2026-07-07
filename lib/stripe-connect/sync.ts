@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStripeForAccount } from "./client";
+import { planStripeCursorAdvance } from "./cursor";
 import {
   applyRecurringExpenseDetection,
   applyRecurringIncomeDetection,
@@ -145,180 +146,155 @@ export async function syncStripeConnection(
     bankAccountId = newAcct.id as string;
   }
 
-  // Pull pages of balance_transactions, oldest-first via the
-  // `starting_after` cursor pattern. We cap a single sync at 5 pages
-  // (500 rows) to keep an individual request bounded; cron picks up
-  // the remainder on the next pass.
+  // Cursor advancement is a HIGH-WATER-MARK walk over newest-first
+  // balance_transactions - see lib/stripe-connect/cursor.ts for the model and
+  // the bug it fixed. That walk is a pure function (planStripeCursorAdvance);
+  // here we just supply the Stripe fetch and then map + upsert what comes back.
   const PAGE = 100;
   const MAX_PAGES = 5;
-  let added = 0;
-  let lastSeen: string | null = cursor;
-  // One-shot recovery: if Stripe rejects the stored cursor, we re-list
-  // once from the year start (see the catch in the loop below).
-  let retriedWithoutCursor = false;
-  // Only import transactions from the current calendar year, anything
-  // older would never roll into THIS year's forecast and is pure noise
-  // in the review queue. The cutoff slides automatically each Jan 1.
+  const watermark: string | null = cursor;
+  // Initial (watermark-less) pull only: bound to the current calendar year so
+  // we don't import last year's noise. The cutoff slides each Jan 1.
   const yearStartUnix = Math.floor(
     Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000,
   );
 
-  for (let pageIdx = 0; pageIdx < MAX_PAGES; pageIdx++) {
-    type ExpandedSource = {
-      // Common shape across charge / payment / refund:
-      description?: string | null;
-      billing_details?: {
-        name?: string | null;
-        email?: string | null;
-      } | null;
-      statement_descriptor?: string | null;
-      customer?: string | null;
-      metadata?: Record<string, string> | null;
+  type ExpandedSource = {
+    // Common shape across charge / payment / refund:
+    description?: string | null;
+    billing_details?: {
+      name?: string | null;
+      email?: string | null;
     } | null;
-    type BalanceTx = {
-      id: string;
-      amount: number;
-      currency: string;
-      type: string;
-      description?: string | null;
-      net: number;
-      fee: number;
-      created: number;
-      // With `expand: ["data.source"]` Stripe inflates this from a
-      // bare id string into the full source object (charge, payment,
-      // refund, etc.). Tax allocation needs the description + the
-      // customer/billing details, not just "Stripe charge".
-      source?: ExpandedSource | string | null;
-    };
-    type ListResp = {
-      data: BalanceTx[];
-      has_more: boolean;
-    };
-    // When paginating from a stored cursor, let `starting_after` bound
-    // the window and DON'T also send `created`. Stripe rejects the
-    // `created` + `starting_after` combination for some connected
-    // accounts with a 400, which wedged every incremental sync (cron,
-    // manual, and the realtime webhook) and left the connection stuck
-    // at status=error pulling nothing. The Jan-1 cutoff is only needed
-    // for the initial, cursor-less pull (to avoid importing last year).
-    const listParams: {
-      limit: number;
-      starting_after?: string;
-      expand?: string[];
-      created?: { gte?: number };
-    } = lastSeen
-      ? {
-          limit: PAGE,
-          // data.source.invoice: lets us see whether a charge came from
-          // a subscription invoice (recurring revenue) vs a one-off
-          // payment, so the auto-apply can set recurrence (see
-          // subscriptionRecurrence) and the forecast projects it.
-          expand: ["data.source", "data.source.invoice"],
-          starting_after: lastSeen,
-        }
-      : {
-          limit: PAGE,
-          expand: ["data.source", "data.source.invoice"],
-          created: { gte: yearStartUnix },
-        };
+    statement_descriptor?: string | null;
+    customer?: string | null;
+    metadata?: Record<string, string> | null;
+  } | null;
+  type BalanceTx = {
+    id: string;
+    amount: number;
+    currency: string;
+    type: string;
+    description?: string | null;
+    net: number;
+    fee: number;
+    created: number;
+    // With `expand: ["data.source"]` Stripe inflates this from a
+    // bare id string into the full source object (charge, payment,
+    // refund, etc.). Tax allocation needs the description + the
+    // customer/billing details, not just "Stripe charge".
+    source?: ExpandedSource | string | null;
+  };
+  type ListResp = { data: BalanceTx[]; has_more: boolean };
 
-    const listClient = stripe as unknown as {
-      balanceTransactions: {
-        list: (
-          params: {
-            limit: number;
-            starting_after?: string;
-            expand?: string[];
-            created?: { gte?: number };
-          },
-          opts: { stripeAccount: string },
-        ) => Promise<ListResp>;
+  const listClient = stripe as unknown as {
+    balanceTransactions: {
+      list: (
+        params: {
+          limit: number;
+          starting_after?: string;
+          expand?: string[];
+          created?: { gte?: number };
+        },
+        opts: { stripeAccount: string },
+      ) => Promise<ListResp>;
+    };
+  };
+
+  const plan = await planStripeCursorAdvance<BalanceTx>({
+    watermark,
+    yearStartUnix,
+    pageSize: PAGE,
+    maxPages: MAX_PAGES,
+    fetchPage: (params) =>
+      listClient.balanceTransactions.list(
+        {
+          ...params,
+          // data.source.invoice: lets us see whether a charge came from a
+          // subscription invoice (recurring revenue) vs a one-off payment, so
+          // the auto-apply can set recurrence (see subscriptionRecurrence) and
+          // the forecast projects it.
+          expand: ["data.source", "data.source.invoice"],
+        },
+        { stripeAccount: stripeUserId },
+      ),
+  });
+
+  // Build the rows to insert from the fresh (newer-than-watermark) slice.
+  // SKIP_TYPES are no-ops (internal Stripe movements), but the watermark still
+  // advances past them via plan.newCursor so we don't re-evaluate them.
+  const rows = plan.fresh
+    .filter((t) => !SKIP_TYPES.has(t.type))
+    .map((t) => {
+      const postedDate = new Date(t.created * 1000).toISOString().slice(0, 10);
+      const isExpense =
+        t.type === "stripe_fee" ||
+        t.type === "tax" ||
+        (t.type === "refund" && t.amount < 0) ||
+        t.amount < 0;
+      // account_transactions.amount_cents convention here matches
+      // the Plaid sync writer: negative = inflow (income), positive
+      // = outflow (expense), so the same review UI works.
+      const signed = isExpense ? Math.abs(t.amount) : -Math.abs(t.amount);
+      // Pull the underlying charge/payment/refund object so the
+      // description shows WHO this was rather than the bare
+      // "Stripe charge". Falls back gracefully when source isn't
+      // expanded (e.g. balance-only adjustments).
+      const src =
+        t.source && typeof t.source === "object"
+          ? (t.source as ExpandedSource)
+          : null;
+      return {
+        account_id: bankAccountId,
+        external_transaction_id: t.id,
+        posted_date: postedDate,
+        amount_cents: signed,
+        iso_currency_code: (t.currency ?? "usd").toUpperCase(),
+        merchant_name: src?.billing_details?.name ?? "Stripe",
+        description: enrichedDescription(t, src),
+        payment_channel: "online",
+        category_path: [stripeCategoryLabel(t.type)],
+        personal_finance_category: stripeCategoryLabel(t.type),
+        raw_payload: t as unknown as Record<string, unknown>,
       };
-    };
+    });
 
-    let list: ListResp;
-    try {
-      list = (await listClient.balanceTransactions.list(listParams, {
-        stripeAccount: stripeUserId,
-      })) as ListResp;
-    } catch (err) {
-      // Safety net: if a cursor page still fails (e.g. a stale cursor
-      // Stripe can't paginate from), recover ONCE by dropping the cursor
-      // and re-listing from the year start. The UNIQUE index on
-      // external_transaction_id makes the re-list idempotent, no
-      // duplicates, so this favours correctness over a wasted call.
-      if (lastSeen && !retriedWithoutCursor) {
-        retriedWithoutCursor = true;
-        lastSeen = null;
-        added = 0;
-        pageIdx = -1; // loop's ++ takes the next iteration back to page 0
-        continue;
-      }
-      throw err;
-    }
-
-    if (!list.data || list.data.length === 0) break;
-
-    // Build the rows to insert. SKIP_TYPES are no-ops (we still
-    // advance the cursor past them so we don't re-evaluate every
-    // sync).
-    const rows = list.data
-      .filter((t) => !SKIP_TYPES.has(t.type))
-      .map((t) => {
-        const postedDate = new Date(t.created * 1000)
-          .toISOString()
-          .slice(0, 10);
-        const isExpense =
-          t.type === "stripe_fee" ||
-          t.type === "tax" ||
-          (t.type === "refund" && t.amount < 0) ||
-          t.amount < 0;
-        // account_transactions.amount_cents convention here matches
-        // the Plaid sync writer: negative = inflow (income), positive
-        // = outflow (expense), so the same review UI works.
-        const signed = isExpense
-          ? Math.abs(t.amount)
-          : -Math.abs(t.amount);
-        // Pull the underlying charge/payment/refund object so the
-        // description shows WHO this was rather than the bare
-        // "Stripe charge". Falls back gracefully when source isn't
-        // expanded (e.g. balance-only adjustments).
-        const src =
-          t.source && typeof t.source === "object"
-            ? (t.source as ExpandedSource)
-            : null;
-        return {
-          account_id: bankAccountId,
-          external_transaction_id: t.id,
-          posted_date: postedDate,
-          amount_cents: signed,
-          iso_currency_code: (t.currency ?? "usd").toUpperCase(),
-          merchant_name: src?.billing_details?.name ?? "Stripe",
-          description: enrichedDescription(t, src),
-          payment_channel: "online",
-          category_path: [stripeCategoryLabel(t.type)],
-          personal_finance_category: stripeCategoryLabel(t.type),
-          raw_payload: t as unknown as Record<string, unknown>,
-        };
+  let added = 0;
+  if (rows.length > 0) {
+    // ON CONFLICT (external_transaction_id) DO NOTHING, the unique
+    // index gives us idempotency for free. PostgREST exposes this
+    // as upsert with onConflict + ignoreDuplicates.
+    const { error: insertErr, count } = await admin
+      .from("account_transactions")
+      .upsert(rows, {
+        onConflict: "external_transaction_id",
+        ignoreDuplicates: true,
+        count: "exact",
       });
+    if (insertErr) throw new Error(insertErr.message);
+    added += count ?? 0;
+  }
 
-    if (rows.length > 0) {
-      // ON CONFLICT (external_transaction_id) DO NOTHING, the unique
-      // index gives us idempotency for free. PostgREST exposes this
-      // as upsert with onConflict + ignoreDuplicates.
-      const { error: insertErr, count } = await admin
-        .from("account_transactions")
-        .upsert(rows, {
-          onConflict: "external_transaction_id",
-          ignoreDuplicates: true,
-          count: "exact",
-        });
-      if (insertErr) throw new Error(insertErr.message);
-      added += count ?? 0;
-    }
-
-    lastSeen = list.data[list.data.length - 1].id;
-    if (!list.has_more) break;
+  // Diagnostics: this sync used to no-op silently (added:0, status active) when
+  // the cursor had marched past the newest data. Always leave a breadcrumb so a
+  // "Sync did nothing" report is debuggable from logs alone.
+  const newCursor = plan.newCursor;
+  console.log(
+    `[stripe-sync] connection=${connectionId} acct=${stripeUserId} ` +
+      `force=${options.force ?? false} watermark=${watermark ?? "none"} ` +
+      `fetched=${plan.fetched} added=${added} ` +
+      `reachedWatermark=${plan.reachedWatermark} newCursor=${newCursor ?? "none"}`,
+  );
+  // Walked the full page cap without meeting the previous watermark: a very
+  // high-volume account may have more new transactions than one run's cap, so
+  // this run left a gap the next sync re-covers (idempotent). Flag it so a
+  // genuine gap is visible rather than silent.
+  if (plan.hitPageCapWithoutWatermark) {
+    console.warn(
+      `[stripe-sync] connection=${connectionId} walked ${MAX_PAGES} pages ` +
+        `(${plan.fetched} txns) without reaching stored cursor ${watermark}; ` +
+        `high volume since last sync - re-run Sync to continue backfilling.`,
+    );
   }
 
   // Auto-apply pass, bring Stripe into parity with the Plaid sync.
@@ -356,12 +332,13 @@ export async function syncStripeConnection(
     new Date().getUTCFullYear(),
   );
 
-  // Persist new cursor + last_synced_at so the next pass picks up
-  // where we stopped and the throttle ticks.
+  // Persist the new high-water mark (newest id seen) + last_synced_at so the
+  // next sync lists from the top and stops here. Fall back to the old
+  // watermark if this run saw nothing, so we never null it out.
   await admin
     .from("bank_connections")
     .update({
-      cursor: lastSeen,
+      cursor: newCursor,
       last_synced_at: new Date().toISOString(),
       status: "active",
       last_error: null,
