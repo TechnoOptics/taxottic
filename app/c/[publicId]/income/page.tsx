@@ -195,15 +195,19 @@ export default async function IncomePage({ params }: { params: Params }) {
                                   d="M7 5l6 5-6 5"
                                 />
                               </svg>
-                              <span className="display text-base text-forest-900 truncate">
+                              {/* min-w-0 so the month name is the ONLY
+                                  thing that shrinks; the chips + count
+                                  stay whole and the row can never push
+                                  past the viewport on narrow phones. */}
+                              <span className="display text-base text-forest-900 truncate min-w-0">
                                 {MONTH_LABELS[month - 1]}
                                 {isCurrent ? (
-                                  <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
+                                  <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium whitespace-nowrap hidden min-[400px]:inline">
                                     This month
                                   </span>
                                 ) : null}
                               </span>
-                              <span className="text-xs text-ink-muted">
+                              <span className="text-xs text-ink-muted whitespace-nowrap shrink-0">
                                 · {monthRows.length}{" "}
                                 {monthRows.length === 1 ? "entry" : "entries"}
                               </span>

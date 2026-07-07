@@ -173,12 +173,18 @@ export function IncomeRow({
   }
 
   return (
-    <li className="flex items-center justify-between rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm gap-3">
-      <div className="min-w-0 flex-1">
-        <div className="font-medium text-forest-900">
-          {MONTH_LABELS[row.month - 1]} - {prettySource(row.source)}
+    // Overflow-hardened (mobile): flex-wrap lets the amount + actions
+    // drop to a second line on narrow phones instead of pushing the row
+    // past the viewport; the label column is the only shrinkable piece
+    // (min-w-0 + truncate) and the cadence badge / amount never break.
+    <li className="flex flex-wrap items-center justify-between rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm gap-x-3 gap-y-1">
+      <div className="min-w-0 flex-1 basis-40">
+        <div className="font-medium text-forest-900 flex items-center gap-2 min-w-0">
+          <span className="truncate min-w-0">
+            {MONTH_LABELS[row.month - 1]} - {prettySource(row.source)}
+          </span>
           {row.recurrence && row.recurrence !== "one_off" ? (
-            <span className="ml-2 text-[10px] uppercase tracking-wide text-gold-700 border border-gold-300/60 rounded px-1.5 py-0.5">
+            <span className="text-[10px] uppercase tracking-wide text-gold-700 border border-gold-300/60 rounded px-1.5 py-0.5 whitespace-nowrap shrink-0">
               {prettyCadence(row.recurrence)}
             </span>
           ) : null}
@@ -187,7 +193,7 @@ export function IncomeRow({
           <div className="text-xs text-ink-muted truncate">{row.notes}</div>
         ) : null}
       </div>
-      <div className="text-forest-900 font-medium tabular-nums">
+      <div className="text-forest-900 font-medium tabular-nums whitespace-nowrap shrink-0">
         {formatCents(row.amount_cents, { showCents: true })}
         {row.recurrence && row.recurrence !== "one_off" ? (
           <span className="ml-1 text-[10px] text-ink-muted">
