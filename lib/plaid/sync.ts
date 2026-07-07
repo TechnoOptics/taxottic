@@ -3,11 +3,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlaidClient } from "./client";
 import { categorizeExpense, categorizeIncome } from "./categorize";
 import { decryptBankToken } from "@/lib/crypto/bankTokens";
-import { applyRecurringExpenseDetection } from "@/lib/banking/recurring";
+import {
+  applyRecurringExpenseDetection,
+  applyRecurringIncomeDetection,
+} from "@/lib/banking/recurring";
 import {
   claimPendingTransaction,
   releasePendingTransaction,
 } from "@/lib/banking/claim";
+import {
+  isSubscriptionLike,
+  subscriptionFallbackKey,
+  findCoveringRecurringRow,
+  type CoverCandidate,
+} from "@/lib/banking/subscription-dedupe";
 
 /**
  * Pull every change since the connection's stored cursor and apply
@@ -257,7 +266,7 @@ async function applyPendingTransactions(
   const { data: txs } = await admin
     .from("account_transactions")
     .select(
-      "id, posted_date, amount_cents, personal_finance_category, raw_payload, is_pending",
+      "id, posted_date, amount_cents, description, personal_finance_category, raw_payload, is_pending",
     )
     .in("account_id", accountIds)
     .eq("user_action", "pending")
@@ -270,6 +279,19 @@ async function applyPendingTransactions(
   if (!txs || !txs.length) {
     return { applied: 0, applied_income: 0, applied_expense: 0 };
   }
+
+  // INCOME double-count guard, same rationale as the Stripe path (see
+  // lib/stripe-connect/sync.ts): a recurring income row already
+  // projects future months, so a real deposit its projection covers
+  // links to it instead of becoming a second countable row. Expenses
+  // rely on the anchor detector (groups manual + synced rows by
+  // category+amount) — no coverage-skip there.
+  const { data: recIncome } = await admin
+    .from("monthly_income")
+    .select("id, tax_year, month, amount_cents, recurrence, recurring_key")
+    .eq("company_id", companyId)
+    .neq("recurrence", "one_off");
+  const incomeCandidates = (recIncome ?? []) as CoverCandidate[];
 
   let income = 0;
   let expense = 0;
@@ -286,13 +308,17 @@ async function applyPendingTransactions(
 
     // Plaid sign convention: positive = outflow (expense), negative
     // = inflow (income / refund / credit).
+    const desc = (tx.description as string | null) ?? null;
+    const subLike = isSubscriptionLike(desc);
+
     if (cents > 0) {
       const code = categorizeExpense(primary);
       if (!code) continue;
-      // Claim atomically before inserting so a concurrent sync can't apply
+      // Claim atomically before writing so a concurrent sync can't apply
       // this transaction twice. Loser of the race skips.
       if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
         continue;
+      const expRecurrence = subLike ? "monthly" : "one_off";
       const { data: row } = await admin
         .from("monthly_expenses")
         .insert({
@@ -302,7 +328,12 @@ async function applyPendingTransactions(
           month,
           amount_cents: cents,
           category_code: code,
-          notes: "Auto-imported from bank feed",
+          // "Subscription" in the bank line → monthly from day one
+          // instead of waiting 3 months for pattern detection.
+          recurrence: expRecurrence,
+          notes: desc
+            ? `Auto-imported from bank feed · ${desc}`.slice(0, 500)
+            : "Auto-imported from bank feed",
         })
         .select("id")
         .maybeSingle();
@@ -318,8 +349,27 @@ async function applyPendingTransactions(
     } else if (cents < 0) {
       const source = categorizeIncome(primary, detailed);
       if (!source) continue;
+      const incRecurrence = subLike ? "monthly" : "one_off";
+      const incKey =
+        subLike && desc
+          ? subscriptionFallbackKey(desc, Math.abs(cents))
+          : null;
+      const coveringIncome = findCoveringRecurringRow(incomeCandidates, {
+        tax_year: taxYear,
+        month,
+        amount_cents: Math.abs(cents),
+        recurring_key: incKey,
+      });
       if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
         continue;
+      if (coveringIncome) {
+        await admin
+          .from("account_transactions")
+          .update({ applied_to_income_id: coveringIncome.id })
+          .eq("id", tx.id);
+        income++;
+        continue;
+      }
       const { data: row } = await admin
         .from("monthly_income")
         .insert({
@@ -329,7 +379,11 @@ async function applyPendingTransactions(
           month,
           amount_cents: Math.abs(cents),
           source,
-          notes: "Auto-imported from bank feed",
+          recurrence: incRecurrence,
+          recurring_key: incKey,
+          notes: desc
+            ? `Auto-imported from bank feed · ${desc}`.slice(0, 500)
+            : "Auto-imported from bank feed",
         })
         .select("id")
         .maybeSingle();
@@ -339,6 +393,16 @@ async function applyPendingTransactions(
           .update({ applied_to_income_id: row.id })
           .eq("id", tx.id);
         income++;
+        if (incRecurrence !== "one_off") {
+          incomeCandidates.push({
+            id: row.id as string,
+            tax_year: taxYear,
+            month,
+            amount_cents: Math.abs(cents),
+            recurrence: incRecurrence,
+            recurring_key: incKey,
+          });
+        }
       } else {
         await releasePendingTransaction(admin, tx.id as string);
       }
@@ -349,6 +413,14 @@ async function applyPendingTransactions(
   // what we just applied and mark their cadence, so the forecast projects
   // them instead of treating each charge as one-off. Idempotent + cheap.
   await applyRecurringExpenseDetection(
+    admin,
+    companyId,
+    new Date().getUTCFullYear(),
+  );
+  // Income rows can now carry recurring keys (subscription-like bank
+  // lines), so run the income anchor pass too — keeps exactly one
+  // charge per stream projecting forward. Idempotent + cheap.
+  await applyRecurringIncomeDetection(
     admin,
     companyId,
     new Date().getUTCFullYear(),

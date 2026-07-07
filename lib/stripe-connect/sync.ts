@@ -9,6 +9,12 @@ import {
   claimPendingTransaction,
   releasePendingTransaction,
 } from "@/lib/banking/claim";
+import {
+  isSubscriptionLike,
+  subscriptionFallbackKey,
+  findCoveringRecurringRow,
+  type CoverCandidate,
+} from "@/lib/banking/subscription-dedupe";
 
 /**
  * Pull balance_transactions for a Stripe Connect connection and write
@@ -512,6 +518,24 @@ async function autoApplyPendingStripe(args: {
     .eq("user_action", "pending")
     .limit(500);
 
+  // INCOME double-count guard: an existing recurring income row (e.g.
+  // the user hand-forecast a subscription as monthly) already projects
+  // into future months, so an arriving real charge that its projection
+  // covers must NOT become a second countable row — that was the
+  // "sync added an income that was already forecasted" bug. Income is
+  // safe to absorb this way because income has no stopped-stream
+  // end-capping; the covering row keeps projecting all year and every
+  // real charge simply links to it. (Expenses deliberately do NOT get
+  // this guard: the expense anchor detector already groups manual +
+  // synced rows by category+amount and demotes stale anchors, and its
+  // stopped-stream capping would mis-fire on absorbed months.)
+  const { data: recIncome } = await admin
+    .from("monthly_income")
+    .select("id, tax_year, month, amount_cents, recurrence, recurring_key")
+    .eq("company_id", companyId)
+    .neq("recurrence", "one_off");
+  const incomeCandidates = (recIncome ?? []) as CoverCandidate[];
+
   let income = 0;
   let expense = 0;
 
@@ -541,9 +565,40 @@ async function autoApplyPendingStripe(args: {
       // inflow type (e.g. adjustment with positive amount) is left
       // pending so the user can confirm it's actually revenue.
       if (type !== "charge" && type !== "payment") continue;
-      // Claim atomically before inserting (idempotency under concurrent syncs).
+      // Subscription semantics. Stripe's own invoice shape wins; when it's
+      // absent but the line item SAYS subscription, treat it as monthly
+      // with a description-derived stream key (the user's rule).
+      const desc = tx.description as string | null;
+      let recurrence = subscriptionRecurrence(raw);
+      let recurringKey = subscriptionKey(raw);
+      if (recurrence === "one_off" && isSubscriptionLike(desc)) {
+        recurrence = "monthly";
+        if (!recurringKey && desc)
+          recurringKey = subscriptionFallbackKey(desc, Math.abs(cents));
+      }
+
+      // Already forecast? If an existing recurring income row projects
+      // this exact stream (same year, same whole-dollar amount, same or
+      // no subscription key) into this month, the money is ALREADY in
+      // the forecast. Link the bank transaction to that row instead of
+      // creating a second countable one.
+      const coveringIncome = findCoveringRecurringRow(incomeCandidates, {
+        tax_year: taxYear,
+        month,
+        amount_cents: Math.abs(cents),
+        recurring_key: recurringKey,
+      });
+      // Claim atomically before writing (idempotency under concurrent syncs).
       if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
         continue;
+      if (coveringIncome) {
+        await admin
+          .from("account_transactions")
+          .update({ applied_to_income_id: coveringIncome.id })
+          .eq("id", tx.id);
+        income++;
+        continue;
+      }
       const { data: row } = await admin
         .from("monthly_income")
         .insert({
@@ -555,12 +610,12 @@ async function autoApplyPendingStripe(args: {
           source: "sales",
           // Recurring subscription revenue → mark it so the forecast
           // projects it across the year instead of treating it one-off.
-          recurrence: subscriptionRecurrence(raw),
+          recurrence,
           // Stable subscription identity so the anchor pass keeps only the
           // latest charge of each subscription projecting forward.
-          recurring_key: subscriptionKey(raw),
+          recurring_key: recurringKey,
           notes: buildIncomeNote({
-            description: tx.description as string | null,
+            description: desc,
             src,
           }),
         })
@@ -572,6 +627,17 @@ async function autoApplyPendingStripe(args: {
           .update({ applied_to_income_id: row.id })
           .eq("id", tx.id);
         income++;
+        if (recurrence !== "one_off") {
+          // Later charges in this same batch must see this stream.
+          incomeCandidates.push({
+            id: row.id as string,
+            tax_year: taxYear,
+            month,
+            amount_cents: Math.abs(cents),
+            recurrence,
+            recurring_key: recurringKey,
+          });
+        }
       } else {
         await releasePendingTransaction(admin, tx.id as string);
       }
@@ -583,6 +649,12 @@ async function autoApplyPendingStripe(args: {
     // the best-matching Schedule-C bucket.
     if (cents > 0) {
       const code = stripeExpenseCode(type);
+      const expDesc = tx.description as string | null;
+      // "Subscription" in the line item → monthly from day one (the
+      // user's rule) instead of waiting 3 months for auto-detection.
+      const expRecurrence = isSubscriptionLike(expDesc)
+        ? ("monthly" as const)
+        : ("one_off" as const);
       if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
         continue;
       const { data: row } = await admin
@@ -594,9 +666,10 @@ async function autoApplyPendingStripe(args: {
           month,
           amount_cents: cents,
           category_code: code,
+          recurrence: expRecurrence,
           notes: buildExpenseNote({
             type,
-            description: tx.description as string | null,
+            description: expDesc,
             src,
           }),
         })
