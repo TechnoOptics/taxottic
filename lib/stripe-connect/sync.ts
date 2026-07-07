@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStripeForAccount } from "./client";
+import { planStripeCursorAdvance } from "./cursor";
 import {
   applyRecurringExpenseDetection,
   applyRecurringIncomeDetection,
@@ -145,241 +146,153 @@ export async function syncStripeConnection(
     bankAccountId = newAcct.id as string;
   }
 
-  // Stripe returns balance_transactions NEWEST-FIRST (descending by
-  // `created`), and `starting_after` pages toward OLDER records. So the
-  // incremental cursor is a HIGH-WATER MARK: bank_connections.cursor holds
-  // the newest balance_transaction.id we imported on the previous run. Each
-  // sync lists from the very top (newest) and walks downward until it reaches
-  // that watermark, importing everything newer, then stores the new newest id.
-  //
-  // The earlier implementation stored the OLDEST id of the page and then
-  // paginated `starting_after` from it every sync, which marched further
-  // backward in history and never saw new charges once the initial backfill
-  // reached the year start. Sync then silently returned added:0 forever with
-  // status="active" - the "connected Stripe account stops updating" bug.
-  //
-  // Idempotent regardless of overlap: account_transactions
-  // .external_transaction_id is UNIQUE, so re-importing a window that spans
-  // the watermark inserts zero duplicate rows.
+  // Cursor advancement is a HIGH-WATER-MARK walk over newest-first
+  // balance_transactions - see lib/stripe-connect/cursor.ts for the model and
+  // the bug it fixed. That walk is a pure function (planStripeCursorAdvance);
+  // here we just supply the Stripe fetch and then map + upsert what comes back.
   const PAGE = 100;
   const MAX_PAGES = 5;
-  let added = 0;
-  let fetched = 0;
-  // Newest id imported previously; the downward walk stops when it reaches it.
   const watermark: string | null = cursor;
-  // Newest id observed this run - becomes the new watermark.
-  let newestSeen: string | null = null;
-  // Pagination pointer INTO older pages. Only ever an id Stripe just handed
-  // us, so it can never be a "stale cursor" Stripe refuses to paginate from.
-  let startingAfter: string | null = null;
-  let reachedWatermark = false;
-  // One-shot recovery: on a transient page failure, restart the walk from the
-  // newest transaction (see the catch in the loop below).
-  let retriedFromTop = false;
   // Initial (watermark-less) pull only: bound to the current calendar year so
   // we don't import last year's noise. The cutoff slides each Jan 1.
   const yearStartUnix = Math.floor(
     Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000,
   );
 
-  for (let pageIdx = 0; pageIdx < MAX_PAGES; pageIdx++) {
-    type ExpandedSource = {
-      // Common shape across charge / payment / refund:
-      description?: string | null;
-      billing_details?: {
-        name?: string | null;
-        email?: string | null;
-      } | null;
-      statement_descriptor?: string | null;
-      customer?: string | null;
-      metadata?: Record<string, string> | null;
+  type ExpandedSource = {
+    // Common shape across charge / payment / refund:
+    description?: string | null;
+    billing_details?: {
+      name?: string | null;
+      email?: string | null;
     } | null;
-    type BalanceTx = {
-      id: string;
-      amount: number;
-      currency: string;
-      type: string;
-      description?: string | null;
-      net: number;
-      fee: number;
-      created: number;
-      // With `expand: ["data.source"]` Stripe inflates this from a
-      // bare id string into the full source object (charge, payment,
-      // refund, etc.). Tax allocation needs the description + the
-      // customer/billing details, not just "Stripe charge".
-      source?: ExpandedSource | string | null;
-    };
-    type ListResp = {
-      data: BalanceTx[];
-      has_more: boolean;
-    };
-    // data.source.invoice: lets us see whether a charge came from a
-    // subscription invoice (recurring revenue) vs a one-off payment, so the
-    // auto-apply can set recurrence (see subscriptionRecurrence) and the
-    // forecast projects it.
-    const listParams: {
-      limit: number;
-      starting_after?: string;
-      expand?: string[];
-      created?: { gte?: number };
-    } = {
-      limit: PAGE,
-      expand: ["data.source", "data.source.invoice"],
-    };
-    if (startingAfter) {
-      // Continuing the downward (into-older) walk through the current sync.
-      // Never combined with `created`: Stripe rejects `created` +
-      // `starting_after` for some connected accounts with a 400.
-      listParams.starting_after = startingAfter;
-    } else if (!watermark) {
-      // First page of the very first sync: bound to this calendar year.
-      listParams.created = { gte: yearStartUnix };
-    }
-    // First page of an incremental sync (watermark set, no startingAfter yet):
-    // send neither bound, so Stripe returns from the newest transaction down.
+    statement_descriptor?: string | null;
+    customer?: string | null;
+    metadata?: Record<string, string> | null;
+  } | null;
+  type BalanceTx = {
+    id: string;
+    amount: number;
+    currency: string;
+    type: string;
+    description?: string | null;
+    net: number;
+    fee: number;
+    created: number;
+    // With `expand: ["data.source"]` Stripe inflates this from a
+    // bare id string into the full source object (charge, payment,
+    // refund, etc.). Tax allocation needs the description + the
+    // customer/billing details, not just "Stripe charge".
+    source?: ExpandedSource | string | null;
+  };
+  type ListResp = { data: BalanceTx[]; has_more: boolean };
 
-    const listClient = stripe as unknown as {
-      balanceTransactions: {
-        list: (
-          params: {
-            limit: number;
-            starting_after?: string;
-            expand?: string[];
-            created?: { gte?: number };
-          },
-          opts: { stripeAccount: string },
-        ) => Promise<ListResp>;
+  const listClient = stripe as unknown as {
+    balanceTransactions: {
+      list: (
+        params: {
+          limit: number;
+          starting_after?: string;
+          expand?: string[];
+          created?: { gte?: number };
+        },
+        opts: { stripeAccount: string },
+      ) => Promise<ListResp>;
+    };
+  };
+
+  const plan = await planStripeCursorAdvance<BalanceTx>({
+    watermark,
+    yearStartUnix,
+    pageSize: PAGE,
+    maxPages: MAX_PAGES,
+    fetchPage: (params) =>
+      listClient.balanceTransactions.list(
+        {
+          ...params,
+          // data.source.invoice: lets us see whether a charge came from a
+          // subscription invoice (recurring revenue) vs a one-off payment, so
+          // the auto-apply can set recurrence (see subscriptionRecurrence) and
+          // the forecast projects it.
+          expand: ["data.source", "data.source.invoice"],
+        },
+        { stripeAccount: stripeUserId },
+      ),
+  });
+
+  // Build the rows to insert from the fresh (newer-than-watermark) slice.
+  // SKIP_TYPES are no-ops (internal Stripe movements), but the watermark still
+  // advances past them via plan.newCursor so we don't re-evaluate them.
+  const rows = plan.fresh
+    .filter((t) => !SKIP_TYPES.has(t.type))
+    .map((t) => {
+      const postedDate = new Date(t.created * 1000).toISOString().slice(0, 10);
+      const isExpense =
+        t.type === "stripe_fee" ||
+        t.type === "tax" ||
+        (t.type === "refund" && t.amount < 0) ||
+        t.amount < 0;
+      // account_transactions.amount_cents convention here matches
+      // the Plaid sync writer: negative = inflow (income), positive
+      // = outflow (expense), so the same review UI works.
+      const signed = isExpense ? Math.abs(t.amount) : -Math.abs(t.amount);
+      // Pull the underlying charge/payment/refund object so the
+      // description shows WHO this was rather than the bare
+      // "Stripe charge". Falls back gracefully when source isn't
+      // expanded (e.g. balance-only adjustments).
+      const src =
+        t.source && typeof t.source === "object"
+          ? (t.source as ExpandedSource)
+          : null;
+      return {
+        account_id: bankAccountId,
+        external_transaction_id: t.id,
+        posted_date: postedDate,
+        amount_cents: signed,
+        iso_currency_code: (t.currency ?? "usd").toUpperCase(),
+        merchant_name: src?.billing_details?.name ?? "Stripe",
+        description: enrichedDescription(t, src),
+        payment_channel: "online",
+        category_path: [stripeCategoryLabel(t.type)],
+        personal_finance_category: stripeCategoryLabel(t.type),
+        raw_payload: t as unknown as Record<string, unknown>,
       };
-    };
+    });
 
-    let list: ListResp;
-    try {
-      list = (await listClient.balanceTransactions.list(listParams, {
-        stripeAccount: stripeUserId,
-      })) as ListResp;
-    } catch (err) {
-      // Safety net: recover ONCE from a transient page failure by restarting
-      // the walk from the newest transaction. `starting_after` only ever
-      // carries an id Stripe just handed us, so a "stale cursor" 400 is no
-      // longer possible; this covers transient network/API errors mid-walk.
-      // The UNIQUE index on external_transaction_id keeps the restart
-      // idempotent (no duplicates).
-      if (startingAfter && !retriedFromTop) {
-        retriedFromTop = true;
-        startingAfter = null;
-        newestSeen = null;
-        added = 0;
-        fetched = 0;
-        reachedWatermark = false;
-        pageIdx = -1; // loop's ++ takes the next iteration back to page 0
-        continue;
-      }
-      throw err;
-    }
-
-    if (!list.data || list.data.length === 0) break;
-    fetched += list.data.length;
-    // The first item of the first page is the newest transaction overall.
-    if (newestSeen === null) newestSeen = list.data[0].id;
-
-    // Import everything newer than the stored watermark, then stop: the id we
-    // already hold (and every older one below it) is already in the table.
-    // The unique index would drop them anyway; stopping saves the rest of the
-    // walk. On the initial, watermark-less pull nothing trips this, so we page
-    // the full MAX_PAGES back through the year.
-    const fresh: typeof list.data = [];
-    for (const t of list.data) {
-      if (watermark && t.id === watermark) {
-        reachedWatermark = true;
-        break;
-      }
-      fresh.push(t);
-    }
-
-    // Build the rows to insert from the fresh (newer-than-watermark) slice.
-    // SKIP_TYPES are no-ops (internal Stripe movements), but the watermark
-    // still advances past them via newestSeen so we don't re-evaluate them.
-    const rows = fresh
-      .filter((t) => !SKIP_TYPES.has(t.type))
-      .map((t) => {
-        const postedDate = new Date(t.created * 1000)
-          .toISOString()
-          .slice(0, 10);
-        const isExpense =
-          t.type === "stripe_fee" ||
-          t.type === "tax" ||
-          (t.type === "refund" && t.amount < 0) ||
-          t.amount < 0;
-        // account_transactions.amount_cents convention here matches
-        // the Plaid sync writer: negative = inflow (income), positive
-        // = outflow (expense), so the same review UI works.
-        const signed = isExpense
-          ? Math.abs(t.amount)
-          : -Math.abs(t.amount);
-        // Pull the underlying charge/payment/refund object so the
-        // description shows WHO this was rather than the bare
-        // "Stripe charge". Falls back gracefully when source isn't
-        // expanded (e.g. balance-only adjustments).
-        const src =
-          t.source && typeof t.source === "object"
-            ? (t.source as ExpandedSource)
-            : null;
-        return {
-          account_id: bankAccountId,
-          external_transaction_id: t.id,
-          posted_date: postedDate,
-          amount_cents: signed,
-          iso_currency_code: (t.currency ?? "usd").toUpperCase(),
-          merchant_name: src?.billing_details?.name ?? "Stripe",
-          description: enrichedDescription(t, src),
-          payment_channel: "online",
-          category_path: [stripeCategoryLabel(t.type)],
-          personal_finance_category: stripeCategoryLabel(t.type),
-          raw_payload: t as unknown as Record<string, unknown>,
-        };
+  let added = 0;
+  if (rows.length > 0) {
+    // ON CONFLICT (external_transaction_id) DO NOTHING, the unique
+    // index gives us idempotency for free. PostgREST exposes this
+    // as upsert with onConflict + ignoreDuplicates.
+    const { error: insertErr, count } = await admin
+      .from("account_transactions")
+      .upsert(rows, {
+        onConflict: "external_transaction_id",
+        ignoreDuplicates: true,
+        count: "exact",
       });
-
-    if (rows.length > 0) {
-      // ON CONFLICT (external_transaction_id) DO NOTHING, the unique
-      // index gives us idempotency for free. PostgREST exposes this
-      // as upsert with onConflict + ignoreDuplicates.
-      const { error: insertErr, count } = await admin
-        .from("account_transactions")
-        .upsert(rows, {
-          onConflict: "external_transaction_id",
-          ignoreDuplicates: true,
-          count: "exact",
-        });
-      if (insertErr) throw new Error(insertErr.message);
-      added += count ?? 0;
-    }
-
-    // Hit the watermark inside this page -> everything below is already ours.
-    if (reachedWatermark) break;
-    // Otherwise page toward older records from the last id of this page.
-    startingAfter = list.data[list.data.length - 1].id;
-    if (!list.has_more) break;
+    if (insertErr) throw new Error(insertErr.message);
+    added += count ?? 0;
   }
 
   // Diagnostics: this sync used to no-op silently (added:0, status active) when
   // the cursor had marched past the newest data. Always leave a breadcrumb so a
   // "Sync did nothing" report is debuggable from logs alone.
-  const newCursor = newestSeen ?? watermark;
+  const newCursor = plan.newCursor;
   console.log(
     `[stripe-sync] connection=${connectionId} acct=${stripeUserId} ` +
       `force=${options.force ?? false} watermark=${watermark ?? "none"} ` +
-      `fetched=${fetched} added=${added} reachedWatermark=${reachedWatermark} ` +
-      `newCursor=${newCursor ?? "none"}`,
+      `fetched=${plan.fetched} added=${added} ` +
+      `reachedWatermark=${plan.reachedWatermark} newCursor=${newCursor ?? "none"}`,
   );
-  // We walked the full page cap without meeting the previous watermark: there
-  // may be transactions older than the newest `fetched` but newer than the old
-  // watermark that this run didn't reach. The next sync starts from the top
-  // again and will re-cover them (idempotent). Flag it so a genuine gap in a
-  // very high-volume account is visible rather than silent.
-  if (watermark && !reachedWatermark && fetched >= PAGE * MAX_PAGES) {
+  // Walked the full page cap without meeting the previous watermark: a very
+  // high-volume account may have more new transactions than one run's cap, so
+  // this run left a gap the next sync re-covers (idempotent). Flag it so a
+  // genuine gap is visible rather than silent.
+  if (plan.hitPageCapWithoutWatermark) {
     console.warn(
       `[stripe-sync] connection=${connectionId} walked ${MAX_PAGES} pages ` +
-        `(${fetched} txns) without reaching stored cursor ${watermark}; ` +
+        `(${plan.fetched} txns) without reaching stored cursor ${watermark}; ` +
         `high volume since last sync - re-run Sync to continue backfilling.`,
     );
   }
