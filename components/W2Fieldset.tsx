@@ -73,6 +73,18 @@ export function W2Fieldset({
       </p>
       <div className="sm:col-span-3">
         <W2Uploader who={who} onApply={applyExtraction} />
+        {who === "owner" ? (
+          <p className="mt-1.5 text-[11px] text-ink-muted">
+            No W-2 yet this year?{" "}
+            <a
+              href="/personal/paystub"
+              className="text-forest-700 underline decoration-dotted hover:text-forest-900"
+            >
+              Upload 1-3 recent pay stubs instead
+            </a>{" "}
+            and we&apos;ll project the full year from them.
+          </p>
+        ) : null}
       </div>
       <Field
         name={fieldNames.wages}
