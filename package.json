@@ -45,6 +45,7 @@
     "@sparticuz/chromium": "^131.0.1",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.0",
+    "@vercel/functions": "^3.7.5",
     "capacitor-plugin-safe-area": "^5.0.0",
     "jose": "^6.2.3",
     "next": "16.2.4",
