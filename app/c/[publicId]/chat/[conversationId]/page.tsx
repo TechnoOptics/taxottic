@@ -54,9 +54,7 @@ export default async function ConversationPage({
         .order("created_at", { ascending: true }),
       supabase
         .from("company_members")
-        .select(
-          "user_id, role, profile:profiles(full_name, email)",
-        )
+        .select("user_id, role")
         .eq("company_id", company.id),
       supabase
         .from("team_messages")
@@ -78,6 +76,31 @@ export default async function ConversationPage({
   // private bucket stays private but messages still render <img> /
   // download links inline.
   const admin = createServiceClient();
+
+  // company_members.user_id has NO foreign key to profiles (it points at
+  // auth.users), so PostgREST can't embed `profile:profiles(...)` - the
+  // whole query comes back null and the roster/count shows 0 (this was the
+  // "chat shows 0 members / no employees" bug). Fetch profiles separately
+  // and stitch by id, exactly like the expenses / manage pages do.
+  const memberIds = ((companyMembers ?? []) as { user_id: string }[]).map(
+    (m) => m.user_id,
+  );
+  const { data: memberProfiles } = memberIds.length
+    ? await admin
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", memberIds)
+    : {
+        data: [] as {
+          id: string;
+          full_name: string | null;
+          email: string | null;
+        }[],
+      };
+  const profileById = new Map(
+    (memberProfiles ?? []).map((p) => [p.id, p]),
+  );
+
   type RawAttachment = {
     id: string;
     storage_path: string;
@@ -124,27 +147,19 @@ export default async function ConversationPage({
       })),
     }));
 
-  // Normalize the joined company members into a flat list. supabase-js
-  // types model the joined `profile:profiles` as an array; coerce.
-  type RawCompanyMember = {
-    user_id: string;
-    role: string;
-    profile:
-      | { full_name: string | null; email: string | null }
-      | { full_name: string | null; email: string | null }[]
-      | null;
-  };
-  const companyMemberList = ((companyMembers ?? []) as unknown as RawCompanyMember[]).map(
-    (m) => {
-      const p = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-      return {
-        user_id: m.user_id,
-        role: m.role,
-        full_name: p?.full_name ?? null,
-        email: p?.email ?? null,
-      };
-    },
-  );
+  // Stitch each member to its separately-fetched profile (see the
+  // no-FK note above).
+  const companyMemberList = (
+    (companyMembers ?? []) as { user_id: string; role: string }[]
+  ).map((m) => {
+    const p = profileById.get(m.user_id) ?? null;
+    return {
+      user_id: m.user_id,
+      role: m.role,
+      full_name: p?.full_name ?? null,
+      email: p?.email ?? null,
+    };
+  });
 
   const conversationList = ((conversations ?? []) as Array<{
     id: string;
