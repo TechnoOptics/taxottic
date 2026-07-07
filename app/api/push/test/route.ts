@@ -66,13 +66,14 @@ export async function POST() {
       process.env.APNS_BUNDLE_ID
     ),
     // FCM is configured via EITHER a service-account key OR keyless
-    // Workload Identity Federation (Vercel OIDC → GCP STS → SA impersonation).
+    // Workload Identity Federation. The WIF subject token is per-request
+    // (getVercelOidcToken), NOT a build-time env var, so it is not part of
+    // this config check.
     fcmConfigured: !!(
       process.env.FCM_SERVICE_ACCOUNT_JSON ||
       (process.env.GCP_WIF_AUDIENCE &&
         process.env.GCP_WIF_SERVICE_ACCOUNT &&
-        process.env.FCM_PROJECT_ID &&
-        process.env.VERCEL_OIDC_TOKEN)
+        process.env.FCM_PROJECT_ID)
     ),
     webConfigured: !!(
       process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
