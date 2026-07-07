@@ -16,7 +16,12 @@ import { runTrialGuard } from "@/lib/security/trial-guard";
 import { MedalCelebration } from "@/components/MedalCelebration";
 import { WelcomeTour } from "@/components/WelcomeTour";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
-import { formatCents } from "@/lib/tax/forecast";
+import {
+  formatCents,
+  forecast,
+  type ForecastResult,
+} from "@/lib/tax/forecast";
+import { buildPersonalForecastInput } from "@/lib/tax/personal-forecast-input";
 import { buildGreeting } from "@/lib/dashboard/greeting";
 import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 import { checkCompanyLimit } from "@/lib/plans/usage";
@@ -308,6 +313,8 @@ export default async function DashboardPage() {
     { data: badges },
     { data: mileageTripRows },
     readinessByCompany,
+    { data: personalTaxProfile },
+    { data: personalExpenseRows },
   ] = await Promise.all([
     supabase
       .from("reminders")
@@ -359,6 +366,22 @@ export default async function DashboardPage() {
         return [m.company_id, r] as const;
       }),
     ).then((entries) => new Map<string, Readiness>(entries)),
+    // Personal (1040) tax profile + logged personal deductions. The
+    // dashboard is the owner's PERSONAL hub, so it leads with their own
+    // year-end picture — computed by the same engine /personal/forecast
+    // uses. Business numbers stay in each company's hub. A null profile
+    // just means they haven't set up personal taxes yet.
+    admin
+      .from("tax_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("tax_year", taxYear)
+      .maybeSingle(),
+    admin
+      .from("personal_expenses")
+      .select("category, amount_cents")
+      .eq("user_id", user.id)
+      .eq("tax_year", taxYear),
   ]);
 
   // Recap: figure out what most needs attention this visit.
@@ -611,27 +634,25 @@ export default async function DashboardPage() {
   const hasMileage = mileageYtdMiles > 0;
 
   // ── Hero stat band ────────────────────────────────────────────────
-  // Three glanceable numbers under the greeting (readiness ring,
-  // mileage YTD, next deadline) so the dashboard opens with a real
-  // "where do I stand" snapshot instead of a stack of equal cards.
-  // companies.length is always > 0 here (the empty state early-returns
-  // above), so the readiness ring always has something to show.
-  const readinessScores = companies
-    .map((m) => readinessByCompany.get(m.company_id)?.score)
-    .filter((s): s is number => typeof s === "number");
-  const portfolioReadiness = readinessScores.length
-    ? Math.round(
-        readinessScores.reduce((a, b) => a + b, 0) / readinessScores.length,
+  // Three glanceable figures under the greeting (personal year-end
+  // snapshot, mileage YTD, next deadline) so the dashboard opens on the
+  // owner's OWN "where do I stand" instead of a single business's
+  // readiness. Each company's readiness stays on its own card in the
+  // "Your businesses" list below, where it belongs.
+  //
+  // Personal year-end snapshot (their own 1040) for the hero lead tile,
+  // built with the same engine as /personal/forecast. A null profile
+  // means the owner hasn't set up their personal taxes yet, so the tile
+  // becomes a "set up" CTA instead of a number.
+  const personalForecast: ForecastResult | null = personalTaxProfile
+    ? forecast(
+        buildPersonalForecastInput(
+          personalTaxProfile,
+          personalExpenseRows ?? [],
+          taxYear,
+        ),
       )
-    : 0;
-  const readinessLabel =
-    portfolioReadiness >= 100
-      ? "Fully ready"
-      : portfolioReadiness >= 70
-        ? "On track"
-        : portfolioReadiness >= 40
-          ? "Getting there"
-          : "Just starting";
+    : null;
   // Nearest upcoming deadline, in whole days, for the third stat tile.
   const nextReminder =
     upcomingReminders && upcomingReminders.length
@@ -698,28 +719,39 @@ export default async function DashboardPage() {
 
         <TrialBanner trial={trial} />
 
-        {/* Hero stat band, three glanceable figures (readiness ring,
-            mileage YTD, next deadline) so the dashboard opens on "where
-            do I stand" instead of a stack of equal cards. On mobile the
-            readiness tile takes the full row with the two figures
-            beneath it; on sm+ all three form one row. */}
+        {/* Hero stat band, three glanceable figures (personal year-end
+            snapshot, mileage YTD, next deadline) so the dashboard opens on
+            the owner's OWN "where do I stand" instead of a stack of equal
+            cards. On mobile the personal tile takes the full row with the
+            two figures beneath it; on sm+ all three form one row. */}
         <section className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Link
-            href={`/c/${companies[0].company.public_id}/forecast`}
-            className="surface surface-hover col-span-2 p-5 flex items-center gap-4"
+            href="/personal/forecast"
+            className="surface surface-hover col-span-2 p-5 flex flex-col justify-center min-w-0"
           >
-            <StatRing score={portfolioReadiness} />
-            <div className="min-w-0">
-              <div className="kicker-sm">Tax readiness</div>
-              <div className="display text-2xl text-forest-900 mt-0.5">
-                {readinessLabel}
-              </div>
-              <div className="text-[13px] text-ink-muted mt-0.5">
-                {companies.length === 1
-                  ? "Your business"
-                  : `${companies.length} businesses`}
-              </div>
-            </div>
+            <div className="kicker-sm">Your personal taxes</div>
+            {personalForecast ? (
+              <>
+                <div className="display text-2xl sm:text-3xl text-forest-900 mt-1 tabular-nums">
+                  {personalForecast.refundCents > 0
+                    ? `${formatCents(personalForecast.refundCents)} back`
+                    : `${formatCents(personalForecast.stillOwedCents)} owed`}
+                </div>
+                <div className="text-[13px] text-ink-muted mt-0.5 truncate">
+                  Projected 1040 ·{" "}
+                  {formatCents(personalForecast.totalTaxCents)} total tax
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="display text-2xl text-forest-900 mt-1">
+                  Set up &rarr;
+                </div>
+                <div className="text-[13px] text-ink-muted mt-0.5 truncate">
+                  Add your personal tax profile
+                </div>
+              </>
+            )}
           </Link>
 
           <Link
@@ -1441,61 +1473,6 @@ async function renderMemberDashboard(args: {
       />
       <MedalCelebration newlyEarnedCodes={newlyEarnedCodes} />
     </main>
-  );
-}
-
-/**
- * Gold progress ring for the dashboard readiness stat, the visual
- * anchor of the hero band. Pure SVG: a faint gold track with the value
- * arc drawn over it, starting at 12 o'clock. The centre label uses
- * fill="currentColor" + .text-forest-900 so it inherits the same
- * theme-aware ink as the rest of the page (cream in dark mode via the
- * globals override) instead of a hardcoded fill that vanishes on navy.
- */
-function StatRing({ score }: { score: number }) {
-  const pct = Math.max(0, Math.min(100, Math.round(score)));
-  const r = 26;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - pct / 100);
-  return (
-    <svg
-      width="60"
-      height="60"
-      viewBox="0 0 64 64"
-      aria-hidden="true"
-      className="shrink-0"
-    >
-      <circle
-        cx="32"
-        cy="32"
-        r={r}
-        fill="none"
-        stroke="rgba(213,187,126,0.18)"
-        strokeWidth="6"
-      />
-      <circle
-        cx="32"
-        cy="32"
-        r={r}
-        fill="none"
-        stroke="#c4a25d"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        transform="rotate(-90 32 32)"
-      />
-      <text
-        x="32"
-        y="37"
-        textAnchor="middle"
-        fill="currentColor"
-        className="display text-forest-900"
-        style={{ fontSize: "15px" }}
-      >
-        {pct}
-      </text>
-    </svg>
   );
 }
 
