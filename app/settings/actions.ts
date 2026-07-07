@@ -279,3 +279,29 @@ export async function setPreviewPlan(formData: FormData) {
   // root-layout cache rather than a handful of paths.
   revalidatePath("/", "layout");
 }
+
+/**
+ * Set how the user's business taxes relate to their personal return.
+ * Writes profiles.combine_personal_business, the flag resolveCombine()
+ * reads (see lib/tax/combine-setting.ts):
+ *
+ *   "auto"     → null   → entity-type-aware default per business
+ *                         (pass-through combines, C-corp separate)
+ *   "combined" → true   → always fold business net onto the 1040
+ *   "separate" → false  → always a standalone business estimate
+ *
+ * Every value is valid for every user; the default resolution happens at
+ * read time, so switching to "auto" simply clears the override. Busts the
+ * whole authenticated layout because this changes both the personal
+ * dashboard/forecast and every company forecast.
+ */
+export async function setCombinePersonalBusiness(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const raw = String(formData.get("combine") ?? "auto");
+  const value = raw === "combined" ? true : raw === "separate" ? false : null;
+  await admin
+    .from("profiles")
+    .update({ combine_personal_business: value })
+    .eq("id", user.id);
+  revalidatePath("/", "layout");
+}
