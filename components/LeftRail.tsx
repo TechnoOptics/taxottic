@@ -226,6 +226,42 @@ const COMPANY_ITEMS: {
   },
 ];
 
+// Personal-workspace entries. `href` is an absolute route (these are NOT
+// under /c/{publicId}). This is the individual-tax side, deliberately free
+// of anything business: no company, no mileage, no chat, no team. The
+// Business toggle is how you cross over to a company's own nav.
+const PERSONAL_ITEMS: {
+  key: string;
+  label: string;
+  href: string;
+  icon: ReactNode;
+}[] = [
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />,
+  },
+  {
+    key: "forecast",
+    label: "Forecast",
+    href: "/personal/forecast",
+    icon: <Path d="M3 18l5-6 4 4 7-9M14 7h6v6" />,
+  },
+  {
+    key: "deductions",
+    label: "Deductions",
+    href: "/personal/expenses",
+    icon: <Path d="M6 4h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1zM14 4v5h5M9 13h6M9 17h6" />,
+  },
+  {
+    key: "export",
+    label: "Export",
+    href: "/personal/export",
+    icon: <Path d="M4 17v3h16v-3M12 3v12m0 0l-4-4m4 4l4-4" />,
+  },
+];
+
 function extractActivePublicId(pathname: string | null): string | null {
   if (!pathname) return null;
   const m = pathname.match(/^\/c\/([^/]+)/);
@@ -273,7 +309,6 @@ export function LeftRail({
     setLastPublicId(urlPublicId);
   }, [urlPublicId]);
 
-  const onDashboard = pathname === "/dashboard";
   // Resolve the effective active company for the nav. Priority:
   //   1. The /c/[publicId] route in the URL.
   //   2. The last company the user visited (localStorage).
@@ -368,7 +403,12 @@ export function LeftRail({
   // belongs to a company (created one or was invited), item 2.
   const hasBusiness = companies.length > 0;
   const onBusiness =
-    urlPublicId != null || (pathname?.startsWith("/c/") ?? false);
+    urlPublicId != null ||
+    (pathname?.startsWith("/c/") ?? false) ||
+    // Mileage is a top-level route (/mileage) but is business-only, so it
+    // counts as the business workspace: keeps the company nav visible
+    // while you're on it, and keeps "Mileage" out of the personal menu.
+    (pathname?.startsWith("/mileage") ?? false);
   const businessHref = effectivePublicId
     ? `/c/${effectivePublicId}/forecast`
     : "/companies/new";
@@ -378,59 +418,80 @@ export function LeftRail({
     "bg-white dark:bg-forest-800 text-forest-900 dark:text-cream shadow-sm";
   const segIdle = "text-forest-700 dark:text-cream/70 hover:text-forest-900";
 
-  const topSection = (
-    <div className="grid gap-1">
-      <div className="grid grid-cols-2 gap-1 rounded-xl bg-cream/70 dark:bg-forest-700/60 p-1 mb-1">
-        <Link
-          href="/personal/forecast"
-          onClick={onDismiss}
-          aria-current={!onBusiness ? "true" : undefined}
-          className={segBase + (!onBusiness ? segActive : segIdle)}
-        >
-          Personal
-        </Link>
-        <Link
-          href={hasBusiness ? businessHref : "/companies/new"}
-          onClick={onDismiss}
-          aria-current={onBusiness ? "true" : undefined}
-          title={
-            hasBusiness
-              ? undefined
-              : "Create or join a company to unlock the business side"
-          }
-          className={
-            segBase +
-            (onBusiness ? segActive : segIdle) +
-            (hasBusiness ? "" : " opacity-60")
-          }
-        >
-          Business
-        </Link>
-      </div>
+  // Personal / Business segmented toggle, always visible so the user can
+  // cross between the two workspaces from anywhere.
+  const toggleSection = (
+    <div className="grid grid-cols-2 gap-1 rounded-xl bg-cream/70 dark:bg-forest-700/60 p-1 mb-1">
       <Link
-        href="/dashboard"
+        href="/personal/forecast"
         onClick={onDismiss}
-        aria-current={onDashboard ? "page" : undefined}
+        aria-current={!onBusiness ? "true" : undefined}
+        className={segBase + (!onBusiness ? segActive : segIdle)}
+      >
+        Personal
+      </Link>
+      <Link
+        href={hasBusiness ? businessHref : "/companies/new"}
+        onClick={onDismiss}
+        aria-current={onBusiness ? "true" : undefined}
+        title={
+          hasBusiness
+            ? undefined
+            : "Create or join a company to unlock the business side"
+        }
         className={
-          baseLink +
-          (onDashboard
-            ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
-            : " text-forest-800 hover:bg-cream")
+          segBase +
+          (onBusiness ? segActive : segIdle) +
+          (hasBusiness ? "" : " opacity-60")
         }
       >
-        <span
-          className={
-            "shrink-0 " +
-            (onDashboard
-              ? "text-gold-600"
-              : "text-forest-700 group-hover/item:text-forest-900")
-          }
-        >
-          <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />
-        </span>
-        <span>Dashboard</span>
+        Business
       </Link>
+    </div>
+  );
 
+  // Personal workspace nav (individual tax side). Deliberately free of
+  // anything business, no company, no mileage, no chat, no team.
+  const personalSection = (
+    <ul className="grid gap-1" role="navigation">
+      {PERSONAL_ITEMS.map((item) => {
+        const active = isActive(item.href);
+        return (
+          <li key={item.key}>
+            <Link
+              href={item.href}
+              onClick={onDismiss}
+              aria-current={active ? "page" : undefined}
+              className={
+                baseLink +
+                (active
+                  ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
+                  : " text-forest-800 hover:bg-cream")
+              }
+              title={mode === "rail" ? item.label : undefined}
+            >
+              <span
+                className={
+                  "shrink-0 " +
+                  (active
+                    ? "text-gold-600"
+                    : "text-forest-700 group-hover/item:text-forest-900")
+                }
+              >
+                {item.icon}
+              </span>
+              <span className="min-w-0 truncate">{item.label}</span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  // Company switcher (business workspace only): the expandable list of the
+  // user's companies + "New company".
+  const companiesSwitcher = (
+    <div className="grid gap-1">
       <button
         type="button"
         onClick={() => setSwitcherOpen((o) => !o)}
@@ -610,15 +671,22 @@ export function LeftRail({
           </button>
         </div>
       ) : null}
-      {topSection}
-      {hydrated || mode === "sheet" ? (
-        <>
+      {toggleSection}
+      {/* Personal mode: individual-tax nav only. No company, no mileage,
+          no chat, no team. Static routes, so no hydration gate needed. */}
+      {!onBusiness ? <div className="grid gap-1">{personalSection}</div> : null}
+      {/* Business mode: the company switcher + the active company's nav.
+          Gated on hydration because the effective company can come from
+          localStorage when the URL doesn't carry a /c/[publicId]. */}
+      {onBusiness && (hydrated || mode === "sheet") ? (
+        <div className="grid gap-1">
+          {companiesSwitcher}
           {/* Separator only when there IS a company section below */}
           {activeCompany ? (
             <div className="my-2 border-t border-forest-100/70 dark:border-forest-700" />
           ) : null}
           {companySection}
-        </>
+        </div>
       ) : null}
     </nav>
   );
