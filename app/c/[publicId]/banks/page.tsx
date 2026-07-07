@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { ScrollToHighlight } from "@/components/ScrollToHighlight";
 import { CompanyNav } from "@/components/CompanyNav";
 import { ProGate } from "@/components/ProGate";
 import { PlaidConnectButton } from "@/components/PlaidConnectButton";
@@ -23,6 +24,10 @@ type Params = Promise<{ publicId: string }>;
 type SearchParams = Promise<{
   stripe_connected?: string | string[];
   stripe_error?: string | string[];
+  /** Deep link from the outstanding-tasks list: the specific
+   *  account_transactions.id to scroll to + ring-highlight, so
+   *  "Review" lands ON the item instead of at the top of the list. */
+  highlight?: string | string[];
 }>;
 
 const STATUS_LABEL: Record<string, string> = {
@@ -44,6 +49,10 @@ export default async function BanksPage({
   const sp = (await searchParams) ?? {};
   const stripeConnectedRaw = sp.stripe_connected;
   const stripeErrorRaw = sp.stripe_error;
+  const highlightRaw = sp.highlight;
+  const highlightTxId = Array.isArray(highlightRaw)
+    ? highlightRaw[0]
+    : highlightRaw;
   const stripeConnectedFlag = Array.isArray(stripeConnectedRaw)
     ? stripeConnectedRaw[0]
     : stripeConnectedRaw;
@@ -540,6 +549,9 @@ export default async function BanksPage({
             not just the broad Schedule C bucket. */}
         {txs.length > 0 ? (
           <section id="transactions" className="mt-8 scroll-mt-24">
+            {highlightTxId ? (
+              <ScrollToHighlight targetId={`txn-${highlightTxId}`} />
+            ) : null}
             <div className="flex items-end justify-between flex-wrap gap-3">
               <div>
                 <h2 className="display text-xl text-forest-900">
@@ -614,10 +626,16 @@ export default async function BanksPage({
                     style: "currency",
                     currency: "USD",
                   }).format(Math.abs(net) / 100);
+                  // A highlighted (deep-linked) transaction must be
+                  // visible: force its month open even when collapsed
+                  // by default.
+                  const hasHighlight =
+                    !!highlightTxId &&
+                    monthTxs.some((t) => t.id === highlightTxId);
                   return (
                     <li key={key}>
                       <details
-                        open={isCurrent}
+                        open={isCurrent || hasHighlight}
                         className="group rounded-xl border border-forest-100 bg-white overflow-hidden"
                       >
                         <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-cream/40 list-none">
@@ -679,10 +697,17 @@ export default async function BanksPage({
                               month: "short",
                               day: "numeric",
                             });
+                            const isHighlighted = t.id === highlightTxId;
                             return (
                               <li
                                 key={t.id}
-                                className="card p-3 sm:p-4 flex items-start gap-3 sm:gap-4"
+                                id={`txn-${t.id}`}
+                                className={
+                                  "card p-3 sm:p-4 flex items-start gap-3 sm:gap-4 scroll-mt-24" +
+                                  (isHighlighted
+                                    ? " ring-2 ring-gold-400 border-gold-300"
+                                    : "")
+                                }
                               >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2 flex-wrap">

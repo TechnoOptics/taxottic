@@ -120,16 +120,20 @@ function Pill({
       aria-checked={checked}
       onClick={onClick}
       className={
-        "rounded-xl border px-3 py-2.5 text-left transition-colors " +
+        // min-w-0 + break-words: the pill lives in a 2-col grid that can
+        // get ~160px wide on small phones; the sub-copy must wrap inside
+        // the pill instead of widening it (mobile overflow hardening).
+        "rounded-xl border px-3 py-2.5 text-left transition-colors min-w-0 " +
         (checked
           ? "border-forest-800 bg-forest-800 text-cream"
           : "border-forest-100 bg-white/70 text-forest-900 hover:border-forest-300")
       }
     >
-      <div className="text-sm font-medium">{label}</div>
+      <div className="text-sm font-medium break-words">{label}</div>
       <div
         className={
-          "text-[11px] " + (checked ? "text-cream/75" : "text-ink-muted")
+          "text-[11px] break-words " +
+          (checked ? "text-cream/75" : "text-ink-muted")
         }
       >
         {sub}
