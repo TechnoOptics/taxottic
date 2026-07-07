@@ -133,11 +133,14 @@ const ApnsProvider: PushProvider = {
 type FcmAuthMode = "sa" | "wif";
 function fcmAuthMode(): FcmAuthMode | null {
   if (process.env.FCM_SERVICE_ACCOUNT_JSON) return "sa";
+  // WIF is "configured" by the build-time vars. The subject token is
+  // per-request and fetched at send time via getVercelOidcToken() (it is
+  // NOT in process.env at runtime, only during `vercel env pull`, which
+  // is the bug this replaced).
   if (
     process.env.GCP_WIF_AUDIENCE &&
     process.env.GCP_WIF_SERVICE_ACCOUNT &&
-    process.env.FCM_PROJECT_ID &&
-    process.env.VERCEL_OIDC_TOKEN
+    process.env.FCM_PROJECT_ID
   ) {
     return "wif";
   }
@@ -201,6 +204,21 @@ async function fcmAccessTokenViaWif(): Promise<string> {
   if (fcmAccess && Date.now() < fcmAccess.exp - 60_000) {
     return fcmAccess.token;
   }
+  // 0. Get the per-request Vercel OIDC token. In the deployed runtime this
+  //    is NOT process.env.VERCEL_OIDC_TOKEN (that only exists locally via
+  //    `vercel env pull`); it is exposed per-invocation and read by
+  //    @vercel/functions' getVercelOidcToken(). Dynamic import so the
+  //    package only loads on the WIF path.
+  let oidcToken = "";
+  try {
+    const { getVercelOidcToken } = await import("@vercel/functions/oidc");
+    oidcToken = await getVercelOidcToken();
+  } catch (e) {
+    console.log(
+      `[push-fcm] no Vercel OIDC token: ${(e as Error)?.message ?? String(e)}`,
+    );
+    throw new Error("wif: Vercel OIDC token unavailable");
+  }
   // 1. Exchange the Vercel OIDC JWT for a federated Google access token.
   //    STS wants application/x-www-form-urlencoded with snake_case fields
   //    (the documented format used by every google-auth client). An earlier
@@ -215,7 +233,7 @@ async function fcmAccessTokenViaWif(): Promise<string> {
       requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
       scope: "https://www.googleapis.com/auth/cloud-platform",
       subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
-      subject_token: process.env.VERCEL_OIDC_TOKEN as string,
+      subject_token: oidcToken,
     }),
   });
   const stsText = await stsRes.text();
