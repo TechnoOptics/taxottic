@@ -482,6 +482,12 @@ export default async function ForecastPage({ params }: { params: Params }) {
     // "missed Q1 estimate" and underpayment-shortfall framing for
     // quarters that ended before the company existed.
     companyCreatedAt: company.created_at ?? null,
+    // Context scoping (Phase 4). A combined forecast IS the owner's 1040,
+    // so personal-return moves (itemize, charitable) are fair game
+    // alongside the business ones. A separate/standalone estimate stays
+    // strictly business — personal-return items would be misleading on a
+    // number that is explicitly not folded into the personal return.
+    contexts: combined ? ["business", "personal"] : ["business"],
   });
 
   return (

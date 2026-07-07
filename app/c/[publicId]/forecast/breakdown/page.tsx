@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { createServiceClient } from "@/lib/supabase/server";
 import { formatCents } from "@/lib/tax/forecast";
+import { resolveCombine } from "@/lib/tax/combine-setting";
 import {
   buildCompanyForecast,
   type IncomeRow,
@@ -58,6 +59,7 @@ export default async function ForecastBreakdownPage({
     { data: tripRows },
     { data: memberRows },
     { data: departmentRows },
+    { data: userProfile },
   ] = await Promise.all([
     supabase
       .from("tax_profiles")
@@ -102,11 +104,37 @@ export default async function ForecastBreakdownPage({
       .select("id, name")
       .eq("company_id", company.id)
       .order("name"),
+    supabase
+      .from("profiles")
+      .select("combine_personal_business")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
 
-  if (!taxProfile) {
+  // Combine switch, identical to the main /forecast page so the two
+  // surfaces compute the SAME whole-company total. A combined forecast
+  // stacks business net onto the owner's 1040 (needs the personal
+  // profile); a separate one is a standalone estimate on a neutral
+  // single-filer basis, decoupled from personal settings.
+  const combined = resolveCombine(
+    userProfile?.combine_personal_business,
+    company.entity_type ?? null,
+  );
+
+  if (combined && !taxProfile) {
     redirect(`/onboarding/tax-profile?next=/c/${publicId}/forecast/breakdown`);
   }
+
+  const forecastTaxProfile: ForecastTaxProfile = combined
+    ? (taxProfile as unknown as ForecastTaxProfile)
+    : {
+        filing_status: "single",
+        state_code: company.state_code ?? "",
+        age: 40,
+        is_blind: false,
+        itemize: false,
+        dependents: 0,
+      };
 
   const incomes = (incomeRows ?? []) as IncomeRow[];
   const expenses = (expenseRows ?? []) as (ExpenseRow & { user_id: string | null })[];
@@ -153,7 +181,7 @@ export default async function ForecastBreakdownPage({
       state_code: company.state_code ?? null,
       entity_type: company.entity_type ?? null,
     },
-    taxProfile: taxProfile as unknown as ForecastTaxProfile,
+    taxProfile: forecastTaxProfile,
     businessProfile:
       (businessProfile as unknown as ForecastBusinessProfile | null) ?? null,
     incomes,
