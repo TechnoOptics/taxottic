@@ -60,9 +60,11 @@ export function computePersonalReadiness(
     },
     {
       key: "income",
-      label: "Household income entered",
+      label: "Household income entered — upload a pay stub and we'll read it",
       done: householdWages > 0,
-      href: "/onboarding/tax-profile?next=/dashboard",
+      // Fast path: 1-3 pay stubs → OCR → annualized wages/withholding.
+      // The manual profile form is linked from that page for typists.
+      href: "/personal/paystub",
       weight: 25,
     },
     {

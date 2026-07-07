@@ -213,11 +213,12 @@ export async function PersonalDashboard({
           </section>
         ) : null}
 
-        {/* Playbook CTA — the personal savings moves. */}
-        <section className="mt-10">
+        {/* Action cards: the playbook (savings moves) and the pay-stub
+            fast path (income in, forecast out). */}
+        <section className="mt-10 grid gap-3 sm:grid-cols-2">
           <Link
             href="/personal/playbook"
-            className="card card-hover p-6 flex items-start gap-3 border-gold-300/60 block"
+            className="card card-hover p-6 flex items-start gap-3 border-gold-300/60"
           >
             <div className="min-w-0">
               <div className="kicker-sm">Savings playbook</div>
@@ -227,6 +228,23 @@ export async function PersonalDashboard({
               <p className="mt-1 text-sm text-ink-soft leading-relaxed">
                 IRA and HSA room, credits, harvesting — personalized,
                 IRS-cited, each with the dollars it saves at your bracket.
+              </p>
+            </div>
+            <span className="ml-auto text-ink-muted shrink-0">→</span>
+          </Link>
+          <Link
+            href="/personal/paystub"
+            className="card card-hover p-6 flex items-start gap-3"
+          >
+            <div className="min-w-0">
+              <div className="kicker-sm">Pay stubs</div>
+              <div className="display mt-1 text-xl text-forest-900">
+                Forecast from your pay stubs
+              </div>
+              <p className="mt-1 text-sm text-ink-soft leading-relaxed">
+                Upload one to three consecutive stubs — we read income,
+                withholding, and pre-tax deductions and project your whole
+                year. Nothing is stored.
               </p>
             </div>
             <span className="ml-auto text-ink-muted shrink-0">→</span>
