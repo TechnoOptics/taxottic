@@ -59,10 +59,28 @@
     </style>
 
 
-    <!-- Launch/splash theme. Window background stays the branded
-         splash drawable (already #121a2a); colour the bars dark too
-         so there's no white flash before the WebView paints. -->
+    <!-- Launch/splash theme.
+
+         Android 12+ (API 31+) SplashScreen API: the OS IGNORES
+         android:windowBackground / android:background for the splash
+         content and instead centres `windowSplashScreenAnimatedIcon`
+         on `windowSplashScreenBackground`. With neither set it fell
+         back to the FULL adaptive launcher icon (@mipmap/ic_launcher =
+         its own ic_launcher_background circle + the brand foreground),
+         which the OS then circle-masks — so the splash showed the
+         wrong icon (a mismatched background disc, not the clean brand
+         mark on navy). Pin the brand mark (foreground only, white on
+         transparent) on the brand navy, and hand back to the app theme
+         once the WebView is ready. These are the androidx
+         core-splashscreen compat attrs (no android: prefix); they map
+         to the platform attrs on API 31+ and are back-ported below.
+
+         Pre-12: android:background=@drawable/splash still gives the
+         branded full-window splash + dark bars, no white flash. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#121a2a</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:background">@drawable/splash</item>
         <item name="android:statusBarColor">#121a2a</item>
         <item name="android:navigationBarColor">#121a2a</item>
