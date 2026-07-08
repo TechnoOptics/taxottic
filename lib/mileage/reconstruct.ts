@@ -26,6 +26,41 @@ const NOTE =
 
 type RawPt = { id: string; ts: number; lat: number; lng: number };
 
+export type TripWindow = { startTs: number; endTs: number };
+
+/** Does the candidate jump window overlap any existing trip? Exported
+ *  pure so the guard is unit-testable. */
+export function overlapsExistingTrip(
+  startTs: number,
+  endTs: number,
+  trips: readonly TripWindow[],
+): boolean {
+  return trips.some((t) => t.startTs <= endTs && t.endTs >= startTs);
+}
+
+/** Existing trip windows for the driver since `sinceIso` — the guard
+ *  that stops recovery from re-creating a drive that already exists
+ *  (fully-tracked or otherwise). Without it, the parked heartbeats
+ *  that STRADDLE a finalized trip read as one long "jump" and recovery
+ *  minted a straight-line duplicate right on top of the real route. */
+async function fetchTripWindows(
+  admin: SupabaseClient,
+  userId: string,
+  companyId: string,
+  sinceIso: string,
+): Promise<TripWindow[]> {
+  const { data } = await admin
+    .from("mileage_trips")
+    .select("started_at, ended_at")
+    .eq("driver_user_id", userId)
+    .eq("company_id", companyId)
+    .gte("ended_at", sinceIso);
+  return (data ?? []).map((t) => ({
+    startTs: Date.parse(t.started_at as string),
+    endTs: Date.parse(t.ended_at as string),
+  }));
+}
+
 async function fetchUnconsumed(
   admin: SupabaseClient,
   userId: string,
@@ -75,9 +110,18 @@ export async function countRecoverableApproxTrips(
   companyId: string,
   sinceIso: string,
 ): Promise<number> {
-  const pts = await fetchUnconsumed(admin, userId, companyId, sinceIso);
+  const [pts, tripWindows] = await Promise.all([
+    fetchUnconsumed(admin, userId, companyId, sinceIso),
+    fetchTripWindows(admin, userId, companyId, sinceIso),
+  ]);
   let n = 0;
-  for (let i = 1; i < pts.length; i++) if (isJump(pts[i - 1], pts[i])) n++;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    if (!isJump(a, b)) continue;
+    if (overlapsExistingTrip(a.ts, b.ts, tripWindows)) continue;
+    n++;
+  }
   return n;
 }
 
@@ -92,7 +136,10 @@ export async function reconstructApproximateTrips(
   companyId: string,
   sinceIso: string,
 ): Promise<number> {
-  const pts = await fetchUnconsumed(admin, userId, companyId, sinceIso);
+  const [pts, tripWindows] = await Promise.all([
+    fetchUnconsumed(admin, userId, companyId, sinceIso),
+    fetchTripWindows(admin, userId, companyId, sinceIso),
+  ]);
   if (pts.length < 2) return 0;
 
   let created = 0;
@@ -101,6 +148,11 @@ export async function reconstructApproximateTrips(
     const b = pts[i];
     const meters = isJump(a, b);
     if (meters == null) continue;
+    // A drive that already exists as a trip (fully tracked, manual, or a
+    // prior recovery) must never be recovered again — that was the
+    // straight-line-duplicate bug. The end-of-run sweep still consumes
+    // these straddle points so they stop counting as recoverable.
+    if (overlapsExistingTrip(a.ts, b.ts, tripWindows)) continue;
 
     const startedAt = new Date(a.ts).toISOString();
     const endedAt = new Date(b.ts).toISOString();
