@@ -361,6 +361,10 @@ export default async function DashboardPage() {
       // queries above; without it a super-admin's dashboard would list
       // other users' goals.
       .eq("user_id", user.id)
+      // PERSONAL goals only: the dashboard is the personal hub, so
+      // business goals stay on /goals (per-company section) and on the
+      // company's own savings-goals page — never mixed in here.
+      .is("company_id", null)
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(3),
@@ -1210,7 +1214,7 @@ export default async function DashboardPage() {
         {activeGoals && activeGoals.length > 0 ? (
           <section className="mt-10">
             <div className="flex items-center justify-between gap-3">
-              <div className="kicker-sm">Active goals</div>
+              <div className="kicker-sm">Personal goals</div>
               <Link
                 href="/goals"
                 className="text-sm font-medium text-gold-700 hover:text-forest-900"
