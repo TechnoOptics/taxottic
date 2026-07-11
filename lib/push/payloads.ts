@@ -42,7 +42,16 @@ export type PushEvent =
    * however often the cron runs, keeps this a pure function (no
    * Date.now() inside payloads.ts).
    */
-  | { kind: "outstanding_reminder"; count: number; dayKey: string };
+  | { kind: "outstanding_reminder"; count: number; dayKey: string }
+  /**
+   * The mileage tracker went silent server-side (no raw points for
+   * hours from a driver who was uploading recently) — almost always
+   * iOS reverting Location "Always" → "While Using", or the toggle /
+   * app getting killed. The in-app banner can't reach a closed app;
+   * this push can. `dayKey` folds into the dedupe key so however
+   * often the cron sweeps, at most one fires per driver per day.
+   */
+  | { kind: "tracker_stalled"; dayKey: string };
 
 export type PushPayload = {
   title: string;
@@ -136,6 +145,14 @@ export function buildPayload(e: PushEvent): PushPayload {
         body: "Some drives or transactions are waiting for a business-or-personal call.",
         data: { kind: e.kind, count: String(e.count) },
         dedupeKey: `outstanding_reminder:${e.dayKey}`,
+      };
+    case "tracker_stalled":
+      return {
+        title: "Mileage tracking stopped",
+        body:
+          "Your phone hasn't sent any drive data in a while. Open Taxottic to turn tracking back on.",
+        data: { kind: e.kind },
+        dedupeKey: `tracker_stalled:${e.dayKey}`,
       };
   }
 }

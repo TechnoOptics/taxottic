@@ -128,3 +128,15 @@ describe("buildPayload", () => {
     expect(tomorrow.dedupeKey).not.toBe(p.dedupeKey);
   });
 });
+
+describe("tracker_stalled", () => {
+  it("no detail on the lock screen, per-day dedupe, /mileage routing kind", async () => {
+    const { buildPayload } = await import("./payloads");
+    const p = buildPayload({ kind: "tracker_stalled", dayKey: "2026-07-11" });
+    expect(p.title).toBe("Mileage tracking stopped");
+    expect(p.data).toEqual({ kind: "tracker_stalled" });
+    expect(p.dedupeKey).toBe("tracker_stalled:2026-07-11");
+    // Privacy rule: nothing personal/identifying in the visible text.
+    expect(p.body).not.toMatch(/mi\b|\$|@/);
+  });
+});

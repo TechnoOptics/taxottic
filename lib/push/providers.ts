@@ -362,6 +362,7 @@ function webUrlFromData(data: Record<string, string>): string {
   switch (data.kind) {
     case "trip_classify":
     case "trip_logged":
+    case "tracker_stalled":
       return "/mileage";
     case "clarify":
       return data.subject === "trip" ? "/mileage" : "/expenses";
