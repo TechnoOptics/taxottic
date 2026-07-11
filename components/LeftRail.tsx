@@ -694,8 +694,13 @@ export function LeftRail({
         </div>
       ) : null}
       {toggleSection}
-      {/* Dashboard is pinned in BOTH modes, it's the always-available
-          home. Sits above the mode-specific sections. */}
+      {/* Dashboard placement is mode-aware. For a user with businesses,
+          /dashboard is the OWNER hub ("Your businesses", company cards) —
+          business content — so on the Personal side it must not appear;
+          it stays pinned in Business mode. For a user with NO companies
+          (pure individual filer) /dashboard renders the personal
+          dashboard, so it stays in Personal mode for them. */}
+      {onBusiness || !hasBusiness ? (
       <div className="grid gap-1 mb-1">
         <Link
           href="/dashboard"
@@ -722,6 +727,7 @@ export function LeftRail({
           <span className="min-w-0 truncate">Dashboard</span>
         </Link>
       </div>
+      ) : null}
       {/* Personal mode: individual-tax nav only. No company, no mileage,
           no chat, no team. Static routes, so no hydration gate needed. */}
       {!onBusiness ? <div className="grid gap-1">{personalSection}</div> : null}
