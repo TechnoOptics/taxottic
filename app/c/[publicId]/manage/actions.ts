@@ -418,6 +418,38 @@ export async function deleteDepartment(formData: FormData) {
   await revalidateManageForCompany(admin, dept.company_id);
 }
 
+/**
+ * Edit a member's details as they appear in THIS company: display name
+ * (a per-membership override; the member's own profiles.full_name is
+ * their global identity and stays theirs) and job title. Manager-only,
+ * same guard as assignMemberDepartment.
+ */
+export async function updateMemberDetails(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const companyId = String(formData.get("company_id") ?? "");
+  const memberUserId = String(formData.get("user_id") ?? "");
+  // Empty string clears the override (falls back to the member's own
+  // profile name) / clears the title.
+  const displayName =
+    String(formData.get("display_name") ?? "").trim().slice(0, 120) || null;
+  const title =
+    String(formData.get("title") ?? "").trim().slice(0, 120) || null;
+
+  if (!companyId || !memberUserId) throw new Error("Missing fields");
+  if (!(await isManagerOf(admin, user.id, companyId))) {
+    throw new Error("Only the company manager can edit member details.");
+  }
+
+  const { error } = await admin
+    .from("company_members")
+    .update({ display_name: displayName, title })
+    .eq("company_id", companyId)
+    .eq("user_id", memberUserId);
+  if (error) throw new Error(error.message);
+
+  await revalidateManageForCompany(admin, companyId);
+}
+
 export async function assignMemberDepartment(formData: FormData) {
   const { admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");

@@ -15,6 +15,7 @@ import {
   renameDepartment,
   deleteDepartment,
   assignMemberDepartment,
+  updateMemberDetails,
 } from "./actions";
 import { closeCompany } from "@/app/actions/recycle-bin";
 import { CopyInviteLink } from "@/components/CopyInviteLink";
@@ -60,7 +61,7 @@ export default async function ManageCompanyPage({
   // then stitch them together by user_id.
   const { data: memberRows } = await admin
     .from("company_members")
-    .select("user_id, role, title, joined_at, department_id, employee_number")
+    .select("user_id, role, title, joined_at, department_id, employee_number, display_name")
     .eq("company_id", company.id);
 
   const { data: departmentRows } = await admin
@@ -518,7 +519,12 @@ export default async function ManageCompanyPage({
                 };
                 return {
                   userId: m.user_id,
-                  name: profile?.full_name ?? profile?.email ?? "Member",
+                  name:
+                    (m.display_name as string | null) ??
+                    profile?.full_name ??
+                    profile?.email ??
+                    "Member",
+                  displayName: (m.display_name as string | null) ?? null,
                   email: profile?.email ?? "",
                   employeeNumber: m.employee_number,
                   title: m.title,
@@ -541,6 +547,7 @@ export default async function ManageCompanyPage({
               publicId={publicId}
               isManager={isManager}
               assignMemberDepartment={assignMemberDepartment}
+              updateMemberDetails={updateMemberDetails}
               removeMember={removeMember}
             />
           </div>

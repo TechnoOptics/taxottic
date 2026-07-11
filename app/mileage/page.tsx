@@ -88,7 +88,7 @@ export default async function MileagePage({
     // gotcha documented in manage/page.tsx). Fetch profiles separately.
     const { data: memberRows } = await admin
       .from("company_members")
-      .select("user_id, department:departments(name)")
+      .select("user_id, display_name, department:departments(name)")
       .eq("company_id", company.id);
     const memberIds = (memberRows ?? []).map((m) => m.user_id);
     const { data: profileRows } = memberIds.length
@@ -99,7 +99,12 @@ export default async function MileagePage({
       .map((m) => {
         const p = profileById.get(m.user_id) ?? null;
         const dept = m.department as unknown as { name: string } | null;
-        const name = (p?.full_name?.trim() || p?.email || "Member").trim();
+        const name = (
+          (m.display_name as string | null)?.trim() ||
+          p?.full_name?.trim() ||
+          p?.email ||
+          "Member"
+        ).trim();
         const withDept = dept?.name ? `${name} · ${dept.name}` : name;
         return {
           userId: m.user_id as string,
