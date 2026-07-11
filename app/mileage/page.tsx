@@ -18,6 +18,7 @@ import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner"
 import {
   assessMileageTrackingHealth,
 } from "@/lib/mileage/health";
+import { finalizeUserTrips } from "@/lib/mileage/finalize";
 import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
 import { recoverApproximateTrips } from "./actions";
 import {
@@ -74,6 +75,29 @@ export default async function MileagePage({
   const memberships = await getMyCompanies();
   const company = memberships[0]?.company ?? null;
   const isManager = memberships[0]?.role === "manager";
+
+  // Freshness: materialize the viewer's own staged points RIGHT NOW,
+  // instead of making them wait out the 10-minute finalize cron (the
+  // "keep reloading until the newest drive appears" complaint). Time-
+  // boxed and best-effort: if the pool is huge or slow we render with
+  // whatever exists and the cron remains the backstop. finalize is
+  // idempotent + overlap-guarded, so racing the cron is safe.
+  if (company) {
+    try {
+      await Promise.race([
+        finalizeUserTrips(admin, user.id, company.id, {
+          sinceIso: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+          // Never sever a drive that is still in progress; and the user
+          // is looking at the page, so no push ping for what they see.
+          forceClose: false,
+          push: false,
+        }),
+        new Promise((resolve) => setTimeout(resolve, 2_500)),
+      ]);
+    } catch {
+      /* best-effort, page renders from whatever is already materialized */
+    }
+  }
 
   // Driver switcher (managers only). A manager can review any teammate's
   // drive log; the trip query + stats + map all re-scope to the chosen
