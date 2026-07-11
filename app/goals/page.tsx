@@ -114,20 +114,74 @@ export default async function GoalsPage() {
           </form>
         </section>
 
-        <section className="mt-8 grid gap-4">
-          {goals && goals.length > 0 ? (
-            goals.map((g) => (
-              <GoalCard
-                key={g.id}
-                goal={g as unknown as GoalRow}
-              />
-            ))
-          ) : (
-            <p className="text-sm text-ink-muted">
-              No active goals. Set your first one above.
-            </p>
-          )}
-        </section>
+        {/* Personal and business goals are SEPARATE ledgers: personal
+            (company_id null) tracks the individual 1040 side, business
+            goals belong to a company. Rendering them in one mixed list
+            made them look like a single pot, so each side gets its own
+            clearly-headed section. */}
+        {(() => {
+          const rows = (goals ?? []) as unknown as GoalRow[];
+          const personal = rows.filter((g) => g.company_id == null);
+          const byCompany = new Map<string, GoalRow[]>();
+          for (const g of rows) {
+            if (g.company_id == null) continue;
+            const key = g.company?.name ?? "Business";
+            byCompany.set(key, [...(byCompany.get(key) ?? []), g]);
+          }
+          if (rows.length === 0) {
+            return (
+              <p className="mt-8 text-sm text-ink-muted">
+                No active goals. Set your first one above.
+              </p>
+            );
+          }
+          return (
+            <>
+              <section className="mt-10">
+                <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+                  Personal
+                </div>
+                <h2 className="display mt-1 text-xl text-forest-900">
+                  Your personal goals
+                </h2>
+                {personal.length > 0 ? (
+                  <div className="mt-4 grid gap-4">
+                    {personal.map((g) => (
+                      <GoalCard key={g.id} goal={g} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-ink-muted">
+                    No personal goals yet. Add one above, or adopt one from
+                    your{" "}
+                    <a
+                      href="/personal/playbook"
+                      className="text-forest-700 underline decoration-dotted hover:text-forest-900"
+                    >
+                      personal playbook
+                    </a>
+                    .
+                  </p>
+                )}
+              </section>
+              {[...byCompany.entries()].map(([companyName, list]) => (
+                <section key={companyName} className="mt-10">
+                  <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+                    Business
+                  </div>
+                  <h2 className="display mt-1 text-xl text-forest-900">
+                    {companyName}
+                  </h2>
+                  <div className="mt-4 grid gap-4">
+                    {list.map((g) => (
+                      <GoalCard key={g.id} goal={g} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </>
+          );
+        })()}
       </section>
     </main>
   );
@@ -157,7 +211,6 @@ function GoalCard({ goal }: { goal: GoalRow }) {
         <div className="min-w-0">
           <h3 className="display text-xl text-forest-900">{goal.title}</h3>
           <div className="text-xs text-ink-muted mt-1 tracking-wide">
-            {goal.company?.name ? `${goal.company.name} - ` : ""}
             {prettyType(goal.goal_type)}
             {goal.deadline
               ? ` - by ${new Date(goal.deadline).toLocaleDateString()}`

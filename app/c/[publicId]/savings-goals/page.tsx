@@ -276,15 +276,30 @@ export default async function SavingsGoalsPage({
     publicId,
   });
 
-  // Pull adopted goals so we can mark cards "Adopted".
+  // Pull adopted goals: full rows so this page can render the company's
+  // own goals ledger (business goals live HERE and on /goals under the
+  // company's section — never mixed into personal surfaces), plus the
+  // title set for marking recommendation cards "Adopted".
   const { data: adopted } = await supabase
     .from("goals")
-    .select("title")
+    .select("id, title, target_cents, saved_cents, status, deadline")
     .eq("user_id", user.id)
     .eq("company_id", company.id)
-    .eq("tax_year", taxYear);
+    .eq("tax_year", taxYear)
+    .order("created_at", { ascending: false });
+  type AdoptedRow = {
+    id: string;
+    title: string;
+    target_cents: number;
+    saved_cents: number;
+    status: string;
+    deadline: string | null;
+  };
+  const adoptedRows = ((adopted ?? []) as AdoptedRow[]).filter(
+    (g) => g.status === "active",
+  );
   const adoptedTitles = new Set(
-    ((adopted ?? []) as Array<{ title: string }>).map((g) => g.title),
+    ((adopted ?? []) as AdoptedRow[]).map((g) => g.title),
   );
 
   // Group by category for rendering.
@@ -348,6 +363,60 @@ export default async function SavingsGoalsPage({
             </Link>
           </div>
         </div>
+
+        {/* This company's adopted goals — the business goals ledger. Kept
+            here (and under this company's section on /goals) so business
+            goals never mix into the personal surfaces. */}
+        {adoptedRows.length > 0 ? (
+          <section className="card mt-6 p-6 sm:p-7">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+              {company.name}
+            </div>
+            <h2 className="display text-xl text-forest-900 mt-1">
+              Adopted goals
+            </h2>
+            <ul className="mt-4 grid gap-3">
+              {adoptedRows.map((g) => {
+                const pct =
+                  g.target_cents > 0
+                    ? Math.min(
+                        100,
+                        Math.round((g.saved_cents / g.target_cents) * 100),
+                      )
+                    : 0;
+                return (
+                  <li
+                    key={g.id}
+                    className="rounded-lg border border-forest-100 bg-white px-4 py-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                      <span className="text-sm font-medium text-forest-900 min-w-0 truncate">
+                        {g.title}
+                      </span>
+                      <span className="text-xs text-ink-muted tabular-nums shrink-0">
+                        {formatCents(g.saved_cents)} /{" "}
+                        {formatCents(g.target_cents)} · {pct}%
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-forest-50 overflow-hidden">
+                      <div
+                        className="h-full bg-gold-400"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-3 text-xs text-ink-muted">
+              Log progress on{" "}
+              <Link href="/goals" className="underline decoration-dotted">
+                the goals page
+              </Link>
+              , under {company.name}.
+            </p>
+          </section>
+        ) : null}
 
         {goals.length === 0 ? (
           <div className="card mt-6 p-8 text-center">
