@@ -29,6 +29,31 @@ const DISMISS_KEY = "taxottic.outstanding.popup.dismissed";
 // match the list's own React key.
 const ITEM_DISMISS_KEY = "taxottic.outstanding.items.dismissed";
 
+// Items the user CLICKED (went to handle) this session. Session-scoped
+// on purpose: clicking means "I'm on it", so the row disappears
+// immediately, but if they never actually classify it, it resurfaces
+// next session instead of being buried forever like an X-dismissal.
+// Shared with the header bell so a click in either surface hides the
+// item in both.
+export const ITEM_CLICKED_KEY = "taxottic.outstanding.items.clicked";
+
+export function loadClickedItems(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(ITEM_CLICKED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveClickedItems(ids: Set<string>) {
+  try {
+    sessionStorage.setItem(ITEM_CLICKED_KEY, JSON.stringify(Array.from(ids)));
+  } catch {
+    /* private mode / quota, the click still hides it for this render */
+  }
+}
+
 function loadDismissedItems(): Set<string> {
   try {
     const raw = localStorage.getItem(ITEM_DISMISS_KEY);
@@ -56,6 +81,7 @@ function saveDismissedItems(ids: Set<string>) {
 export function OutstandingTasksPopup({ count, items }: Props) {
   const [open, setOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [clickedIds, setClickedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (count <= 0) return;
@@ -66,6 +92,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot on-load surfacing, condition depends on browser storage only readable client-side
     setDismissedIds(loadDismissedItems());
+    setClickedIds(loadClickedItems());
     setOpen(true);
   }, [count]);
 
@@ -91,6 +118,16 @@ export function OutstandingTasksPopup({ count, items }: Props) {
     }
   }
 
+  // Link click-through: the user is going to handle this item, so it
+  // leaves the list immediately (session-scoped, see ITEM_CLICKED_KEY).
+  function clickThroughItem(key: string) {
+    const next = new Set(clickedIds);
+    next.add(key);
+    setClickedIds(next);
+    saveClickedItems(next);
+    close();
+  }
+
   function dismissItem(e: React.MouseEvent, key: string) {
     e.preventDefault();
     e.stopPropagation();
@@ -102,13 +139,14 @@ export function OutstandingTasksPopup({ count, items }: Props) {
 
   if (!open) return null;
 
-  const visibleItems = items.filter(
-    (it) => !dismissedIds.has(`${it.kind}:${it.id}`),
-  );
+  const visibleItems = items.filter((it) => {
+    const key = `${it.kind}:${it.id}`;
+    return !dismissedIds.has(key) && !clickedIds.has(key);
+  });
   // The server-computed `count` includes items past the preview cap
   // AND anything just dismissed locally, knock off local dismissals so
   // the heading stays honest about what's actually still showing.
-  const visibleCount = Math.max(0, count - dismissedIds.size);
+  const visibleCount = Math.max(0, count - dismissedIds.size - clickedIds.size);
 
   return (
     <div
@@ -162,7 +200,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
               <li key={key} className="relative">
                 <Link
                   href={it.href}
-                  onClick={close}
+                  onClick={() => clickThroughItem(key)}
                   className="flex items-start gap-2.5 rounded-lg pl-3 pr-9 py-2 hover:bg-cream transition-colors"
                 >
                   <span

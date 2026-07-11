@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { OutstandingItem } from "@/lib/tasks/outstanding";
+import {
+  loadClickedItems,
+  saveClickedItems,
+} from "@/components/OutstandingTasksPopup";
 
 type Props = {
   count: number;
@@ -62,15 +66,30 @@ export function OutstandingTasksBell({ count, items }: Props) {
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const [mounted, setMounted] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [clickedIds, setClickedIds] = useState<Set<string>>(new Set());
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: createPortal needs document
     setMounted(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- read persisted dismissals once (client-only)
+     
     setDismissedIds(loadDismissedItems());
+     
+    setClickedIds(loadClickedItems());
   }, []);
+
+  // Link click-through: user is off to handle it; drop it from the list
+  // for this session (shared sessionStorage key with the popup).
+  function clickThroughItem(key: string) {
+    setClickedIds((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      saveClickedItems(next);
+      return next;
+    });
+    setOpen(false);
+  }
 
   function dismissItem(e: React.MouseEvent, key: string) {
     e.preventDefault();
@@ -85,10 +104,11 @@ export function OutstandingTasksBell({ count, items }: Props) {
 
   // Hide anything the user X'd out (in the bell or the popup), and keep the
   // badge honest by knocking those off the server-computed count.
-  const visibleItems = items.filter(
-    (it) => !dismissedIds.has(`${it.kind}:${it.id}`),
-  );
-  const visibleCount = Math.max(0, count - dismissedIds.size);
+  const visibleItems = items.filter((it) => {
+    const key = `${it.kind}:${it.id}`;
+    return !dismissedIds.has(key) && !clickedIds.has(key);
+  });
+  const visibleCount = Math.max(0, count - dismissedIds.size - clickedIds.size);
 
   useEffect(() => {
     if (!open || !buttonRef.current) return;
@@ -174,7 +194,7 @@ export function OutstandingTasksBell({ count, items }: Props) {
                     <div key={key} className="relative">
                       <Link
                         href={it.href}
-                        onClick={() => setOpen(false)}
+                        onClick={() => clickThroughItem(key)}
                         className="flex items-start gap-2.5 rounded-lg pl-3 pr-9 py-2 hover:bg-forest-50/60 transition-colors"
                       >
                         <span
