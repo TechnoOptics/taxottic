@@ -107,7 +107,7 @@ export default async function BusinessTripsPage({
     let tripQuery = admin
       .from("mileage_trips")
       .select(
-        "id, started_at, ended_at, distance_miles, classification, deduction_cents, start_place_id, end_place_id",
+        "id, started_at, ended_at, distance_miles, classification, deduction_cents, start_place_id, end_place_id, notes",
       )
       .eq("company_id", company.id)
       .eq("driver_user_id", user.id)
@@ -158,6 +158,9 @@ export default async function BusinessTripsPage({
   const mapTrips: MapTrip[] = trips.map((t) => ({
     id: t.id,
     classification: t.classification,
+    approximate: ((t as { notes?: string | null }).notes ?? "").startsWith(
+      "Approximate drive",
+    ),
     points: (pointsByTrip.get(t.id) ?? [])
       .slice()
       .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
