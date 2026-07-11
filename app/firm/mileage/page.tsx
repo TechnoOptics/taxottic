@@ -67,7 +67,7 @@ export default async function FirmMileagePage({
     const { data: tripData } = await admin
       .from("mileage_trips")
       .select(
-        "id, company_id, driver_user_id, started_at, distance_miles, classification, deduction_cents, mileage_points(lat, lng, captured_at)",
+        "id, company_id, driver_user_id, started_at, distance_miles, classification, deduction_cents, notes, mileage_points(lat, lng, captured_at)",
       )
       .in("company_id", companyIds)
       .gte("started_at", sinceIso)
@@ -115,6 +115,9 @@ export default async function FirmMileagePage({
   const mapTrips: MapTrip[] = trips.map((t) => ({
     id: t.id,
     classification: t.classification,
+    approximate: ((t as unknown as { notes?: string | null }).notes ?? "").startsWith(
+      "Approximate drive",
+    ),
     // Per-driver colouring on the team map: each teammate's trails get a
     // unique colour (MileageMap assigns one per driver when 2+ are shown).
     driverId: t.driver_user_id,

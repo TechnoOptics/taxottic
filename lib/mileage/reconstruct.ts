@@ -17,12 +17,21 @@ import { haversineMeters } from "./segmentation";
 // It is opt-in (the user taps "Recover"), never automatic.
 
 const METERS_PER_MILE = 1609.344;
-const MIN_JUMP_M = 1000; // < 1 km = jitter / a short walk, not a drive
-const MAX_JUMP_M = 250_000; // > 250 km between two fixes = data glitch, skip
+const MIN_JUMP_M = 1000; // chain shorter than 1 km = jitter / a short walk, not a drive
+const MAX_JUMP_M = 250_000; // > 250 km between two fixes = data glitch, hard break
 const MIN_DT_S = 120; // 2 min
 const MAX_DT_S = 4 * 3600; // 4 h, beyond this we can't assume a single drive
+/** A leg (consecutive fix pair) counts as "driving" when it moved at
+ *  least this far... */
+const LEG_MIN_M = 300;
+/** ...at at least this implied speed (m/s). 2.5 ≈ 5.6 mph: above any
+ *  walk, below the slowest crawl of city driving with 2-min fixes. */
+const LEG_MIN_SPEED_MPS = 2.5;
+/** A chain may bridge stationary legs (red lights, quick stops) up to
+ *  this much accumulated pause before it is considered ended. */
+const PAUSE_MAX_S = 360;
 const NOTE =
-  "Approximate drive, reconstructed from stop-to-stop GPS after a background-tracking gap. Straight-line distance may under-count road miles; verify before claiming.";
+  "Approximate drive, reconstructed from sparse GPS after a background-tracking gap. The trace may under-count road miles; verify before claiming.";
 
 type RawPt = { id: string; ts: number; lat: number; lng: number };
 
@@ -94,13 +103,71 @@ async function fetchUnconsumed(
   return out;
 }
 
-function isJump(a: RawPt, b: RawPt): number | null {
-  const m = haversineMeters(a, b);
-  const dt = (b.ts - a.ts) / 1000;
-  if (m < MIN_JUMP_M || m > MAX_JUMP_M || dt < MIN_DT_S || dt > MAX_DT_S) {
-    return null;
+export type ApproxChain = {
+  /** Index range into the input points array, inclusive. */
+  startIdx: number;
+  endIdx: number;
+  /** Sum of leg distances across the chain (the honest sparse-trace
+   *  length — still an under-count of road miles, never an over-count). */
+  meters: number;
+};
+
+/**
+ * Group consecutive driving-like legs into chains, bridging short
+ * pauses (red lights, quick stops). This replaces the old
+ * endpoint-pair "jump" logic: a drive captured as sparse fixes every
+ * couple of minutes now becomes ONE approximate trip whose polyline
+ * follows every fix we actually have, instead of a straight line
+ * between the first and last stop. Pure and exported for tests.
+ */
+export function buildApproxChains(pts: readonly RawPt[]): ApproxChain[] {
+  const chains: ApproxChain[] = [];
+  let start = -1; // index of chain's first point
+  let lastDrivingEnd = -1; // index of the last point of the last driving leg
+  let meters = 0;
+  let pauseS = 0;
+
+  const close = () => {
+    if (start >= 0 && lastDrivingEnd > start) {
+      const durS = (pts[lastDrivingEnd].ts - pts[start].ts) / 1000;
+      if (meters >= MIN_JUMP_M && durS >= MIN_DT_S && durS <= MAX_DT_S) {
+        chains.push({ startIdx: start, endIdx: lastDrivingEnd, meters });
+      }
+    }
+    start = -1;
+    lastDrivingEnd = -1;
+    meters = 0;
+    pauseS = 0;
+  };
+
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const m = haversineMeters(a, b);
+    const dt = (b.ts - a.ts) / 1000;
+    const hardBreak = m > MAX_JUMP_M || dt > MAX_DT_S || dt <= 0;
+    const driving = !hardBreak && m >= LEG_MIN_M && m / dt >= LEG_MIN_SPEED_MPS;
+
+    if (hardBreak) {
+      close();
+      continue;
+    }
+    if (driving) {
+      if (start < 0) start = i - 1;
+      // Include the distance covered across any bridged pause legs too
+      // (they moved a little; it is real, if tiny, ground).
+      meters += m;
+      lastDrivingEnd = i;
+      pauseS = 0;
+    } else if (start >= 0) {
+      pauseS += dt;
+      if (pauseS > PAUSE_MAX_S) close();
+      // else: hold — a following driving leg resumes the chain, and the
+      // trailing pause is trimmed at close() via lastDrivingEnd.
+    }
   }
-  return m;
+  close();
+  return chains;
 }
 
 /** How many approximate trips a recovery run would create (for the UI label). */
@@ -115,11 +182,9 @@ export async function countRecoverableApproxTrips(
     fetchTripWindows(admin, userId, companyId, sinceIso),
   ]);
   let n = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1];
-    const b = pts[i];
-    if (!isJump(a, b)) continue;
-    if (overlapsExistingTrip(a.ts, b.ts, tripWindows)) continue;
+  for (const c of buildApproxChains(pts)) {
+    if (overlapsExistingTrip(pts[c.startIdx].ts, pts[c.endIdx].ts, tripWindows))
+      continue;
     n++;
   }
   return n;
@@ -143,11 +208,10 @@ export async function reconstructApproximateTrips(
   if (pts.length < 2) return 0;
 
   let created = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1];
-    const b = pts[i];
-    const meters = isJump(a, b);
-    if (meters == null) continue;
+  for (const chain of buildApproxChains(pts)) {
+    const a = pts[chain.startIdx];
+    const b = pts[chain.endIdx];
+    const meters = chain.meters;
     // A drive that already exists as a trip (fully tracked, manual, or a
     // prior recovery) must never be recovered again — that was the
     // straight-line-duplicate bug. The end-of-run sweep still consumes
@@ -175,12 +239,24 @@ export async function reconstructApproximateTrips(
       console.error("[reconstruct] trip insert failed", error?.message);
       continue;
     }
-    // Give the trip its two endpoint points so the map can draw it (a
-    // straight line between the two stops, honest for an approximate trip).
-    await admin.from("mileage_points").insert([
-      { trip_id: ins.id, captured_at: startedAt, lat: a.lat, lng: a.lng },
-      { trip_id: ins.id, captured_at: endedAt, lat: b.lat, lng: b.lng },
-    ]);
+    // Attach EVERY fix in the chain so the map draws whatever shape we
+    // actually captured (a sparse but real route), not a straight line
+    // between the two stops. Chunked insert to stay under payload caps.
+    const tracePoints = pts.slice(chain.startIdx, chain.endIdx + 1).map((pt) => ({
+      trip_id: ins.id,
+      captured_at: new Date(pt.ts).toISOString(),
+      lat: pt.lat,
+      lng: pt.lng,
+    }));
+    for (let j = 0; j < tracePoints.length; j += 500) {
+      const { error: ptErr } = await admin
+        .from("mileage_points")
+        .insert(tracePoints.slice(j, j + 500));
+      if (ptErr) {
+        console.error("[reconstruct] trace insert failed", ptErr.message);
+        break;
+      }
+    }
     // Consume the two endpoint fixes (and anything between) into this trip.
     await admin
       .from("mileage_points_raw")

@@ -19,6 +19,10 @@ export type MapTrip = {
    *  colours. Optional so single-user views need pass nothing. */
   driverId?: string | null;
   driverName?: string | null;
+  /** Reconstructed from sparse GPS (a recovery), not a full-fidelity
+   *  capture. Drawn DASHED so a coarse segment reads as "approximate",
+   *  never as a claimed road route. */
+  approximate?: boolean;
 };
 export type MapPlace = {
   id: string;
@@ -322,16 +326,34 @@ export function MileageMap({
             strokeWeight: 6,
             map,
           });
+          // Approximate (recovered) trips draw DASHED: the solid stroke
+          // is suppressed and a dash icon repeats along the path, so a
+          // sparse trace never reads as a precise road route.
+          const isApprox = t.approximate === true;
           const line = new maps.Polyline({
             path,
             strokeColor: lineColor,
-            strokeOpacity: lineOpacity,
+            strokeOpacity: isApprox ? 0 : lineOpacity,
             strokeWeight: 4,
             // Direction of travel: arrowheads riding the breadcrumb at a
             // steady cadence. Same fill as the trip colour with the dark
             // shadow tone as outline so they read on both the navy water
             // and the lighter road strokes.
             icons: [
+              ...(isApprox
+                ? [
+                    {
+                      icon: {
+                        path: "M 0,-1 0,1",
+                        strokeOpacity: 0.9,
+                        strokeColor: lineColor,
+                        scale: 3,
+                      },
+                      offset: "0",
+                      repeat: "14px",
+                    },
+                  ]
+                : []),
               {
                 icon: {
                   path: maps.SymbolPath.FORWARD_CLOSED_ARROW,

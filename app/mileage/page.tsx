@@ -184,7 +184,7 @@ export default async function MileagePage({
   const pointsByTrip = new Map<string, Pt[]>();
   if (company) {
     const TRIP_SELECT =
-      "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents";
+      "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, notes";
     if (viewingAll) {
       // Team overlay: MY drives (all classifications) + every teammate's
       // BUSINESS drives. Two scoped queries so teammates' personal /
@@ -296,6 +296,9 @@ export default async function MileagePage({
   const mapTrips: MapTrip[] = trips.map((t) => ({
     id: t.id,
     classification: t.classification,
+    approximate: ((t as { notes?: string | null }).notes ?? "").startsWith(
+      "Approximate drive",
+    ),
     // Driver identity only in the "all drivers" overlay, so single-driver
     // views keep the business/personal classification colours.
     driverId: viewingAll ? t.driver_user_id ?? null : null,
