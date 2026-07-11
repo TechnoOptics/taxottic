@@ -6,6 +6,10 @@ import Link from "next/link";
 export type RosterRow = {
   userId: string;
   name: string;
+  /** Raw per-company override (null = name falls back to the member's
+   *  own profile). Kept separate from `name` so the edit form can show
+   *  the override as the value and the profile name as the placeholder. */
+  displayName: string | null;
   email: string;
   employeeNumber: number | null;
   title: string | null;
@@ -24,6 +28,7 @@ type Props = {
   publicId: string;
   isManager: boolean;
   assignMemberDepartment: (formData: FormData) => Promise<void>;
+  updateMemberDetails: (formData: FormData) => Promise<void>;
   removeMember: (formData: FormData) => Promise<void>;
 };
 
@@ -41,10 +46,13 @@ export function TeamRoster({
   publicId,
   isManager,
   assignMemberDepartment,
+  updateMemberDetails,
   removeMember,
 }: Props) {
   const [query, setQuery] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
+  // userId of the row whose details form is open (one at a time).
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -117,7 +125,62 @@ export function TeamRoster({
                 <div className="min-w-0">
                   <div className="font-medium text-forest-900 truncate">
                     {m.name}
+                    {isManager ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingId((v) => (v === m.userId ? null : m.userId))
+                        }
+                        className="ml-2 text-xs font-normal text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                        aria-expanded={editingId === m.userId}
+                      >
+                        {editingId === m.userId ? "Close" : "Edit"}
+                      </button>
+                    ) : null}
                   </div>
+                  {isManager && editingId === m.userId ? (
+                    <form
+                      action={async (fd) => {
+                        await updateMemberDetails(fd);
+                        setEditingId(null);
+                      }}
+                      className="mt-2 grid gap-1.5 sm:grid-cols-[1fr_1fr_auto] sm:items-end max-w-md"
+                    >
+                      <input type="hidden" name="company_id" value={companyId} />
+                      <input type="hidden" name="user_id" value={m.userId} />
+                      <label className="grid gap-1 min-w-0">
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                          Display name
+                        </span>
+                        <input
+                          name="display_name"
+                          defaultValue={m.displayName ?? ""}
+                          placeholder={m.name}
+                          maxLength={120}
+                          className="input h-8 text-xs py-0"
+                        />
+                      </label>
+                      <label className="grid gap-1 min-w-0">
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700">
+                          Job title
+                        </span>
+                        <input
+                          name="title"
+                          defaultValue={m.title ?? ""}
+                          placeholder="e.g. Lead photographer"
+                          maxLength={120}
+                          className="input h-8 text-xs py-0"
+                        />
+                      </label>
+                      <button className="btn-ghost text-xs h-8 px-3 justify-self-start">
+                        Save
+                      </button>
+                      <p className="sm:col-span-3 text-[10px] text-ink-muted leading-relaxed">
+                        Changes how they appear in this company only. Leave the
+                        name blank to use their own profile name.
+                      </p>
+                    </form>
+                  ) : null}
                   <div className="text-xs text-ink-muted mt-0.5">
                     {[
                       m.employeeNumber
