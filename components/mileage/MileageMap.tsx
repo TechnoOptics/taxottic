@@ -301,6 +301,17 @@ export function MileageMap({
         });
         const bounds = new maps.LatLngBounds();
         let plotted = 0;
+        // Approximate trips queued for road-snapping (below): with only
+        // sparse fixes (sometimes just two endpoints) the honest trace is
+        // straight segments; the Directions service can suggest the LIKELY
+        // road route between the captured fixes, which we then draw in the
+        // same dashed "approximate" style. Purely visual — the claimed
+        // distance stays the captured trace, never the estimated route.
+        const approxToSnap: {
+          path: { lat: number; lng: number }[];
+          line: any;
+          shadow: any;
+        }[] = [];
 
         for (const t of trips) {
           if (t.points.length < 2) continue;
@@ -370,6 +381,7 @@ export function MileageMap({
             map,
           });
           overlays.push(shadow, line);
+          if (isApprox) approxToSnap.push({ path, line, shadow });
           // Start + end markers so a glance answers "which way did this
           // drive go?", green dot = where the trip began, navy/gold
           // checkered-flag disc = where it ended. Kept deliberately small
@@ -448,6 +460,44 @@ export function MileageMap({
           } else {
             map.setCenter({ lat: 39.5, lng: -98.35 });
             map.setZoom(minZoom);
+          }
+        }
+        // Best-effort road-snapping for approximate trips. Re-paths the
+        // already-drawn dashed polylines in place (same objects, same
+        // cleanup), so on ANY failure — Directions API not enabled on the
+        // key, quota, offline — the honest straight dashed trace simply
+        // stays. Capped per render to keep Directions usage bounded.
+        const SNAP_CAP = 8;
+        if (maps.DirectionsService && approxToSnap.length > 0) {
+          const dirSvc = new maps.DirectionsService();
+          for (const a of approxToSnap.slice(0, SNAP_CAP)) {
+            void (async () => {
+              try {
+                const origin = a.path[0];
+                const destination = a.path[a.path.length - 1];
+                const mids = a.path.slice(1, -1);
+                // Directions allows ≤ 25 waypoints; downsample evenly and
+                // pass captured fixes as via-points so the suggested route
+                // is threaded through what we actually know.
+                const step = Math.max(1, Math.ceil(mids.length / 23));
+                const waypoints = mids
+                  .filter((_, i) => i % step === 0)
+                  .slice(0, 23)
+                  .map((location) => ({ location, stopover: false }));
+                const res = await dirSvc.route({
+                  origin,
+                  destination,
+                  waypoints,
+                  travelMode: maps.TravelMode?.DRIVING ?? "DRIVING",
+                });
+                const overview = res?.routes?.[0]?.overview_path;
+                if (cancelled || !overview || overview.length < 2) return;
+                a.line.setPath(overview);
+                a.shadow.setPath(overview);
+              } catch {
+                /* keep the straight dashed trace */
+              }
+            })();
           }
         }
         setState("ready");
