@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
+import { evaluateTrackerStall, WATCH_WINDOW_MS } from "@/lib/mileage/stall";
+import { notify } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -91,8 +93,101 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Tracker-stall escalation ─────────────────────────────────────
+  // A driver who WAS uploading (any point in the watch window) and has
+  // now been silent for hours has a dead tracker — in practice iOS
+  // reverting Location "Always" → "While Using" (observed twice on a
+  // real device). The in-app banner can't reach a closed app, so the
+  // escalation is a push. Pure decision logic in lib/mileage/stall.ts;
+  // episode state in mileage_tracker_alerts (service-role only).
+  let stallsNotified = 0;
+  try {
+    const nowMs = Date.now();
+    const watchSinceIso = new Date(nowMs - WATCH_WINDOW_MS).toISOString();
+    // Distinct (driver, company) with ANY upload in the watch window —
+    // deliberately not the unconsumed-pairs set above, which can miss a
+    // driver whose points were all consumed before the tracker died.
+    const watched = new Map<string, { driver: string; company: string }>();
+    for (let from = 0; from < SCAN_CAP; from += PAGE) {
+      const { data, error } = await admin
+        .from("mileage_points_raw")
+        .select("driver_user_id, company_id")
+        .gte("created_at", watchSinceIso)
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data) {
+        const driver = r.driver_user_id as string;
+        const company = r.company_id as string;
+        watched.set(`${driver}|${company}`, { driver, company });
+      }
+      if (data.length < PAGE) break;
+    }
+
+    for (const { driver, company } of watched.values()) {
+      const { data: newest } = await admin
+        .from("mileage_points_raw")
+        .select("created_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!newest) continue;
+      const lastUploadMs = Date.parse(newest.created_at as string);
+
+      const { data: alert } = await admin
+        .from("mileage_tracker_alerts")
+        .select("notified_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .maybeSingle();
+
+      const decision = evaluateTrackerStall({
+        lastUploadMs,
+        nowMs,
+        lastNotifiedMs: alert
+          ? Date.parse(alert.notified_at as string)
+          : null,
+      });
+
+      if (decision === "clear") {
+        if (alert) {
+          await admin
+            .from("mileage_tracker_alerts")
+            .delete()
+            .eq("driver_user_id", driver)
+            .eq("company_id", company);
+        }
+        continue;
+      }
+      if (decision !== "notify") continue;
+
+      await notify(driver, {
+        kind: "tracker_stalled",
+        dayKey: new Date(nowMs).toISOString().slice(0, 10),
+      });
+      await admin.from("mileage_tracker_alerts").upsert(
+        {
+          driver_user_id: driver,
+          company_id: company,
+          stalled_since: new Date(lastUploadMs).toISOString(),
+          notified_at: new Date(nowMs).toISOString(),
+        },
+        { onConflict: "driver_user_id,company_id" },
+      );
+      stallsNotified++;
+    }
+  } catch (err) {
+    // The sweep must never break trip finalization.
+    console.error(
+      "[mileage-finalize] stall sweep failed",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   console.log(
-    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips}`,
+    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} stallsNotified=${stallsNotified}`,
   );
 
   return NextResponse.json({
