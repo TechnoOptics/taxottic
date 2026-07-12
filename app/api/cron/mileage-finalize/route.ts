@@ -151,7 +151,44 @@ export async function GET(req: NextRequest) {
           : null,
       });
 
-      if (decision === "clear") {
+      // Device-truth escalation (workstream C): the app's heartbeat can
+      // prove the tracker is dead LONG before the 3h GPS-silence floor —
+      // "toggle ON but no native callback for 30+ min" or (once the
+      // native plugin reports it) "authorization degraded from Always".
+      // Only trust a FRESH heartbeat (<15 min): a stale one just means
+      // the app is closed, which is the silence alarm's job, not ours.
+      let deviceStall = false;
+      if (decision !== "notify") {
+        const { data: ds } = await admin
+          .from("mileage_device_status")
+          .select(
+            "tracking_enabled, last_cb_age_s, location_authorization, reported_at",
+          )
+          .eq("driver_user_id", driver)
+          .eq("company_id", company)
+          .maybeSingle();
+        if (
+          ds &&
+          ds.tracking_enabled === true &&
+          nowMs - Date.parse(ds.reported_at as string) < 15 * 60_000
+        ) {
+          const cbAge = (ds.last_cb_age_s as number | null) ?? null;
+          const auth = (ds.location_authorization as string | null) ?? null;
+          deviceStall =
+            (cbAge != null && cbAge > 1800) ||
+            (auth != null && auth !== "always");
+        }
+        if (deviceStall) {
+          const lastNotified = alert
+            ? Date.parse(alert.notified_at as string)
+            : null;
+          if (lastNotified != null && nowMs - lastNotified < 24 * 60 * 60_000) {
+            deviceStall = false; // already told them this episode
+          }
+        }
+      }
+
+      if (decision === "clear" && !deviceStall) {
         if (alert) {
           await admin
             .from("mileage_tracker_alerts")
@@ -161,7 +198,7 @@ export async function GET(req: NextRequest) {
         }
         continue;
       }
-      if (decision !== "notify") continue;
+      if (decision !== "notify" && !deviceStall) continue;
 
       await notify(driver, {
         kind: "tracker_stalled",
