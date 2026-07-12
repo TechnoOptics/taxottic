@@ -93,11 +93,17 @@ jobs:
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "GOOGLE_SERVICES_JSON present → enabling Android push"
             printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            # Accept base64-encoded secrets too (a common way to store
+            # JSON secrets safely): if the raw value isn't JSON, try
+            # decoding before failing.
+            if ! node -e "JSON.parse(require('fs').readFileSync('./android/app/google-services.json','utf8'))" 2>/dev/null; then
+              printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > android/app/google-services.json 2>/dev/null || true
+            fi
             # Sanity-check it is valid JSON with a project_id so a
             # malformed secret fails the build loudly instead of
             # shipping a broken (crashing) push binary.
             node -e "const j=require('./android/app/google-services.json');if(!j.project_info&&!j.project_id){process.exit(1)}" \
-              || { echo '::error::GOOGLE_SERVICES_JSON is not a valid google-services.json'; exit 1; }
+              || { echo '::error::GOOGLE_SERVICES_JSON is not a valid google-services.json (raw or base64). Re-save the secret with the FILE CONTENTS from Firebase console → Project settings → your Android app.'; exit 1; }
           else
             echo "GOOGLE_SERVICES_JSON absent → stripping push-notifications (no Firebase yet)"
             rm -rf node_modules/@capacitor/push-notifications
