@@ -171,12 +171,23 @@ function totalMeters(points: GpsPoint[]): number {
  *     once the last point is old enough to indicate the user has
  *     parked.
  */
+/** Fixes with reported horizontal accuracy worse than this are noise
+ *  (urban-canyon multipath, cold-start cell fixes) and get dropped
+ *  BEFORE segmentation. A 500 m jump from one bad fix reads as > 8 m/s
+ *  "driving" and can open a phantom trip or inflate a real one's
+ *  distance — the type has always documented accuracyM as "used to
+ *  ignore jittery fixes", but nothing enforced it until now. */
+export const MAX_ACCURACY_M = 100;
+
 export function segmentTrips(
   points: GpsPoint[],
   options: { closeOpenAtEnd?: boolean } = {},
 ): Trip[] {
   const { closeOpenAtEnd = true } = options;
   const trips: Trip[] = [];
+  points = points.filter(
+    (p) => p.accuracyM == null || p.accuracyM <= MAX_ACCURACY_M,
+  );
   if (points.length < 2) return trips;
 
   let current: GpsPoint[] = [];

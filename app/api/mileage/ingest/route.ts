@@ -77,7 +77,16 @@ export async function POST(req: NextRequest) {
     console.log("[ingest] 400, missing_company user=" + user.id);
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
-  const points = rawPoints.filter(isFinitePoint).sort((a, b) => a.ts - b.ts);
+  // Clamp device clocks running ahead: a future captured_at makes the
+  // finalizer's parked test (server now - device ts) read negative, so
+  // the drive never tail-closes. Anything more than 2 min ahead of
+  // receipt is clock skew, not physics; pin it to receipt time.
+  const receiptMs = Date.now();
+  const maxTs = receiptMs + 2 * 60_000;
+  const points = rawPoints
+    .filter(isFinitePoint)
+    .map((pt) => (pt.ts > maxTs ? { ...pt, ts: receiptMs } : pt))
+    .sort((a, b) => a.ts - b.ts);
   if (points.length > 50_000) {
     console.log(
       "[ingest] 413, too_many_points user=" + user.id + " n=" + points.length,
@@ -138,11 +147,23 @@ export async function POST(req: NextRequest) {
     `[ingest] done user=${user.id} incoming=${points.length} pool=${result.poolSize} trips=${result.tripsCreated} biz_mi=${result.businessMiles.toFixed(2)} ded_$=${(result.deductionCents / 100).toFixed(2)} sessionEnded=${sessionEnded}`,
   );
 
+  // Honest remaining-backlog figure for the on-device diagnostics: the
+  // client reads `stagingRemaining` (the old `stagingPoolSize` was both
+  // misnamed on the wire and semantically the PROCESSED pool, so the
+  // diag crumb permanently showed 0).
+  const { count: stagingRemaining } = await admin
+    .from("mileage_points_raw")
+    .select("id", { count: "exact", head: true })
+    .eq("driver_user_id", user.id)
+    .eq("company_id", companyId)
+    .is("consumed_at", null);
+
   return NextResponse.json({
     ok: true,
     tripsCreated: result.tripsCreated,
     businessMiles: Number(result.businessMiles.toFixed(3)),
     deductionCents: result.deductionCents,
     stagingPoolSize: result.poolSize,
+    stagingRemaining: stagingRemaining ?? 0,
   });
 }

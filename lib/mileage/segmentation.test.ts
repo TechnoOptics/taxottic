@@ -291,3 +291,46 @@ describe("suggestClassification", () => {
     );
   });
 });
+
+import { MAX_ACCURACY_M } from "./segmentation";
+
+describe("accuracy filtering", () => {
+  // A clean 8-minute drive: fixes every 30 s moving ~300 m each
+  // (10 m/s), due north from the origin.
+  const drive = Array.from({ length: 16 }, (_, i) => ({
+    lat: (i * 300) / 111_320,
+    lng: 0,
+    ts: i * 30_000,
+    speedMps: 10,
+  }));
+
+  it("drops fixes with accuracy worse than the threshold", () => {
+    // Inject a 5 km teleport fix with terrible accuracy mid-drive; it
+    // must not inflate the trip distance.
+    const withJunk = [
+      ...drive.slice(0, 8),
+      {
+        lat: 0.045, // ~5 km off-course
+        lng: 0.045,
+        ts: 8 * 30_000 + 1_000,
+        speedMps: 0,
+        accuracyM: 500,
+      },
+      ...drive.slice(8),
+    ];
+    const clean = segmentTrips(drive, { closeOpenAtEnd: true });
+    const filtered = segmentTrips(withJunk, { closeOpenAtEnd: true });
+    expect(filtered).toHaveLength(clean.length);
+    expect(filtered[0].distanceMiles).toBeCloseTo(clean[0].distanceMiles, 2);
+  });
+
+  it("keeps fixes with missing accuracy (older clients report none)", () => {
+    const trips = segmentTrips(drive, { closeOpenAtEnd: true });
+    expect(trips).toHaveLength(1);
+  });
+
+  it("a trace that is ONLY bad fixes yields no trips", () => {
+    const junk = drive.map((p) => ({ ...p, accuracyM: MAX_ACCURACY_M + 1 }));
+    expect(segmentTrips(junk, { closeOpenAtEnd: true })).toHaveLength(0);
+  });
+});
