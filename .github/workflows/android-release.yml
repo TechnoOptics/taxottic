@@ -93,6 +93,21 @@ jobs:
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "GOOGLE_SERVICES_JSON present → enabling Android push"
             printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            # Encoding sanitizer: secrets pasted from Windows editors /
+            # some browsers arrive as UTF-16 (BOM + NUL bytes — observed
+            # in the 2026-07-12 build-3 failure). Strip any BOM
+            # (FFFE/FEFF/EFBBBF) and NULs; a clean UTF-8 secret passes
+            # through unchanged, so this is always safe.
+            node -e '
+              const fs = require("fs");
+              const p = "android/app/google-services.json";
+              let b = fs.readFileSync(p);
+              if (b[0] === 0xFF && b[1] === 0xFE) b = b.subarray(2);
+              else if (b[0] === 0xFE && b[1] === 0xFF) b = b.subarray(2);
+              else if (b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) b = b.subarray(3);
+              b = Buffer.from([...b].filter((x) => x !== 0));
+              fs.writeFileSync(p, b);
+            '
             # Accept base64-encoded secrets too (a common way to store
             # JSON secrets safely): if the raw value isn't JSON, try
             # decoding before failing.
