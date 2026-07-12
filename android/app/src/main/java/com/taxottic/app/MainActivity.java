@@ -23,6 +23,7 @@ public class MainActivity extends BridgeActivity {
         // home-screen widget bridge.
         registerPlugin(TaxotticWatchBridgePlugin.class);
         registerPlugin(TaxotticWidgetBridgePlugin.class);
+        registerPlugin(TaxotticDeviceStatusPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

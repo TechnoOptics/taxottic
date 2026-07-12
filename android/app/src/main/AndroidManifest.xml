@@ -121,4 +121,9 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Battery-exemption request dialog (mileage tracking breaks under
+         Doze; Google's acceptable-use list covers this case). The setup
+         wizard drives it; the policy-safe settings-list intent is the
+         fallback. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

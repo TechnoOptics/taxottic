@@ -645,7 +645,11 @@
 // map — reported on a real device as drives still displaying wrong
 // while the server data was verified healthy. Bump forces existing
 // clients to drop the stale HTML/JS on next nav.
-const CACHE_VERSION = "v97";
+// v98: mileage reliability — TrackingHealthBanner gains the "Run the
+// reliability check" link, new /mileage/setup wizard, tracker gains
+// device-status heartbeat enrichment + instant permission-downgrade
+// reaction. Bump so WebViews drop stale JS (the v96 lesson).
+const CACHE_VERSION = "v98";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
