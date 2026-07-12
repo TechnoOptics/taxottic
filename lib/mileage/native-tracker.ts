@@ -468,6 +468,40 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
   }
 }
 
+/**
+ * Report device-truth to the server (reliability plan, workstream C):
+ * toggle state, buffer depth, callback age, failure streak. Fired on
+ * start/stop/resume and every ~5 min while tracking (every 10th flush
+ * tick). Best-effort — a lost heartbeat costs nothing; the server keeps
+ * the last one it saw. Native-plugin fields (authorization, battery)
+ * join this payload when the DeviceStatus plugin ships.
+ */
+async function sendHeartbeat(): Promise<void> {
+  if (!companyId) return;
+  try {
+    const cap = (window as unknown as {
+      Capacitor?: { getPlatform?: () => string };
+    }).Capacitor;
+    await fetch("/api/mileage/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        companyId,
+        platform: cap?.getPlatform?.() ?? "web",
+        trackingEnabled: tracking,
+        bufferSize: buffer.length,
+        lastCbAgeS: trackerDiag.lastCbAt
+          ? Math.round((Date.now() - trackerDiag.lastCbAt) / 1000)
+          : null,
+        failStreak: trackerDiag.failStreak,
+      }),
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Map a plugin Location → the server's GpsPoint contract. */
 function toPoint(p: {
   latitude: number;
@@ -697,7 +731,12 @@ export async function startMileageTracking(
   }
 
   if (!flushTimer) {
-    flushTimer = setInterval(() => void flush(), FLUSH_EVERY_MS);
+    flushTimer = setInterval(() => {
+      void flush();
+      // Device-truth heartbeat every ~5 min (10 ticks) while tracking.
+      if (trackerDiag.flushCount % 10 === 0) void sendHeartbeat();
+    }, FLUSH_EVERY_MS);
+    void sendHeartbeat();
     if (watchdogTimer) clearInterval(watchdogTimer);
     trackerDiag.lastCbAt = Date.now(); // arm from "now", not from 0
     watchdogTimer = setInterval(() => {
@@ -760,6 +799,7 @@ export async function stopMileageTracking(
     await stopBgSafely(bg);
   }
   tracking = false;
+  void sendHeartbeat();
   // Final upload tagged sessionEnded so the server force-closes any
   // in-progress trip immediately (the user explicitly stopped). This
   // is the only thing that materializes a drive that ended without a
