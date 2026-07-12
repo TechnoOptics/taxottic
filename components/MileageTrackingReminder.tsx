@@ -33,6 +33,7 @@ export function MileageTrackingReminder() {
   const [mounted, setMounted] = useState(false);
   const [isNative, setIsNative] = useState(false);
   const [state, setState] = useState({ enabled: false, permBlocked: false });
+  const [authBlocked, setAuthBlocked] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -51,8 +52,20 @@ export function MileageTrackingReminder() {
       /* private mode */
     }
 
-    const refresh = () => setState(getMileageTrackingUiState());
+    const refresh = () => {
+      setState(getMileageTrackingUiState());
+      try {
+        setAuthBlocked(
+          localStorage.getItem("taxottic.mileage.authBlocked") === "1",
+        );
+      } catch {
+        /* private mode */
+      }
+    };
     refresh();
+    // Session-dead signal from the tracker's flush loop (401 after a
+    // refresh attempt): drives its own banner below.
+    window.addEventListener("taxottic:mileage-auth", refresh);
     // Live updates: the tracker dispatches this on every permission
     // change; also re-check on focus / app resume.
     window.addEventListener("taxottic:mileage-perm", refresh);
@@ -70,6 +83,7 @@ export function MileageTrackingReminder() {
 
     return () => {
       window.removeEventListener("taxottic:mileage-perm", refresh);
+      window.removeEventListener("taxottic:mileage-auth", refresh);
       window.removeEventListener("focus", refresh);
       removeAppListener();
     };
@@ -78,8 +92,31 @@ export function MileageTrackingReminder() {
   if (!mounted || !isNative) return null;
 
   const blocked = state.permBlocked;
-  const reminder = !blocked && state.enabled && !dismissed;
-  if (!blocked && !reminder) return null;
+  const reminder = !blocked && !authBlocked && state.enabled && !dismissed;
+  if (!blocked && !reminder && !authBlocked) return null;
+
+  if (authBlocked) {
+    // Session expired while the tracker was buffering: the drives are
+    // SAFE on this device, but nothing uploads until they sign in
+    // again. Non-dismissible — silence here is how a day went missing.
+    return (
+      <div className="mx-4 mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+        <div className="text-sm font-semibold text-red-900">
+          Sign in again to keep mileage syncing
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-red-800">
+          Your drives are still being recorded and are saved on this
+          phone, but they can&apos;t upload until you sign back in.
+        </p>
+        <a
+          href="/login?next=/mileage"
+          className="mt-2 inline-flex items-center rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white"
+        >
+          Sign in
+        </a>
+      </div>
+    );
+  }
 
   async function openSettings() {
     setBusy(true);

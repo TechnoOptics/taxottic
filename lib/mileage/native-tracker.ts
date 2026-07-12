@@ -64,6 +64,15 @@ const LS_BUFFER = "taxottic.mileage.buffer";
  *  start(). "1" enables eco; anything else (including missing) is
  *  the default full-fidelity mode. */
 const LS_ECO = "taxottic.mileage.eco";
+/** Poison batches the server permanently rejected (400/413): moved out
+ *  of the live buffer so they stop blocking the queue head, kept for
+ *  diagnosis. Capped; oldest quarantined batches are discarded first. */
+const LS_DEADLETTER = "taxottic.mileage.deadletter";
+/** "1" while flushes are failing 401 after a refresh attempt — the
+ *  session is genuinely dead and the user must sign in again. Read by
+ *  MileageTrackingReminder; cleared on the next successful flush. */
+const LS_AUTH_BLOCKED = "taxottic.mileage.authBlocked";
+const AUTH_EVENT = "taxottic:mileage-auth";
 /** Set when the background watcher reports a permission/authorization
  *  failure (location not set to "Always", or denied). The UI reads this
  *  to FORCE a fix instead of letting tracking fail silently. Self-clears
@@ -166,6 +175,13 @@ let plugin: BackgroundGeolocationPlugin | null = null;
 let tracking = false;
 let buffer: GpsPoint[] = [];
 let flushTimer: ReturnType<typeof setInterval> | null = null;
+let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+let watchdogRearming = false;
+/** No callback for this long while enabled + app visible = the native
+ *  service died under us (OS kill) while the toggle still says ON — the
+ *  zombie state that previously required a manual off/on cycle. */
+const WATCHDOG_STALL_MS = 10 * 60_000;
+const WATCHDOG_MAX_RESTARTS = 3;
 let flushing = false;
 let companyId = "";
 
@@ -198,6 +214,16 @@ export const trackerDiag = {
   startError: "" as string,
   cbHits: 0 as number,
   cbLastError: "" as string,
+  /** Consecutive failed flushes; drives the backoff (skip ticks). */
+  failStreak: 0 as number,
+  /** Points evicted at MAX_BUFFER (oldest dropped) — data loss signal. */
+  evictedPoints: 0 as number,
+  /** Batches quarantined after a permanent 4xx rejection. */
+  deadlettered: 0 as number,
+  /** Watchdog re-arms of a zombie watcher. */
+  watchdogRestarts: 0 as number,
+  /** ms epoch of the most recent plugin callback (fix OR error). */
+  lastCbAt: 0 as number,
   // Last flush round-trip, populated by flush() so the toggle UI
   // can show "the device IS reaching the server" or "the device
   // sent 40 points and got 401 back" without DevTools.
@@ -330,6 +356,17 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
   // override, toggling off after a drive whose last points already
   // flushed would never close the trip, it would sit open forever.
   if (buffer.length < 1 && !tracking && !sessionEnded) return;
+  // Backoff: after 3+ consecutive failures only attempt every 4th tick
+  // (~2 min) so a dead session / server incident isn't hammered every
+  // 30 s. sessionEnded always goes through (it closes the trip).
+  if (
+    trackerDiag.failStreak >= 3 &&
+    !sessionEnded &&
+    trackerDiag.flushCount % 4 !== 0
+  ) {
+    trackerDiag.flushCount++;
+    return;
+  }
   flushing = true;
   trackerDiag.flushCount++;
   // Cap the batch (see FLUSH_BATCH_MAX). NEVER use keepalive here: its
@@ -337,12 +374,27 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
   // non-trivial. A large backlog drains over successive ticks.
   const batch = buffer.slice(0, FLUSH_BATCH_MAX);
   try {
-    const res = await fetch("/api/mileage/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ companyId, points: batch, sessionEnded }),
-    });
+    const post = () =>
+      fetch("/api/mileage/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ companyId, points: batch, sessionEnded }),
+      });
+    let res = await post();
+    if (res.status === 401) {
+      // Most likely a stale cookie after a long background (the OS
+      // suspends the JS timers, so supabase-js autoRefresh never ran).
+      // Refresh the session ONCE and retry this same batch; only a
+      // second 401 means the session is genuinely dead.
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        await createClient().auth.refreshSession();
+        res = await post();
+      } catch {
+        /* refresh unavailable (offline) — fall through to 401 handling */
+      }
+    }
     trackerDiag.flushLastStatus = res.status;
     let bodyJson: unknown = null;
     try {
@@ -365,15 +417,44 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
       trackerDiag.flushLastTripsCreated = j?.tripsCreated ?? 0;
       trackerDiag.flushLastStagingLeft = j?.stagingRemaining ?? 0;
       trackerDiag.flushLastResult = `ok trips=${j?.tripsCreated ?? 0} left=${j?.stagingRemaining ?? 0}`;
+      trackerDiag.failStreak = 0;
+      if (localStorage.getItem(LS_AUTH_BLOCKED) === "1") {
+        localStorage.removeItem(LS_AUTH_BLOCKED);
+        window.dispatchEvent(new Event(AUTH_EVENT));
+      }
     } else {
-      // KEEP the batch on non-2xx so we retry next tick. Surface the
-      // status + first ~40 chars of the body so the UI diag line can
-      // show "401 unauthorized" instead of silently failing forever
-      // (the bug we shipped for months before May 25).
       const errBody = bodyJson
         ? JSON.stringify(bodyJson).slice(0, 60)
         : (await res.clone().text().catch(() => "")).slice(0, 60);
       trackerDiag.flushLastResult = `${res.status} ${errBody}`;
+      trackerDiag.failStreak++;
+      if (res.status === 401) {
+        // Refresh already failed above: the session is dead. Keep the
+        // buffer (points are safe locally) but tell the user — a silent
+        // 401 loop is how a full day of drives went missing before.
+        try {
+          localStorage.setItem(LS_AUTH_BLOCKED, "1");
+          window.dispatchEvent(new Event(AUTH_EVENT));
+        } catch {
+          /* private mode */
+        }
+      } else if (res.status === 400 || res.status === 413) {
+        // Permanent rejection: this batch will NEVER succeed, and as the
+        // queue head it was blocking every point behind it. Quarantine
+        // it to the dead-letter store and unblock the queue.
+        try {
+          const raw = localStorage.getItem(LS_DEADLETTER);
+          const dead = raw ? (JSON.parse(raw) as unknown[]) : [];
+          dead.push({ at: Date.now(), status: res.status, points: batch });
+          while (dead.length > 5) dead.shift();
+          localStorage.setItem(LS_DEADLETTER, JSON.stringify(dead));
+        } catch {
+          /* quota — drop without quarantine, unblocking still matters */
+        }
+        buffer = buffer.slice(batch.length);
+        persistBuffer();
+        trackerDiag.deadlettered++;
+      }
     }
   } catch (e) {
     // Offline / transient, keep the batch. Surface the error type
@@ -381,6 +462,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
     trackerDiag.flushLastResult = `network: ${
       e instanceof Error ? e.name + ":" + e.message.slice(0, 40) : "unknown"
     }`;
+    trackerDiag.failStreak++;
   } finally {
     flushing = false;
   }
@@ -536,6 +618,7 @@ export async function startMileageTracking(
       },
       (location, error) => {
         trackerDiag.cbHits++;
+        trackerDiag.lastCbAt = Date.now();
         if (error) {
           trackerDiag.cbLastError =
             String(error.code ?? "") + ":" + String(error.message ?? "");
@@ -561,7 +644,10 @@ export async function startMileageTracking(
         const pt = toPoint(location);
         if (!pt) return;
         buffer.push(pt);
-        if (buffer.length > MAX_BUFFER) buffer = buffer.slice(-MAX_BUFFER);
+        if (buffer.length > MAX_BUFFER) {
+          trackerDiag.evictedPoints += buffer.length - MAX_BUFFER;
+          buffer = buffer.slice(-MAX_BUFFER);
+        }
         persistBuffer();
         if (buffer.length >= FLUSH_AT_POINTS) void flush();
       },
@@ -612,19 +698,61 @@ export async function startMileageTracking(
 
   if (!flushTimer) {
     flushTimer = setInterval(() => void flush(), FLUSH_EVERY_MS);
+    if (watchdogTimer) clearInterval(watchdogTimer);
+    trackerDiag.lastCbAt = Date.now(); // arm from "now", not from 0
+    watchdogTimer = setInterval(() => {
+      if (!tracking || watchdogRearming) return;
+      // Only judge liveness while the app is actually visible: in the
+      // background the WebView's own timers are throttled, so silence
+      // proves nothing there (resume re-arms separately).
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+      const silentMs = Date.now() - trackerDiag.lastCbAt;
+      if (silentMs < WATCHDOG_STALL_MS) return;
+      if (trackerDiag.watchdogRestarts >= WATCHDOG_MAX_RESTARTS) return;
+      trackerDiag.watchdogRestarts++;
+      watchdogRearming = true;
+      void (async () => {
+        try {
+          await stopMileageTracking({ keepEnabled: true });
+          await startMileageTracking(companyId);
+        } catch {
+          /* next watchdog tick tries again, bounded by MAX_RESTARTS */
+        } finally {
+          watchdogRearming = false;
+        }
+      })();
+    }, 60_000);
   }
   return { ok: true };
 }
 
 /** Stop tracking, flush whatever is buffered, forget the preference. */
-export async function stopMileageTracking(): Promise<void> {
-  try {
-    window.localStorage.removeItem(LS_ENABLED);
-  } catch {
-    /* ignore */
+export async function stopMileageTracking(
+  opts?: {
+    /** Watchdog re-arm: bounce the native watcher WITHOUT flipping the
+     *  user's enabled preference off (a plain stop is a user intent;
+     *  a re-arm is not). */
+    keepEnabled?: boolean;
+  },
+): Promise<void> {
+  if (!opts?.keepEnabled) {
+    try {
+      window.localStorage.removeItem(LS_ENABLED);
+    } catch {
+      /* ignore */
+    }
   }
   if (flushTimer) {
     clearInterval(flushTimer);
+    if (watchdogTimer) {
+      clearInterval(watchdogTimer);
+      watchdogTimer = null;
+    }
     flushTimer = null;
   }
   const bg = await guard();
