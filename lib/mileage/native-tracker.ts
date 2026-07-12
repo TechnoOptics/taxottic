@@ -177,6 +177,7 @@ let buffer: GpsPoint[] = [];
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogRearming = false;
+let authUnsub: (() => void) | null = null;
 /** No callback for this long while enabled + app visible = the native
  *  service died under us (OS kill) while the toggle still says ON — the
  *  zombie state that previously required a manual off/on cycle. */
@@ -482,6 +483,11 @@ async function sendHeartbeat(): Promise<void> {
     const cap = (window as unknown as {
       Capacitor?: { getPlatform?: () => string };
     }).Capacitor;
+    // Native device truth (authorization level, battery optimization)
+    // when the DeviceStatus plugin is in this binary; null on web/old
+    // builds and the heartbeat still carries the JS-visible fields.
+    const { getDeviceStatus } = await import("@/lib/mileage/device-status");
+    const ds = await getDeviceStatus();
     await fetch("/api/mileage/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -495,6 +501,10 @@ async function sendHeartbeat(): Promise<void> {
           ? Math.round((Date.now() - trackerDiag.lastCbAt) / 1000)
           : null,
         failStreak: trackerDiag.failStreak,
+        locationAuthorization: ds?.locationAuthorization ?? null,
+        preciseLocation: ds?.preciseLocation ?? null,
+        batteryOptimized: ds?.batteryOptimized ?? null,
+        lowPowerMode: ds?.lowPowerMode ?? null,
       }),
     });
   } catch {
@@ -737,6 +747,33 @@ export async function startMileageTracking(
       if (trackerDiag.flushCount % 10 === 0) void sendHeartbeat();
     }, FLUSH_EVERY_MS);
     void sendHeartbeat();
+    // Instant permission-downgrade reaction (plan §C): the native
+    // plugin fires the moment iOS silently drops Always → While Using.
+    // Set the blocked flag (drives the non-dismissible banner), tell
+    // the server NOW via heartbeat, and let the reminder UI refresh.
+    void (async () => {
+      try {
+        const { onAuthorizationChanged } = await import(
+          "@/lib/mileage/device-status"
+        );
+        authUnsub?.();
+        authUnsub = await onAuthorizationChanged((auth) => {
+          if (auth === "always") {
+            try {
+              localStorage.removeItem(LS_PERM);
+            } catch { /* private mode */ }
+          } else {
+            try {
+              localStorage.setItem(LS_PERM, "1");
+            } catch { /* private mode */ }
+          }
+          window.dispatchEvent(new Event("taxottic:mileage-perm"));
+          void sendHeartbeat();
+        });
+      } catch {
+        /* plugin absent */
+      }
+    })();
     if (watchdogTimer) clearInterval(watchdogTimer);
     trackerDiag.lastCbAt = Date.now(); // arm from "now", not from 0
     watchdogTimer = setInterval(() => {

@@ -49,6 +49,12 @@ export function TrackingHealthBanner({ reason, recoverable, recoverAction }: Pro
             >
               {opening ? "Opening…" : "Open location settings"}
             </button>
+          <a
+            href="/mileage/setup"
+            className="btn-ghost text-xs"
+          >
+            Run the reliability check
+          </a>
             {recoverable > 0 ? (
               <form action={recoverAction}>
                 <button
