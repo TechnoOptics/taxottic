@@ -42,6 +42,34 @@ export type FinalizeResult = {
   poolSize: number;
 };
 
+export type OverlapAction =
+  | { action: "insert" }
+  | { action: "consume_to_keeper"; keeperId: string }
+  | { action: "replace"; deleteIds: string[] };
+
+/**
+ * Pure decision for a candidate trip vs existing overlapping trips:
+ * no overlaps → insert; an existing trip at least as full → consume the
+ * candidate's window to the fullest keeper; otherwise the candidate is
+ * fuller → replace the stale fragments. Extracted from the loop below so
+ * the branch — the most consequential dedupe logic in the pipeline — is
+ * unit-testable without a database.
+ */
+export function resolveOverlapAction(
+  candidateMiles: number,
+  overlaps: readonly { id: string; miles: number }[],
+): OverlapAction {
+  if (overlaps.length === 0) return { action: "insert" };
+  const maxMiles = Math.max(...overlaps.map((o) => o.miles || 0));
+  if (candidateMiles <= maxMiles + 0.005) {
+    const keeper = overlaps.reduce((a, b) =>
+      (a.miles || 0) >= (b.miles || 0) ? a : b,
+    );
+    return { action: "consume_to_keeper", keeperId: keeper.id };
+  }
+  return { action: "replace", deleteIds: overlaps.map((o) => o.id) };
+}
+
 export async function finalizeUserTrips(
   admin: SupabaseClient,
   userId: string,
@@ -158,26 +186,19 @@ export async function finalizeUserTrips(
       .eq("driver_user_id", userId)
       .lte("started_at", endedAt)
       .gte("ended_at", startedAt);
-    if (overlaps && overlaps.length > 0) {
-      const maxMiles = Math.max(
-        ...overlaps.map((o) => Number(o.distance_miles) || 0),
-      );
-      if (trip.distanceMiles <= maxMiles + 0.005) {
-        const keeper = overlaps.reduce((a, b) =>
-          (Number(a.distance_miles) || 0) >= (Number(b.distance_miles) || 0)
-            ? a
-            : b,
-        );
-        await consumeRange(startedAt, endedAt, keeper.id as string);
-        continue;
-      }
-      await admin
-        .from("mileage_trips")
-        .delete()
-        .in(
-          "id",
-          overlaps.map((o) => o.id as string),
-        );
+    const decision = resolveOverlapAction(
+      trip.distanceMiles,
+      (overlaps ?? []).map((o) => ({
+        id: o.id as string,
+        miles: Number(o.distance_miles) || 0,
+      })),
+    );
+    if (decision.action === "consume_to_keeper") {
+      await consumeRange(startedAt, endedAt, decision.keeperId);
+      continue;
+    }
+    if (decision.action === "replace") {
+      await admin.from("mileage_trips").delete().in("id", decision.deleteIds);
     }
 
     const classification = suggestClassification(trip, places);
@@ -203,6 +224,22 @@ export async function finalizeUserTrips(
       .select("id")
       .single();
     if (tripErr || !inserted) {
+      // 23505 on (driver_user_id, started_at) = a CONCURRENT finalize run
+      // (cron / ingest / page-open all segment the same pool) inserted
+      // this exact trip between our overlap read and this insert. We are
+      // the race's loser: consume our window to the winner's trip instead
+      // of double-materializing the drive (which double-counted the
+      // deduction before the unique index existed).
+      if ((tripErr as { code?: string } | null)?.code === "23505") {
+        const { data: winner } = await admin
+          .from("mileage_trips")
+          .select("id")
+          .eq("driver_user_id", userId)
+          .eq("started_at", startedAt)
+          .maybeSingle();
+        if (winner) await consumeRange(startedAt, endedAt, winner.id as string);
+        continue;
+      }
       console.error("[finalize] trip insert failed", tripErr?.message);
       continue;
     }
