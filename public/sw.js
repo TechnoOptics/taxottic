@@ -639,7 +639,13 @@
 // browsers/desktop PWAs can receive the same notifications the native
 // apps do (VAPID subscription created client-side in lib/push/web.ts).
 // No caching change; the bump ships the new handlers to existing clients.
-const CACHE_VERSION = "v96";
+// v97: mileage map rendering changes (#382 dashed approximate trips
+// with full sparse traces, #383 Directions road-snapping) shipped
+// WITHOUT a bump, so WebView clients kept serving the cached pre-#382
+// map — reported on a real device as drives still displaying wrong
+// while the server data was verified healthy. Bump forces existing
+// clients to drop the stale HTML/JS on next nav.
+const CACHE_VERSION = "v97";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
