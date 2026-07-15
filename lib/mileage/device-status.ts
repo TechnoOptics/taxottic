@@ -69,6 +69,56 @@ export async function requestAlwaysUpgrade(): Promise<void> {
   }
 }
 
+/**
+ * FIRM auto-exemption (all Android phones + tablets): make sure the OS
+ * isn't battery-optimizing us, prompting the native "allow background"
+ * dialog automatically when it is — so a driver never has to discover
+ * the setup wizard to keep tracking alive. Called on launch + resume
+ * (see CapacitorNativeInit) whenever tracking is enabled.
+ *
+ * Throttled: at most one auto-prompt per ATTEMPT_INTERVAL so we don't
+ * nag on every resume, but we DO re-prompt after the interval if the
+ * OS silently re-optimized us (Samsung re-enables "sleeping apps" after
+ * firmware updates — the exact repeat failure this guards against).
+ * A grant clears the throttle immediately so the next revocation
+ * re-prompts without delay.
+ */
+const AUTO_EXEMPT_KEY = "taxottic.mileage.batteryPromptAt";
+const ATTEMPT_INTERVAL_MS = 3 * 24 * 60 * 60_000; // 3 days
+
+export async function ensureBatteryExemption(): Promise<void> {
+  const plugin = await guard();
+  if (!plugin) return;
+  let status: DeviceStatus;
+  try {
+    status = await plugin.getStatus();
+  } catch {
+    return;
+  }
+  // Only Android optimizes; batteryOptimized false/undefined = fine.
+  if (status.batteryOptimized !== true) {
+    try {
+      localStorage.removeItem(AUTO_EXEMPT_KEY);
+    } catch {
+      /* private mode */
+    }
+    return;
+  }
+  // Throttle repeated auto-prompts.
+  try {
+    const last = Number(localStorage.getItem(AUTO_EXEMPT_KEY) ?? 0);
+    if (Date.now() - last < ATTEMPT_INTERVAL_MS) return;
+    localStorage.setItem(AUTO_EXEMPT_KEY, String(Date.now()));
+  } catch {
+    /* private mode: still prompt, just no throttle memory */
+  }
+  try {
+    await plugin.requestBatteryExemption();
+  } catch {
+    /* dialog unavailable; the setup wizard remains the manual path */
+  }
+}
+
 export async function requestBatteryExemption(): Promise<boolean> {
   const plugin = await guard();
   if (!plugin) return false;

@@ -649,7 +649,12 @@
 // reliability check" link, new /mileage/setup wizard, tracker gains
 // device-status heartbeat enrichment + instant permission-downgrade
 // reaction. Bump so WebViews drop stale JS (the v96 lesson).
-const CACHE_VERSION = "v98";
+// v99: firm auto battery-exemption — CapacitorNativeInit now
+// auto-prompts the "allow background" dialog on every Android device
+// when tracking is enabled and the OS is optimizing us, so no driver
+// has to find the setup wizard. Client-JS change → bump so WebViews
+// drop the v98 cache.
+const CACHE_VERSION = "v99";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
