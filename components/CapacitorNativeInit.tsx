@@ -285,15 +285,36 @@ export function CapacitorNativeInit() {
             "@/lib/mileage/native-tracker"
           );
           await resumeMileageTrackingIfEnabled();
+          // FIRM battery-exemption: whenever tracking is enabled, make
+          // sure the OS isn't optimizing us away — auto-prompting the
+          // native "allow background" dialog on every phone/tablet, so
+          // no driver has to find the setup wizard to stay tracked.
+          // Throttled + re-checked on resume (Samsung re-optimizes after
+          // firmware updates). No-ops on iOS / older binaries.
+          const ensureExempt = async () => {
+            try {
+              if (localStorage.getItem("taxottic.mileage.enabled") !== "1")
+                return;
+              const { ensureBatteryExemption } = await import(
+                "@/lib/mileage/device-status"
+              );
+              await ensureBatteryExemption();
+            } catch {
+              /* best-effort */
+            }
+          };
+          void ensureExempt();
           try {
             const { App } = await import("@capacitor/app");
             App.addListener("appStateChange", (state) => {
               if (state.isActive) {
                 void resumeMileageTrackingIfEnabled().catch(() => {});
+                void ensureExempt();
               }
             });
             App.addListener("resume", () => {
               void resumeMileageTrackingIfEnabled().catch(() => {});
+              void ensureExempt();
             });
           } catch {
             /* @capacitor/app missing in this binary, best-effort */
