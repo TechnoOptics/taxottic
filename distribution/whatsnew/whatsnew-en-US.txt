@@ -1,0 +1,5 @@
+Big reliability update for automatic mileage tracking:
+- Drives now capture and appear far more reliably in the background.
+- We detect and alert you the moment tracking is interrupted, so you never silently lose a drive.
+- Recovered drives follow the real roads instead of a straight line.
+- Cleaner app launch and a faster, tidier experience throughout.

@@ -32,6 +32,10 @@ on:
         description: "Play track (internal | alpha | beta | production)"
         required: false
         default: "internal"
+      rollout_fraction:
+        description: "Staged rollout fraction for production (e.g. 0.2 = 20%). Blank = full release."
+        required: false
+        default: ""
 
 jobs:
   android-release:
@@ -195,7 +199,12 @@ jobs:
           packageName: com.taxottic.app
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: ${{ inputs.track || 'internal' }}
-          status: completed
+          # Staged rollout when a fraction is given (production launches),
+          # else a full release (internal/test tracks). userFraction only
+          # applies with status inProgress.
+          status: ${{ inputs.rollout_fraction != '' && 'inProgress' || 'completed' }}
+          userFraction: ${{ inputs.rollout_fraction }}
+          whatsNewDirectory: distribution/whatsnew
           changesNotSentForReview: false
 
       - uses: actions/upload-artifact@v4
