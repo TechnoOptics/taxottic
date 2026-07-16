@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { finalizeUserTrips } from "@/lib/mileage/finalize";
+import { finalizeUserTrips, reconcileBrokenTrips } from "@/lib/mileage/finalize";
 import { evaluateTrackerStall, WATCH_WINDOW_MS } from "@/lib/mileage/stall";
 import { notify } from "@/lib/push";
 
@@ -91,6 +91,31 @@ export async function GET(req: NextRequest) {
         err instanceof Error ? err.message : String(err),
       );
     }
+  }
+
+  // ── Self-healing reconcile ───────────────────────────────────────
+  // Catch any trip left with a "straight line across no road" gap (its
+  // window holds more usable raw points than were drawn) and rebuild it
+  // from the raw window. Idempotent + never-shrink, so healthy trips are
+  // untouched; a future regression self-heals within one cron interval.
+  // Wrapped so a reconcile failure can never break finalization.
+  let healed = 0;
+  try {
+    const reconcile = await reconcileBrokenTrips(admin, {
+      sinceIso: new Date(Date.now() - 45 * 24 * 60 * 60_000).toISOString(),
+      limit: 200,
+    });
+    healed = reconcile.healed;
+    if (reconcile.scanned > 0) {
+      console.log(
+        `[mileage-finalize] reconcile scanned=${reconcile.scanned} healed=${reconcile.healed}`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      "[mileage-finalize] reconcile failed",
+      err instanceof Error ? err.message : String(err),
+    );
   }
 
   // ── Tracker-stall escalation ─────────────────────────────────────
@@ -224,7 +249,7 @@ export async function GET(req: NextRequest) {
   }
 
   console.log(
-    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} stallsNotified=${stallsNotified}`,
+    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified}`,
   );
 
   return NextResponse.json({
@@ -232,5 +257,6 @@ export async function GET(req: NextRequest) {
     pairs: pairs.size,
     processed,
     tripsCreated: totalTrips,
+    healed,
   });
 }

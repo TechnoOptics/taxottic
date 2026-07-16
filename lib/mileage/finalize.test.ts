@@ -37,3 +37,29 @@ describe("resolveOverlapAction (finalize dedupe decision)", () => {
     expect(d).toEqual({ action: "consume_to_keeper", keeperId: "real" });
   });
 });
+
+import { shouldReplaceTrack } from "./finalize";
+
+describe("shouldReplaceTrack (render never-shrink invariant)", () => {
+  it("replaces a broken trip with a fuller rebuild", () => {
+    expect(shouldReplaceTrack(2, 167)).toBe(true); // Abel's drive
+  });
+
+  it("no-op on a healthy trip (equal counts still replace, idempotent)", () => {
+    expect(shouldReplaceTrack(130, 130)).toBe(true);
+  });
+
+  it("REFUSES to shrink a good trip from a truncated/failed window read", () => {
+    expect(shouldReplaceTrack(167, 40)).toBe(false);
+    expect(shouldReplaceTrack(130, 129)).toBe(false);
+  });
+
+  it("materialises a fresh insert (0 existing) from the raw window", () => {
+    expect(shouldReplaceTrack(0, 5)).toBe(true);
+  });
+
+  it("never renders a sub-2-point track", () => {
+    expect(shouldReplaceTrack(0, 1)).toBe(false);
+    expect(shouldReplaceTrack(0, 0)).toBe(false);
+  });
+});
