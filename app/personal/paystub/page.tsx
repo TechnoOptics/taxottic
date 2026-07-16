@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requirePersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { PaystubUploader } from "@/components/PaystubUploader";
@@ -14,6 +15,7 @@ import { applyPaystubAnnualization } from "./actions";
  * that drives the personal forecast + bracket stats.
  */
 export default async function PersonalPaystubPage() {
+  await requirePersonalAccess();
   const { admin, user } = await requireUserWithAdmin();
   const taxYear = new Date().getUTCFullYear();
 

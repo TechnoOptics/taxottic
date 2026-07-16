@@ -663,7 +663,14 @@
 // wedged plugin can't silently kill device heartbeats (observed on a
 // real device: flushes fine, heartbeats stopped), appVersion now sent,
 // result surfaced in trackerDiag. Client-JS change → bump.
-const CACHE_VERSION = "v101";
+// v102: employee personal-hub gate. An account whose only role is
+// being someone else's employee (owns no company) no longer gets the
+// personal tax hub for free — the Personal nav is replaced by an
+// upgrade upsell, /dashboard sends them to their work home, and the
+// /personal/* routes redirect to /personal/upgrade. Owners and
+// employees with their own paid plan are unaffected. Client chrome
+// (LeftRail/AppHeader) changed → bump.
+const CACHE_VERSION = "v102";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requirePersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUser } from "@/lib/auth";
 import { formatCents } from "@/lib/tax/forecast";
@@ -26,6 +27,7 @@ type Row = {
  * company side.
  */
 export default async function PersonalExpensesPage() {
+  await requirePersonalAccess();
   const { supabase, user } = await requireUser();
   const now = new Date();
   const taxYear = now.getUTCFullYear();

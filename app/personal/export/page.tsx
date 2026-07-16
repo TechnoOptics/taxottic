@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requirePersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { redirect } from "next/navigation";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { forecast, formatCents, type ForecastResult } from "@/lib/tax/forecast";
@@ -42,6 +43,7 @@ export default async function PersonalExportPage({
 }: {
   searchParams: Search;
 }) {
+  await requirePersonalAccess();
   const { admin, user } = await requireUserWithAdmin();
   const { year } = await searchParams;
   const currentYear = new Date().getUTCFullYear();
