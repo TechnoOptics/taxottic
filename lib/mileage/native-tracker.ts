@@ -221,6 +221,7 @@ export const trackerDiag = {
   startError: "" as string,
   cbHits: 0 as number,
   driveEndReason: "" as string,
+  hbLastResult: "" as string,
   cbLastError: "" as string,
   /** Consecutive failed flushes; drives the backoff (skip ticks). */
   failStreak: 0 as number,
@@ -517,6 +518,17 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
  * the last one it saw. Native-plugin fields (authorization, battery)
  * join this payload when the DeviceStatus plugin ships.
  */
+/** Time-box a native-bridge promise: a hung plugin call must degrade to
+ *  null, never wedge the caller (observed: a device whose heartbeats
+ *  stopped entirely while flushes kept working — the un-time-boxed
+ *  getDeviceStatus await was the only difference between the paths). */
+function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p.catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 async function sendHeartbeat(): Promise<void> {
   if (!companyId) return;
   try {
@@ -526,15 +538,33 @@ async function sendHeartbeat(): Promise<void> {
     // Native device truth (authorization level, battery optimization)
     // when the DeviceStatus plugin is in this binary; null on web/old
     // builds and the heartbeat still carries the JS-visible fields.
-    const { getDeviceStatus } = await import("@/lib/mileage/device-status");
-    const ds = await getDeviceStatus();
-    await fetch("/api/mileage/heartbeat", {
+    // TIME-BOXED: device truth is a bonus, the heartbeat itself is the
+    // point — it must go out even when the native bridge is wedged.
+    const ds = await within(
+      import("@/lib/mileage/device-status").then((m) => m.getDeviceStatus()),
+      3_000,
+    );
+    // App version (was never sent — the manager health view showed
+    // app_version null for every device). Guarded + time-boxed like
+    // everything else on the bridge.
+    let appVersion: string | null = null;
+    try {
+      const info = await within(
+        import("@capacitor/app").then((m) => m.App.getInfo()),
+        2_000,
+      );
+      appVersion = info?.version ?? null;
+    } catch {
+      /* web / plugin missing */
+    }
+    const res = await fetch("/api/mileage/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
         companyId,
         platform: cap?.getPlatform?.() ?? "web",
+        appVersion,
         trackingEnabled: tracking,
         bufferSize: buffer.length,
         lastCbAgeS: trackerDiag.lastCbAt
@@ -547,8 +577,12 @@ async function sendHeartbeat(): Promise<void> {
         lowPowerMode: ds?.lowPowerMode ?? null,
       }),
     });
-  } catch {
-    /* best-effort */
+    trackerDiag.hbLastResult = `${res.status} @ ${new Date()
+      .toISOString()
+      .slice(11, 19)}`;
+  } catch (e) {
+    trackerDiag.hbLastResult =
+      "err:" + String((e as Error)?.message ?? e).slice(0, 60);
   }
 }
 

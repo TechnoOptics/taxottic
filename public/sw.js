@@ -659,7 +659,11 @@
 // the DeviceStatus plugin) or after a 6-min stationary fallback,
 // instead of only the server's 5-min parked timer. Client-JS change
 // (native-tracker + wizard row) → bump so WebViews drop v99.
-const CACHE_VERSION = "v100";
+// v101: heartbeat resilience — time-boxed native-bridge reads so a
+// wedged plugin can't silently kill device heartbeats (observed on a
+// real device: flushes fine, heartbeats stopped), appVersion now sent,
+// result surfaced in trackerDiag. Client-JS change → bump.
+const CACHE_VERSION = "v101";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
