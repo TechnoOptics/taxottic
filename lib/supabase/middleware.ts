@@ -30,6 +30,10 @@ const PUBLIC_PATHS = [
   "/calculators",
   "/compare",
   "/changelog",
+  // The install link we hand to testers and new users. Anonymous by
+  // definition: anyone hitting /get has no account yet, so bouncing it
+  // through /login would defeat the entire point of the link.
+  "/get",
   "/example",
   "/manifest.webmanifest",
   "/icon.svg",
