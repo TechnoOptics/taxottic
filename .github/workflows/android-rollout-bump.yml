@@ -1,0 +1,75 @@
+name: Android — Bump production rollout
+
+# Adjusts the EXISTING production release's staged-rollout fraction via
+# the Play Developer API — no rebuild, no new versionCode. Needed
+# because re-running android-release.yml builds from current main,
+# which may carry manifest changes (e.g. ACTIVITY_RECOGNITION) that the
+# in-review release must not inherit.
+#
+# fraction: 0<x<1 keeps a staged rollout at x; "1" or blank completes
+# the rollout (100%).
+
+on:
+  workflow_dispatch:
+    inputs:
+      fraction:
+        description: "New rollout fraction (e.g. 0.5), or 1 / blank for full release"
+        required: false
+        default: "1"
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bump rollout
+        env:
+          PLAY_SERVICE_ACCOUNT: ${{ secrets.PLAY_SERVICE_ACCOUNT }}
+          FRACTION: ${{ inputs.fraction }}
+          PKG: com.taxottic.app
+        run: |
+          cat > /tmp/bump.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+          const sa = JSON.parse(process.env.PLAY_SERVICE_ACCOUNT);
+          const PKG = process.env.PKG;
+          const fracRaw = (process.env.FRACTION || "1").trim();
+          const frac = fracRaw === "" ? 1 : Number(fracRaw);
+          if (!(frac > 0 && frac <= 1)) { console.error("::error::bad fraction"); process.exit(1); }
+
+          const b64u = (x) => Buffer.from(x).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const jwtHead = b64u(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+          const jwtBody = b64u(JSON.stringify({
+            iss: sa.client_email,
+            scope: "https://www.googleapis.com/auth/androidpublisher",
+            aud: "https://oauth2.googleapis.com/token",
+            iat: now, exp: now + 3000,
+          }));
+          const sig = crypto.sign("sha256", Buffer.from(`${jwtHead}.${jwtBody}`), sa.private_key).toString("base64url");
+          const tok = await (await fetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwtHead}.${jwtBody}.${sig}`,
+          })).json();
+          if (!tok.access_token) { console.error("::error::auth failed", JSON.stringify(tok)); process.exit(1); }
+          const H = { Authorization: `Bearer ${tok.access_token}`, "Content-Type": "application/json" };
+          const API = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PKG}`;
+          const j = async (r) => { const t = await r.text(); const o = t ? JSON.parse(t) : {}; if (!r.ok) { console.error("::error::" + JSON.stringify(o)); process.exit(1); } return o; };
+
+          const edit = await j(await fetch(`${API}/edits`, { method: "POST", headers: H, body: "{}" }));
+          const track = await j(await fetch(`${API}/edits/${edit.id}/tracks/production`, { headers: H }));
+          const releases = track.releases || [];
+          const active = releases.find((r) => r.status === "inProgress") || releases.find((r) => r.status === "completed");
+          if (!active) { console.error("::error::no active production release found"); process.exit(1); }
+          console.log(`Current: status=${active.status} fraction=${active.userFraction ?? "n/a"} versionCodes=${active.versionCodes}`);
+
+          if (frac >= 1) { active.status = "completed"; delete active.userFraction; }
+          else { active.status = "inProgress"; active.userFraction = frac; }
+
+          await j(await fetch(`${API}/edits/${edit.id}/tracks/production`, {
+            method: "PUT", headers: H,
+            body: JSON.stringify({ track: "production", releases }),
+          }));
+          const commit = await j(await fetch(`${API}/edits/${edit.id}:commit`, { method: "POST", headers: H }));
+          console.log(`✅ Rollout now ${frac >= 1 ? "FULL (completed)" : `${frac * 100}% (inProgress)`} — edit ${commit.id} committed.`);
+          SCRIPT
+          node /tmp/bump.mjs
