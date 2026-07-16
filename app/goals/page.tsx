@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { requirePersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { AppHeader } from "@/components/AppHeader";
 import { formatCents } from "@/lib/tax/forecast";
 import { addGoal, deleteGoal, recordSaved } from "./actions";
@@ -13,6 +14,7 @@ const GOAL_TYPES = [
 ];
 
 export default async function GoalsPage() {
+  await requirePersonalAccess();
   const { supabase, user } = await requireUser();
   const taxYear = new Date().getUTCFullYear();
 

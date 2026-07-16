@@ -84,6 +84,10 @@ type Props = {
   /** Companies the user is a member of, used to populate the switcher.
    *  Server-fetched in AppHeader so first paint already has the list. */
   companies?: Company[];
+  /** Employee-only accounts without their own paid personal plan: the
+   *  personal workspace is replaced by an upgrade upsell (they get the
+   *  business side only). Owners/subscribers see the full personal nav. */
+  personalLocked?: boolean;
 };
 
 // Shared icon frame, outline style, 24×24, matched to the app's UI weight.
@@ -296,6 +300,7 @@ export function LeftRail({
   mode = "rail",
   onDismiss,
   companies = [],
+  personalLocked = false,
 }: Props) {
   const pathname = usePathname();
   const urlPublicId = extractActivePublicId(pathname);
@@ -445,7 +450,7 @@ export function LeftRail({
   const toggleSection = (
     <div className="grid grid-cols-2 gap-1 rounded-xl bg-cream/70 dark:bg-forest-700/60 p-1 mb-1">
       <Link
-        href="/personal/forecast"
+        href={personalLocked ? "/personal/upgrade" : "/personal/forecast"}
         onClick={onDismiss}
         aria-current={!onBusiness ? "true" : undefined}
         className={segBase + (!onBusiness ? segActive : segIdle)}
@@ -472,9 +477,34 @@ export function LeftRail({
     </div>
   );
 
+  // Employee-only accounts without a personal plan don't get the personal
+  // nav at all — a single upsell entry replaces it (their work side is
+  // fully available on the Business tab). Owners/subscribers skip this.
+  const personalUpsell = (
+    <ul className="grid gap-1" role="navigation">
+      <li>
+        <Link
+          href="/personal/upgrade"
+          onClick={onDismiss}
+          className={baseLink + " text-forest-800 hover:bg-cream"}
+          title={mode === "rail" ? "Personal tax tools" : undefined}
+        >
+          <span className="shrink-0 text-gold-600">
+            <Icon>
+              <Path d="M12 2l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 15.9 6.8 18.2l1-5.8L3.5 8.2l5.9-.9z" />
+            </Icon>
+          </span>
+          <span className="min-w-0 truncate">Get personal tax tools</span>
+        </Link>
+      </li>
+    </ul>
+  );
+
   // Personal workspace nav (individual tax side). Deliberately free of
   // anything business, no company, no mileage, no chat, no team.
-  const personalSection = (
+  const personalSection = personalLocked ? (
+    personalUpsell
+  ) : (
     <ul className="grid gap-1" role="navigation">
       {PERSONAL_ITEMS.map((item) => {
         const active = isActive(item.href);

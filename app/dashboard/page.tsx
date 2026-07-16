@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getPersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { redirect } from "next/navigation";
 import {
   requireUserWithAdmin,
@@ -66,6 +67,13 @@ export default async function DashboardPage() {
       `/onboarding/employee-role?company_id=${pendingOnboarding.company_id}`,
     );
   }
+
+  // Employee-only accounts without their own paid personal plan don't get
+  // the personal hub (the dashboard). Send them to their work home; the
+  // personal side is offered via the /personal/upgrade upsell. Owners and
+  // subscribed employees fall through to the normal dashboard.
+  const { locked: personalLocked } = await getPersonalAccess();
+  if (personalLocked) redirect("/mileage");
 
   // Fan out the independent top-of-dashboard queries in one round-trip.
   // Previously each of these awaited serially: evaluateBadges →

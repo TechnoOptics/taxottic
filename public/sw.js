@@ -663,13 +663,16 @@
 // wedged plugin can't silently kill device heartbeats (observed on a
 // real device: flushes fine, heartbeats stopped), appVersion now sent,
 // result surfaced in trackerDiag. Client-JS change → bump.
-// v102: QA pass — (1) location-settings button now deep-links to the
-// app's Location permission screen (was bouncing to generic App info),
-// (2) core business surfaces (income, money-in, deductions, sales-tax,
-// export, CPA) now redirect non-manager members to their expenses, so
-// employees never reach company financials by direct URL. Client-JS
-// change (native-tracker) → bump.
-const CACHE_VERSION = "v102";
+// v102: QA pass — location-settings deep-link + gate business surfaces
+// for members (see #404).
+// v103: employee personal-hub gate. An account whose only role is
+// being someone else's employee (owns no company) no longer gets the
+// personal tax hub for free — the Personal nav is replaced by an
+// upgrade upsell, /dashboard sends them to their work home, and the
+// /personal/* routes redirect to /personal/upgrade. Owners and
+// employees with their own paid plan are unaffected. Client chrome
+// (LeftRail/AppHeader) changed → bump.
+const CACHE_VERSION = "v103";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

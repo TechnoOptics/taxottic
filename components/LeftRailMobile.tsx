@@ -34,7 +34,13 @@ type Company = {
  * `lg:hidden` keeps the FAB out of the way when the desktop rail is
  * showing.
  */
-export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
+export function LeftRailMobile({
+  companies = [],
+  personalLocked = false,
+}: {
+  companies?: Company[];
+  personalLocked?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -135,6 +141,7 @@ export function LeftRailMobile({ companies = [] }: { companies?: Company[] }) {
                 mode="sheet"
                 onDismiss={() => setOpen(false)}
                 companies={companies}
+                personalLocked={personalLocked}
               />
             </div>
           </div>,

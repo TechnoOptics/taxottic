@@ -3,6 +3,7 @@ import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { WebOnly } from "./WebOnly";
 import { DarkThemeMount } from "./DarkThemeMount";
+import { isPersonalLocked, type MembershipRole } from "@/lib/entitlements/personal-access";
 import { LeftRail } from "./LeftRail";
 import { LeftRailMobile } from "./LeftRailMobile";
 import { SmartSearch } from "./SmartSearch";
@@ -116,6 +117,39 @@ export async function AppHeader({
     name: m.company.name,
     role: m.role,
   }));
+
+  // Employee personal-hub lock: an account whose only relationship is
+  // being someone else's employee (no company of their own) doesn't get
+  // the personal tax hub unless they hold their own paid plan. Computed
+  // here (memberships already loaded) so the rail can hide the Personal
+  // workspace and offer the upsell instead. Owners fall through unlocked.
+  let personalLocked = false;
+  if (user && homeHref !== "/") {
+    const roles = memberships.map((m) => m.role as MembershipRole);
+    // Only employee-only accounts can be locked, so only they pay for the
+    // extra subscription read. Wrapped defensively: a failed read must
+    // never break the header — it just leaves the personal nav visible
+    // (the per-page requirePersonalAccess guard is the real enforcement).
+    if (
+      roles.length > 0 &&
+      !roles.some((r) => r === "manager" || r === "lead")
+    ) {
+      try {
+        const { data: sub } = await supabase
+          .from("subscriptions")
+          .select("plan, status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        personalLocked = isPersonalLocked({
+          roles,
+          plan: (sub?.plan as string | null) ?? null,
+          status: (sub?.status as string | null) ?? null,
+        });
+      } catch {
+        personalLocked = false;
+      }
+    }
+  }
 
   // Outstanding tasks (unclassified drives + transactions awaiting a
   // business/personal or category call). Follows the same "active
@@ -252,7 +286,7 @@ export async function AppHeader({
           {/* Consumer surface only: hamburger that opens the same
               left rail in a sheet on < lg widths. Admin / HQ host
               still renders only the wordmark + UserMenu pair. */}
-          {homeHref !== "/" ? <LeftRailMobile companies={companies} /> : null}
+          {homeHref !== "/" ? <LeftRailMobile companies={companies} personalLocked={personalLocked} /> : null}
           <Wordmark href={homeHref} size="sm" tone="cream" />
           {/* Smart search powered by Bella. OPT-IN per user via
               /settings (profile.show_smart_search). When on, it
@@ -318,7 +352,7 @@ export async function AppHeader({
           handles those via the hamburger). Consumer surfaces only -
           admin / HQ host doesn't get it because the rail's items
           don't apply. */}
-      {homeHref !== "/" ? <LeftRail mode="rail" companies={companies} /> : null}
+      {homeHref !== "/" ? <LeftRail mode="rail" companies={companies} personalLocked={personalLocked} /> : null}
       {/* Flip <html data-theme="dark"> for the duration of any
           authenticated page render. Public marketing routes don't
           mount <AppHeader> so they stay light by default. See

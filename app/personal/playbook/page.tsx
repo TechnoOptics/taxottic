@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requirePersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { SavingsGoalCard } from "@/components/SavingsGoalCard";
@@ -67,6 +68,7 @@ const CATEGORY_INTRO: Record<GoalCategory, string> = {
 };
 
 export default async function PersonalPlaybookPage() {
+  await requirePersonalAccess();
   const { admin, user } = await requireUserWithAdmin();
   const taxYear = new Date().getUTCFullYear();
 

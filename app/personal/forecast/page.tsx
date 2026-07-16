@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requirePersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
@@ -38,6 +39,7 @@ import { buildPersonalForecastInput } from "@/lib/tax/personal-forecast-input";
  * type and kicks them over to /c/[publicId]/forecast.
  */
 export default async function PersonalForecastPage() {
+  await requirePersonalAccess();
   const { admin, user } = await requireUserWithAdmin();
   const supabase = await createClient();
   const taxYear = new Date().getUTCFullYear();
