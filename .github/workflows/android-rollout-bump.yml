@@ -62,12 +62,24 @@ jobs:
           if (!active) { console.error("::error::no active production release found"); process.exit(1); }
           console.log(`Current: status=${active.status} fraction=${active.userFraction ?? "n/a"} versionCodes=${active.versionCodes}`);
 
-          if (frac >= 1) { active.status = "completed"; delete active.userFraction; }
-          else { active.status = "inProgress"; active.userFraction = frac; }
+          // Play allows exactly ONE completed release per track: completing
+          // the rollout REPLACES the previously-live release, so the track
+          // update must contain only the new release. A fractional rollout
+          // keeps the old completed release (it serves the remaining users).
+          let newReleases;
+          if (frac >= 1) {
+            active.status = "completed";
+            delete active.userFraction;
+            newReleases = [active];
+          } else {
+            active.status = "inProgress";
+            active.userFraction = frac;
+            newReleases = releases.filter((r) => r === active || r.status === "completed");
+          }
 
           await j(await fetch(`${API}/edits/${edit.id}/tracks/production`, {
             method: "PUT", headers: H,
-            body: JSON.stringify({ track: "production", releases }),
+            body: JSON.stringify({ track: "production", releases: newReleases }),
           }));
           const commit = await j(await fetch(`${API}/edits/${edit.id}:commit`, { method: "POST", headers: H }));
           console.log(`✅ Rollout now ${frac >= 1 ? "FULL (completed)" : `${frac * 100}% (inProgress)`} — edit ${commit.id} committed.`);
