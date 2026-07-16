@@ -1,0 +1,91 @@
+name: iOS — Review status
+
+# Read-only. Answers "where is our submission?" from App Store Connect,
+# which is the only authoritative source: the public storefront and the
+# iTunes lookup API both lag approval and cache, so neither can tell
+# "still in review" apart from "approved, not yet propagated".
+#
+# Reuses the same ASC_* secrets as ios-appstore-submit.yml. Queries only,
+# it never mutates a version, a build, or a submission.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          cat > /tmp/status.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+          const KID = process.env.ASC_KEY_ID;
+          const ISS = process.env.ASC_ISSUER_ID;
+          const PK = process.env.ASC_PRIVATE_KEY;
+          const APP_ID = "6767039803";
+          if (!KID || !ISS || !PK) {
+            console.error("::error::ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY missing");
+            process.exit(1);
+          }
+          const b64u = (x) => Buffer.from(x).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const head = b64u(JSON.stringify({ alg: "ES256", kid: KID, typ: "JWT" }));
+          const body = b64u(JSON.stringify({
+            iss: ISS, iat: now, exp: now + 900, aud: "appstoreconnect-v1",
+          }));
+          const sig = crypto
+            .sign("sha256", Buffer.from(`${head}.${body}`), { key: PK, dsaEncoding: "ieee-p1363" })
+            .toString("base64url");
+          const TOK = `${head}.${body}.${sig}`;
+          const api = async (path) => {
+            const r = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              headers: { Authorization: `Bearer ${TOK}` },
+            });
+            const t = await r.text();
+            if (!r.ok) { console.error("::error::" + t.slice(0, 400)); process.exit(1); }
+            return t ? JSON.parse(t) : {};
+          };
+
+          const vers = await api(
+            `/v1/apps/${APP_ID}/appStoreVersions?filter[platform]=IOS&limit=5`,
+          );
+          console.log("=== App Store versions (newest first) ===");
+          for (const v of vers.data ?? []) {
+            const a = v.attributes;
+            console.log(`  ${String(a.versionString).padEnd(8)} ${a.appStoreState}`);
+          }
+
+          const latest = (vers.data ?? [])[0];
+          if (!latest) { console.log("no versions found"); process.exit(0); }
+          const st = latest.attributes.appStoreState;
+          const ver = latest.attributes.versionString;
+
+          // Name the attached build so "approved" is never ambiguous about
+          // WHICH binary Apple cleared.
+          let buildNum = "?";
+          try {
+            const b = await api(`/v1/appStoreVersions/${latest.id}/build`);
+            buildNum = b?.data?.attributes?.version ?? "none attached";
+          } catch { buildNum = "none attached"; }
+
+          console.log("");
+          console.log(`LATEST: ${ver} (build ${buildNum}) => ${st}`);
+          if (st === "READY_FOR_SALE") {
+            console.log("APPROVED and RELEASED. Live on the App Store.");
+          } else if (st === "PENDING_DEVELOPER_RELEASE") {
+            console.log("APPROVED, waiting on a manual release from App Store Connect.");
+          } else if (st === "IN_REVIEW") {
+            console.log("NOT YET. Apple is actively reviewing it.");
+          } else if (st === "WAITING_FOR_REVIEW") {
+            console.log("NOT YET. Queued, review has not started.");
+          } else if (st === "REJECTED" || st === "DEVELOPER_REJECTED" || st === "METADATA_REJECTED") {
+            console.log("REJECTED. Check Resolution Center in App Store Connect.");
+          } else {
+            console.log(`State is ${st}.`);
+          }
+          SCRIPT
+          node /tmp/status.mjs
