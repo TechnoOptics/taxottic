@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { requireBusinessManager } from "@/lib/tax/require-business-manager";
 import { formatCents } from "@/lib/tax/forecast";
 
 type Params = Promise<{ publicId: string }>;
@@ -30,7 +31,8 @@ const SOURCE_LABELS: Record<string, string> = {
  */
 export default async function MoneyInHub({ params }: { params: Params }) {
   const { publicId } = await params;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, role } = await loadCompanyByPublicId(publicId);
+  requireBusinessManager(role, publicId);
   const taxYear = new Date().getUTCFullYear();
 
   const { data: rows } = await supabase

@@ -204,6 +204,40 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
         }
     }
 
+    /** Deep-link straight to THIS app's Location permission screen so
+     *  the user can flip "Allow all the time" without hunting through
+     *  App info → Permissions → Location. The Capgo plugin's
+     *  openSettings() only reaches the generic app-details page, which
+     *  read as "the location button does nothing useful". Falls back to
+     *  app-details if the manage-permission intent is unavailable. */
+    @PluginMethod
+    public void openLocationSettings(PluginCall call) {
+        Context ctx = getContext();
+        String pkg = ctx.getPackageName();
+        Uri uri = Uri.fromParts("package", pkg, null);
+        // MANAGE_APP_PERMISSION targets the specific permission group on
+        // API 31+; fall back to the app's permission list, then details.
+        Intent[] tries = new Intent[] {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                ? new Intent("android.intent.action.MANAGE_APP_PERMISSION")
+                    .putExtra("android.intent.extra.PACKAGE_NAME", pkg)
+                    .putExtra("android.intent.extra.PERMISSION_GROUP_NAME",
+                              "android.permission-group.LOCATION")
+                : null,
+            new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri),
+        };
+        for (Intent intent : tries) {
+            if (intent == null) continue;
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                ctx.startActivity(intent);
+                call.resolve();
+                return;
+            } catch (Exception ignored) { /* try next */ }
+        }
+        call.reject("location_settings_unavailable");
+    }
+
     /** Policy-safe fallback: the full battery-optimization list where
      *  the user exempts Taxottic manually. */
     @PluginMethod

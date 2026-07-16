@@ -2,6 +2,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { ProGate } from "@/components/ProGate";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { requireBusinessManager } from "@/lib/tax/require-business-manager";
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { createServiceClient } from "@/lib/supabase/server";
 import { PreparerPanel } from "./PreparerPanel";
@@ -20,8 +21,9 @@ type Params = Promise<{ publicId: string }>;
 
 export default async function PreparerPage({ params }: { params: Params }) {
   const { publicId } = await params;
-  const { supabase, user, company, isManager } =
+  const { supabase, user, company, isManager, role } =
     await loadCompanyByPublicId(publicId);
+  requireBusinessManager(role, publicId);
 
   const { gates } = await getActiveFeatureGates(supabase, user.id);
   if (!gates.taxPreparer) {

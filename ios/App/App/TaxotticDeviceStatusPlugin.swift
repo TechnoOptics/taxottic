@@ -23,7 +23,8 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestAlwaysUpgrade", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "queryStepsSince", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "queryStepsSince", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openLocationSettings", returnType: CAPPluginReturnPromise)
     ]
 
     private var manager: CLLocationManager?
@@ -109,7 +110,19 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
         }
     }
 
-    public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    /// Open this app's iOS Settings page (where Location lives). iOS
+    /// offers no deeper per-permission deep link, but this lands the
+    /// user one tap from Location → Always, unlike a generic bounce.
+    @objc func openLocationSettings(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            call.resolve()
+        }
+    }
+
+        public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         notifyListeners("authorizationChanged", data: [
             "locationAuthorization": authString(manager.authorizationStatus),
             "preciseLocation": manager.accuracyAuthorization == .fullAccuracy

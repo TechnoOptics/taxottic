@@ -949,8 +949,20 @@ export function getMileageTrackingUiState(): {
   }
 }
 
-/** Open the OS location-settings screen for this app (plugin-native). */
+/** Open the OS location-settings screen for this app. Prefers our
+ *  TaxotticDeviceStatus plugin, which deep-links straight to the app's
+ *  Location permission page (Android) / Settings page (iOS); falls back
+ *  to the Capgo plugin's openSettings (which only reaches the generic
+ *  App-info page) when our plugin isn't in this binary. */
 export async function openMileageLocationSettings(): Promise<void> {
+  try {
+    const { openLocationSettingsPrecise } = await import(
+      "@/lib/mileage/device-status"
+    );
+    if (await openLocationSettingsPrecise()) return;
+  } catch {
+    /* device-status plugin absent — fall through to Capgo openSettings */
+  }
   const bg = await guard();
   try {
     await (bg as { openSettings?: () => Promise<void> } | null)?.openSettings?.();
@@ -1013,10 +1025,20 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   await startMileageTracking(savedCompany);
 }
 
-/** Open the OS app-settings screen so the user can flip Location to
- *  "Always" (the only way background drive-capture works). No-ops off
+/** Open the OS location-settings screen so the user can flip Location to
+ *  "Always" (the only way background drive-capture works). Prefers our
+ *  TaxotticDeviceStatus deep-link to the Location permission page, then
+ *  falls back to the Capgo plugin's coarser openSettings. No-ops off
  *  native. Never awaits `.then` on the native proxy (see stopBgSafely). */
 export async function openLocationSettings(): Promise<void> {
+  try {
+    const { openLocationSettingsPrecise } = await import(
+      "@/lib/mileage/device-status"
+    );
+    if (await openLocationSettingsPrecise()) return;
+  } catch {
+    /* device-status plugin absent — fall through to Capgo openSettings */
+  }
   const bg = await guard();
   if (!bg) return;
   try {

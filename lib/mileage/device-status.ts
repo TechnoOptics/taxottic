@@ -27,6 +27,10 @@ type DeviceStatusPlugin = {
   openBatterySettings(): Promise<void>;
   queryStepsSince(opts: { fromMs: number }): Promise<{ steps: number; available: boolean }>;
   requestActivityRecognition(): Promise<{ granted: boolean }>;
+  /** Deep-links to THIS app's Location permission screen (Android) or
+   *  the app's Settings page (iOS) — closer than the generic app-details
+   *  page the Capgo plugin's openSettings can reach. */
+  openLocationSettings(): Promise<void>;
   addListener(
     event: "authorizationChanged",
     cb: (data: {
@@ -71,6 +75,24 @@ export async function requestAlwaysUpgrade(): Promise<void> {
     await plugin?.requestAlwaysUpgrade();
   } catch {
     /* no-op */
+  }
+}
+
+/**
+ * Deep-link to the app's Location permission screen. Returns true if our
+ * TaxotticDeviceStatus plugin handled it (Android: the specific Location
+ * permission page; iOS: the app's Settings page). Returns false when the
+ * plugin isn't in this binary, so the caller can fall back to the Capgo
+ * plugin's coarser openSettings() (which only reaches App info).
+ */
+export async function openLocationSettingsPrecise(): Promise<boolean> {
+  const plugin = await guard();
+  if (!plugin) return false;
+  try {
+    await plugin.openLocationSettings();
+    return true;
+  } catch {
+    return false;
   }
 }
 
