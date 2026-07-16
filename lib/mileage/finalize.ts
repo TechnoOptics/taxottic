@@ -4,8 +4,10 @@ import {
   suggestClassification,
   STATIONARY_DWELL_MS,
   type Place,
+  type Classification,
 } from "./segmentation";
 import { tripDeductionCents } from "./deduction";
+import { buildTrackFromRaw, type RawPoint } from "./track";
 import { notify } from "@/lib/push";
 
 /**
@@ -68,6 +70,120 @@ export function resolveOverlapAction(
     return { action: "consume_to_keeper", keeperId: keeper.id };
   }
   return { action: "replace", deleteIds: overlaps.map((o) => o.id) };
+}
+
+/**
+ * Rebuild a trip's rendered track (mileage_points) + distance from ALL
+ * raw staging points inside its own time window, then persist. This is
+ * what keeps the rendered polyline honest: the segmentation pool only
+ * ever sees currently-unconsumed points, so a drive whose points arrived
+ * across multiple flush batches (the delayed-flush / battery case) could
+ * be materialised from a partial pool while consume-by-range swallowed
+ * the rest — a straight line across the missing stretch. Rebuilding from
+ * the window is drift-free for healthy trips (the points the segmenter
+ * drops sit outside [start, end]) and corrective for broken ones.
+ *
+ * `candStart/candEnd` is the window of the segment that resolved to this
+ * trip; the effective window is the union with the trip's stored span so
+ * a keeper absorbing an earlier/later fragment grows to cover it.
+ */
+async function renderTripFromRaw(
+  admin: SupabaseClient,
+  userId: string,
+  companyId: string,
+  tripId: string,
+  candStartIso: string,
+  candEndIso: string,
+): Promise<{ miles: number; deductionCents: number } | null> {
+  const { data: trip } = await admin
+    .from("mileage_trips")
+    .select("started_at, ended_at, classification, tax_year")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (!trip) return null;
+  const startIso =
+    (trip.started_at as string) < candStartIso
+      ? (trip.started_at as string)
+      : candStartIso;
+  const endIso =
+    (trip.ended_at as string) > candEndIso
+      ? (trip.ended_at as string)
+      : candEndIso;
+
+  const PAGE = 1000;
+  const raw: RawPoint[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from("mileage_points_raw")
+      .select("captured_at, lat, lng, speed_mps, accuracy_m")
+      .eq("driver_user_id", userId)
+      .eq("company_id", companyId)
+      .gte("captured_at", startIso)
+      .lte("captured_at", endIso)
+      .order("captured_at", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error("[finalize] render raw fetch failed", error.message);
+      return null;
+    }
+    const rows = (data ?? []) as RawPoint[];
+    raw.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+
+  const track = buildTrackFromRaw(raw);
+  // Fewer than 2 usable points in the window: leave whatever was already
+  // rendered rather than blanking the trip.
+  if (track.points.length < 2) return null;
+
+  const { error: delErr } = await admin
+    .from("mileage_points")
+    .delete()
+    .eq("trip_id", tripId);
+  if (delErr) {
+    console.error("[finalize] render delete failed", delErr.message);
+    return null;
+  }
+  const { error: insErr } = await admin.from("mileage_points").insert(
+    track.points.map((pt) => ({
+      trip_id: tripId,
+      captured_at: pt.captured_at,
+      lat: pt.lat,
+      lng: pt.lng,
+      speed_mps: pt.speed_mps ?? null,
+      accuracy_m: pt.accuracy_m ?? null,
+    })),
+  );
+  if (insErr) {
+    console.error("[finalize] render insert failed", insErr.message);
+    return null;
+  }
+
+  const taxYear = (trip.tax_year as number) ?? new Date(startIso).getUTCFullYear();
+  const classification = (trip.classification as Classification) ?? "unclassified";
+  const deductionCents = tripDeductionCents(
+    { distanceMiles: track.distanceMiles },
+    classification,
+    taxYear,
+  );
+  const newStart = track.points[0].captured_at;
+  const newEnd = track.points[track.points.length - 1].captured_at;
+  const { error: updErr } = await admin
+    .from("mileage_trips")
+    .update({
+      started_at: newStart,
+      ended_at: newEnd,
+      distance_miles: Number(track.distanceMiles.toFixed(3)),
+      deduction_cents: deductionCents,
+    })
+    .eq("id", tripId);
+  if (updErr) {
+    // A started_at collision (unique index) is the only expected failure
+    // and is harmless — the points are already corrected; skip the span
+    // update rather than abort finalize.
+    console.error("[finalize] render trip update failed", updErr.message);
+  }
+  return { miles: track.distanceMiles, deductionCents };
 }
 
 export async function finalizeUserTrips(
@@ -195,6 +311,17 @@ export async function finalizeUserTrips(
     );
     if (decision.action === "consume_to_keeper") {
       await consumeRange(startedAt, endedAt, decision.keeperId);
+      // Merge this segment's window into the keeper's rendered track so
+      // an absorbed fragment's points are drawn, not just marked consumed
+      // (the straight-line bug: consumed-but-never-rendered points).
+      await renderTripFromRaw(
+        admin,
+        userId,
+        companyId,
+        decision.keeperId,
+        startedAt,
+        endedAt,
+      );
       continue;
     }
     if (decision.action === "replace") {
@@ -237,34 +364,62 @@ export async function finalizeUserTrips(
           .eq("driver_user_id", userId)
           .eq("started_at", startedAt)
           .maybeSingle();
-        if (winner) await consumeRange(startedAt, endedAt, winner.id as string);
+        if (winner) {
+          await consumeRange(startedAt, endedAt, winner.id as string);
+          await renderTripFromRaw(
+            admin,
+            userId,
+            companyId,
+            winner.id as string,
+            startedAt,
+            endedAt,
+          );
+        }
         continue;
       }
       console.error("[finalize] trip insert failed", tripErr?.message);
       continue;
     }
 
-    const pointRows = trip.points.map((pt) => ({
-      trip_id: inserted.id,
-      captured_at: new Date(pt.ts).toISOString(),
-      lat: pt.lat,
-      lng: pt.lng,
-      speed_mps: pt.speedMps ?? null,
-      accuracy_m: pt.accuracyM ?? null,
-    }));
-    if (pointRows.length > 0) {
-      const { error: ptErr } = await admin
-        .from("mileage_points")
-        .insert(pointRows);
-      if (ptErr) console.error("[finalize] points insert failed", ptErr.message);
-    }
-
     await consumeRange(startedAt, endedAt, inserted.id);
+
+    // Render the track from ALL raw in the window (not just this run's
+    // segmentation pool), so points that flushed in a separate batch are
+    // drawn instead of being silently consumed. Falls back to the
+    // in-memory segment if the window somehow reads < 2 raw points, so a
+    // freshly-inserted trip is never left with an empty track.
+    const rendered = await renderTripFromRaw(
+      admin,
+      userId,
+      companyId,
+      inserted.id,
+      startedAt,
+      endedAt,
+    );
+    if (!rendered) {
+      const pointRows = trip.points.map((pt) => ({
+        trip_id: inserted.id,
+        captured_at: new Date(pt.ts).toISOString(),
+        lat: pt.lat,
+        lng: pt.lng,
+        speed_mps: pt.speedMps ?? null,
+        accuracy_m: pt.accuracyM ?? null,
+      }));
+      if (pointRows.length > 0) {
+        const { error: ptErr } = await admin
+          .from("mileage_points")
+          .insert(pointRows);
+        if (ptErr)
+          console.error("[finalize] points insert failed", ptErr.message);
+      }
+    }
 
     tripsCreated++;
     if (classification === "business") {
-      businessMiles += trip.distanceMiles;
-      deductionCents += dCents;
+      // Prefer the raw-rebuilt distance/deduction (corrects a partial
+      // segmentation pool) over the in-memory estimate when available.
+      businessMiles += rendered?.miles ?? trip.distanceMiles;
+      deductionCents += rendered?.deductionCents ?? dCents;
     }
 
     if (opts.push) {
