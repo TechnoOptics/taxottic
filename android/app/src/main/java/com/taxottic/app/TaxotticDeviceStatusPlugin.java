@@ -1,6 +1,10 @@
 package com.taxottic.app;
 
 import android.Manifest;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -16,6 +20,10 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+
+import java.util.ArrayDeque;
 
 /**
  * Device-truth probe for mileage reliability (plan §C), Android side.
@@ -30,8 +38,118 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * under Doze — continuous mileage tracking is the canonical case) and
  * the policy-safe settings list as fallback.
  */
-@CapacitorPlugin(name = "TaxotticDeviceStatus")
+@CapacitorPlugin(
+        name = "TaxotticDeviceStatus",
+        permissions = {
+            @Permission(
+                strings = { Manifest.permission.ACTIVITY_RECOGNITION },
+                alias = "motion")
+        })
 public class TaxotticDeviceStatusPlugin extends Plugin {
+
+    /**
+     * Walk-away drive-end support (lib/mileage/drive-end.ts): Android's
+     * TYPE_STEP_COUNTER only reports a CUMULATIVE count since boot, so
+     * to answer "steps since T" we keep a small ring of (wall-clock ms,
+     * cumulative) samples while the plugin is alive and difference the
+     * latest against the sample at/just before T. Costs nothing when the
+     * sensor is quiet (event-driven) and needs ACTIVITY_RECOGNITION on
+     * API 29+ (the "motion" alias below; degraded gracefully to
+     * available:false when missing so the tracker falls back to its
+     * stationary timeout).
+     */
+    private static final int STEP_RING_MAX = 360;
+    private final ArrayDeque<long[]> stepRing = new ArrayDeque<>();
+    private SensorManager sensorManager;
+    private boolean stepListenerArmed = false;
+    private final SensorEventListener stepListener = new SensorEventListener() {
+        @Override public void onSensorChanged(SensorEvent event) {
+            synchronized (stepRing) {
+                stepRing.addLast(new long[] {
+                        System.currentTimeMillis(), (long) event.values[0] });
+                while (stepRing.size() > STEP_RING_MAX) stepRing.removeFirst();
+            }
+        }
+        @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    };
+
+    private boolean hasMotionPermission() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                || granted(Manifest.permission.ACTIVITY_RECOGNITION);
+    }
+
+    private void armStepListener() {
+        if (stepListenerArmed || !hasMotionPermission()) return;
+        if (sensorManager == null) {
+            sensorManager = (SensorManager)
+                    getContext().getSystemService(Context.SENSOR_SERVICE);
+        }
+        if (sensorManager == null) return;
+        Sensor stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
+        if (stepSensor == null) return;
+        stepListenerArmed = sensorManager.registerListener(
+                stepListener, stepSensor, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    @Override
+    public void load() {
+        armStepListener();
+    }
+
+    /** Steps since `fromMs`. available=false when the sensor/permission
+     *  is missing OR we have no baseline sample at/before fromMs yet
+     *  (just armed) — callers treat that as 0 and use the timeout. */
+    @PluginMethod
+    public void queryStepsSince(PluginCall call) {
+        armStepListener(); // re-try in case permission arrived after load
+        JSObject out = new JSObject();
+        if (!stepListenerArmed) {
+            out.put("steps", 0);
+            out.put("available", false);
+            call.resolve(out);
+            return;
+        }
+        long fromMs = (long) call.getDouble("fromMs", 0.0).doubleValue();
+        long baseline = -1;
+        long latest = -1;
+        synchronized (stepRing) {
+            for (long[] sample : stepRing) {
+                if (sample[0] <= fromMs) baseline = sample[1];
+                latest = sample[1];
+            }
+        }
+        if (baseline < 0 || latest < 0) {
+            out.put("steps", 0);
+            out.put("available", false);
+        } else {
+            out.put("steps", Math.max(0, latest - baseline));
+            out.put("available", true);
+        }
+        call.resolve(out);
+    }
+
+    /** Prompt for ACTIVITY_RECOGNITION (the setup wizard's fix button
+     *  for the walk-away drive-end check). */
+    @PluginMethod
+    public void requestActivityRecognition(PluginCall call) {
+        if (hasMotionPermission()) {
+            armStepListener();
+            JSObject out = new JSObject();
+            out.put("granted", true);
+            call.resolve(out);
+            return;
+        }
+        requestPermissionForAlias("motion", call, "motionPermissionCallback");
+    }
+
+    @PermissionCallback
+    private void motionPermissionCallback(PluginCall call) {
+        boolean ok = hasMotionPermission();
+        if (ok) armStepListener();
+        JSObject out = new JSObject();
+        out.put("granted", ok);
+        call.resolve(out);
+    }
 
     private boolean granted(String permission) {
         return ContextCompat.checkSelfPermission(getContext(), permission)
@@ -65,6 +183,7 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
         out.put("preciseLocation", fine);
         out.put("batteryOptimized", !ignoring);
         out.put("manufacturer", Build.MANUFACTURER);
+        out.put("motionPermission", hasMotionPermission());
         call.resolve(out);
     }
 

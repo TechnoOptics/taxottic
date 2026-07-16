@@ -654,7 +654,12 @@
 // when tracking is enabled and the OS is optimizing us, so no driver
 // has to find the setup wizard. Client-JS change → bump so WebViews
 // drop the v98 cache.
-const CACHE_VERSION = "v99";
+// v100: walk-away drive-end detection — the tracker now closes a
+// drive ~30s after the driver walks away from the car (step burst via
+// the DeviceStatus plugin) or after a 6-min stationary fallback,
+// instead of only the server's 5-min parked timer. Client-JS change
+// (native-tracker + wizard row) → bump so WebViews drop v99.
+const CACHE_VERSION = "v100";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

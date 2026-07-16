@@ -116,6 +116,14 @@
          not the Activity Recognition API. It was removed so the
          app no longer triggers Google Play's Health-apps
          declaration, which fires on that permission. -->
+    <!-- Walk-away drive-end detection (lib/mileage/drive-end.ts): the
+         step counter needs ACTIVITY_RECOGNITION on API 29+. Deliberately
+         RE-ADDED (it was removed when unused): the DeviceStatus plugin
+         now consumes it to close drives the moment the driver walks
+         away. NOTE: this permission triggers Google Play's Health-apps
+         declaration — complete it in Play Console before the release
+         carrying this build is submitted. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />

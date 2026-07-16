@@ -14,6 +14,9 @@ export type DeviceStatus = {
   manufacturer?: string;
   /** iOS only. */
   lowPowerMode?: boolean;
+  /** Walk-away drive-end: step source usable (sensor present + motion
+   *  permission not denied). */
+  motionPermission?: boolean;
   backgroundRefresh?: boolean;
 };
 
@@ -22,6 +25,8 @@ type DeviceStatusPlugin = {
   requestAlwaysUpgrade(): Promise<void>;
   requestBatteryExemption(): Promise<void>;
   openBatterySettings(): Promise<void>;
+  queryStepsSince(opts: { fromMs: number }): Promise<{ steps: number; available: boolean }>;
+  requestActivityRecognition(): Promise<{ granted: boolean }>;
   addListener(
     event: "authorizationChanged",
     cb: (data: {
@@ -154,5 +159,45 @@ export async function onAuthorizationChanged(
     return () => void handle.remove();
   } catch {
     return () => {};
+  }
+}
+
+/**
+ * Steps taken since `fromMs` (epoch ms), from the device motion
+ * coprocessor. Drives the drive-end "walked away" signal
+ * (lib/mileage/drive-end.ts). Returns 0 on web / older binaries / when
+ * Motion permission is unavailable — the drive-end logic then relies on
+ * the stationary-timeout fallback, so a 0 is always safe.
+ */
+export async function queryStepsSince(fromMs: number): Promise<number> {
+  const plugin = await guard();
+  if (!plugin) return 0;
+  try {
+    const r = await plugin.queryStepsSince({ fromMs });
+    return typeof r?.steps === "number" ? r.steps : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Ask for the motion/step permission that powers walk-away drive-end.
+ * Android: the ACTIVITY_RECOGNITION runtime prompt. iOS: the plugin has
+ * no explicit request — the first pedometer query triggers the Motion &
+ * Fitness prompt, so we fire a probe query instead.
+ */
+export async function requestMotionPermission(): Promise<boolean> {
+  const plugin = await guard();
+  if (!plugin) return false;
+  try {
+    const r = await plugin.requestActivityRecognition();
+    return r?.granted === true;
+  } catch {
+    try {
+      await plugin.queryStepsSince({ fromMs: Date.now() - 60_000 });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

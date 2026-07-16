@@ -27,6 +27,7 @@
 // and no-ops cleanly so the /mileage page still renders.
 
 import type { GpsPoint } from "./segmentation";
+import { STATIONARY_SPEED_MPS as DE_STATIONARY_SPEED_MPS } from "./drive-end";
 
 // Minimal contract for the slice of @capgo/background-geolocation we
 // use. Declared locally (rather than importing the package's types at
@@ -175,6 +176,11 @@ let plugin: BackgroundGeolocationPlugin | null = null;
 let tracking = false;
 let buffer: GpsPoint[] = [];
 let flushTimer: ReturnType<typeof setInterval> | null = null;
+// Drive-end detection state (see lib/mileage/drive-end.ts): whether this
+// session has actually driven, and the ts of the last moving fix (so the
+// stationary duration and step window are measured from there).
+let deHasDriven = false;
+let deLastMovingTs = 0;
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogRearming = false;
 let authUnsub: (() => void) | null = null;
@@ -214,6 +220,7 @@ export const trackerDiag = {
   startResult: "untouched" as string,
   startError: "" as string,
   cbHits: 0 as number,
+  driveEndReason: "" as string,
   cbLastError: "" as string,
   /** Consecutive failed flushes; drives the backoff (skip ticks). */
   failStreak: 0 as number,
@@ -344,6 +351,39 @@ function loadPersistedBuffer() {
  *  heartbeat, parking → no new points → no flush → no segmentation
  *  → no trip ever materializes.
  */
+/**
+ * Drive-end check, run every flush tick while tracking. When the vehicle
+ * has been stationary and the driver has walked away (step burst) — or
+ * the stationary fallback elapses — force-close the trip with a
+ * sessionEnded flush so it materializes in ~30s instead of the server's
+ * 5-min parked timer. Decision logic is the unit-tested evaluateDriveEnd.
+ */
+async function maybeCloseDrive(): Promise<void> {
+  if (!tracking || !deHasDriven || deLastMovingTs <= 0) return;
+  const stationaryMs = Date.now() - deLastMovingTs;
+  if (stationaryMs <= 0) return;
+  let steps = 0;
+  try {
+    const { queryStepsSince } = await import("./device-status");
+    steps = await queryStepsSince(deLastMovingTs);
+  } catch {
+    /* no motion plugin → steps 0, stationary fallback still applies */
+  }
+  const { evaluateDriveEnd } = await import("./drive-end");
+  const decision = evaluateDriveEnd({
+    hasDriven: true,
+    stationaryMs,
+    stepsSinceStationary: steps,
+  });
+  if (decision.close) {
+    // Reset so the NEXT drive detects independently, then force-close.
+    deHasDriven = false;
+    deLastMovingTs = 0;
+    trackerDiag.driveEndReason = decision.reason;
+    void flush({ sessionEnded: true });
+  }
+}
+
 async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
   const sessionEnded = opts?.sessionEnded === true;
   if (flushing) return;
@@ -687,6 +727,13 @@ export async function startMileageTracking(
         }
         const pt = toPoint(location);
         if (!pt) return;
+        // Drive-end tracking: a fix above driving speed means we're
+        // moving; remember when. Below it, the vehicle is stationary and
+        // deLastMovingTs stops advancing, so its age = time parked.
+        if ((pt.speedMps ?? 0) >= DE_STATIONARY_SPEED_MPS) {
+          deHasDriven = true;
+          deLastMovingTs = pt.ts;
+        }
         buffer.push(pt);
         if (buffer.length > MAX_BUFFER) {
           trackerDiag.evictedPoints += buffer.length - MAX_BUFFER;
@@ -743,6 +790,9 @@ export async function startMileageTracking(
   if (!flushTimer) {
     flushTimer = setInterval(() => {
       void flush();
+      // Close a finished drive promptly (walked-away / parked) instead of
+      // waiting out the server's 5-min timer.
+      void maybeCloseDrive();
       // Device-truth heartbeat every ~5 min (10 ticks) while tracking.
       if (trackerDiag.flushCount % 10 === 0) void sendHeartbeat();
     }, FLUSH_EVERY_MS);
