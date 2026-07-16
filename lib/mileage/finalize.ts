@@ -73,6 +73,18 @@ export function resolveOverlapAction(
 }
 
 /**
+ * Never let the render pass shrink a trip's drawn track: only replace
+ * when the rebuilt track is at least as detailed (>= existing count) and
+ * has the 2-point minimum. Pure so the safety invariant is unit-tested.
+ */
+export function shouldReplaceTrack(
+  existingRenderedCount: number,
+  rebuiltCount: number,
+): boolean {
+  return rebuiltCount >= 2 && rebuiltCount >= existingRenderedCount;
+}
+
+/**
  * Rebuild a trip's rendered track (mileage_points) + distance from ALL
  * raw staging points inside its own time window, then persist. This is
  * what keeps the rendered polyline honest: the segmentation pool only
@@ -135,6 +147,20 @@ async function renderTripFromRaw(
   // Fewer than 2 usable points in the window: leave whatever was already
   // rendered rather than blanking the trip.
   if (track.points.length < 2) return null;
+
+  // Safety invariant: the render pass may only ADD detail to a trip,
+  // never lose it. If a rebuild would produce fewer points than are
+  // already drawn (a truncated/failed window read, a mid-flush race),
+  // skip the replace and keep the existing track. This makes the render
+  // path safe-by-construction — it can heal a broken trip but can never
+  // itself corrupt a healthy one.
+  const { count: existingCount } = await admin
+    .from("mileage_points")
+    .select("*", { count: "exact", head: true })
+    .eq("trip_id", tripId);
+  if (!shouldReplaceTrack(existingCount ?? 0, track.points.length)) {
+    return null;
+  }
 
   const { error: delErr } = await admin
     .from("mileage_points")
@@ -441,4 +467,67 @@ export async function finalizeUserTrips(
     deductionCents,
     poolSize: allPoints.length,
   };
+}
+
+export type ReconcileResult = { scanned: number; healed: number };
+
+/**
+ * Self-healing safety net. Scans recent trips for the "straight line
+ * across no road" signature — a trip whose own time window contains
+ * materially more usable raw points than are actually drawn — and
+ * rebuilds each from the raw window. renderTripFromRaw is idempotent and
+ * can only add detail (see shouldReplaceTrack), so this is safe to run on
+ * every cron tick: a healthy trip is left untouched, and any trip a
+ * future regression breaks is repaired within one cron interval instead
+ * of silently corrupting a driver's mileage forever.
+ *
+ * Detection runs in one indexed DB function (mileage_broken_trips) so the
+ * per-trip point-count comparison never round-trips through the app.
+ */
+export async function reconcileBrokenTrips(
+  admin: SupabaseClient,
+  opts: { sinceIso: string; limit?: number },
+): Promise<ReconcileResult> {
+  const limit = opts.limit ?? 200;
+  const { data, error } = await admin.rpc("mileage_broken_trips", {
+    p_since: opts.sinceIso,
+    p_lim: limit,
+  });
+  if (error) {
+    console.error("[reconcile] broken-trip scan failed", error.message);
+    return { scanned: 0, healed: 0 };
+  }
+  const rows = (data ?? []) as Array<{
+    trip_id: string;
+    driver_user_id: string;
+    company_id: string;
+    started_at: string;
+    ended_at: string;
+  }>;
+  let healed = 0;
+  for (const r of rows) {
+    try {
+      const res = await renderTripFromRaw(
+        admin,
+        r.driver_user_id,
+        r.company_id,
+        r.trip_id,
+        r.started_at,
+        r.ended_at,
+      );
+      if (res) {
+        healed++;
+        console.warn(
+          `[reconcile] healed trip ${r.trip_id} (${res.miles.toFixed(2)} mi)`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[reconcile] heal failed",
+        r.trip_id,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+  return { scanned: rows.length, healed };
 }
