@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import CoreLocation
+import CoreMotion
 import UIKit
 
 /// Device-truth probe for mileage reliability (plan §C). Reports the
@@ -21,10 +22,12 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
     public let jsName = "TaxotticDeviceStatus"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getStatus", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "requestAlwaysUpgrade", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "requestAlwaysUpgrade", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "queryStepsSince", returnType: CAPPluginReturnPromise)
     ]
 
     private var manager: CLLocationManager?
+    private let pedometer = CMPedometer()
 
     override public func load() {
         let m = CLLocationManager()
@@ -48,7 +51,13 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
             "platform": "ios",
             "locationAuthorization": authString(m.authorizationStatus),
             "preciseLocation": m.accuracyAuthorization == .fullAccuracy,
-            "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled
+            "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
+            // Walk-away drive-end support: step counting available and
+            // not explicitly denied (notDetermined is fine — the first
+            // pedometer query triggers the Motion & Fitness prompt).
+            "motionPermission": CMPedometer.isStepCountingAvailable()
+                && CMPedometer.authorizationStatus() != .denied
+                && CMPedometer.authorizationStatus() != .restricted
         ]
         // Background App Refresh off = no relaunch events ever fire;
         // the wizard warns on this. Main-thread only API.
@@ -62,6 +71,31 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
     @objc func getStatus(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             call.resolve(self.statusPayload())
+        }
+    }
+
+    /// Steps taken since `fromMs` (epoch ms), from the motion
+    /// coprocessor. The tracker uses this + GPS-stationary time to
+    /// decide a drive has ENDED (the driver walked away) and close it
+    /// immediately, instead of waiting out the server's parked timer.
+    /// See lib/mileage/drive-end.ts. Needs Motion & Fitness
+    /// (NSMotionUsageDescription); returns 0 when unavailable/denied so
+    /// the drive-end logic simply falls back to the stationary timeout.
+    @objc func queryStepsSince(_ call: CAPPluginCall) {
+        guard CMPedometer.isStepCountingAvailable() else {
+            call.resolve(["steps": 0, "available": false])
+            return
+        }
+        let fromMs = call.getDouble("fromMs") ?? 0
+        let from = Date(timeIntervalSince1970: fromMs / 1000.0)
+        let to = Date()
+        guard from < to else {
+            call.resolve(["steps": 0, "available": true])
+            return
+        }
+        pedometer.queryPedometerData(from: from, to: to) { data, error in
+            let steps = (error == nil) ? (data?.numberOfSteps.intValue ?? 0) : 0
+            call.resolve(["steps": steps, "available": true])
         }
     }
 

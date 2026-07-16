@@ -6,6 +6,7 @@ import {
   getDeviceStatus,
   requestAlwaysUpgrade,
   requestBatteryExemption,
+  requestMotionPermission,
   type DeviceStatus,
 } from "@/lib/mileage/device-status";
 import {
@@ -113,6 +114,28 @@ export default function MileageSetupPage() {
                 ? {
                     label: "Fix now",
                     run: () => void requestBatteryExemption(),
+                  }
+                : undefined,
+          },
+        ]
+      : []),
+    // Walk-away drive ending (both platforms): steps tell us the driver
+    // left the car, closing the trip in ~30s instead of the 5-min timer.
+    ...(status
+      ? [
+          {
+            key: "motion",
+            label: "Walk-away drive ending",
+            ok: status.motionPermission === true,
+            detail:
+              status.motionPermission === true
+                ? "Drives close the moment you walk away from the car."
+                : "Allow motion & steps so drives close instantly when you park and walk away.",
+            action:
+              status.motionPermission !== true
+                ? {
+                    label: "Allow",
+                    run: () => void requestMotionPermission().then(refresh),
                   }
                 : undefined,
           },
