@@ -81,4 +81,21 @@ test.describe("Public routes stay public", () => {
       `These sitemap URLs are NOT public for anonymous visitors. A "307 → /login" means the route's prefix is missing from PUBLIC_PATHS in lib/supabase/middleware.ts:\n  ${failures.join("\n  ")}\n`,
     ).toEqual([]);
   });
+
+  /**
+   * The install link is noindex on purpose (a share link, not an SEO
+   * surface), so the sitemap sweep above can never cover it. It still
+   * has to be anonymous-200: every person who receives /get has no
+   * account yet, and a 307 to /login would silently break every link
+   * we have handed to a tester. Guard it by name.
+   */
+  test("/get stays anonymous-reachable for testers", async ({ request }) => {
+    const res = await request.get("/get", { maxRedirects: 0 });
+    expect(
+      res.status(),
+      `/get must be 200 for anonymous visitors, got ${res.status()} -> ${
+        res.headers()["location"] ?? "no location"
+      }. Check PUBLIC_PATHS in lib/supabase/middleware.ts.`,
+    ).toBe(200);
+  });
 });
