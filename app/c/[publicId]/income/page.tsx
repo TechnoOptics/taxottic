@@ -4,6 +4,7 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { PageHeader } from "@/components/PageHeader";
 import { ImportConnectActions } from "@/components/ImportConnectActions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { requireBusinessManager } from "@/lib/tax/require-business-manager";
 import { formatCents } from "@/lib/tax/forecast";
 import { RecurrencePicker } from "@/components/RecurrencePicker";
 import { addIncome, deleteIncome, updateIncome } from "./actions";
@@ -30,7 +31,8 @@ type Params = Promise<{ publicId: string }>;
 
 export default async function IncomePage({ params }: { params: Params }) {
   const { publicId } = await params;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, role } = await loadCompanyByPublicId(publicId);
+  requireBusinessManager(role, publicId);
   const taxYear = new Date().getUTCFullYear();
   const currentMonth = new Date().getUTCMonth() + 1;
 

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { DeductionExplorer } from "@/components/DeductionExplorer";
 import { HomeOfficeQuickApply } from "@/components/HomeOfficeQuickApply";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { requireBusinessManager } from "@/lib/tax/require-business-manager";
 import { MASTER_DEDUCTIONS } from "@/lib/deductions/master";
 import { appliesToCompany } from "@/lib/deductions/applicability";
 import type { CompanyEntityType } from "@/lib/deductions/types";
@@ -31,7 +32,8 @@ const SUPPORTED_ENTITIES = new Set<CompanyEntityType>([
 
 export default async function DeductionsPage({ params }: { params: Params }) {
   const { publicId } = await params;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, role } = await loadCompanyByPublicId(publicId);
+  requireBusinessManager(role, publicId);
 
   // Coerce the company's stored entity_type string into our typed union;
   // anything we don't recognize yet falls back to null so applicability
