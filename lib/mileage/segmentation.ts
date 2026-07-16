@@ -95,7 +95,7 @@ export const MAX_CAPTURE_GAP_MS = 8 * 60 * 1000;
 /** Trips shorter than this are GPS noise, not a drive. */
 export const MIN_TRIP_METERS = 200;
 
-const METERS_PER_MILE = 1609.344;
+export const METERS_PER_MILE = 1609.344;
 const EARTH_RADIUS_M = 6_371_000;
 
 type LatLng = { lat: number; lng: number };
