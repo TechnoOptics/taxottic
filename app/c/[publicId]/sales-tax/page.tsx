@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { requireBusinessManager } from "@/lib/tax/require-business-manager";
 import { formatCents } from "@/lib/tax/forecast";
 
 type Params = Promise<{ publicId: string }>;
@@ -27,7 +28,8 @@ export default async function SalesTaxPage({
 }) {
   const { publicId } = await params;
   const { year } = await searchParams;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, role } = await loadCompanyByPublicId(publicId);
+  requireBusinessManager(role, publicId);
   const taxYear = year ? Number(year) : new Date().getUTCFullYear();
 
   // Pull state rates + this company's state + YTD income/expense

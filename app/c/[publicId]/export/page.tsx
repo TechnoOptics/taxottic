@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { requireBusinessManager } from "@/lib/tax/require-business-manager";
 import { formatCents, ABOVE_THE_LINE_CODES } from "@/lib/tax/forecast";
 import {
   computeNetBusinessIncome,
@@ -22,7 +23,8 @@ export default async function ExportPage({
 }) {
   const { publicId } = await params;
   const { year } = await searchParams;
-  const { supabase, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, company, role } = await loadCompanyByPublicId(publicId);
+  requireBusinessManager(role, publicId);
 
   const taxYear = year ? Number(year) : new Date().getUTCFullYear();
 
