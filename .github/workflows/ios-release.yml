@@ -170,11 +170,22 @@ jobs:
 
       - name: Upload to TestFlight
         run: |
+          set -o pipefail
+          # altool has been observed to print a 409 "Validation failed"
+          # (e.g. a malformed .appex) yet still exit 0, so a broken build
+          # silently reported success and never reached TestFlight. Tee
+          # the output and hard-fail on any validation/error line so a
+          # bad build can never masquerade as a green run again.
+          out="$RUNNER_TEMP/altool.log"
           xcrun altool --upload-app \
             -f $RUNNER_TEMP/export/App.ipa \
             -t ios \
             --apiKey ${{ secrets.ASC_KEY_ID }} \
-            --apiIssuer ${{ secrets.ASC_ISSUER_ID }}
+            --apiIssuer ${{ secrets.ASC_ISSUER_ID }} 2>&1 | tee "$out"
+          if grep -qiE "Validation failed|ERROR:|Invalid bundle" "$out"; then
+            echo "::error::altool reported a validation/upload error above — build did NOT reach TestFlight."
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
