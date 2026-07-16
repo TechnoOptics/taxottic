@@ -1,0 +1,213 @@
+name: iOS — Submit to App Store review
+
+# Automates the PUBLIC App Store release for an already-uploaded build:
+# finds the processed build for VERSION, creates/reuses the editable App
+# Store version, sets release notes + export compliance, enables phased
+# release, attaches the build, and submits for review.
+#
+# Prereq: the build must already be uploaded to TestFlight (run
+# ios-release.yml first) and finished Apple processing. This workflow
+# polls for the VALID build so you can run it right after the upload.
+#
+# Reuses the same App Store Connect API secrets as ios-release.yml:
+#   ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY (.p8 contents)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Marketing version to submit (e.g. 1.2.0)"
+        required: true
+        default: "1.2.0"
+      whats_new:
+        description: "Release notes shown to users"
+        required: false
+        default: "Big reliability update for automatic mileage tracking, a cleaner app launch, and a faster experience throughout."
+      phased:
+        description: "Phased (gradual) release? true/false"
+        required: false
+        default: "true"
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit to App Store review
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          VERSION: ${{ inputs.version }}
+          WHATS_NEW: ${{ inputs.whats_new }}
+          PHASED: ${{ inputs.phased }}
+          BUNDLE_ID: com.taxottic.app
+        run: |
+          cat > /tmp/submit.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+
+          const API = "https://api.appstoreconnect.apple.com";
+          const KID = process.env.ASC_KEY_ID;
+          const ISS = process.env.ASC_ISSUER_ID;
+          const PK = process.env.ASC_PRIVATE_KEY;
+          const VERSION = process.env.VERSION;
+          const WHATS_NEW = process.env.WHATS_NEW;
+          const PHASED = String(process.env.PHASED) === "true";
+          const BUNDLE_ID = process.env.BUNDLE_ID;
+
+          const b64u = (x) => Buffer.from(x).toString("base64url");
+          function token() {
+            const now = Math.floor(Date.now() / 1000);
+            const head = b64u(JSON.stringify({ alg: "ES256", kid: KID, typ: "JWT" }));
+            const body = b64u(
+              JSON.stringify({ iss: ISS, iat: now, exp: now + 1000, aud: "appstoreconnect-v1" }),
+            );
+            const sig = crypto
+              .sign("sha256", Buffer.from(`${head}.${body}`), { key: PK, dsaEncoding: "ieee-p1363" })
+              .toString("base64url");
+            return `${head}.${body}.${sig}`;
+          }
+          const T = token();
+          async function api(method, path, body) {
+            const res = await fetch(path.startsWith("http") ? path : API + path, {
+              method,
+              headers: { Authorization: `Bearer ${T}`, "Content-Type": "application/json" },
+              body: body ? JSON.stringify(body) : undefined,
+            });
+            const text = await res.text();
+            const json = text ? JSON.parse(text) : {};
+            if (!res.ok) {
+              throw new Error(`${method} ${path} -> ${res.status}\n${JSON.stringify(json, null, 2)}`);
+            }
+            return json;
+          }
+          const die = (m) => { console.error(`::error::${m}`); process.exit(1); };
+
+          // 1. App
+          const apps = await api("GET", `/v1/apps?filter[bundleId]=${BUNDLE_ID}`);
+          const app = apps.data?.[0];
+          if (!app) die(`App not found for bundle ${BUNDLE_ID}`);
+          const appId = app.id;
+          console.log(`App ${app.attributes.name} (${appId})`);
+
+          // 2. Poll for the VALID build matching VERSION (Apple processing lag).
+          let build = null;
+          for (let i = 0; i < 20; i++) {
+            const builds = await api(
+              "GET",
+              `/v1/builds?filter[app]=${appId}&filter[preReleaseVersion.version]=${VERSION}&sort=-version&limit=5`,
+            );
+            build = (builds.data || []).find((b) => b.attributes.processingState === "VALID");
+            if (build) break;
+            console.log(`Build for ${VERSION} not VALID yet (attempt ${i + 1}/20), waiting 60s...`);
+            await new Promise((r) => setTimeout(r, 60000));
+          }
+          if (!build) die(`No VALID build for version ${VERSION}. Upload via ios-release.yml and let it finish processing.`);
+          console.log(`Build ${build.attributes.version} (${build.id}) VALID`);
+
+          // 3. Export compliance on the build (standard HTTPS = exempt).
+          if (build.attributes.usesNonExemptEncryption !== false) {
+            await api("PATCH", `/v1/builds/${build.id}`, {
+              data: { type: "builds", id: build.id, attributes: { usesNonExemptEncryption: false } },
+            });
+            console.log("Set export compliance: usesNonExemptEncryption=false");
+          }
+
+          // 4. Editable App Store version — reuse or create.
+          const editable = new Set([
+            "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+            "METADATA_REJECTED", "INVALID_BINARY",
+          ]);
+          const versions = await api(
+            "GET",
+            `/v1/apps/${appId}/appStoreVersions?filter[platform]=IOS&limit=10`,
+          );
+          let version = (versions.data || []).find(
+            (v) => v.attributes.versionString === VERSION && editable.has(v.attributes.appStoreState),
+          );
+          if (!version) {
+            version = (
+              await api("POST", `/v1/appStoreVersions`, {
+                data: {
+                  type: "appStoreVersions",
+                  attributes: { platform: "IOS", versionString: VERSION },
+                  relationships: { app: { data: { type: "apps", id: appId } } },
+                },
+              })
+            ).data;
+            console.log(`Created App Store version ${VERSION} (${version.id})`);
+          } else {
+            console.log(`Reusing editable version ${VERSION} (${version.id}, ${version.attributes.appStoreState})`);
+          }
+          const versionId = version.id;
+
+          // 5. Attach the build.
+          await api("PATCH", `/v1/appStoreVersions/${versionId}/relationships/build`, {
+            data: { type: "builds", id: build.id },
+          });
+          console.log("Attached build to version");
+
+          // 6. Release notes (en-US localization).
+          const locs = await api("GET", `/v1/appStoreVersions/${versionId}/appStoreVersionLocalizations`);
+          const enUS = (locs.data || []).find((l) => l.attributes.locale === "en-US") || (locs.data || [])[0];
+          if (enUS) {
+            await api("PATCH", `/v1/appStoreVersionLocalizations/${enUS.id}`, {
+              data: { type: "appStoreVersionLocalizations", id: enUS.id, attributes: { whatsNew: WHATS_NEW } },
+            });
+            console.log(`Set release notes on ${enUS.attributes.locale}`);
+          }
+
+          // 7. Phased release.
+          if (PHASED) {
+            try {
+              await api("POST", `/v1/appStoreVersionPhasedReleases`, {
+                data: {
+                  type: "appStoreVersionPhasedReleases",
+                  attributes: { phasedReleaseState: "INACTIVE" },
+                  relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: versionId } } },
+                },
+              });
+              console.log("Enabled phased release");
+            } catch (e) {
+              console.log(`Phased release already set or unavailable: ${e.message.split("\n")[0]}`);
+            }
+          }
+
+          // 8. Submit via the current reviewSubmissions flow.
+          // Reuse an open submission if one exists, else create.
+          let sub = (
+            await api("GET", `/v1/reviewSubmissions?filter[app]=${appId}&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES,WAITING_FOR_REVIEW&limit=1`)
+          ).data?.[0];
+          if (!sub) {
+            sub = (
+              await api("POST", `/v1/reviewSubmissions`, {
+                data: {
+                  type: "reviewSubmissions",
+                  attributes: { platform: "IOS" },
+                  relationships: { app: { data: { type: "apps", id: appId } } },
+                },
+              })
+            ).data;
+            console.log(`Created review submission ${sub.id}`);
+          }
+          // Add the version as an item (ignore if already present).
+          try {
+            await api("POST", `/v1/reviewSubmissionItems`, {
+              data: {
+                type: "reviewSubmissionItems",
+                relationships: {
+                  reviewSubmission: { data: { type: "reviewSubmissions", id: sub.id } },
+                  appStoreVersion: { data: { type: "appStoreVersions", id: versionId } },
+                },
+              },
+            });
+            console.log("Added version to review submission");
+          } catch (e) {
+            console.log(`Item add note: ${e.message.split("\n")[0]}`);
+          }
+          // Submit.
+          await api("PATCH", `/v1/reviewSubmissions/${sub.id}`, {
+            data: { type: "reviewSubmissions", id: sub.id, attributes: { submitted: true } },
+          });
+          console.log(`\n✅ Submitted version ${VERSION} (build ${build.attributes.version}) for App Store review.`);
+          SCRIPT
+          node /tmp/submit.mjs
