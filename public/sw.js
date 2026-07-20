@@ -676,7 +676,10 @@
 // forecast (amount, drive count, driver count), and an unconfigured
 // has_vehicle no longer silently zeroes a real tracked deduction.
 // Forecast markup changed -> bump so WebViews drop v103.
-const CACHE_VERSION = "v104";
+// v105: the personal hub no longer shows tracked BUSINESS mileage in
+// its hero band (that is company data on a personal page); the slot now
+// shows personal deductions YTD. Dashboard markup changed -> bump.
+const CACHE_VERSION = "v105";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

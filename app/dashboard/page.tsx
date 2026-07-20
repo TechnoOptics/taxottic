@@ -336,7 +336,6 @@ export default async function DashboardPage() {
     { data: overdueReminders },
     { data: activeGoals },
     { data: badges },
-    { data: mileageTripRows },
     readinessByCompany,
     { data: personalTaxProfile },
     { data: personalExpenseRows },
@@ -381,14 +380,6 @@ export default async function DashboardPage() {
       .select("badge_code, awarded_at")
       .eq("user_id", user.id)
       .order("awarded_at", { ascending: false }),
-    // Tracked business drives across ALL the user's companies (keyed on
-    // driver_user_id) for the at-a-glance mileage tile below.
-    admin
-      .from("mileage_trips")
-      .select("started_at, distance_miles, deduction_cents")
-      .eq("driver_user_id", user.id)
-      .eq("classification", "business")
-      .eq("tax_year", taxYear),
     Promise.all(
       companies.map(async (m) => {
         const r = await computeReadiness(admin, m.company_id, taxYear);
@@ -647,20 +638,21 @@ export default async function DashboardPage() {
   }
   const trial = await getTrialState(supabase, user.id);
 
-  // Mileage at-a-glance, YTD business-drive deduction across all of the
-  // user's companies, surfaced in the hero stat band rather than buried
-  // in /mileage.
-  let mileageYtdCents = 0;
-  let mileageYtdMiles = 0;
-  for (const t of (mileageTripRows ?? []) as Array<{
-    started_at: string;
-    distance_miles: number | null;
-    deduction_cents: number | null;
-  }>) {
-    mileageYtdCents += Number(t.deduction_cents ?? 0);
-    mileageYtdMiles += Number(t.distance_miles ?? 0);
-  }
-  const hasMileage = mileageYtdMiles > 0;
+  // Personal deductions logged YTD, for the hero stat band.
+  //
+  // This slot used to show tracked BUSINESS mileage (classification =
+  // "business", across every company the user drives for). That is
+  // business data on the owner's personal hub, contradicting this page's
+  // own rule that "business numbers stay in each company's hub", and it
+  // read as the personal profile claiming the company's miles. Business
+  // mileage lives on the company forecast and /mileage; where a sole
+  // proprietorship legitimately flows into the 1040 it is already shown
+  // by the lead tile as an explicit "incl. {company}" line, which is the
+  // labelled-inclusion pattern this page uses everywhere else.
+  const personalDeductionsYtdCents = (
+    (personalExpenseRows ?? []) as Array<{ amount_cents: number | null }>
+  ).reduce((a, r) => a + Number(r.amount_cents ?? 0), 0);
+  const hasPersonalDeductions = personalDeductionsYtdCents > 0;
 
   // ── Hero stat band ────────────────────────────────────────────────
   // Three glanceable figures under the greeting (personal year-end
@@ -873,19 +865,15 @@ export default async function DashboardPage() {
           </Link>
 
           <Link
-            href="/mileage"
+            href="/personal/expenses"
             className="surface surface-hover col-span-1 p-5 flex flex-col justify-center min-w-0"
           >
-            <div className="kicker-sm">Mileage YTD</div>
+            <div className="kicker-sm">Deductions YTD</div>
             <div className="display text-2xl sm:text-3xl text-forest-900 mt-1 tabular-nums">
-              {formatCents(mileageYtdCents)}
+              {formatCents(personalDeductionsYtdCents)}
             </div>
             <div className="text-[13px] text-ink-muted mt-0.5 truncate">
-              {hasMileage
-                ? `${mileageYtdMiles.toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })} business mi`
-                : "Track your drives"}
+              {hasPersonalDeductions ? "personal" : "Log a deduction"}
             </div>
           </Link>
 
