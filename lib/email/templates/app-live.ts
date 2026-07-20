@@ -39,7 +39,7 @@ export function renderAppLiveEmail(args: AppLiveArgs): {
   const firstName = args.recipientName?.split(" ")[0];
   const greet = firstName ? `Hi ${escapeHtml(firstName)},` : "Hi,";
   const sender = args.senderName ? escapeHtml(args.senderName) : null;
-  const subject = "Taxottic is live — install the latest version";
+  const subject = "Taxottic is live, install the latest version";
   const preheader =
     "The new version is on the App Store and Google Play. One link installs it.";
 

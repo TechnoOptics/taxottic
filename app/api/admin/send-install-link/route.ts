@@ -14,7 +14,7 @@ export const runtime = "nodejs";
  * beta-invite template, whose copy promises a build "before it ships".
  *
  * Auth: Bearer $CRON_SECRET, the same shared secret the cron routes use.
- * There is no session path on purpose — this sends outbound mail, so it
+ * There is no session path on purpose: this sends outbound mail, so it
  * stays operator-only rather than reachable by any signed-in user.
  */
 const INSTALL_URL = "https://taxottic.com/get";
