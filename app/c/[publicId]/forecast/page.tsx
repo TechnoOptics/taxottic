@@ -173,14 +173,22 @@ export default async function ForecastPage({ params }: { params: Params }) {
   const admin = createServiceClient();
   const { data: bizTripRows } = await admin
     .from("mileage_trips")
-    .select("deduction_cents, started_at")
+    .select("deduction_cents, started_at, driver_user_id")
     .eq("company_id", company.id)
     .eq("classification", "business")
     .eq("tax_year", taxYear);
   const trackedTrips = (bizTripRows ?? []) as unknown as {
     deduction_cents: number;
     started_at: string;
+    driver_user_id: string;
   }[];
+  // How many people's drives are in that number. The whole point of the
+  // company forecast is that it rolls up EVERY employee's business
+  // mileage, but a single blended total can't show that, which reads as
+  // "my team's miles aren't counted".
+  const trackedDriverCount = new Set(
+    trackedTrips.map((t) => t.driver_user_id).filter(Boolean),
+  ).size;
   const trackedYtdMileageCents = trackedTrips.reduce(
     (a, t) => a + Number(t.deduction_cents ?? 0),
     0,
@@ -606,6 +614,28 @@ export default async function ForecastPage({ params }: { params: Params }) {
                 of deductible expenses across {input.monthsEntered} month
                 {input.monthsEntered === 1 ? "" : "s"}. {subhead}
               </p>
+              {/* Tracked mileage is already inside the expenses figure
+                  above (forecast.ts sums autoMileageCents into
+                  ytdDeductibleExpenses), but folded into one blended total
+                  it is invisible, so a user watching their team log drives
+                  sees the number move for reasons they can't attribute.
+                  Spell it out: how much, from how many drives, across how
+                  many drivers, and that only business-classified trips
+                  count. */}
+              {trackedYtdMileageCents > 0 ? (
+                <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-2xl">
+                  That includes{" "}
+                  <strong className="text-forest-900">
+                    {formatCents(trackedYtdMileageCents)}
+                  </strong>{" "}
+                  of tracked business mileage from {trackedTrips.length} drive
+                  {trackedTrips.length === 1 ? "" : "s"}
+                  {trackedDriverCount > 1
+                    ? ` across ${trackedDriverCount} drivers`
+                    : ""}
+                  . Personal and unclassified trips are excluded.
+                </p>
+              ) : null}
               {/* Surface the active tax profile so the user doesn't
                   silently inherit an old default (audit Medium #4). When
                   the forecast is SEPARATE (not combined with the personal

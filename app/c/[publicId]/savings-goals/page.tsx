@@ -208,6 +208,7 @@ export default async function SavingsGoalsPage({
   );
   const { projectedCents: autoMileageProjected } = resolveAutoMileageCents({
     onStandardVehicle,
+    onActualMethod: businessProfile?.vehicle_method === "actual",
     trackedYtdCents: trackedYtdMileageCents,
     trackedTripCount: trackedTrips.length,
     manualProjectedCents: manualMileageProjected,

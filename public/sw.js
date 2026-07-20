@@ -672,7 +672,11 @@
 // /personal/* routes redirect to /personal/upgrade. Owners and
 // employees with their own paid plan are unaffected. Client chrome
 // (LeftRail/AppHeader) changed → bump.
-const CACHE_VERSION = "v103";
+// v104: tracked business mileage is now spelled out on the company
+// forecast (amount, drive count, driver count), and an unconfigured
+// has_vehicle no longer silently zeroes a real tracked deduction.
+// Forecast markup changed -> bump so WebViews drop v103.
+const CACHE_VERSION = "v104";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

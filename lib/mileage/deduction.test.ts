@@ -83,13 +83,59 @@ describe("resolveAutoMileageCents", () => {
     trackedProjectionMonths: 3,
   };
 
-  it("actual-expense method (or no vehicle) suppresses both paths", () => {
+  it("explicit actual-expense election suppresses both paths", () => {
+    // Real costs are deducted instead, so adding standard mileage on top
+    // would double-count the same vehicle.
     expect(
       resolveAutoMileageCents({
         ...base,
         onStandardVehicle: false,
+        onActualMethod: true,
         trackedYtdCents: 50000,
         trackedTripCount: 9,
+      }),
+    ).toEqual({ ytdCents: 0, projectedCents: 0 });
+  });
+
+  it("no vehicle configured and nothing tracked → nothing to claim", () => {
+    expect(
+      resolveAutoMileageCents({
+        ...base,
+        onStandardVehicle: false,
+        manualProjectedCents: 0,
+        manualYtdCents: 0,
+      }),
+    ).toEqual({ ytdCents: 0, projectedCents: 0 });
+  });
+
+  it("tracked business drives count even when has_vehicle was never set", () => {
+    // Regression: an unconfigured profile silently zeroed a real tracked
+    // deduction. Production had a company showing $36.61 of business
+    // mileage on the Mileage page while the forecast valued it at $0.
+    // Logging classified-business drives IS evidence of a business
+    // vehicle; only an explicit "actual" election opts out.
+    expect(
+      resolveAutoMileageCents({
+        ...base,
+        onStandardVehicle: false,
+        onActualMethod: false,
+        trackedYtdCents: 3661,
+        trackedTripCount: 3,
+        trackedProjectionMonths: 6,
+      }),
+    ).toEqual({ ytdCents: 3661, projectedCents: 7322 });
+  });
+
+  it("an unset profile does not resurrect the MANUAL estimate", () => {
+    // The implied-vehicle rule is evidence-based: it trusts real drives,
+    // not a manual miles figure typed into a profile that was never
+    // completed.
+    expect(
+      resolveAutoMileageCents({
+        ...base,
+        onStandardVehicle: false,
+        trackedYtdCents: 0,
+        trackedTripCount: 0,
       }),
     ).toEqual({ ytdCents: 0, projectedCents: 0 });
   });

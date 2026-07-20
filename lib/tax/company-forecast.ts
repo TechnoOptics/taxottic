@@ -277,6 +277,7 @@ export function buildCompanyForecast(
   const { ytdCents: autoMileageYtd, projectedCents: autoMileageProjected } =
     resolveAutoMileageCents({
       onStandardVehicle,
+      onActualMethod: businessProfile?.vehicle_method === "actual",
       trackedYtdCents: trackedYtdMileageCents,
       trackedTripCount,
       manualProjectedCents: manualMileageProjected,
