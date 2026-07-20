@@ -86,8 +86,12 @@ export function summarizeMileageDeduction(
  * specific) manual projection basis stays where it belongs.
  */
 export function resolveAutoMileageCents(args: {
-  /** business_profiles.has_vehicle && vehicle_method === "standard". */
+  /** business_profiles.has_vehicle && vehicle_method !== "actual". */
   onStandardVehicle: boolean;
+  /** vehicle_method === "actual": an explicit election OUT of standard
+   *  mileage. Deliberately distinct from an unconfigured profile, see the
+   *  implied-vehicle rule below. */
+  onActualMethod?: boolean;
   /** Σ stored deduction_cents for classified-business trips this year. */
   trackedYtdCents: number;
   /** Count of those classified-business tracked trips. */
@@ -99,10 +103,22 @@ export function resolveAutoMileageCents(args: {
   /** Months of real data; pace-projects the tracked YTD to year-end. */
   trackedProjectionMonths: number;
 }): { ytdCents: number; projectedCents: number } {
-  if (!args.onStandardVehicle) return { ytdCents: 0, projectedCents: 0 };
-
   const useTracked =
     args.trackedTripCount > 0 && args.trackedYtdCents > 0;
+
+  // Classified-business drives are themselves evidence of a business
+  // vehicle. An unset has_vehicle is a PROFILE GAP, not an election of the
+  // actual-expense method, so it must not silently zero a real tracked
+  // deduction: observed in production, a company with 3 classified-business
+  // trips showed a $36.61 deduction on the Mileage page while the forecast
+  // valued the same drives at $0, with nothing on screen explaining why.
+  // Only an explicit vehicle_method === "actual" opts out, because there
+  // the vehicle is deducted through real costs instead and adding standard
+  // mileage on top would double-count.
+  const impliedByTracking = useTracked && args.onActualMethod !== true;
+  if (!args.onStandardVehicle && !impliedByTracking) {
+    return { ytdCents: 0, projectedCents: 0 };
+  }
   if (useTracked) {
     const months = Math.min(
       12,
