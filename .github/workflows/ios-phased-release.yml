@@ -1,0 +1,97 @@
+name: iOS — Phased release control
+
+# Reports and optionally COMPLETES the phased release of the current
+# App Store version. Phased release drips an update to existing users
+# over ~7 days; completing it pushes to 100% immediately.
+#
+# action=status  -> read-only report (default, safe)
+# action=complete-> release to ALL users now (irreversible: you cannot
+#                   put an update back into phased rollout)
+#
+# Reuses the ASC_* secrets from ios-appstore-submit.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "status (read-only) or complete (release to everyone now)"
+        required: true
+        default: "status"
+        type: choice
+        options: [status, complete]
+
+jobs:
+  phased:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Phased release
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          cat > /tmp/phased.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+          const KID = process.env.ASC_KEY_ID;
+          const ISS = process.env.ASC_ISSUER_ID;
+          const PK = process.env.ASC_PRIVATE_KEY;
+          const ACTION = (process.env.ACTION || "status").trim();
+          const APP_ID = "6767039803";
+          if (!KID || !ISS || !PK) { console.error("::error::ASC_* secrets missing"); process.exit(1); }
+          const b64u = (x) => Buffer.from(x).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const head = b64u(JSON.stringify({ alg: "ES256", kid: KID, typ: "JWT" }));
+          const body = b64u(JSON.stringify({ iss: ISS, iat: now, exp: now + 900, aud: "appstoreconnect-v1" }));
+          const sig = crypto.sign("sha256", Buffer.from(`${head}.${body}`), { key: PK, dsaEncoding: "ieee-p1363" }).toString("base64url");
+          const TOK = `${head}.${body}.${sig}`;
+          const api = async (method, path, payload) => {
+            const r = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              method,
+              headers: { Authorization: `Bearer ${TOK}`, "Content-Type": "application/json" },
+              body: payload ? JSON.stringify(payload) : undefined,
+            });
+            const t = await r.text();
+            if (!r.ok) { console.error("::error::" + t.slice(0, 500)); process.exit(1); }
+            return t ? JSON.parse(t) : {};
+          };
+
+          const vers = await api("GET", `/v1/apps/${APP_ID}/appStoreVersions?filter[platform]=IOS&limit=1`);
+          const v = (vers.data ?? [])[0];
+          if (!v) { console.log("no version found"); process.exit(0); }
+          const ver = v.attributes.versionString;
+          console.log(`Version ${ver} => ${v.attributes.appStoreState}`);
+
+          let pr = null;
+          try {
+            pr = await api("GET", `/v1/appStoreVersions/${v.id}/appStoreVersionPhasedRelease`);
+          } catch { /* handled below */ }
+          const prd = pr?.data;
+          if (!prd) {
+            console.log("No phased release on this version — it is already at 100% for all users.");
+            process.exit(0);
+          }
+          const state = prd.attributes?.phasedReleaseState;
+          const day = prd.attributes?.currentDayNumber;
+          console.log(`Phased release: state=${state} day=${day ?? "n/a"}`);
+          // Apple's published curve for the 7-day drip.
+          const CURVE = { 1: "1%", 2: "2%", 3: "5%", 4: "10%", 5: "20%", 6: "50%", 7: "100%" };
+          if (state === "ACTIVE" && day) console.log(`Roughly ${CURVE[day] ?? "?"} of auto-update users have it so far.`);
+
+          if (ACTION !== "complete") {
+            console.log("");
+            console.log("Read-only run. Re-run with action=complete to push to 100% now.");
+            process.exit(0);
+          }
+          if (state === "COMPLETE") {
+            console.log("Already COMPLETE — everyone has it. Nothing to do.");
+            process.exit(0);
+          }
+          await api("PATCH", `/v1/appStoreVersionPhasedReleases/${prd.id}`, {
+            data: { id: prd.id, type: "appStoreVersionPhasedReleases",
+                    attributes: { phasedReleaseState: "COMPLETE" } },
+          });
+          console.log("");
+          console.log(`✅ Phased release COMPLETED — ${ver} now goes to 100% of users.`);
+          SCRIPT
+          node /tmp/phased.mjs
