@@ -702,15 +702,15 @@
 // v112: dead stops no longer sever drives (10-min server dwell,
 // 12-min client fallback); chat attachment paths confined. Client JS
 // changed -> bump.
-// v113: marketing/pricing copy corrected to match shipped reality
-// (daily sync not hourly, CPA workpaper not PDF+CSV, no unbuilt
-// white-label/API/trial-email claims). Public pages changed -> bump.
 // v113: tax-engine corrections — NIIT/EITC see capital gains, AMT
 // keeps credits, additional-Medicare withholding credited, QBI cap
 // excludes net capital gain, combined 1040 keeps family credits.
+// v114: marketing/pricing copy corrected to match shipped reality
+// (daily sync not hourly, CPA workpaper not PDF+CSV, no unbuilt
+// white-label/API/trial-email claims). Public pages changed -> bump.
+const CACHE_VERSION = "v114";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
-const CACHE_VERSION = "v114";
 
 
 const PRECACHE = ["/", "/login", "/manifest.webmanifest", "/icon.svg"];
