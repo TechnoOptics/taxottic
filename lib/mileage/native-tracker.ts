@@ -833,6 +833,12 @@ export async function startMileageTracking(
       (location, error) => {
         trackerDiag.cbHits++;
         trackerDiag.lastCbAt = Date.now();
+      // A real fix proves the watcher is alive, so the restart budget
+      // resets. It used to be a per-SESSION cap of 3 that a parked
+      // phone (no fixes while stationary, which is correct behaviour)
+      // burned through — leaving nothing left for an actual zombie
+      // tracker later in the same session (audit #30).
+      trackerDiag.watchdogRestarts = 0;
         if (error) {
           trackerDiag.cbLastError =
             String(error.code ?? "") + ":" + String(error.message ?? "");
