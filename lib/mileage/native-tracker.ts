@@ -180,6 +180,7 @@ let flushTimer: ReturnType<typeof setInterval> | null = null;
 // session has actually driven, and the ts of the last moving fix (so the
 // stationary duration and step window are measured from there).
 let deHasDriven = false;
+let driveEndPosting = false;
 let deLastMovingTs = 0;
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogRearming = false;
@@ -190,6 +191,11 @@ let authUnsub: (() => void) | null = null;
 const WATCHDOG_STALL_MS = 10 * 60_000;
 const WATCHDOG_MAX_RESTARTS = 3;
 let flushing = false;
+// The in-flight flush's promise, so a sessionEnded flush can WAIT for
+// it instead of being silently dropped by the `flushing` guard (audit:
+// the walk-away fast-close was dead code because maybeCloseDrive always
+// collided with the same tick's heartbeat flush).
+let flushPromise: Promise<boolean> | null = null;
 let companyId = "";
 
 /** Listeners notified when bg.start() settles (resolves OR rejects).
@@ -377,18 +383,43 @@ async function maybeCloseDrive(): Promise<void> {
     stepsSinceStationary: steps,
   });
   if (decision.close) {
-    // Reset so the NEXT drive detects independently, then force-close.
-    deHasDriven = false;
-    deLastMovingTs = 0;
-    trackerDiag.driveEndReason = decision.reason;
-    void flush({ sessionEnded: true });
+    if (driveEndPosting) return;
+    driveEndPosting = true;
+    try {
+      // Force-close FIRST; only consume the drive-end state once the
+      // server confirmed (2xx). On failure everything stays armed, so
+      // the very next tick re-evaluates and retries — the close can be
+      // late, but it can no longer be lost.
+      const ok = await flush({ sessionEnded: true });
+      if (ok) {
+        deHasDriven = false;
+        deLastMovingTs = 0;
+        trackerDiag.driveEndReason = decision.reason;
+      } else {
+        trackerDiag.driveEndReason = `retrying:${decision.reason}`;
+      }
+    } finally {
+      driveEndPosting = false;
+    }
   }
 }
 
-async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
+async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
   const sessionEnded = opts?.sessionEnded === true;
-  if (flushing) return;
-  if (!companyId) return;
+  if (flushing) {
+    // Ordinary ticks can just skip — another flush is already moving the
+    // queue. A sessionEnded flush must NEVER be dropped (it closes the
+    // trip): wait out the in-flight one, then proceed.
+    if (!sessionEnded) return false;
+    while (flushing) {
+      try {
+        await flushPromise;
+      } catch {
+        /* the in-flight flush's own error handling already ran */
+      }
+    }
+  }
+  if (!companyId) return false;
   // Allow heartbeat (buffer.length === 0) WHILE tracking is active so
   // the server keeps re-segmenting staging. If we're not tracking and
   // the buffer is empty, nothing to do, UNLESS this is the
@@ -397,7 +428,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
   // sessionEnded handling in /api/mileage/ingest). Without this
   // override, toggling off after a drive whose last points already
   // flushed would never close the trip, it would sit open forever.
-  if (buffer.length < 1 && !tracking && !sessionEnded) return;
+  if (buffer.length < 1 && !tracking && !sessionEnded) return false;
   // Backoff: after 3+ consecutive failures only attempt every 4th tick
   // (~2 min) so a dead session / server incident isn't hammered every
   // 30 s. sessionEnded always goes through (it closes the trip).
@@ -407,10 +438,15 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
     trackerDiag.flushCount % 4 !== 0
   ) {
     trackerDiag.flushCount++;
-    return;
+    return false;
   }
   flushing = true;
   trackerDiag.flushCount++;
+  let resolveRun: (ok: boolean) => void = () => {};
+  flushPromise = new Promise<boolean>((r) => {
+    resolveRun = r;
+  });
+  let sent = false;
   // Cap the batch (see FLUSH_BATCH_MAX). NEVER use keepalive here: its
   // 64 KB body limit silently breaks every flush once the buffer is
   // non-trivial. A large backlog drains over successive ticks.
@@ -445,6 +481,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
       /* not JSON, leave as null */
     }
     if (res.ok) {
+      sent = true;
       // Server staged everything; drop locally so we don't re-send
       // the same points. The server's staging table is authoritative
       // for "did this point land", we trust the 2xx.
@@ -507,7 +544,10 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<void> {
     trackerDiag.failStreak++;
   } finally {
     flushing = false;
+    resolveRun(sent);
+    flushPromise = null;
   }
+  return sent;
 }
 
 /**
