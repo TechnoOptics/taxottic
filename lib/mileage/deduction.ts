@@ -16,13 +16,50 @@ import type { Classification, Trip } from "./segmentation";
  * back (getTaxYearConstants handles that), the caller can surface
  * `isFallback` if it needs to warn.
  */
+/**
+ * The IRS rate in force on a given date. Split-rate years (2026: 72.5¢
+ * Jan–Jun, 76¢ from Jul 1 per the mid-year adjustment) resolve by the
+ * trip's own date; flat years and undated calls fall back to the year
+ * constant. String compare is safe: both sides are ISO yyyy-mm-dd...
+ */
+export function mileageRateCentsForDate(
+  taxYear: number,
+  dateIso?: string | null,
+): number {
+  const k = getTaxYearConstants(taxYear);
+  const periods = k.MILEAGE_RATE_PERIODS;
+  if (!periods?.length || !dateIso) return k.MILEAGE_RATE_PER_MILE_CENTS;
+  let rate = periods[0].centsPerMile;
+  for (const p of periods) {
+    if (dateIso >= p.fromIso) rate = p.centsPerMile;
+  }
+  return rate;
+}
+
+/**
+ * Whole-year average rate, month-weighted. For pricing an ANNUAL
+ * projection of undated miles in a split-rate year (a manual YTD
+ * estimate annualized to Dec 31 spans both rate periods).
+ */
+export function fullYearAverageMileageRateCents(taxYear: number): number {
+  const k = getTaxYearConstants(taxYear);
+  const periods = k.MILEAGE_RATE_PERIODS;
+  if (!periods?.length) return k.MILEAGE_RATE_PER_MILE_CENTS;
+  let total = 0;
+  for (let m = 1; m <= 12; m++) {
+    const iso = `${taxYear}-${String(m).padStart(2, "0")}-01`;
+    total += mileageRateCentsForDate(taxYear, iso);
+  }
+  return total / 12;
+}
+
 export function businessMileageDeductionCents(
   miles: number,
   taxYear: number,
+  tripDateIso?: string | null,
 ): number {
   if (!(miles > 0)) return 0;
-  const rate = getTaxYearConstants(taxYear).MILEAGE_RATE_PER_MILE_CENTS;
-  return Math.round(miles * rate);
+  return Math.round(miles * mileageRateCentsForDate(taxYear, tripDateIso));
 }
 
 /**
@@ -36,9 +73,10 @@ export function tripDeductionCents(
   trip: Pick<Trip, "distanceMiles">,
   classification: Classification,
   taxYear: number,
+  tripDateIso?: string | null,
 ): number {
   if (classification !== "business") return 0;
-  return businessMileageDeductionCents(trip.distanceMiles, taxYear);
+  return businessMileageDeductionCents(trip.distanceMiles, taxYear, tripDateIso);
 }
 
 /**

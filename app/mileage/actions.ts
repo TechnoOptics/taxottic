@@ -311,7 +311,12 @@ export async function addRouteTrip(formData: FormData) {
 
   const taxYear = new Date(startedAt).getUTCFullYear();
   const cls = classification as "business" | "personal" | "unclassified";
-  const deductionCents = tripDeductionCents({ distanceMiles: miles }, cls, taxYear);
+  const deductionCents = tripDeductionCents(
+    { distanceMiles: miles },
+    cls,
+    taxYear,
+    startedAt,
+  );
 
   const note =
     `Reconstructed from entered stops${stopsSummary ? ` (${stopsSummary})` : ""}. ` +
@@ -449,6 +454,7 @@ export async function addManualTrip(formData: FormData) {
     { distanceMiles: miles },
     cls,
     taxYear,
+    startedAt,
   );
 
   const { data: insertedTrip, error } = await admin

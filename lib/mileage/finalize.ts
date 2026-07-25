@@ -200,12 +200,13 @@ async function renderTripFromRaw(
 
   const taxYear = (trip.tax_year as number) ?? new Date(startIso).getUTCFullYear();
   const classification = (trip.classification as Classification) ?? "unclassified";
+  const newStart = track.points[0].captured_at;
   const deductionCents = tripDeductionCents(
     { distanceMiles: track.distanceMiles },
     classification,
     taxYear,
+    newStart,
   );
-  const newStart = track.points[0].captured_at;
   const newEnd = track.points[track.points.length - 1].captured_at;
   const { error: updErr } = await admin
     .from("mileage_trips")
@@ -421,6 +422,7 @@ export async function finalizeUserTrips(
       { distanceMiles: trip.distanceMiles },
       classification,
       taxYear,
+      startedAt,
     );
 
     const { data: inserted, error: tripErr } = await admin

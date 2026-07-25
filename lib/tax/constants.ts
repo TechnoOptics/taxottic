@@ -46,6 +46,7 @@ import {
   SE_TAX_2026,
   STANDARD_DEDUCTION_2026,
   UNDERPAYMENT_SAFE_HARBOR_2026,
+  MILEAGE_RATE_PERIODS_2026,
 } from "./constants-2026";
 
 export type Bracket = { rate: number; upTo: number | null };
@@ -79,6 +80,9 @@ export type TaxYearConstants = {
     obbbaMinimumQbiToQualifyCents?: number;
   };
   MILEAGE_RATE_PER_MILE_CENTS: number;
+  /** Date-ranged rates for split-rate years (IRS mid-year adjustments).
+   *  Each entry applies from `fromIso` inclusive. Absent = flat rate. */
+  MILEAGE_RATE_PERIODS?: { fromIso: string; centsPerMile: number }[];
   /**
    * True when the per-year IRS Notice that sets the mileage rate
    * hasn't been published yet and the bundle is using the prior
@@ -155,9 +159,10 @@ const BUNDLE_2026: TaxYearConstants = {
     obbbaMinimumQbiToQualifyCents: QBI_2026.obbbaMinimumQbiToQualifyCents,
   },
   MILEAGE_RATE_PER_MILE_CENTS: MILEAGE_RATE_2026_PER_MILE_CENTS,
-  // Final: 72.5¢/mile per IRS Notice 2026-10 (verified against irs.gov,
-  // Jul 2026). No longer provisional, so the forecast drops the
-  // "placeholder rate" assumption caveat.
+  // SPLIT-RATE YEAR: 72.5¢ Jan–Jun (Notice 2026-10), 76¢ from Jul 1 per
+  // the IRS mid-year adjustment announced ~Jul 13, 2026. Per-trip
+  // pricing uses MILEAGE_RATE_PERIODS via mileageRateCentsForDate.
+  MILEAGE_RATE_PERIODS: MILEAGE_RATE_PERIODS_2026,
   isMileageRateProvisional: false,
   // OBBBA § 70433: raised § 6041 reporting threshold from $600 to
   // $2,000 for payments made after Dec 31 2025.
