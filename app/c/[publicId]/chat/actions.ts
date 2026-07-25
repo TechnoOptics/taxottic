@@ -336,6 +336,22 @@ export async function sendMessage(formData: FormData) {
   if (error || !msg) throw new Error(error?.message ?? "Insert failed");
 
   if (attachments.length > 0) {
+    // Path confinement (audit #39): storage_path arrives from the
+    // client and admin-signed URLs are minted for whatever lands in
+    // chat_attachments — so an unvalidated path let a member attach
+    // ANY object in the bucket (another conversation's, another
+    // company's) and receive a working signed URL for it. Only paths
+    // inside THIS conversation's folder are acceptable; anything else
+    // (including ../ traversal) is rejected outright.
+    const requiredPrefix = `${ctx.companyPublicId}/${conversationId}/`;
+    for (const a of attachments) {
+      if (
+        !a.storage_path.startsWith(requiredPrefix) ||
+        a.storage_path.includes("..")
+      ) {
+        throw new Error("Invalid attachment path.");
+      }
+    }
     const rows = attachments.map((a) => ({
       message_id: msg.id,
       storage_path: a.storage_path,

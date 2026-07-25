@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   segmentTrips,
   suggestClassification,
-  STATIONARY_DWELL_MS,
+  TRIP_END_DWELL_MS,
   type Place,
   type Classification,
 } from "./segmentation";
@@ -297,12 +297,18 @@ export async function finalizeUserTrips(
     radiusM: (p.radius_m as number) ?? 120,
   }));
 
-  // Close the open trip only when the user is parked (last point older
-  // than the 5-min dwell) OR when the caller forces it. The cron never
-  // forces, so it cannot fragment a drive that is still in progress.
+  // Close the open trip when the caller forces it (sessionEnded /
+  // walked-away: an explicit, evidence-backed end) or when the user
+  // has been parked for the SAME 10-minute dwell the in-stream
+  // segmentation uses. It used to be the 5-min STATIONARY dwell, which
+  // quietly undercut the June 2026 fragmentation fix (audit major
+  // #15): at a dead stop the 25 m distanceFilter emits no fixes, the
+  // 30 s heartbeats keep re-running this test, and any train crossing
+  // or drive-through longer than 5 minutes severed the drive into two
+  // trips — shaving deductible connector miles every time.
   const lastPointAgeMs = Date.now() - allPoints[allPoints.length - 1].ts;
   const closeOpenAtEnd =
-    opts.forceClose || lastPointAgeMs >= STATIONARY_DWELL_MS;
+    opts.forceClose || lastPointAgeMs >= TRIP_END_DWELL_MS;
   const trips = segmentTrips(allPoints, { closeOpenAtEnd });
 
   let tripsCreated = 0;
