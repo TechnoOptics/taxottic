@@ -711,7 +711,10 @@
 // v115: expense sheet expands recurrence like the forecast (same row,
 // same number on both screens); trip tax year from local date; render
 // window clamped so neighbours can't double-count.
-const CACHE_VERSION = "v115";
+// v115: device-clock skew now shifts a batch instead of collapsing it
+// (drives keep their shape), watchdog budget resets on real fixes,
+// employee filter gated to manager/lead. Client JS changed -> bump.
+const CACHE_VERSION = "v116";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

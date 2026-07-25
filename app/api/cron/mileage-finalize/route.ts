@@ -49,11 +49,19 @@ export async function GET(req: NextRequest) {
   const pairs = new Map<string, { driver: string; company: string }>();
   const PAGE = 1000;
   const SCAN_CAP = 50_000;
+  // Same 45-day floor the finalizer itself uses. Without it the scan
+  // walked the 50,000 OLDEST unconsumed rows first — permanently
+  // stationary residue that will never segment — so a busy fleet could
+  // saturate the cap on ancient noise and never reach today's drivers
+  // (audit #32). Saturation is logged loudly below.
+  const scanSinceIso = new Date(Date.now() - 45 * 24 * 60 * 60_000).toISOString();
+  let scanSaturated = false;
   for (let from = 0; from < SCAN_CAP; from += PAGE) {
     const { data, error } = await admin
       .from("mileage_points_raw")
       .select("driver_user_id, company_id")
       .is("consumed_at", null)
+      .gte("captured_at", scanSinceIso)
       .order("captured_at", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) {
@@ -67,6 +75,12 @@ export async function GET(req: NextRequest) {
       pairs.set(`${driver}|${company}`, { driver, company });
     }
     if (rows.length < PAGE) break;
+    if (from + PAGE >= SCAN_CAP) scanSaturated = true;
+  }
+  if (scanSaturated) {
+    console.error(
+      `[mileage-finalize] SCAN CAP HIT (${SCAN_CAP}): some drivers may not have been finalized this tick. Raise SCAN_CAP or tighten retention.`,
+    );
   }
 
   // Finalize each. Wide window (45 days) so drives stranded well beyond
