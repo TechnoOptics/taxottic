@@ -705,9 +705,13 @@
 // v113: marketing/pricing copy corrected to match shipped reality
 // (daily sync not hourly, CPA workpaper not PDF+CSV, no unbuilt
 // white-label/API/trial-email claims). Public pages changed -> bump.
-const CACHE_VERSION = "v113";
+// v113: tax-engine corrections — NIIT/EITC see capital gains, AMT
+// keeps credits, additional-Medicare withholding credited, QBI cap
+// excludes net capital gain, combined 1040 keeps family credits.
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
+const CACHE_VERSION = "v114";
+
 
 const PRECACHE = ["/", "/login", "/manifest.webmanifest", "/icon.svg"];
 
