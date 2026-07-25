@@ -708,7 +708,10 @@
 // v114: marketing/pricing copy corrected to match shipped reality
 // (daily sync not hourly, CPA workpaper not PDF+CSV, no unbuilt
 // white-label/API/trial-email claims). Public pages changed -> bump.
-const CACHE_VERSION = "v114";
+// v115: expense sheet expands recurrence like the forecast (same row,
+// same number on both screens); trip tax year from local date; render
+// window clamped so neighbours can't double-count.
+const CACHE_VERSION = "v115";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

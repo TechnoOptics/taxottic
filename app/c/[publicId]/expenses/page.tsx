@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ImportConnectActions } from "@/components/ImportConnectActions";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { createServiceClient } from "@/lib/supabase/server";
+import { expandRowToMonthly, ytdOfMonthly } from "@/lib/tax/recurrence";
 import { getBusinessMileageSummary } from "@/lib/mileage/summary";
 import { formatCents } from "@/lib/tax/forecast";
 import {
@@ -131,9 +132,28 @@ export default async function ExpensesPage({
   // Personal-classified rows still show in the list (so a manager can see
   // what got reclassified and why) but never count toward the YTD
   // deduction total, they're not a business write-off anymore.
+  // Recurrence is EXPANDED here, exactly as the forecast expands it
+  // (expandRowToMonthly + ytdOfMonthly). A "$200/mo" row entered in
+  // January is $200 x elapsed-months of real YTD spend; counting it
+  // once made this sheet disagree with the forecast that drives the
+  // deduction — the same row, two different numbers, on two screens
+  // (audit #21).
   const expensesTotal = (rows ?? [])
     .filter((r) => r.classification !== "personal")
-    .reduce((a, r) => a + r.amount_cents, 0);
+    .reduce(
+      (a, r) =>
+        a +
+        ytdOfMonthly(
+          expandRowToMonthly({
+            month: r.month,
+            amount_cents: r.amount_cents,
+            recurrence: r.recurrence,
+            recurrence_end_month: r.recurrence_end_month,
+          }),
+          currentMonth,
+        ),
+      0,
+    );
 
   // Tracked business mileage, rolled up per month, so a logged drive
   // shows as a deduction line in the month it happened, the user

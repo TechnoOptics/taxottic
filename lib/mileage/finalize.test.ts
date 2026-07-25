@@ -63,3 +63,20 @@ describe("shouldReplaceTrack (render never-shrink invariant)", () => {
     expect(shouldReplaceTrack(0, 0)).toBe(false);
   });
 });
+
+// audit #34: a US evening drive on Dec 31 is already Jan 1 in UTC, so a
+// UTC-derived tax year filed the deduction under the wrong return.
+import { localTaxYear } from "./finalize";
+
+describe("localTaxYear (audit #34)", () => {
+  it("Dec 31 evening in US-Central stays in that tax year", () => {
+    // 2026-12-31 20:00 CST == 2027-01-01 02:00 UTC
+    const ms = Date.parse("2027-01-01T02:00:00Z");
+    expect(new Date(ms).getUTCFullYear()).toBe(2027); // the old, wrong answer
+    expect(localTaxYear(ms)).toBe(2026);
+  });
+
+  it("a genuine January drive is the new year", () => {
+    expect(localTaxYear(Date.parse("2027-01-02T18:00:00Z"))).toBe(2027);
+  });
+});
