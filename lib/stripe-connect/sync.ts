@@ -14,6 +14,7 @@ import {
   subscriptionFallbackKey,
   findCoveringRecurringRow,
   type CoverCandidate,
+  coverageKey,
 } from "@/lib/banking/subscription-dedupe";
 
 /**
@@ -535,6 +536,8 @@ async function autoApplyPendingStripe(args: {
     .eq("company_id", companyId)
     .neq("recurrence", "one_off");
   const incomeCandidates = (recIncome ?? []) as CoverCandidate[];
+  // One absorption per (recurring row, month) — see coverageKey.
+  const consumedCoverage = new Set<string>();
 
   let income = 0;
   let expense = 0;
@@ -582,12 +585,16 @@ async function autoApplyPendingStripe(args: {
       // no subscription key) into this month, the money is ALREADY in
       // the forecast. Link the bank transaction to that row instead of
       // creating a second countable one.
-      const coveringIncome = findCoveringRecurringRow(incomeCandidates, {
-        tax_year: taxYear,
-        month,
-        amount_cents: Math.abs(cents),
-        recurring_key: recurringKey,
-      });
+      const coveringIncome = findCoveringRecurringRow(
+        incomeCandidates,
+        {
+          tax_year: taxYear,
+          month,
+          amount_cents: Math.abs(cents),
+          recurring_key: recurringKey,
+        },
+        consumedCoverage,
+      );
       // Claim atomically before writing (idempotency under concurrent syncs).
       if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
         continue;
@@ -596,6 +603,7 @@ async function autoApplyPendingStripe(args: {
           .from("account_transactions")
           .update({ applied_to_income_id: coveringIncome.id })
           .eq("id", tx.id);
+        consumedCoverage.add(coverageKey(coveringIncome.id, month));
         income++;
         continue;
       }
@@ -627,6 +635,25 @@ async function autoApplyPendingStripe(args: {
           .update({ applied_to_income_id: row.id })
           .eq("id", tx.id);
         income++;
+        // Stripe's per-charge processing fee (~2.9% + 30c) lives on the
+        // balance transaction itself, not as a separate stripe_fee row,
+        // so it was never recorded and income was applied at GROSS —
+        // the module header promised 'Stripe fees as expenses' but no
+        // code read t.fee (audit #29). Book it as a deductible
+        // bank_fees expense alongside the income it belongs to.
+        const feeCents = Math.round(Number(raw.fee ?? 0));
+        if (feeCents > 0) {
+          await admin.from("monthly_expenses").insert({
+            company_id: companyId,
+            user_id: userId,
+            tax_year: taxYear,
+            month,
+            amount_cents: feeCents,
+            category_code: "bank_fees",
+            recurrence: "one_off",
+            notes: `Stripe processing fee on ${desc ?? "charge"}`.slice(0, 500),
+          });
+        }
         if (recurrence !== "one_off") {
           // Later charges in this same batch must see this stream.
           incomeCandidates.push({

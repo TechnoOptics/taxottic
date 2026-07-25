@@ -129,9 +129,18 @@ function projectionCovers(row: CoverCandidate, month: number): boolean {
  *    user's double-count case: hand-forecast $X/mo, then the real $X
  *    subscription charge arrives).
  */
+/** Stable key for "this row already absorbed a charge for this month". */
+export function coverageKey(rowId: string, month: number): string {
+  return `${rowId}:${month}`;
+}
+
 export function findCoveringRecurringRow(
   rows: readonly CoverCandidate[],
   probe: CoverProbe,
+  /** Coverage keys already used in this sync run. Callers mutate their
+   *  own Set after each absorption so one recurring row can't cover two
+   *  charges in the same month. */
+  consumed?: ReadonlySet<string>,
 ): CoverCandidate | null {
   const bucket = dollarBucket(probe.amount_cents);
   for (const row of rows) {
@@ -149,7 +158,14 @@ export function findCoveringRecurringRow(
       probe.recurring_key !== row.recurring_key
     )
       continue; // two distinct subscriptions at the same price
+
     if (!projectionCovers(row, probe.month)) continue;
+    // A recurring row projects ONE charge per covered month, so it can
+    // absorb at most one charge per month. Without this, a keyless
+    // match (amount + month only) let a single row swallow EVERY
+    // same-dollar deposit in every covered month, silently deleting
+    // real revenue from the forecast (audit #26).
+    if (consumed?.has(coverageKey(row.id, probe.month))) continue;
     return row;
   }
   return null;

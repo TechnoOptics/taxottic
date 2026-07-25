@@ -5,6 +5,7 @@ import {
   findCoveringRecurringRow,
   chargeFingerprint,
   type CoverCandidate,
+  coverageKey,
 } from "./subscription-dedupe";
 
 describe("isSubscriptionLike", () => {
@@ -172,5 +173,37 @@ describe("chargeFingerprint", () => {
     expect(chargeFingerprint("2026-07-05", 8999, "Adobe")).not.toBe(base);
     expect(chargeFingerprint("2026-07-04", 9000, "Adobe")).not.toBe(base);
     expect(chargeFingerprint("2026-07-04", 8999, "AWS")).not.toBe(base);
+  });
+});
+
+// audit #26 regression: a recurring row projects ONE charge per covered
+// month, so it must not absorb a second same-dollar deposit in that
+// month. Before this cap a single keyless row swallowed every matching
+// deposit for every covered month, deleting real revenue.
+describe("audit #26: one absorption per (row, month)", () => {
+  const row = {
+    id: "row-1",
+    tax_year: 2026,
+    month: 1,
+    amount_cents: 500_00,
+    recurrence: "monthly" as const,
+    recurring_key: null,
+  };
+  const probe = { tax_year: 2026, month: 5, amount_cents: 500_00 };
+
+  it("absorbs the first charge in a covered month", () => {
+    expect(findCoveringRecurringRow([row], probe, new Set())?.id).toBe("row-1");
+  });
+
+  it("refuses a second charge in the SAME month once consumed", () => {
+    const consumed = new Set([coverageKey("row-1", 5)]);
+    expect(findCoveringRecurringRow([row], probe, consumed)).toBeNull();
+  });
+
+  it("still absorbs in a DIFFERENT covered month", () => {
+    const consumed = new Set([coverageKey("row-1", 5)]);
+    expect(
+      findCoveringRecurringRow([row], { ...probe, month: 6 }, consumed)?.id,
+    ).toBe("row-1");
   });
 });
