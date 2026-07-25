@@ -14,6 +14,8 @@ import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
 import { DriverPicker, ALL_DRIVERS } from "@/components/mileage/DriverPicker";
+import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
+import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
 import {
   assessMileageTrackingHealth,
@@ -153,6 +155,15 @@ export default async function MileagePage({
   const viewingDriverLabel =
     drivers.find((d) => d.userId === viewingDriverId)?.label ?? null;
   const showDriverPicker = isManager && drivers.length >= 2;
+
+  // Team drive-tracking health (manager-only), computed from raw uploads
+  // so it is accurate even for a teammate on an old build. Surfaces a
+  // driver whose phone went silent or has been parked, the failure that
+  // used to go unnoticed until a week of drives had already gone missing.
+  const teamHealth =
+    isManager && drivers.length >= 1
+      ? await loadTeamTrackingHealth(admin, company!.id, drivers, Date.now())
+      : [];
   // Driver display names for the map legend + rollup (strip the "· you"
   // / "· Dept" suffixes the picker label carries).
   const driverNameById = new Map(
@@ -382,6 +393,10 @@ export default async function MileagePage({
             <div className="mt-2 text-sm text-ink-soft">
               {company.name} · {rangeCfg.label.toLowerCase()}
             </div>
+
+            {isManager && teamHealth.length > 0 ? (
+              <TeamTrackingHealth rows={teamHealth} />
+            ) : null}
 
             {/* Manager-only driver switcher. Re-scopes the whole page to
                 a chosen teammate's drives. */}

@@ -683,7 +683,10 @@
 // build now get a persistent "update to keep tracking" nudge, the
 // durable antidote to devices sitting on stale builds and silently
 // losing drive capture. New client component -> bump.
-const CACHE_VERSION = "v106";
+// v107: manager Team-tracking-health card on /mileage — flags a
+// driver whose phone went silent or has been parked, computed from raw
+// uploads so it works on any build. New server markup -> bump.
+const CACHE_VERSION = "v107";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
