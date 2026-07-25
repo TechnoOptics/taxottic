@@ -444,7 +444,14 @@ async function upsertTx(
   // comparison is correct here. We do this client-side because
   // /transactions/sync doesn't accept a start_date, the date window
   // is implicit in the cursor.
-  const yearStartIso = `${new Date().getUTCFullYear()}-01-01`;
+  // Keep the CURRENT and PREVIOUS tax years. Plaid delivers
+  // transactions days after their posted date and re-delivers December
+  // pendings as posted in January — with a current-year-only filter
+  // those late-December rows were dropped forever, because the cursor
+  // advances past them unconditionally and a re-sync can never see
+  // them again (audit critical #9). Downstream already derives
+  // tax_year from posted_date, so prior-year rows land correctly.
+  const yearStartIso = `${new Date().getUTCFullYear() - 1}-01-01`;
   // Plaid returns positive amount for outflow; we store cents with
   // the same sign convention so income flows are negative. Keep this
   // consistent because the suggestion engine assumes it.

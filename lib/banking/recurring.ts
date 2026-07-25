@@ -355,7 +355,7 @@ export async function applyRecurringIncomeDetection(
 ): Promise<number> {
   const { data: rows, error } = await admin
     .from("monthly_income")
-    .select("id, month, recurring_key, recurrence")
+    .select("id, month, recurring_key, recurrence, user_id, source, amount_cents")
     .eq("company_id", companyId)
     .eq("tax_year", taxYear)
     .not("recurring_key", "is", null);
@@ -366,5 +366,66 @@ export async function applyRecurringIncomeDetection(
   if (!rows || rows.length === 0) return 0;
 
   const updates = computeIncomeRecurrenceUpdates(rows as IncomeRowForRecurrence[]);
+
+  // Re-materialize absorbed charges before demoting an anchor (audit
+  // critical #10). While a row is the recurring anchor, the sync links
+  // later real charges to it (account_transactions.applied_to_income_id)
+  // INSTEAD of inserting countable rows — the projection covers their
+  // months. The moment the anchor demotes to one_off (typical trigger: a
+  // price change starts a fuller stream), that projection is gone and
+  // every absorbed charge would count NOWHERE. Turn each absorbed charge
+  // back into a real one_off row for its actual month, then repoint the
+  // link so a re-run is idempotent.
+  const rowById = new Map(
+    (rows as Array<{
+      id: string;
+      month: number;
+      user_id: string;
+      source: string | null;
+      recurrence: string | null;
+    }>).map((r) => [r.id, r]),
+  );
+  for (const u of updates) {
+    if (u.recurrence !== "one_off") continue; // promotion, not demotion
+    const anchor = rowById.get(u.id);
+    if (!anchor) continue;
+    const wasProjecting =
+      anchor.recurrence != null && anchor.recurrence !== "one_off";
+    if (!wasProjecting) continue;
+    const { data: absorbed } = await admin
+      .from("account_transactions")
+      .select("id, posted_date, amount_cents")
+      .eq("applied_to_income_id", u.id);
+    for (const tx of absorbed ?? []) {
+      const posted = String(tx.posted_date ?? "");
+      const txYear = Number(posted.slice(0, 4));
+      const txMonth = Number(posted.slice(5, 7));
+      if (!txYear || !txMonth) continue;
+      // The charge that CREATED the anchor shares its month; the anchor
+      // row itself still counts that month after demotion.
+      if (txYear === taxYear && txMonth === anchor.month) continue;
+      const { data: created } = await admin
+        .from("monthly_income")
+        .insert({
+          company_id: companyId,
+          user_id: anchor.user_id,
+          tax_year: txYear,
+          month: txMonth,
+          amount_cents: Math.abs(Number(tx.amount_cents) || 0),
+          source: anchor.source ?? "sales",
+          recurrence: "one_off",
+          notes: "Restored from a subscription charge when its recurring stream changed",
+        })
+        .select("id")
+        .maybeSingle();
+      if (created) {
+        await admin
+          .from("account_transactions")
+          .update({ applied_to_income_id: created.id })
+          .eq("id", tx.id);
+      }
+    }
+  }
+
   return persistRecurrenceUpdates(admin, "monthly_income", updates);
 }
