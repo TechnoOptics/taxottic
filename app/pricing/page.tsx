@@ -98,7 +98,7 @@ const PRICING_FAQ_LD = {
       name: "Is there a free trial on paid tiers?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes, every paid tier ships with a 14-day trial. No credit card required to start. We send one reminder email three days before the trial converts. Cancel anytime from Billing & plan.",
+        text: "Yes, every paid tier ships with a 14-day trial. No credit card required to start. Cancel anytime from Billing & plan, and the app shows your trial's days remaining while it's running.",
       },
     },
     {
@@ -232,14 +232,11 @@ const HIGHLIGHTS: Record<TierKey, string[]> = {
     "Unlimited CSV imports",
     "Priority support",
     "Audit support",
-    "White-label PDFs",
-    "API access",
     "5,000 AI credits / month",
   ],
   practice: [
     "Unlimited companies",
     "Preparer cockpit",
-    "White-label client portal",
     "Per-client or per-seat billing",
     "Priority + audit support",
     "15,000 AI credits / month",
