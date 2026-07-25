@@ -116,14 +116,27 @@
          not the Activity Recognition API. It was removed so the
          app no longer triggers Google Play's Health-apps
          declaration, which fires on that permission. -->
-    <!-- Walk-away drive-end detection (lib/mileage/drive-end.ts): the
-         step counter needs ACTIVITY_RECOGNITION on API 29+. Deliberately
-         RE-ADDED (it was removed when unused): the DeviceStatus plugin
-         now consumes it to close drives the moment the driver walks
-         away. NOTE: this permission triggers Google Play's Health-apps
-         declaration — complete it in Play Console before the release
-         carrying this build is submitted. -->
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- ACTIVITY_RECOGNITION is deliberately NOT declared.
+
+         It was re-added for walk-away drive-end detection (the step
+         counter needs it on API 29+), but Google Play then refuses the
+         release outright: "You must let us know whether your app
+         includes any health features." The Health-apps declaration IS
+         on file and correctly says Taxottic has none - Play still
+         rejects any binary shipping this permission alongside that
+         answer, and the only way through would be to declare an
+         "Activity and fitness" health feature we do not have. We will
+         not file a false declaration to ship a convenience feature.
+
+         Consequence: on Android, walk-away closing degrades to the
+         6-minute stationary fallback in lib/mileage/drive-end.ts (the
+         JS bridge already returns 0 steps when the plugin method is
+         absent, so this is a supported path, not a break). iOS keeps
+         full walk-away via CMPedometer, which no store policy gates.
+
+         The native step-counter code is retained but inert, so
+         restoring this is a one-line change if Play's stance changes
+         or a GPS-displacement walk-away signal replaces the sensor. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
