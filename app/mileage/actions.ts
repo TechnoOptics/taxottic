@@ -332,6 +332,7 @@ export async function addRouteTrip(formData: FormData) {
       tax_year: taxYear,
       deduction_cents: deductionCents,
       notes: note.slice(0, 500),
+      source: "route",
     })
     .select("id")
     .single();
@@ -462,6 +463,7 @@ export async function addManualTrip(formData: FormData) {
       tax_year: taxYear,
       deduction_cents: deductionCents,
       notes: "manual entry",
+      source: "manual",
     })
     .select("id")
     .single();

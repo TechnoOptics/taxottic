@@ -686,7 +686,10 @@
 // v107: manager Team-tracking-health card on /mileage — flags a
 // driver whose phone went silent or has been parked, computed from raw
 // uploads so it works on any build. New server markup -> bump.
-const CACHE_VERSION = "v107";
+// v108: audit fixes 1/3 — walk-away close can no longer be dropped by
+// a colliding flush (client change), manual/route trips protected from
+// machine rewrite. Client JS changed -> bump.
+const CACHE_VERSION = "v108";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

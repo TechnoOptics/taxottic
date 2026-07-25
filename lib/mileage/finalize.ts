@@ -148,6 +148,19 @@ async function renderTripFromRaw(
   // rendered rather than blanking the trip.
   if (track.points.length < 2) return null;
 
+  // Provenance guard (audit critical #1): manual and route trips carry a
+  // user-authored distance that is NOT derivable from raw GPS. A partial
+  // stranded trace inside their window must never overwrite them — that
+  // was destroying IRS-defensible odometer entries with 8-mile fragments.
+  {
+    const { data: t } = await admin
+      .from("mileage_trips")
+      .select("source")
+      .eq("id", tripId)
+      .maybeSingle();
+    if (t && (t as { source?: string }).source !== "tracked") return null;
+  }
+
   // Safety invariant: the render pass may only ADD detail to a trip,
   // never lose it. If a rebuild would produce fewer points than are
   // already drawn (a truncated/failed window read, a mid-flush race),
@@ -323,11 +336,24 @@ export async function finalizeUserTrips(
     // new one is fuller, replace the stale fragment(s).
     const { data: overlaps } = await admin
       .from("mileage_trips")
-      .select("id, distance_miles")
+      .select(
+        "id, distance_miles, source, classification, classified_by, classified_at, notes",
+      )
       .eq("company_id", companyId)
       .eq("driver_user_id", userId)
       .lte("started_at", endedAt)
       .gte("ended_at", startedAt);
+    // User-authored trips (manual odometer entry, route reconstruction)
+    // are authoritative for their window: the machine defers. Consume the
+    // raw range to them WITHOUT re-rendering (their distance/polyline is
+    // not raw-derived) and never insert a competing auto trip on top.
+    const authored = (overlaps ?? []).find(
+      (o) => (o as { source?: string }).source && (o as { source?: string }).source !== "tracked",
+    );
+    if (authored) {
+      await consumeRange(startedAt, endedAt, authored.id as string);
+      continue;
+    }
     const decision = resolveOverlapAction(
       trip.distanceMiles,
       (overlaps ?? []).map((o) => ({
@@ -350,11 +376,46 @@ export async function finalizeUserTrips(
       );
       continue;
     }
+    // Human classification survives a replace (audit critical #2): if any
+    // fragment being superseded was classified by a person, the fuller
+    // successor inherits that decision (and its notes) instead of a fresh
+    // auto-suggestion silently discarding review work — or worse,
+    // flipping a user-marked-personal drive back to business.
+    let carried: {
+      classification: "business" | "personal" | "unclassified";
+      classified_by: string;
+      classified_at: string | null;
+      notes: string | null;
+    } | null = null;
     if (decision.action === "replace") {
+      const humanClassified = (overlaps ?? [])
+        .filter(
+          (o) =>
+            decision.deleteIds.includes(o.id as string) &&
+            (o as { classified_by?: string | null }).classified_by != null,
+        )
+        .sort(
+          (a, b) =>
+            (Number(b.distance_miles) || 0) - (Number(a.distance_miles) || 0),
+        )[0];
+      if (humanClassified) {
+        carried = {
+          classification: (humanClassified as { classification: string })
+            .classification as "business" | "personal" | "unclassified",
+          classified_by: (humanClassified as { classified_by: string })
+            .classified_by,
+          classified_at:
+            (humanClassified as { classified_at: string | null })
+              .classified_at ?? null,
+          notes: (humanClassified as { notes: string | null }).notes ?? null,
+        };
+      }
       await admin.from("mileage_trips").delete().in("id", decision.deleteIds);
     }
 
-    const classification = suggestClassification(trip, places);
+    const classification = carried
+      ? carried.classification
+      : suggestClassification(trip, places);
     const taxYear = new Date(trip.startTs).getUTCFullYear();
     const dCents = tripDeductionCents(
       { distanceMiles: trip.distanceMiles },
@@ -371,6 +432,9 @@ export async function finalizeUserTrips(
         ended_at: endedAt,
         distance_miles: Number(trip.distanceMiles.toFixed(3)),
         classification,
+        classified_by: carried?.classified_by ?? null,
+        classified_at: carried?.classified_at ?? null,
+        notes: carried?.notes ?? null,
         tax_year: taxYear,
         deduction_cents: dCents,
       })
