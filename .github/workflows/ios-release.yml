@@ -108,6 +108,15 @@ jobs:
         run: |
           # Use github.run_number so each build is monotonic + unique.
           /usr/libexec/PlistBuddy -c "Set CFBundleVersion ${{ github.run_number }}" App/Info.plist
+          # The widget extension resolves its CFBundleVersion from
+          # $(CURRENT_PROJECT_VERSION) in the pbxproj, NOT from the app's
+          # patched Info.plist — so patching only the app left the appex
+          # on a stale build number and altool warned "The CFBundleVersion
+          # of an app extension ('3') must match that of its containing
+          # parent app ('28')". Apple can reject on that at processing.
+          # Bump every CURRENT_PROJECT_VERSION so app and appex agree.
+          sed -i "" "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/g" App.xcodeproj/project.pbxproj
+          grep -c "CURRENT_PROJECT_VERSION = ${{ github.run_number }};" App.xcodeproj/project.pbxproj
 
       # Pin the bundle id + team id in the Xcode project so the
       # automatic-signing flow knows which provisioning profile to
