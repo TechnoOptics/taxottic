@@ -25,7 +25,12 @@ const EXPENSE_MAP: Record<string, string | null> = {
   ENTERTAINMENT: "meals",
   BANK_FEES: "office",
   GOVERNMENT_AND_NON_PROFIT: "taxes_licenses",
-  LOAN_PAYMENTS: "interest_business",
+  // A loan/credit-card payment is mostly PRINCIPAL, which is never
+  // deductible; only the interest portion could be, and Plaid doesn't
+  // split it. Auto-applying the whole bill as business interest both
+  // inflated deductions and (via the card-side inflow) minted phantom
+  // income (audit critical #11). Leave in the review queue.
+  LOAN_PAYMENTS: null,
   MEDICAL: "benefits",
 
   // Skip: not a business expense or ambiguous
@@ -68,6 +73,15 @@ export function categorizeIncome(
 ): string | null {
   // Transfers between own accounts are never income.
   if (plaidPrimaryCategory === "TRANSFER_IN") return null;
+  // A credit-card/loan payment arriving on the card account is the
+  // user's own money moving, not revenue — it used to fall through to
+  // the 'sales' default and mint phantom business income.
+  if (
+    plaidPrimaryCategory === "LOAN_PAYMENTS" ||
+    plaidDetailedCategory?.startsWith("LOAN_PAYMENTS")
+  ) {
+    return null;
+  }
 
   // Try the detailed category first - it's the more specific INCOME_*
   // bucket. Fall back to the primary.
