@@ -1,5 +1,9 @@
-Big reliability update for automatic mileage tracking:
-- Drives now capture and appear far more reliably in the background.
-- We detect and alert you the moment tracking is interrupted, so you never silently lose a drive.
-- Recovered drives follow the real roads instead of a straight line.
-- Cleaner app launch and a faster, tidier experience throughout.
+Drive tracking is substantially more reliable in this release.
+
+- Trips now close within about a minute of you parking and walking away, instead of waiting on a timer.
+- A stop at a train crossing, drive-through, or long light no longer splits one drive into two.
+- Drives keep their full shape even when your phone's clock drifts.
+- Miles are priced at the correct IRS rate for the date you drove, including the mid-year rate change.
+- Manually entered and reconstructed trips are protected and never overwritten.
+- Vehicle costs are no longer double-counted against the standard mileage rate.
+- Your year-end CPA export now includes tracked mileage on Schedule C.
