@@ -699,7 +699,10 @@
 // v111: buffer carries company provenance (multi-company miles can't
 // jump books); team chat gated on the COMPANY plan (employees of a
 // paying company stay in). Client JS changed -> bump.
-const CACHE_VERSION = "v111";
+// v112: dead stops no longer sever drives (10-min server dwell,
+// 12-min client fallback); chat attachment paths confined. Client JS
+// changed -> bump.
+const CACHE_VERSION = "v112";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

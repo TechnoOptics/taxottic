@@ -25,7 +25,11 @@ export const STEP_CLOSE_THRESHOLD = 18;
  *  (phone left in the car, driver sitting). Matches the server's own
  *  parked-dwell floor so the two never disagree, just a hair longer to
  *  stay conservative when steps are unavailable. */
-export const STATIONARY_CLOSE_MS = 6 * 60_000;
+// Longer than the server's 10-min in-stream dwell ON PURPOSE: this
+// fallback fires a forceClose, so at 6 min it was severing drives at
+// drawbridges/train crossings (no steps at a stop, so only the timer
+// gates it). Walk-away (steps) stays fast; the timer is the slow path.
+export const STATIONARY_CLOSE_MS = 12 * 60_000;
 
 /** A driving-like speed. Below this the vehicle is treated as stationary
  *  for the purpose of drive-end (m/s; ~3.4 mph). */
