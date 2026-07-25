@@ -542,7 +542,7 @@ const PERSONAL: Capability[] = [
   {
     kicker: "Quarterly Reminders",
     title: "Gentle nudges, in good time.",
-    body: "Quarterly set-asides calculated from your live forecast, with reminders that fire two weeks early. A small habit that makes April feel ordinary.",
+    body: "Quarterly set-asides calculated from your live forecast, with a reminder for every IRS deadline. A small habit that makes April feel ordinary.",
     pull: "A small habit that pays off.",
   },
 ];
@@ -551,7 +551,7 @@ const BUSINESS: Capability[] = [
   {
     kicker: "Automatic Expensing",
     title: "Your bank feed becomes your books.",
-    body: "Every business transaction syncs hourly and lands pre-matched to an IRS deduction code, cited to the publication. Mixed personal/business? Reclassify in a tap. No receipts to shoebox, no month-end catch-up.",
+    body: "Every business transaction syncs daily and lands pre-matched to an IRS deduction code, cited to the publication. Mixed personal/business? Reclassify in a tap. No receipts to shoebox, no month-end catch-up.",
     pull: "The books keep themselves.",
   },
   {
@@ -569,7 +569,7 @@ const BUSINESS: Capability[] = [
   {
     kicker: "Year-End, Done for You",
     title: "A ready-to-file Schedule C, plus a plan.",
-    body: "Every applied transaction lands on its proper Schedule C line, meals at 50%, vehicle split correctly, exported to PDF + CSV for your CPA. A savings playbook shows the moves still worth making before December.",
+    body: "Every applied transaction lands on its proper Schedule C line, meals at 50%, vehicle split correctly, exported as a print-ready CPA workpaper. A savings playbook shows the moves still worth making before December.",
     pull: "December feels like any other month.",
   },
 ];
@@ -679,7 +679,7 @@ const TOUR: Record<
         kicker: "Every day - Automatic expensing",
         title: "Your accounts do the sorting.",
         body: "New transactions sync on their own and land pre-matched to a deductible category, IRC section cited, source one tap away. Charitable gifts, medical, education, student-loan interest, tagged the moment they clear. One tap to keep, dismiss, or split.",
-        tags: ["Hourly sync", "IRS-cited", "Auto-applied"],
+        tags: ["Daily sync", "IRS-cited", "Auto-applied"],
       },
       {
         mockup: <DeductionCatalogMockup />,
@@ -719,7 +719,7 @@ const TOUR: Record<
         kicker: "Hour 1 - Automatic expensing",
         title: "The bank feed becomes the books.",
         body: "Every active account stays in step every hour. New transactions land tagged against the 1,025-item IRS deduction catalog, IRC section cited. Meals at 50%, software, travel, home office, all applied automatically. One tap to dismiss or split.",
-        tags: ["Hourly bank sync", "1,025 IRS-cited deductions", "Auto-applied"],
+        tags: ["Daily bank sync", "1,025 IRS-cited deductions", "Auto-applied"],
       },
       {
         mockup: <MileageMockup />,
@@ -739,8 +739,8 @@ const TOUR: Record<
         mockup: <ScheduleCMockup />,
         kicker: "December - Year-end, done for you",
         title: "One click assembles the whole Schedule C.",
-        body: "Every applied transaction lands on its proper Schedule C line. Meals 50% rule applied, vehicle split between standard and actual, everything cited to the IRS publication and exported to PDF + CSV, ready for your CPA.",
-        tags: ["Schedule C", "IRS-cited", "PDF + CSV"],
+        body: "Every applied transaction lands on its proper Schedule C line. Meals 50% rule applied, vehicle split between standard and actual, everything cited to the IRS publication and exported as a print-ready workpaper for your CPA.",
+        tags: ["Schedule C", "IRS-cited", "CPA workpaper"],
       },
     ],
   },
@@ -1370,7 +1370,7 @@ function ProofBand() {
   const stats = [
     { kpi: "1,025", label: "IRS-cited deductions, auto-matched against every bank transaction" },
     { kpi: "1 hr", label: "Bank sync cadence - fully automatic" },
-    { kpi: "Q1-Q4", label: "Quarterly safe-harbor reminders, two weeks early" },
+    { kpi: "Q1-Q4", label: "Quarterly safe-harbor reminders" },
     { kpi: "Face ID", label: "Passkey biometric sign-in on every device" },
   ];
   return (

@@ -313,7 +313,7 @@ const TIER_PERKS: Record<Exclude<Plan, "free">, string[]> = {
     "Unlimited companies / seats",
     "15,000 credits / month",
     "Preparer center + client portal",
-    "White-label + 1M-context review",
+    "1M-context review",
   ],
 };
 
