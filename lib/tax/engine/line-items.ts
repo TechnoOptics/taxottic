@@ -1,4 +1,5 @@
 import { getTaxYearConstants } from "../constants";
+import { fullYearAverageMileageRateCents } from "../../mileage/deduction";
 import type { FilingStatus } from "../constants-2025";
 
 // Standalone per-line-item calculators: mileage, simplified home office, and
@@ -26,8 +27,10 @@ export function computeMileageDeductionCents(args: {
     args.monthsEntered > 0 ? 12 / Math.min(12, args.monthsEntered) : 1;
   const projectedMiles = args.ytdMiles * projectionFactor;
   const taxYear = args.taxYear ?? new Date().getUTCFullYear();
-  const k = getTaxYearConstants(taxYear);
-  return Math.round(projectedMiles * k.MILEAGE_RATE_PER_MILE_CENTS);
+  // An annualized projection spans the whole year, so in a split-rate
+  // year (2026 mid-year increase) price it at the month-weighted
+  // average, not the January rate.
+  return Math.round(projectedMiles * fullYearAverageMileageRateCents(taxYear));
 }
 
 /**

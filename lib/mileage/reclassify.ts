@@ -38,7 +38,7 @@ export async function reclassifyTripCore(
 
   const { data: trip } = await admin
     .from("mileage_trips")
-    .select("id, company_id, driver_user_id, distance_miles, tax_year")
+    .select("id, company_id, driver_user_id, distance_miles, tax_year, started_at")
     .eq("id", tripId)
     .maybeSingle();
   if (!trip) return { ok: false, reason: "not_found" };
@@ -59,6 +59,7 @@ export async function reclassifyTripCore(
     { distanceMiles: Number(trip.distance_miles) },
     cls,
     Number(trip.tax_year),
+    trip.started_at as string,
   );
 
   const { error } = await admin

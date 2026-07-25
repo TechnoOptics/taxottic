@@ -207,6 +207,24 @@ export function buildCompanyForecast(
         ),
     );
 
+  // Vehicle-method election, needed BEFORE the expense sums: under the
+  // standard-mileage method the per-mile rate already includes gas,
+  // repairs, insurance and depreciation, so car_truck expense rows must
+  // NOT also count as deductible business expenses — the bank feed
+  // auto-categorizes gas stations into car_truck, so without this the
+  // same vehicle was deducted twice (audit critical #4). Under an
+  // explicit actual-expense election the reverse holds: car_truck rows
+  // count and the mileage engine contributes zero.
+  //
+  // Standard mileage is the DEFAULT method, so treat a null/unset
+  // vehicle_method as standard; only an explicit "actual" election
+  // opts out (matches resolveAutoMileageCents).
+  const onStandardVehicle =
+    !!businessProfile?.has_vehicle &&
+    businessProfile?.vehicle_method !== "actual";
+  const carTruckExcluded = (r: { category_code: string }) =>
+    onStandardVehicle && r.category_code === "car_truck";
+
   const recurringMealsMonthly = monthlyForExpenses(
     (r) => r.category_code === "meals",
   );
@@ -216,7 +234,8 @@ export function buildCompanyForecast(
   const recurringBizExpenseMonthly = monthlyForExpenses(
     (r) =>
       r.category_code !== "meals" &&
-      !ABOVE_THE_LINE_CODES.has(r.category_code),
+      !ABOVE_THE_LINE_CODES.has(r.category_code) &&
+      !carTruckExcluded(r),
   );
 
   // ---------- "As-of-today" totals ----------
@@ -234,7 +253,8 @@ export function buildCompanyForecast(
       expenses,
       (r) =>
         r.category_code !== "meals" &&
-        !ABOVE_THE_LINE_CODES.has(r.category_code),
+        !ABOVE_THE_LINE_CODES.has(r.category_code) &&
+        !carTruckExcluded(r),
     ) + ytdOfMonthly(recurringBizExpenseMonthly, currentMonth);
 
   // ---------- Year-end projected totals ----------
@@ -252,25 +272,22 @@ export function buildCompanyForecast(
       expenses,
       (r) =>
         r.category_code !== "meals" &&
-        !ABOVE_THE_LINE_CODES.has(r.category_code),
+        !ABOVE_THE_LINE_CODES.has(r.category_code) &&
+        !carTruckExcluded(r),
     ) + totalOfMonthly(recurringBizExpenseMonthly);
 
   // Auto-deductions from business profile.
   //
-  // Standard mileage is the DEFAULT method, so treat a null/unset
-  // vehicle_method as standard, only an explicit "actual" election
-  // (deducting real car costs instead of per-mile) opts out. The old
-  // `=== "standard"` check silently dropped tracked mileage for every
-  // profile that had has_vehicle=true but never picked a method, so
-  // logged drives never moved the forecast. Matches the `!== "actual"`
-  // test the forecast page already uses.
-  const onStandardVehicle =
-    !!businessProfile?.has_vehicle &&
-    businessProfile?.vehicle_method !== "actual";
   const manualMileageProjected = onStandardVehicle
     ? computeMileageDeductionCents({
         ytdMiles: businessProfile?.vehicle_business_miles ?? 0,
-        monthsEntered: Math.max(1, monthsWithOneOff),
+        // Elapsed CALENDAR months (audit critical #7): the divisor used
+        // to be months-with-one-off-ledger-entries, which is unrelated
+        // to how long the miles took to accrue — an all-recurring
+        // bookkeeping setup gave divisor 1 and multiplied real YTD
+        // mileage by 12. Same basis as home office and manualYtdCents.
+        monthsEntered: Math.max(1, currentMonth),
+        taxYear,
       })
     : 0;
 
@@ -282,7 +299,7 @@ export function buildCompanyForecast(
       trackedTripCount,
       manualProjectedCents: manualMileageProjected,
       manualYtdCents: Math.round(manualMileageProjected * (currentMonth / 12)),
-      trackedProjectionMonths: monthsWithOneOff,
+      trackedProjectionMonths: Math.max(1, currentMonth),
     });
   const autoHomeOfficeFull = computeHomeOfficeSimplifiedCents({
     hasHomeOffice: businessProfile?.has_home_office ?? false,

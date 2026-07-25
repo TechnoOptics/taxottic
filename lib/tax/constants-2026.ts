@@ -172,6 +172,17 @@ export const QBI_2026 = {
 // are not modeled, the forecast only applies the business rate.
 export const MILEAGE_RATE_2026_PER_MILE_CENTS = 72.5;
 
+/**
+ * 2026 is a SPLIT-RATE year: the IRS raised the business standard
+ * mileage rate mid-year (announced ~Jul 13, 2026). Notice 2026-10's
+ * 72.5¢ applies Jan 1 – Jun 30 only; 76¢ applies from Jul 1. Each entry
+ * applies from `fromIso` (inclusive) until the next entry.
+ */
+export const MILEAGE_RATE_PERIODS_2026 = [
+  { fromIso: "2026-01-01", centsPerMile: 72.5 },
+  { fromIso: "2026-07-01", centsPerMile: 76 },
+];
+
 // ---------- Child Tax Credit (§ 4.05; OBBBA § 70104) ----------
 //
 // OBBBA increased the maximum credit to $2,200 for 2025+ and made the

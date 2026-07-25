@@ -186,3 +186,47 @@ describe("resolveAutoMileageCents", () => {
     ).toBe(5000); // 5000 × 12 / 12
   });
 });
+
+// ── Split-rate year (2026 IRS mid-year adjustment) ──────────────────
+// The IRS raised the business rate to 76¢/mi effective Jul 1, 2026;
+// 72.5¢ applies Jan 1 – Jun 30 (Notice 2026-10). Every trip must be
+// priced at the rate in force ON ITS DATE, and annualized projections
+// at the month-weighted average. These tests pin that behaviour so a
+// future "simplify to one constant" regression fails loudly.
+import {
+  mileageRateCentsForDate,
+  fullYearAverageMileageRateCents,
+} from "./deduction";
+
+describe("2026 split-rate pricing", () => {
+  it("resolves the rate by trip date across the Jul 1 boundary", () => {
+    expect(mileageRateCentsForDate(2026, "2026-06-30T23:59:00Z")).toBe(72.5);
+    expect(mileageRateCentsForDate(2026, "2026-07-01T00:00:00Z")).toBe(76);
+    expect(mileageRateCentsForDate(2026, "2026-01-15")).toBe(72.5);
+    expect(mileageRateCentsForDate(2026, "2026-12-31")).toBe(76);
+  });
+
+  it("undated calls fall back to the base year rate", () => {
+    expect(mileageRateCentsForDate(2026)).toBe(72.5);
+    expect(mileageRateCentsForDate(2025, "2025-08-01")).toBe(70);
+  });
+
+  it("prices a trip at its own date's rate", () => {
+    expect(businessMileageDeductionCents(100, 2026, "2026-03-10")).toBe(7250);
+    expect(businessMileageDeductionCents(100, 2026, "2026-08-10")).toBe(7600);
+  });
+
+  it("tripDeductionCents: business-only, date-aware", () => {
+    expect(
+      tripDeductionCents({ distanceMiles: 10 }, "business", 2026, "2026-09-01"),
+    ).toBe(760);
+    expect(
+      tripDeductionCents({ distanceMiles: 10 }, "personal", 2026, "2026-09-01"),
+    ).toBe(0);
+  });
+
+  it("full-year average is month-weighted (6mo @72.5 + 6mo @76)", () => {
+    expect(fullYearAverageMileageRateCents(2026)).toBeCloseTo(74.25, 5);
+    expect(fullYearAverageMileageRateCents(2025)).toBe(70);
+  });
+});

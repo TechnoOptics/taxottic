@@ -689,7 +689,11 @@
 // v108: audit fixes 1/3 — walk-away close can no longer be dropped by
 // a colliding flush (client change), manual/route trips protected from
 // machine rewrite. Client JS changed -> bump.
-const CACHE_VERSION = "v108";
+// v109: audit money-math fixes — IRS split-rate 2026 mileage pricing
+// (72.5¢ H1 / 76¢ H2), car_truck no longer double-counted under
+// standard mileage, projections on elapsed months. Forecast copy
+// changed -> bump.
+const CACHE_VERSION = "v109";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

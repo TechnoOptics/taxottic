@@ -532,7 +532,27 @@ export function forecast(input: ForecastInput): ForecastResult {
     // 72.5¢/mile show correctly, a dollar `.toFixed(2)` would round
     // $0.725 down to "$0.72".
     const ratePerMile = `${k.MILEAGE_RATE_PER_MILE_CENTS}¢`;
-    if (k.isMileageRateProvisional) {
+    if (k.MILEAGE_RATE_PERIODS && k.MILEAGE_RATE_PERIODS.length > 1) {
+      // Split-rate year (IRS mid-year adjustment): say exactly which
+      // rate applies when, so the on-screen claim matches how each
+      // trip was actually priced.
+      const parts = k.MILEAGE_RATE_PERIODS.map((per, i, arr) => {
+        const from = new Date(per.fromIso + "T00:00:00Z");
+        const to = arr[i + 1]
+          ? new Date(Date.parse(arr[i + 1].fromIso) - 86_400_000)
+          : new Date(Date.UTC(k.year, 11, 31));
+        const fmt = (d: Date) =>
+          d.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            timeZone: "UTC",
+          });
+        return `${per.centsPerMile}¢ (${fmt(from)} – ${fmt(to)})`;
+      });
+      assumptions.push(
+        `Vehicle: standard mileage applied at the IRS ${k.year} split rates of ${parts.join(" and ")} per business mile, per the IRS mid-year adjustment. Each trip is priced at the rate in force on its date.`,
+      );
+    } else if (k.isMileageRateProvisional) {
       assumptions.push(
         `Vehicle: standard mileage applied at ${ratePerMile} per business mile (the ${k.year} IRS Notice hasn't been published yet; we're carrying forward last year's rate as a placeholder and will refresh once the Notice posts).`,
       );
