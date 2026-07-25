@@ -84,6 +84,19 @@ export function shouldReplaceTrack(
   return rebuiltCount >= 2 && rebuiltCount >= existingRenderedCount;
 }
 
+/** Calendar year of an instant in US-Central, the fleet default. UTC
+ *  rolls over 6 hours early, misfiling US evening drives near Dec 31. */
+export function localTaxYear(
+  ms: number,
+  timeZone = "America/Chicago",
+): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric" }).format(
+      new Date(ms),
+    ),
+  );
+}
+
 /**
  * Rebuild a trip's rendered track (mileage_points) + distance from ALL
  * raw staging points inside its own time window, then persist. This is
@@ -373,13 +386,44 @@ export async function finalizeUserTrips(
       // Merge this segment's window into the keeper's rendered track so
       // an absorbed fragment's points are drawn, not just marked consumed
       // (the straight-line bug: consumed-but-never-rendered points).
+      // Clamp the render window to the keeper's own span union this
+      // segment. Rendering a raw range that reaches across ANOTHER
+      // existing trip made both trips draw the same points, so the same
+      // miles were counted twice (audit #16).
+      const { data: keeper } = await admin
+        .from("mileage_trips")
+        .select("started_at, ended_at")
+        .eq("id", decision.keeperId)
+        .maybeSingle();
+      const kStart = keeper?.started_at
+        ? (keeper.started_at as string)
+        : startedAt;
+      const kEnd = keeper?.ended_at ? (keeper.ended_at as string) : endedAt;
+      const unionStart = startedAt < kStart ? startedAt : kStart;
+      const unionEnd = endedAt > kEnd ? endedAt : kEnd;
+      const { data: neighbours } = await admin
+        .from("mileage_trips")
+        .select("started_at, ended_at")
+        .eq("company_id", companyId)
+        .eq("driver_user_id", userId)
+        .neq("id", decision.keeperId)
+        .lte("started_at", unionEnd)
+        .gte("ended_at", unionStart);
+      let clampedStart = unionStart;
+      let clampedEnd = unionEnd;
+      for (const n of neighbours ?? []) {
+        const nStart = n.started_at as string;
+        const nEnd = n.ended_at as string;
+        if (nEnd <= kStart && nEnd > clampedStart) clampedStart = nEnd;
+        if (nStart >= kEnd && nStart < clampedEnd) clampedEnd = nStart;
+      }
       await renderTripFromRaw(
         admin,
         userId,
         companyId,
         decision.keeperId,
-        startedAt,
-        endedAt,
+        clampedStart,
+        clampedEnd,
       );
       continue;
     }
@@ -423,7 +467,13 @@ export async function finalizeUserTrips(
     const classification = carried
       ? carried.classification
       : suggestClassification(trip, places);
-    const taxYear = new Date(trip.startTs).getUTCFullYear();
+    // Tax year from the trip's LOCAL date. A US evening drive on Dec 31
+    // is already Jan 1 in UTC, so getUTCFullYear() filed it under the
+    // WRONG tax year — the deduction landed in a return the user had
+    // already filed (audit #34). America/Chicago is the fleet default
+    // until a per-company timezone exists; any US zone puts a Dec-31
+    // evening drive back in the right year.
+    const taxYear = localTaxYear(trip.startTs);
     const dCents = tripDeductionCents(
       { distanceMiles: trip.distanceMiles },
       classification,
