@@ -95,6 +95,20 @@ export async function GET() {
   const companyIds = (memberships ?? []).map(
     (m: { company_id: string }) => m.company_id,
   );
+  // Role scoping (audit critical #8): this export authenticates the
+  // caller but used to read with the service client at FULL company
+  // scope for every membership, handing a plain member every
+  // coworker's income/expense rows, the whole bank feed, and the
+  // DECRYPTED EIN — the exact data the RLS migration
+  // 20260704120000_scope_member_financial_reads deliberately walled
+  // off. "Download my data" means the data THIS USER can see in the
+  // app: managers get company books, members get their own rows only.
+  const roleByCompany = new Map(
+    (memberships ?? []).map((m: { company_id: string; role: string }) => [
+      m.company_id,
+      m.role,
+    ]),
+  );
 
   const companies: ExportEnvelope["companies"] = [];
   if (companyIds.length > 0) {
@@ -106,6 +120,7 @@ export async function GET() {
       .in("id", companyIds);
 
     for (const c of companyRows ?? []) {
+      const isManager = roleByCompany.get(c.id) === "manager";
       const [
         { data: members },
         { data: bps },
@@ -119,56 +134,70 @@ export async function GET() {
           .from("company_members")
           .select("user_id, role, joined_at, title")
           .eq("company_id", c.id),
-        admin
-          .from("business_profiles")
-          .select("*")
-          .eq("company_id", c.id),
-        admin
-          .from("monthly_income")
-          .select("*")
-          .eq("company_id", c.id),
-        admin
-          .from("monthly_expenses")
-          .select("*")
-          .eq("company_id", c.id),
-        admin
-          .from("bank_connections")
-          .select(
-            "id, provider, institution_name, status, last_synced_at, last_error, created_at, deleted_at",
-          )
-          .eq("company_id", c.id),
-        admin
-          .from("bank_accounts")
-          .select("*")
-          .in(
-            "connection_id",
-            (
-              await admin
-                .from("bank_connections")
-                .select("id")
-                .eq("company_id", c.id)
-            ).data?.map((r: { id: string }) => r.id) ?? [],
-          ),
-        admin
-          .from("account_transactions")
-          .select("*")
-          .in(
-            "account_id",
-            (
-              await admin
-                .from("bank_accounts")
-                .select("id, connection_id")
-                .in(
-                  "connection_id",
-                  (
-                    await admin
-                      .from("bank_connections")
-                      .select("id")
-                      .eq("company_id", c.id)
-                  ).data?.map((r: { id: string }) => r.id) ?? [],
-                )
-            ).data?.map((r: { id: string }) => r.id) ?? [],
-          ),
+        // Business profile (incl. EIN) is owner/manager material.
+        isManager
+          ? admin.from("business_profiles").select("*").eq("company_id", c.id)
+          : Promise.resolve({ data: [] as never[] }),
+        // Members export THEIR OWN ledger rows, mirroring the RLS the
+        // app enforces everywhere else.
+        isManager
+          ? admin.from("monthly_income").select("*").eq("company_id", c.id)
+          : admin
+              .from("monthly_income")
+              .select("*")
+              .eq("company_id", c.id)
+              .eq("user_id", user.id),
+        isManager
+          ? admin.from("monthly_expenses").select("*").eq("company_id", c.id)
+          : admin
+              .from("monthly_expenses")
+              .select("*")
+              .eq("company_id", c.id)
+              .eq("user_id", user.id),
+        isManager
+          ? admin
+              .from("bank_connections")
+              .select(
+                "id, provider, institution_name, status, last_synced_at, last_error, created_at, deleted_at",
+              )
+              .eq("company_id", c.id)
+          : Promise.resolve({ data: [] as never[] }),
+        isManager
+          ? admin
+              .from("bank_accounts")
+              .select("*")
+              .in(
+                "connection_id",
+                (
+                  await admin
+                    .from("bank_connections")
+                    .select("id")
+                    .eq("company_id", c.id)
+                ).data?.map((r: { id: string }) => r.id) ?? [],
+              )
+          : Promise.resolve({ data: [] as never[] }),
+        isManager
+          ? admin
+              .from("account_transactions")
+              .select("*")
+              .in(
+                "account_id",
+                (
+                  await admin
+                    .from("bank_accounts")
+                    .select("id, connection_id")
+                    .in(
+                      "connection_id",
+                      (
+                        await admin
+                          .from("bank_connections")
+                          .select("id")
+                          .eq("company_id", c.id)
+                      ).data?.map((r: { id: string }) => r.id) ?? [],
+                    )
+                ).data?.map((r: { id: string }) => r.id) ?? [],
+              )
+          : Promise.resolve({ data: [] as never[] }),
       ]);
 
       companies.push({
@@ -182,10 +211,12 @@ export async function GET() {
         members: members ?? [],
         // Decrypt the EIN so the user's own data export shows their real
         // value, not the stored ciphertext.
-        business_profiles: (bps ?? []).map((bp: { ein?: string | null }) => ({
-          ...bp,
-          ein: decryptField(bp.ein),
-        })),
+        business_profiles: isManager
+          ? (bps ?? []).map((bp: { ein?: string | null }) => ({
+              ...bp,
+              ein: decryptField(bp.ein),
+            }))
+          : [],
         monthly_income: incomeRows ?? [],
         monthly_expenses: expenseRows ?? [],
         bank_connections: conns ?? [],

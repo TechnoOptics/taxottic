@@ -693,7 +693,10 @@
 // (72.5¢ H1 / 76¢ H2), car_truck no longer double-counted under
 // standard mileage, projections on elapsed months. Forecast copy
 // changed -> bump.
-const CACHE_VERSION = "v109";
+// v110: CPA export now includes tracked mileage (Sched C Line 9),
+// excludes personal-reclassified rows; data export role-scoped. Page
+// markup changed -> bump.
+const CACHE_VERSION = "v110";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
