@@ -52,9 +52,12 @@ export default async function ExpensesPage({
   const currentMonth = new Date().getUTCMonth() + 1;
   const isLead = role === "lead";
 
-  // Team roster for the per-employee filter. Members can already read
-  // every company expense (RLS: "member read"), so this filter is a
-  // view convenience, it only renders when there are ≥2 members. Names
+  // Team roster for the per-employee filter. Managers and department
+  // leads only: the member-privacy RLS (migration 20260704120000)
+  // scopes a plain member's reads to their OWN rows, so offering them
+  // teammate names produced an filter that could only ever return an
+  // empty list (audit #35). The old comment here claimed members could
+  // read every company expense, which stopped being true then. Names
   // come from profiles (full_name, falling back to email); department
   // (if assigned) is appended so the admin can see where a drive/expense
   // came from at a glance.
@@ -239,7 +242,7 @@ export default async function ExpensesPage({
           {/* Per-employee filter, only for companies with a team. Picking
               a person scopes both the expense rows AND the mileage rollup
               to them via ?emp=. */}
-          {multiMember ? (
+          {multiMember && (isManager || isLead) ? (
             <div className="mt-3">
               <EmployeeFilter members={members} current={emp} />
             </div>

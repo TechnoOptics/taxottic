@@ -190,6 +190,9 @@ export default async function SavingsGoalsPage({
     ? computeMileageDeductionCents({
         ytdMiles: businessProfile?.vehicle_business_miles ?? 0,
         monthsEntered: Math.max(1, currentMonth),
+        // Price at the FORECAST's year, not the server's current year
+        // (audit #33): a prior-year view silently used today's rate.
+        taxYear,
       })
     : 0;
   const admin = createServiceClient();

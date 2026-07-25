@@ -77,16 +77,32 @@ export async function POST(req: NextRequest) {
     console.log("[ingest] 400, missing_company user=" + user.id);
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
-  // Clamp device clocks running ahead: a future captured_at makes the
-  // finalizer's parked test (server now - device ts) read negative, so
-  // the drive never tail-closes. Anything more than 2 min ahead of
-  // receipt is clock skew, not physics; pin it to receipt time.
+  // Device-clock correction. Two failure modes, both fixed by SHIFTING
+  // the batch rather than pinning individual points:
+  //
+  //  - Clock AHEAD: a future captured_at makes the finalizer's parked
+  //    test (server now - device ts) read negative, so the drive never
+  //    tail-closes. Pinning every skewed point to the identical receipt
+  //    instant (the old behaviour) collapsed the batch to one timestamp,
+  //    and renderTripFromRaw's by-time dedupe then kept ONE point per
+  //    batch — silently deleting the drive's shape (audit #14).
+  //  - Clock BEHIND: every point looks minutes old on arrival, so the
+  //    parked test fires on a live drive and force-closes it every
+  //    ingest, shredding one drive into fragments (audit #13).
+  //
+  // Both are a constant offset across the batch, so compute the skew
+  // from the batch's newest point and subtract it from all of them.
+  // Relative spacing — the thing that makes a track a track — survives.
   const receiptMs = Date.now();
-  const maxTs = receiptMs + 2 * 60_000;
-  const points = rawPoints
-    .filter(isFinitePoint)
-    .map((pt) => (pt.ts > maxTs ? { ...pt, ts: receiptMs } : pt))
-    .sort((a, b) => a.ts - b.ts);
+  const SKEW_TOLERANCE_MS = 2 * 60_000;
+  const finite = rawPoints.filter(isFinitePoint);
+  const newestTs = finite.reduce((a, pt) => Math.max(a, pt.ts), 0);
+  const skewMs = newestTs > 0 ? newestTs - receiptMs : 0;
+  const correctedPoints =
+    Math.abs(skewMs) > SKEW_TOLERANCE_MS
+      ? finite.map((pt) => ({ ...pt, ts: pt.ts - skewMs }))
+      : finite;
+  const points = correctedPoints.sort((a, b) => a.ts - b.ts);
   if (points.length > 50_000) {
     console.log(
       "[ingest] 413, too_many_points user=" + user.id + " n=" + points.length,
