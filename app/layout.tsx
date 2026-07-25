@@ -5,6 +5,7 @@ import { PWASetup } from "@/components/PWASetup";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
 import { CapacitorNativeInit } from "@/components/CapacitorNativeInit";
 import { MileageTrackingReminder } from "@/components/MileageTrackingReminder";
+import { OutdatedAppBanner } from "@/components/OutdatedAppBanner";
 import { EdgeSwipeBack } from "@/components/EdgeSwipeBack";
 import { IOS_APP_ID } from "@/lib/app-stores";
 import "./globals.css";
@@ -239,6 +240,7 @@ export default function RootLayout({
         <PWASetup />
         <CapacitorAuth />
         <CapacitorNativeInit />
+        <OutdatedAppBanner />
         <MileageTrackingReminder />
         <EdgeSwipeBack />
       </body>

@@ -679,7 +679,11 @@
 // v105: the personal hub no longer shows tracked BUSINESS mileage in
 // its hero band (that is company data on a personal page); the slot now
 // shows personal deductions YTD. Dashboard markup changed -> bump.
-const CACHE_VERSION = "v105";
+// v106: OutdatedAppBanner — native shells below the min supported
+// build now get a persistent "update to keep tracking" nudge, the
+// durable antidote to devices sitting on stale builds and silently
+// losing drive capture. New client component -> bump.
+const CACHE_VERSION = "v106";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
