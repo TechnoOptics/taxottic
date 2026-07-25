@@ -748,6 +748,11 @@ export default async function DashboardPage() {
           0,
         ),
         trackedTripCount: trips.length,
+        // TRUE combined 1040: this line is the owner's own return with
+        // their sole-prop's Schedule C folded in, so individual credits
+        // (CTC/ODC, EITC, Saver's, education) apply. Business scope was
+        // silently zeroing all of them here (audit #23).
+        scope: "personal",
       });
       combinedBusiness = { companyName: primaryManaged.company.name, result };
     }

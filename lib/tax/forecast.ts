@@ -581,11 +581,17 @@ export function forecast(input: ForecastInput): ForecastResult {
   // a pure-W-2 filer and overstated the rate for anyone with W-2 wages
   // (May 2026 audit). A pure self-employed filer has no W-2/spouse income,
   // so this equals projectedIncome and their displayed rate is unchanged.
+  // Spouse income appears in TWO fields (the explicit W-2 one and a
+  // legacy generic one). Everywhere else the engine picks ONE via
+  // effectiveSpouseIncome; this denominator used to add both, inflating
+  // gross income and understating the displayed effective rate for any
+  // profile that had filled in both (audit #38).
+  const denomSpouseIncome =
+    input.spouseW2WagesCents > 0
+      ? input.spouseW2WagesCents
+      : input.spouseIncomeCents;
   const totalGrossIncomeCents =
-    projectedIncome +
-    input.ownerW2WagesCents +
-    input.spouseW2WagesCents +
-    input.spouseIncomeCents;
+    projectedIncome + input.ownerW2WagesCents + denomSpouseIncome;
 
   // Above-the-line aggregation. The original engine had one number
   // (ytdAboveTheLineCents) summed from monthly_expenses rows tagged with
@@ -840,6 +846,17 @@ export function forecast(input: ForecastInput): ForecastResult {
             k.SE_TAX.additionalMedicareRate,
         )
       : 0;
+  // Employers MUST withhold the 0.9% on any single employee's wages over
+  // $200k regardless of filing status (IRC §3102(f)(1)); that withholding
+  // is already money paid, so counting the full surtax as still-owed
+  // double-charges a high-W-2 household (audit #37). Estimated per earner
+  // and credited below via alreadyPaid.
+  const EMPLOYER_ADDTL_MEDICARE_FLOOR = 200_000_00;
+  const employerWithheldAddtlMedicare = Math.round(
+    (Math.max(0, input.ownerW2WagesCents - EMPLOYER_ADDTL_MEDICARE_FLOOR) +
+      Math.max(0, input.spouseW2WagesCents - EMPLOYER_ADDTL_MEDICARE_FLOOR)) *
+      k.SE_TAX.additionalMedicareRate,
+  );
   if (additionalMedicare > 0) {
     assumptions.push(
       "Additional Medicare 0.9% surtax applied to wages + SE earnings above the filing-status threshold (Form 8959).",
@@ -900,6 +917,9 @@ export function forecast(input: ForecastInput): ForecastResult {
     0,
     input.qualifiedDividendsCents ?? 0,
   );
+  // Net capital gain, hoisted: the QBI cap (§199A(a)(2)) and the NIIT /
+  // EITC investment-income tests all need it before their own sites.
+  const ltcgIncome = longTermCapitalGainsCents + qualifiedDividendsCents;
   const agiBeforeSli = Math.max(
     0,
     netBiz +
@@ -1012,9 +1032,19 @@ export function forecast(input: ForecastInput): ForecastResult {
   let qbi = 0;
   const qbiThreshold = k.QBI.thresholdBelow[input.filingStatus];
   if (QBI_ELIGIBLE_ENTITY_TYPES.has(input.entityType) && netBiz > 0) {
-    if (agi <= qbiThreshold) {
-      // QBI is limited to lesser of (20% of QBI, 20% of taxable income before QBI).
-      const taxableBeforeQbi = Math.max(0, agi - deduction);
+    // §199A(e)(2) tests against TAXABLE income (before QBI), not AGI, and
+    // §199A(a)(2) caps the deduction at 20% of taxable income REDUCED BY
+    // net capital gain. Using AGI let a filer just over the line keep a
+    // deduction they'd lost, and ignoring capital gain overstated the cap
+    // for anyone with meaningful LTCG/qualified dividends (audit #24).
+    const taxableBeforeQbiForTest = Math.max(0, agi - deduction);
+    if (taxableBeforeQbiForTest <= qbiThreshold) {
+      // QBI is limited to lesser of (20% of QBI, 20% of taxable income
+      // before QBI, excluding net capital gain).
+      const taxableBeforeQbi = Math.max(
+        0,
+        agi - deduction - ltcgIncome,
+      );
       qbi = Math.min(
         Math.round(netBiz * k.QBI.rate),
         Math.round(taxableBeforeQbi * k.QBI.rate),
@@ -1110,7 +1140,6 @@ export function forecast(input: ForecastInput): ForecastResult {
   // so the LTCG slice math is consistent with what's in AGI. (If we
   // re-read input here we'd risk a sign/zero mismatch if either value
   // ever gets normalized differently between the two code paths.)
-  const ltcgIncome = longTermCapitalGainsCents + qualifiedDividendsCents;
   const ordinaryTaxable = Math.max(0, taxableIncome - ltcgIncome);
   const fedTaxOnOrdinary = computeFederalIncomeTax(
     ordinaryTaxable,
@@ -1356,16 +1385,21 @@ export function forecast(input: ForecastInput): ForecastResult {
     fedTaxBeforeAmt - totalNonRefundableCredits,
   );
 
-  // Now compare regular tax (after credits) to AMT and take the larger.
-  // AMT can't be reduced by the non-refundable credits the same way -
-  // simplification here is to compare AMT to the *pre-credit* regular
-  // tax and use the higher of (regular after credits, AMT). Real Form
-  // 6251 is more nuanced for credit ordering; this is the directionally-
-  // correct simplification for a forecast.
+  // Compare AMT against the PRE-credit regular tax, then apply the same
+  // non-refundable credits to whichever side wins: §26(a) allows the
+  // personal credits against AMT, so winning AMT must not wipe them out.
+  // Real Form 6251 is more nuanced about credit ordering; this is the
+  // directionally-correct simplification for a forecast.
   let fedTax: number;
   if (amtTotal > fedTaxBeforeAmt) {
     amtAddOnCents = amtTotal - fedTaxBeforeAmt;
-    fedTax = amtTotal;
+    // The CTC/ODC and other non-refundable personal credits are allowed
+    // against AMT (IRC §26(a) as amended — the personal-credit
+    // limitation was permanently repealed), so when AMT wins the filer
+    // does NOT lose them. Previously fedTax jumped straight to the raw
+    // AMT figure, silently deleting every credit and overstating tax by
+    // the full credit amount for anyone AMT touched (audit #36).
+    fedTax = Math.max(0, amtTotal - totalNonRefundableCredits);
     assumptions.push(
       `AMT (§ 55) applied: alternative minimum tax exceeds regular tax by $${(amtAddOnCents / 100).toLocaleString()}. Common triggers: large LTCG stacked on high ordinary income, or high state-tax / misc itemized deductions hitting the SALT cap.`,
     );
@@ -1565,8 +1599,15 @@ export function forecast(input: ForecastInput): ForecastResult {
   // Investment income: interest, dividends, capital gains, passive
   // rental. Caller passes ytdInvestmentIncomeCents; we project it the
   // same way as ordinary income.
+  // Long-term capital gains and qualified dividends ARE net investment
+  // income (IRC §1411(c)) and DO count toward the EITC investment-income
+  // disqualifier (§32(i)). They were excluded, so NIIT was effectively
+  // dead code and a filer with large gains could still be handed EITC
+  // (audit #22). They're already projected to year-end upstream, so only
+  // the caller-supplied YTD figure gets the pace factor.
   const projectedInvestmentIncome = round(
-    Math.max(0, input.ytdInvestmentIncomeCents ?? 0) * projectionFactor,
+    Math.max(0, input.ytdInvestmentIncomeCents ?? 0) * projectionFactor +
+      ltcgIncome,
   );
   let niit = 0;
   if (projectedInvestmentIncome > 0) {
@@ -1624,7 +1665,13 @@ export function forecast(input: ForecastInput): ForecastResult {
     educationCreditRefundableCents;
   const w2WithheldTotal =
     input.ownerW2WithheldCents + input.spouseW2WithheldCents;
-  const alreadyPaid = input.estimatedPaymentsCents + w2WithheldTotal;
+  // Employer-withheld additional Medicare (see the estimate above) is
+  // already paid, so it belongs in alreadyPaid — otherwise the same 0.9%
+  // is charged twice for a high-wage household (audit #37).
+  const alreadyPaid =
+    input.estimatedPaymentsCents +
+    w2WithheldTotal +
+    employerWithheldAddtlMedicare;
   // Bidirectional balance: positive = still owe, negative = refund.
   // The combined-filer (W-2 + Schedule C) case is exactly where this
   // matters most, the user's W-2 withholding can easily exceed total

@@ -100,6 +100,14 @@ export type CompanyForecastArgs = {
   // Caller sums these from mileage_trips (keeps this module I/O-free).
   trackedYtdMileageCents: number;
   trackedTripCount: number;
+  /** Tax scope for the engine. Default "business" suppresses
+   *  individual-return credits (CTC/ODC, EITC, Saver's, education),
+   *  which is right for a company's own Schedule C view. Pass
+   *  "personal" for a TRUE COMBINED 1040 (sole-prop / disregarded
+   *  entity flowing onto the owner's return), where those credits DO
+   *  apply — the dashboard's "incl. business" line was dropping every
+   *  one of them (audit #23). */
+  scope?: "business" | "personal";
 };
 
 export type CompanyForecast = {
@@ -149,6 +157,7 @@ export function buildCompanyForecast(
     expenses,
     trackedYtdMileageCents,
     trackedTripCount,
+    scope,
   } = args;
 
   const isRecurring = (r: { recurrence: Recurrence | null }) =>
@@ -320,9 +329,10 @@ export function buildCompanyForecast(
     | "monthsEntered"
   > = {
     taxYear,
-    // Business side: suppress individual-return credits (child tax credit,
-    // EITC, Saver's, education). Those live on the personal forecast.
-    scope: "business",
+    // Default business scope suppresses individual-return credits (child
+    // tax credit, EITC, Saver's, education); a combined 1040 view passes
+    // "personal" so they apply (see the scope arg).
+    scope: scope ?? "business",
     filingStatus: taxProfile.filing_status as FilingStatus,
     stateCode: company.state_code ?? taxProfile.state_code,
     age: taxProfile.age,
