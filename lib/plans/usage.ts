@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isSuperAdminCached } from "@/lib/auth";
+import { createServiceClient } from "@/lib/supabase/server";
 import {
   FEATURE_GATES,
   type FeatureGates,
   PLAN_LIMITS,
+  PLAN_ORDER,
   type Plan,
 } from "./limits";
 
@@ -262,6 +264,40 @@ export async function checkInviteLimit(
  * once, then mapped through FEATURE_GATES so callers don't each write
  * their own "if plan === ..." branch.
  */
+/**
+ * Resolve a COMPANY's feature gates from the plan of whoever pays for
+ * it: the company creator, upgraded to the best plan held by any of its
+ * managers. Company-level features (team chat) belong to the company's
+ * subscription — an invited employee's lapsed 7-day personal trial must
+ * not lock them out of a workspace their employer already pays for
+ * (audit major #25: every non-owner teammate lost chat a week after
+ * joining). Service-role reads because a member cannot read their
+ * manager's subscriptions row under RLS; the result exposes only the
+ * derived gate map, never the subscription itself.
+ */
+export async function getCompanyFeatureGates(
+  companyId: string,
+): Promise<{ plan: Plan; gates: FeatureGates }> {
+  const admin = createServiceClient();
+  const [{ data: company }, { data: managers }] = await Promise.all([
+    admin.from("companies").select("created_by").eq("id", companyId).maybeSingle(),
+    admin
+      .from("company_members")
+      .select("user_id")
+      .eq("company_id", companyId)
+      .eq("role", "manager"),
+  ]);
+  const candidates = new Set<string>();
+  if (company?.created_by) candidates.add(company.created_by as string);
+  for (const m of managers ?? []) candidates.add(m.user_id as string);
+  let best: Plan = "free";
+  for (const id of candidates) {
+    const plan = await getActivePlan(admin, id);
+    if (PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(best)) best = plan;
+  }
+  return { plan: best, gates: FEATURE_GATES[best] };
+}
+
 export async function getActiveFeatureGates(
   supabase: SupabaseClient,
   userId: string,

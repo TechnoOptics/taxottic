@@ -696,7 +696,10 @@
 // v110: CPA export now includes tracked mileage (Sched C Line 9),
 // excludes personal-reclassified rows; data export role-scoped. Page
 // markup changed -> bump.
-const CACHE_VERSION = "v110";
+// v111: buffer carries company provenance (multi-company miles can't
+// jump books); team chat gated on the COMPANY plan (employees of a
+// paying company stay in). Client JS changed -> bump.
+const CACHE_VERSION = "v111";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

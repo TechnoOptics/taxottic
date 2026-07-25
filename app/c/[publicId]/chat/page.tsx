@@ -3,7 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { ProGate } from "@/components/ProGate";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
-import { getActiveFeatureGates } from "@/lib/plans/usage";
+import { getCompanyFeatureGates } from "@/lib/plans/usage";
 
 type Params = Promise<{ publicId: string }>;
 
@@ -20,8 +20,10 @@ export default async function ChatLandingPage({
   const { publicId } = await params;
   const { supabase, user, company } = await loadCompanyByPublicId(publicId);
 
-  // Pro-only feature.
-  const { gates } = await getActiveFeatureGates(supabase, user.id);
+  // Company-plan feature (audit major #25): team chat belongs to the
+  // COMPANY's subscription, so an employee's lapsed personal trial
+  // must not lock them out of the workspace their employer pays for.
+  const { gates } = await getCompanyFeatureGates(company.id);
   if (!gates.teamChat) {
     return (
       <main id="main" className="min-h-screen">

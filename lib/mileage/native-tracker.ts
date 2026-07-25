@@ -330,7 +330,14 @@ async function stopBgSafely(bg: BackgroundGeolocationPlugin): Promise<void> {
 
 function persistBuffer() {
   try {
-    window.localStorage.setItem(LS_BUFFER, JSON.stringify(buffer));
+    // The buffer is stored WITH its owning company (audit major #12):
+    // a bare point array adopted by whichever company was active at
+    // reload time attributed one company's miles — and deductions — to
+    // another for multi-company drivers.
+    window.localStorage.setItem(
+      LS_BUFFER,
+      JSON.stringify({ companyId, points: buffer }),
+    );
   } catch {
     /* quota / disabled, in-memory buffer still flushes */
   }
@@ -340,10 +347,58 @@ function loadPersistedBuffer() {
   try {
     const raw = window.localStorage.getItem(LS_BUFFER);
     if (!raw) return;
-    const parsed = JSON.parse(raw) as GpsPoint[];
-    if (Array.isArray(parsed)) buffer = parsed.slice(-MAX_BUFFER);
+    const parsed = JSON.parse(raw) as
+      | GpsPoint[]
+      | { companyId?: string; points?: GpsPoint[] };
+    // Legacy shape: a bare array from a pre-provenance build. It has no
+    // owner tag, so only adopt it for the company that was tracking
+    // when it was written (LS_COMPANY is persisted in the same breath).
+    if (Array.isArray(parsed)) {
+      const owner = window.localStorage.getItem(LS_COMPANY);
+      if (owner === companyId) buffer = parsed.slice(-MAX_BUFFER);
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.points)) return;
+    if (parsed.companyId && parsed.companyId !== companyId) {
+      // Points captured for ANOTHER company: never adopt them here.
+      // Leave them stored; that company's next tracking session (or its
+      // next flush) uploads them under the right books.
+      orphanBuffer = { companyId: parsed.companyId, points: parsed.points };
+      return;
+    }
+    buffer = parsed.points.slice(-MAX_BUFFER);
   } catch {
     /* corrupt, drop it */
+  }
+}
+
+/** Leftover points owned by a DIFFERENT company, found at start. Sent
+ *  under their own companyId by drainOrphanBuffer so miles never jump
+ *  books. */
+let orphanBuffer: { companyId: string; points: GpsPoint[] } | null = null;
+
+async function drainOrphanBuffer(): Promise<void> {
+  if (!orphanBuffer || orphanBuffer.points.length === 0) {
+    orphanBuffer = null;
+    return;
+  }
+  const { companyId: owner, points } = orphanBuffer;
+  try {
+    const res = await fetch("/api/mileage/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ companyId: owner, points, sessionEnded: true }),
+    });
+    if (res.ok) {
+      orphanBuffer = null;
+      trackerDiag.lastError = "";
+    }
+    // Non-2xx: keep the orphan in memory; the next start retries. The
+    // points also remain in localStorage until persistBuffer overwrites,
+    // which only happens after this drain on the happy path.
+  } catch {
+    /* offline — retry on the next start */
   }
 }
 
@@ -700,6 +755,7 @@ export async function startMileageTracking(
     /* private mode, tracking still works for this session */
   }
   loadPersistedBuffer();
+  void drainOrphanBuffer();
 
   // CRITICAL (2026-05-26): always call bg.stop() before bg.start() to
   // kill any orphaned foreground service from a previous WebView
