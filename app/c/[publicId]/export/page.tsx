@@ -33,6 +33,7 @@ export default async function ExportPage({
     { data: incomeRows },
     { data: expenseRows },
     { data: categoryRows },
+    { data: bizTripRows },
   ] = await Promise.all([
     supabase
       .from("business_profiles")
@@ -54,11 +55,25 @@ export default async function ExportPage({
       .select("month, amount_cents, category_code, notes")
       .eq("company_id", company.id)
       .eq("tax_year", taxYear)
+      // Personal-reclassified rows never count toward the deduction —
+      // the forecast and expenses pages both enforce this; the export
+      // must hand the CPA the same books (audit critical #6).
+      .neq("classification", "personal")
       .order("month")
       .order("created_at"),
     supabase
       .from("deduction_categories")
       .select("code, label, schedule_c_line, irc_section, irs_pub"),
+    // Tracked business drives: the IRS-grade mileage log this product
+    // exists to produce. The export omitted it entirely (audit critical
+    // #5) while the forecast counted it, so Line 28/31 here never
+    // reconciled with the forecast's headline.
+    supabase
+      .from("mileage_trips")
+      .select("distance_miles, deduction_cents")
+      .eq("company_id", company.id)
+      .eq("tax_year", taxYear)
+      .eq("classification", "business"),
   ]);
 
   const catMap = new Map<
@@ -92,7 +107,32 @@ export default async function ExportPage({
   // that Schedule C Line 24b carries the post-50% meals figure (not
   // the gross). Resolves the May 2026 audit's Critical #1 + Critical
   // #2 + High #5.
-  const categoryTotals = expensesByCategory(expenseRows ?? []);
+  // Vehicle-method consistency (same election logic as the forecast):
+  // under standard mileage the per-mile rate already covers operating
+  // costs, so car_truck rows must not ALSO land on Schedule C.
+  const onStandardVehicle = bp?.vehicle_method !== "actual";
+  const bizTrips = (bizTripRows ?? []) as Array<{
+    distance_miles: number | null;
+    deduction_cents: number | null;
+  }>;
+  const trackedBusinessMiles = bizTrips.reduce(
+    (a, t) => a + Number(t.distance_miles ?? 0),
+    0,
+  );
+  // Stored per-trip cents are authoritative: each trip was priced at
+  // the IRS rate in force on its own date (split-rate years included).
+  const mileageDeductionCents = onStandardVehicle
+    ? bizTrips.reduce((a, t) => a + Number(t.deduction_cents ?? 0), 0)
+    : 0;
+  const carTruckExcludedCents = onStandardVehicle
+    ? (expenseRows ?? [])
+        .filter((r) => r.category_code === "car_truck")
+        .reduce((a, r) => a + r.amount_cents, 0)
+    : 0;
+  const rollupRows = onStandardVehicle
+    ? (expenseRows ?? []).filter((r) => r.category_code !== "car_truck")
+    : (expenseRows ?? []);
+  const categoryTotals = expensesByCategory(rollupRows);
   // Sort by deductible amount (what actually goes on Schedule C),
   // descending. Above-the-line categories drop to the bottom (their
   // deductibleCents is 0 by definition, they're Schedule 1
@@ -114,8 +154,10 @@ export default async function ExportPage({
   // Net Business Income. The expense-detail section below still shows
   // the gross per-row figure (footnoted) so users can audit their own
   // entries against bank/receipts.
-  const totalExpense = nbi.deductibleExpensesCents;
-  const totalGrossExpense = nbi.grossExpensesCents;
+  const totalExpense = nbi.deductibleExpensesCents + mileageDeductionCents;
+  const totalGrossExpense = nbi.grossExpensesCents + mileageDeductionCents;
+  const netBusinessIncomeCents =
+    nbi.netBusinessIncomeCents - mileageDeductionCents;
 
   const businessDisplayName = bp?.legal_name || company.name;
 
@@ -241,6 +283,18 @@ export default async function ExportPage({
               label="Gross receipts or sales"
               value={formatCents(totalIncome)}
             />
+            {mileageDeductionCents > 0 ? (
+              <ReconRow
+                line="Line 9"
+                label="Car and truck expenses (standard mileage)"
+                value={formatCents(mileageDeductionCents)}
+                note={`${trackedBusinessMiles.toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })} tracked business miles across ${bizTrips.length} GPS-logged ${
+                  bizTrips.length === 1 ? "trip" : "trips"
+                }; each priced at the IRS rate in force on its date`}
+              />
+            ) : null}
             <ReconRow
               line="Line 28"
               label="Total expenses"
@@ -255,12 +309,8 @@ export default async function ExportPage({
             />
             <ReconRow
               line="Line 31"
-              label={
-                nbi.netBusinessIncomeCents < 0
-                  ? "Net loss"
-                  : "Net profit"
-              }
-              value={formatCents(nbi.netBusinessIncomeCents)}
+              label={netBusinessIncomeCents < 0 ? "Net loss" : "Net profit"}
+              value={formatCents(netBusinessIncomeCents)}
               emphasis
             />
           </div>
@@ -268,6 +318,16 @@ export default async function ExportPage({
             Net profit also carries to Schedule 1, Line 3 and Schedule SE
             (self-employment tax). Figures are the owner-entered totals for{" "}
             {taxYear}; your preparer confirms final placement.
+            {carTruckExcludedCents > 0 ? (
+              <>
+                {" "}
+                {formatCents(carTruckExcludedCents)} of logged car/truck
+                expenses (fuel, repairs) are shown for reference only and
+                excluded from these totals: the standard mileage rate on
+                Line 9 already covers vehicle operating costs, and
+                deducting both would double-count.
+              </>
+            ) : null}
           </p>
         </section>
 
