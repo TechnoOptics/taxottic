@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { finalizeUserTrips, reconcileBrokenTrips } from "@/lib/mileage/finalize";
 import { evaluateTrackerStall, WATCH_WINDOW_MS } from "@/lib/mileage/stall";
+import {
+  evaluateDriveTrackingHealth,
+  MOVEMENT_SPEED_MPS,
+} from "@/lib/mileage/device-health";
 import { notify } from "@/lib/push";
 
 export const runtime = "nodejs";
@@ -126,6 +130,7 @@ export async function GET(req: NextRequest) {
   // escalation is a push. Pure decision logic in lib/mileage/stall.ts;
   // episode state in mileage_tracker_alerts (service-role only).
   let stallsNotified = 0;
+  let parkedNotified = 0;
   try {
     const nowMs = Date.now();
     const watchSinceIso = new Date(nowMs - WATCH_WINDOW_MS).toISOString();
@@ -166,6 +171,7 @@ export async function GET(req: NextRequest) {
         .select("notified_at")
         .eq("driver_user_id", driver)
         .eq("company_id", company)
+        .eq("kind", "silent")
         .maybeSingle();
 
       const decision = evaluateTrackerStall({
@@ -219,7 +225,8 @@ export async function GET(req: NextRequest) {
             .from("mileage_tracker_alerts")
             .delete()
             .eq("driver_user_id", driver)
-            .eq("company_id", company);
+            .eq("company_id", company)
+            .eq("kind", "silent");
         }
         continue;
       }
@@ -233,12 +240,105 @@ export async function GET(req: NextRequest) {
         {
           driver_user_id: driver,
           company_id: company,
+          kind: "silent",
           stalled_since: new Date(lastUploadMs).toISOString(),
           notified_at: new Date(nowMs).toISOString(),
         },
-        { onConflict: "driver_user_id,company_id" },
+        { onConflict: "driver_user_id,company_id,kind" },
       );
       stallsNotified++;
+    }
+
+    // ── Parked-device escalation ──────────────────────────────────
+    // The OTHER way tracking silently loses drives: the device reports
+    // like clockwork but never moves, i.e. Taxottic runs on a phone
+    // that is not the one being driven (observed for real: a Fold
+    // uploading on schedule while parked for 3 days as drives went
+    // untracked). Silence-based detection can never catch this, the
+    // device is not silent. Same episode machinery as the silent
+    // sweep, under kind='parked', with a slower 72h renotify since
+    // the fix (move tracking to the right phone) is not instant.
+    const PARKED_RENOTIFY_MS = 72 * 60 * 60_000;
+    for (const { driver, company } of watched.values()) {
+      const { data: newest } = await admin
+        .from("mileage_points_raw")
+        .select("created_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!newest) continue;
+      const lastUploadMs = Date.parse(newest.created_at as string);
+
+      const { data: moved } = await admin
+        .from("mileage_points_raw")
+        .select("created_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .gte("speed_mps", MOVEMENT_SPEED_MPS)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const health = evaluateDriveTrackingHealth({
+        nowMs,
+        lastUploadMs,
+        lastMovementMs: moved
+          ? Date.parse(moved.created_at as string)
+          : null,
+        // The watched set only contains uploading devices; intent is
+        // irrelevant here (an uploading device IS tracking).
+        trackingEnabled: true,
+      });
+
+      const { data: parkedAlert } = await admin
+        .from("mileage_tracker_alerts")
+        .select("notified_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .eq("kind", "parked")
+        .maybeSingle();
+
+      if (health.status !== "parked") {
+        // Movement returned (or the device went silent, which is the
+        // silent sweep's episode, not ours): close the parked episode
+        // so the next one notifies fresh.
+        if (parkedAlert) {
+          await admin
+            .from("mileage_tracker_alerts")
+            .delete()
+            .eq("driver_user_id", driver)
+            .eq("company_id", company)
+            .eq("kind", "parked");
+        }
+        continue;
+      }
+
+      const lastNotified = parkedAlert
+        ? Date.parse(parkedAlert.notified_at as string)
+        : null;
+      if (lastNotified != null && nowMs - lastNotified < PARKED_RENOTIFY_MS) {
+        continue;
+      }
+
+      await notify(driver, {
+        kind: "tracker_parked",
+        dayKey: new Date(nowMs).toISOString().slice(0, 10),
+      });
+      await admin.from("mileage_tracker_alerts").upsert(
+        {
+          driver_user_id: driver,
+          company_id: company,
+          kind: "parked",
+          stalled_since: new Date(
+            nowMs - (health.ageMs ?? 0),
+          ).toISOString(),
+          notified_at: new Date(nowMs).toISOString(),
+        },
+        { onConflict: "driver_user_id,company_id,kind" },
+      );
+      parkedNotified++;
     }
   } catch (err) {
     // The sweep must never break trip finalization.
@@ -249,7 +349,7 @@ export async function GET(req: NextRequest) {
   }
 
   console.log(
-    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified}`,
+    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified} parkedNotified=${parkedNotified}`,
   );
 
   return NextResponse.json({

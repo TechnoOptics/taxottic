@@ -51,7 +51,8 @@ export type PushEvent =
    * this push can. `dayKey` folds into the dedupe key so however
    * often the cron sweeps, at most one fires per driver per day.
    */
-  | { kind: "tracker_stalled"; dayKey: string };
+  | { kind: "tracker_stalled"; dayKey: string }
+  | { kind: "tracker_parked"; dayKey: string };
 
 export type PushPayload = {
   title: string;
@@ -153,6 +154,17 @@ export function buildPayload(e: PushEvent): PushPayload {
           "Your phone hasn't sent any drive data in a while. Open Taxottic to turn tracking back on.",
         data: { kind: e.kind },
         dedupeKey: `tracker_stalled:${e.dayKey}`,
+      };
+    case "tracker_parked":
+      return {
+        // The device is reporting fine but hasn't moved in days: tracking
+        // is "working" and still missing every real drive, so the ask is
+        // different from tracker_stalled — confirm it's the right phone.
+        title: "Is this the phone you drive with?",
+        body:
+          "Taxottic is running here, but this phone hasn't been on a drive in days. If you drive with a different phone, set up tracking there.",
+        data: { kind: e.kind },
+        dedupeKey: `tracker_parked:${e.dayKey}`,
       };
   }
 }
