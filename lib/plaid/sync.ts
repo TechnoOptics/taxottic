@@ -16,6 +16,7 @@ import {
   subscriptionFallbackKey,
   findCoveringRecurringRow,
   type CoverCandidate,
+  coverageKey,
 } from "@/lib/banking/subscription-dedupe";
 
 /**
@@ -284,14 +285,26 @@ async function applyPendingTransactions(
   // lib/stripe-connect/sync.ts): a recurring income row already
   // projects future months, so a real deposit its projection covers
   // links to it instead of becoming a second countable row. Expenses
-  // rely on the anchor detector (groups manual + synced rows by
-  // category+amount) — no coverage-skip there.
+  // Expenses use the same guard for subscription-like streams (audit
+  // #27): only the first charge projects; later ones link to it.
   const { data: recIncome } = await admin
     .from("monthly_income")
     .select("id, tax_year, month, amount_cents, recurrence, recurring_key")
     .eq("company_id", companyId)
     .neq("recurrence", "one_off");
+  const { data: recExpense } = await admin
+    .from("monthly_expenses")
+    .select(
+      "id, tax_year, month, amount_cents, recurrence, recurring_key, category_code",
+    )
+    .eq("company_id", companyId)
+    .neq("recurrence", "one_off");
   const incomeCandidates = (recIncome ?? []) as CoverCandidate[];
+  // One absorption per (recurring row, month) — see coverageKey.
+  const consumedCoverage = new Set<string>();
+  // Recurring EXPENSE rows already in the ledger, so a second
+  // charge in the same stream doesn't also project (audit #27).
+  const expenseCandidates = (recExpense ?? []) as CoverCandidate[];
 
   let income = 0;
   let expense = 0;
@@ -318,7 +331,25 @@ async function applyPendingTransactions(
       // this transaction twice. Loser of the race skips.
       if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
         continue;
-      const expRecurrence = subLike ? "monthly" : "one_off";
+      // Subscription-like expenses go 'monthly' from day one so the
+      // forecast projects them immediately — but ONLY for the first
+      // charge in the stream. A later charge marked monthly too would
+      // double-project every remaining month, and the anchor-demote
+      // pass doesn't fire until a stream spans 3 months (audit #27).
+      const coveringExpense = subLike
+        ? findCoveringRecurringRow(
+            expenseCandidates,
+            {
+              tax_year: taxYear,
+              month,
+              amount_cents: cents,
+              category_code: code,
+            },
+            consumedCoverage,
+          )
+        : null;
+      const expRecurrence =
+        subLike && !coveringExpense ? "monthly" : "one_off";
       const { data: row } = await admin
         .from("monthly_expenses")
         .insert({
@@ -342,6 +373,19 @@ async function applyPendingTransactions(
           .from("account_transactions")
           .update({ applied_to_expense_id: row.id })
           .eq("id", tx.id);
+        if (coveringExpense) {
+          consumedCoverage.add(coverageKey(coveringExpense.id, month));
+        } else if (expRecurrence !== "one_off") {
+          expenseCandidates.push({
+            id: row.id as string,
+            tax_year: taxYear,
+            month,
+            amount_cents: cents,
+            recurrence: expRecurrence,
+            recurring_key: null,
+            category_code: code,
+          });
+        }
         expense++;
       } else {
         await releasePendingTransaction(admin, tx.id as string);
@@ -354,12 +398,16 @@ async function applyPendingTransactions(
         subLike && desc
           ? subscriptionFallbackKey(desc, Math.abs(cents))
           : null;
-      const coveringIncome = findCoveringRecurringRow(incomeCandidates, {
-        tax_year: taxYear,
-        month,
-        amount_cents: Math.abs(cents),
-        recurring_key: incKey,
-      });
+      const coveringIncome = findCoveringRecurringRow(
+        incomeCandidates,
+        {
+          tax_year: taxYear,
+          month,
+          amount_cents: Math.abs(cents),
+          recurring_key: incKey,
+        },
+        consumedCoverage,
+      );
       if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
         continue;
       if (coveringIncome) {
@@ -367,6 +415,7 @@ async function applyPendingTransactions(
           .from("account_transactions")
           .update({ applied_to_income_id: coveringIncome.id })
           .eq("id", tx.id);
+        consumedCoverage.add(coverageKey(coveringIncome.id, month));
         income++;
         continue;
       }
@@ -507,6 +556,28 @@ async function removeTx(
     .map((r) => r.transaction_id)
     .filter((x): x is string => !!x);
   if (!ids.length) return 0;
+  // A removed transaction (bank reversal, duplicate correction) used to
+  // delete only the account_transactions row, orphaning the
+  // monthly_income / monthly_expenses row it had been auto-applied to:
+  // the forecast kept counting money the bank says never happened, and
+  // the audit link was destroyed (applied_to_* is ON DELETE SET NULL in
+  // the other direction). Remove the applied rows first (audit #28).
+  const { data: doomed } = await admin
+    .from("account_transactions")
+    .select("id, applied_to_income_id, applied_to_expense_id")
+    .in("external_transaction_id", ids);
+  const incomeIds = (doomed ?? [])
+    .map((r) => r.applied_to_income_id as string | null)
+    .filter((x): x is string => !!x);
+  const expenseIds = (doomed ?? [])
+    .map((r) => r.applied_to_expense_id as string | null)
+    .filter((x): x is string => !!x);
+  if (incomeIds.length) {
+    await admin.from("monthly_income").delete().in("id", incomeIds);
+  }
+  if (expenseIds.length) {
+    await admin.from("monthly_expenses").delete().in("id", expenseIds);
+  }
   const { count } = await admin
     .from("account_transactions")
     .delete({ count: "exact" })
