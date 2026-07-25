@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { getCompanyFeatureGates } from "@/lib/plans/usage";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ChatShell } from "@/components/chat/ChatShell";
 import {
@@ -23,6 +24,12 @@ export default async function ConversationPage({
   const { publicId, conversationId } = await params;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
+
+  // Same company-plan gate as the chat landing (audit major #25): this
+  // route used to have NO gate at all, so a direct URL bypassed the
+  // paywall entirely. Redirect to the landing, which renders the upsell.
+  const { gates } = await getCompanyFeatureGates(company.id);
+  if (!gates.teamChat) redirect(`/c/${publicId}/chat`);
 
   // Conversation: read with the user's RLS so we get a clean 404 for
   // conversations the user can't access.

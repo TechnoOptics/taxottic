@@ -1,5 +1,6 @@
 "use server";
 
+import { getCompanyFeatureGates } from "@/lib/plans/usage";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUserWithAdmin } from "@/lib/auth";
@@ -79,6 +80,12 @@ export async function createGroup(formData: FormData) {
   if (name.length > 80) throw new Error("Name is too long");
 
   await assertCompanyMember(admin, user.id, companyId);
+  // Company-plan gate (audit major #25): the pages gate the UI, but a
+  // crafted POST reached these actions with no plan check at all.
+  {
+    const { gates } = await getCompanyFeatureGates(companyId);
+    if (!gates.teamChat) throw new Error("Team chat requires a Studio plan.");
+  }
 
   // Verify each requested member is actually in this company.
   if (memberIds.length > 0) {
@@ -144,6 +151,12 @@ export async function createOrOpenDm(formData: FormData) {
   }
 
   await assertCompanyMember(admin, user.id, companyId);
+  // Company-plan gate (audit major #25): the pages gate the UI, but a
+  // crafted POST reached these actions with no plan check at all.
+  {
+    const { gates } = await getCompanyFeatureGates(companyId);
+    if (!gates.teamChat) throw new Error("Team chat requires a Studio plan.");
+  }
   await assertCompanyMember(admin, otherUserId, companyId);
 
   // Look for an existing DM by intersecting members.
@@ -210,6 +223,11 @@ export async function addGroupMember(formData: FormData) {
   if (!conversationId || !newUserId) throw new Error("Missing input");
 
   const ctx = await assertConversationAccess(admin, user.id, conversationId);
+  // Same company-plan gate as createGroup/createOrOpenDm (audit #25).
+  {
+    const { gates } = await getCompanyFeatureGates(ctx.companyId);
+    if (!gates.teamChat) throw new Error("Team chat requires a Studio plan.");
+  }
   if (ctx.kind === "dm") {
     throw new Error("DMs are limited to two participants.");
   }
