@@ -1,0 +1,116 @@
+name: iOS — TestFlight external invite
+
+# Invites an EXTERNAL tester by email: creates/reuses the "External
+# Testers" beta group, adds the newest processed build to it, and
+# creates the tester (Apple sends the TestFlight invite email).
+#
+# External testers are NOT App Store Connect team members — this grants
+# app access only, never portal/account access. The first build in an
+# external group goes through TestFlight Beta App Review before the
+# invite becomes installable (usually hours).
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Tester email"
+        required: true
+      first_name:
+        description: "Tester first name (for the invite)"
+        required: false
+        default: ""
+
+jobs:
+  invite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invite external tester
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          TESTER_EMAIL: ${{ inputs.email }}
+          TESTER_NAME: ${{ inputs.first_name }}
+        run: |
+          cat > /tmp/invite.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+          const KID = process.env.ASC_KEY_ID, ISS = process.env.ASC_ISSUER_ID, PK = process.env.ASC_PRIVATE_KEY;
+          const EMAIL = (process.env.TESTER_EMAIL || "").trim();
+          const NAME = (process.env.TESTER_NAME || "").trim();
+          const APP_ID = "6767039803";
+          const GROUP_NAME = "External Testers";
+          if (!KID || !ISS || !PK) { console.error("::error::ASC_* secrets missing"); process.exit(1); }
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(EMAIL)) { console.error("::error::bad email"); process.exit(1); }
+          const b64u = (x) => Buffer.from(x).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const head = b64u(JSON.stringify({ alg: "ES256", kid: KID, typ: "JWT" }));
+          const body = b64u(JSON.stringify({ iss: ISS, iat: now, exp: now + 1000, aud: "appstoreconnect-v1" }));
+          const sig = crypto.sign("sha256", Buffer.from(`${head}.${body}`), { key: PK, dsaEncoding: "ieee-p1363" }).toString("base64url");
+          const TOK = `${head}.${body}.${sig}`;
+          const api = async (method, path, payload) => {
+            const r = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              method, headers: { Authorization: `Bearer ${TOK}`, "Content-Type": "application/json" },
+              body: payload ? JSON.stringify(payload) : undefined,
+            });
+            const t = await r.text();
+            return { ok: r.ok, status: r.status, json: t ? JSON.parse(t) : {} };
+          };
+          const fail = (m, r) => { console.error(`::error::${m}: ${JSON.stringify(r.json).slice(0, 400)}`); process.exit(1); };
+
+          // 1. Find or create the external group.
+          let g = await api("GET", `/v1/betaGroups?filter[app]=${APP_ID}&filter[name]=${encodeURIComponent(GROUP_NAME)}`);
+          if (!g.ok) fail("group lookup", g);
+          let group = (g.json.data ?? [])[0];
+          if (!group) {
+            const c = await api("POST", "/v1/betaGroups", {
+              data: { type: "betaGroups",
+                attributes: { name: GROUP_NAME, isInternalGroup: false, publicLinkEnabled: false },
+                relationships: { app: { data: { type: "apps", id: APP_ID } } } },
+            });
+            if (!c.ok) fail("group create", c);
+            group = c.json.data;
+            console.log(`Created beta group "${GROUP_NAME}"`);
+          } else {
+            console.log(`Using existing group "${GROUP_NAME}"`);
+          }
+
+          // 2. Attach the newest processed build so the invite has something
+          //    to install (first build triggers Beta App Review).
+          const b = await api("GET", `/v1/builds?filter[app]=${APP_ID}&filter[processingState]=VALID&sort=-version&limit=1`);
+          if (!b.ok) fail("build lookup", b);
+          const build = (b.json.data ?? [])[0];
+          if (build) {
+            const add = await api("POST", `/v1/betaGroups/${group.id}/relationships/builds`, {
+              data: [{ type: "builds", id: build.id }],
+            });
+            // 409 = already in group; fine.
+            if (!add.ok && add.status !== 409) fail("build attach", add);
+            console.log(`Build ${build.attributes.version} attached to group`);
+          } else {
+            console.log("No VALID build yet - tester will get access when one lands");
+          }
+
+          // 3. Create the tester in the group (Apple emails the invite).
+          const t = await api("POST", "/v1/betaTesters", {
+            data: { type: "betaTesters",
+              attributes: { email: EMAIL, ...(NAME ? { firstName: NAME } : {}) },
+              relationships: { betaGroups: { data: [{ type: "betaGroups", id: group.id }] } } },
+          });
+          if (!t.ok) {
+            const msg = JSON.stringify(t.json);
+            if (t.status === 409 && /already/i.test(msg)) {
+              console.log("Tester already exists - ensuring group membership");
+              const ex = await api("GET", `/v1/betaTesters?filter[email]=${encodeURIComponent(EMAIL)}`);
+              const tester = (ex.json.data ?? [])[0];
+              if (!tester) fail("tester lookup", ex);
+              const link = await api("POST", `/v1/betaTesters/${tester.id}/relationships/betaGroups`, {
+                data: [{ type: "betaGroups", id: group.id }],
+              });
+              if (!link.ok && link.status !== 409) fail("group link", link);
+            } else {
+              fail("tester create", t);
+            }
+          }
+          console.log(`✅ ${EMAIL} invited to TestFlight (external, app-only access).`);
+          SCRIPT
+          node /tmp/invite.mjs
