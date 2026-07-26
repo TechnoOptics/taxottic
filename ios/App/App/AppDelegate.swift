@@ -30,14 +30,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             identifier: "business", title: "Business", options: [])
         let personal = UNNotificationAction(
             identifier: "personal", title: "Personal", options: [])
+        // "Review" foregrounds the app on the item (deep link handled by
+        // the pushNotificationActionPerformed listener). action-map maps
+        // any unknown/`review` id to { type: "open" }, so this needs no
+        // server change and can never mutate anything.
+        let review = UNNotificationAction(
+            identifier: "review", title: "Review",
+            options: [.foreground])
         let tripCategory = UNNotificationCategory(
             identifier: "TRIP_CLASSIFY",
-            actions: [business, personal],
+            actions: [business, personal, review],
             intentIdentifiers: [],
             options: [])
         let clarifyCategory = UNNotificationCategory(
             identifier: "CLARIFY",
-            actions: [business, personal],
+            actions: [business, personal, review],
             intentIdentifiers: [],
             options: [])
         UNUserNotificationCenter.current().setNotificationCategories(

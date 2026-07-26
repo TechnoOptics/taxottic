@@ -399,6 +399,9 @@ const WebPushProvider: PushProvider = {
       data: payload.data,
       url: webUrlFromData(payload.data),
       tag: payload.data.kind,
+      // Interactive category → the SW renders Business/Personal/Review
+      // action buttons (sw.js v119). Same contract as aps.category.
+      ...(payload.category ? { category: payload.category } : {}),
     });
     try {
       await webpush.sendNotification(subscription, swPayload, {

@@ -721,7 +721,11 @@
 // 1000-row cap (most trips had NO preview), dark navy basemap with the
 // big map's gold path (was invisible light-on-light), placeholder tile
 // for manual trips. Client markup changed -> bump.
-const CACHE_VERSION = "v118";
+// v119: actionable classify banners — Business / Personal buttons
+// resolve from the notification without opening the app (background
+// POST to /api/push/action + confirmation toast); Review deep-links.
+// Trip banners now lead with the snippet ("3.2 mi drive · 7:41 PM").
+const CACHE_VERSION = "v119";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
@@ -847,6 +851,13 @@ self.addEventListener("push", (event) => {
   }
 
   const title = payload.title || "Taxottic";
+  // Interactive categories get one-tap classify buttons: the user
+  // answers Business / Personal straight from the banner; Review opens
+  // the app on the item. Everything else stays a plain notification.
+  const category =
+    (payload.data && payload.data.category) || payload.category || "";
+  const interactive =
+    category === "TRIP_CLASSIFY" || category === "CLARIFY";
   const options = {
     body: payload.body || "",
     icon: payload.icon || "/icon-192.png",
@@ -855,6 +866,15 @@ self.addEventListener("push", (event) => {
     // instead of stacking duplicates.
     tag: payload.tag || undefined,
     renotify: Boolean(payload.tag),
+    ...(interactive
+      ? {
+          actions: [
+            { action: "business", title: "Business" },
+            { action: "personal", title: "Personal" },
+            { action: "review", title: "Review" },
+          ],
+        }
+      : {}),
     // Carried through to notificationclick so the tap can route + attribute.
     data: {
       url: payload.url || "/",
@@ -870,7 +890,56 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
   const targetUrl = new URL(data.url || "/", self.location.origin).href;
+  const tapped = event.action || "";
 
+  // One-tap classify: Business / Personal resolve ENTIRELY in the
+  // background — no app launch. The endpoint re-validates the session
+  // and row ownership server-side (a notification tap is untrusted);
+  // a silent confirmation banner replaces the prompt on success.
+  if (tapped === "business" || tapped === "personal") {
+    event.waitUntil(
+      (async () => {
+        let ok = false;
+        try {
+          const res = await fetch("/api/push/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ actionId: tapped, data }),
+          });
+          ok = res.ok;
+        } catch {
+          /* offline or logged out */
+        }
+        await self.registration.showNotification(
+          ok
+            ? `Marked ${tapped === "business" ? "business" : "personal"} ✓`
+            : "Couldn't save — tap to review",
+          {
+            body: ok ? "" : "Open the app to classify this drive.",
+            icon: "/icon-192.png",
+            badge: "/icon-192.png",
+            tag: event.notification.tag || "classify-result",
+            data: { url: targetUrl },
+            ...(ok ? {} : {}),
+          },
+        );
+        if (ok) {
+          // Auto-dismiss the confirmation after a few seconds where
+          // supported; harmless where not.
+          setTimeout(async () => {
+            const shown = await self.registration.getNotifications({
+              tag: event.notification.tag || "classify-result",
+            });
+            for (const n of shown) n.close();
+          }, 4000);
+        }
+      })(),
+    );
+    return;
+  }
+
+  // "Review" (or a plain tap) falls through to the app-open path below.
   event.waitUntil(
     (async () => {
       // Best-effort server attribution, mirrors the native
