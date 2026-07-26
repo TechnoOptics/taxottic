@@ -163,7 +163,9 @@ jobs:
           const sub = await api("POST", `/v1/betaAppReviewSubmissions`, {
             data: { type: "betaAppReviewSubmissions",
               relationships: { build: { data: { type: "builds", id: build.id } } } },
-          }, ["ALREADY_EXISTS", "STATE_ERROR", "DUPLICATE"]);
+          }, ["ALREADY_EXISTS", "STATE_ERROR", "DUPLICATE", "INVALID_QC_STATE"]);
+          // INVALID_QC_STATE on re-submit = the build is already in (or
+          // through) beta review — exactly the resumable case.
           console.log(`Beta review: ${sub.status === 201 ? "submitted" : "already submitted/reviewed"}`);
 
           // 5. Invite each tester into the group (invite email sends now).
