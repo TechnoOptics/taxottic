@@ -1,0 +1,118 @@
+name: iOS — TestFlight external invite
+
+# Invites external testers by email. External testers are NOT App Store
+# Connect team members — no account access is granted — so this is the
+# lane that works without adding anyone to the Apple team (the internal
+# lane 409s unless the tester is a team user). The named build is
+# attached to an external group and submitted for Beta App Review once;
+# testers get their invite email immediately and the build unlocks for
+# them the moment beta review clears.
+
+on:
+  workflow_dispatch:
+    inputs:
+      emails:
+        description: "Comma-separated tester emails"
+        required: true
+      first_names:
+        description: "Comma-separated first names (parallel to emails)"
+        required: false
+        default: ""
+      build_number:
+        description: "CFBundleVersion to distribute (e.g. 28)"
+        required: true
+
+jobs:
+  invite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invite external testers
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          EMAILS: ${{ inputs.emails }}
+          FIRST_NAMES: ${{ inputs.first_names }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          cat > /tmp/invite.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+          const KID = process.env.ASC_KEY_ID, ISS = process.env.ASC_ISSUER_ID, PK = process.env.ASC_PRIVATE_KEY;
+          const APP_ID = "6767039803";
+          const GROUP_NAME = "External Testers";
+          const emails = process.env.EMAILS.split(",").map((e) => e.trim()).filter(Boolean);
+          const names = (process.env.FIRST_NAMES || "").split(",").map((n) => n.trim());
+          const BUILD_NUMBER = process.env.BUILD_NUMBER.trim();
+          if (!KID || !ISS || !PK) { console.error("::error::ASC_* secrets missing"); process.exit(1); }
+          const b64u = (x) => Buffer.from(x).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const head = b64u(JSON.stringify({ alg: "ES256", kid: KID, typ: "JWT" }));
+          const body = b64u(JSON.stringify({ iss: ISS, iat: now, exp: now + 1200, aud: "appstoreconnect-v1" }));
+          const sig = crypto.sign("sha256", Buffer.from(`${head}.${body}`), { key: PK, dsaEncoding: "ieee-p1363" }).toString("base64url");
+          const TOK = `${head}.${body}.${sig}`;
+          const api = async (method, path, payload, okCodes = []) => {
+            const r = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              method, headers: { Authorization: `Bearer ${TOK}`, "Content-Type": "application/json" },
+              body: payload ? JSON.stringify(payload) : undefined,
+            });
+            const t = await r.text();
+            const o = t ? JSON.parse(t) : {};
+            if (!r.ok && !okCodes.some((c) => t.includes(c))) {
+              console.error(`::error::${method} ${path} -> ${r.status}: ${t.slice(0, 400)}`);
+              process.exit(1);
+            }
+            return { status: r.status, body: o, raw: t };
+          };
+
+          // 1. Find the build by CFBundleVersion.
+          const builds = await api("GET", `/v1/builds?filter[app]=${APP_ID}&filter[version]=${BUILD_NUMBER}&limit=5`);
+          const build = (builds.body.data ?? [])[0];
+          if (!build) { console.error(`::error::build ${BUILD_NUMBER} not found`); process.exit(1); }
+          console.log(`Build ${BUILD_NUMBER}: ${build.id} (${build.attributes.processingState})`);
+
+          // 2. Find or create the external group.
+          const groups = await api("GET", `/v1/betaGroups?filter[app]=${APP_ID}&limit=50`);
+          let group = (groups.body.data ?? []).find(
+            (g) => g.attributes.isInternalGroup === false && g.attributes.name === GROUP_NAME,
+          );
+          if (!group) {
+            const created = await api("POST", `/v1/betaGroups`, {
+              data: { type: "betaGroups",
+                attributes: { name: GROUP_NAME, isInternalGroup: false, publicLinkEnabled: false },
+                relationships: { app: { data: { type: "apps", id: APP_ID } } } },
+            });
+            group = created.body.data;
+            console.log(`Created external group "${GROUP_NAME}"`);
+          } else {
+            console.log(`Using existing group "${GROUP_NAME}"`);
+          }
+
+          // 3. Attach the build to the group (idempotent; ALREADY_EXISTS ok).
+          await api("POST", `/v1/betaGroups/${group.id}/relationships/builds`, {
+            data: [{ type: "builds", id: build.id }],
+          }, ["ALREADY_EXISTS", "STATE_ERROR"]);
+          console.log("Build attached to group");
+
+          // 4. Submit for Beta App Review (first external build needs it; a
+          //    duplicate submission error means it's already in/through review).
+          const sub = await api("POST", `/v1/betaAppReviewSubmissions`, {
+            data: { type: "betaAppReviewSubmissions",
+              relationships: { build: { data: { type: "builds", id: build.id } } } },
+          }, ["ALREADY_EXISTS", "STATE_ERROR", "DUPLICATE"]);
+          console.log(`Beta review: ${sub.status === 201 ? "submitted" : "already submitted/reviewed"}`);
+
+          // 5. Invite each tester into the group (invite email sends now).
+          for (let i = 0; i < emails.length; i++) {
+            const email = emails[i];
+            const firstName = names[i] || email.split("@")[0];
+            const r = await api("POST", `/v1/betaTesters`, {
+              data: { type: "betaTesters",
+                attributes: { email, firstName },
+                relationships: { betaGroups: { data: [{ type: "betaGroups", id: group.id }] } } },
+            }, ["ALREADY_EXISTS"]);
+            console.log(`${email}: ${r.status === 201 ? "INVITED" : "already in group"}`);
+          }
+          console.log("");
+          console.log("Done. Testers get the invite email now; the build installs once Beta App Review clears.");
+          SCRIPT
+          node /tmp/invite.mjs
