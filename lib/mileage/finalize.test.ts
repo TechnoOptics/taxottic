@@ -80,3 +80,31 @@ describe("localTaxYear (audit #34)", () => {
     expect(localTaxYear(Date.parse("2027-01-02T18:00:00Z"))).toBe(2027);
   });
 });
+
+// Plausibility gate: fabricated trips (timestamp poisoning, teleports)
+// must die at creation, never reach a user's phone. Live incident: 808,
+// 314 and 1,343-"mile" trips in one evening from a time-shifted backlog.
+import { isPlausibleTrip } from "./finalize";
+
+describe("isPlausibleTrip", () => {
+  const MIN = 60_000;
+  it("a normal commute passes", () => {
+    expect(isPlausibleTrip(12, 0, 25 * MIN)).toBe(true); // ~29 mph
+  });
+  it("a fast interstate leg passes", () => {
+    expect(isPlausibleTrip(85, 0, 60 * MIN)).toBe(true); // 85 mph
+  });
+  it("the 1,343-mile 51-minute fabrication is rejected", () => {
+    expect(isPlausibleTrip(1343.1, 0, 51 * MIN)).toBe(false);
+  });
+  it("a 1.6-mile 36-second teleport is rejected", () => {
+    expect(isPlausibleTrip(1.6, 0, 36_000)).toBe(false); // 163 mph
+  });
+  it("degenerate zero-duration cannot divide by zero (floored to 30s)", () => {
+    // The 30s floor turns a half-mile zero-duration blip into 60 mph —
+    // deliberately tolerated; the segmenter's own point/duration minimums
+    // are the filter for those. What matters is no NaN/Infinity escape.
+    expect(isPlausibleTrip(0.5, 0, 0)).toBe(true);
+    expect(isPlausibleTrip(2, 0, 0)).toBe(false); // 240 mph even floored
+  });
+});
