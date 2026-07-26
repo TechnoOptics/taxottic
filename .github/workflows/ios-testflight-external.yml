@@ -174,8 +174,28 @@ jobs:
               data: { type: "betaTesters",
                 attributes: { email, firstName },
                 relationships: { betaGroups: { data: [{ type: "betaGroups", id: group.id }] } } },
+            }, ["ALREADY_EXISTS", "STATE_ERROR"]);
+            if (r.status === 201) {
+              console.log(`${email}: INVITED`);
+              continue;
+            }
+            // 409 STATE_ERROR: a tester record for this email already
+            // exists on the app (e.g. from an old failed internal-invite
+            // attempt). Find it and attach it to the group instead — that
+            // sends the invite for this group.
+            const found = await api(
+              "GET",
+              `/v1/betaTesters?filter[email]=${encodeURIComponent(email)}&filter[apps]=${APP_ID}&limit=2`,
+            );
+            const existing = (found.body.data ?? [])[0];
+            if (!existing) {
+              console.error(`::error::${email}: cannot create AND no existing tester found`);
+              process.exit(1);
+            }
+            await api("POST", `/v1/betaGroups/${group.id}/relationships/betaTesters`, {
+              data: [{ type: "betaTesters", id: existing.id }],
             }, ["ALREADY_EXISTS"]);
-            console.log(`${email}: ${r.status === 201 ? "INVITED" : "already in group"}`);
+            console.log(`${email}: existing tester attached to group (invite sent)`);
           }
           console.log("");
           console.log("Done. Testers get the invite email now; the build installs once Beta App Review clears.");
