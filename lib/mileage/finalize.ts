@@ -84,6 +84,23 @@ export function shouldReplaceTrack(
   return rebuiltCount >= 2 && rebuiltCount >= existingRenderedCount;
 }
 
+/** A trip whose average speed is physically impossible is corrupt data
+ *  (timestamp poisoning, interleaved backlogs, GPS teleports), never a
+ *  real drive. Highest sustained legal-ish average on US interstates is
+ *  ~85 mph; 100 leaves margin. Observed live before this gate: 808, 314
+ *  and 1,343 "mile" trips fabricated from a time-shifted backlog, worth
+ *  \$1,875 of false deduction across one evening. */
+export const MAX_PLAUSIBLE_AVG_MPH = 100;
+
+export function isPlausibleTrip(
+  distanceMiles: number,
+  startMs: number,
+  endMs: number,
+): boolean {
+  const hours = Math.max((endMs - startMs) / 3_600_000, 1 / 120); // >=30s
+  return distanceMiles / hours <= MAX_PLAUSIBLE_AVG_MPH;
+}
+
 /** Calendar year of an instant in US-Central, the fleet default. UTC
  *  rolls over 6 hours early, misfiling US evening drives near Dec 31. */
 export function localTaxYear(
@@ -480,6 +497,18 @@ export async function finalizeUserTrips(
       taxYear,
       startedAt,
     );
+
+    // Plausibility gate: refuse to CREATE an impossible trip. The
+    // segmenter can only be as good as its input; poisoned timestamps
+    // upstream must die here, not surface as a four-digit deduction on
+    // someone's phone.
+    if (!isPlausibleTrip(trip.distanceMiles, trip.startTs, trip.endTs)) {
+      console.error(
+        `[finalize] IMPLAUSIBLE trip rejected: ${trip.distanceMiles.toFixed(1)} mi in ` +
+          `${((trip.endTs - trip.startTs) / 60_000).toFixed(1)} min (driver=${userId})`,
+      );
+      continue;
+    }
 
     const { data: inserted, error: tripErr } = await admin
       .from("mileage_trips")
