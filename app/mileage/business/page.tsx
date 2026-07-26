@@ -121,11 +121,23 @@ export default async function BusinessTripsPage({
     trips = (tripData ?? []) as unknown as TripRow[];
 
     if (trips.length > 0) {
-      const { data: polyRows } = await admin.rpc("mileage_trip_polylines", {
-        p_trip_ids: trips.map((t) => t.id),
-        p_max: 250,
-      });
-      for (const r of (polyRows ?? []) as ({ trip_id: string } & Pt)[]) {
+      // Paginated: PostgREST truncates any response at max-rows (1000),
+      // which silently dropped polylines for all but the first few trips
+      // (same fix as app/mileage/page.tsx).
+      const polyRows: ({ trip_id: string } & Pt)[] = [];
+      const POLY_PAGE = 1000;
+      for (let from = 0; from < 60_000; from += POLY_PAGE) {
+        const { data: pageRows } = await admin
+          .rpc("mileage_trip_polylines", {
+            p_trip_ids: trips.map((t) => t.id),
+            p_max: 250,
+          })
+          .range(from, from + POLY_PAGE - 1);
+        const rows = (pageRows ?? []) as ({ trip_id: string } & Pt)[];
+        polyRows.push(...rows);
+        if (rows.length < POLY_PAGE) break;
+      }
+      for (const r of polyRows) {
         const arr = pointsByTrip.get(r.trip_id);
         if (arr) arr.push({ lat: r.lat, lng: r.lng, captured_at: r.captured_at });
         else
