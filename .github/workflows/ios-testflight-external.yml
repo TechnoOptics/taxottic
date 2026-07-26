@@ -126,15 +126,26 @@ jobs:
           // Beta review contact details (required once per app).
           const detail = await api("GET", `/v1/apps/${APP_ID}/betaAppReviewDetail`);
           if (detail.body.data?.id) {
-            await api("PATCH", `/v1/betaAppReviewDetails/${detail.body.data.id}`, {
-              data: { type: "betaAppReviewDetails", id: detail.body.data.id,
-                attributes: {
-                  contactEmail: "contact@technooptics.com",
-                  contactFirstName: "Abel", contactLastName: "Ark",
-                  contactPhone: "+1-555-010-0000",
-                } },
-            });
-            console.log("Beta review contact set");
+            // Fill only MISSING fields; never overwrite real data and never
+            // invent a phone number — Apple may actually call it. If the
+            // phone is absent, say so and continue: the submission error
+            // (if any) names exactly what's still required.
+            const a = detail.body.data.attributes ?? {};
+            const attrs = {};
+            if (!a.contactEmail) attrs.contactEmail = "contact@technooptics.com";
+            if (!a.contactFirstName) attrs.contactFirstName = "Abel";
+            if (!a.contactLastName) attrs.contactLastName = "Ark";
+            if (Object.keys(attrs).length) {
+              await api("PATCH", `/v1/betaAppReviewDetails/${detail.body.data.id}`, {
+                data: { type: "betaAppReviewDetails", id: detail.body.data.id, attributes: attrs },
+              });
+              console.log(`Beta review contact updated: ${Object.keys(attrs).join(", ")}`);
+            } else {
+              console.log("Beta review contact already complete");
+            }
+            if (!a.contactPhone) {
+              console.log("NOTE: contact phone is empty in App Store Connect — if beta review submission fails on it, add a real phone under TestFlight > Beta App Review Information.");
+            }
           }
 
           // 4. Submit for Beta App Review (first external build needs it; a
