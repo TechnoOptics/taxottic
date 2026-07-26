@@ -714,7 +714,10 @@
 // v115: device-clock skew now shifts a batch instead of collapsing it
 // (drives keep their shape), watchdog budget resets on real fixes,
 // employee filter gated to manager/lead. Client JS changed -> bump.
-const CACHE_VERSION = "v116";
+// v117: GPS walk-away detection — permission-free fast drive close
+// from walking-band GPS drift; restores fast close on Android (no step
+// counter) and doubles as a second witness on iOS. Client JS -> bump.
+const CACHE_VERSION = "v117";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
