@@ -8,7 +8,15 @@
 // the spec calls out; keep it.
 
 export type PushEvent =
-  | { kind: "trip_classify"; tripId: string }
+  | {
+      kind: "trip_classify";
+      tripId: string;
+      /** Snippet for the banner: "3.2 mi · 7:41 PM". Optional so older
+       *  producers keep compiling; the copy degrades to the generic
+       *  question. */
+      miles?: number;
+      whenLabel?: string;
+    }
   /**
    * "Trip logged", fires for every materialized trip that the
    * segmenter already auto-classified business or personal (the
@@ -74,14 +82,23 @@ export type PushPayload = {
  */
 export function buildPayload(e: PushEvent): PushPayload {
   switch (e.kind) {
-    case "trip_classify":
+    case "trip_classify": {
+      // Snippet-first copy: the user classifies from the shade without
+      // opening the app, so the banner must SAY which drive this is.
+      const snippet =
+        e.miles != null
+          ? `${e.miles.toFixed(1)} mi drive${e.whenLabel ? ` · ${e.whenLabel}` : ""}`
+          : null;
       return {
-        title: "New drive logged",
-        body: "Was this trip for business?",
+        title: snippet ?? "New drive logged",
+        body: snippet
+          ? "Business or personal? Tap to classify."
+          : "Was this trip for business?",
         category: "TRIP_CLASSIFY",
         data: { kind: e.kind, tripId: e.tripId },
         dedupeKey: `trip_classify:${e.tripId}`,
       };
+    }
     case "trip_logged":
       return {
         title: "Drive logged",

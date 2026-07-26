@@ -601,7 +601,16 @@ export async function finalizeUserTrips(
 
     if (opts.push) {
       if (classification === "unclassified") {
-        await notify(userId, { kind: "trip_classify", tripId: inserted.id });
+        await notify(userId, {
+          kind: "trip_classify",
+          tripId: inserted.id,
+          miles: trip.distanceMiles,
+          whenLabel: new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/Chicago",
+            hour: "numeric",
+            minute: "2-digit",
+          }).format(new Date(trip.startTs)),
+        });
       } else {
         await notify(userId, {
           kind: "trip_logged",
