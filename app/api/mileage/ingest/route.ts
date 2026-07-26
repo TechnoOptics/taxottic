@@ -95,13 +95,25 @@ export async function POST(req: NextRequest) {
   // Relative spacing — the thing that makes a track a track — survives.
   const receiptMs = Date.now();
   const SKEW_TOLERANCE_MS = 2 * 60_000;
+  // A true clock offset is seconds to minutes. A batch HOURS or days
+  // behind receipt is not a broken clock, it is an OFFLINE BACKLOG
+  // finally flushing — its timestamps are correct and must be kept.
+  // Shifting a backlog relabels old drives as "now" and interleaves
+  // them with tonight's points into fabricated mega-trips (observed
+  // live: two impossible trips, 808 mi and 314 mi, 21-mile hops at
+  // 1-minute spacing, after a 2-day-dark phone flushed its buffer).
+  const MAX_BEHIND_SHIFT_MS = 30 * 60_000;
   const finite = rawPoints.filter(isFinitePoint);
   const newestTs = finite.reduce((a, pt) => Math.max(a, pt.ts), 0);
   const skewMs = newestTs > 0 ? newestTs - receiptMs : 0;
-  const correctedPoints =
-    Math.abs(skewMs) > SKEW_TOLERANCE_MS
-      ? finite.map((pt) => ({ ...pt, ts: pt.ts - skewMs }))
-      : finite;
+  const shiftable =
+    // Ahead of receipt is physically impossible: always a clock issue.
+    (skewMs > SKEW_TOLERANCE_MS ||
+      // Behind is ambiguous: only treat SMALL lags as clock skew.
+      (skewMs < -SKEW_TOLERANCE_MS && skewMs > -MAX_BEHIND_SHIFT_MS));
+  const correctedPoints = shiftable
+    ? finite.map((pt) => ({ ...pt, ts: pt.ts - skewMs }))
+    : finite;
   const points = correctedPoints.sort((a, b) => a.ts - b.ts);
   if (points.length > 50_000) {
     console.log(
