@@ -74,11 +74,63 @@ describe("evaluateDriveEnd", () => {
 // on iOS. Sustained walking-band fixes drifting >45 m from the park
 // point mean the driver left the car.
 describe("gps_walk close", () => {
-  const base = { hasDriven: true, stationaryMs: 90_000, stepsSinceStationary: 0 };
+  // Armed + off-axis: the post-2026-07-26 contract. A real park (45s
+  // hard stop) arms the detector; the walker's path diverges from the
+  // road. Both were missing when highway stop-and-go closed two real
+  // drives mid-motion.
+  const base = {
+    hasDriven: true,
+    stationaryMs: 90_000,
+    stepsSinceStationary: 0,
+    walkArmed: true,
+    walkBearingDeltaDeg: 90,
+  };
 
   it("closes on sustained walking displacement (Android's fast path)", () => {
     const d = evaluateDriveEnd({ ...base, walkDisplacementM: 60, walkingFixCount: 4 });
     expect(d).toEqual({ close: true, reason: "gps_walk" });
+  });
+
+  it("HIGHWAY REGRESSION: unarmed walking-band creep never closes", () => {
+    // Jul 26 field failure: stop-and-go traffic creeps at walking pace.
+    // No 45s hard stop ever happened, so the detector must stay silent
+    // no matter how much band-speed displacement accumulates.
+    const d = evaluateDriveEnd({
+      ...base,
+      walkArmed: false,
+      walkDisplacementM: 300,
+      walkingFixCount: 12,
+    });
+    expect(d.close).toBe(false);
+  });
+
+  it("HIGHWAY REGRESSION: armed but creeping ALONG the road never closes", () => {
+    // Gridlock with real 45s+ stops still creeps along the driving
+    // heading. On-axis movement is traffic, not a walker.
+    const d = evaluateDriveEnd({
+      ...base,
+      walkBearingDeltaDeg: 8,
+      walkDisplacementM: 200,
+      walkingFixCount: 8,
+    });
+    expect(d.close).toBe(false);
+  });
+
+  it("no known heading: closes only past the long displacement floor", () => {
+    const near = evaluateDriveEnd({
+      ...base,
+      walkBearingDeltaDeg: null,
+      walkDisplacementM: 90,
+      walkingFixCount: 5,
+    });
+    expect(near.close).toBe(false);
+    const far = evaluateDriveEnd({
+      ...base,
+      walkBearingDeltaDeg: null,
+      walkDisplacementM: 150,
+      walkingFixCount: 5,
+    });
+    expect(far).toEqual({ close: true, reason: "gps_walk" });
   });
 
   it("displacement without enough walking fixes does NOT close (one bad fix)", () => {

@@ -64,6 +64,42 @@ export const WALK_DISPLACEMENT_M = 45;
  *  so one bad fix can't close a drive. */
 export const WALK_FIX_COUNT = 3;
 
+// ── Anti-traffic guards (2026-07-26) ────────────────────────────────
+// Field failure: highway stop-and-go traffic creeps at EXACTLY walking
+// pace, so the original detector closed two real drives mid-motion
+// (156 highway-speed fixes arrived within 3 min of one "walk-away").
+// Two physical truths a car in traffic cannot fake:
+//   1. A real park begins with a HARD stop. Cars in a jam keep inching;
+//      a parked car sits genuinely still. The walk detector only ARMS
+//      after WALK_ARM_STOP_MS continuously under HARD_STOP_SPEED_MPS.
+//      Any creep resets the clock; any driving-speed fix resets it all.
+//   2. A walker LEAVES THE ROAD'S AXIS. Jam creep continues along the
+//      pre-stop driving heading; someone walking into a building
+//      diverges from it. The park→walker vector must differ from the
+//      last driving heading by WALK_OFF_AXIS_MIN_DEG — or, when no
+//      heading is known, the displacement must reach the much larger
+//      WALK_NO_BEARING_DISPLACEMENT_M before we trust it.
+// Cost of the guards: someone who parks and walks along the sidewalk in
+// the exact direction they were driving falls back to the stationary
+// timer instead of the fast close. Correct-but-slower beats
+// fast-but-wrong here — a mid-drive close splits an IRS record.
+
+/** Below this the vehicle is genuinely stopped, not creeping (m/s). */
+export const HARD_STOP_SPEED_MPS = 0.7;
+
+/** Continuous hard-stop time required before walk detection arms. Long
+ *  lights arm too (90s+ reds exist) — the off-axis test and the
+ *  any-driving-fix reset still protect them. */
+export const WALK_ARM_STOP_MS = 45_000;
+
+/** Minimum angle between the last driving heading and the park→walker
+ *  vector for the movement to read as "left the road" (degrees). */
+export const WALK_OFF_AXIS_MIN_DEG = 45;
+
+/** With no usable driving heading, require this much displacement
+ *  instead — far beyond one jam creep between fixes (meters). */
+export const WALK_NO_BEARING_DISPLACEMENT_M = 120;
+
 export type DriveEndSignals = {
   /** Has this session actually been driving (ever exceeded driving speed)?
    *  We never close a "drive" that never moved. */
@@ -79,6 +115,12 @@ export type DriveEndSignals = {
    *  the distance filter emits nothing from a parked phone). */
   walkDisplacementM?: number;
   walkingFixCount?: number;
+  /** True only after a continuous hard stop of WALK_ARM_STOP_MS — the
+   *  precondition traffic creep can never satisfy. */
+  walkArmed?: boolean;
+  /** Angle (deg, 0-180) between the last driving heading and the
+   *  park→current vector; null when no heading is known. */
+  walkBearingDeltaDeg?: number | null;
 };
 
 export type DriveEndDecision =
@@ -100,8 +142,12 @@ export function evaluateDriveEnd(s: DriveEndSignals): DriveEndDecision {
   // point. The permission-free equivalent for builds without a step
   // counter (all Android 1.3.0+), and a second witness everywhere else.
   if (
+    s.walkArmed === true &&
     (s.walkDisplacementM ?? 0) >= WALK_DISPLACEMENT_M &&
-    (s.walkingFixCount ?? 0) >= WALK_FIX_COUNT
+    (s.walkingFixCount ?? 0) >= WALK_FIX_COUNT &&
+    (s.walkBearingDeltaDeg == null
+      ? (s.walkDisplacementM ?? 0) >= WALK_NO_BEARING_DISPLACEMENT_M
+      : s.walkBearingDeltaDeg >= WALK_OFF_AXIS_MIN_DEG)
   ) {
     return { close: true, reason: "gps_walk" };
   }
