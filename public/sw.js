@@ -725,7 +725,10 @@
 // resolve from the notification without opening the app (background
 // POST to /api/push/action + confirmation toast); Review deep-links.
 // Trip banners now lead with the snippet ("3.2 mi drive · 7:41 PM").
-const CACHE_VERSION = "v119";
+// v120: GPS walk-away hardened — arms only after a 45s hard stop and
+// requires off-axis movement, so highway stop-and-go (walking-pace
+// creep) can never close a drive mid-motion again.
+const CACHE_VERSION = "v120";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

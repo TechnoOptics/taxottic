@@ -31,6 +31,8 @@ import {
   STATIONARY_SPEED_MPS as DE_STATIONARY_SPEED_MPS,
   WALK_SPEED_MIN_MPS as DE_WALK_MIN_MPS,
   WALK_SPEED_MAX_MPS as DE_WALK_MAX_MPS,
+  HARD_STOP_SPEED_MPS as DE_HARD_STOP_MPS,
+  WALK_ARM_STOP_MS as DE_WALK_ARM_STOP_MS,
 } from "./drive-end";
 import { haversineMeters } from "./segmentation";
 
@@ -195,6 +197,15 @@ let deParkLng = 0;
 let deParkSet = false;
 let deWalkFixes = 0;
 let deWalkDisplacementM = 0;
+// Anti-traffic guards: when the continuous hard stop began (0 = moving
+// or creeping), the last two driving-speed fixes (for the pre-park
+// heading), and the latest park→walker bearing delta.
+let deHardStopStartTs = 0;
+let dePrevDriveLat = 0;
+let dePrevDriveLng = 0;
+let dePrevDriveSet = false;
+let deDriveBearingDeg: number | null = null;
+let deWalkBearingDeltaDeg: number | null = null;
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogRearming = false;
 let authUnsub: (() => void) | null = null;
@@ -451,6 +462,10 @@ async function maybeCloseDrive(): Promise<void> {
     stepsSinceStationary: steps,
     walkDisplacementM: deWalkDisplacementM,
     walkingFixCount: deWalkFixes,
+    walkArmed:
+      deHardStopStartTs > 0 &&
+      Date.now() - deHardStopStartTs >= DE_WALK_ARM_STOP_MS,
+    walkBearingDeltaDeg: deWalkBearingDeltaDeg,
   });
   if (decision.close) {
     if (driveEndPosting) return;
@@ -467,6 +482,10 @@ async function maybeCloseDrive(): Promise<void> {
         deParkSet = false;
         deWalkFixes = 0;
         deWalkDisplacementM = 0;
+        deHardStopStartTs = 0;
+        deWalkBearingDeltaDeg = null;
+        dePrevDriveSet = false;
+        deDriveBearingDeg = null;
         trackerDiag.driveEndReason = decision.reason;
       } else {
         trackerDiag.driveEndReason = `retrying:${decision.reason}`;
@@ -699,6 +718,28 @@ async function sendHeartbeat(): Promise<void> {
   }
 }
 
+/** Initial bearing from a to b, degrees 0-360. */
+function bearingDegrees(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const toRad = Math.PI / 180;
+  const dLng = (b.lng - a.lng) * toRad;
+  const la1 = a.lat * toRad;
+  const la2 = b.lat * toRad;
+  const y = Math.sin(dLng) * Math.cos(la2);
+  const x =
+    Math.cos(la1) * Math.sin(la2) -
+    Math.sin(la1) * Math.cos(la2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360;
+}
+
+/** Smallest angle between two bearings, degrees 0-180. */
+function bearingDeltaDegrees(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
 /** Map a plugin Location → the server's GpsPoint contract. */
 function toPoint(p: {
   latitude: number;
@@ -884,29 +925,72 @@ export async function startMileageTracking(
         // Drive-end tracking: a fix above driving speed means we're
         // moving; remember when. Below it, the vehicle is stationary and
         // deLastMovingTs stops advancing, so its age = time parked.
-        if ((pt.speedMps ?? 0) >= DE_STATIONARY_SPEED_MPS) {
+        const spd = pt.speedMps ?? 0;
+        if (spd >= DE_STATIONARY_SPEED_MPS) {
           deHasDriven = true;
           deLastMovingTs = pt.ts;
-          // Back at driving speed: any walk evidence was noise/pacing.
+        }
+        if (spd > DE_WALK_MAX_MPS) {
+          // Unambiguous driving. Any walk evidence was traffic creep or
+          // noise — reset EVERYTHING, including the hard-stop clock, and
+          // update the driving heading (used to tell a walker leaving
+          // the road from a jam creeping along it).
+          if (dePrevDriveSet) {
+            deDriveBearingDeg = bearingDegrees(
+              { lat: dePrevDriveLat, lng: dePrevDriveLng },
+              { lat: pt.lat, lng: pt.lng },
+            );
+          }
+          dePrevDriveLat = pt.lat;
+          dePrevDriveLng = pt.lng;
+          dePrevDriveSet = true;
           deParkSet = false;
           deWalkFixes = 0;
           deWalkDisplacementM = 0;
+          deHardStopStartTs = 0;
+          deWalkBearingDeltaDeg = null;
         } else if (deHasDriven) {
-          // Below driving speed after having driven: this is either the
-          // parked car or the driver walking off with the phone.
-          if (!deParkSet) {
-            deParkLat = pt.lat;
-            deParkLng = pt.lng;
-            deParkSet = true;
-          } else {
-            const sp = pt.speedMps ?? 0;
-            if (sp >= DE_WALK_MIN_MPS && sp <= DE_WALK_MAX_MPS) {
-              deWalkFixes++;
+          const armed =
+            deHardStopStartTs > 0 &&
+            pt.ts - deHardStopStartTs >= DE_WALK_ARM_STOP_MS;
+          if (spd < DE_HARD_STOP_MPS) {
+            // Genuinely still. Start (or continue) the hard-stop clock;
+            // the park point is where the stop BEGAN.
+            if (deHardStopStartTs === 0) {
+              deHardStopStartTs = pt.ts;
+              deParkLat = pt.lat;
+              deParkLng = pt.lng;
+              deParkSet = true;
             }
+          } else if (!armed) {
+            // Sub-driving movement BEFORE a qualifying hard stop: that is
+            // a car creeping in traffic, never a walker (you cannot walk
+            // away from a car that hasn't stopped). Reset the clock — a
+            // real park will restart it and pass with ease.
+            deHardStopStartTs = 0;
+            deParkSet = false;
+            deWalkFixes = 0;
+            deWalkDisplacementM = 0;
+            deWalkBearingDeltaDeg = null;
+          } else if (spd >= DE_WALK_MIN_MPS && spd <= DE_WALK_MAX_MPS) {
+            // Armed (real park happened) and moving at walking pace:
+            // candidate walker. Track displacement AND how far the path
+            // has diverged from the road's axis.
+            deWalkFixes++;
             deWalkDisplacementM = haversineMeters(
               { lat: deParkLat, lng: deParkLng },
               { lat: pt.lat, lng: pt.lng },
             );
+            deWalkBearingDeltaDeg =
+              deDriveBearingDeg == null
+                ? null
+                : bearingDeltaDegrees(
+                    deDriveBearingDeg,
+                    bearingDegrees(
+                      { lat: deParkLat, lng: deParkLng },
+                      { lat: pt.lat, lng: pt.lng },
+                    ),
+                  );
           }
         }
         buffer.push(pt);
