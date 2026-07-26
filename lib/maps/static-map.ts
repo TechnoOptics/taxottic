@@ -17,13 +17,28 @@ export type StaticMapPoint = { lat: number; lng: number };
 
 type Classification = "business" | "personal" | "unclassified";
 
-// Match the interactive map's breadcrumb palette so a thumbnail and
-// the big map read as the same trip.
+// Match the interactive map EXACTLY: same gold/amber breadcrumbs on
+// the same dark navy basemap, so a thumbnail and the big map read as
+// the same trip. The previous palette (green on Google's default LIGHT
+// roadmap at weight 3) was invisible inside the dark app UI — the
+// route "could not be seen" at 64 px.
 const PATH_COLOR: Record<Classification, string> = {
-  business: "0x16a34a",
-  personal: "0xd97706",
-  unclassified: "0x71717a",
+  business: "0xF2D896", // gold, as MileageMap's TRIP_COLOR.business
+  personal: "0xD97706", // amber
+  unclassified: "0xA1A1AA",
 };
+
+// Static Maps `style` params mirroring MileageMap's dark theme (navy
+// geometry, muted labels). Kept minimal: enough for the path to pop
+// and the tile to blend with the app's dark cards.
+const DARK_STYLE = [
+  "feature:all|element:geometry|color:0x1d2843",
+  "feature:water|element:geometry|color:0x121a2a",
+  "feature:road|element:geometry|color:0x2a3a5e",
+  "feature:all|element:labels|visibility:off",
+  "feature:poi|visibility:off",
+  "feature:transit|visibility:off",
+];
 
 /**
  * Even-stride downsample that always keeps the first and last fix.
@@ -74,7 +89,7 @@ export function staticMapUrl(
   const color = PATH_COLOR[opts?.classification ?? "unclassified"];
 
   const path =
-    `color:${color}|weight:3|` +
+    `color:${color}|weight:4|` +
     downsample(pts, 60)
       .map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`)
       .join("|");
@@ -86,5 +101,8 @@ export function staticMapUrl(
     path,
     key,
   });
+  // URLSearchParams can't repeat a key via the object form; Static Maps
+  // wants one `style` param per rule.
+  for (const rule of DARK_STYLE) qs.append("style", rule);
   return `https://maps.googleapis.com/maps/api/staticmap?${qs.toString()}`;
 }

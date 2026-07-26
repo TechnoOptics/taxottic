@@ -717,7 +717,11 @@
 // v117: GPS walk-away detection — permission-free fast drive close
 // from walking-band GPS drift; restores fast close on Android (no step
 // counter) and doubles as a second witness on iOS. Client JS -> bump.
-const CACHE_VERSION = "v117";
+// v118: trip thumbnails — polyline fetch paginated past PostgREST's
+// 1000-row cap (most trips had NO preview), dark navy basemap with the
+// big map's gold path (was invisible light-on-light), placeholder tile
+// for manual trips. Client markup changed -> bump.
+const CACHE_VERSION = "v118";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
