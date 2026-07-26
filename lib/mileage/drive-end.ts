@@ -35,7 +35,34 @@ export const STATIONARY_CLOSE_MS = 12 * 60_000;
  *  for the purpose of drive-end (m/s; ~3.4 mph). */
 export const STATIONARY_SPEED_MPS = 1.5;
 
-export type DriveEndReason = "walked_away" | "stationary_timeout";
+export type DriveEndReason =
+  | "walked_away"
+  | "gps_walk"
+  | "stationary_timeout";
+
+// ── GPS walk-away (no permission required) ─────────────────────────
+// Android 1.3.0 shipped WITHOUT the step counter (Google Play rejects
+// ACTIVITY_RECOGNITION under a truthful "no health features" answer),
+// so Android lost the fast walk-away signal entirely. But walking is
+// unmistakable in the GPS stream we already collect: sustained fixes in
+// the walking-speed band drifting away from where the car stopped. No
+// sensor, no permission, works on every platform, and deploys as web
+// code. Steps (iOS) stay as the fastest signal; this is the second.
+
+/** Speed band that reads as walking, not driving and not GPS jitter
+ *  (m/s). Lower bound keeps a stationary phone's noise out; upper stays
+ *  below slow-rolling traffic. */
+export const WALK_SPEED_MIN_MPS = 0.4;
+export const WALK_SPEED_MAX_MPS = 2.5;
+
+/** Distance from the park point that means "left the car", not pacing
+ *  next to it (meters). With a ~25 m distance filter this is 2-3 fixes,
+ *  roughly 30-60 s of walking. */
+export const WALK_DISPLACEMENT_M = 45;
+
+/** Fixes inside the walking band required alongside the displacement,
+ *  so one bad fix can't close a drive. */
+export const WALK_FIX_COUNT = 3;
 
 export type DriveEndSignals = {
   /** Has this session actually been driving (ever exceeded driving speed)?
@@ -46,6 +73,12 @@ export type DriveEndSignals = {
   stationaryMs: number;
   /** Steps counted since the vehicle went stationary. */
   stepsSinceStationary: number;
+  /** GPS walk signal: meters moved from the park point since going
+   *  stationary, and how many fixes landed in the walking-speed band.
+   *  Zero/absent when no fixes have arrived (phone still in the car:
+   *  the distance filter emits nothing from a parked phone). */
+  walkDisplacementM?: number;
+  walkingFixCount?: number;
 };
 
 export type DriveEndDecision =
@@ -62,6 +95,15 @@ export function evaluateDriveEnd(s: DriveEndSignals): DriveEndDecision {
   // Walked away: the fast, unambiguous signal.
   if (s.stepsSinceStationary >= STEP_CLOSE_THRESHOLD) {
     return { close: true, reason: "walked_away" };
+  }
+  // GPS walk-away: sustained walking-band movement away from the park
+  // point. The permission-free equivalent for builds without a step
+  // counter (all Android 1.3.0+), and a second witness everywhere else.
+  if (
+    (s.walkDisplacementM ?? 0) >= WALK_DISPLACEMENT_M &&
+    (s.walkingFixCount ?? 0) >= WALK_FIX_COUNT
+  ) {
+    return { close: true, reason: "gps_walk" };
   }
   // Parked but no walking detected (sat in car / phone left behind).
   if (s.stationaryMs >= STATIONARY_CLOSE_MS) {

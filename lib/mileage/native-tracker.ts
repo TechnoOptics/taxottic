@@ -27,7 +27,12 @@
 // and no-ops cleanly so the /mileage page still renders.
 
 import type { GpsPoint } from "./segmentation";
-import { STATIONARY_SPEED_MPS as DE_STATIONARY_SPEED_MPS } from "./drive-end";
+import {
+  STATIONARY_SPEED_MPS as DE_STATIONARY_SPEED_MPS,
+  WALK_SPEED_MIN_MPS as DE_WALK_MIN_MPS,
+  WALK_SPEED_MAX_MPS as DE_WALK_MAX_MPS,
+} from "./drive-end";
+import { haversineMeters } from "./segmentation";
 
 // Minimal contract for the slice of @capgo/background-geolocation we
 // use. Declared locally (rather than importing the package's types at
@@ -182,6 +187,14 @@ let flushTimer: ReturnType<typeof setInterval> | null = null;
 let deHasDriven = false;
 let driveEndPosting = false;
 let deLastMovingTs = 0;
+// GPS walk-away state: where the car stopped (first below-driving-speed
+// fix after driving) and how many subsequent fixes landed in the
+// walking-speed band. Permission-free walk detection — see drive-end.ts.
+let deParkLat = 0;
+let deParkLng = 0;
+let deParkSet = false;
+let deWalkFixes = 0;
+let deWalkDisplacementM = 0;
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogRearming = false;
 let authUnsub: (() => void) | null = null;
@@ -436,6 +449,8 @@ async function maybeCloseDrive(): Promise<void> {
     hasDriven: true,
     stationaryMs,
     stepsSinceStationary: steps,
+    walkDisplacementM: deWalkDisplacementM,
+    walkingFixCount: deWalkFixes,
   });
   if (decision.close) {
     if (driveEndPosting) return;
@@ -449,6 +464,9 @@ async function maybeCloseDrive(): Promise<void> {
       if (ok) {
         deHasDriven = false;
         deLastMovingTs = 0;
+        deParkSet = false;
+        deWalkFixes = 0;
+        deWalkDisplacementM = 0;
         trackerDiag.driveEndReason = decision.reason;
       } else {
         trackerDiag.driveEndReason = `retrying:${decision.reason}`;
@@ -869,6 +887,27 @@ export async function startMileageTracking(
         if ((pt.speedMps ?? 0) >= DE_STATIONARY_SPEED_MPS) {
           deHasDriven = true;
           deLastMovingTs = pt.ts;
+          // Back at driving speed: any walk evidence was noise/pacing.
+          deParkSet = false;
+          deWalkFixes = 0;
+          deWalkDisplacementM = 0;
+        } else if (deHasDriven) {
+          // Below driving speed after having driven: this is either the
+          // parked car or the driver walking off with the phone.
+          if (!deParkSet) {
+            deParkLat = pt.lat;
+            deParkLng = pt.lng;
+            deParkSet = true;
+          } else {
+            const sp = pt.speedMps ?? 0;
+            if (sp >= DE_WALK_MIN_MPS && sp <= DE_WALK_MAX_MPS) {
+              deWalkFixes++;
+            }
+            deWalkDisplacementM = haversineMeters(
+              { lat: deParkLat, lng: deParkLng },
+              { lat: pt.lat, lng: pt.lng },
+            );
+          }
         }
         buffer.push(pt);
         if (buffer.length > MAX_BUFFER) {

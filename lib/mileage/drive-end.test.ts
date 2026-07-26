@@ -68,3 +68,45 @@ describe("evaluateDriveEnd", () => {
     ).toEqual({ close: false, reason: null });
   });
 });
+
+// GPS walk-away (permission-free). Android 1.3.0 has no step counter
+// (Play policy), so this is its only fast close; it also backs up steps
+// on iOS. Sustained walking-band fixes drifting >45 m from the park
+// point mean the driver left the car.
+describe("gps_walk close", () => {
+  const base = { hasDriven: true, stationaryMs: 90_000, stepsSinceStationary: 0 };
+
+  it("closes on sustained walking displacement (Android's fast path)", () => {
+    const d = evaluateDriveEnd({ ...base, walkDisplacementM: 60, walkingFixCount: 4 });
+    expect(d).toEqual({ close: true, reason: "gps_walk" });
+  });
+
+  it("displacement without enough walking fixes does NOT close (one bad fix)", () => {
+    const d = evaluateDriveEnd({ ...base, walkDisplacementM: 80, walkingFixCount: 1 });
+    expect(d.close).toBe(false);
+  });
+
+  it("walking fixes without displacement does NOT close (pacing by the car)", () => {
+    const d = evaluateDriveEnd({ ...base, walkDisplacementM: 20, walkingFixCount: 6 });
+    expect(d.close).toBe(false);
+  });
+
+  it("steps still win when both signals present (fastest first)", () => {
+    const d = evaluateDriveEnd({
+      ...base,
+      stepsSinceStationary: 25,
+      walkDisplacementM: 60,
+      walkingFixCount: 4,
+    });
+    expect(d).toEqual({ close: true, reason: "walked_away" });
+  });
+
+  it("red light: no steps, no walk signal, under timer → stays open", () => {
+    const d = evaluateDriveEnd({ ...base, walkDisplacementM: 0, walkingFixCount: 0 });
+    expect(d.close).toBe(false);
+  });
+
+  it("absent walk fields (old callers) behave exactly as before", () => {
+    expect(evaluateDriveEnd(base).close).toBe(false);
+  });
+});
