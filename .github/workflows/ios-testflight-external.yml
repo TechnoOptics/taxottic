@@ -21,6 +21,10 @@ on:
       build_number:
         description: "CFBundleVersion to distribute (e.g. 28)"
         required: true
+      contact_phone:
+        description: "Real phone for Beta App Review contact (needed once; Apple may call it)"
+        required: false
+        default: ""
 
 jobs:
   invite:
@@ -34,6 +38,7 @@ jobs:
           EMAILS: ${{ inputs.emails }}
           FIRST_NAMES: ${{ inputs.first_names }}
           BUILD_NUMBER: ${{ inputs.build_number }}
+          CONTACT_PHONE: ${{ inputs.contact_phone }}
         run: |
           cat > /tmp/invite.mjs <<'SCRIPT'
           import crypto from "node:crypto";
@@ -131,20 +136,25 @@ jobs:
             // phone is absent, say so and continue: the submission error
             // (if any) names exactly what's still required.
             const a = detail.body.data.attributes ?? {};
+            // Apple 409s ANY PATCH to this entity without contactPhone. A
+            // real number arrives via the contact_phone input; we never
+            // invent one. With no phone available the PATCH is skipped and
+            // the submission's own error says whether Apple insists.
+            const phone = a.contactPhone || process.env.CONTACT_PHONE || "";
             const attrs = {};
             if (!a.contactEmail) attrs.contactEmail = "contact@technooptics.com";
             if (!a.contactFirstName) attrs.contactFirstName = "Abel";
             if (!a.contactLastName) attrs.contactLastName = "Ark";
-            if (Object.keys(attrs).length) {
+            if (Object.keys(attrs).length && phone) {
+              attrs.contactPhone = phone;
               await api("PATCH", `/v1/betaAppReviewDetails/${detail.body.data.id}`, {
                 data: { type: "betaAppReviewDetails", id: detail.body.data.id, attributes: attrs },
               });
               console.log(`Beta review contact updated: ${Object.keys(attrs).join(", ")}`);
+            } else if (Object.keys(attrs).length) {
+              console.log("Skipping contact PATCH: no phone on file and none provided (pass contact_phone).");
             } else {
               console.log("Beta review contact already complete");
-            }
-            if (!a.contactPhone) {
-              console.log("NOTE: contact phone is empty in App Store Connect — if beta review submission fails on it, add a real phone under TestFlight > Beta App Review Information.");
             }
           }
 
