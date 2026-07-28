@@ -756,7 +756,10 @@
 // The old aliased dynamic import could resolve to a separate lazy
 // chunk; when it failed to load in time every device field went null
 // at once — on both platforms, which is why it looked native.
-const CACHE_VERSION = "v129";
+// v130: pending synced bank/Stripe transactions can finally be
+// resolved in place — category picker + "Not business" on each pending
+// row, so the action item can actually be cleared.
+const CACHE_VERSION = "v130";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
