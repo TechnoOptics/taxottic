@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
         typeof body.batteryOptimized === "boolean" ? body.batteryOptimized : null,
       low_power_mode:
         typeof body.lowPowerMode === "boolean" ? body.lowPowerMode : null,
+      background_refresh:
+        typeof body.backgroundRefresh === "boolean"
+          ? body.backgroundRefresh
+          : null,
       reported_at: new Date().toISOString(),
     },
     { onConflict: "driver_user_id,company_id" },

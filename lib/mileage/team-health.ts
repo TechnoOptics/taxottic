@@ -84,13 +84,19 @@ export async function loadTeamTrackingHealth(
   // Toggle intent overlay (best-effort).
   const { data: statuses } = await admin
     .from("mileage_device_status")
-    .select("driver_user_id, tracking_enabled")
+    .select("driver_user_id, tracking_enabled, background_refresh")
     .eq("company_id", companyId)
     .in("driver_user_id", ids);
   const enabledById = new Map(
     (statuses ?? []).map((s) => [
       s.driver_user_id as string,
       s.tracking_enabled as boolean | null,
+    ]),
+  );
+  const bgRefreshById = new Map(
+    (statuses ?? []).map((s) => [
+      s.driver_user_id as string,
+      s.background_refresh as boolean | null,
     ]),
   );
 
@@ -102,6 +108,7 @@ export async function loadTeamTrackingHealth(
       lastUploadMs: lastUpload.get(d.userId) ?? null,
       lastMovementMs: lastMovement.get(d.userId) ?? null,
       trackingEnabled: enabledById.get(d.userId) ?? null,
+      backgroundRefresh: bgRefreshById.get(d.userId) ?? null,
     }),
   }));
 }

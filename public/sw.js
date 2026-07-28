@@ -734,7 +734,10 @@
 // v122: iOS background revival — native SLC capture + disk buffer,
 // drained on page load. Also fixes the iOS DeviceStatus plugin never
 // having been compiled into the app at all.
-const CACHE_VERSION = "v122";
+// v123: Background App Refresh now travels to the server and shows
+// as its own "blocked" state (it silently defeats every iOS relaunch
+// path); native Visits monitoring added as a second revival trigger.
+const CACHE_VERSION = "v123";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

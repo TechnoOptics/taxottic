@@ -112,3 +112,54 @@ describe("describeDriveHealth", () => {
     expect(describeDriveHealth({ status: "off", ageMs: null })).toBe("Tracking off");
   });
 });
+
+// Background App Refresh OFF defeats every relaunch mechanism iOS has
+// (SLC and geofences alike) with no client-side error, so it must read
+// as its own state — "silent" would send a manager chasing the wrong
+// remedy, and waiting never fixes it.
+describe("audit: background-refresh blocker", () => {
+  it("blocked outranks silence when refresh is off", () => {
+    const r = evaluateDriveTrackingHealth({
+      nowMs: NOW,
+      lastUploadMs: NOW - SILENT_AFTER_MS - h(20),
+      lastMovementMs: null,
+      trackingEnabled: true,
+      backgroundRefresh: false,
+    });
+    expect(r.status).toBe("blocked");
+    expect(describeDriveHealth(r)).toBe("Background refresh off");
+  });
+
+  it("refresh on leaves normal silence detection intact", () => {
+    const r = evaluateDriveTrackingHealth({
+      nowMs: NOW,
+      lastUploadMs: NOW - SILENT_AFTER_MS - h(1),
+      lastMovementMs: null,
+      trackingEnabled: true,
+      backgroundRefresh: true,
+    });
+    expect(r.status).toBe("silent");
+  });
+
+  it("unknown refresh (Android, or an old build) never blocks", () => {
+    const r = evaluateDriveTrackingHealth({
+      nowMs: NOW,
+      lastUploadMs: NOW - h(0.1),
+      lastMovementMs: NOW - h(1),
+      trackingEnabled: true,
+      backgroundRefresh: null,
+    });
+    expect(r.status).toBe("healthy");
+  });
+
+  it("tracking off still wins over a blocker (not our alarm)", () => {
+    const r = evaluateDriveTrackingHealth({
+      nowMs: NOW,
+      lastUploadMs: NOW - h(50),
+      lastMovementMs: null,
+      trackingEnabled: false,
+      backgroundRefresh: false,
+    });
+    expect(r.status).toBe("off");
+  });
+});
