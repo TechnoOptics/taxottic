@@ -10,6 +10,19 @@ import { StripeConnectButton } from "@/components/StripeConnectButton";
 import { StripeSyncButton } from "@/components/StripeSyncButton";
 import { isStripeConnectConfigured } from "@/lib/stripe-connect/client";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { ResolveSyncedTx } from "@/components/banks/ResolveSyncedTx";
+
+/** Mirrors INCOME_SOURCES in components/IncomeRow.tsx so a manually
+ *  categorized deposit uses the same vocabulary as a hand-entered one. */
+const INCOME_SOURCE_OPTIONS = [
+  { code: "sales", label: "Product sales" },
+  { code: "services", label: "Services / consulting" },
+  { code: "interest", label: "Interest" },
+  { code: "dividends", label: "Dividends" },
+  { code: "rental", label: "Rental income" },
+  { code: "royalty", label: "Royalty / licensing" },
+  { code: "other", label: "Other" },
+];
 import { getActiveFeatureGates } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
 import { disconnectBank } from "@/app/actions/recycle-bin";
@@ -104,6 +117,7 @@ export default async function BanksPage({
     { data: connections },
     { data: accounts },
     { count: pendingTxCount },
+    { data: deductionCats },
     { count: appliedTxCount },
     { data: recentTx },
   ] = await Promise.all([
@@ -128,6 +142,10 @@ export default async function BanksPage({
       .from("account_transactions")
       .select("id", { count: "exact", head: true })
       .eq("user_action", "pending"),
+    supabase
+      .from("deduction_categories")
+      .select("code, label")
+      .order("label"),
     supabase
       .from("account_transactions")
       .select("id", { count: "exact", head: true })
@@ -770,6 +788,22 @@ export default async function BanksPage({
                         {t.user_action}
                       </span>
                     </div>
+                    {/* Pending rows are actionable in place. The
+                        outstanding-task list counts these and links
+                        here, so without a control the item could never
+                        be cleared. */}
+                    {t.user_action === "pending" ? (
+                      <ResolveSyncedTx
+                        publicId={publicId}
+                        txId={t.id}
+                        amountCents={t.amount_cents}
+                        expenseCategories={(deductionCats ?? []).map((c) => ({
+                          code: c.code as string,
+                          label: c.label as string,
+                        }))}
+                        incomeSources={INCOME_SOURCE_OPTIONS}
+                      />
+                    ) : null}
                               </li>
                             );
                           })}
