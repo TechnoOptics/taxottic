@@ -12,17 +12,17 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.4"),
-        .package(name: "CapacitorApp", path: "../../../node_modules/@capacitor/app"),
-        .package(name: "CapacitorBrowser", path: "../../../node_modules/@capacitor/browser"),
-        .package(name: "CapacitorCamera", path: "../../../node_modules/@capacitor/camera"),
-        .package(name: "CapacitorHaptics", path: "../../../node_modules/@capacitor/haptics"),
-        .package(name: "CapacitorNetwork", path: "../../../node_modules/@capacitor/network"),
-        .package(name: "CapacitorPreferences", path: "../../../node_modules/@capacitor/preferences"),
-        .package(name: "CapacitorPushNotifications", path: "../../../node_modules/@capacitor/push-notifications"),
-        .package(name: "CapacitorSplashScreen", path: "../../../node_modules/@capacitor/splash-screen"),
-        .package(name: "CapacitorStatusBar", path: "../../../node_modules/@capacitor/status-bar"),
-        .package(name: "CapgoBackgroundGeolocation", path: "../../../node_modules/@capgo/background-geolocation"),
-        .package(name: "CapacitorPluginSafeArea", path: "../../../node_modules/capacitor-plugin-safe-area")
+        .package(name: "CapacitorApp", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/app"),
+        .package(name: "CapacitorBrowser", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/browser"),
+        .package(name: "CapacitorCamera", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/camera"),
+        .package(name: "CapacitorHaptics", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/haptics"),
+        .package(name: "CapacitorNetwork", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/network"),
+        .package(name: "CapacitorPreferences", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/preferences"),
+        .package(name: "CapacitorPushNotifications", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/push-notifications"),
+        .package(name: "CapacitorSplashScreen", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/splash-screen"),
+        .package(name: "CapacitorStatusBar", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capacitor/status-bar"),
+        .package(name: "CapgoBackgroundGeolocation", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/@capgo/background-geolocation"),
+        .package(name: "CapacitorPluginSafeArea", path: "../../../../../../../../../../Users/technooptics/Projects/taxottic/node_modules/capacitor-plugin-safe-area")
     ],
     targets: [
         .target(

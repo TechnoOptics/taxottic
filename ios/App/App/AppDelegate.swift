@@ -8,6 +8,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Re-arm native background location BEFORE anything else.
+        //
+        // On a location relaunch iOS grants ~10 seconds and Apple warns
+        // against network work in it — and this app's WebView loads a
+        // REMOTE url, so waiting for JavaScript here would spend the
+        // whole budget on a network fetch and often run no JS at all.
+        // The bridge and its view controller may not even be built on a
+        // background launch. So revival lives here, in the one callback
+        // that always runs, and re-creating the manager + restarting SLC
+        // is what makes iOS deliver the pending event that woke us.
+        //
+        // Deliberately NOT gated on UIApplication.LaunchOptionsKey.location:
+        // it is deprecated as of iOS 26 and Apple DTS notes it is not
+        // always present even on a genuine location launch.
+        TaxotticBackgroundLocation.shared.restoreOnLaunch()
+
         // Interactive notification categories for the Phase-2
         // "Business / Personal" actions (mileage / clarify). iOS only
         // renders action buttons — on the lock screen and a paired

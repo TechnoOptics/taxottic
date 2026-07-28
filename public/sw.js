@@ -731,7 +731,10 @@
 // v121: render-time GPS jitter suppression — 50-100m-accuracy scatter
 // no longer scribbles routes; noise-circle bounce is dropped from the
 // drawn track (segmentation unchanged).
-const CACHE_VERSION = "v121";
+// v122: iOS background revival — native SLC capture + disk buffer,
+// drained on page load. Also fixes the iOS DeviceStatus plugin never
+// having been compiled into the app at all.
+const CACHE_VERSION = "v122";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -31,6 +31,19 @@ type DeviceStatusPlugin = {
    *  the app's Settings page (iOS) — closer than the generic app-details
    *  page the Capgo plugin's openSettings can reach. */
   openLocationSettings(): Promise<void>;
+  enableBackgroundRevival(opts: { companyId: string }): Promise<{ ok: boolean }>;
+  disableBackgroundRevival(): Promise<{ ok: boolean }>;
+  drainBufferedLocations(): Promise<{
+    points: Array<{
+      ts: number;
+      lat: number;
+      lng: number;
+      speedMps: number | null;
+      accuracyM: number;
+    }>;
+    companyId: string;
+  }>;
+  clearBufferedLocations(opts: { upToTs: number }): Promise<{ remaining: number }>;
   addListener(
     event: "authorizationChanged",
     cb: (data: {
@@ -221,5 +234,79 @@ export async function requestMotionPermission(): Promise<boolean> {
     } catch {
       return false;
     }
+  }
+}
+
+/**
+ * Arm/disarm native background revival (iOS).
+ *
+ * On iOS the JS tracker alone cannot survive app termination: standard
+ * location updates never relaunch a terminated app, so an overnight
+ * kill means every morning drive is lost until the user opens the app.
+ * The native side registers significant-location-change, which DOES
+ * relaunch, and captures to disk without needing the WebView.
+ *
+ * No-ops on web and on builds without the plugin.
+ */
+export async function setBackgroundRevival(
+  enabled: boolean,
+  companyId: string,
+): Promise<void> {
+  const plugin = await guard();
+  if (!plugin) return;
+  try {
+    if (enabled) await plugin.enableBackgroundRevival({ companyId });
+    else await plugin.disableBackgroundRevival();
+  } catch {
+    /* older binary without the native side */
+  }
+}
+
+/**
+ * Upload anything the native layer captured while the page was not
+ * alive, then clear only what the server accepted.
+ *
+ * Late points are fine: the finalizer works over a 45-day window and
+ * reconciles trips, so a commute drained at lunchtime still becomes a
+ * correct trip. Ingest is idempotent, so overlapping with the live JS
+ * flush costs nothing.
+ *
+ * Returns the number of points handed to the server (0 when there was
+ * nothing, or on any failure — the buffer is left intact to retry).
+ */
+export async function drainNativeLocationBuffer(): Promise<number> {
+  const plugin = await guard();
+  if (!plugin) return 0;
+  let points: Array<{
+    ts: number;
+    lat: number;
+    lng: number;
+    speedMps: number | null;
+    accuracyM: number;
+  }> = [];
+  let companyId = "";
+  try {
+    const r = await plugin.drainBufferedLocations();
+    points = r?.points ?? [];
+    companyId = r?.companyId ?? "";
+  } catch {
+    return 0;
+  }
+  if (points.length === 0 || !companyId) return 0;
+  const maxTs = points.reduce((a, p) => Math.max(a, p.ts), 0);
+  try {
+    const res = await fetch("/api/mileage/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ companyId, points }),
+    });
+    if (!res.ok) return 0;
+    // Clear ONLY after the server confirmed, so a failed upload can
+    // never lose a drive.
+    await plugin.clearBufferedLocations({ upToTs: maxTs });
+    return points.length;
+  } catch {
+    return 0;
   }
 }

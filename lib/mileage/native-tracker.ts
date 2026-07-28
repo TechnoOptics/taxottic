@@ -34,6 +34,10 @@ import {
   HARD_STOP_SPEED_MPS as DE_HARD_STOP_MPS,
   WALK_ARM_STOP_MS as DE_WALK_ARM_STOP_MS,
 } from "./drive-end";
+import {
+  setBackgroundRevival,
+  drainNativeLocationBuffer,
+} from "./device-status";
 import { haversineMeters } from "./segmentation";
 
 // Minimal contract for the slice of @capgo/background-geolocation we
@@ -252,6 +256,7 @@ export const trackerDiag = {
   cbHits: 0 as number,
   driveEndReason: "" as string,
   hbLastResult: "" as string,
+  nativeDrained: 0 as number,
   cbLastError: "" as string,
   /** Consecutive failed flushes; drives the backoff (skip ticks). */
   failStreak: 0 as number,
@@ -809,6 +814,10 @@ export async function startMileageTracking(
   companyId = forCompanyId;
   try {
     window.localStorage.setItem(LS_ENABLED, "1");
+    // Arm native background revival (iOS). Standard location updates
+    // never relaunch a terminated app, so without this an overnight
+    // kill loses every morning drive until the user opens the app.
+    void setBackgroundRevival(true, forCompanyId);
     window.localStorage.setItem(LS_COMPANY, forCompanyId);
   } catch {
     /* private mode, tracking still works for this session */
@@ -1128,6 +1137,7 @@ export async function stopMileageTracking(
   if (!opts?.keepEnabled) {
     try {
       window.localStorage.removeItem(LS_ENABLED);
+      void setBackgroundRevival(false, "");
     } catch {
       /* ignore */
     }
@@ -1233,6 +1243,17 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   loadPersistedBuffer();
   companyId = savedCompany;
   void flush(); // drain a killed-mid-drive leftover
+  // Upload whatever the NATIVE layer captured while this page was not
+  // alive — on iOS that is the entire morning commute after an
+  // overnight termination. Late points are fine: the finalizer runs a
+  // 45-day window and reconciles, so the trip still materialises
+  // correctly. Buffer is cleared only after the server accepts.
+  void drainNativeLocationBuffer().then((n) => {
+    if (n > 0) trackerDiag.nativeDrained = n;
+  });
+  // Re-arm native revival too: a reinstall or a permission change can
+  // leave the flag set with SLC not actually registered.
+  void setBackgroundRevival(true, savedCompany);
   // Always re-verify/re-arm here, ignoring the in-memory `tracking` flag.
   // That flag only reflects whether OUR code called bg.start(), it stays
   // true even when Android (esp. Samsung's "Sleeping apps" battery
