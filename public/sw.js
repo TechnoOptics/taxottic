@@ -742,7 +742,11 @@
 // v125: device-status plugin no longer gated on isPluginAvailable —
 // that probe was silently returning false on BOTH platforms, so device
 // truth (permissions, battery, low-power) was never reported at all.
-const CACHE_VERSION = "v125";
+// v126: mileage uploads now use the NATIVE http stack on device.
+// Android throttles WebView-issued requests after ~5 min in the
+// background, which stalled flushes mid-drive and grew the buffer
+// toward eviction. Web is unchanged.
+const CACHE_VERSION = "v126";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
