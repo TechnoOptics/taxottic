@@ -1,8 +1,7 @@
-Drive tracking is substantially more reliable in this release.
+Automatic drive tracking is significantly more dependable on iPhone.
 
-- Trips close about a minute after you park and walk away.
-- A stop at a train crossing or drive-through no longer splits one drive in two.
-- Drives keep their shape even if your phone's clock drifts.
-- Miles are priced at the correct IRS rate for the date you drove.
-- Manually entered trips are protected and never overwritten.
-- Your CPA export now includes tracked mileage on Schedule C.
+- Your phone now wakes itself when a drive begins, so morning trips are captured even if you have not opened the app.
+- Drives are recorded even when the app cannot reach the network, and upload once it can.
+- The setup check now warns you if an iPhone setting is silently preventing tracking.
+- Traffic that crawls at walking pace no longer ends a drive early.
+- Routes with weak GPS draw cleanly instead of zigzagging.
