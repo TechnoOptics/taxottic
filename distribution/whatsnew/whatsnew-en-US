@@ -1,7 +1,6 @@
-Automatic drive tracking is significantly more dependable on iPhone.
+Reliability and accuracy improvements for automatic drive tracking.
 
-- Your phone now wakes itself when a drive begins, so morning trips are captured even if you have not opened the app.
-- Drives are recorded even when the app cannot reach the network, and upload once it can.
-- The setup check now warns you if an iPhone setting is silently preventing tracking.
-- Traffic that crawls at walking pace no longer ends a drive early.
-- Routes with weak GPS draw cleanly instead of zigzagging.
+- Drives upload over a more reliable connection, so long trips with the app in the background no longer stall.
+- A phone sitting still with weak GPS no longer draws a zigzag or adds miles you did not drive.
+- Trip distances are more accurate on drives that start before the signal settles.
+- The app now reports why it stopped if the phone shuts it down, so problems can be diagnosed instead of guessed at.
