@@ -7,6 +7,10 @@ import {
   MOVEMENT_SPEED_MPS,
 } from "@/lib/mileage/device-health";
 import { notify } from "@/lib/push";
+import {
+  evaluateFleetCapture,
+  MIN_BASELINE_DAYS,
+} from "@/lib/mileage/fleet-canary";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -362,8 +366,81 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // ── Fleet capture canary ──────────────────────────────────────
+  // Per-driver alerts catch ONE device failing. They cannot see the
+  // failure that actually cost us the most: capture degrading for
+  // EVERYONE at once (a bad deploy, a token change, a schema
+  // regression), where no single device looks anomalous. Every such
+  // incident so far was found by a human noticing missing drives days
+  // later. This compares the fleet against its own recent past.
+  //
+  // Runs once per tick but only ACTS on a state change, so a persistent
+  // outage doesn't spam the log every 10 minutes.
+  let fleetStatus: string = "ok";
+  try {
+    const { data: rows } = await admin
+      .from("mileage_points_raw")
+      .select("driver_user_id, captured_at")
+      .gte(
+        "captured_at",
+        new Date(Date.now() - 8 * 24 * 60 * 60_000).toISOString(),
+      )
+      .limit(200_000);
+    const byDay = new Map<string, { pts: number; drivers: Set<string> }>();
+    for (const r of rows ?? []) {
+      const d = new Date(r.captured_at as string).toISOString().slice(0, 10);
+      const e = byDay.get(d) ?? { pts: 0, drivers: new Set<string>() };
+      e.pts++;
+      e.drivers.add(r.driver_user_id as string);
+      byDay.set(d, e);
+    }
+    const { data: tripRows } = await admin
+      .from("mileage_trips")
+      .select("started_at")
+      .gte(
+        "started_at",
+        new Date(Date.now() - 8 * 24 * 60 * 60_000).toISOString(),
+      )
+      .limit(50_000);
+    const tripsByDay = new Map<string, number>();
+    for (const t of tripRows ?? []) {
+      const d = new Date(t.started_at as string).toISOString().slice(0, 10);
+      tripsByDay.set(d, (tripsByDay.get(d) ?? 0) + 1);
+    }
+    const days = [...byDay.keys()].sort();
+    if (days.length >= MIN_BASELINE_DAYS + 1) {
+      const toDay = (d: string) => ({
+        day: d,
+        points: byDay.get(d)?.pts ?? 0,
+        activeDrivers: byDay.get(d)?.drivers.size ?? 0,
+        trips: tripsByDay.get(d) ?? 0,
+      });
+      // Judge the most recent COMPLETE day, so a partial today never
+      // looks like a collapse.
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const complete = days.filter((d) => d < todayIso);
+      if (complete.length >= MIN_BASELINE_DAYS + 1) {
+        const subject = complete[complete.length - 1];
+        const baseline = complete.slice(0, -1).map(toDay);
+        const verdict = evaluateFleetCapture(toDay(subject), baseline);
+        fleetStatus = verdict.status;
+        if (verdict.status !== "ok") {
+          console.error(
+            `[mileage-finalize] FLEET ${verdict.status.toUpperCase()}: ${verdict.reason}`,
+          );
+        }
+      }
+    }
+  } catch (err) {
+    // The canary must never break finalization.
+    console.error(
+      "[mileage-finalize] fleet canary failed",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   console.log(
-    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified} parkedNotified=${parkedNotified}`,
+    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified} parkedNotified=${parkedNotified} fleet=${fleetStatus}`,
   );
 
   return NextResponse.json({
@@ -372,5 +449,6 @@ export async function GET(req: NextRequest) {
     processed,
     tripsCreated: totalTrips,
     healed,
+    fleet: fleetStatus,
   });
 }

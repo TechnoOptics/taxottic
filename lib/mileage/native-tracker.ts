@@ -34,6 +34,7 @@ import {
   HARD_STOP_SPEED_MPS as DE_HARD_STOP_MPS,
   WALK_ARM_STOP_MS as DE_WALK_ARM_STOP_MS,
 } from "./drive-end";
+import { removeUploadedPoints, capBuffer } from "./buffer";
 import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
@@ -582,7 +583,12 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
       // Server staged everything; drop locally so we don't re-send
       // the same points. The server's staging table is authoritative
       // for "did this point land", we trust the 2xx.
-      buffer = buffer.slice(batch.length);
+      //
+      // Removal is by TIMESTAMP IDENTITY, not position. The callback
+      // keeps pushing during the request and MAX_BUFFER evicts from the
+      // head, so a positional slice could delete newer points that were
+      // never uploaded (see lib/mileage/buffer.test.ts).
+      buffer = removeUploadedPoints(buffer, batch);
       persistBuffer();
       const j = bodyJson as
         | {
@@ -627,7 +633,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
         } catch {
           /* quota — drop without quarantine, unblocking still matters */
         }
-        buffer = buffer.slice(batch.length);
+        buffer = removeUploadedPoints(buffer, batch);
         persistBuffer();
         trackerDiag.deadlettered++;
       }
@@ -1009,8 +1015,9 @@ export async function startMileageTracking(
         }
         buffer.push(pt);
         if (buffer.length > MAX_BUFFER) {
-          trackerDiag.evictedPoints += buffer.length - MAX_BUFFER;
-          buffer = buffer.slice(-MAX_BUFFER);
+          const capped = capBuffer(buffer, MAX_BUFFER);
+          trackerDiag.evictedPoints += capped.evicted;
+          buffer = capped.points;
         }
         persistBuffer();
         if (buffer.length >= FLUSH_AT_POINTS) void flush();

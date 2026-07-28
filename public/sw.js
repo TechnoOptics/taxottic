@@ -737,7 +737,9 @@
 // v123: Background App Refresh now travels to the server and shows
 // as its own "blocked" state (it silently defeats every iOS relaunch
 // path); native Visits monitoring added as a second revival trigger.
-const CACHE_VERSION = "v123";
+// v124: flush now removes uploaded points by identity, so buffer
+// eviction during an in-flight POST can no longer delete unsent fixes.
+const CACHE_VERSION = "v124";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
