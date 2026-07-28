@@ -62,9 +62,26 @@ async function guard(): Promise<DeviceStatusPlugin | null> {
       };
     };
     if (w.Capacitor?.isNativePlatform?.() !== true) return null;
-    if (w.Capacitor?.isPluginAvailable?.("TaxotticDeviceStatus") !== true) {
-      return null;
-    }
+    // Deliberately NOT gated on isPluginAvailable().
+    //
+    // Measured in production: every field sourced from this plugin was
+    // NULL on 100% of devices (0/2) across BOTH platforms, while fields
+    // from other sources (@capacitor/app version, tracker callback age)
+    // populated fine — so the plugin was unreachable from JS even on
+    // Android, where it is correctly registered via
+    // MainActivity.registerPlugin AND annotated @CapacitorPlugin. The
+    // availability probe was the only thing common to both platforms,
+    // and it is unreliable here: this app loads a REMOTE url, so the
+    // bridge's plugin registry is not guaranteed to be populated in the
+    // page's JS context at the moment we ask (and the Android build
+    // runs useLegacyBridge).
+    //
+    // registerPlugin() itself is safe to call regardless — a missing
+    // native implementation simply makes the METHOD CALL reject, which
+    // every caller already handles. Failing at the call site is strictly
+    // better than refusing to try: the old gate turned "maybe present"
+    // into a permanent silent no, which is how device truth stayed
+    // invisible for weeks while we debugged permissions blind.
     const { registerPlugin } = await import("@capacitor/core");
     return registerPlugin<DeviceStatusPlugin>("TaxotticDeviceStatus");
   } catch {
