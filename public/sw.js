@@ -739,7 +739,10 @@
 // path); native Visits monitoring added as a second revival trigger.
 // v124: flush now removes uploaded points by identity, so buffer
 // eviction during an in-flight POST can no longer delete unsent fixes.
-const CACHE_VERSION = "v124";
+// v125: device-status plugin no longer gated on isPluginAvailable —
+// that probe was silently returning false on BOTH platforms, so device
+// truth (permissions, battery, low-power) was never reported at all.
+const CACHE_VERSION = "v125";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
