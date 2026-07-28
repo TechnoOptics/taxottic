@@ -749,7 +749,10 @@
 // v127: heartbeat now carries the OS's own reason for the last
 // process death (Android ApplicationExitInfo / iOS MetricKit), so
 // "tracking stopped" becomes a named cause instead of a guess.
-const CACHE_VERSION = "v127";
+// v128: a stationary phone's sparse GPS drift no longer draws as a
+// zigzag or counts as distance — dwell anchors snap to the last real
+// position instead of carrying the noisy coordinate.
+const CACHE_VERSION = "v128";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

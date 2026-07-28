@@ -110,3 +110,40 @@ describe("render jitter suppression", () => {
     expect(track.points.length).toBe(2);
   });
 });
+
+// Field report: a trip showed zigzags that "must have tracked her
+// walking in the mall". The cause was a ~16 minute preamble of a nearly
+// stationary phone with 28-44 m accuracy emitting roughly one fix a
+// minute. Each fix was past the 60s dwell-anchor interval, so the
+// jitter filter kept it verbatim — drawing the scribble AND counting
+// every drift hop as real distance.
+describe("sparse GPS drift while stationary", () => {
+  const t0 = Date.parse("2026-07-27T19:27:00Z");
+  // ~40m accuracy, ~20m apart, 90s between fixes: pure drift, but each
+  // gap exceeds the dwell-anchor interval.
+  const drift = [0, 1, 2, 3, 4].map((i) => ({
+    captured_at: new Date(t0 + i * 90_000).toISOString(),
+    lat: 44.0 + (i % 2) * 0.00018,
+    lng: -93.0 - (i % 3) * 0.00012,
+    accuracy_m: 40,
+    speed_mps: null as number | null,
+  }));
+
+  it("keeps the dwell visible but adds no phantom distance", () => {
+    const track = buildTrackFromRaw(drift);
+    // Time anchors survive, so the dwell is still on the map...
+    expect(track.points.length).toBe(drift.length);
+    // ...but the scribble contributes essentially zero miles.
+    expect(track.distanceMiles).toBeLessThan(0.005);
+  });
+
+  it("real travel after the dwell is still measured", () => {
+    const withDrive = [
+      ...drift,
+      { captured_at: new Date(t0 + 500_000).toISOString(), lat: 44.02, lng: -93.0, accuracy_m: 8, speed_mps: 15 },
+      { captured_at: new Date(t0 + 560_000).toISOString(), lat: 44.04, lng: -93.0, accuracy_m: 8, speed_mps: 15 },
+    ];
+    const track = buildTrackFromRaw(withDrive);
+    expect(track.distanceMiles).toBeGreaterThan(2.5);
+  });
+});
