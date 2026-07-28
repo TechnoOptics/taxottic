@@ -39,6 +39,8 @@ import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
   setExitBreadcrumb,
+  getDeviceStatus,
+  getOsExitInfo,
 } from "./device-status";
 import { haversineMeters } from "./segmentation";
 
@@ -746,15 +748,30 @@ async function sendHeartbeat(): Promise<void> {
     // builds and the heartbeat still carries the JS-visible fields.
     // TIME-BOXED: device truth is a bonus, the heartbeat itself is the
     // point — it must go out even when the native bridge is wedged.
+    // Called through the STATIC import above, not a dynamic one.
+    //
+    // This used to be `import("@/lib/mileage/device-status")` inside a
+    // 3s timeout — a different specifier for a module this file already
+    // imports relatively. Mixed specifiers can resolve to a separate
+    // lazy chunk, and if that chunk is slow or unfetchable (remote-URL
+    // WebView, backgrounded, poor signal) the timeout fires and EVERY
+    // device field lands as null at once. That matches production
+    // exactly: location_authorization / precise_location /
+    // battery_optimized / low_power_mode were null on 100%% of devices
+    // on BOTH platforms — even on Android, where the native plugin
+    // demonstrably works (verified live over CDP) — while app_version
+    // survived because @capacitor/app is already-loaded vendor code.
+    // A JS-layer cause is the only kind that explains a cross-platform
+    // symptom with a healthy native layer.
     const ds = await within(
-      import("@/lib/mileage/device-status").then((m) => m.getDeviceStatus()),
+      Promise.resolve().then(() => getDeviceStatus()),
       3_000,
     );
     // App version (was never sent — the manager health view showed
     // app_version null for every device). Guarded + time-boxed like
     // everything else on the bridge.
     const exitInfo = await within(
-      import("@/lib/mileage/device-status").then((m) => m.getOsExitInfo()),
+      Promise.resolve().then(() => getOsExitInfo()),
       2_000,
     );
     let appVersion: string | null = null;
