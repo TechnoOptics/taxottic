@@ -70,6 +70,15 @@ export async function POST(req: NextRequest) {
         typeof body.backgroundRefresh === "boolean"
           ? body.backgroundRefresh
           : null,
+      last_exit_reason: str("exitReason", 60),
+      last_exit_at:
+        typeof body.exitAtMs === "number" && Number.isFinite(body.exitAtMs)
+          ? new Date(body.exitAtMs).toISOString()
+          : null,
+      last_exit_detail:
+        body.exitDetail && typeof body.exitDetail === "object"
+          ? body.exitDetail
+          : null,
       reported_at: new Date().toISOString(),
     },
     { onConflict: "driver_user_id,company_id" },

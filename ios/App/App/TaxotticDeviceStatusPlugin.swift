@@ -2,6 +2,7 @@ import Foundation
 import Capacitor
 import CoreLocation
 import CoreMotion
+import MetricKit
 import UIKit
 
 /// Device-truth probe for mileage reliability (plan §C). Reports the
@@ -28,7 +29,8 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
         CAPPluginMethod(name: "enableBackgroundRevival", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "disableBackgroundRevival", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "drainBufferedLocations", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "clearBufferedLocations", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "clearBufferedLocations", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getExitInfo", returnType: CAPPluginReturnPromise)
     ]
 
     private var manager: CLLocationManager?
@@ -156,6 +158,52 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
         let upTo = call.getInt("upToTs") ?? 0
         TaxotticBackgroundLocation.shared.clearBuffered(upTo: upTo)
         call.resolve(["remaining": TaxotticBackgroundLocation.shared.bufferedCount()])
+    }
+
+    /// Why iOS killed us last time, straight from the OS.
+    ///
+    /// MetricKit's background-exit counters are the only first-party
+    /// answer to "the tracker stopped and nothing crashed". Until now we
+    /// inferred the cause from GPS silence, which is guesswork; these are
+    /// the OS's own tallies, available on release builds on real users'
+    /// phones.
+    ///
+    /// Read from `pastPayloads` rather than registering a subscriber:
+    /// payloads are delivered at most once a day and only while the app
+    /// runs, so a pull model has the same coverage with none of the
+    /// subscriber lifecycle to get wrong.
+    ///
+    /// The counter that matters most for us is
+    /// suspendedWithLockedFile (termination code 0xdead10cc): iOS kills
+    /// an app suspended while holding a file/SQLite lock, which is
+    /// exactly the shape of a tracker writing its buffer as the system
+    /// suspends it.
+    ///
+    /// Simulator returns nothing — MetricKit needs a physical device.
+    @objc func getExitInfo(_ call: CAPPluginCall) {
+        guard #available(iOS 14.0, *),
+              let payload = MXMetricManager.shared.pastPayloads.last,
+              let exits = payload.applicationExitMetrics?.backgroundExitData
+        else {
+            call.resolve(["available": false, "platform": "ios"])
+            return
+        }
+        call.resolve([
+            "available": true,
+            "platform": "ios",
+            "windowEnd": ISO8601DateFormatter().string(from: payload.timeStampEnd),
+            "appVersion": payload.latestApplicationVersion,
+            "normal": exits.cumulativeNormalAppExitCount,
+            "abnormal": exits.cumulativeAbnormalExitCount,
+            "watchdog": exits.cumulativeAppWatchdogExitCount,
+            "cpuLimit": exits.cumulativeCPUResourceLimitExitCount,
+            "memoryLimit": exits.cumulativeMemoryResourceLimitExitCount,
+            "memoryPressure": exits.cumulativeMemoryPressureExitCount,
+            "suspendedWithLockedFile": exits.cumulativeSuspendedWithLockedFileExitCount,
+            "bgTaskTimeout": exits.cumulativeBackgroundTaskAssertionTimeoutExitCount,
+            "badAccess": exits.cumulativeBadAccessExitCount,
+            "illegalInstruction": exits.cumulativeIllegalInstructionExitCount,
+        ])
     }
 
     public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

@@ -44,6 +44,8 @@ type DeviceStatusPlugin = {
     companyId: string;
   }>;
   clearBufferedLocations(opts: { upToTs: number }): Promise<{ remaining: number }>;
+  getExitInfo(): Promise<Record<string, unknown>>;
+  setExitBreadcrumb(opts: { note: string }): Promise<void>;
   addListener(
     event: "authorizationChanged",
     cb: (data: {
@@ -325,5 +327,79 @@ export async function drainNativeLocationBuffer(): Promise<number> {
     return points.length;
   } catch {
     return 0;
+  }
+}
+
+export type OsExitInfo = {
+  /** Normalized slug, e.g. "excessive_resource_usage", "ios_watchdog". */
+  reason: string;
+  /** When the OS killed us, ms epoch. Null when the platform only gives
+   *  us aggregate counters (iOS) rather than a timestamped event. */
+  atMs: number | null;
+  /** Full platform payload, kept for forensics. */
+  detail: Record<string, unknown>;
+};
+
+/**
+ * Ask the OS why it killed us last time.
+ *
+ * This is the difference between "tracking stopped" and "Android killed
+ * the process for excessive resource usage while the foreground service
+ * was alive" — the second is actionable, the first is a guess. Android
+ * gives a per-event reason; iOS gives 24h counters, so we surface the
+ * dominant non-normal counter as the reason.
+ *
+ * Returns null on web, on older OS versions, and whenever the platform
+ * has nothing to report.
+ */
+export async function getOsExitInfo(): Promise<OsExitInfo | null> {
+  const plugin = await guard();
+  if (!plugin) return null;
+  let raw: Record<string, unknown>;
+  try {
+    raw = await plugin.getExitInfo();
+  } catch {
+    return null;
+  }
+  if (!raw || raw.available !== true) return null;
+
+  if (raw.platform === "android") {
+    return {
+      reason: String(raw.reasonName ?? "unknown"),
+      atMs: typeof raw.timestamp === "number" ? raw.timestamp : null,
+      detail: raw,
+    };
+  }
+  // iOS: pick the most diagnostic non-normal counter that is non-zero.
+  // Ordered by how strongly each implicates OUR behaviour rather than
+  // ordinary system housekeeping.
+  const ranked: Array<[string, string]> = [
+    ["suspendedWithLockedFile", "ios_suspended_with_locked_file"],
+    ["bgTaskTimeout", "ios_bg_task_timeout"],
+    ["watchdog", "ios_watchdog"],
+    ["memoryLimit", "ios_memory_limit"],
+    ["cpuLimit", "ios_cpu_limit"],
+    ["memoryPressure", "ios_memory_pressure"],
+    ["badAccess", "ios_bad_access"],
+    ["illegalInstruction", "ios_illegal_instruction"],
+    ["abnormal", "ios_abnormal"],
+  ];
+  for (const [key, slug] of ranked) {
+    if (typeof raw[key] === "number" && (raw[key] as number) > 0) {
+      return { reason: slug, atMs: null, detail: raw };
+    }
+  }
+  return { reason: "ios_normal", atMs: null, detail: raw };
+}
+
+/** Record what we were doing, so the NEXT exit record explains itself.
+ *  Android only; no-ops elsewhere. */
+export async function setExitBreadcrumb(note: string): Promise<void> {
+  const plugin = await guard();
+  if (!plugin) return;
+  try {
+    await plugin.setExitBreadcrumb({ note });
+  } catch {
+    /* older binary */
   }
 }
