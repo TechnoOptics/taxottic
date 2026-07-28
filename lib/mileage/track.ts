@@ -80,7 +80,21 @@ export function buildTrackFromRaw(raw: readonly RawPoint[]): BuiltTrack {
       const noise = Math.max(prev.accuracy_m ?? 0, p.accuracy_m ?? 0);
       const dtMs =
         Date.parse(p.captured_at) - Date.parse(prev.captured_at);
-      if (jump < noise && dtMs < JITTER_ANCHOR_MS) continue;
+      if (jump < noise) {
+        // Movement smaller than the pair's own error radius is noise,
+        // not travel.
+        if (dtMs < JITTER_ANCHOR_MS) continue;
+        // Past the anchor interval we still want a point, so a long
+        // dwell stays visible on the drawn track — but we must NOT let
+        // it carry the noisy coordinate. A phone sitting still with a
+        // 40 m fix emits one drifting point per minute; keeping those
+        // verbatim drew the scribble a user reported as "it tracked me
+        // walking around the mall", and each drift hop was also counted
+        // as real distance. Snapping to the previous position preserves
+        // the passage of time and adds exactly zero phantom miles.
+        kept.push({ ...p, lat: prev.lat, lng: prev.lng });
+        continue;
+      }
     }
     kept.push(p);
   }

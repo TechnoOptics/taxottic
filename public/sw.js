@@ -749,11 +749,14 @@
 // v127: heartbeat now carries the OS's own reason for the last
 // process death (Android ApplicationExitInfo / iOS MetricKit), so
 // "tracking stopped" becomes a named cause instead of a guess.
+// v128: a stationary phone's sparse GPS drift no longer draws as a
+// zigzag or counts as distance — dwell anchors snap to the last real
+// position instead of carrying the noisy coordinate.
 // v128: heartbeat reads device status through the STATIC import.
 // The old aliased dynamic import could resolve to a separate lazy
 // chunk; when it failed to load in time every device field went null
 // at once — on both platforms, which is why it looked native.
-const CACHE_VERSION = "v128";
+const CACHE_VERSION = "v129";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
