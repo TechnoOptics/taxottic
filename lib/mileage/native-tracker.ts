@@ -38,6 +38,7 @@ import { removeUploadedPoints, capBuffer } from "./buffer";
 import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
+  setExitBreadcrumb,
 } from "./device-status";
 import { haversineMeters } from "./segmentation";
 
@@ -752,6 +753,10 @@ async function sendHeartbeat(): Promise<void> {
     // App version (was never sent — the manager health view showed
     // app_version null for every device). Guarded + time-boxed like
     // everything else on the bridge.
+    const exitInfo = await within(
+      import("@/lib/mileage/device-status").then((m) => m.getOsExitInfo()),
+      2_000,
+    );
     let appVersion: string | null = null;
     try {
       const info = await within(
@@ -785,6 +790,13 @@ async function sendHeartbeat(): Promise<void> {
         // no error to log. The device could always read this; it was
         // never transmitted, so the blocker stayed invisible.
         backgroundRefresh: ds?.backgroundRefresh ?? null,
+        // Why the OS killed us last time. Reported once per heartbeat;
+        // cheap, and it converts 'tracking mysteriously stopped' into a
+        // named cause (Samsung battery kill vs force-stop vs OOM vs a
+        // revoked permission).
+        exitReason: exitInfo?.reason ?? null,
+        exitAtMs: exitInfo?.atMs ?? null,
+        exitDetail: exitInfo?.detail ?? null,
       }),
     });
     trackerDiag.hbLastResult = `${res.status} @ ${new Date()
@@ -891,6 +903,9 @@ export async function startMileageTracking(
     // never relaunch a terminated app, so without this an overnight
     // kill loses every morning drive until the user opens the app.
     void setBackgroundRevival(true, forCompanyId);
+    // Breadcrumb the NEXT exit record: if the OS kills us mid-drive we
+    // want the record to say tracking was on.
+    void setExitBreadcrumb(`tracking=on;co=${forCompanyId.slice(0, 8)}`);
     window.localStorage.setItem(LS_COMPANY, forCompanyId);
   } catch {
     /* private mode, tracking still works for this session */
@@ -1212,6 +1227,7 @@ export async function stopMileageTracking(
     try {
       window.localStorage.removeItem(LS_ENABLED);
       void setBackgroundRevival(false, "");
+      void setExitBreadcrumb("tracking=off");
     } catch {
       /* ignore */
     }

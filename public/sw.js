@@ -746,7 +746,10 @@
 // Android throttles WebView-issued requests after ~5 min in the
 // background, which stalled flushes mid-drive and grew the buffer
 // toward eviction. Web is unchanged.
-const CACHE_VERSION = "v126";
+// v127: heartbeat now carries the OS's own reason for the last
+// process death (Android ApplicationExitInfo / iOS MetricKit), so
+// "tracking stopped" becomes a named cause instead of a guess.
+const CACHE_VERSION = "v127";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

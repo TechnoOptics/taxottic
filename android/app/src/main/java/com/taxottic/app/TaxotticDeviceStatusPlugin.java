@@ -5,6 +5,10 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.app.ActivityManager;
+import android.app.ApplicationExitInfo;
+import java.util.List;
+import java.nio.charset.StandardCharsets;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -210,6 +214,115 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
      *  openSettings() only reaches the generic app-details page, which
      *  read as "the location button does nothing useful". Falls back to
      *  app-details if the manage-permission intent is unavailable. */
+    /**
+     * Why Android killed us last time, straight from the OS.
+     *
+     * ApplicationExitInfo (API 30+) is the only first-party answer to
+     * "tracking stopped and nothing crashed". We previously inferred the
+     * cause from GPS silence, which cannot distinguish a Samsung battery
+     * kill from a user force-stop from an OOM. This names it.
+     *
+     * REASON_EXCESSIVE_RESOURCE_USAGE and REASON_LOW_MEMORY are the OEM
+     * battery-starvation signature; REASON_PERMISSION_CHANGE means the
+     * user revoked location (the process is killed on that change);
+     * REASON_USER_REQUESTED is a force-stop or swipe-away.
+     *
+     * getImportance() at time of death tells us whether the foreground
+     * service was still alive, which separates "the OS killed a live
+     * tracker" from "we were already cached and idle".
+     *
+     * Needs no permission for our own package.
+     */
+    @PluginMethod
+    public void getExitInfo(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("platform", "android");
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            ret.put("available", false);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            ActivityManager am =
+                (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+            List<ApplicationExitInfo> exits =
+                am.getHistoricalProcessExitReasons(null, 0, 5);
+            if (exits == null || exits.isEmpty()) {
+                ret.put("available", false);
+                call.resolve(ret);
+                return;
+            }
+            ApplicationExitInfo last = exits.get(0); // newest first
+            ret.put("available", true);
+            ret.put("reason", last.getReason());
+            ret.put("reasonName", reasonName(last.getReason()));
+            ret.put("status", last.getStatus());
+            ret.put("timestamp", last.getTimestamp());
+            ret.put("importance", last.getImportance());
+            // IMPORTANCE_FOREGROUND_SERVICE (125) or better means the
+            // tracking service was still live when the OS killed us.
+            ret.put(
+                "fgsWasAlive",
+                last.getImportance()
+                    <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE);
+            ret.put("pssKb", last.getPss());
+            ret.put("rssKb", last.getRss());
+            String desc = last.getDescription();
+            if (desc != null) ret.put("description", desc);
+            byte[] summary = last.getProcessStateSummary();
+            if (summary != null) {
+                ret.put("breadcrumb", new String(summary, StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            ret.put("available", false);
+            ret.put("error", String.valueOf(e.getMessage()));
+        }
+        call.resolve(ret);
+    }
+
+    /** Leave a breadcrumb the NEXT exit record will carry, so we learn
+     *  whether tracking was active when the process died. Capped at 128
+     *  bytes by the platform; the system may throttle calls. */
+    @PluginMethod
+    public void setExitBreadcrumb(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                String note = call.getString("note", "");
+                ActivityManager am =
+                    (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+                byte[] bytes = note.getBytes(StandardCharsets.UTF_8);
+                if (bytes.length > 128) {
+                    byte[] trimmed = new byte[128];
+                    System.arraycopy(bytes, 0, trimmed, 0, 128);
+                    bytes = trimmed;
+                }
+                am.setProcessStateSummary(bytes);
+            } catch (Exception ignored) {
+                // Throttled or unavailable — never break the caller.
+            }
+        }
+        call.resolve();
+    }
+
+    private static String reasonName(int reason) {
+        switch (reason) {
+            case ApplicationExitInfo.REASON_EXIT_SELF: return "exit_self";
+            case ApplicationExitInfo.REASON_SIGNALED: return "signaled";
+            case ApplicationExitInfo.REASON_LOW_MEMORY: return "low_memory";
+            case ApplicationExitInfo.REASON_CRASH: return "crash";
+            case ApplicationExitInfo.REASON_CRASH_NATIVE: return "crash_native";
+            case ApplicationExitInfo.REASON_ANR: return "anr";
+            case ApplicationExitInfo.REASON_INITIALIZATION_FAILURE: return "init_failure";
+            case ApplicationExitInfo.REASON_PERMISSION_CHANGE: return "permission_change";
+            case ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE: return "excessive_resource_usage";
+            case ApplicationExitInfo.REASON_USER_REQUESTED: return "user_requested";
+            case ApplicationExitInfo.REASON_USER_STOPPED: return "user_stopped";
+            case ApplicationExitInfo.REASON_DEPENDENCY_DIED: return "dependency_died";
+            case ApplicationExitInfo.REASON_OTHER: return "other";
+            default: return "unknown_" + reason;
+        }
+    }
+
     @PluginMethod
     public void openLocationSettings(PluginCall call) {
         Context ctx = getContext();
