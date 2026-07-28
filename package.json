@@ -22,7 +22,7 @@
     "test:ct": "playwright test -c playwright-ct.config.ts",
     "test:ct:update": "playwright test -c playwright-ct.config.ts --update-snapshots",
     "audits:monthly": "node scripts/audits/run-monthly.mjs",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package --error-on-fail"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
