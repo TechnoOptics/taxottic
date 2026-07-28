@@ -35,6 +35,14 @@ export type BuiltTrack = {
  * Dedup keeps the best-accuracy fix per timestamp. Points worse than
  * MAX_ACCURACY_M are dropped (same threshold as segmentation).
  */
+/** Accuracy worse than this never renders (segmentation keeps its own
+ *  wider cap — detection and drawing have different stakes). */
+export const RENDER_MAX_ACCURACY_M = 60;
+
+/** Keep one anchor fix at least this often even inside the noise
+ *  radius, so long dwells stay visible on the drawn track. */
+export const JITTER_ANCHOR_MS = 60_000;
+
 export function buildTrackFromRaw(raw: readonly RawPoint[]): BuiltTrack {
   const byTime = new Map<string, RawPoint>();
   for (const p of raw) {
@@ -48,9 +56,35 @@ export function buildTrackFromRaw(raw: readonly RawPoint[]): BuiltTrack {
       byTime.set(p.captured_at, p);
     }
   }
-  const points = [...byTime.values()].sort((a, b) =>
+  const sorted = [...byTime.values()].sort((a, b) =>
     a.captured_at < b.captured_at ? -1 : a.captured_at > b.captured_at ? 1 : 0,
   );
+  // Render-time jitter suppression (2026-07-27, "messy lines"). Fixes in
+  // the 50-100m accuracy band pass the segmentation cap (rightly — they
+  // still prove the phone was somewhere) but DRAWING them scribbles the
+  // route: parked or slow-moving phones scatter inside their own GPS
+  // error circle and the polyline zigzags through the noise, inflating
+  // distance too. Two rules, applied only to the rendered track:
+  //  - drop fixes worse than RENDER_MAX_ACCURACY_M outright;
+  //  - drop a fix whose displacement from the last KEPT fix is smaller
+  //    than the larger error radius of the pair (movement
+  //    indistinguishable from noise), unless enough time passed that
+  //    keeping an anchor beats dropping (dwell gaps stay visible).
+  // Falls back to the unfiltered set when fewer than 2 points survive.
+  const kept: typeof sorted = [];
+  for (const p of sorted) {
+    if ((p.accuracy_m ?? 0) > RENDER_MAX_ACCURACY_M) continue;
+    const prev = kept[kept.length - 1];
+    if (prev) {
+      const jump = haversineMeters(prev, p);
+      const noise = Math.max(prev.accuracy_m ?? 0, p.accuracy_m ?? 0);
+      const dtMs =
+        Date.parse(p.captured_at) - Date.parse(prev.captured_at);
+      if (jump < noise && dtMs < JITTER_ANCHOR_MS) continue;
+    }
+    kept.push(p);
+  }
+  const points = kept.length >= 2 ? kept : sorted;
   let meters = 0;
   for (let i = 1; i < points.length; i++) {
     meters += haversineMeters(points[i - 1], points[i]);
