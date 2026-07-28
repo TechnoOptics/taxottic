@@ -88,6 +88,14 @@ import CoreLocation
         guard UserDefaults.standard.bool(forKey: kEnabled) else { return }
         guard hasAlwaysAuthorization() else { return }
         manager.startMonitoringSignificantLocationChanges()
+        // Visits is a SECOND force-quit-survivable relaunch trigger and
+        // costs almost nothing to run alongside SLC. Its departure
+        // events are system-computed, so iOS tells us when the user
+        // actually left a place — a free trip-start anchor that no
+        // major mileage app appears to use. Belt and braces: if SLC is
+        // throttled (relaunch is capped at ~1 per 3-5 min), a visit
+        // event can still wake us.
+        manager.startMonitoringVisits()
     }
 
     /// JS calls this when the user turns tracking on, passing the
@@ -97,6 +105,7 @@ import CoreLocation
         UserDefaults.standard.set(companyId, forKey: kCompanyId)
         guard hasAlwaysAuthorization() else { return }
         manager.startMonitoringSignificantLocationChanges()
+        manager.startMonitoringVisits()
     }
 
     /// JS calls this when the user turns tracking off. Buffered points
@@ -104,6 +113,7 @@ import CoreLocation
     @objc public func disable() {
         UserDefaults.standard.set(false, forKey: kEnabled)
         manager.stopMonitoringSignificantLocationChanges()
+        manager.stopMonitoringVisits()
         stopFineUpdates()
     }
 
@@ -176,6 +186,26 @@ import CoreLocation
         } else {
             stopFineUpdates()
         }
+    }
+
+    public func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
+        guard UserDefaults.standard.bool(forKey: kEnabled) else { return }
+        // A departure means a trip just began from a known place. Record
+        // the departure point so the server has an anchor at the true
+        // start, and escalate to fine updates immediately rather than
+        // waiting for SLC's ~500 m threshold.
+        let departed = visit.departureDate != Date.distantFuture
+        guard departed, visit.coordinate.latitude != 0 || visit.coordinate.longitude != 0
+        else { return }
+        let loc = CLLocation(
+            coordinate: visit.coordinate,
+            altitude: 0,
+            horizontalAccuracy: visit.horizontalAccuracy,
+            verticalAccuracy: -1,
+            timestamp: visit.departureDate
+        )
+        append(loc)
+        startFineUpdates()
     }
 
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

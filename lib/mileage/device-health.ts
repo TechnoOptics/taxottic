@@ -31,6 +31,7 @@ export const PARKED_AFTER_MS = 48 * 60 * 60_000; // 48h
 export const MOVEMENT_SPEED_MPS = 2.5;
 
 export type DriveTrackingHealth =
+  | "blocked" // an OS setting makes revival impossible (iOS)
   | "healthy" // recent upload AND recent movement
   | "silent" // tracking on, but no upload for SILENT_AFTER_MS
   | "parked" // uploading, but no movement for PARKED_AFTER_MS
@@ -43,6 +44,11 @@ export type DriveHealthSignals = {
   lastUploadMs: number | null;
   /** Newest raw point with speed >= MOVEMENT_SPEED_MPS, or null. */
   lastMovementMs: number | null;
+  /** iOS Background App Refresh. FALSE means iOS will relaunch the app
+   *  for NO location event — SLC and geofences alike — so capture
+   *  cannot recover on its own no matter how long we wait. Distinct
+   *  from "silent" because the fix is a device setting, not a nudge. */
+  backgroundRefresh?: boolean | null;
   /** The driver's own toggle intent (mileage_device_status.tracking_enabled).
    *  Unknown/absent is treated as ON, so a device that never sent a
    *  heartbeat but IS uploading still gets watched. */
@@ -68,6 +74,11 @@ export function evaluateDriveTrackingHealth(
   // Explicit opt-out: the driver turned tracking off. Not our alarm.
   if (s.trackingEnabled === false) return { status: "off", ageMs: null };
 
+  // A hard OS blocker outranks silence: no amount of waiting fixes it,
+  // and telling the manager "silent" would send them chasing the wrong
+  // remedy.
+  if (s.backgroundRefresh === false) return { status: "blocked", ageMs: null };
+
   if (s.lastUploadMs == null) {
     // Never uploaded. Only interesting if they intend to track.
     return { status: "never", ageMs: null };
@@ -91,6 +102,8 @@ export function evaluateDriveTrackingHealth(
 /** Compact human label for a health result, e.g. "Silent 5h" / "Parked 3d". */
 export function describeDriveHealth(r: DriveHealthResult): string {
   switch (r.status) {
+    case "blocked":
+      return "Background refresh off";
     case "healthy":
       return "Tracking";
     case "off":

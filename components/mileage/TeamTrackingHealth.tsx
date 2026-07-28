@@ -21,7 +21,10 @@ type Row = {
  */
 export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
   const attention = rows.filter(
-    (r) => r.health.status === "silent" || r.health.status === "parked",
+    (r) =>
+      r.health.status === "silent" ||
+      r.health.status === "parked" ||
+      r.health.status === "blocked",
   );
   if (attention.length === 0) return null;
 
@@ -48,7 +51,9 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
               <span className="flex items-center gap-2 whitespace-nowrap">
                 <span
                   className={`inline-block h-2 w-2 rounded-full ${
-                    silent ? "bg-red-500" : "bg-amber-500"
+                    silent || r.health.status === "blocked"
+                      ? "bg-red-500"
+                      : "bg-amber-500"
                   }`}
                   aria-hidden
                 />
@@ -63,6 +68,9 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
       <p className="mt-3 text-xs leading-relaxed text-amber-800">
         {attention.some((r) => r.health.status === "silent")
           ? "Silent means the phone stopped uploading, usually location permission dropped to “While Using” or the app was force-closed. "
+          : ""}
+        {attention.some((r) => r.health.status === "blocked")
+          ? "Background refresh off means iOS will not wake Taxottic for any drive — that phone cannot track until it is turned back on in Settings > General > Background App Refresh. "
           : ""}
         {attention.some((r) => r.health.status === "parked")
           ? "Parked means the phone is uploading but hasn’t moved in days, it may not be the device that person drives with. "

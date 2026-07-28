@@ -144,6 +144,22 @@ export default function MileageSetupPage() {
     ...(status?.platform === "ios"
       ? [
           {
+            key: "bgrefresh",
+            label: "Background App Refresh on",
+            ok: status.backgroundRefresh !== false,
+            detail:
+              status.backgroundRefresh === false
+                ? "With this off, iOS will not wake Taxottic for ANY drive — this alone stops all automatic tracking."
+                : "iOS is allowed to wake Taxottic when a drive starts.",
+            action:
+              status.backgroundRefresh === false
+                ? {
+                    label: "Open settings",
+                    run: () => void openMileageLocationSettings(),
+                  }
+                : undefined,
+          },
+          {
             key: "lowpower",
             label: "Low Power Mode off",
             ok: status.lowPowerMode === true ? false : true,

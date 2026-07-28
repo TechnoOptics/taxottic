@@ -712,6 +712,11 @@ async function sendHeartbeat(): Promise<void> {
         preciseLocation: ds?.preciseLocation ?? null,
         batteryOptimized: ds?.batteryOptimized ?? null,
         lowPowerMode: ds?.lowPowerMode ?? null,
+        // Background App Refresh OFF means iOS relaunches us for NO
+        // location event — SLC and geofences both go dead silent with
+        // no error to log. The device could always read this; it was
+        // never transmitted, so the blocker stayed invisible.
+        backgroundRefresh: ds?.backgroundRefresh ?? null,
       }),
     });
     trackerDiag.hbLastResult = `${res.status} @ ${new Date()
