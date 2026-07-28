@@ -407,6 +407,77 @@ function loadPersistedBuffer() {
  *  books. */
 let orphanBuffer: { companyId: string; points: GpsPoint[] } | null = null;
 
+/**
+ * POST JSON to our API, using the NATIVE HTTP stack when running in the
+ * app and plain fetch on the web.
+ *
+ * Why this exists: Android throttles HTTP requests issued from the
+ * WebView after roughly 5 minutes in the background. The
+ * capacitor-community background-geolocation README documents exactly
+ * this ("after 5 minutes in the background Android will throttle HTTP
+ * requests initiated from the WebView. The solution is to use a native
+ * HTTP plugin"), and Transistor Software's SDK docs say native upload
+ * "is more reliable for background delivery than ad-hoc HTTP requests
+ * from your own code". We had already adopted the OTHER half of that
+ * same workaround (android.useLegacyBridge, which keeps the location
+ * CALLBACKS firing) without ever moving the uploads.
+ *
+ * Symptom this fixes: on a long backgrounded drive the fixes keep being
+ * captured but the flush stops landing, so the buffer grows toward
+ * MAX_BUFFER and starts evicting oldest-first — real, silent data loss.
+ *
+ * Auth: verified on-device (emulator, CDP) that CapacitorHttp carries
+ * our Supabase session cookie — a native POST and a WebView fetch to the
+ * same authenticated endpoint returned the IDENTICAL status (403
+ * not_a_member, which only fires AFTER the auth check passes). Falls
+ * back to fetch if the plugin is missing or throws, so a bad native
+ * path can never take uploads down.
+ */
+async function postJson(
+  path: string,
+  body: unknown,
+): Promise<{ status: number; json: unknown }> {
+  const webFetch = async () => {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    let json: unknown = null;
+    try {
+      json = await res.clone().json();
+    } catch {
+      /* not JSON */
+    }
+    return { status: res.status, json };
+  };
+
+  let native = false;
+  try {
+    const w = window as unknown as {
+      Capacitor?: { isNativePlatform?: () => boolean };
+    };
+    native = w.Capacitor?.isNativePlatform?.() === true;
+  } catch {
+    native = false;
+  }
+  if (!native) return webFetch();
+
+  try {
+    const { CapacitorHttp } = await import("@capacitor/core");
+    const r = await CapacitorHttp.post({
+      url: new URL(path, window.location.origin).toString(),
+      headers: { "Content-Type": "application/json" },
+      data: body,
+    });
+    return { status: r.status, json: r.data ?? null };
+  } catch {
+    // Native path unavailable/failed — never lose the upload over it.
+    return webFetch();
+  }
+}
+
 async function drainOrphanBuffer(): Promise<void> {
   if (!orphanBuffer || orphanBuffer.points.length === 0) {
     orphanBuffer = null;
@@ -414,13 +485,12 @@ async function drainOrphanBuffer(): Promise<void> {
   }
   const { companyId: owner, points } = orphanBuffer;
   try {
-    const res = await fetch("/api/mileage/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ companyId: owner, points, sessionEnded: true }),
+    const res = await postJson("/api/mileage/ingest", {
+      companyId: owner,
+      points,
+      sessionEnded: true,
     });
-    if (res.ok) {
+    if (res.status >= 200 && res.status < 300) {
       orphanBuffer = null;
       trackerDiag.lastError = "";
     }
@@ -551,11 +621,10 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
   const batch = buffer.slice(0, FLUSH_BATCH_MAX);
   try {
     const post = () =>
-      fetch("/api/mileage/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ companyId, points: batch, sessionEnded }),
+      postJson("/api/mileage/ingest", {
+        companyId,
+        points: batch,
+        sessionEnded,
       });
     let res = await post();
     if (res.status === 401) {
@@ -572,13 +641,8 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
       }
     }
     trackerDiag.flushLastStatus = res.status;
-    let bodyJson: unknown = null;
-    try {
-      bodyJson = await res.clone().json();
-    } catch {
-      /* not JSON, leave as null */
-    }
-    if (res.ok) {
+    const bodyJson: unknown = res.json;
+    if (res.status >= 200 && res.status < 300) {
       sent = true;
       // Server staged everything; drop locally so we don't re-send
       // the same points. The server's staging table is authoritative
@@ -605,9 +669,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
         window.dispatchEvent(new Event(AUTH_EVENT));
       }
     } else {
-      const errBody = bodyJson
-        ? JSON.stringify(bodyJson).slice(0, 60)
-        : (await res.clone().text().catch(() => "")).slice(0, 60);
+      const errBody = bodyJson ? JSON.stringify(bodyJson).slice(0, 60) : "";
       trackerDiag.flushLastResult = `${res.status} ${errBody}`;
       trackerDiag.failStreak++;
       if (res.status === 401) {
