@@ -728,7 +728,10 @@
 // v120: GPS walk-away hardened — arms only after a 45s hard stop and
 // requires off-axis movement, so highway stop-and-go (walking-pace
 // creep) can never close a drive mid-motion again.
-const CACHE_VERSION = "v120";
+// v121: render-time GPS jitter suppression — 50-100m-accuracy scatter
+// no longer scribbles routes; noise-circle bounce is dropped from the
+// drawn track (segmentation unchanged).
+const CACHE_VERSION = "v121";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
