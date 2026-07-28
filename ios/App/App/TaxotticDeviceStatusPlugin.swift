@@ -24,7 +24,11 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
         CAPPluginMethod(name: "getStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestAlwaysUpgrade", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryStepsSince", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openLocationSettings", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openLocationSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "enableBackgroundRevival", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "disableBackgroundRevival", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "drainBufferedLocations", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearBufferedLocations", returnType: CAPPluginReturnPromise)
     ]
 
     private var manager: CLLocationManager?
@@ -122,7 +126,39 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
         }
     }
 
-        public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        // ── Native background revival bridge ───────────────────────────
+    // The capture itself is WebView-independent (see
+    // TaxotticBackgroundLocation); these only let JS arm it and collect
+    // what it recorded while the page was not alive.
+
+    @objc func enableBackgroundRevival(_ call: CAPPluginCall) {
+        let companyId = call.getString("companyId") ?? ""
+        TaxotticBackgroundLocation.shared.enable(companyId: companyId)
+        call.resolve(["ok": true])
+    }
+
+    @objc func disableBackgroundRevival(_ call: CAPPluginCall) {
+        TaxotticBackgroundLocation.shared.disable()
+        call.resolve(["ok": true])
+    }
+
+    @objc func drainBufferedLocations(_ call: CAPPluginCall) {
+        let points = TaxotticBackgroundLocation.shared.drainBuffered()
+        call.resolve([
+            "points": points,
+            "companyId": TaxotticBackgroundLocation.shared.currentCompanyId(),
+        ])
+    }
+
+    @objc func clearBufferedLocations(_ call: CAPPluginCall) {
+        // Only ever called after the server accepted the upload, so a
+        // failed flush can never lose a drive.
+        let upTo = call.getInt("upToTs") ?? 0
+        TaxotticBackgroundLocation.shared.clearBuffered(upTo: upTo)
+        call.resolve(["remaining": TaxotticBackgroundLocation.shared.bufferedCount()])
+    }
+
+    public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         notifyListeners("authorizationChanged", data: [
             "locationAuthorization": authString(manager.authorizationStatus),
             "preciseLocation": manager.accuracyAuthorization == .fullAccuracy

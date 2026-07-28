@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		00B3F60355CC8CB613B47E5F /* TaxotticWidgetBridgePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6C0728C226DACE4E9C63F7 /* TaxotticWidgetBridgePlugin.swift */; };
+		A1D5010000000000000DS002 /* TaxotticDeviceStatusPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D5010000000000000DS001 /* TaxotticDeviceStatusPlugin.swift */; };
+		A1D5010000000000000BG002 /* TaxotticBackgroundLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D5010000000000000BG001 /* TaxotticBackgroundLocation.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -62,6 +64,8 @@
 		82FBBC7E1E5E683B7B42E94B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		CE6C0728C226DACE4E9C63F7 /* TaxotticWidgetBridgePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaxotticWidgetBridgePlugin.swift; sourceTree = "<group>"; };
+		A1D5010000000000000DS001 /* TaxotticDeviceStatusPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaxotticDeviceStatusPlugin.swift; sourceTree = "<group>"; };
+		A1D5010000000000000BG001 /* TaxotticBackgroundLocation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaxotticBackgroundLocation.swift; sourceTree = "<group>"; };
 		F8F36FE7D47C352493E6B3BE /* TaxotticWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TaxotticWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -118,6 +122,8 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 				49BC7CD58AD5C2CA406BB191 /* App.entitlements */,
 				CE6C0728C226DACE4E9C63F7 /* TaxotticWidgetBridgePlugin.swift */,
+				A1D5010000000000000DS001 /* TaxotticDeviceStatusPlugin.swift */,
+				A1D5010000000000000BG001 /* TaxotticBackgroundLocation.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -259,6 +265,8 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				00B3F60355CC8CB613B47E5F /* TaxotticWidgetBridgePlugin.swift in Sources */,
+				A1D5010000000000000DS002 /* TaxotticDeviceStatusPlugin.swift in Sources */,
+				A1D5010000000000000BG002 /* TaxotticBackgroundLocation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
