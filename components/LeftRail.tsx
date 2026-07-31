@@ -380,8 +380,24 @@ export function LeftRail({
     return `/c/${effectivePublicId}/${path}`;
   }
 
+  // Nav row language, ported from Techottic's `nav-links.tsx` (see
+  // docs/design-system-from-techottic.md section 5.6).
+  //
+  // The active state is the same three-alpha formula the status pills use:
+  // the accent supplies a 15% background and a 40% border, and the label
+  // goes to full-strength foreground at semibold. Because both come from
+  // the semantic tokens, the row is correct in light (navy accent on cream)
+  // and dark (gold accent on navy) with no second rule.
+  //
+  // `border` lives in the base string but the COLOUR is set by both the
+  // active and the idle string. That is deliberate: idle rows carry an
+  // explicit `border-transparent` so a row does not shift by 1px at the
+  // moment it becomes active.
   const baseLink =
-    "group/item flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors";
+    "group/item flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors";
+  const navActive = " bg-accent/15 border-accent/40 text-foreground font-semibold";
+  const navIdle =
+    " border-transparent text-muted hover:bg-surface-2 hover:text-foreground";
 
   // ---- styling parity with the prior flush sidebar ----
   //
@@ -402,9 +418,12 @@ export function LeftRail({
         // detached floating card).
         "!fixed left-0 z-40 hidden lg:flex flex-col " +
         "w-56 xl:w-60 2xl:w-64 " +
-        "bg-paper/95 dark:bg-forest-800/95 " +
-        "border-r border-forest-100 dark:border-forest-700 " +
-        "rounded-r-2xl shadow-[2px_0_16px_rgba(18,26,42,0.10)] " +
+        // Techottic's rail is `bg-surface/80 backdrop-blur-xl` with a plain
+        // hairline right border: the page frosts behind it as it scrolls
+        // instead of hiding under an opaque slab with its own drop shadow.
+        "bg-surface/80 backdrop-blur-xl " +
+        "border-r border-edge " +
+        "rounded-r-2xl " +
         "px-2 pt-3 pb-3"
       : // Floating sheet: unlike the rail (flush to the screen edge, so
         // only its outer corners round), the sheet sits with a gap on
@@ -441,14 +460,13 @@ export function LeftRail({
     : "/companies/new";
   const segBase =
     "rounded-lg px-2 py-1.5 text-[13px] font-medium text-center transition-colors ";
-  const segActive =
-    "bg-white dark:bg-forest-800 text-forest-900 dark:text-cream shadow-sm";
-  const segIdle = "text-forest-700 dark:text-cream/70 hover:text-forest-900";
+  const segActive = "bg-surface text-foreground shadow-sm";
+  const segIdle = "text-muted hover:text-foreground";
 
   // Personal / Business segmented toggle, always visible so the user can
   // cross between the two workspaces from anywhere.
   const toggleSection = (
-    <div className="grid grid-cols-2 gap-1 rounded-xl bg-cream/70 dark:bg-forest-700/60 p-1 mb-1">
+    <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 mb-1">
       <Link
         href={personalLocked ? "/personal/upgrade" : "/personal/forecast"}
         onClick={onDismiss}
@@ -486,10 +504,10 @@ export function LeftRail({
         <Link
           href="/personal/upgrade"
           onClick={onDismiss}
-          className={baseLink + " text-forest-800 hover:bg-cream"}
+          className={baseLink + navIdle}
           title={mode === "rail" ? "Personal tax tools" : undefined}
         >
-          <span className="shrink-0 text-gold-600">
+          <span className="shrink-0 text-accent-2">
             <Icon>
               <Path d="M12 2l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 15.9 6.8 18.2l1-5.8L3.5 8.2l5.9-.9z" />
             </Icon>
@@ -517,8 +535,8 @@ export function LeftRail({
               className={
                 baseLink +
                 (active
-                  ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
-                  : " text-forest-800 hover:bg-cream")
+                  ? navActive
+                  : navIdle)
               }
               title={mode === "rail" ? item.label : undefined}
             >
@@ -526,8 +544,8 @@ export function LeftRail({
                 className={
                   "shrink-0 " +
                   (active
-                    ? "text-gold-600"
-                    : "text-forest-700 group-hover/item:text-forest-900")
+                    ? "text-accent-2"
+                    : "")
                 }
               >
                 {item.icon}
@@ -551,11 +569,12 @@ export function LeftRail({
         aria-controls="leftrail-company-switcher"
         className={
           baseLink +
-          " w-full justify-between text-forest-800 hover:bg-cream"
+          navIdle +
+          " w-full justify-between"
         }
       >
         <span className="flex items-center gap-3 min-w-0">
-          <span className="shrink-0 text-forest-700">
+          <span className="shrink-0">
             <Path d="M4 21h16V8l-8-5-8 5v13zM10 21v-6h4v6" />
           </span>
           <span className="min-w-0 truncate">Companies</span>
@@ -576,7 +595,7 @@ export function LeftRail({
       {switcherOpen ? (
         <ul
           id="leftrail-company-switcher"
-          className="grid gap-0.5 ml-3 pl-3 border-l border-forest-100/70 dark:border-forest-700"
+          className="grid gap-0.5 ml-3 pl-3 border-l border-edge"
         >
           {companies.length === 0 ? (
             <li className="px-3 py-2 text-xs text-ink-muted">
@@ -594,8 +613,8 @@ export function LeftRail({
                     className={
                       "block rounded-lg px-3 py-1.5 text-[13px] truncate " +
                       (isCurrent
-                        ? "bg-cream text-forest-900 font-medium"
-                        : "text-forest-800 hover:bg-cream")
+                        ? "bg-accent/15 text-foreground font-semibold"
+                        : "text-muted hover:bg-surface-2 hover:text-foreground")
                     }
                     title={c.name}
                   >
@@ -609,7 +628,7 @@ export function LeftRail({
             <Link
               href="/companies/new"
               onClick={onDismiss}
-              className="block rounded-lg px-3 py-1.5 text-[12px] text-ink-soft hover:bg-cream hover:text-forest-900"
+              className="block rounded-lg px-3 py-1.5 text-[12px] text-muted hover:bg-surface-2 hover:text-foreground"
             >
               + New company
             </Link>
@@ -639,7 +658,7 @@ export function LeftRail({
           >
             {activeCompany.name.charAt(0).toUpperCase()}
           </span>
-          <span className="min-w-0 truncate text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+          <span className="nav-group-title min-w-0 truncate">
             {activeCompany.name}
           </span>
         </div>
@@ -667,8 +686,8 @@ export function LeftRail({
                   className={
                     baseLink +
                     (active
-                      ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
-                      : " text-forest-800 hover:bg-cream")
+                      ? navActive
+                      : navIdle)
                   }
                   title={mode === "rail" ? item.label : undefined}
                 >
@@ -676,8 +695,8 @@ export function LeftRail({
                     className={
                       "shrink-0 " +
                       (active
-                        ? "text-gold-600"
-                        : "text-forest-700 group-hover/item:text-forest-900")
+                        ? "text-accent-2"
+                        : "")
                     }
                   >
                     {item.icon}
@@ -700,7 +719,7 @@ export function LeftRail({
     >
       {mode === "sheet" ? (
         <div className="flex items-center justify-between px-2 pt-1 pb-2">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-ink-muted font-medium">
+          <span className="nav-group-title">
             Menu
           </span>
           <button
@@ -739,8 +758,8 @@ export function LeftRail({
           className={
             baseLink +
             (isActive("/dashboard")
-              ? " bg-cream text-forest-900 ring-1 ring-gold-300/70 font-medium"
-              : " text-forest-800 hover:bg-cream")
+              ? navActive
+              : navIdle)
           }
           title={mode === "rail" ? "Dashboard" : undefined}
         >
@@ -748,8 +767,8 @@ export function LeftRail({
             className={
               "shrink-0 " +
               (isActive("/dashboard")
-                ? "text-gold-600"
-                : "text-forest-700 group-hover/item:text-forest-900")
+                ? "text-accent-2"
+                : "")
             }
           >
             <Path d="M3 11l9-8 9 8M5 10v9h4v-6h6v6h4v-9" />
@@ -769,7 +788,7 @@ export function LeftRail({
           {companiesSwitcher}
           {/* Separator only when there IS a company section below */}
           {activeCompany ? (
-            <div className="my-2 border-t border-forest-100/70 dark:border-forest-700" />
+            <div className="glow-line my-2" />
           ) : null}
           {companySection}
         </div>
