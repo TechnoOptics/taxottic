@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
+import { WarningIcon } from "@/components/ui/Icons";
 import { CompanyNav } from "@/components/CompanyNav";
 import { PageHeader } from "@/components/PageHeader";
 import { formatCents } from "@/lib/tax/forecast";
@@ -194,9 +195,12 @@ export default async function ManageCompanyPage({
 , please share this link with your new teammate yourself
                   (email, text, whatever they actually open).
                 </p>
-                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  ⚠️ Automatic email delivery isn&apos;t configured yet. The
-                  invitation itself was created successfully.
+                <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <WarningIcon className="size-4 mt-px shrink-0" />
+                  <span>
+                    Automatic email delivery isn&apos;t configured yet. The
+                    invitation itself was created successfully.
+                  </span>
                 </div>
               </>
             )}

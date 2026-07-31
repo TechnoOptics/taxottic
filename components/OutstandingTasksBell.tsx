@@ -5,9 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { OutstandingItem } from "@/lib/tasks/outstanding";
 import {
+  KIND_ICON,
   loadClickedItems,
   saveClickedItems,
 } from "@/components/OutstandingTasksPopup";
+import { BellIcon } from "@/components/ui/Icons";
 
 type Props = {
   count: number;
@@ -26,12 +28,6 @@ type AnchorRect = { top: number; left: number; width: number };
 // panel can never go off either edge, regardless of viewport quirks.
 const PANEL_WIDTH = 320;
 const EDGE_MARGIN = 8;
-
-const KIND_ICON: Record<OutstandingItem["kind"], string> = {
-  trip: "🚗",
-  csv_transaction: "🧾",
-  bank_transaction: "🏦",
-};
 
 // Per-item "stop showing this" dismissals. Shared with the on-load popup via
 // the SAME localStorage key, so an item X'd in either surface stays hidden in
@@ -197,10 +193,7 @@ export function OutstandingTasksBell({ count, items }: Props) {
                         onClick={() => clickThroughItem(key)}
                         className="flex items-start gap-2.5 rounded-lg pl-3 pr-9 py-2 hover:bg-forest-50/60 transition-colors"
                       >
-                        <span
-                          aria-hidden="true"
-                          className="text-base leading-none mt-0.5"
-                        >
+                        <span className="mt-0.5 text-ink-soft shrink-0">
                           {KIND_ICON[it.kind]}
                         </span>
                         <span className="min-w-0 flex-1">
@@ -260,9 +253,7 @@ export function OutstandingTasksBell({ count, items }: Props) {
         aria-expanded={open}
         className="relative inline-flex size-8 items-center justify-center rounded-full text-cream/85 hover:text-cream hover:bg-white/10 transition-colors"
       >
-        <span aria-hidden="true" className="text-base leading-none">
-          🔔
-        </span>
+        <BellIcon className="size-[18px]" />
         {visibleCount > 0 ? (
           <span
             aria-hidden="true"

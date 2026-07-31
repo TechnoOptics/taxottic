@@ -7,6 +7,12 @@ import {
   type CompanyMembership,
 } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
+import {
+  CarIcon,
+  ChatIcon,
+  LockIcon,
+  ReceiptIcon,
+} from "@/components/ui/Icons";
 import { PersonalDashboard } from "./PersonalDashboard";
 import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { CompanyLogo } from "@/components/CompanyLogo";
@@ -1037,7 +1043,7 @@ export default async function DashboardPage() {
               <WebOnly
                 fallback={
                   <span className="text-sm text-ink-muted inline-flex items-center gap-1.5 whitespace-nowrap">
-                    <span aria-hidden="true">🔒</span>
+                    <LockIcon className="size-4 shrink-0" />
                     Free plan: 1 company
                   </span>
                 }
@@ -1047,7 +1053,7 @@ export default async function DashboardPage() {
                   className="text-sm text-ink-muted hover:text-forest-900 inline-flex items-center gap-1.5 whitespace-nowrap"
                   title={newCompanyTooltip}
                 >
-                  <span aria-hidden="true">🔒</span>
+                  <LockIcon className="size-4 shrink-0" />
                   + New company (Pro)
                 </Link>
               </WebOnly>
@@ -1451,9 +1457,7 @@ async function renderMemberDashboard(args: {
             href={primary ? `/c/${primary.public_id}/expenses` : "#"}
             className="surface surface-hover p-5 flex items-center gap-3"
           >
-            <span aria-hidden="true" className="text-2xl">
-              🧾
-            </span>
+            <ReceiptIcon className="size-7 shrink-0 text-gold-700" />
             <div>
               <div className="display text-lg text-forest-900">Add expense</div>
               <div className="text-[13px] text-ink-muted">
@@ -1465,9 +1469,7 @@ async function renderMemberDashboard(args: {
             href="/mileage"
             className="surface surface-hover p-5 flex items-center gap-3"
           >
-            <span aria-hidden="true" className="text-2xl">
-              🚗
-            </span>
+            <CarIcon className="size-7 shrink-0 text-gold-700" />
             <div>
               <div className="display text-lg text-forest-900">Log mileage</div>
               <div className="text-[13px] text-ink-muted">
@@ -1479,9 +1481,7 @@ async function renderMemberDashboard(args: {
             href={primary ? `/c/${primary.public_id}/chat` : "#"}
             className="surface surface-hover p-5 flex items-center gap-3"
           >
-            <span aria-hidden="true" className="text-2xl">
-              💬
-            </span>
+            <ChatIcon className="size-7 shrink-0 text-gold-700" />
             <div>
               <div className="display text-lg text-forest-900">Chat</div>
               <div className="text-[13px] text-ink-muted">

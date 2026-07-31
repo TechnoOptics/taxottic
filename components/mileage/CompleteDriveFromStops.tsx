@@ -21,6 +21,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/maps/google-maps-loader";
+import { CompassIcon } from "@/components/ui/Icons";
 
 type Stop = { id: string; label: string; lat: number | null; lng: number | null };
 type Computed = {
@@ -323,7 +324,7 @@ export function CompleteDriveFromStops({
           onClick={() => setOpen(true)}
           className="inline-flex items-center gap-2 text-xs text-forest-700 hover:text-forest-900 underline underline-offset-2"
         >
-          <span aria-hidden="true">🧭</span>
+          <CompassIcon className="size-4 shrink-0" />
           Phone died on a drive? Rebuild it from where you went
         </button>
       </div>

@@ -319,7 +319,7 @@ function WelcomeStage({
         Welcome
       </div>
       <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
-        🎉 Congratulations on your new business.
+        Congratulations on your new business.
       </h1>
       <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
         A few quick questions and Taxottic shapes itself to your

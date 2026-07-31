@@ -352,7 +352,7 @@ export default async function ImportReviewPage({
               ) : null}
               {stats.bellaSuggested > 0 ? (
                 <span className="block text-gold-800">
-                  ⚡ {stats.bellaSuggested} pre-tagged by Bella for review
+                  • {stats.bellaSuggested} pre-tagged by Bella for review
                 </span>
               ) : null}
               {stats.untouched > 0 ? (

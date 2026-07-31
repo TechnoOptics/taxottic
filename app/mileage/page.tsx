@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { BoltIcon, EyeIcon, MapIcon, PinIcon } from "@/components/ui/Icons";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import {
   MileageMap,
@@ -426,7 +427,7 @@ export default async function MileagePage({
 
             {viewingAll ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
-                <span aria-hidden="true">🗺️</span>
+                <MapIcon className="size-4 shrink-0" />
                 <span>
                   Team view: every driver&apos;s trails in their own colour.
                   Your drives show all classifications; teammates&apos; show
@@ -436,7 +437,7 @@ export default async function MileagePage({
               </div>
             ) : !viewingSelf ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
-                <span aria-hidden="true">👁️</span>
+                <EyeIcon className="size-4 shrink-0" />
                 <span>
                   Reviewing{" "}
                   <span className="font-medium">
@@ -493,11 +494,8 @@ export default async function MileagePage({
                 className="mt-4 block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-400"
               >
                 <div className="flex items-center gap-3">
-                  <span
-                    aria-hidden="true"
-                    className="grid place-items-center size-9 rounded-full bg-amber-500 text-white text-lg"
-                  >
-                    ⚡
+                  <span className="grid place-items-center size-9 shrink-0 rounded-full bg-amber-500 text-white">
+                    <BoltIcon className="size-5" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="display text-sm text-amber-900">
@@ -557,7 +555,7 @@ export default async function MileagePage({
                 href="/mileage/places"
                 className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
               >
-                <span aria-hidden="true">📍</span>
+                <PinIcon className="size-3.5 shrink-0" />
                 Saved places →
               </Link>
               {/* New (May 2026): per-user schedule. Lets the driver

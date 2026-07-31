@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
+import { CompassIcon } from "@/components/ui/Icons";
 import { CompanyNav } from "@/components/CompanyNav";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { PageHeader } from "@/components/PageHeader";
@@ -529,7 +530,7 @@ export default async function ForecastPage({ params }: { params: Params }) {
               href={`/c/${publicId}/forecast/breakdown`}
               className="inline-flex items-center gap-1.5 text-xs px-3 h-8 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
             >
-              <span aria-hidden="true">🧭</span>
+              <CompassIcon className="size-3.5 shrink-0" />
               {isManager
                 ? "View by department & employee →"
                 : "View your department →"}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { CompassIcon } from "@/components/ui/Icons";
 import { CompanyNav } from "@/components/CompanyNav";
 import { PageHeader } from "@/components/PageHeader";
 import { ImportConnectActions } from "@/components/ImportConnectActions";
@@ -396,7 +397,7 @@ export default async function ExpensesPage({
                                 className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border border-dashed border-gold-200 bg-gold-50/50 hover:bg-gold-50"
                               >
                                 <span className="flex items-center gap-2 min-w-0">
-                                  <span aria-hidden="true">🧭</span>
+                                  <CompassIcon className="size-4 shrink-0" />
                                   <span className="text-sm text-forest-900 font-medium shrink-0">
                                     {lead}
                                   </span>
@@ -446,7 +447,7 @@ export default async function ExpensesPage({
                                             d="M7 5l6 5-6 5"
                                           />
                                         </svg>
-                                        <span aria-hidden="true">🧭</span>
+                                        <CompassIcon className="size-4 shrink-0" />
                                         <span className="text-sm text-forest-900 font-medium shrink-0">
                                           {dayLabel(dk)}
                                         </span>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { RecurrencePicker, type Cadence } from "./RecurrencePicker";
 import { formatCents } from "@/lib/tax/forecast";
+import { ChatIcon } from "@/components/ui/Icons";
 
 // Round-5 audit Medium: expense rows had Remove but no Edit. Same
 // rationale as IncomeRow, power users entering 30+ transactions per
@@ -237,7 +238,7 @@ export function ExpenseRow({
           ) : null}
           {row.managerNote ? (
             <div className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200/70 rounded px-2 py-1">
-              <span aria-hidden="true">💬</span>
+              <ChatIcon className="size-3.5 mt-0.5 shrink-0" />
               <span className="italic">{row.managerNote}</span>
             </div>
           ) : null}

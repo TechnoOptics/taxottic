@@ -803,7 +803,19 @@
 // down a card several thousand pixels tall. The controls now sit on
 // their own row beneath the transaction, so the text keeps the full
 // width of the card at every size.
-const CACHE_VERSION = "v136";
+// v137: emoji that were standing in as icons are now outline SVGs. The
+// header notification bell, the rows of the outstanding-items popup and
+// its slim banner, the dashboard quick actions and plan locks, the
+// mileage team, review, saved-places and needs-a-call markers, the sync
+// freshness pill, the manager-note and mobile-only cards, the warning
+// banners, and the four public calculators all drew a vendor emoji
+// bitmap where an icon belonged. They share one set now
+// (components/ui/Icons.tsx) on the same 24x24 currentColor frame the
+// left rail already used, so every glyph takes the surrounding text
+// colour on the light and dark surfaces alike. Markup changed on those
+// pages, so the bump keeps v136 clients from hydrating new server HTML
+// against cached chunks.
+const CACHE_VERSION = "v137";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

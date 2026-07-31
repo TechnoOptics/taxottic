@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Freshness } from "@/lib/format/relative-time";
+import { RefreshIcon, WarningIcon } from "@/components/ui/Icons";
 
 type Props = {
   publicId: string;
@@ -75,7 +76,11 @@ export function SyncFreshness({ publicId, label, level, canSync }: Props) {
         top: "calc(max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px)) + var(--app-header-h, 3.25rem) + 0.5rem)",
       }}
     >
-      <span aria-hidden>{stale ? "⚠" : "↻"}</span>
+      {stale ? (
+        <WarningIcon className="size-3.5 shrink-0" />
+      ) : (
+        <RefreshIcon className="size-3.5 shrink-0" />
+      )}
       <span>
         <span className="hidden sm:inline">Synced </span>
         <span className="font-medium">{label}</span>

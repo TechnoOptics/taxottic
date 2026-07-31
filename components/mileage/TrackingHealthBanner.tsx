@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { openLocationSettings } from "@/lib/mileage/native-tracker";
+import { WarningIcon } from "@/components/ui/Icons";
 
 type Props = {
   reason: string;
@@ -22,9 +23,7 @@ export function TrackingHealthBanner({ reason, recoverable, recoverAction }: Pro
   return (
     <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50/60 p-4 text-amber-900">
       <div className="flex items-start gap-2">
-        <span aria-hidden className="mt-0.5">
-          ⚠
-        </span>
+        <WarningIcon className="size-4 mt-0.5 shrink-0" />
         <div className="min-w-0">
           <p className="font-semibold text-sm">Your drives aren&rsquo;t being recorded</p>
           <p className="mt-1 text-xs leading-relaxed">{reason}</p>
