@@ -217,11 +217,19 @@ let deWalkBearingDeltaDeg: number | null = null;
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogRearming = false;
 let authUnsub: (() => void) | null = null;
-/** No callback for this long while enabled + app visible = the native
- *  service died under us (OS kill) while the toggle still says ON — the
- *  zombie state that previously required a manual off/on cycle. */
+/** No callback for this long while enabled = the native service died
+ *  under us (OS kill) while the toggle still says ON: the zombie state
+ *  that previously required a manual off/on cycle. */
 const WATCHDOG_STALL_MS = 10 * 60_000;
 const WATCHDOG_MAX_RESTARTS = 3;
+/** Watchdog tick period. */
+const WATCHDOG_TICK_MS = 60_000;
+/** A tick that arrives this much later than WATCHDOG_TICK_MS means our
+ *  OWN timer was suspended or throttled, so the silence it is about to
+ *  measure is our silence, not the watcher's. */
+const WATCHDOG_THROTTLE_TICK_MS = 3 * WATCHDOG_TICK_MS;
+/** When the previous watchdog tick ran. 0 = not armed yet. */
+let watchdogLastTickAt = 0;
 let flushing = false;
 // The in-flight flush's promise, so a sessionEnded flush can WAIT for
 // it instead of being silently dropped by the `flushing` guard (audit:
@@ -1200,18 +1208,37 @@ export async function startMileageTracking(
     })();
     if (watchdogTimer) clearInterval(watchdogTimer);
     trackerDiag.lastCbAt = Date.now(); // arm from "now", not from 0
+    watchdogLastTickAt = Date.now();
     watchdogTimer = setInterval(() => {
       if (!tracking || watchdogRearming) return;
-      // Only judge liveness while the app is actually visible: in the
-      // background the WebView's own timers are throttled, so silence
-      // proves nothing there (resume re-arms separately).
-      if (
-        typeof document !== "undefined" &&
-        document.visibilityState !== "visible"
-      ) {
+      // Self-check FIRST: did our own timer actually run on schedule?
+      //
+      // This used to be `if (document.visibilityState !== "visible")
+      // return`, which made the watchdog unable to fire in the one
+      // situation it exists for. The zombie it hunts (Samsung "Sleeping
+      // apps" and friends killing the foreground GPS service while the
+      // WebView process survives) happens WHILE THE APP IS
+      // BACKGROUNDED. By the time the app is visible again,
+      // resumeMileageTrackingIfEnabled() has already re-armed on the
+      // appStateChange/resume listeners, so the visible-only watchdog
+      // could only ever run when there was nothing left to fix.
+      //
+      // The reason behind the old gate was real, though: a throttled or
+      // suspended WebView timer makes `now - lastCbAt` look enormous
+      // without proving anything about the watcher. Test that directly
+      // instead of using visibility as a proxy. A tick that arrives on
+      // schedule proves our timers are running, which makes the silence
+      // it measures real evidence, backgrounded or not. A late tick
+      // proves only that WE were asleep, so re-baseline and wait for
+      // clean evidence.
+      const tickAt = Date.now();
+      const sinceTick = tickAt - watchdogLastTickAt;
+      watchdogLastTickAt = tickAt;
+      if (sinceTick > WATCHDOG_THROTTLE_TICK_MS) {
+        trackerDiag.lastCbAt = tickAt;
         return;
       }
-      const silentMs = Date.now() - trackerDiag.lastCbAt;
+      const silentMs = tickAt - trackerDiag.lastCbAt;
       if (silentMs < WATCHDOG_STALL_MS) return;
       if (trackerDiag.watchdogRestarts >= WATCHDOG_MAX_RESTARTS) return;
       trackerDiag.watchdogRestarts++;
@@ -1226,7 +1253,7 @@ export async function startMileageTracking(
           watchdogRearming = false;
         }
       })();
-    }, 60_000);
+    }, WATCHDOG_TICK_MS);
   }
   return { ok: true };
 }

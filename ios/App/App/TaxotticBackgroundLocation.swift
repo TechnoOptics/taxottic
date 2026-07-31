@@ -66,6 +66,9 @@ import CoreLocation
     private let queue = DispatchQueue(label: "com.taxottic.bglocation", qos: .utility)
     private var fineUpdatesActive = false
     private var lastDrivingFixAt: Date?
+    /// Previous accepted fix, used to DERIVE speed when CoreLocation
+    /// does not report one. See `effectiveSpeed(of:)`.
+    private var lastFix: CLLocation?
 
     private override init() {
         super.init()
@@ -139,6 +142,13 @@ import CoreLocation
     private func startFineUpdates() {
         guard !fineUpdatesActive, hasAlwaysAuthorization() else { return }
         fineUpdatesActive = true
+        // Start the idle clock at the moment of escalation. It used to be
+        // set ONLY where a reported speed cleared drivingSpeed, so a
+        // session escalated from a source that reports no speed (every
+        // SLC fix, every CLVisit) left `lastDrivingFixAt` nil forever and
+        // stopFineUpdates()'s `let last = lastDrivingFixAt` guard could
+        // never pass: continuous GPS then ran until the app died.
+        if lastDrivingFixAt == nil { lastDrivingFixAt = Date() }
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()
@@ -148,6 +158,34 @@ import CoreLocation
         guard fineUpdatesActive else { return }
         fineUpdatesActive = false
         manager.stopUpdatingLocation()
+    }
+
+    /// Speed in m/s, DERIVED from the previous fix when CoreLocation does
+    /// not report one. Returns a negative value only when it is genuinely
+    /// unknowable (no usable predecessor).
+    ///
+    /// Load-bearing: `CLLocation.speed` is -1 (unavailable) on every fix
+    /// that did not come from continuous GPS, which is precisely the
+    /// fixes this class receives before it escalates. Significant-
+    /// location-change and CLVisit locations are computed by the system
+    /// from cell/Wi-Fi, carry no Doppler, and therefore report -1. Any
+    /// test of the form `loc.speed >= drivingSpeed` is unreachable from
+    /// those sources, so gating escalation on it meant the device stayed
+    /// on the SLC net for the entire drive and only ever recorded a
+    /// handful of ~500 m breadcrumbs with null speeds.
+    ///
+    /// The server learned this lesson in 2026-05 and the native layer
+    /// never did: see `segmentSpeedMps` in lib/mileage/segmentation.ts,
+    /// which trusts device-reported speed ONLY when it is > 0 and
+    /// otherwise falls back to haversine over the time delta, precisely
+    /// because a device that misreports speed must not be able to hide a
+    /// real drive. This function is that same rule, applied at capture.
+    private func effectiveSpeed(of loc: CLLocation) -> CLLocationSpeed {
+        if loc.speed >= 0 { return loc.speed }
+        guard let prev = lastFix else { return -1 }
+        let dt = loc.timestamp.timeIntervalSince(prev.timestamp)
+        guard dt > 0 else { return -1 }
+        return loc.distance(from: prev) / dt
     }
 
     public func locationManager(
@@ -160,16 +198,25 @@ import CoreLocation
             // Negative accuracy means the fix is invalid.
             guard loc.horizontalAccuracy >= 0 else { continue }
             append(loc)
-            if loc.speed >= drivingSpeed {
+            let speed = effectiveSpeed(of: loc)
+            lastFix = loc
+            // Unknown speed with nothing to derive from means this is the
+            // FIRST fix of a wake-up: SLC does not fire until the device
+            // has moved roughly 500 m, so the OS has effectively just told
+            // us the phone is travelling. Escalate and let the idle timer
+            // below stand it back down if the derived speeds say we were
+            // wrong. Treating "unknown" as "not driving" is what kept the
+            // tracker asleep through entire trips.
+            if speed >= drivingSpeed || speed < 0 {
                 sawDriving = true
-                lastDrivingFixAt = Date()
+                if speed >= drivingSpeed { lastDrivingFixAt = Date() }
             }
         }
         if sawDriving {
             startFineUpdates()
         } else if fineUpdatesActive,
-                  let last = lastDrivingFixAt,
-                  Date().timeIntervalSince(last) > idleStopInterval {
+                  Date().timeIntervalSince(lastDrivingFixAt ?? .distantPast)
+                    > idleStopInterval {
             // Parked long enough: drop back to the cheap SLC net. The
             // server's own parked test closes the trip.
             stopFineUpdates()
