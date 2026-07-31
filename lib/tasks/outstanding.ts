@@ -8,10 +8,17 @@ import { formatCents } from "@/lib/tax/forecast";
 // glance. One tally means the count shown in the bell always matches
 // what the popup lists and what the push nudge claims — no drift.
 //
-// Sources of "needs a decision":
-//   1. mileage_trips        classification = 'unclassified' (this driver)
-//   2. bank_transactions    CSV-imported rows not yet applied/ignored
-//   3. account_transactions Plaid-synced rows still user_action='pending'
+// Sources of "needs a decision", ACCOUNT AND BANK SYNCS ONLY:
+//   1. bank_transactions    CSV-imported rows not yet applied/ignored
+//   2. account_transactions Plaid-synced rows still user_action='pending'
+//
+// Drives are deliberately NOT a source. A finished drive is
+// auto-classified when it materialises (see lib/mileage/segmentation
+// autoClassify + finalize's auto-apply), so it shows up on the map and
+// in the deduction straight away instead of queueing for review. The
+// driver can still change any drive's call from the trip list on
+// /mileage, or from /mileage/classify. The control stayed, only the
+// nagging went.
 //
 // Uses the SESSION-scoped Supabase client (RLS-enforced), matching the
 // pattern already used by the banks page and AppHeader — never the
@@ -19,8 +26,11 @@ import { formatCents } from "@/lib/tax/forecast";
 // signed-in user viewing their own data.
 
 export type OutstandingItem = {
-  id: string;
+  /** "trip" is retained so the icon maps in the bell / popup keep
+   *  compiling and so any historical item still renders, but nothing
+   *  produces it any more: drives are auto-classified, never queued. */
   kind: "trip" | "csv_transaction" | "bank_transaction";
+  id: string;
   title: string;
   subtitle: string;
   href: string;
@@ -28,7 +38,7 @@ export type OutstandingItem = {
 
 export type OutstandingTasks = {
   items: OutstandingItem[];
-  /** True total across all three sources — NOT capped like `items`. */
+  /** True total across both sync sources, NOT capped like `items`. */
   count: number;
 };
 
@@ -42,58 +52,22 @@ function monthDayLabel(iso: string): string {
 
 /**
  * Tally + preview list of outstanding items for the CURRENT user,
- * scoped to their active company (for the two transaction sources —
- * mileage is scoped to the driver directly, regardless of company).
+ * scoped to their active company.
  *
  * `companyPublicId` may be null (e.g. user has no company yet), in
- * which case the two transaction sources are skipped — mileage trips
- * still surface since they don't require a company context to review.
+ * which case there is nothing to tally: both sources are synced
+ * transactions belonging to a company.
  */
 export async function getOutstandingTasks(
   supabase: SupabaseClient,
   params: { userId: string; companyId: string | null; companyPublicId: string | null },
 ): Promise<OutstandingTasks> {
-  const { userId, companyId, companyPublicId } = params;
+  const { companyId, companyPublicId } = params;
   const items: OutstandingItem[] = [];
   let total = 0;
 
-  // 1. Unclassified mileage trips (this driver, any company).
-  try {
-    const { count } = await supabase
-      .from("mileage_trips")
-      .select("id", { count: "exact", head: true })
-      .eq("driver_user_id", userId)
-      .eq("classification", "unclassified");
-    total += count ?? 0;
-
-    if ((count ?? 0) > 0) {
-      const { data } = await supabase
-        .from("mileage_trips")
-        .select("id, distance_miles, started_at")
-        .eq("driver_user_id", userId)
-        .eq("classification", "unclassified")
-        .order("started_at", { ascending: false })
-        .limit(MAX_ITEMS);
-      for (const row of (data ?? []) as Array<{
-        id: string;
-        distance_miles: number;
-        started_at: string;
-      }>) {
-        items.push({
-          id: row.id,
-          kind: "trip",
-          title: `${Number(row.distance_miles ?? 0).toFixed(1)} mi drive`,
-          subtitle: `${monthDayLabel(row.started_at)} · business or personal?`,
-          href: `/mileage/classify?trip=${row.id}`,
-        });
-      }
-    }
-  } catch {
-    /* mileage source unavailable — skip, don't fail the whole tally */
-  }
-
   if (companyId) {
-    // 2. CSV-imported bank transactions still needing a category/ignore call.
+    // 1. CSV-imported bank transactions still needing a category/ignore call.
     try {
       const { count } = await supabase
         .from("bank_transactions")
@@ -136,7 +110,7 @@ export async function getOutstandingTasks(
       /* csv-transaction source unavailable — skip */
     }
 
-    // 3. Plaid-synced transactions still pending a business/personal call.
+    // 2. Plaid-synced transactions still pending a business/personal call.
     try {
       const { count } = await supabase
         .from("account_transactions")
@@ -175,7 +149,7 @@ export async function getOutstandingTasks(
     }
   }
 
-  // Capped for the preview list (trips, then CSV, then Plaid — each
-  // source is already newest-first within itself).
+  // Capped for the preview list (CSV, then Plaid; each source is
+  // already newest-first within itself).
   return { items: items.slice(0, MAX_ITEMS), count: total };
 }

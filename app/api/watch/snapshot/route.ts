@@ -134,15 +134,19 @@ export async function GET(req: NextRequest) {
   // phone's header-bell count; see lib/tasks/outstanding.ts).
   let outstandingCount = 0;
 
+  // Drives deliberately do NOT feed outstandingCount: they are
+  // auto-classified on arrival, so there is no drive backlog to badge,
+  // and the phone's bell no longer counts them either. The deck below
+  // still lists any drive left unclassified on purpose (a manual "review
+  // later"), so the swipe control stays reachable from the wrist.
   try {
-    const { data, count } = await admin
+    const { data } = await admin
       .from("mileage_trips")
-      .select("id, distance_miles, started_at", { count: "exact" })
+      .select("id, distance_miles, started_at")
       .eq("driver_user_id", uid)
       .eq("classification", "unclassified")
       .order("started_at", { ascending: false })
       .limit(6);
-    outstandingCount += count ?? 0;
     pendingTrips = (data ?? []).map((row) => {
       const t = row as {
         id: string;

@@ -774,8 +774,9 @@ export default async function DashboardPage() {
       )
     : null;
 
-  // Outstanding tasks, unclassified drives + transactions awaiting a
-  // business/personal or category call. Best-effort: a tally failure
+  // Outstanding tasks, synced bank/account transactions awaiting a
+  // business/personal or category call. Drives are not a source: they
+  // are auto-classified on arrival. Best-effort: a tally failure
   // must never break the dashboard render. Follows the same "first
   // company" convention this page already uses elsewhere (line below,
   // the hero stat band's forecast link).
