@@ -41,8 +41,10 @@ import {
   setExitBreadcrumb,
   getDeviceStatusProbed,
   getOsExitInfoProbed,
+  readDeviceStatusCache,
+  refreshDeviceStatusCache,
 } from "./device-status";
-import type { DeviceProbeOutcome } from "./device-status";
+import type { DeviceProbeOutcome, DeviceProbeStage } from "./device-status";
 import {
   drainGeofenceBuffer,
   stopGeofenceCapture,
@@ -760,17 +762,130 @@ function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ]);
 }
 
+/* ------------------------------------------------------------------ *
+ * Probe context: is the app actually in the foreground, and are our own
+ * timers running?
+ *
+ * The first probed heartbeat from production came back
+ * device_probe = "timeout" and exit_probe = "timeout": the bridge
+ * exists, the plugin is registered, the OS is not returning empty, and
+ * the call simply does not come back inside the time box. The standing
+ * hypothesis is that heartbeats fire while backgrounded and the WebView
+ * JS thread is too throttled to run the promise resolution. It is a
+ * hypothesis. These three measurements are what turn it into an answer.
+ * ------------------------------------------------------------------ */
+
+/** Native app-state truth from @capacitor/app: the OS told us the app
+ *  became active/inactive. null until the first event or getState()
+ *  reply, so "unknown" is never silently reported as "background". */
+let appActive: boolean | null = null;
+let appStateWatchInstalled = false;
+
+/**
+ * Arm the foreground signal, and refresh the device-truth cache every
+ * time the app genuinely comes forward.
+ *
+ * NOT document.visibilityState. Visibility-as-a-proxy-for-foreground is
+ * the exact mistake that made the tracker watchdog dead code for
+ * months (see the watchdog comment below): a WebView can be hidden
+ * without the app being backgrounded and vice versa. `appStateChange`
+ * is the OS's own statement about the app process. visibilityState is
+ * still recorded in the heartbeat, but explicitly as a second, weaker
+ * signal that we can compare against the real one rather than as the
+ * thing we act on.
+ *
+ * Idempotent; safe to call from every entry point.
+ */
+function installAppStateWatch(): void {
+  if (appStateWatchInstalled || typeof window === "undefined") return;
+  appStateWatchInstalled = true;
+  void (async () => {
+    try {
+      const { App } = await import("@capacitor/app");
+      // Seed from the OS rather than assuming: a cold start triggered by
+      // a background relaunch is NOT foreground, and guessing "true"
+      // there would poison exactly the rows we care about.
+      const seed = await within(App.getState(), 2_000);
+      if (seed && typeof seed.isActive === "boolean") appActive = seed.isActive;
+      void App.addListener("appStateChange", ({ isActive }) => {
+        appActive = isActive;
+        // A genuine foregrounding. This is the moment the bridge
+        // demonstrably answers, so it is the moment to capture device
+        // truth for every heartbeat that follows.
+        if (isActive) void refreshDeviceStatusCache().catch(() => {});
+      });
+    } catch {
+      /* web / @capacitor/app absent: appActive stays null (unknown) */
+    }
+  })();
+  // Secondary trigger only. A visibility gain is never treated as proof
+  // of foreground, but it is a harmless extra chance to refresh the
+  // cache while the JS thread is demonstrably running.
+  try {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        void refreshDeviceStatusCache().catch(() => {});
+      }
+    });
+  } catch {
+    /* SSR / no document */
+  }
+}
+
+/**
+ * How late a short timer actually ran, in ms.
+ *
+ * This is the load-bearing measurement for the throttling hypothesis,
+ * and it cuts in a direction that is easy to get backwards. The probe
+ * time box is itself a setTimeout. If Chromium were throttling this
+ * WebView's timers, the time box would fire LATE, not early, handing
+ * the bridge MORE wall time, not less. So:
+ *
+ *   lag small + probe timed out  the JS thread was running fine and the
+ *                                native call genuinely did not answer.
+ *                                The throttling hypothesis is dead.
+ *   lag large                    our timers really were being starved,
+ *                                and the measured probe elapsed will be
+ *                                far greater than the 3000 ms box.
+ *
+ * Started before the probes and awaited after, so it costs no added
+ * latency.
+ */
+function measureTimerLag(ms: number): Promise<number> {
+  const startedAt = Date.now();
+  return new Promise<number>((resolve) =>
+    setTimeout(() => resolve(Math.max(0, Date.now() - startedAt - ms)), ms),
+  );
+}
+
 /** Time-box a probed bridge read (see device-status.ts) without losing
  *  WHY it produced what it produced. `within()` above collapses "the
  *  plugin answered with nothing", "the plugin rejected" and "the plugin
  *  never answered" into one null, which is exactly the ambiguity that
  *  has kept the device-truth NULL investigation stuck: every
  *  plugin-sourced column is null in production on both platforms and
- *  the row cannot say why. */
+ *  the row cannot say why.
+ *
+ *  Also reports the measured wall-clock elapsed and the last stage the
+ *  probe reached, so a "timeout" says how long it really waited (vs the
+ *  nominal box) and which await it was sitting in. */
 async function probeWithin<T>(
-  fn: () => Promise<{ value: T | null; outcome: DeviceProbeOutcome }>,
+  fn: (onStage: (s: DeviceProbeStage) => void) => Promise<{
+    value: T | null;
+    outcome: DeviceProbeOutcome;
+  }>,
   ms: number,
-): Promise<{ value: T | null; outcome: DeviceProbeOutcome }> {
+): Promise<{
+  value: T | null;
+  outcome: DeviceProbeOutcome;
+  ms: number;
+  stage: DeviceProbeStage;
+}> {
+  const startedAt = Date.now();
+  let stage: DeviceProbeStage = "start";
+  const onStage = (s: DeviceProbeStage) => {
+    stage = s;
+  };
   const timeout = new Promise<{
     value: T | null;
     outcome: DeviceProbeOutcome;
@@ -778,13 +893,15 @@ async function probeWithin<T>(
     setTimeout(() => resolve({ value: null, outcome: "timeout" }), ms),
   );
   const run = Promise.resolve()
-    .then(fn)
+    .then(() => fn(onStage))
     .catch(() => ({ value: null, outcome: "error" as DeviceProbeOutcome }));
-  return Promise.race([run, timeout]);
+  const settled = await Promise.race([run, timeout]);
+  return { ...settled, ms: Date.now() - startedAt, stage };
 }
 
 async function sendHeartbeat(): Promise<void> {
   if (!companyId) return;
+  installAppStateWatch();
   try {
     const cap = (window as unknown as {
       Capacitor?: { getPlatform?: () => string };
@@ -809,6 +926,18 @@ async function sendHeartbeat(): Promise<void> {
     // survived because @capacitor/app is already-loaded vendor code.
     // A JS-layer cause is the only kind that explains a cross-platform
     // symptom with a healthy native layer.
+    //
+    // FIRST PRODUCTION RESULT of that probe: device_probe = "timeout"
+    // and exit_probe = "timeout" on Android. So it is not registration,
+    // not a missing binary, not an empty OS answer, and not the lazy
+    // chunk either. The call is issued and does not come back inside the
+    // box. What is NOT yet established is why, hence the three context
+    // measurements attached below (foreground, elapsed, timer lag) and
+    // the stage recorded inside each probe.
+    //
+    // Started first, resolved last: a free reading of whether our own
+    // timers ran while the probes were in flight.
+    const timerLag = measureTimerLag(1_000);
     const dsProbe = await probeWithin(getDeviceStatusProbed, 3_000);
     const ds = dsProbe.value;
     // App version (was never sent — the manager health view showed
@@ -816,6 +945,19 @@ async function sendHeartbeat(): Promise<void> {
     // everything else on the bridge.
     const exitProbe = await probeWithin(getOsExitInfoProbed, 2_000);
     const exitInfo = exitProbe.value;
+    const timerLagMs = Math.round(await timerLag);
+    // Device truth, live if the probe answered and cached otherwise.
+    // The cache is only ever written by a SUCCESSFUL read (see
+    // device-status.ts), and its age travels with it, so a nine-hour-old
+    // value can never be mistaken for a current one.
+    const cached = ds ? null : readDeviceStatusCache();
+    const truth = ds ?? cached?.value ?? null;
+    const truthSource = ds ? "live" : cached ? "cache" : "none";
+    const truthAgeS = ds
+      ? 0
+      : cached
+        ? Math.round(cached.ageMs / 1000)
+        : null;
     // Geofence resurrection net health. Time-boxed like every other
     // bridge read: this is diagnosis, the heartbeat itself is the point.
     const geofence = await within(getGeofenceState(), 2_000).catch(() => null);
@@ -843,15 +985,23 @@ async function sendHeartbeat(): Promise<void> {
           ? Math.round((Date.now() - trackerDiag.lastCbAt) / 1000)
           : null,
         failStreak: trackerDiag.failStreak,
-        locationAuthorization: ds?.locationAuthorization ?? null,
-        preciseLocation: ds?.preciseLocation ?? null,
-        batteryOptimized: ds?.batteryOptimized ?? null,
-        lowPowerMode: ds?.lowPowerMode ?? null,
+        locationAuthorization: truth?.locationAuthorization ?? null,
+        preciseLocation: truth?.preciseLocation ?? null,
+        batteryOptimized: truth?.batteryOptimized ?? null,
+        lowPowerMode: truth?.lowPowerMode ?? null,
         // Background App Refresh OFF means iOS relaunches us for NO
         // location event — SLC and geofences both go dead silent with
         // no error to log. The device could always read this; it was
         // never transmitted, so the blocker stayed invisible.
-        backgroundRefresh: ds?.backgroundRefresh ?? null,
+        backgroundRefresh: truth?.backgroundRefresh ?? null,
+        // Where the five fields above came from, and how old they are.
+        // Without these a cached value is indistinguishable from a live
+        // one, which would trade a visible NULL for an invisible lie.
+        // "live" = this heartbeat's probe answered (age 0). "cache" =
+        // the last successful foreground read, age in seconds. "none" =
+        // still nothing, which is the honest NULL.
+        deviceStatusSource: truthSource,
+        deviceStatusAgeS: truthAgeS,
         // Why the OS killed us last time. Reported once per heartbeat;
         // cheap, and it converts 'tracking mysteriously stopped' into a
         // named cause (Samsung battery kill vs force-stop vs OOM vs a
@@ -864,6 +1014,30 @@ async function sendHeartbeat(): Promise<void> {
         // plugin is unreachable from this WebView".
         deviceProbe: dsProbe.outcome,
         exitProbe: exitProbe.outcome,
+        // How long each probe actually took, and where it had got to.
+        // A "timeout" whose elapsed is ~3000 ms proves our timers ran on
+        // schedule (so the JS thread was NOT throttled and the native
+        // call is the thing that did not answer). A "timeout" whose
+        // elapsed is far greater proves the opposite: the time box
+        // itself fired late because our timers were starved. The stage
+        // separates "hung importing @capacitor/core" from "hung waiting
+        // on the native method".
+        deviceProbeMs: dsProbe.ms,
+        deviceProbeStage: dsProbe.stage,
+        exitProbeMs: exitProbe.ms,
+        exitProbeStage: exitProbe.stage,
+        // Was the app actually in the foreground when the probes ran?
+        // appActive is the OS's own statement via @capacitor/app
+        // appStateChange (null = we have not heard from it yet, never
+        // guessed). probeVisibility is document.visibilityState, kept
+        // ONLY as a weaker cross-check: using visibility as a proxy for
+        // foreground is a mistake this codebase has already made once.
+        probeForeground: appActive,
+        probeVisibility:
+          typeof document === "undefined" ? null : document.visibilityState,
+        // Whether a plain 1 s timer ran on time while the probes were in
+        // flight. See measureTimerLag.
+        timerLagMs,
         // Learned-place geofence mesh. Without these, a device whose
         // mesh silently failed to register looks identical to one that
         // simply had no drives, which is the ambiguity that let a
@@ -945,6 +1119,12 @@ export async function startMileageTracking(
   forCompanyId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   trackerDiag.startResult = "entered";
+  // Arm the foreground signal + the foreground device-truth cache before
+  // anything else. Starting tracking is itself a foreground moment, so
+  // the very first heartbeat already has a cached value to fall back on
+  // if its live probe times out.
+  installAppStateWatch();
+  void refreshDeviceStatusCache().catch(() => {});
   // Prefer the cached plugin; if not yet loaded, AWAIT guardWithTimeout
   // so the first tap actually starts tracking instead of silently
   // returning "warming" and requiring a second tap. Capped at
@@ -1430,6 +1610,11 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
     return;
   }
   if (!enabled || !savedCompany) return;
+  // App start is one of the two moments the app is genuinely
+  // foregrounded (the other is appStateChange isActive). Capture device
+  // truth now, while the bridge demonstrably answers.
+  installAppStateWatch();
+  void refreshDeviceStatusCache().catch(() => {});
   loadPersistedBuffer();
   companyId = savedCompany;
   void flush(); // drain a killed-mid-drive leftover
