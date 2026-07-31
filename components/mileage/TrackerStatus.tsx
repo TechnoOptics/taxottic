@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  describeGeofenceHealth,
+  getGeofenceState,
+  type GeofenceHealth,
+} from "@/lib/mileage/geofence";
 
 /**
  * "Is the tracker actually running?", the diagnostic strip the user
@@ -46,6 +51,32 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
     isNative: boolean;
     bgAvailable: boolean | null;
   }>({ isNative: false, bgAvailable: null });
+
+  // Learned-place geofence mesh health. This is the half of the story
+  // the server cannot see: whether the mesh that is supposed to restart
+  // tracking after an overnight process kill is actually armed, and
+  // whether the last automatic restart could see location at all.
+  //
+  // It has to be shown. The bug this feature fixes hid for a week
+  // because the tracking notification kept saying healthy while every
+  // fix was being discarded, so a 21-hour blackout looked identical to
+  // a quiet day. A status surface that can only say "fine" is how that
+  // happens.
+  const [geofence, setGeofence] = useState<GeofenceHealth | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const state = await getGeofenceState();
+      if (cancelled) return;
+      // Null means no native side to ask (web, or an older binary).
+      // Say nothing rather than claim anything.
+      if (state) setGeofence(describeGeofenceHealth(state));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -104,6 +135,7 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
     : "No GPS points have been ingested on this account yet";
 
   return (
+    <>
     <div
       className={
         "mt-3 rounded-2xl border px-4 py-3 " +
@@ -192,5 +224,53 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
         </div>
       </div>
     </div>
+    {geofence && geofence.status !== "unavailable" ? (
+      <div
+        className={
+          "mt-2 rounded-2xl border px-4 py-3 " +
+          (geofence.status === "ok"
+            ? "border-emerald-100 bg-emerald-50/60"
+            : geofence.status === "degraded"
+              ? "border-amber-100 bg-amber-50/60"
+              : "border-rose-100 bg-rose-50/60")
+        }
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className={
+              "mt-1.5 size-2.5 rounded-full shrink-0 " +
+              (geofence.status === "ok"
+                ? "bg-emerald-500"
+                : geofence.status === "degraded"
+                  ? "bg-amber-500"
+                  : "bg-rose-500")
+            }
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-forest-900">
+              Automatic restart
+            </div>
+            <div className="text-xs text-ink-muted mt-0.5">
+              {geofence.message}
+            </div>
+            {geofence.action === "background_location" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void import("@/lib/mileage/device-status").then((m) =>
+                    m.openLocationSettingsPrecise(),
+                  );
+                }}
+                className="mt-2 text-[11px] font-medium underline underline-offset-2 text-forest-900"
+              >
+                Open location settings
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

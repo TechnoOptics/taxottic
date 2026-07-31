@@ -775,7 +775,15 @@
 // outcome alongside their value, so a null field now says WHY it is
 // null (no bridge / plugin missing / timed out / OS had nothing)
 // instead of being indistinguishable from every other cause.
-const CACHE_VERSION = "v133";
+// v134: learned-place geofences restart tracking after the OS kills
+// the app overnight, which is why the first drive of the day was being
+// missed while every later drive recorded perfectly. The server
+// clusters each driver's own history into home, work and habitual
+// stops; the device registers those as geofences, and driving out of
+// one restarts capture even though nothing of ours survived the night.
+// The mileage page now also shows whether that net is armed, and says
+// so plainly when an automatic restart ran and could not see location.
+const CACHE_VERSION = "v134";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
