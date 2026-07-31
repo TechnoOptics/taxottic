@@ -759,7 +759,17 @@
 // v130: pending synced bank/Stripe transactions can finally be
 // resolved in place — category picker + "Not business" on each pending
 // row, so the action item can actually be cleared.
-const CACHE_VERSION = "v130";
+// v131: design-system alignment with Techottic. New semantic surface
+// tokens drive the card / input / button / nav primitives, cards and
+// buttons lost their hover lift, page headers dropped a size step, and
+// the left rail moved to the tinted-accent active state. Markup and CSS
+// both changed, so cached shells must not be reused.
+// v132: the mileage tracker's watchdog can finally fire while the app
+// is backgrounded. It used to return early unless the page was visible,
+// which is precisely when there was nothing left to fix (the resume
+// listeners had already re-armed). It now proves its own timer ran on
+// schedule instead of using visibility as a proxy for that.
+const CACHE_VERSION = "v132";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
