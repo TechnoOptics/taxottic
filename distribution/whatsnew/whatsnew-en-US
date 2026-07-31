@@ -1,6 +1,5 @@
-Reliability and accuracy improvements for automatic drive tracking.
+Automatic drive tracking fixes.
 
-- Drives upload over a more reliable connection, so long trips with the app in the background no longer stall.
-- A phone sitting still with weak GPS no longer draws a zigzag or adds miles you did not drive.
-- Trip distances are more accurate on drives that start before the signal settles.
-- The app now reports why it stopped if the phone shuts it down, so problems can be diagnosed instead of guessed at.
+- iPhone: drives now record in full detail from the moment they start, instead of dropping to a rough outline when the app has been closed for a while.
+- Drives appear on their own, already sorted as business or personal, so there is nothing left to confirm.
+- Clearer reporting when a phone stops tracking, so the cause can be found instead of guessed at.
