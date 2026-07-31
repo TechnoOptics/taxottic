@@ -118,6 +118,17 @@ export async function POST(req: NextRequest) {
     // location_authorization cannot be told apart from a dead bridge.
     device_probe: probe("deviceProbe"),
     exit_probe: probe("exitProbe"),
+    // Learned-place geofence mesh (Android). See
+    // supabase/migrations/20260731000001_mileage_learned_places.sql.
+    // geofence_capture = 'blind_no_fix' is the one that matters: a
+    // geofence exit started the location service and it received no
+    // location, so the permission was granted but not usable. Stored
+    // verbatim rather than collapsed into a boolean, because "why"
+    // is the whole value.
+    geofence_arm_state: str("geofenceArmState", 40),
+    geofence_count: num("geofenceCount"),
+    geofence_capture: str("geofenceCapture", 40),
+    geofence_buffered_fixes: num("geofenceBufferedFixes"),
     reported_at: reportedAt,
   };
 

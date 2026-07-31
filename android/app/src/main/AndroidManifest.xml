@@ -70,6 +70,58 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_forecast_info" />
         </receiver>
+
+        <!-- Learned-place geofence mesh: the resurrection net for the
+             confirmed "first drive of the day is never recorded" bug.
+
+             The phone sits at home overnight with the app backgrounded,
+             the OS reclaims the process (or Samsung's sleeping-apps
+             state restricts it), nothing re-arms the foreground
+             service, and the morning commute is lost. A geofence is
+             delivered by the platform to a process it starts for the
+             purpose, so driving off the driveway restarts capture with
+             nothing of ours having survived the night.
+
+             exported="false" is correct and not a mistake: Play
+             services delivers via our own PendingIntent, which does not
+             require the component to be exported. -->
+        <receiver
+            android:name=".TaxotticGeofenceReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Geofence registrations do NOT survive a reboot, and they do
+             NOT survive an app update. Both re-arm here. The update case
+             is the one most easily forgotten, because it only bites on
+             the release after the one you tested: users have no reason
+             to open the app after an automatic Play update. -->
+        <receiver
+            android:name=".TaxotticGeofenceBootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Started ONLY by a geofence exit, and only when background
+             location is genuinely granted.
+
+             PLAY POLICY: Google removed "geofencing" as an approved
+             foreground-service use case in April 2026, directing
+             developers to the Geofence API. That is what this is. The
+             geofencing itself is done by GeofencingClient with no
+             service at all; this service is started BY that trigger and
+             does vehicle activity tracking, which is an explicitly
+             named approved location foreground-service use case in
+             Play's requirements effective 26 August 2026. Do not
+             relabel it, and do not move region monitoring inside it. -->
+        <service
+            android:name=".TaxotticResurrectionService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
     <!-- Permissions -->
@@ -142,6 +194,12 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Re-arm the learned-place geofence mesh after a reboot
+         (TaxotticGeofenceBootReceiver). The @capgo plugin's manifest
+         happens to declare this too and the merger would supply it, but
+         a permission our own receiver depends on must not be inherited
+         from a dependency that could drop it in any future version. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Battery-exemption request dialog (mileage tracking breaks under
          Doze; Google's acceptable-use list covers this case). The setup
          wizard drives it; the policy-safe settings-list intent is the

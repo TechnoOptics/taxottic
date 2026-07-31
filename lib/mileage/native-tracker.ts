@@ -43,6 +43,13 @@ import {
   getOsExitInfoProbed,
 } from "./device-status";
 import type { DeviceProbeOutcome } from "./device-status";
+import {
+  drainGeofenceBuffer,
+  stopGeofenceCapture,
+  syncLearnedPlaces,
+  getGeofenceState,
+} from "./geofence";
+import type { GeofenceArmState } from "./geofence";
 import { haversineMeters } from "./segmentation";
 
 // Minimal contract for the slice of @capgo/background-geolocation we
@@ -289,6 +296,13 @@ export const trackerDiag = {
   flushLastResult: "" as string,
   flushLastTripsCreated: 0 as number,
   flushLastStagingLeft: 0 as number,
+  /** Points recovered from the Android geofence resurrection buffer,
+   *  i.e. a drive that happened while this page did not exist. */
+  geofenceDrained: 0 as number,
+  /** Learned places actually registered as geofences on this device. */
+  geofenceSynced: 0 as number,
+  /** Why the mesh is or is not armed. Null means never answered. */
+  geofenceArmState: null as GeofenceArmState | null,
 };
 
 /** Race guard() against a timeout so the very first call doesn't
@@ -802,6 +816,9 @@ async function sendHeartbeat(): Promise<void> {
     // everything else on the bridge.
     const exitProbe = await probeWithin(getOsExitInfoProbed, 2_000);
     const exitInfo = exitProbe.value;
+    // Geofence resurrection net health. Time-boxed like every other
+    // bridge read: this is diagnosis, the heartbeat itself is the point.
+    const geofence = await within(getGeofenceState(), 2_000).catch(() => null);
     let appVersion: string | null = null;
     try {
       const info = await within(
@@ -847,6 +864,20 @@ async function sendHeartbeat(): Promise<void> {
         // plugin is unreachable from this WebView".
         deviceProbe: dsProbe.outcome,
         exitProbe: exitProbe.outcome,
+        // Learned-place geofence mesh. Without these, a device whose
+        // mesh silently failed to register looks identical to one that
+        // simply had no drives, which is the ambiguity that let a
+        // week of missing morning commutes pass unnoticed.
+        //
+        // geofenceCapture is the load-bearing one: "blind_no_fix" means
+        // a geofence exit DID start the service and it received no
+        // location, i.e. the permission reported granted and was not
+        // actually usable. That is a real failure and must never be
+        // reported as a healthy tracking day.
+        geofenceArmState: geofence?.armState ?? null,
+        geofenceCount: geofence?.registeredCount ?? null,
+        geofenceCapture: geofence?.lastCapture?.state ?? null,
+        geofenceBufferedFixes: geofence?.bufferedFixes ?? null,
       }),
     });
     trackerDiag.hbLastResult = `${res.status} @ ${new Date()
@@ -1413,6 +1444,27 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   // Re-arm native revival too: a reinstall or a permission change can
   // leave the flag set with SLC not actually registered.
   void setBackgroundRevival(true, savedCompany);
+  // ANDROID GEOFENCE RESURRECTION NET (lib/mileage/geofence.ts).
+  //
+  // Same job as the iOS drain above, different mechanism. If the OS
+  // killed us overnight and a learned-place geofence exit restarted
+  // capture this morning, that drive is sitting in a native disk
+  // buffer, because the @capgo plugin discards every fix whose saved
+  // PluginCall is gone. Upload it, then tell the native capture to
+  // stand down now that the WebView watcher is about to take over:
+  // two location foreground services is double battery for one stream.
+  void drainGeofenceBuffer(savedCompany).then((n) => {
+    if (n > 0) trackerDiag.geofenceDrained = n;
+    return stopGeofenceCapture();
+  });
+  // Re-sync the mesh on every resume, not once. A permission change, a
+  // reinstall, or Play services clearing its geofence table all leave
+  // us believing we are armed with nothing registered, and none of
+  // those is observable from here.
+  void syncLearnedPlaces(savedCompany).then((r) => {
+    trackerDiag.geofenceSynced = r.synced;
+    trackerDiag.geofenceArmState = r.armState;
+  });
   // Always re-verify/re-arm here, ignoring the in-memory `tracking` flag.
   // That flag only reflects whether OUR code called bg.start(), it stays
   // true even when Android (esp. Samsung's "Sleeping apps" battery
