@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   segmentTrips,
   haversineMeters,
+  autoClassify,
   suggestClassification,
   type GpsPoint,
   type Place,
@@ -289,6 +290,22 @@ describe("suggestClassification", () => {
     expect(suggestClassification(trip(99999, 88888), [home, office])).toBe(
       "unclassified",
     );
+  });
+
+  describe("autoClassify", () => {
+    it("never returns unclassified: unknown endpoints take the default", () => {
+      expect(autoClassify(trip(99999, 88888), [home, office])).toBe("business");
+      expect(autoClassify(trip(99999, 88888), [])).toBe("business");
+    });
+
+    it("still files a home-to-home errand personal", () => {
+      const home2: Place = { ...home, id: "h2", lat: BASE_LAT };
+      expect(autoClassify(trip(0, 5000), [home2, home])).toBe("personal");
+    });
+
+    it("still files a work drive business", () => {
+      expect(autoClassify(trip(5000, 0), [home, office])).toBe("business");
+    });
   });
 });
 

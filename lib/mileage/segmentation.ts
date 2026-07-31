@@ -311,3 +311,33 @@ export function suggestClassification(
   if (start?.kind === "home" && end?.kind === "home") return "personal";
   return "unclassified";
 }
+
+/**
+ * The classification an auto-applied drive gets when the place
+ * heuristic can't tell. "business" is the product's long-standing
+ * intent for this case: mileage_trips.company_id is NOT NULL (every
+ * tracked drive belongs to a business), the tracker exists to capture
+ * Schedule C mileage, the personal hub has no mileage feature at all
+ * (a "personal" drive only zeroes the deduction, it is never filed
+ * anywhere), and the watch has shipped an "Auto-apply business"
+ * toggle since the watch app landed.
+ */
+export const AUTO_APPLY_CLASSIFICATION: Classification = "business";
+
+/**
+ * Classification for a drive that lands WITHOUT a review step.
+ *
+ * The place heuristic still decides whenever it can, so a home-to-home
+ * errand is still filed personal and an office/client drive is still
+ * filed business. Only the "can't tell" case changes: instead of
+ * parking the drive in a review queue it takes the auto-apply default.
+ * Never returns "unclassified", that is the whole point.
+ *
+ * Machine decisions leave `classified_by` NULL, so a human call is
+ * still distinguishable from this one and still wins on a replace
+ * (see finalize's carry-forward).
+ */
+export function autoClassify(trip: Trip, places: Place[]): Classification {
+  const suggested = suggestClassification(trip, places);
+  return suggested === "unclassified" ? AUTO_APPLY_CLASSIFICATION : suggested;
+}

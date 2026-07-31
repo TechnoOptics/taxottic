@@ -151,8 +151,9 @@ export async function AppHeader({
     }
   }
 
-  // Outstanding tasks (unclassified drives + transactions awaiting a
-  // business/personal or category call). Follows the same "active
+  // Outstanding tasks (synced bank/account transactions awaiting a
+  // business/personal or category call; drives are auto-classified on
+  // arrival and never queue here). Follows the same "active
   // company" resolution as the watch snapshot endpoint: the company
   // the user was last looking at, falling back to their first
   // membership, and never trusting a stale active_company_id the user

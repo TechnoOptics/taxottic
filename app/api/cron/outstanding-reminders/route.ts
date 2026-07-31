@@ -15,12 +15,13 @@ export const maxDuration = 120;
  * dedupe (keyed on today's date, see lib/push/payloads.ts) means a more
  * frequent schedule would still only ever deliver once per user per day.
  *
- * Two backlog sources, summed per user:
- *   1. Unclassified mileage trips, reminded to the DRIVER directly
- *      (mileage_trips.driver_user_id), regardless of company.
- *   2. Pending bank/CSV transactions, reminded to every MANAGER of the
- *      company the transactions belong to (member drivers don't
- *      necessarily see the books; managers do).
+ * One backlog source: pending bank/CSV transactions, reminded to every
+ * MANAGER of the company the transactions belong to (member drivers
+ * don't necessarily see the books; managers do).
+ *
+ * Drives are deliberately NOT a source. A finished drive is
+ * auto-classified when it materialises, so there is no drive backlog to
+ * nudge about. See lib/tasks/outstanding.ts, which this cron mirrors.
  *
  * Auth: same convention as every other cron in this codebase, Vercel's
  * `x-vercel-cron: 1` header on scheduled runs, or `Authorization: Bearer
@@ -40,33 +41,7 @@ export async function GET(req: NextRequest) {
   const add = (userId: string, n: number) =>
     perUserCount.set(userId, (perUserCount.get(userId) ?? 0) + n);
 
-  // 1. Unclassified trips, grouped by driver. Small per-row payload, page
-  // through so a large backlog can't hide past the PostgREST 1000-row cap.
-  try {
-    const PAGE = 1000;
-    const SCAN_CAP = 20_000;
-    for (let from = 0; from < SCAN_CAP; from += PAGE) {
-      const { data, error } = await admin
-        .from("mileage_trips")
-        .select("driver_user_id")
-        .eq("classification", "unclassified")
-        .range(from, from + PAGE - 1);
-      if (error) {
-        console.error("[outstanding-reminders] trip scan failed", error.message);
-        break;
-      }
-      const rows = data ?? [];
-      for (const r of rows) add(r.driver_user_id as string, 1);
-      if (rows.length < PAGE) break;
-    }
-  } catch (err) {
-    console.error(
-      "[outstanding-reminders] trip scan threw",
-      err instanceof Error ? err.message : String(err),
-    );
-  }
-
-  // 2. Pending transactions (CSV-imported + Plaid-synced), grouped by
+  // Pending transactions (CSV-imported + Plaid-synced), grouped by
   // company, then fanned out to that company's managers.
   const pendingByCompany = new Map<string, number>();
   try {

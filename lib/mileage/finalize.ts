@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  autoClassify,
   segmentTrips,
   suggestClassification,
   TRIP_END_DWELL_MS,
@@ -256,6 +257,31 @@ async function renderTripFromRaw(
   return { miles: track.distanceMiles, deductionCents };
 }
 
+/**
+ * Is auto-apply on for this driver? On unless the driver explicitly
+ * turned it off (profiles.mileage_schedule.autoApplyBusiness === false).
+ * Fails open: a missing profile row or a read error keeps drives
+ * landing automatically rather than silently reviving the review queue.
+ */
+export async function autoApplyEnabled(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const { data } = await admin
+      .from("profiles")
+      .select("mileage_schedule")
+      .eq("id", userId)
+      .maybeSingle();
+    const sched =
+      (data?.mileage_schedule as { autoApplyBusiness?: boolean } | null) ??
+      null;
+    return sched?.autoApplyBusiness !== false;
+  } catch {
+    return true;
+  }
+}
+
 export async function finalizeUserTrips(
   admin: SupabaseClient,
   userId: string,
@@ -326,6 +352,19 @@ export async function finalizeUserTrips(
     lng: p.lng as number,
     radiusM: (p.radius_m as number) ?? 120,
   }));
+
+  // Auto-apply: a finished drive lands already classified so it shows
+  // up on the map and in the deduction the moment it materialises,
+  // with no review queue and no "business or personal?" push. This is
+  // the default. The driver can still change any drive's call
+  // afterwards from the trip list (or /mileage/classify).
+  //
+  // profiles.mileage_schedule.autoApplyBusiness is the existing opt-out
+  // (the watch's "Auto-apply business" toggle writes it). Only an
+  // explicit `false` restores the old review flow, so users who never
+  // touch the toggle, and every row where mileage_schedule is NULL, get
+  // the automatic behaviour.
+  const autoApply = await autoApplyEnabled(admin, userId);
 
   // Close the open trip when the caller forces it (sessionEnded /
   // walked-away: an explicit, evidence-backed end) or when the user
@@ -481,9 +520,14 @@ export async function finalizeUserTrips(
       await admin.from("mileage_trips").delete().in("id", decision.deleteIds);
     }
 
+    // A carried human call always wins, including a deliberate "review
+    // later". Otherwise the machine decides, and with auto-apply on it
+    // must decide fully: no drive is parked in a review queue.
     const classification = carried
       ? carried.classification
-      : suggestClassification(trip, places);
+      : autoApply
+        ? autoClassify(trip, places)
+        : suggestClassification(trip, places);
     // Tax year from the trip's LOCAL date. A US evening drive on Dec 31
     // is already Jan 1 in UTC, so getUTCFullYear() filed it under the
     // WRONG tax year — the deduction landed in a return the user had
@@ -600,7 +644,11 @@ export async function finalizeUserTrips(
     }
 
     if (opts.push) {
-      if (classification === "unclassified") {
+      if (classification === "unclassified" && !autoApply) {
+        // Only reachable with auto-apply explicitly turned off. With it
+        // on, a drive is never left needing a call, so the "business or
+        // personal?" push never fires, including for a drive whose
+        // human classifier had chosen "review later".
         await notify(userId, {
           kind: "trip_classify",
           tripId: inserted.id,
@@ -611,7 +659,7 @@ export async function finalizeUserTrips(
             minute: "2-digit",
           }).format(new Date(trip.startTs)),
         });
-      } else {
+      } else if (classification !== "unclassified") {
         await notify(userId, {
           kind: "trip_logged",
           tripId: inserted.id,
