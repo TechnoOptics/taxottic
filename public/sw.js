@@ -795,7 +795,15 @@
 // whether the app was foreground at the time, so the remaining question
 // of why the live read hangs is answered by measurement rather than by
 // argument.
-const CACHE_VERSION = "v135";
+// v136: a pending synced transaction on the banks page is readable again
+// on a narrow screen. The resolve controls used to sit in the same flex
+// row as the transaction text, and because only the text column was
+// allowed to shrink it collapsed to zero width on a foldable cover
+// screen, rendering the merchant and the note one character per line
+// down a card several thousand pixels tall. The controls now sit on
+// their own row beneath the transaction, so the text keeps the full
+// width of the card at every size.
+const CACHE_VERSION = "v136";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
