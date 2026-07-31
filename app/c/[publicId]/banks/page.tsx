@@ -721,77 +721,89 @@ export default async function BanksPage({
                                 key={t.id}
                                 id={`txn-${t.id}`}
                                 className={
-                                  "card p-3 sm:p-4 flex items-start gap-3 sm:gap-4 scroll-mt-24" +
+                                  "card p-3 sm:p-4 scroll-mt-24" +
                                   (isHighlighted
                                     ? " ring-2 ring-gold-400 border-gold-300"
                                     : "")
                                 }
                               >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <span className="text-sm sm:text-base text-forest-900 font-medium truncate">
-                          {merchant}
-                        </span>
-                        <span className="text-[11px] text-ink-muted">{date}</span>
+                                <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-sm sm:text-base text-forest-900 font-medium truncate">
+                            {merchant}
+                          </span>
+                          <span className="text-[11px] text-ink-muted">{date}</span>
+                        </div>
+                        {master ? (
+                          <div className="mt-1 text-[11px] text-forest-700 leading-relaxed">
+                            <span className="text-gold-600 mr-1">↳</span>
+                            Bella suggested:{" "}
+                            <span className="text-forest-900 font-medium">
+                              {master.name}
+                            </span>{" "}
+                            <span className="text-ink-muted">
+                              ({master.category})
+                            </span>{" "}
+                            <a
+                              href={master.source}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"
+                            >
+                              IRS source ↗
+                            </a>
+                          </div>
+                        ) : isExpense ? (
+                          <div className="mt-1 text-[11px] text-ink-muted">
+                            No master-deduction match - categorized to the
+                            generic Schedule C bucket.
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-[11px] text-ink-muted">
+                            Inflow / refund · not categorized as a deduction.
+                          </div>
+                        )}
                       </div>
-                      {master ? (
-                        <div className="mt-1 text-[11px] text-forest-700 leading-relaxed">
-                          <span className="text-gold-600 mr-1">↳</span>
-                          Bella suggested:{" "}
-                          <span className="text-forest-900 font-medium">
-                            {master.name}
-                          </span>{" "}
-                          <span className="text-ink-muted">
-                            ({master.category})
-                          </span>{" "}
-                          <a
-                            href={master.source}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-gold-800 hover:text-gold-900 font-medium underline underline-offset-2"
-                          >
-                            IRS source ↗
-                          </a>
-                        </div>
-                      ) : isExpense ? (
-                        <div className="mt-1 text-[11px] text-ink-muted">
-                          No master-deduction match - categorized to the
-                          generic Schedule C bucket.
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-[11px] text-ink-muted">
-                          Inflow / refund · not categorized as a deduction.
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span
-                        className={
-                          "text-sm tabular-nums " +
-                          (isExpense
-                            ? "text-forest-900"
-                            : "text-emerald-700")
-                        }
-                      >
-                        {isExpense ? amount : `+${amount}`}
-                      </span>
-                      <span
-                        className={
-                          "text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5 border " +
-                          (t.user_action === "applied"
-                            ? "text-emerald-700 bg-emerald-50 border-emerald-100"
-                            : t.user_action === "dismissed"
-                              ? "text-ink-muted bg-forest-50 border-forest-100"
-                              : "text-gold-700 bg-gold-50 border-gold-100")
-                        }
-                      >
-                        {t.user_action}
-                      </span>
-                    </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span
+                          className={
+                            "text-sm tabular-nums " +
+                            (isExpense
+                              ? "text-forest-900"
+                              : "text-emerald-700")
+                          }
+                        >
+                          {isExpense ? amount : `+${amount}`}
+                        </span>
+                        <span
+                          className={
+                            "text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5 border " +
+                            (t.user_action === "applied"
+                              ? "text-emerald-700 bg-emerald-50 border-emerald-100"
+                              : t.user_action === "dismissed"
+                                ? "text-ink-muted bg-forest-50 border-forest-100"
+                                : "text-gold-700 bg-gold-50 border-gold-100")
+                          }
+                        >
+                          {t.user_action}
+                        </span>
+                      </div>
+                                </div>
                     {/* Pending rows are actionable in place. The
                         outstanding-task list counts these and links
                         here, so without a control the item could never
-                        be cleared. */}
+                        be cleared.
+
+                        The controls sit on their OWN row, outside the
+                        flex row above, on purpose. As a third flex
+                        sibling they kept their min-content width (the
+                        category select is ~180px on its own) while the
+                        text column, the only `min-w-0` item, absorbed
+                        the whole shortfall and computed to 0px on a
+                        344dp foldable cover screen. With
+                        `overflow-wrap: anywhere` on <body> that renders
+                        as one character per line. */}
                     {t.user_action === "pending" ? (
                       <ResolveSyncedTx
                         publicId={publicId}
