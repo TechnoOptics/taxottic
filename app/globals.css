@@ -47,7 +47,81 @@ html {
   color-scheme: light;
 }
 
+/* ============================================================================
+   Semantic surface tokens (ported from Techottic's token architecture)
+
+   Techottic's whole theme system is nine variables redefined once per theme,
+   with everything else -- cards, fields, buttons, nav, tables -- expressed in
+   terms of them. Flipping the theme is then a token swap, not a per-component
+   patch.
+
+   Taxottic previously had only BRAND ramps (forest-* / gold-* / cream / ink)
+   and no semantic layer, which is why its dark theme is implemented further
+   down this file as ~60 `html[data-theme="dark"] .text-forest-700 { ...
+   !important }` overrides. Those overrides stay (377 `.card` call sites and
+   hundreds of pages still write brand classes directly), but every primitive
+   from here on is rebuilt on these tokens so new code needs no dark-mode
+   twin, and so the overrides can be retired incrementally.
+
+   The token SLOTS are Techottic's. The VALUES are Taxottic's brand:
+   Techottic's neutral greys map to the forest navy ramp, and its emerald
+   accent maps to champagne gold. Gold is the accent in both themes, matching
+   Techottic's rule that only the neutrals move between light and dark.
+
+   Naming note: `--border` is exported to Tailwind as `edge`, so the utility
+   reads `border-edge` rather than the unreadable `border-border`. Same
+   rename Techottic uses.
+============================================================================ */
+
+:root,
+html[data-theme="light"] {
+  --background: #fbf7e9; /* cream */
+  --surface: #ffffff;
+  --surface-2: #f6f2e4; /* recessed: fields sit BELOW the card they're in */
+  --border: rgba(18, 26, 42, 0.1);
+  --border-bright: rgba(18, 26, 42, 0.2);
+  --foreground: #18181b;
+  --muted: #52525b;
+  --accent: #1d2843; /* forest: the filled-primary colour on light */
+  --accent-2: #c4a25d; /* gold: rings, focus, decorative accents */
+  --accent-fg: #fbf7e9; /* text on a filled accent */
+  /* The gold eyebrow above page and card titles. It needs its own token
+     rather than reusing --accent-2, because the gold that reads correctly
+     on cream (gold-700, ~6:1) is not the gold that reads correctly on navy,
+     and vice versa. */
+  --kicker: #8a661f; /* gold-700 */
+}
+
+html[data-theme="dark"] {
+  --background: #121a2a; /* forest-950 */
+  --surface: #202d4d;
+  --surface-2: rgba(18, 26, 42, 0.85);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-bright: rgba(213, 187, 126, 0.42);
+  --foreground: #fbf7e9;
+  --muted: rgba(251, 247, 233, 0.58);
+  /* On the navy field, navy-on-navy has no presence, so the accent role
+     passes to gold. Techottic keeps one accent across both themes because
+     its neutrals are true greys; Taxottic's "neutral" IS navy, so the
+     primary fill has to move or it disappears into the page. */
+  --accent: #d5bb7e; /* gold-400 */
+  --accent-2: #e0c590; /* gold-300 */
+  --accent-fg: #121a2a;
+  --kicker: #e0c590; /* gold-300: gold-700 was near-invisible on navy */
+}
+
 @theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-edge: var(--border);
+  --color-edge-bright: var(--border-bright);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-fg: var(--accent-fg);
+
   --color-forest-50: #eef1f6;
   --color-forest-100: #d6dded;
   --color-forest-200: #b0bcd6;
@@ -627,7 +701,7 @@ main, footer, nav {
     letter-spacing: 0.32em;
     text-transform: uppercase;
     font-weight: 500;
-    color: var(--color-gold-700);
+    color: var(--kicker);
   }
   /* Smaller "inline kicker" used inside a card right above the title.
      Same color + caps treatment but with `0.2em` tracking and 11px so
@@ -639,83 +713,88 @@ main, footer, nav {
     letter-spacing: 0.2em;
     text-transform: uppercase;
     font-weight: 500;
-    color: var(--color-gold-700);
+    color: var(--kicker);
   }
 
-  /* Card: the app-wide card primitive. Calmed in June 2026 to match the
-     dashboard's `.surface` system - a hairline border + a soft two-stop
-     shadow that lifts the card off the page, and NOTHING else. The old
-     treatment stacked a gold ring (0 0 0 1px gold), an inset champagne
-     highlight, AND a `::before` gold line across the top edge of every
-     card; on a screen full of cards that read busy/heavy, not premium.
-     `.card` and `.surface` are now intentionally the same look so the
-     whole app speaks one calm visual language (most screens still write
-     `.card`; the dashboard writes `.surface`). position:relative stays
-     so absolutely-positioned children keep anchoring. */
+  /* Card: the app-wide card primitive (377 call sites).
+
+     Rebuilt on the semantic tokens and retuned to Techottic's card
+     treatment. Techottic's card is a hairline border, a 14px radius, and
+     ONE 2px shadow stop -- separation comes from `--surface` being a
+     different value than `--background`, not from blur. Taxottic was
+     running a two-stop shadow with a 34px blur and -18px spread, roughly
+     six times the lift, plus a `translateY(-1px)` on hover. On a screen
+     of eight cards that read as eight floating slabs.
+
+     What changed:
+       radius   1rem      -> 14px (Techottic's, deliberately between
+                            rounded-xl and rounded-2xl)
+       shadow   two-stop  -> one stop, 2px blur
+       hover    lift+blur -> border brightens one step, nothing moves
+
+     Because background/border now come from tokens, the separate
+     `html[data-theme="dark"] .card` rule that used to restate the whole
+     thing is gone: the dark values arrive with the token swap.
+     position:relative stays so absolutely-positioned children keep
+     anchoring. */
   .card {
     position: relative;
-    background: #ffffff;
-    border: 1px solid rgba(18, 26, 42, 0.06);
-    border-radius: 1rem;
-    box-shadow:
-      0 1px 2px rgba(18, 26, 42, 0.05),
-      0 14px 34px -18px rgba(18, 26, 42, 0.26);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(18, 26, 42, 0.06);
   }
+  html[data-theme="dark"] .card {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Hover on an interactive card: raise the border one step. That is the
+     entire gesture -- the same "brighten the edge" move used by buttons,
+     inputs and nav rows, which is what makes the whole UI feel like one
+     surface system. */
   .card-hover {
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .card-hover:hover {
-    transform: translateY(-1px);
-    border-color: rgba(213, 187, 126, 0.55);
-    box-shadow:
-      0 2px 6px rgba(18, 26, 42, 0.07),
-      0 22px 50px -22px rgba(18, 26, 42, 0.34);
+    border-color: var(--border-bright);
   }
 
-  /* .surface - the redesign's SINGLE card treatment. Quieter than the
-     legacy `.card` (gold ring + heavy shadow), but NOT flat: a hairline
-     border PLUS a soft two-stop shadow so the card genuinely lifts off
-     the page. The first revision was a bare 9%-opacity border with no
-     shadow - on cream the white cards read as ghost rectangles and the
-     whole screen looked unfinished ("plain / cheap"). Live-tuned on the
-     real dashboard until the lift read as premium without shouting.
-     In dark mode shadows barely register on a navy field, so the card
-     is a clearly LIGHTER navy (#202d4d on the #121a2a page) carrying a
-     1px top-light border - separation comes from value + edge, not blur. */
+  /* `.surface` (3 call sites, dashboard only) is kept as an alias so those
+     pages don't need touching, but it is now literally the same treatment
+     as `.card`. Techottic has exactly one card class and that is the point;
+     two near-identical ones is how they drift apart again. New code should
+     write `.card`. */
   .surface {
-    background: #ffffff;
-    border: 1px solid rgba(18, 26, 42, 0.06);
-    border-radius: 1.125rem;
-    box-shadow:
-      0 1px 2px rgba(18, 26, 42, 0.05),
-      0 14px 34px -18px rgba(18, 26, 42, 0.26);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(18, 26, 42, 0.06);
   }
   html[data-theme="dark"] .surface {
-    background: #202d4d;
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.35),
-      0 18px 44px -22px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   }
   .surface-hover {
-    transition:
-      box-shadow 0.2s ease,
-      border-color 0.2s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .surface-hover:hover {
-    border-color: rgba(213, 187, 126, 0.6);
-    box-shadow:
-      0 2px 6px rgba(18, 26, 42, 0.07),
-      0 22px 50px -22px rgba(18, 26, 42, 0.34);
-  }
-  html[data-theme="dark"] .surface-hover:hover {
-    border-color: rgba(213, 187, 126, 0.6);
-    box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.4),
-      0 24px 54px -24px rgba(0, 0, 0, 0.62);
+    border-color: var(--border-bright);
   }
 
-  /* Primary button: forest with subtle gold inner highlight + lift hover */
+  /* Primary button: flat accent fill.
+
+     Techottic's rule is "primary IS the accent colour" -- a flat fill, no
+     gradient, no inner highlight, and press feedback via `active:scale(.99)`
+     rather than a hover lift. Ported wholesale except for the height (see
+     below).
+
+     The accent token carries the theme difference: forest navy on the cream
+     marketing pages, champagne gold on the dark authenticated app, where
+     navy-on-navy had almost no presence. `--accent-fg` supplies readable
+     text in both directions (cream on navy, near-black navy on gold).
+
+     Height stays 2.75rem (44px) rather than adopting Techottic's 36px.
+     Techottic is a desktop IT console; Taxottic ships inside iOS and Android
+     WebViews, where 44px is the minimum comfortable tap target. */
   .btn-primary {
     display: inline-flex;
     align-items: center;
@@ -723,29 +802,34 @@ main, footer, nav {
     gap: 0.5rem;
     height: 2.75rem;
     padding: 0 1.25rem;
-    border-radius: 0.625rem;
-    background: linear-gradient(180deg, #243150 0%, #1d2843 100%);
-    color: #fbf7e9;
+    border-radius: 0.5rem;
+    background: var(--accent);
+    color: var(--accent-fg);
     font-size: 0.875rem;
-    font-weight: 500;
-    box-shadow:
-      inset 0 1px 0 rgba(213, 187, 126, 0.18),
-      0 1px 2px rgba(29, 40, 67, 0.2);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(18, 26, 42, 0.16);
+    cursor: pointer;
+    transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   }
   .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow:
-      inset 0 1px 0 rgba(213, 187, 126, 0.28),
-      0 6px 18px rgba(29, 40, 67, 0.25);
+    /* Darken the fill instead of lifting the button. `filter` works for both
+       the navy and the gold accent without needing a second hover colour
+       token per theme. */
+    filter: brightness(0.92);
+  }
+  .btn-primary:active {
+    transform: scale(0.99);
   }
   .btn-primary:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+    filter: none;
   }
 
-  /* Secondary button: ghost outline, forest text, hover fills cream */
+  /* Ghost button: transparent with a hairline. Hover raises the border one
+     step and fills to the recessed surface -- the same two-token gesture as
+     cards and nav rows. */
   .btn-ghost {
     display: inline-flex;
     align-items: center;
@@ -753,42 +837,244 @@ main, footer, nav {
     gap: 0.5rem;
     height: 2.75rem;
     padding: 0 1.25rem;
-    border-radius: 0.625rem;
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(29, 40, 67, 0.18);
-    color: #1d2843;
+    border-radius: 0.5rem;
+    background: transparent;
+    border: 1px solid var(--border-bright);
+    color: var(--foreground);
     font-size: 0.875rem;
     font-weight: 500;
+    cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   }
   .btn-ghost:hover {
-    background: #f5edd6;
-    border-color: rgba(213, 187, 126, 0.6);
-    transform: translateY(-1px);
+    background: var(--surface-2);
+    border-color: var(--accent-2);
+  }
+  .btn-ghost:active {
+    transform: scale(0.99);
+  }
+  .btn-ghost:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
   }
 
-  /* Form input: clean hairline + focus ring in forest.
-     font-size: 16px on iOS prevents the auto-zoom-on-focus jump. */
+  /* Form input.
+
+     Ported from Techottic's `.field`: the input background is `--surface-2`,
+     i.e. RECESSED relative to the card it sits in rather than elevated
+     white, and focus is a two-part signal (border steps to `--border-bright`
+     PLUS a 2px accent ring at 25% alpha) instead of a single shadow.
+
+     Two Taxottic behaviours are deliberately kept because Techottic has no
+     equivalent and both fix real device bugs:
+       - font-size: 1rem below 640px, which stops iOS auto-zooming on focus
+       - the custom `select` chevron further down, which stops the Android
+         WebView painting native dropdown popups solid black */
   .input {
     width: 100%;
     height: 2.75rem;
     padding: 0 0.875rem;
-    background: #ffffff;
-    border: 1px solid rgba(29, 40, 67, 0.18);
-    border-radius: 0.625rem;
-    color: #18181b;
+    background: var(--surface-2);
+    border: 1px solid var(--border-bright);
+    border-radius: 0.5rem;
+    color: var(--foreground);
     /* Crisp, intentional text caret (was the low-contrast UA default). */
-    caret-color: #1d2843;
+    caret-color: var(--accent-2);
     font-size: 1rem;
     outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .input::placeholder {
+    color: color-mix(in srgb, var(--muted) 60%, transparent);
   }
   @media (min-width: 640px) {
     .input { font-size: 0.875rem; }
   }
   .input:focus {
-    border-color: #1d2843;
-    box-shadow: 0 0 0 3px rgba(29, 40, 67, 0.12);
+    border-color: var(--border-bright);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-2) 25%, transparent);
+  }
+
+  /* ========================================================================
+     Primitives ported from Techottic
+
+     Techottic's density comes from a handful of label, row and cell
+     treatments applied consistently rather than from any one component.
+     These are the classes for the ones Taxottic had no shared version of --
+     every page was hand-rolling its own. See
+     docs/design-system-from-techottic.md sections 2.3, 5.3-5.6.
+  ======================================================================== */
+
+  /* Icon-only button. Techottic writes this inline everywhere; here it is
+     once. 40px square so it stays a valid touch target in the WebViews. */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.5rem;
+    width: 2.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .icon-btn:hover {
+    border-color: var(--border-bright);
+    color: var(--foreground);
+  }
+
+  /* Label above a metric. Techottic: 12px, medium, uppercase, wide tracking,
+     always muted -- never accent-coloured. Distinct from Taxottic's gold
+     `.kicker`, which is the page-level eyebrow; this is the in-card one. */
+  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  /* The big number in a stat card: 30px bold. Colour is set by the caller
+     (semantic status colour, or the accent by default). */
+  .stat-value {
+    margin-top: 0.25rem;
+    font-size: 1.875rem;
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--accent-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Heading above a group of cards. One step up from `.stat-label`:
+     14px semibold, same caps and tracking, same muted colour. */
+  .section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  /* Nav group heading. Smallest and heaviest of the three label treatments
+     -- Techottic's rule is that as a label shrinks, weight and tracking go
+     up. */
+  .nav-group-title {
+    font-size: 10px;
+    line-height: 1.4;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: color-mix(in srgb, var(--muted) 70%, transparent);
+  }
+
+  /* Neutral tapered hairline. Techottic's `.glow-line`, used under the
+     sidebar wordmark. Taxottic's `.gold-rule` / `.gold-flourish` are the
+     ornamental accent-coloured versions; this is the quiet one. */
+  .glow-line {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--foreground) 14%, transparent),
+      transparent
+    );
+  }
+
+  /* Status pill.
+
+     Techottic's three-alpha formula: one hue supplies the text at 100%, the
+     background at 10% and the border at 25%. Callers pass the hue as
+     `--pill` and get a badge that needs no dark-mode twin, because a single
+     hue at those alphas reads correctly on both cream and navy. This
+     replaces the pattern of writing `bg-emerald-50 text-emerald-700
+     border-emerald-200` inline and then adding an `!important` dark
+     override for each of the three.
+
+     `.pill` is the rounded-full conversational form (status), `.pill-code`
+     the rounded-md dense form (short codes, counts). */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    white-space: nowrap;
+    border-radius: 9999px;
+    padding: 0.125rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--pill, var(--accent-2));
+    background: color-mix(in srgb, var(--pill, var(--accent-2)) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--pill, var(--accent-2)) 25%, transparent);
+  }
+  .pill-code {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    border-radius: 0.375rem;
+    padding: 0.125rem 0.375rem;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.025em;
+    color: var(--pill, var(--accent-2));
+    background: color-mix(in srgb, var(--pill, var(--accent-2)) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--pill, var(--accent-2)) 25%, transparent);
+  }
+  /* The 6px leading dot that turns a pill into a status indicator. */
+  .pill-dot {
+    height: 0.375rem;
+    width: 0.375rem;
+    border-radius: 9999px;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  /* Table treatment. Techottic has no table component, just a consistently
+     repeated set of classes; these are those classes, named.
+       .data-table   14px, full width
+       thead row     12px uppercase tracked muted on a full hairline
+       tbody row     half-alpha hairline, recessed surface on hover
+       cell          16x12px */
+  .data-table {
+    width: 100%;
+    font-size: 0.875rem;
+    border-collapse: collapse;
+  }
+  .data-table thead tr {
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .data-table thead th {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .data-table tbody tr {
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    transition: background 0.15s ease;
+  }
+  .data-table tbody tr:hover {
+    background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+  }
+  .data-table td {
+    padding: 0.75rem 1rem;
+  }
+  /* Money and dates line up column-wise. */
+  .data-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A list row that is not in a table but should behave like one. */
+  .row-hover {
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .row-hover:hover {
+    background: color-mix(in srgb, var(--surface-2) 40%, transparent);
   }
 
   /* Premium, accessible keyboard focus: one crisp on-brand gold ring, shown
@@ -1122,63 +1408,29 @@ main, footer, nav {
      change. Inputs/cards/buttons all flip together.
   ========================================================================== */
 
-  /* Card on dark: a clearly-lifted, SOLID lighter navy (#202d4d on the
-     #121a2a page) - same value-based separation `.surface` uses, with a
-     1px top-light edge. Dropped the gold ring + champagne catch-light to
-     match the calm system now used app-wide. Solid (was 62% alpha) so
-     stacked cards and text stay crisp instead of letting the page bleed
-     through. */
-  html[data-theme="dark"] .card {
-    background: #202d4d;
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.35),
-      0 18px 44px -22px rgba(0, 0, 0, 0.55);
-    color: #fbf7e9;
+  /* `.card`, `.card-hover`, `.input` and `.btn-ghost` no longer need dark
+     twins here. They are defined on the semantic tokens up top, so the
+     `html[data-theme="dark"]` token block supplies their dark values
+     automatically. The only piece that still needs an explicit dark rule
+     is the card's text colour (page markup often sets no colour at all and
+     inherits from the body) and the select chevron, whose colour is baked
+     into a data-URI and cannot come from a token. */
+  html[data-theme="dark"] .card,
+  html[data-theme="dark"] .surface {
+    color: var(--foreground);
   }
-  html[data-theme="dark"] .card-hover:hover {
-    border-color: rgba(213, 187, 126, 0.6);
-  }
-  /* Opaque variant - for floating menus (UserMenu dropdown, etc.)
-     where the page beneath would otherwise bleed through the 62%
-     alpha and make the menu hard to read. Light mode already uses
-     #ffffff, so only the dark override matters. */
+  /* Opaque variant - for floating menus (UserMenu dropdown, etc.) that need
+     to sit on a solid fill so the page beneath cannot bleed through.
+     Light mode already uses #ffffff, so only the dark override matters. */
   html[data-theme="dark"] .card.card-opaque {
     background: #1d2843;
   }
 
-  /* Inputs / selects / textareas */
-  html[data-theme="dark"] .input {
-    background: rgba(18, 26, 42, 0.85);
-    border-color: rgba(213, 187, 126, 0.22);
-    color: #fbf7e9;
-    /* Gold caret pops on the dark surface (cream on near-dark was faint). */
-    caret-color: #d5bb7e;
-  }
-  html[data-theme="dark"] .input::placeholder {
-    color: rgba(251, 247, 233, 0.45);
-  }
-  html[data-theme="dark"] .input:focus {
-    border-color: rgba(213, 187, 126, 0.7);
-    box-shadow: 0 0 0 3px rgba(213, 187, 126, 0.18);
-  }
   html[data-theme="dark"] select,
   html[data-theme="dark"] .select {
     /* Re-tint the chevron so it reads against the dark surface.
        Targets bare `select` to match the broadened base rule. */
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path fill='none' stroke='%23fbf7e9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M4 6l4 4 4-4'/></svg>");
-  }
-
-  /* Ghost button: invert. On dark, "ghost" means cream-tinted
-     translucent panel with cream text. Hover lifts the surface. */
-  html[data-theme="dark"] .btn-ghost {
-    background: rgba(251, 247, 233, 0.06);
-    border-color: rgba(213, 187, 126, 0.26);
-    color: #fbf7e9;
-  }
-  html[data-theme="dark"] .btn-ghost:hover {
-    background: rgba(251, 247, 233, 0.12);
-    border-color: rgba(213, 187, 126, 0.55);
   }
 
   /* Tailwind utility overrides for the most common Taxottic colors.
