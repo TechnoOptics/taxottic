@@ -39,9 +39,10 @@ import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
   setExitBreadcrumb,
-  getDeviceStatus,
-  getOsExitInfo,
+  getDeviceStatusProbed,
+  getOsExitInfoProbed,
 } from "./device-status";
+import type { DeviceProbeOutcome } from "./device-status";
 import { haversineMeters } from "./segmentation";
 
 // Minimal contract for the slice of @capgo/background-geolocation we
@@ -745,6 +746,29 @@ function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ]);
 }
 
+/** Time-box a probed bridge read (see device-status.ts) without losing
+ *  WHY it produced what it produced. `within()` above collapses "the
+ *  plugin answered with nothing", "the plugin rejected" and "the plugin
+ *  never answered" into one null, which is exactly the ambiguity that
+ *  has kept the device-truth NULL investigation stuck: every
+ *  plugin-sourced column is null in production on both platforms and
+ *  the row cannot say why. */
+async function probeWithin<T>(
+  fn: () => Promise<{ value: T | null; outcome: DeviceProbeOutcome }>,
+  ms: number,
+): Promise<{ value: T | null; outcome: DeviceProbeOutcome }> {
+  const timeout = new Promise<{
+    value: T | null;
+    outcome: DeviceProbeOutcome;
+  }>((resolve) =>
+    setTimeout(() => resolve({ value: null, outcome: "timeout" }), ms),
+  );
+  const run = Promise.resolve()
+    .then(fn)
+    .catch(() => ({ value: null, outcome: "error" as DeviceProbeOutcome }));
+  return Promise.race([run, timeout]);
+}
+
 async function sendHeartbeat(): Promise<void> {
   if (!companyId) return;
   try {
@@ -771,17 +795,13 @@ async function sendHeartbeat(): Promise<void> {
     // survived because @capacitor/app is already-loaded vendor code.
     // A JS-layer cause is the only kind that explains a cross-platform
     // symptom with a healthy native layer.
-    const ds = await within(
-      Promise.resolve().then(() => getDeviceStatus()),
-      3_000,
-    );
+    const dsProbe = await probeWithin(getDeviceStatusProbed, 3_000);
+    const ds = dsProbe.value;
     // App version (was never sent — the manager health view showed
     // app_version null for every device). Guarded + time-boxed like
     // everything else on the bridge.
-    const exitInfo = await within(
-      Promise.resolve().then(() => getOsExitInfo()),
-      2_000,
-    );
+    const exitProbe = await probeWithin(getOsExitInfoProbed, 2_000);
+    const exitInfo = exitProbe.value;
     let appVersion: string | null = null;
     try {
       const info = await within(
@@ -822,6 +842,11 @@ async function sendHeartbeat(): Promise<void> {
         exitReason: exitInfo?.reason ?? null,
         exitAtMs: exitInfo?.atMs ?? null,
         exitDetail: exitInfo?.detail ?? null,
+        // Whether the bridge answered at all, so a null field above is
+        // no longer ambiguous between "nothing to report" and "the
+        // plugin is unreachable from this WebView".
+        deviceProbe: dsProbe.outcome,
+        exitProbe: exitProbe.outcome,
       }),
     });
     trackerDiag.hbLastResult = `${res.status} @ ${new Date()

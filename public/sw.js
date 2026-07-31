@@ -769,7 +769,13 @@
 // which is precisely when there was nothing left to fix (the resume
 // listeners had already re-armed). It now proves its own timer ran on
 // schedule instead of using visibility as a proxy for that.
-const CACHE_VERSION = "v132";
+// v133: heartbeats are now appended to history rather than only
+// overwriting the latest row, so a multi-hour blackout stops erasing
+// its own evidence. The device-status bridge reads also report an
+// outcome alongside their value, so a null field now says WHY it is
+// null (no bridge / plugin missing / timed out / OS had nothing)
+// instead of being indistinguishable from every other cause.
+const CACHE_VERSION = "v133";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
