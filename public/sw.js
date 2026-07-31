@@ -783,7 +783,19 @@
 // one restarts capture even though nothing of ours survived the night.
 // The mileage page now also shows whether that net is armed, and says
 // so plainly when an automatic restart ran and could not see location.
-const CACHE_VERSION = "v134";
+// v135: device truth (location permission, battery optimization,
+// Background App Refresh) stops reporting NULL. The heartbeat used to
+// read it live through the JS bridge every five minutes, which is to
+// say almost always while the app was backgrounded, and the read timed
+// out. Those values change when a person changes them, so the device
+// now captures them whenever the app is genuinely foregrounded and
+// every heartbeat sends the cached value plus its age, falling back to
+// the cache only when the live read fails. The heartbeat also records
+// how long each bridge read took, how late its own timer ran, and
+// whether the app was foreground at the time, so the remaining question
+// of why the live read hangs is answered by measurement rather than by
+// argument.
+const CACHE_VERSION = "v135";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -55,8 +55,29 @@ type DeviceStatusPlugin = {
   ): Promise<{ remove: () => void }>;
 };
 
-async function guard(): Promise<DeviceStatusPlugin | null> {
+/**
+ * Where a probe had got to when it stopped making progress.
+ *
+ * A time-boxed probe that reports only "timeout" cannot say WHICH await
+ * hung, and the two candidates need completely different fixes:
+ *
+ *  bridge  we were still inside `await import("@capacitor/core")`. That
+ *          is the JS module system, not the native layer: a cold or
+ *          unfetchable chunk in a remote-URL WebView looks exactly like
+ *          a dead plugin from the outside.
+ *  call    the native method was invoked and its promise never settled.
+ *          That is the bridge round-trip or the native side itself.
+ *
+ * Reported alongside the outcome so the next production sample answers
+ * the question instead of narrowing it.
+ */
+export type DeviceProbeStage = "start" | "bridge" | "call" | "done";
+
+type StageSink = (stage: DeviceProbeStage) => void;
+
+async function guard(onStage?: StageSink): Promise<DeviceStatusPlugin | null> {
   try {
+    onStage?.("bridge");
     const w = window as unknown as {
       Capacitor?: {
         isNativePlatform?: () => boolean;
@@ -118,20 +139,107 @@ export type DeviceProbeOutcome =
   | "error"
   | "timeout";
 
-export async function getDeviceStatusProbed(): Promise<{
+export async function getDeviceStatusProbed(onStage?: StageSink): Promise<{
   value: DeviceStatus | null;
   outcome: DeviceProbeOutcome;
 }> {
-  const plugin = await guard();
+  onStage?.("start");
+  const plugin = await guard(onStage);
   if (!plugin) return { value: null, outcome: "unavailable" };
   try {
+    onStage?.("call");
     const value = await plugin.getStatus();
-    return value
-      ? { value, outcome: "ok" }
-      : { value: null, outcome: "null" };
+    onStage?.("done");
+    if (!value) return { value: null, outcome: "null" };
+    // Every successful read refreshes the foreground cache, wherever it
+    // came from (heartbeat, wizard, resume). See the cache block below:
+    // device truth changes slowly, so the last good read is a far better
+    // answer than the NULL a timed-out background probe produces.
+    writeDeviceStatusCache(value);
+    return { value, outcome: "ok" };
   } catch {
     return { value: null, outcome: "error" };
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Foreground cache
+ *
+ * The live probe reads device truth through the JS bridge at the exact
+ * moment the JS bridge is least able to answer: the heartbeat fires
+ * every ~5 min while tracking, which in practice means while the app is
+ * backgrounded. Whatever starves that round-trip, the design is wrong
+ * in the same way regardless.
+ *
+ * What is being read barely moves: a location authorization level, a
+ * battery-optimization exemption, Background App Refresh. Those change
+ * when a human changes them, not minute to minute. So the last value
+ * read while the app was genuinely foregrounded is nearly as good as a
+ * live one and infinitely better than NULL.
+ *
+ * The cache is a FALLBACK, never a replacement: the heartbeat still
+ * probes live first and only falls back when the probe fails, and it
+ * always transmits the capture age so a consumer can tell "battery
+ * optimization was off 40 seconds ago" from "nine hours ago".
+ * ------------------------------------------------------------------ */
+
+const LS_DEVICE_STATUS = "taxottic.mileage.deviceStatus";
+
+export type CachedDeviceStatus = {
+  value: DeviceStatus;
+  /** ms epoch of the read that produced `value`. */
+  capturedAtMs: number;
+  /** ms since that read, computed at read time. */
+  ageMs: number;
+};
+
+function writeDeviceStatusCache(value: DeviceStatus): void {
+  try {
+    window.localStorage.setItem(
+      LS_DEVICE_STATUS,
+      JSON.stringify({ value, capturedAtMs: Date.now() }),
+    );
+  } catch {
+    /* private mode / SSR: the cache is best-effort by design */
+  }
+}
+
+/**
+ * Last successful device-truth read, with its age. localStorage rather
+ * than a module variable on purpose: a WebView revived in the
+ * background after a process kill starts with an empty JS heap, and
+ * that is precisely the situation where a live probe is least likely to
+ * answer, so an in-memory cache would be empty exactly when it is
+ * needed.
+ */
+export function readDeviceStatusCache(): CachedDeviceStatus | null {
+  try {
+    const raw = window.localStorage.getItem(LS_DEVICE_STATUS);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      value?: DeviceStatus;
+      capturedAtMs?: number;
+    };
+    if (!parsed?.value || typeof parsed.capturedAtMs !== "number") return null;
+    return {
+      value: parsed.value,
+      capturedAtMs: parsed.capturedAtMs,
+      ageMs: Math.max(0, Date.now() - parsed.capturedAtMs),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refresh the cache from a live read. Call this only at moments the app
+ * is genuinely foregrounded (app start, native appStateChange isActive),
+ * which is when the bridge demonstrably works. Returns the outcome so a
+ * caller can log it; the value lands in the cache as a side effect of
+ * getDeviceStatusProbed above.
+ */
+export async function refreshDeviceStatusCache(): Promise<DeviceProbeOutcome> {
+  return (await getDeviceStatusProbed()).outcome;
 }
 
 export async function requestAlwaysUpgrade(): Promise<void> {
@@ -389,15 +497,18 @@ export async function getOsExitInfo(): Promise<OsExitInfo | null> {
   return (await getOsExitInfoProbed()).value;
 }
 
-export async function getOsExitInfoProbed(): Promise<{
+export async function getOsExitInfoProbed(onStage?: StageSink): Promise<{
   value: OsExitInfo | null;
   outcome: DeviceProbeOutcome;
 }> {
-  const plugin = await guard();
+  onStage?.("start");
+  const plugin = await guard(onStage);
   if (!plugin) return { value: null, outcome: "unavailable" };
   let raw: Record<string, unknown>;
   try {
+    onStage?.("call");
     raw = await plugin.getExitInfo();
+    onStage?.("done");
   } catch {
     return { value: null, outcome: "error" };
   }

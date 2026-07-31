@@ -44,6 +44,24 @@ const PROBE_VALUES = new Set([
   "timeout",
 ]);
 
+/**
+ * How far a probe got before it stopped making progress
+ * (lib/mileage/device-status.ts):
+ *   start   nothing awaited yet
+ *   bridge  inside await import("@capacitor/core")
+ *   call    the native method was invoked and had not resolved
+ *   done    the native method resolved
+ * A timeout at "bridge" is a JS module-loading problem; a timeout at
+ * "call" is the bridge round-trip or the native side. Different bugs,
+ * different fixes, and the previous probe could not tell them apart.
+ */
+const STAGE_VALUES = new Set(["start", "bridge", "call", "done"]);
+
+/** Where the device-truth fields in this row came from: this
+ *  heartbeat's live probe, the last successful foreground read, or
+ *  nothing. Always read alongside device_status_age_s. */
+const SOURCE_VALUES = new Set(["live", "cache", "none"]);
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -83,6 +101,13 @@ export async function POST(req: NextRequest) {
     const v = str(k, 12);
     return v && PROBE_VALUES.has(v) ? v : "absent";
   };
+  /** Enum-or-null: an app build older than the field sends nothing, and
+   *  NULL is the honest record of that. Unlike the probe outcome there
+   *  is no useful "absent" bucket here. */
+  const oneOf = (k: string, allowed: Set<string>) => {
+    const v = str(k, 12);
+    return v && allowed.has(v) ? v : null;
+  };
 
   const reportedAt = new Date().toISOString();
   const payload = {
@@ -118,6 +143,46 @@ export async function POST(req: NextRequest) {
     // location_authorization cannot be told apart from a dead bridge.
     device_probe: probe("deviceProbe"),
     exit_probe: probe("exitProbe"),
+    // Probe CONTEXT. The first probed heartbeat from production came
+    // back device_probe = 'timeout', which rules out registration, a
+    // missing binary and an empty OS answer, but does not say why the
+    // call never returned. These five columns are what make that
+    // readable from the data instead of argued from plausibility.
+    //
+    // Reading them together:
+    //   device_probe='timeout' AND device_probe_ms ~= 3000 AND
+    //   timer_lag_ms small        our timers ran on schedule, so the JS
+    //                             thread was NOT throttled and the
+    //                             native call genuinely did not answer.
+    //   device_probe='timeout' AND device_probe_ms >> 3000 AND
+    //   timer_lag_ms large        our timers were starved: the time box
+    //                             itself fired late. Background
+    //                             throttling.
+    //   device_probe_stage='bridge'
+    //                             it never reached the native call at
+    //                             all; the dynamic import hung.
+    //   probe_foreground=false vs true
+    //                             does success track foreground? If
+    //                             timeouts also occur with
+    //                             probe_foreground=true, foregrounding
+    //                             is not the variable.
+    device_probe_ms: num("deviceProbeMs"),
+    device_probe_stage: oneOf("deviceProbeStage", STAGE_VALUES),
+    exit_probe_ms: num("exitProbeMs"),
+    exit_probe_stage: oneOf("exitProbeStage", STAGE_VALUES),
+    // OS app-state truth (@capacitor/app appStateChange), not
+    // document.visibilityState. Null = the device has not told us yet.
+    probe_foreground:
+      typeof body.probeForeground === "boolean" ? body.probeForeground : null,
+    // visibilityState, recorded as the weaker cross-check only.
+    probe_visibility: str("probeVisibility", 12),
+    timer_lag_ms: num("timerLagMs"),
+    // Provenance of the five device-truth columns above.
+    // device_status_age_s = 0 means this heartbeat's live probe
+    // answered; a larger number is the age of the last successful
+    // foreground read. Never read the truth columns without it.
+    device_status_source: oneOf("deviceStatusSource", SOURCE_VALUES),
+    device_status_age_s: num("deviceStatusAgeS"),
     // Learned-place geofence mesh (Android). See
     // supabase/migrations/20260731000001_mileage_learned_places.sql.
     // geofence_capture = 'blind_no_fix' is the one that matters: a
