@@ -19,6 +19,17 @@ export const maxDuration = 300;
  *     dead weight that also keeps their (driver, company) pair in the
  *     finalize cron's pending scan forever. Marked consumed (no trip)
  *     rather than deleted, so a 30-day paper trail survives the sweep.
+ *  3. Delete device heartbeat history (mileage_device_heartbeats) older
+ *     than 30 days. History exists to diagnose a blackout after the
+ *     fact; a blackout older than a month is a post-mortem nobody is
+ *     running, and the volume is small enough that a longer window buys
+ *     nothing (~12 rows/hour per actively-tracking driver, so a driver
+ *     tracking 10 hours a day is roughly 3,600 rows a month). 30 days
+ *     also matches the raw-point retention above, so the heartbeat that
+ *     explains a gap and the GPS points around it expire together
+ *     instead of leaving history pointing at points that are gone.
+ *     mileage_device_status (latest state) is never purged: it is one
+ *     row per driver and the finalize cron reads it.
  *
  * Batched deletes (id IN subquery is unsupported by PostgREST; we page
  * on captured_at windows) so one giant delete can't hold locks.
@@ -35,6 +46,7 @@ export async function GET(req: NextRequest) {
   const admin = createServiceClient();
   const consumedCutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const strandedCutoff = new Date(Date.now() - 45 * 86_400_000).toISOString();
+  const heartbeatCutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
   // 1. Purge old consumed rows.
   const { error: delErr, count: deleted } = await admin
@@ -56,12 +68,24 @@ export async function GET(req: NextRequest) {
     console.error("[mileage-retention] sweep failed", sweepErr.message);
   }
 
+  // 3. Purge old device heartbeat history.
+  const { error: hbErr, count: heartbeatsDeleted } = await admin
+    .from("mileage_device_heartbeats")
+    .delete({ count: "exact" })
+    .lt("reported_at", heartbeatCutoff);
+  if (hbErr) {
+    console.error("[mileage-retention] heartbeat purge failed", hbErr.message);
+  }
+
   console.log(
-    `[mileage-retention] deleted=${deleted ?? 0} swept=${swept ?? 0}`,
+    `[mileage-retention] deleted=${deleted ?? 0} swept=${swept ?? 0} heartbeats=${
+      heartbeatsDeleted ?? 0
+    }`,
   );
   return NextResponse.json({
     ok: true,
     deleted: deleted ?? 0,
     swept: swept ?? 0,
+    heartbeatsDeleted: heartbeatsDeleted ?? 0,
   });
 }

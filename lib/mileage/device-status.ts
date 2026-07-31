@@ -92,12 +92,45 @@ async function guard(): Promise<DeviceStatusPlugin | null> {
 }
 
 export async function getDeviceStatus(): Promise<DeviceStatus | null> {
+  return (await getDeviceStatusProbed()).value;
+}
+
+/**
+ * Why a device-truth read produced what it produced.
+ *
+ *  ok          the plugin answered with data
+ *  null        the plugin answered, but had nothing to report
+ *  unavailable no bridge to ask (web, or registerPlugin itself failed)
+ *  error       the bridge exists but the call rejected, which is what a
+ *              plugin missing from the binary looks like
+ *  timeout     the call never came back (added by the caller)
+ *
+ * Every plugin-sourced column has been NULL in production on 100% of
+ * devices across both platforms, and the plain getters cannot say which
+ * of these it was because they all collapse to null. The heartbeat
+ * reports the outcome alongside the value so the next blackout does not
+ * have to re-litigate that question.
+ */
+export type DeviceProbeOutcome =
+  | "ok"
+  | "null"
+  | "unavailable"
+  | "error"
+  | "timeout";
+
+export async function getDeviceStatusProbed(): Promise<{
+  value: DeviceStatus | null;
+  outcome: DeviceProbeOutcome;
+}> {
   const plugin = await guard();
-  if (!plugin) return null;
+  if (!plugin) return { value: null, outcome: "unavailable" };
   try {
-    return await plugin.getStatus();
+    const value = await plugin.getStatus();
+    return value
+      ? { value, outcome: "ok" }
+      : { value: null, outcome: "null" };
   } catch {
-    return null;
+    return { value: null, outcome: "error" };
   }
 }
 
@@ -353,21 +386,34 @@ export type OsExitInfo = {
  * has nothing to report.
  */
 export async function getOsExitInfo(): Promise<OsExitInfo | null> {
+  return (await getOsExitInfoProbed()).value;
+}
+
+export async function getOsExitInfoProbed(): Promise<{
+  value: OsExitInfo | null;
+  outcome: DeviceProbeOutcome;
+}> {
   const plugin = await guard();
-  if (!plugin) return null;
+  if (!plugin) return { value: null, outcome: "unavailable" };
   let raw: Record<string, unknown>;
   try {
     raw = await plugin.getExitInfo();
   } catch {
-    return null;
+    return { value: null, outcome: "error" };
   }
-  if (!raw || raw.available !== true) return null;
+  // available:false is a real answer: API < 30, or the OS simply has no
+  // exit record for us yet. That is NOT the same as an unreachable
+  // bridge, and the outcome keeps them apart.
+  if (!raw || raw.available !== true) return { value: null, outcome: "null" };
 
   if (raw.platform === "android") {
     return {
-      reason: String(raw.reasonName ?? "unknown"),
-      atMs: typeof raw.timestamp === "number" ? raw.timestamp : null,
-      detail: raw,
+      value: {
+        reason: String(raw.reasonName ?? "unknown"),
+        atMs: typeof raw.timestamp === "number" ? raw.timestamp : null,
+        detail: raw,
+      },
+      outcome: "ok",
     };
   }
   // iOS: pick the most diagnostic non-normal counter that is non-zero.
@@ -386,10 +432,16 @@ export async function getOsExitInfo(): Promise<OsExitInfo | null> {
   ];
   for (const [key, slug] of ranked) {
     if (typeof raw[key] === "number" && (raw[key] as number) > 0) {
-      return { reason: slug, atMs: null, detail: raw };
+      return {
+        value: { reason: slug, atMs: null, detail: raw },
+        outcome: "ok",
+      };
     }
   }
-  return { reason: "ios_normal", atMs: null, detail: raw };
+  return {
+    value: { reason: "ios_normal", atMs: null, detail: raw },
+    outcome: "ok",
+  };
 }
 
 /** Record what we were doing, so the NEXT exit record explains itself.
