@@ -222,7 +222,7 @@ export function ScheduleForm({ initial, action }: Props) {
           />
           <div>
             <div className="display text-base text-forest-900">
-              Eco mode 🌱
+              Eco mode
             </div>
             <p className="text-xs text-ink-soft mt-1 leading-relaxed">
               Sample location less often (100 m vs 25 m) and reuse

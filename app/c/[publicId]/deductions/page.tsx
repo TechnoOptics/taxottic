@@ -270,7 +270,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
           >
             <input type="hidden" name="publicId" value={publicId} />
             <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
-              Log a gift · earn the Philanthropist medal 🤍
+              Log a gift · earn the Philanthropist medal
             </div>
             {hasGiven ? (
               <p className="text-sm text-forest-900">

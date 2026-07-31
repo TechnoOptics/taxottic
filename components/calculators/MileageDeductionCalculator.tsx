@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CarIcon } from "@/components/ui/Icons";
 import { useMemo, useState } from "react";
 import { formatCents } from "@/lib/tax/forecast";
 import { getTaxYearConstants } from "@/lib/tax/constants";
@@ -174,9 +175,7 @@ export function MileageDeductionCalculator({
         ) : (
           <div className="card p-6 sm:p-7 grid place-items-center text-center min-h-[240px]">
             <div>
-              <div className="text-4xl" aria-hidden="true">
-                🚗
-              </div>
+              <CarIcon className="size-9 mx-auto text-gold-700" />
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your business miles to see your deduction and roughly what
                 it saves you, instantly.

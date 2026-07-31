@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { PhoneIcon } from "@/components/ui/Icons";
 
 /**
  * True only inside the Capacitor native app (iOS / Android). Returns
@@ -54,9 +55,7 @@ export function MobileOnly({
   if (isNative) return <>{children}</>;
   return (
     <div className="card p-4 flex items-start gap-3">
-      <div aria-hidden="true" className="text-2xl leading-none mt-0.5">
-        📱
-      </div>
+      <PhoneIcon className="size-6 mt-0.5 shrink-0 text-gold-700" />
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
           In the mobile app

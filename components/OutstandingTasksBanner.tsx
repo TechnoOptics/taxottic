@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BellIcon } from "@/components/ui/Icons";
 
 type Props = {
   count: number;
@@ -38,7 +39,7 @@ export function OutstandingTasksBanner({ count, firstHref }: Props) {
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-gold-300/60 bg-gold-50/70 px-4 py-2.5 text-xs text-forest-900">
-      <span aria-hidden="true">🔔</span>
+      <BellIcon className="size-4 shrink-0" />
       <span className="min-w-0 flex-1">
         {count} item{count === 1 ? "" : "s"} need{count === 1 ? "s" : ""} a
         business-or-personal call before they count toward your deduction.

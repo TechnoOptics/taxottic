@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { reverseGeocode, type PlaceLabel } from "@/lib/maps/reverseGeocode";
+import { PinIcon } from "@/components/ui/Icons";
 
 /**
  * Shows the start → end place of a trip ("Shakopee, MN 55379 → Mounds
@@ -73,9 +74,7 @@ export function TripEndpoints({
       className={"text-xs text-forest-800 leading-snug " + (className ?? "")}
       title={[start?.full, end?.full].filter(Boolean).join("  →  ")}
     >
-      <span aria-hidden="true" className="text-ink-muted">
-        📍{" "}
-      </span>
+      <PinIcon className="size-3.5 mr-1 inline-block align-[-2px] text-ink-muted" />
       <span className="font-medium">{startText ?? "Unknown start"}</span>
       <span className="text-ink-muted"> → </span>
       <span className="font-medium">{endText ?? "Unknown end"}</span>

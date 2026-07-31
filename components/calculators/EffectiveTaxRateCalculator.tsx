@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChartIcon } from "@/components/ui/Icons";
 import { useMemo, useState } from "react";
 import { forecast, formatCents, type ForecastInput } from "@/lib/tax/forecast";
 import type { FilingStatus } from "@/lib/tax/constants-2025";
@@ -249,9 +250,7 @@ export function EffectiveTaxRateCalculator({
         ) : (
           <div className="card p-6 sm:p-7 grid place-items-center text-center min-h-[240px]">
             <div>
-              <div className="text-4xl" aria-hidden="true">
-                📊
-              </div>
+              <ChartIcon className="size-9 mx-auto text-gold-700" />
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your income to see your real effective tax rate, your
                 marginal bracket, and your after-tax take-home.

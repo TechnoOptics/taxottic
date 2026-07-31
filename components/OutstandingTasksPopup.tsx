@@ -2,17 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import type { OutstandingItem } from "@/lib/tasks/outstanding";
+import { BankIcon, CarIcon, ReceiptIcon } from "@/components/ui/Icons";
 
 type Props = {
   count: number;
   items: OutstandingItem[];
 };
 
-const KIND_ICON: Record<OutstandingItem["kind"], string> = {
-  trip: "🚗",
-  csv_transaction: "🧾",
-  bank_transaction: "🏦",
+// Row glyphs. Outline SVGs on `currentColor`, so they take the row's own
+// text colour on both the light popup and the dark authenticated surface.
+// Shared with the header bell so an item looks the same in either place.
+export const KIND_ICON: Record<OutstandingItem["kind"], ReactNode> = {
+  trip: <CarIcon className="size-4" />,
+  csv_transaction: <ReceiptIcon className="size-4" />,
+  bank_transaction: <BankIcon className="size-4" />,
 };
 
 // One popup per browser SESSION (not per page nav), sessionStorage
@@ -203,10 +208,7 @@ export function OutstandingTasksPopup({ count, items }: Props) {
                   onClick={() => clickThroughItem(key)}
                   className="flex items-start gap-2.5 rounded-lg pl-3 pr-9 py-2 hover:bg-cream transition-colors"
                 >
-                  <span
-                    aria-hidden="true"
-                    className="text-base leading-none mt-0.5"
-                  >
+                  <span className="mt-0.5 text-ink-soft shrink-0">
                     {KIND_ICON[it.kind]}
                   </span>
                   <span className="min-w-0 flex-1">
