@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
-import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { getCompanyFeatureGates } from "@/lib/plans/usage";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -11,6 +10,7 @@ import {
   createOrOpenDm,
   deleteMessage,
   leaveConversation,
+  removeGroupMember,
   sendMessage,
 } from "../actions";
 
@@ -200,10 +200,6 @@ export default async function ConversationPage({
         </h1>
 
         <div className="mt-5">
-          <CompanyNav publicId={publicId} active="chat" />
-        </div>
-
-        <div className="mt-5">
           <ChatShell
             companyId={company.id}
             companyPublicId={publicId}
@@ -225,7 +221,12 @@ export default async function ConversationPage({
             createGroupAction={createGroup}
             createDmAction={createOrOpenDm}
             addGroupMemberAction={addGroupMember}
+            removeGroupMemberAction={removeGroupMember}
             leaveAction={leaveConversation}
+            canManageMembers={
+              conversation.kind === "group" &&
+              (conversation.created_by === user.id || isManager)
+            }
           />
         </div>
       </section>

@@ -27,11 +27,16 @@ async function assertConversationAccess(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
   userId: string,
   conversationId: string,
-): Promise<{ companyId: string; companyPublicId: string; kind: string }> {
+): Promise<{
+  companyId: string;
+  companyPublicId: string;
+  kind: string;
+  createdBy: string | null;
+}> {
   const { data: conv } = await admin
     .from("chat_conversations")
     .select(
-      "id, company_id, kind, companies:companies!inner(public_id)",
+      "id, company_id, kind, created_by, companies:companies!inner(public_id)",
     )
     .eq("id", conversationId)
     .maybeSingle();
@@ -57,6 +62,7 @@ async function assertConversationAccess(
     companyId: conv.company_id,
     companyPublicId: company.public_id,
     kind: conv.kind,
+    createdBy: conv.created_by ?? null,
   };
 }
 
@@ -245,6 +251,61 @@ export async function addGroupMember(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath(`/c/${ctx.companyPublicId}/chat`);
+  // The inbox shows the last message of every conversation, so it
+  // needs revalidating alongside the conversation itself.
+  revalidatePath(`/c/${ctx.companyPublicId}/chat`);
+  revalidatePath(`/c/${ctx.companyPublicId}/chat/${conversationId}`);
+}
+
+/**
+ * Remove somebody else from a group. Only the group's creator or a
+ * company manager may do this, mirroring the
+ * "conv-members: leave or be removed" RLS policy exactly, so a crafted
+ * POST gets the same answer the database would give.
+ *
+ * Channels have no membership rows to remove, and neither half of a DM
+ * may evict the other.
+ */
+export async function removeGroupMember(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const conversationId = String(formData.get("conversation_id") ?? "");
+  const targetUserId = String(formData.get("user_id") ?? "");
+  if (!conversationId || !targetUserId) throw new Error("Missing input");
+
+  const ctx = await assertConversationAccess(admin, user.id, conversationId);
+  if (ctx.kind !== "group") {
+    throw new Error("Only private groups have a membership you can edit.");
+  }
+  if (targetUserId === user.id) {
+    throw new Error("Use Leave to remove yourself.");
+  }
+
+  const { data: membership } = await admin
+    .from("company_members")
+    .select("role")
+    .eq("company_id", ctx.companyId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const isCreator = ctx.createdBy === user.id;
+  const isManager = membership?.role === "manager";
+  if (!isCreator && !isManager) {
+    throw new Error(
+      "Only the person who made this group, or a company manager, can remove someone.",
+    );
+  }
+
+  const { error } = await admin
+    .from("chat_conversation_members")
+    .delete()
+    .eq("conversation_id", conversationId)
+    .eq("user_id", targetUserId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/c/${ctx.companyPublicId}/chat`);
+  // The inbox shows the last message of every conversation, so it
+  // needs revalidating alongside the conversation itself.
+  revalidatePath(`/c/${ctx.companyPublicId}/chat`);
   revalidatePath(`/c/${ctx.companyPublicId}/chat/${conversationId}`);
 }
 
@@ -338,7 +399,7 @@ export async function sendMessage(formData: FormData) {
   if (attachments.length > 0) {
     // Path confinement (audit #39): storage_path arrives from the
     // client and admin-signed URLs are minted for whatever lands in
-    // chat_attachments — so an unvalidated path let a member attach
+    // chat_attachments, so an unvalidated path let a member attach
     // ANY object in the bucket (another conversation's, another
     // company's) and receive a working signed URL for it. Only paths
     // inside THIS conversation's folder are acceptable; anything else
@@ -365,6 +426,9 @@ export async function sendMessage(formData: FormData) {
     if (attError) throw new Error(attError.message);
   }
 
+  // The inbox shows the last message of every conversation, so it
+  // needs revalidating alongside the conversation itself.
+  revalidatePath(`/c/${ctx.companyPublicId}/chat`);
   revalidatePath(`/c/${ctx.companyPublicId}/chat/${conversationId}`);
 }
 
@@ -415,5 +479,8 @@ export async function deleteMessage(formData: FormData) {
       .remove(atts.map((a) => a.storage_path));
   }
 
+  // The inbox shows the last message of every conversation, so it
+  // needs revalidating alongside the conversation itself.
+  revalidatePath(`/c/${ctx.companyPublicId}/chat`);
   revalidatePath(`/c/${ctx.companyPublicId}/chat/${conversationId}`);
 }

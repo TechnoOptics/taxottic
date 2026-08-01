@@ -32,13 +32,20 @@ type Props = {
   createGroupAction: (formData: FormData) => Promise<void>;
   createDmAction: (formData: FormData) => Promise<void>;
   addGroupMemberAction: (formData: FormData) => Promise<void>;
+  removeGroupMemberAction: (formData: FormData) => Promise<void>;
   leaveAction: (formData: FormData) => Promise<void>;
+  /** Group creator, or a company manager: may remove other members. */
+  canManageMembers: boolean;
 };
 
 /**
  * Two-column chat shell: conversation sidebar (channels / groups /
- * DMs) on the left, the active conversation on the right. Stacks on
- * narrow screens.
+ * DMs) on the left, the active conversation on the right.
+ *
+ * The sidebar is desktop-only. On a phone it used to stack above the
+ * conversation as a tall card, pushing the messages off screen and
+ * costing most of a 344px viewport; the inbox at /chat does that job
+ * now, reached from the header's back link.
  */
 export function ChatShell({
   companyId,
@@ -55,20 +62,24 @@ export function ChatShell({
   createGroupAction,
   createDmAction,
   addGroupMemberAction,
+  removeGroupMemberAction,
   leaveAction,
+  canManageMembers,
 }: Props) {
   return (
     <div className="grid gap-4 md:grid-cols-[260px_1fr]">
-      <ConversationSidebar
-        companyId={companyId}
-        companyPublicId={companyPublicId}
-        currentUserId={currentUserId}
-        conversations={conversations}
-        companyMembers={companyMembers}
-        activeConversationId={conversation.id}
-        createGroupAction={createGroupAction}
-        createDmAction={createDmAction}
-      />
+      <div className="hidden md:block">
+        <ConversationSidebar
+          companyId={companyId}
+          companyPublicId={companyPublicId}
+          currentUserId={currentUserId}
+          conversations={conversations}
+          companyMembers={companyMembers}
+          activeConversationId={conversation.id}
+          createGroupAction={createGroupAction}
+          createDmAction={createDmAction}
+        />
+      </div>
       <ConversationView
         companyId={companyId}
         companyPublicId={companyPublicId}
@@ -81,7 +92,9 @@ export function ChatShell({
         sendAction={sendAction}
         deleteAction={deleteAction}
         addGroupMemberAction={addGroupMemberAction}
+        removeGroupMemberAction={removeGroupMemberAction}
         leaveAction={leaveAction}
+        canManageMembers={canManageMembers}
       />
     </div>
   );

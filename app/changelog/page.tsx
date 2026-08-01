@@ -41,6 +41,12 @@ type Entry = {
 
 const ENTRIES: Entry[] = [
   {
+    date: "2026-08-01",
+    title: "Chat opens on your conversations, not one company room",
+    body: "Chat now lands on a list of your conversations, with 'New message' and 'New group' as the first thing you see. Direct messages and private groups already existed but were hidden behind two small links, so chat felt like a single company-wide room. General is still there with all its history, now as one conversation among the rest. A direct message or private group is readable only by the people in it, enforced in the database, and losing your seat on a company now ends your access to its conversations immediately.",
+    tags: ["shipped", "security"],
+  },
+  {
     date: "2026-05-12",
     title: "May 2026 audit fixes",
     body: "Public pricing page, /help, /changelog, /example, DMCA + accessibility policies, OpenGraph image, canonical links, WCAG-compliant viewport (zoom no longer capped), and stricter CORS on app responses. Plus a short 'Single sign-on across Techno Optics products' section in /legal/security explaining why the same Google account signs into multiple products of ours.",
