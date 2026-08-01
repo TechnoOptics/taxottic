@@ -844,7 +844,21 @@
 // its anchor, so Sign out sat below the fold with no way to scroll to
 // it; Switch accounts and Sign out are now pinned outside the scroll
 // region and the long segments collapse.
-const CACHE_VERSION = "v144";
+// v144: a waiting service worker is now adopted automatically on
+// cold start, on resume, and whenever the page is hidden, instead of
+// only on a tap of the "New version" toast. The geofence import fix sat
+// live in production for hours while the affected phone kept running
+// the broken bundle, because nobody knew there was a toast to tap. The
+// toast still applies mid-session, when swapping the bundle under an
+// open form would lose typed input.
+// v145: legal pages corrected against the code. The privacy policy
+// said location is never shared, which was false (coordinates go to
+// Google Static Maps and Geocoding, and business drives go to the
+// employer), stated no location retention window, and omitted document
+// OCR, device telemetry, chat, push, TINs and learned home/work places.
+// A new "Who can see your drives" page covers employer visibility, and
+// the tracking consent screen no longer claims data is never shared.
+const CACHE_VERSION = "v145";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

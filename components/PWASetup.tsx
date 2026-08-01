@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ensureWebPushSubscribed } from "@/lib/push/web";
 
 type DeferredPrompt = Event & {
@@ -41,6 +41,12 @@ export function PWASetup() {
   // install UI when native (the SW "Refresh" update toast still
   // applies because the shell loads the remote site).
   const [isNative, setIsNative] = useState(false);
+  // One-shot latch so a single page life can only ever adopt one waiting
+  // worker. Adopting posts SKIP_WAITING, which fires controllerchange,
+  // which reloads. Without the latch a repeated adopt could reload-loop.
+  // A reload starts a fresh page life anyway, so this never blocks a real
+  // second update.
+  const adopted = useRef(false);
   useEffect(() => {
     setMounted(true);
     try {
@@ -62,8 +68,30 @@ export function PWASetup() {
       try {
         reg = await navigator.serviceWorker.register("/sw.js");
 
-        // If a worker is already waiting when we register, surface it.
-        if (reg.waiting) setWaitingWorker(reg.waiting);
+        // Adopt a waiting worker instead of waiting for a tap.
+        //
+        // Why this changed: the old flow ONLY ever adopted on a tap of the
+        // "New version" toast. For a background drive tracker that is the
+        // wrong default, and it bit us for real. The fix that finally let
+        // the geofence mesh arm sat live in production for hours while the
+        // affected phone kept running the broken bundle, because nobody
+        // knew there was a toast to tap. A fix that cannot reach the device
+        // is not a fix.
+        //
+        // Adopting is safe at exactly the moments nothing is in progress:
+        // a cold start (this effect runs once per page life), a resume from
+        // background, and any time the page is hidden. Mid-session, with
+        // the user actually looking at a form, the toast still applies:
+        // swapping the bundle under someone's hands is how you lose typed
+        // input, which is presumably why the original author chose to wait.
+        const adopt = (w: ServiceWorker | null | undefined) => {
+          if (!w || adopted.current) return;
+          adopted.current = true;
+          w.postMessage({ type: "SKIP_WAITING" });
+        };
+
+        // Cold start: a worker left waiting by a previous session.
+        if (reg.waiting) adopt(reg.waiting);
 
         // When an update is found, watch its install state.
         reg.addEventListener("updatefound", () => {
@@ -74,12 +102,26 @@ export function PWASetup() {
               newWorker.state === "installed" &&
               navigator.serviceWorker.controller
             ) {
-              // A new version is ready, but the current page is still
-              // controlled by the old one. Wait for user opt-in.
-              setWaitingWorker(newWorker);
+              // Hidden means backgrounded or another tab is in front, so a
+              // reload costs the user nothing and they never see it.
+              if (document.visibilityState === "hidden") adopt(newWorker);
+              // Visible and mid-session: ask, do not seize.
+              else setWaitingWorker(newWorker);
             }
           });
         });
+
+        // Resume: check for a new version and take it. Covers the native
+        // shell returning from background, which is the case that matters
+        // here since the app is a WebView on a remote URL.
+        const onResume = () => {
+          if (document.visibilityState !== "visible") return;
+          reg
+            ?.update()
+            .then(() => adopt(reg?.waiting))
+            .catch(() => {});
+        };
+        document.addEventListener("visibilitychange", onResume);
 
         // Once the new SW takes control (after we post SKIP_WAITING), reload
         // so the page picks up the new build.
@@ -102,6 +144,7 @@ export function PWASetup() {
         return () => {
           clearInterval(interval);
           window.removeEventListener("focus", onFocus);
+          document.removeEventListener("visibilitychange", onResume);
         };
       } catch {
         // SW failures are non-fatal.
