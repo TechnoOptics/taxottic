@@ -826,7 +826,15 @@
 // no bell entry and no popup. Markup changed on the trip list, so the
 // bump keeps v137 clients from hydrating new server HTML against cached
 // chunks.
-const CACHE_VERSION = "v139";
+// v142: chat is an inbox instead of a forced redirect into General.
+// /chat listed nothing and redirected straight into the default
+// channel, so the direct-message and group features that shipped in
+// April were unreachable: production had zero DMs ever created. The
+// page now lists conversations with New message and New group as its
+// first two controls, General survives unchanged as one row among
+// them, and an unread dot is backed by a new reads table. Markup
+// changed across the chat surface, so cached shells must not be reused.
+const CACHE_VERSION = "v142";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
