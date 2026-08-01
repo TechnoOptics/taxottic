@@ -1,6 +1,6 @@
-Drive tracking and category picker fixes.
+Automatic drive tracking and phone screen fixes.
 
-- Android: if the phone shuts the app down overnight, driving away from home now restarts recording on its own, so the first drive of the day is no longer missed.
-- The category list on synced transactions is readable again instead of showing one giant option per screen.
-- Drives appear on their own, already sorted business or personal.
-- iPhone: drives record in full detail from the moment they start.
+- Android: the automatic restart after your phone shuts the app down overnight now actually arms, so the first drive of the day is captured.
+- The category list on synced transactions keeps the app's own look, and a tap outside closes it.
+- Expanded income rows no longer run off the screen, and Edit and Remove are reachable again.
+- The menu scrolls on its own instead of moving the page behind it.
