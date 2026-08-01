@@ -70,6 +70,26 @@ export default async function FirmMileagePage({
         "id, company_id, driver_user_id, started_at, distance_miles, classification, deduction_cents, notes, mileage_points(lat, lng, captured_at)",
       )
       .in("company_id", companyIds)
+      // Business only, filtered in the QUERY, not after the fetch.
+      //
+      // This reads through the service-role client, so RLS is not a
+      // barrier here: these two lines are the only thing between an
+      // external accounting firm and an employee's private movements.
+      // mapTrips below maps over every row it is given and serialises
+      // the joined mileage_points into the client payload, so a personal
+      // trip fetched here is a personal route rendered on the firm's map.
+      //
+      // needs_confirmation is excluded for the same reason it is excluded
+      // from the in-company team view: the system sets it when it had no
+      // evidence and applied a blanket "business" guess, and writes a zero
+      // deduction because it does not trust the label. A drive we refuse
+      // to count is not one to show an outside firm.
+      //
+      // .not(..., "is", true) rather than .neq(): the column is NULL on
+      // every pre-existing row, and NULL fails .neq() under SQL's
+      // three-valued logic, which would blank the map entirely.
+      .eq("classification", "business")
+      .not("needs_confirmation", "is", true)
       .gte("started_at", sinceIso)
       .order("started_at", { ascending: false })
       .limit(1000);
