@@ -19,6 +19,7 @@
  * turns the native health state into something the driver can act on.
  */
 
+import { registerPlugin } from "@capacitor/core";
 export type GeofenceArmState =
   | "armed"
   | "disarmed_no_places"
@@ -104,7 +105,19 @@ async function guard(): Promise<GeofencePlugin | null> {
       Capacitor?: { isNativePlatform?: () => boolean };
     };
     if (w.Capacitor?.isNativePlatform?.() !== true) return null;
-    const { registerPlugin } = await import("@capacitor/core");
+    // registerPlugin is imported STATICALLY at the top of this file.
+    //
+    // This was `await import("@capacitor/core")`, and that is why the
+    // geofence mesh never armed. Measured on the owner's Galaxy Z Fold5
+    // running 1.3.5: geofence_arm_state NULL, geofence_count NULL,
+    // mileage_learned_places 0, on a device that was capturing drives
+    // normally. The identical dynamic import in device-status.ts was
+    // proven to hang, reporting device_probe_stage = "bridge" on every
+    // sampled heartbeat with the app in the foreground and timers on
+    // schedule. A chunk fetch that never resolves leaves the promise
+    // pending forever with no rejection for the catch below to see, so
+    // every caller of guard() here silently waits and the mesh is never
+    // registered.
     return registerPlugin<GeofencePlugin>("TaxotticGeofence");
   } catch {
     return null;
