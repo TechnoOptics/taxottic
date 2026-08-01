@@ -851,7 +851,14 @@
 // the broken bundle, because nobody knew there was a toast to tap. The
 // toast still applies mid-session, when swapping the bundle under an
 // open form would lose typed input.
-const CACHE_VERSION = "v144";
+// v146: frame-budget work. The header gold sweep panned
+// background-position, which cannot be composited, on a header that
+// renders on 95 authenticated pages: it alone accounted for roughly 20
+// percent of idle main-thread paint (371ms to 0ms per 2.5s). Rewritten
+// as a composited transform. Also stepped the gold-shine and reward-tile
+// animations, and stopped the profile menu and bell re-measuring their
+// anchor on every scroll event when the anchor sits in a fixed header.
+const CACHE_VERSION = "v146";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
