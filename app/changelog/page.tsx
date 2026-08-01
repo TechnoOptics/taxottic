@@ -42,6 +42,12 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: "2026-08-01",
+    title: "Clearer answers about location, and who can see your drives",
+    body: "A new policy page, Location tracking and team visibility, sets out exactly what automatic mileage tracking records, how long each part of it is kept, and what a manager at your company or an engaged accounting firm can see. Short version: only drives you mark as business become visible to your company, and personal or unclassified drives never leave your own account. The screen that asks for location permission now says the same thing before you agree to it. The privacy policy, cookie list, and subprocessor list have also been brought in line with what the app actually does, including the vendors that were live but unlisted.",
+    tags: ["shipped"],
+  },
+  {
+    date: "2026-08-01",
     title: "Chat opens on your conversations, not one company room",
     body: "Chat now lands on a list of your conversations, with 'New message' and 'New group' as the first thing you see. Direct messages and private groups already existed but were hidden behind two small links, so chat felt like a single company-wide room. General is still there with all its history, now as one conversation among the rest. A direct message or private group is readable only by the people in it, enforced in the database, and losing your seat on a company now ends your access to its conversations immediately.",
     tags: ["shipped", "security"],

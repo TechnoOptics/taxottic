@@ -1558,8 +1558,11 @@ function Footer() {
                 aria-hidden="true"
                 className="size-1.5 rounded-full bg-gold-500"
               />
+              {/* Exact attribution wording, do not reword: the string
+                  "Powered by Techno Optics LLC" is the agreed studio
+                  credit and is used verbatim in every footer. */}
               <span className="text-forest-800 font-medium">
-                Made by{" "}
+                Powered by{" "}
                 <a
                   href="https://technooptics.com"
                   target="_blank"
@@ -1629,6 +1632,12 @@ function Footer() {
             </Link>
             <Link href="/legal/terms" className="hover:text-forest-700">
               Terms
+            </Link>
+            <Link
+              href="/legal/location-monitoring"
+              className="hover:text-forest-700"
+            >
+              Location tracking
             </Link>
             <Link href="/legal/security" className="hover:text-forest-700">
               Security

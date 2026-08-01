@@ -844,7 +844,7 @@
 // its anchor, so Sign out sat below the fold with no way to scroll to
 // it; Switch accounts and Sign out are now pinned outside the scroll
 // region and the long segments collapse.
-const CACHE_VERSION = "v143";
+const CACHE_VERSION = "v144";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

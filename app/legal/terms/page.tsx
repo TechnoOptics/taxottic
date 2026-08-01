@@ -1,6 +1,52 @@
 import Link from "next/link";
 
-export const metadata = { title: "Terms - Taxottic" };
+/**
+ * UNREVIEWED DRAFT. Not legal advice, not a final legal instrument.
+ *
+ * Revised 2026-08-01 by an engineering pass that checked the billing
+ * clauses against what Stripe is actually configured to do. It has NOT
+ * been reviewed by an attorney.
+ *
+ * What changed on 2026-08-01:
+ *  1. "Free tiers exist ... Paid tiers (Pro, Firm)" described plans
+ *     that do not exist. The real ladder is free / filer / solo /
+ *     studio / scale / practice, monthly or yearly, plus one-off
+ *     credit packs (lib/plans/limits.ts:36, 273-334, 342-367).
+ *  2. The 7-day Solo trial with no card was undisclosed
+ *     (supabase/migrations/20260505000005_signup_trial.sql:82-96).
+ *  3. Cancellation happens in the Stripe-hosted billing portal, not in
+ *     our UI (app/api/stripe/portal/route.ts:36-39). There is no
+ *     refund logic in the product at all. Stated honestly.
+ *  4. Purchases are made on the web, never in the mobile app
+ *     (capacitor.config.ts:23-26, app/billing/page.tsx:59-79). Added,
+ *     because an app-store reviewer will look for it.
+ *  5. Added a mileage/employer clause pointing at the new notice.
+ *
+ * ATTORNEY: the two clauses that most need your judgment are
+ *   - "Governing law and disputes". The Massachusetts choice of law
+ *     and Suffolk County venue were already shipped and match the
+ *     entity's home state, so they were left in place rather than
+ *     replaced with a blank. But the DISPUTE MECHANISM is an open
+ *     question that was never decided by anyone qualified: courts
+ *     versus arbitration, class-action waiver, jury waiver, and the
+ *     consumer carve-outs that several states require. Treat the
+ *     current text as a placeholder pending your decision.
+ *   - "Limitation of liability". The $100-or-fees-paid cap is a
+ *     drafting convention, not a considered position, and its
+ *     enforceability against consumers varies by state.
+ *
+ * ALSO FOR THE OWNER: the app-store payment-compliance model is still
+ * undecided (docs/store-listing/CONTENT_PACK.md:85). Today there is no
+ * in-app purchase code and the native build hides purchase controls.
+ * If that changes, the "Where you can buy" clause must change with it.
+ */
+
+export const metadata = {
+  title: "Terms - Taxottic",
+  description:
+    "The agreement between you and Techno Optics LLC for using Taxottic, including what the software is not, subscription terms, and liability.",
+  alternates: { canonical: "/legal/terms" },
+};
 
 export default function TermsPage() {
   return (
@@ -114,18 +160,62 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section title="Subscriptions and payment">
+          <Section title="Subscriptions and payment" id="billing">
             <p>
-              Free tiers exist for individuals and small teams. Paid
-              tiers (Pro, Firm) are billed by Stripe on a recurring basis
-              until you cancel. You can cancel any time from
-              <em> Billing</em>; access continues until period end. We do
-              not pro-rate refunds for partial months unless required by
-              law or agreed in writing.
+              There is a free tier. Paid plans are Filer, Solo, Studio,
+              Scale, and Practice, each available monthly or yearly, with
+              yearly billed at a discount. Current prices are listed in USD
+              on the{" "}
+              <Link
+                href="/pricing"
+                className="underline hover:text-forest-900"
+              >
+                Pricing
+              </Link>{" "}
+              page. Tax may be added based on your billing address.
             </p>
             <p>
-              Prices are listed in USD on the Billing page. Tax may be
-              added based on your billing address.
+              <strong>Free trial.</strong> New accounts start on a 7-day
+              Solo trial with an initial credit grant, and we do not ask
+              for a card to begin it. When the 7 days end, the account
+              simply reverts to the free tier. Nothing is charged unless
+              you choose a paid plan.
+            </p>
+            <p>
+              <strong>Credits and top-ups.</strong> Some features consume
+              credits, which your plan grants each billing period. You can
+              buy one-off credit packs. Top-up purchases are capped per
+              billing period, and unused granted credits roll over only up
+              to a cap. Credits are not money, have no cash value, and are
+              not redeemable or refundable.
+            </p>
+            <p>
+              <strong>Renewal and cancellation.</strong> Paid plans renew
+              automatically at the end of each period until you cancel.
+              Cancellation is handled in the Stripe billing portal, which
+              you reach from <em>Billing</em>. When you cancel, your plan
+              stays active until the end of the period you already paid
+              for, and then drops to the free tier.
+            </p>
+            <p>
+              <strong>Refunds.</strong> Charges are not refundable and we
+              do not pro-rate partial periods, except where the law where
+              you live requires otherwise or where we agree in writing. If
+              you think you were billed in error, write to{" "}
+              <a
+                href="mailto:contact@taxottic.com"
+                className="underline hover:text-forest-900"
+              >
+                contact@taxottic.com
+              </a>{" "}
+              and we will look at it.
+            </p>
+            <p>
+              <strong>Where you can buy.</strong> Subscriptions and credit
+              packs are purchased on the Taxottic website and processed by
+              Stripe. The iOS and Android apps do not sell anything; they
+              link you to the web for billing. We never see or store your
+              card number.
             </p>
           </Section>
 
@@ -141,6 +231,48 @@ export default function TermsPage() {
               You confirm you have the right to share the bank data with
               Taxottic and that doing so does not violate any agreement
               you have with your bank.
+            </p>
+          </Section>
+
+          <Section title="Automatic mileage tracking and teams">
+            <p>
+              Automatic mileage tracking is optional and off until you turn
+              it on. If you turn it on, the app records your location in
+              the background to detect drives. What is recorded, how long
+              it is kept, and who can see it is described at{" "}
+              <Link
+                href="/legal/location-monitoring"
+                className="underline hover:text-forest-900"
+              >
+                Location tracking and team visibility
+              </Link>
+              .
+            </p>
+            <p>
+              <strong>
+                If you enable mileage tracking for people who work for you,
+                you are responsible for doing so lawfully.
+              </strong>{" "}
+              Employee location monitoring is regulated, and the notice and
+              consent obligations differ by jurisdiction. You confirm that
+              you have given your workers whatever notice is required where
+              they work, obtained any consent that is required, and that
+              you have a lawful basis for the monitoring. We provide the
+              product controls, the notice linked above, and a{" "}
+              <Link
+                href="/legal/dpa"
+                className="underline hover:text-forest-900"
+              >
+                Data Processing Agreement
+              </Link>
+              . We do not advise you on whether your deployment is lawful,
+              and nothing in these Terms is legal advice.
+            </p>
+            <p>
+              Mileage figures produced by the app are estimates derived
+              from GPS. You remain responsible for the mileage records you
+              rely on for a deduction and for meeting IRS substantiation
+              requirements.
             </p>
           </Section>
 

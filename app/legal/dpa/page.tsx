@@ -1,6 +1,30 @@
 import Link from "next/link";
 
-export const metadata = { title: "Data Processing Agreement - Taxottic" };
+/**
+ * UNREVIEWED DRAFT. Not legal advice, not a final legal instrument.
+ *
+ * Revised 2026-08-01. This DPA previously did not mention geolocation
+ * anywhere, even though enabling mileage tracking is the single most
+ * consequential thing a business Customer can do on Taxottic and the
+ * one most likely to attract a regulator. Added to section 2
+ * (categories) and section 4 (roles / who carries the employee
+ * monitoring obligations).
+ *
+ * ATTORNEY: this whole document is a template that has never been
+ * reviewed. The clauses most in need of your attention are section 4
+ * (the controller/processor allocation for employee location
+ * monitoring), section 7 (international transfers, which currently
+ * asserts SCC reliance without the SCCs being attached), and section 9
+ * (audit rights). Version number left at 1.0 deliberately: bump it
+ * when a reviewed version is issued.
+ */
+
+export const metadata = {
+  title: "Data Processing Agreement - Taxottic",
+  description:
+    "The standard DPA for Taxottic firm and business customers, covering processing scope, subprocessors, transfers, and employee location monitoring.",
+  alternates: { canonical: "/legal/dpa" },
+};
 
 export default function DpaPage() {
   return (
@@ -45,7 +69,26 @@ export default function DpaPage() {
               tax forecasts on Personal Data the Customer or its end
               users submit, including: name, email, tax profile,
               business profile, income / expense entries, bank
-              transaction metadata, and conversations with Bella.
+              transaction metadata, uploaded and scanned documents,
+              taxpayer identification numbers, in-app messages, device
+              and diagnostic data, and conversations with Bella.
+            </p>
+            <p>
+              <strong>Geolocation data.</strong> Where the Customer
+              enables automatic mileage tracking, processing also
+              includes precise location data captured from a data
+              subject&apos;s mobile device, including background capture,
+              and the trips derived from it. What is captured, the
+              retention periods, and the visibility given to the
+              Customer&apos;s managers and to any engaged firm are set out
+              at{" "}
+              <Link
+                href="/legal/location-monitoring"
+                className="underline hover:text-forest-900"
+              >
+                /legal/location-monitoring
+              </Link>
+              , which forms part of this Agreement.
             </p>
           </Section>
 
@@ -62,6 +105,20 @@ export default function DpaPage() {
               Processor. Where required by law, both parties shall comply
               with their respective obligations under GDPR (EU 2016/679),
               UK GDPR, and CCPA / CPRA.
+            </p>
+            <p>
+              <strong>Employee monitoring.</strong> If the Customer
+              enables automatic mileage tracking for its workers, the
+              Customer determines the purposes and means of that
+              monitoring and is the Controller of the resulting location
+              data. The Customer is responsible for providing whatever
+              notice is required in each jurisdiction where its workers
+              are located, for obtaining any consent or authorisation
+              required there, for establishing a lawful basis, and for
+              carrying out any data protection impact assessment that
+              applies. Taxottic supplies the product controls and the
+              notice referenced in section 2 and does not advise the
+              Customer on the lawfulness of its monitoring.
             </p>
           </Section>
 

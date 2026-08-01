@@ -385,7 +385,7 @@ export default function PricingPage() {
               tax attorney.
             </p>
             <p className="mt-3 leading-relaxed">
-              Made by{" "}
+              Powered by{" "}
               <a
                 href="https://technooptics.com"
                 target="_blank"
@@ -406,6 +406,12 @@ export default function PricingPage() {
             </Link>
             <Link href="/legal/terms" className="hover:text-forest-900">
               Terms
+            </Link>
+            <Link
+              href="/legal/location-monitoring"
+              className="hover:text-forest-900"
+            >
+              Location tracking
             </Link>
             <Link href="/legal/security" className="hover:text-forest-900">
               Security
