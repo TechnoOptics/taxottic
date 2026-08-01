@@ -40,10 +40,63 @@
             bitmap's intrinsic height, which is the single mechanism behind
             both the giant rows and the repeated logo. Neutralising
             android:background here is therefore the load-bearing line, not
-            windowBackground. -->
+            windowBackground.
+
+         AND A THIRD THING WAS STILL MISSED, shipped in 1.3.5: the option
+         rows came back to a normal height but the picker still painted
+         solid brand navy. Neutralising android:background HERE only
+         covers views built from the dialog's own themed context. The
+         Chromium select popup builds its ListView from the ACTIVITY
+         context, so that view resolves android:background from the
+         ACTIVITY theme and never sees this @null. Proved on an API-34
+         emulator: the picker's background sampled (18,26,42), the exact
+         pixel of @drawable/splash and not the white set below, and
+         setting a diagnostic red on AppTheme.NoActionBar (the theme
+         MainActivity switches to) turned the picker red. The real
+         severing is therefore the android:background @null on
+         AppTheme.NoActionBar; this one stays as the second layer. -->
     <style name="AppTheme.AlertDialog" parent="android:Theme.DeviceDefault.Dialog.Alert">
-        <item name="android:windowBackground">@android:color/white</item>
+        <!-- Dark on purpose. See picker_dialog_background.xml: the parent
+             is the DARK DeviceDefault variant, so its list text is
+             near-white, and the pages that open the picker are dark. The
+             old @android:color/white was white-on-white and only looked
+             survivable because the splash bitmap covered it. -->
+        <item name="android:windowBackground">@drawable/picker_dialog_background</item>
         <item name="android:background">@null</item>
+
+        <!-- Pin the text colours instead of trusting the parent. On OneUI
+             the DeviceDefault dialog follows the SYSTEM light/dark
+             setting, so a phone in light mode would resolve dark text
+             onto the dark surface above and the options would be
+             unreadable. -->
+        <item name="android:textColorPrimary">#f2f5fa</item>
+        <item name="android:textColorSecondary">#b8c2d4</item>
+        <item name="android:textColorAlertDialogListItem">#f2f5fa</item>
+        <item name="android:colorAccent">@color/colorAccent</item>
+        <item name="android:colorControlActivated">@color/colorAccent</item>
+
+        <!-- Makes "tap outside to dismiss" physically possible. The
+             framework floating-dialog default is windowMinWidthMinor
+             95%, which on a 1080px-wide screen leaves a 27px margin,
+             while Window.isOutOfBounds() only counts a touch as outside
+             once it clears the decor by getScaledWindowTouchSlop(),
+             which is 16dp, roughly 44px at that density. Every side tap
+             therefore landed INSIDE the slop and the dialog never
+             cancelled; with an 89-item list filling the height there was
+             no vertical outside either, so Back was the only way out.
+             Cancel-on-touch-outside was never disabled, it was simply
+             unreachable: lowering this floor to 72% moved the dialog to
+             [141,...][939,...] on that screen, a 141px strip either side,
+             and the same tap then dismissed it.
+
+             Width only, and a floor rather than windowFixedWidthMinor,
+             which is a private attribute the app cannot set. A fixed
+             HEIGHT would force a 3-option select to open as a giant
+             half-empty sheet. Long labels do not defeat the floor: the
+             Chromium row wraps to a second line instead of demanding a
+             wider dialog (measured with 40-character category names). -->
+        <item name="android:windowMinWidthMinor">72%</item>
+        <item name="android:windowMinWidthMajor">55%</item>
     </style>
 
     <!-- Post-splash theme Capacitor's BridgeActivity switches to.
@@ -68,6 +121,20 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowBackground">#121a2a</item>
+        <!-- Severs the splash drawable from every view in the app, and is
+             what finally stopped the native <select> picker painting
+             brand navy. MainActivity.onCreate calls
+             setTheme(AppTheme_NoActionBar), but Activity.setTheme MERGES
+             (Resources.Theme.applyStyle with force=true) onto the theme
+             already resolved from the manifest, so any attribute this
+             theme does not restate survives from
+             AppTheme.NoActionBarLaunch for the Activity's whole life.
+             android:background was one of those: @drawable/splash stayed
+             live as the default background for every view built from the
+             Activity context, including the ListView the Chromium select
+             popup constructs. @null restores the framework default (no
+             background); the window still paints #121a2a above. -->
+        <item name="android:background">@null</item>
         <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
         <item name="android:statusBarColor">#121a2a</item>
         <item name="android:navigationBarColor">#121a2a</item>
@@ -95,8 +162,10 @@
          core-splashscreen compat attrs (no android: prefix); they map
          to the platform attrs on API 31+ and are back-ported below.
 
-         Pre-12: android:background=@drawable/splash still gives the
-         branded full-window splash + dark bars, no white flash. -->
+         Pre-12: the branded full-window splash and the dark bars come
+         from the SAME two windowSplashScreen* attrs, which the androidx
+         library back-ports into an android:windowBackground. See the
+         correction on android:background below. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#121a2a</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
@@ -106,10 +175,28 @@
              resolves its dialog theme from. Leaving it out is what let the
              splash drawable below leak into the picker's option rows. -->
         <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
-        <!-- Pre-Android-12 branded splash. Keep it: on API < 31 this is
-             what avoids a white flash on launch. It is also why the
-             alertDialogTheme above is not optional, since a theme-level
-             android:background is inherited by plain views. -->
+        <!-- Pre-Android-12 branded splash.
+
+             CORRECTION, verified against core-splashscreen 1.2.0: this
+             line is NOT what avoids the white launch flash. The parent
+             Theme.SplashScreen already sets, via Theme.SplashScreen.Common
+             in the library's res/values/values.xml,
+               android:windowBackground =
+                   @drawable/compat_splash_screen_no_icon_background
+             built from windowSplashScreenBackground (#121a2a), and that
+             is the attribute the OS paints the launch window with on
+             API < 31. android:background is a VIEW attribute; it can never
+             be a window background, and no view exists yet at launch.
+
+             It is kept only because it is what the two themes below have
+             to defend against, and removing it is a separate change: as a
+             theme item it becomes the default background of every plain
+             view, and MainActivity.setTheme MERGES rather than replaces,
+             so it leaked out of launch and into the whole app. That is why
+             it and the alertDialogTheme above travel together, and why
+             AppTheme.NoActionBar now restates android:background as @null.
+             Deleting this line would end the leak at source; it is left
+             in place here so this change stays scoped to the picker. -->
         <item name="android:background">@drawable/splash</item>
         <item name="android:statusBarColor">#121a2a</item>
         <item name="android:navigationBarColor">#121a2a</item>
