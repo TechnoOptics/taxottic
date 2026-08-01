@@ -180,6 +180,7 @@ export default async function MileagePage({
     classification: "business" | "personal" | "unclassified";
     tax_year: number;
     deduction_cents: number;
+    needs_confirmation: boolean | null;
   };
   type Pt = { lat: number; lng: number; captured_at: string };
 
@@ -196,7 +197,7 @@ export default async function MileagePage({
   const pointsByTrip = new Map<string, Pt[]>();
   if (company) {
     const TRIP_SELECT =
-      "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, notes";
+      "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, notes";
     if (viewingAll) {
       // Team overlay: MY drives (all classifications) + every teammate's
       // BUSINESS drives. Two scoped queries so teammates' personal /
@@ -623,6 +624,7 @@ export default async function MileagePage({
                   distanceMiles: Number(t.distance_miles),
                   classification: t.classification,
                   deductionCents: Number(t.deduction_cents),
+                  needsConfirmation: t.needs_confirmation === true,
                   points: pointsByTrip.get(t.id) ?? [],
                   companyId: company.id,
                 }))}

@@ -41,6 +41,10 @@ export type TripRow = {
   distanceMiles: number;
   classification: "business" | "personal" | "unclassified";
   deductionCents: number;
+  /** The classification was ASSUMED, not decided: no saved place backed
+   *  it, so the drive is stored at zero cents and stays out of the
+   *  deduction total until the driver confirms it. */
+  needsConfirmation: boolean;
   points: { lat: number; lng: number; captured_at: string }[];
   /** Which company/business this drive currently belongs to. */
   companyId: string;
@@ -224,7 +228,12 @@ function TripCard({
     // Optimistic-ish: no local optimistic state because the server
     // action revalidates the page; useTransition keeps the UI from
     // freezing while it round-trips.
-    if (c === trip.classification) return;
+    //
+    // Re-sending the CURRENT classification is normally a no-op, but on an
+    // assumed drive it is the confirmation: the same server action clears
+    // needs_confirmation and writes the real deduction, so "Confirm" needs
+    // no parallel code path of its own.
+    if (c === trip.classification && !trip.needsConfirmation) return;
     const fd = new FormData();
     fd.set("trip_id", trip.id);
     fd.set("classification", c);
@@ -270,7 +279,7 @@ function TripCard({
           </div>
           <div className="text-xs text-ink-muted mt-0.5">
             {fmtMiles(Number(trip.distanceMiles))} mi
-            {trip.classification === "business"
+            {trip.classification === "business" && !trip.needsConfirmation
               ? ` · ${fmtUsd(Number(trip.deductionCents))} deduction`
               : ""}
           </div>
@@ -328,6 +337,36 @@ function TripCard({
           </button>
         )}
       </div>
+
+      {/* Assumed-classification notice. The drive landed automatically
+          with no place evidence behind the call, so it is stored at zero
+          cents and stays out of the deduction until the driver confirms.
+          Deliberately quiet and on-page only: no push, no bell entry, no
+          popup. The nagging stayed gone, the guess just stopped counting
+          as a deduction on its own. */}
+      {trip.needsConfirmation ? (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-[12px] font-medium text-amber-900">
+              {trip.classification === "personal"
+                ? "Assumed personal, confirm"
+                : "Assumed business, confirm"}
+            </div>
+            <div className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+              No saved place matched this drive, so it is not in your
+              deduction yet.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => doReclassify(trip.classification)}
+            disabled={pending}
+            className="shrink-0 text-[11px] font-medium px-3 h-8 rounded-full bg-amber-600 text-white disabled:opacity-60"
+          >
+            Confirm
+          </button>
+        </div>
+      ) : null}
 
       {/* Classification + review controls.
           - Business / Personal are toggles that fill in ONLY when that

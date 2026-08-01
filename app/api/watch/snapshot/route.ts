@@ -97,6 +97,12 @@ export async function GET(req: NextRequest) {
       .select("distance_miles")
       .eq("driver_user_id", uid)
       .eq("classification", "business")
+      // These two tiles are the ONE deduction figure in the app derived
+      // from summed miles instead of stored deduction_cents, so the
+      // zero-cents guard on an assumed drive does not reach them. Exclude
+      // the unconfirmed drives explicitly or the wrist would claim a
+      // deduction the phone deliberately does not.
+      .not("needs_confirmation", "is", true)
       .eq("tax_year", taxYear);
     const miles = (data ?? []).reduce(
       (s, r) => s + Number((r as { distance_miles: number }).distance_miles || 0),
@@ -115,6 +121,7 @@ export async function GET(req: NextRequest) {
       .select("distance_miles")
       .eq("driver_user_id", uid)
       .eq("classification", "business")
+      .not("needs_confirmation", "is", true)
       .gte("started_at", startOfDay.toISOString());
     todayBusinessMiles = (data ?? []).reduce(
       (s, r) => s + Number((r as { distance_miles: number }).distance_miles || 0),

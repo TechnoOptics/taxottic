@@ -324,20 +324,43 @@ export function suggestClassification(
  */
 export const AUTO_APPLY_CLASSIFICATION: Classification = "business";
 
+export type AutoClassification = {
+  classification: Classification;
+  /** True when the place heuristic could NOT decide and the blanket
+   *  default fired. Nothing about this drive supports calling it
+   *  business, so the caller stores it at zero cents and marks it for
+   *  a human to confirm. False means the heuristic actually decided
+   *  from a saved place, which is evidence. */
+  needsConfirmation: boolean;
+};
+
 /**
  * Classification for a drive that lands WITHOUT a review step.
  *
  * The place heuristic still decides whenever it can, so a home-to-home
  * errand is still filed personal and an office/client drive is still
  * filed business. Only the "can't tell" case changes: instead of
- * parking the drive in a review queue it takes the auto-apply default.
- * Never returns "unclassified", that is the whole point.
+ * parking the drive in a review queue it takes the auto-apply default,
+ * flagged. Never returns "unclassified", that is the whole point.
  *
- * Machine decisions leave `classified_by` NULL, so a human call is
- * still distinguishable from this one and still wins on a replace
- * (see finalize's carry-forward).
+ * The flag is the difference between "the heuristic decided" and "we
+ * fell back to a guess", which `classified_by` alone cannot express
+ * (both leave it NULL). It matters most where the heuristic can never
+ * fire at all: only one of the four production companies has saved any
+ * places, so for the rest EVERY drive takes the fallback. A guess must
+ * not become a Schedule C deduction on its own.
+ *
+ * Machine decisions still leave `classified_by` NULL, so a human call
+ * is distinguishable and still wins on a replace (see finalize's
+ * carry-forward).
  */
-export function autoClassify(trip: Trip, places: Place[]): Classification {
+export function autoClassify(trip: Trip, places: Place[]): AutoClassification {
   const suggested = suggestClassification(trip, places);
-  return suggested === "unclassified" ? AUTO_APPLY_CLASSIFICATION : suggested;
+  if (suggested !== "unclassified") {
+    return { classification: suggested, needsConfirmation: false };
+  }
+  return {
+    classification: AUTO_APPLY_CLASSIFICATION,
+    needsConfirmation: true,
+  };
 }

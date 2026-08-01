@@ -3,6 +3,29 @@
 // only exists in app builds that shipped it; on web and older installed
 // binaries every entry point no-ops to null.
 
+// STATIC, deliberately. This was `await import("@capacitor/core")` and it
+// is the reason device truth read NULL in production for weeks.
+//
+// Proven on 2026-07-31, not inferred. The probe instrumentation reported
+// device_probe_stage = "bridge" on EVERY sampled heartbeat, meaning the
+// native method was never reached, with probe_foreground = true,
+// probe_visibility = "visible", timer_lag_ms of 0 to 5, and elapsed of
+// exactly 3000 to 3002 ms against a 3000 ms box. Timers ran on schedule
+// and the app was in the foreground, so the JS thread was not starved:
+// the dynamic import itself simply never settled.
+//
+// A dynamic import is a chunk fetch, and a chunk fetch that never
+// resolves leaves the promise pending forever with no rejection to catch.
+// Nothing in this app statically imports @capacitor/core, so the same
+// latent hang exists at every other call site (native-tracker, the watch,
+// widget and auth bridges, camera capture). Those are unproven and left
+// alone for now; this one is proven.
+//
+// Bundling it costs little: on native the Capacitor runtime is present
+// anyway, and registerPlugin is a plain function with no side effects at
+// import time, so it is safe under SSR and on plain web.
+import { registerPlugin } from "@capacitor/core";
+
 export type DeviceStatus = {
   platform: string;
   locationAuthorization: "always" | "whenInUse" | "denied" | "notDetermined";
@@ -105,7 +128,6 @@ async function guard(onStage?: StageSink): Promise<DeviceStatusPlugin | null> {
     // better than refusing to try: the old gate turned "maybe present"
     // into a permanent silent no, which is how device truth stayed
     // invisible for weeks while we debugged permissions blind.
-    const { registerPlugin } = await import("@capacitor/core");
     return registerPlugin<DeviceStatusPlugin>("TaxotticDeviceStatus");
   } catch {
     return null;

@@ -68,6 +68,14 @@ export async function reclassifyTripCore(
       classification: cls,
       classified_by: userId,
       classified_at: new Date().toISOString(),
+      // A human has now decided, so the drive is no longer an assumption:
+      // clear the flag and write the real deduction. This is also what
+      // makes the "Confirm" tap on /mileage work by re-sending the drive's
+      // CURRENT classification. Every surface routes through here (the
+      // trip list, the swipe deck, the push action, the watch), so one
+      // write covers them all, and finalize's re-render path reads the
+      // cleared flag and can never zero the deduction again.
+      needs_confirmation: false,
       deduction_cents: deductionCents,
     })
     .eq("id", tripId);
