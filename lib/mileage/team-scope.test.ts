@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   ALL_DRIVERS,
+  FIRM_TRIP_SELECT,
   resolveTripScope,
+  loadFirmVisibleTrips,
   loadScopedTrips,
   stripForeignPrivateTrips,
+  stripPrivateTrips,
   type TripScope,
 } from "./team-scope";
 
@@ -43,6 +46,12 @@ class FakeQuery implements PromiseLike<{ data: Row[] }> {
   neq(col: string, val: unknown) {
     this.calls.push(`neq:${col}=${String(val)}`);
     this.preds.push((r) => r[col] != null && r[col] !== val);
+    return this;
+  }
+  /** PostgREST `in` compiles to SQL `col IN (…)`. */
+  in(col: string, vals: readonly unknown[]) {
+    this.calls.push(`in:${col}=[${vals.join(",")}]`);
+    this.preds.push((r) => vals.includes(r[col]));
     return this;
   }
   gte(col: string, val: string) {
@@ -378,5 +387,116 @@ describe("stripForeignPrivateTrips (last line of defence before render)", () => 
       VIEWER,
     );
     expect(kept).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------
+// The outside firm. A different actor from a company manager, and the
+// counterparty here is outside the company altogether, so the rule is
+// strictly tighter: there is no "your own data" exemption at all.
+// ---------------------------------------------------------------
+
+async function loadFirm(companyIds: string[]) {
+  const { client, queries } = fakeAdmin(FIXTURE);
+  const rows = await loadFirmVisibleTrips<Row>(client, {
+    companyIds,
+    sinceIso: SINCE,
+  });
+  return { ids: rows.map((r) => String(r.id)), queries };
+}
+
+describe("loadFirmVisibleTrips: an outside firm sees no one's private drives", () => {
+  it("returns confirmed business drives only, from every engaged company", async () => {
+    const { ids } = await loadFirm(["co"]);
+    expect(ids.sort()).toEqual(
+      [
+        "own-business",
+        "mate-business-confirmed",
+        "mate-business-legacy-null",
+      ].sort(),
+    );
+  });
+
+  it("leaks none of the rows a manager is already denied", async () => {
+    const { ids } = await loadFirm(["co"]);
+    for (const bad of FORBIDDEN) expect(ids).not.toContain(bad);
+  });
+
+  it("denies the firm EVERY driver's personal drives, with no self exemption", async () => {
+    // The crux of the firm rule. A manager viewing their own page keeps
+    // "own-personal" because it is their own data; to an outside firm no
+    // drive is its own data, so the same row must disappear.
+    const { ids } = await loadFirm(["co"]);
+    expect(ids).not.toContain("own-personal");
+    expect(ids).not.toContain("own-unclassified");
+    expect(stripForeignPrivateTrips(FIXTURE, VIEWER).map((r) => r.id)).toContain(
+      "own-personal",
+    );
+  });
+
+  it("an ASSUMED business drive is not evidence, so the firm does not get it", async () => {
+    const { ids } = await loadFirm(["co"]);
+    expect(ids).not.toContain("mate-business-ASSUMED");
+  });
+
+  it("a pre-flag row (needs_confirmation NULL) is still shown", async () => {
+    // Guards against a NULL-unsafe `.neq(col, true)` rewrite, which would
+    // blank the firm's map entirely for any company with no backfill.
+    const { ids } = await loadFirm(["co"]);
+    expect(ids).toContain("mate-business-legacy-null");
+  });
+
+  it("scopes to the engaged companies and nothing else", async () => {
+    const { ids: one } = await loadFirm(["co"]);
+    expect(one).not.toContain("other-company");
+    const { ids: both } = await loadFirm(["co", "SOMEONE-ELSE"]);
+    expect(both).toContain("other-company");
+  });
+
+  it("applies the classification + confirmation filters in the query", async () => {
+    const { queries } = await loadFirm(["co"]);
+    expect(queries).toHaveLength(1);
+    expect(queries[0].calls).toContain("eq:classification=business");
+    expect(queries[0].calls).toContain("not:needs_confirmation is true");
+  });
+
+  it("issues no query at all for a firm with no engagements", async () => {
+    const { ids, queries } = await loadFirm([]);
+    expect(ids).toEqual([]);
+    expect(queries).toHaveLength(0);
+  });
+
+  it("selects needs_confirmation, or the in-memory backstop cannot see it", () => {
+    // An unselected column arrives as `undefined`, which passes a
+    // `!== true` test and would silently make stripPrivateTrips a no-op.
+    expect(FIRM_TRIP_SELECT).toContain("needs_confirmation");
+  });
+});
+
+describe("stripPrivateTrips (last line of defence before the firm's map renders)", () => {
+  it("keeps only confirmed business rows, whoever drove them", () => {
+    const kept = stripPrivateTrips(FIXTURE).map((r) => String(r.id));
+    expect(kept.sort()).toEqual(
+      [
+        "own-business",
+        "mate-business-confirmed",
+        "mate-business-legacy-null",
+        "other-company",
+        "mate-business-too-old",
+      ].sort(),
+    );
+  });
+
+  it("removes a private row even if the query somehow returned it", () => {
+    for (const bad of [
+      "own-personal",
+      "own-unclassified",
+      "mate-PERSONAL",
+      "mate-UNCLASSIFIED",
+      "mate-business-ASSUMED",
+    ])
+      expect(stripPrivateTrips(FIXTURE).map((r) => String(r.id))).not.toContain(
+        bad,
+      );
   });
 });
