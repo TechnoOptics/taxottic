@@ -858,7 +858,17 @@
 // as a composited transform. Also stepped the gold-shine and reward-tile
 // animations, and stopped the profile menu and bell re-measuring their
 // anchor on every scroll event when the anchor sits in a fixed header.
-const CACHE_VERSION = "v146";
+// v147: CSV import review. Every expense candidate now carries a
+// checkbox with a select-all, and one button saves exactly the ticked
+// rows as business expenses; previously the only way to exclude a row
+// was to un-categorize it. Duplicate detection got two halves: an
+// uploaded file is matched on a hash of its normalized contents, so the
+// same statement saved under a different name is caught and the user is
+// asked rather than refused; and duplicate ROWS, which were silently
+// dropped before insert, are now recorded and shown. Review screens are
+// titled with the period the rows cover instead of the filename, and a
+// multi-file upload is chained so it can be walked one file at a time.
+const CACHE_VERSION = "v147";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -6,6 +6,13 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { logCompanyActivity } from "@/lib/activity/log";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
+import { csvContentHash } from "@/lib/csv/content-hash";
+import { partitionRows } from "@/lib/csv/duplicates";
+import {
+  rowEligibility,
+  effectiveCategory,
+  type SelectableRow,
+} from "@/lib/csv/selection";
 import {
   categorizeBatch,
   type CategorizeInput,
@@ -134,6 +141,41 @@ function uploadErrorMessage(err: unknown): string {
   return `Upload failed: ${raw.slice(0, 200)}`;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The import that an upload turned out to duplicate, byte-for-byte in
+ * content. Handed back so the UI can name it instead of just refusing.
+ */
+export type DuplicateFileInfo = {
+  importId: string;
+  filename: string;
+  uploadedAt: string;
+  rowCount: number;
+};
+
+export type CsvImportResult =
+  | {
+      ok: true;
+      importId: string;
+      publicId: string;
+      /** Rows held back as duplicates, surfaced on the review screen. */
+      duplicateRowCount: number;
+    }
+  | {
+      ok: false;
+      error: string;
+      publicId: string;
+      /**
+       * Present when the upload was stopped ONLY because the same content is
+       * already imported. The caller re-sends with force=1 to proceed. This
+       * is a question, not a refusal: silently blocking a re-import is
+       * hostile when the user genuinely wants one.
+       */
+      duplicateOf?: DuplicateFileInfo;
+    };
+
 /**
  * Pure import worker, does the auth + parse + insert + categorize
  * work and returns a result without any redirects. Both the
@@ -142,13 +184,18 @@ function uploadErrorMessage(err: unknown): string {
  * multi-file dropzone can loop without each upload navigating away)
  * thunk through here.
  */
-async function runCsvImport(formData: FormData): Promise<
-  | { ok: true; importId: string; publicId: string }
-  | { ok: false; error: string; publicId: string }
-> {
+async function runCsvImport(formData: FormData): Promise<CsvImportResult> {
   const { supabase, admin, user } = await requireUserWithAdmin();
   const companyId = String(formData.get("company_id") ?? "");
   const file = formData.get("file");
+  // Set by the dropzone to group the imports of one multi-file upload, so the
+  // review screen can walk them one at a time ("file 2 of 4").
+  const batchIdRaw = String(formData.get("batch_id") ?? "").trim();
+  const batchId = UUID_RE.test(batchIdRaw) ? batchIdRaw : null;
+  // The user has seen the "you already imported this file" warning and asked
+  // for it anyway. Re-importing is a legitimate thing to want: the first
+  // import may have been deleted, or applied to the wrong company.
+  const force = String(formData.get("force") ?? "") === "1";
   const rawAccountType = String(formData.get("account_type") ?? "checking");
   const accountType = VALID_ACCOUNT_TYPES.has(rawAccountType)
     ? rawAccountType
@@ -175,6 +222,7 @@ async function runCsvImport(formData: FormData): Promise<
   // a thrown error from the action surfacing as "server error" because
   // the form had no client-side handler.
   let importId: string | null = null;
+  let duplicateRowCount = 0;
   try {
     if (!companyId || !(file instanceof File)) {
       throw new Error("Invalid upload");
@@ -191,6 +239,37 @@ async function runCsvImport(formData: FormData): Promise<
     }
 
     const text = await file.text();
+
+    // Duplicate FILE detection, before any parsing work. Hashing the
+    // normalized content (not the bytes, not the name) is what catches the
+    // case the user actually hits: the same statement re-downloaded and saved
+    // as "activity (2).csv". We stop and ask rather than refuse, because a
+    // deliberate re-import is legitimate.
+    const contentHash = await csvContentHash(text);
+    if (!force) {
+      const { data: priorImport } = await admin
+        .from("bank_imports")
+        .select("id, filename, created_at, row_count")
+        .eq("company_id", companyId)
+        .eq("content_sha256", contentHash)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (priorImport) {
+        return {
+          ok: false,
+          publicId,
+          error: `This file's contents match "${priorImport.filename}", already imported.`,
+          duplicateOf: {
+            importId: priorImport.id as string,
+            filename: priorImport.filename as string,
+            uploadedAt: String(priorImport.created_at),
+            rowCount: Number(priorImport.row_count ?? 0),
+          },
+        };
+      }
+    }
+
     const rows = parseCsv(text);
     if (rows.length < 2) throw new Error("CSV is empty or has no data rows");
 
@@ -204,6 +283,36 @@ async function runCsvImport(formData: FormData): Promise<
 
     const dataRows = rows.slice(1);
 
+    // Parse every row BEFORE creating the import, so the import record can
+    // carry the period the statement actually covers. The review screen is
+    // titled with that period rather than the filename.
+    const parsed = dataRows.map((r) => {
+      const desc = (r[cols.description] ?? "").trim();
+      const amountCents = parseAmountCents(r[cols.amount] ?? "");
+      const dateRaw = cols.date >= 0 ? (r[cols.date] ?? "").trim() : "";
+      const rawCategory =
+        cols.category >= 0 ? (r[cols.category] ?? "").trim() : null;
+      const suggested = desc ? autoCategorize(desc) : null;
+      return {
+        company_id: companyId,
+        posted_at: parseDate(dateRaw),
+        description: desc.slice(0, 500) || "(no description)",
+        // An unreadable amount stays 0 rather than guessing. A zero row is
+        // never eligible to be booked (see lib/csv/selection), so it lands on
+        // the review screen flagged instead of quietly becoming a $0 expense.
+        amount_cents: amountCents ?? 0,
+        raw_category: rawCategory,
+        suggested_category_code: suggested,
+      };
+    });
+
+    const dates = parsed
+      .map((t) => t.posted_at)
+      .filter((d): d is string => !!d)
+      .sort();
+    const periodStart = dates.length > 0 ? dates[0] : null;
+    const periodEnd = dates.length > 0 ? dates[dates.length - 1] : null;
+
     const { data: importRow, error: importErr } = await admin
       .from("bank_imports")
       .insert({
@@ -213,6 +322,10 @@ async function runCsvImport(formData: FormData): Promise<
         row_count: dataRows.length,
         status: "reviewing",
         account_type: accountType,
+        content_sha256: contentHash,
+        period_start: periodStart,
+        period_end: periodEnd,
+        batch_id: batchId,
       })
       .select("id")
       .single();
@@ -221,60 +334,44 @@ async function runCsvImport(formData: FormData): Promise<
     }
     importId = importRow.id;
 
-    const transactions = dataRows.map((r) => {
-      const desc = (r[cols.description] ?? "").trim();
-      const amountCents = parseAmountCents(r[cols.amount] ?? "");
-      const dateRaw = cols.date >= 0 ? (r[cols.date] ?? "").trim() : "";
-      const rawCategory =
-        cols.category >= 0 ? (r[cols.category] ?? "").trim() : null;
-      const suggested = desc ? autoCategorize(desc) : null;
-      return {
-        import_id: importRow.id,
-        company_id: companyId,
-        posted_at: parseDate(dateRaw),
-        description: desc.slice(0, 500) || "(no description)",
-        amount_cents: amountCents ?? 0,
-        raw_category: rawCategory,
-        suggested_category_code: suggested,
-      };
-    });
-
-    // Exact-charge dedupe: a re-uploaded statement (or an overlapping
-    // export) must not book the same charge twice. Identity = posted
-    // date + exact cents + normalized description (chargeFingerprint) —
-    // "master the dates so we know it's the exact same charge". Compare
-    // against every prior import for this company in the batch's date
-    // range and drop matches before insert.
-    const dates = transactions
-      .map((t) => t.posted_at)
-      .filter((d): d is string => !!d)
-      .sort();
-    let toInsert = transactions;
+    // Exact-charge dedupe: a re-uploaded statement (or an overlapping export)
+    // must not book the same charge twice. Identity = posted date + exact
+    // cents + normalized description (chargeFingerprint), the same key the
+    // Stripe and Plaid paths use, so the CSV path cannot drift into a
+    // different idea of "the same charge".
+    //
+    // Changed here: duplicates are no longer dropped into the void. They are
+    // RECORDED and shown on the review screen. A statement that legitimately
+    // lists two identical charges used to lose one with no trace.
+    let priorByFingerprint = new Map<
+      string,
+      { id: string; import_id: string }
+    >();
     if (dates.length > 0) {
       const { data: priorRows } = await admin
         .from("bank_transactions")
-        .select("posted_at, amount_cents, description")
+        .select("id, import_id, posted_at, amount_cents, description")
         .eq("company_id", companyId)
         .gte("posted_at", dates[0])
         .lte("posted_at", dates[dates.length - 1])
         .limit(10_000);
-      const seen = new Set(
-        (priorRows ?? []).map((r) =>
+      priorByFingerprint = new Map(
+        (priorRows ?? []).map((r) => [
           chargeFingerprint(
             String(r.posted_at ?? ""),
             r.amount_cents as number,
             r.description as string | null,
           ),
-        ),
-      );
-      toInsert = transactions.filter(
-        (t) =>
-          !t.posted_at ||
-          !seen.has(
-            chargeFingerprint(t.posted_at, t.amount_cents, t.description),
-          ),
+          { id: r.id as string, import_id: r.import_id as string },
+        ]),
       );
     }
+
+    const split = partitionRows(parsed, new Set(priorByFingerprint.keys()));
+    const toInsert = split.fresh.map((t) => ({
+      ...t,
+      import_id: importRow.id,
+    }));
 
     const BATCH = 500;
     for (let i = 0; i < toInsert.length; i += BATCH) {
@@ -282,6 +379,48 @@ async function runCsvImport(formData: FormData): Promise<
       const { error } = await admin.from("bank_transactions").insert(slice);
       if (error) throw new Error(error.message);
     }
+
+    // Record what was held back. Failure here is non-fatal: the import itself
+    // succeeded, and losing the audit trail is better than losing the import.
+    const duplicateRecords = [
+      ...split.againstBooks.map((d) => {
+        const existing = priorByFingerprint.get(d.fingerprint);
+        return {
+          import_id: importRow.id,
+          company_id: companyId,
+          posted_at: d.row.posted_at,
+          description: d.row.description,
+          amount_cents: d.row.amount_cents,
+          fingerprint: d.fingerprint,
+          kind: "already_booked" as const,
+          existing_transaction_id: existing?.id ?? null,
+          existing_import_id: existing?.import_id ?? null,
+        };
+      }),
+      ...split.withinFile.map((d) => ({
+        import_id: importRow.id,
+        company_id: companyId,
+        posted_at: d.row.posted_at,
+        description: d.row.description,
+        amount_cents: d.row.amount_cents,
+        fingerprint: d.fingerprint,
+        kind: "within_file" as const,
+        existing_transaction_id: null,
+        existing_import_id: importRow.id,
+      })),
+    ];
+    if (duplicateRecords.length > 0) {
+      for (let i = 0; i < duplicateRecords.length; i += BATCH) {
+        const { error } = await admin
+          .from("bank_import_duplicates")
+          .insert(duplicateRecords.slice(i, i + BATCH));
+        if (error) {
+          console.error("recording import duplicates failed:", error.message);
+          break;
+        }
+      }
+    }
+    duplicateRowCount = duplicateRecords.length;
 
     // Auto-run Bella over the freshly-imported batch. Failures here
     // (insufficient credits, model timeout, anything else) are
@@ -318,7 +457,7 @@ async function runCsvImport(formData: FormData): Promise<
   if (!importId) {
     return { ok: false, error: "Upload failed", publicId };
   }
-  return { ok: true, importId, publicId };
+  return { ok: true, importId, publicId, duplicateRowCount };
 }
 
 /**
@@ -351,10 +490,9 @@ export async function uploadCsv(formData: FormData) {
  * to the last importId, or surfacing the error inline on the row
  * that failed).
  */
-export async function uploadCsvBatch(formData: FormData): Promise<
-  | { ok: true; importId: string; publicId: string }
-  | { ok: false; error: string; publicId: string }
-> {
+export async function uploadCsvBatch(
+  formData: FormData,
+): Promise<CsvImportResult> {
   return runCsvImport(formData);
 }
 
@@ -579,6 +717,212 @@ export async function applyTransactions(formData: FormData) {
   revalidatePath(`/c/${company?.public_id}/import/${importId}`);
   revalidatePath(`/c/${company?.public_id}/expenses`);
   revalidatePath(`/c/${company?.public_id}/forecast`);
+}
+
+/**
+ * Save the CHECKED rows of an import as business expenses.
+ *
+ * This is the action behind the review screen's single confirm button. It
+ * differs from `applyTransactions` in one way that matters: that action books
+ * every row that happens to carry a category, so excluding a row meant first
+ * un-categorizing it. Here the user's checkboxes are the instruction, posted
+ * as repeated `tx_ids` fields (the same shape `deleteAccountTransactions`
+ * uses).
+ *
+ * Every id is re-validated server-side against `rowEligibility`, the same
+ * function the browser used to decide what could be ticked. A client can post
+ * any id it likes; nothing is booked on the strength of the client's opinion.
+ *
+ * Rows whose category is a transfer, a personal (Schedule A) item, or a
+ * federal credit are labelled and marked ignored rather than booked, matching
+ * `applyTransactions`. None of those belong on a Schedule C, and a user can
+ * legitimately tick one because the picker offers them.
+ */
+export async function saveSelectedAsExpenses(formData: FormData): Promise<{
+  saved: number;
+  savedCents: number;
+  labelledNotBooked: number;
+  skipped: number;
+}> {
+  const { admin, user } = await requireUserWithAdmin();
+  const importId = String(formData.get("import_id") ?? "");
+  const companyId = String(formData.get("company_id") ?? "");
+  const requestedIds = formData.getAll("tx_ids").map((v) => String(v));
+
+  if (!importId || !companyId) throw new Error("Missing import_id or company_id");
+  if (!(await userBelongsToCompany(admin, user.id, companyId))) {
+    throw new Error("Not a member of this company");
+  }
+  if (requestedIds.length === 0) {
+    return { saved: 0, savedCents: 0, labelledNotBooked: 0, skipped: 0 };
+  }
+
+  const { data: imp } = await admin
+    .from("bank_imports")
+    .select("account_type")
+    .eq("id", importId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!imp) throw new Error("Import not found");
+  const isCredit = (imp.account_type as string | null) === "credit";
+
+  // Scope the fetch to this import AND this company, so a forged id from
+  // another tenant returns nothing rather than being booked.
+  const { data: rows } = await admin
+    .from("bank_transactions")
+    .select(
+      "id, description, amount_cents, posted_at, applied_category_code, suggested_category_code, applied_expense_id, applied_income_id, ignored",
+    )
+    .eq("import_id", importId)
+    .eq("company_id", companyId)
+    .in("id", requestedIds);
+
+  const now = new Date();
+  const ctx = {
+    isCredit,
+    taxYear: now.getUTCFullYear(),
+    currentMonth: now.getUTCMonth() + 1,
+  };
+
+  const candidates = (rows ?? []) as SelectableRow[];
+  const eligible = candidates.filter(
+    (r) => rowEligibility(r, ctx) === "eligible",
+  );
+  const skipped = requestedIds.length - eligible.length;
+
+  if (eligible.length === 0) {
+    return { saved: 0, savedCents: 0, labelledNotBooked: 0, skipped };
+  }
+
+  // Which of the chosen categories never belong on a Schedule C.
+  const chosenCodes = Array.from(
+    new Set(eligible.map((r) => effectiveCategory(r)).filter(Boolean)),
+  ) as string[];
+  const { data: catScopes } = await admin
+    .from("deduction_categories")
+    .select("code, scope")
+    .in("code", chosenCodes);
+  const nonBusinessCodes = new Set(
+    (catScopes ?? [])
+      .filter((c) => {
+        const scope = (c as { scope?: string }).scope;
+        return scope === "transfer" || scope === "personal" || scope === "credit";
+      })
+      .map((c) => (c as { code: string }).code),
+  );
+
+  const labelOnly: Array<{ id: string; code: string }> = [];
+  const expenseInserts: Array<{
+    company_id: string;
+    user_id: string;
+    tax_year: number;
+    month: number;
+    amount_cents: number;
+    category_code: string;
+    recurrence: string;
+    notes: string;
+  }> = [];
+  const expenseTxIds: string[] = [];
+
+  for (const tx of eligible) {
+    const code = effectiveCategory(tx);
+    if (!code) continue;
+    if (nonBusinessCodes.has(code)) {
+      labelOnly.push({ id: tx.id, code });
+      continue;
+    }
+    // rowEligibility already guaranteed posted_at, the tax year, a non-future
+    // month, and the right sign for this account type.
+    const month = Number(tx.posted_at!.slice(5, 7));
+    expenseInserts.push({
+      company_id: companyId,
+      user_id: user.id,
+      tax_year: ctx.taxYear,
+      month,
+      amount_cents: Math.abs(tx.amount_cents),
+      category_code: code,
+      recurrence: isSubscriptionLike(tx.description) ? "monthly" : "one_off",
+      notes: tx.description,
+    });
+    expenseTxIds.push(tx.id);
+  }
+
+  // Transfers / Schedule A / credits: keep the label, do not book.
+  for (const row of labelOnly) {
+    await admin
+      .from("bank_transactions")
+      .update({ applied_category_code: row.code, ignored: true })
+      .eq("id", row.id);
+  }
+
+  let savedCents = 0;
+  if (expenseInserts.length > 0) {
+    const { data: created, error: insErr } = await admin
+      .from("monthly_expenses")
+      .insert(expenseInserts)
+      .select("id");
+    if (insErr) throw new Error(insErr.message);
+
+    for (let i = 0; i < (created ?? []).length; i++) {
+      const txId = expenseTxIds[i];
+      const exId = created![i]?.id;
+      if (!txId || !exId) continue;
+      // Stamp applied_category_code too: a row booked from a model
+      // suggestion has now been confirmed by a person clicking save, and the
+      // review screen should stop showing it as a mere suggestion.
+      await admin
+        .from("bank_transactions")
+        .update({
+          applied_expense_id: exId,
+          applied_category_code: expenseInserts[i].category_code,
+        })
+        .eq("id", txId);
+      savedCents += expenseInserts[i].amount_cents;
+    }
+
+    const { count: appliedTotal } = await admin
+      .from("bank_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("import_id", importId)
+      .not("applied_expense_id", "is", null);
+    await admin
+      .from("bank_imports")
+      .update({
+        applied_count: appliedTotal ?? expenseInserts.length,
+        status: "applied",
+      })
+      .eq("id", importId);
+
+    await logCompanyActivity(admin, {
+      companyId,
+      actorUserId: user.id,
+      kind: "import.applied",
+      summary: `Saved ${expenseInserts.length} selected transaction${
+        expenseInserts.length === 1 ? "" : "s"
+      } as business expenses`,
+      payload: { import_id: importId, count: expenseInserts.length },
+    });
+    await applyRecurringExpenseDetection(admin, companyId, ctx.taxYear);
+  }
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .maybeSingle();
+  if (company?.public_id) {
+    revalidatePath(`/c/${company.public_id}/import/${importId}`);
+    revalidatePath(`/c/${company.public_id}/expenses`);
+    revalidatePath(`/c/${company.public_id}/forecast`);
+  }
+  revalidatePath("/dashboard");
+
+  return {
+    saved: expenseInserts.length,
+    savedCents,
+    labelledNotBooked: labelOnly.length,
+    skipped,
+  };
 }
 
 export async function setTxCategory(formData: FormData) {

@@ -5,17 +5,19 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 import {
-  applyTransactions,
   bellaAutoApply,
   deleteImport,
   ignoreTx,
+  saveSelectedAsExpenses,
   setTxCategory,
   teachBella,
 } from "../actions";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
-import { TxRow } from "@/components/import/TxRow";
+import { ImportSelection } from "@/components/import/ImportSelection";
+import { ImportDuplicates } from "@/components/import/ImportDuplicates";
+import { formatImportPeriod } from "@/lib/csv/period";
 
 type Params = Promise<{ publicId: string; importId: string }>;
 type Search = Promise<{ highlight?: string }>;
@@ -37,7 +39,7 @@ export default async function ImportReviewPage({
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, filename, status, row_count, applied_count, account_type, created_at",
+      "id, filename, status, row_count, applied_count, account_type, created_at, period_start, period_end, batch_id",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
@@ -45,11 +47,49 @@ export default async function ImportReviewPage({
   if (!imp) notFound();
   const isCredit = imp.account_type === "credit";
 
+  // Title the screen with the period the rows cover rather than the filename.
+  // A user working through four statements needs to know which month is on
+  // screen, and "activity (2).csv" does not tell them.
+  const period = formatImportPeriod(imp.period_start, imp.period_end);
+
+  // Rows held back as duplicates, and the other files from the same upload so
+  // the user can walk a multi-file upload one file at a time.
+  const [{ data: duplicateRows }, { data: batchSiblings }] = await Promise.all([
+    supabase
+      .from("bank_import_duplicates")
+      .select("id, posted_at, description, amount_cents, kind, existing_import_id")
+      .eq("import_id", importId)
+      .order("posted_at", { ascending: false })
+      .limit(500),
+    imp.batch_id
+      ? supabase
+          .from("bank_imports")
+          .select("id, filename, period_start, period_end, created_at")
+          .eq("company_id", company.id)
+          .eq("batch_id", imp.batch_id)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const siblings = (batchSiblings ?? []) as {
+    id: string;
+    filename: string;
+    period_start: string | null;
+    period_end: string | null;
+  }[];
+  const batchIndex = siblings.findIndex((s) => s.id === importId);
+  const nextInBatch =
+    batchIndex >= 0 && batchIndex < siblings.length - 1
+      ? siblings[batchIndex + 1]
+      : null;
+
   const [{ data: txs }, { data: categories }] = await Promise.all([
     supabase
       .from("bank_transactions")
       .select(
-        "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, ignored",
+        // applied_income_id is needed by rowEligibility: a row already booked
+        // as income must never also be bookable as an expense.
+        "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
       )
       .eq("import_id", importId)
       .order("posted_at", { ascending: false })
@@ -151,9 +191,6 @@ export default async function ImportReviewPage({
     ? []
     : allActive.filter((t) => t.amount_cents > 0);
   const ignoredRows = (txs ?? []).filter((t) => t.ignored);
-  const pendingApply = debits.filter(
-    (t) => t.applied_category_code && !t.applied_expense_id,
-  );
 
   // Bella detection rollup, shown at the top of the review section
   // so the user can see at a glance "Bella tagged X, you tagged Y,
@@ -210,6 +247,16 @@ export default async function ImportReviewPage({
     monthMap.set(key, arr);
   }
 
+  // Shared by the checkbox defaults on the client and by the re-validation
+  // the save action runs on the server, so the two can never disagree about
+  // what is bookable.
+  const nowUtc = new Date();
+  const selectionCtx = {
+    isCredit,
+    taxYear: nowUtc.getUTCFullYear(),
+    currentMonth: nowUtc.getUTCMonth() + 1,
+  };
+
   // Deep-linked from the outstanding-items list (?highlight=<id>): if
   // the target row already got tagged since the item was surfaced,
   // it lives in the collapsed "Sorted, awaiting Apply" pile, force
@@ -247,16 +294,29 @@ export default async function ImportReviewPage({
           &larr; All imports
         </Link>
 
+        {siblings.length > 1 ? (
+          <div className="mt-2 text-[11px] uppercase tracking-[0.2em] text-gold-700">
+            File {batchIndex + 1} of {siblings.length} from this upload
+          </div>
+        ) : null}
+
         <h1 className="display mt-2 text-3xl text-forest-900">
-          {imp.filename}
+          {period ?? "No dates in this file"}
         </h1>
-        <div className="text-xs text-ink-muted mt-1 tracking-wide">
-          {prettyAccountType(imp.account_type)} ·{" "}
+        <div className="text-xs text-ink-muted mt-1 tracking-wide break-words">
+          {imp.filename} · {prettyAccountType(imp.account_type)} ·{" "}
           {imp.row_count} rows uploaded -{" "}
           {imp.applied_count > 0
             ? `${imp.applied_count} applied`
             : "not yet applied"}
         </div>
+        {!period ? (
+          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-rose-800">
+            None of the dates in this file could be read, so its rows cannot be
+            booked to a month. Check that the file has a date column, or add
+            these expenses by hand from the Expenses tab.
+          </p>
+        ) : null}
         {isCredit ? (
           <p className="mt-2 text-xs text-ink-muted max-w-2xl leading-relaxed">
             Credit-card import: every charge counts as an expense regardless
@@ -302,28 +362,11 @@ export default async function ImportReviewPage({
           <button className="btn-ghost">Re-run Bella</button>
         </form>
 
-        {pendingApply.length > 0 ? (
-          <form
-            action={applyTransactions}
-            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap"
-          >
-            <input type="hidden" name="import_id" value={importId} />
-            <input type="hidden" name="company_id" value={company.id} />
-            <div>
-              <div className="display text-base text-forest-900">
-                {pendingApply.length} transaction
-                {pendingApply.length === 1 ? "" : "s"} ready to apply
-              </div>
-              <div className="text-xs text-ink-muted mt-1">
-                Each will become a deductible expense entry on the corresponding
-                month.
-              </div>
-            </div>
-            <button className="btn-ghost">
-              Apply manually selected ({pendingApply.length})
-            </button>
-          </form>
-        ) : null}
+        {/* The old "Apply manually selected" card lived here. It booked every
+            row that happened to carry a category, which meant excluding one
+            row required un-categorizing it first. The checkboxes below replace
+            it with a single, explicit save. `applyTransactions` is left in
+            place in actions.ts, unused by this page. */}
 
         {/* Bella detection rollup, surfaces "what did the model see"
             and "what was applied" without making the user count rows
@@ -385,92 +428,56 @@ export default async function ImportReviewPage({
             <p className="mt-4 text-sm text-ink-muted">
               No debit transactions in this file.
             </p>
-          ) : activeDebits.length === 0 ? (
-            <p className="mt-4 text-sm text-ink-soft">
-              Every row has been categorized or skipped. Click{" "}
-              <span className="font-medium text-forest-900">
-                Apply manually selected
-              </span>{" "}
-              above to book the tagged ones into your monthly expenses.
-            </p>
           ) : (
-            <div className="mt-4 grid gap-6">
-              {debitGroups.map((g) => (
-                <div key={g.key}>
-                  <h3 className="text-[11px] uppercase tracking-[0.22em] text-gold-700 flex items-baseline gap-2">
-                    <span>{g.label}</span>
-                    <span className="text-ink-muted normal-case tracking-normal">
-                      {g.rows.length}{" "}
-                      {g.rows.length === 1 ? "row" : "rows"} ·{" "}
-                      {formatCents(g.totalCents)}
-                    </span>
-                  </h3>
-                  <ul className="mt-2 grid gap-2">
-                    {g.rows.map((t) => (
-                      <TxRow
-                        key={t.id}
-                        tx={t}
-                        importId={importId}
-                        companyId={company.id}
-                        cats={catOptions}
-                        frequentCodes={frequentCodes}
-                        catById={catById}
-                        isCredit={isCredit}
-                        setTxCategory={setTxCategory}
-                        ignoreTx={ignoreTx}
-                        teachBella={teachBella}
-                        highlight={t.id === targetTxId}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            <ImportSelection
+              groups={debitGroups}
+              taggedRows={taggedDebits}
+              taggedOpen={targetInTagged}
+              importId={importId}
+              companyId={company.id}
+              cats={catOptions}
+              frequentCodes={frequentCodes}
+              catById={catById}
+              isCredit={isCredit}
+              ctx={selectionCtx}
+              highlightId={targetTxId}
+              setTxCategory={setTxCategory}
+              ignoreTx={ignoreTx}
+              teachBella={teachBella}
+              saveSelected={saveSelectedAsExpenses}
+            />
           )}
         </section>
 
-        {/* Tagged-but-not-applied pile, collapsed by default. Users
-            picked a category here, the slide-off pulled the row out
-            of the Active list, and now it lives here until they hit
-            Apply. Open the details to review/change picks before
-            committing. */}
-        {taggedDebits.length > 0 ? (
-          <section className="mt-6 card p-5">
-            <details open={targetInTagged}>
-              <summary className="cursor-pointer select-none flex items-baseline justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
-                    Sorted, awaiting Apply
-                  </div>
-                  <div className="display text-base text-forest-900 mt-1">
-                    {taggedDebits.length}{" "}
-                    {taggedDebits.length === 1 ? "row" : "rows"} tagged
-                  </div>
-                </div>
-                <span className="text-xs text-ink-muted">
-                  Click to review / change picks
-                </span>
-              </summary>
-              <ul className="mt-4 grid gap-2">
-                {taggedDebits.map((t) => (
-                  <TxRow
-                    key={t.id}
-                    tx={t}
-                    importId={importId}
-                    companyId={company.id}
-                    cats={catOptions}
-                    frequentCodes={frequentCodes}
-                    catById={catById}
-                    isCredit={isCredit}
-                    setTxCategory={setTxCategory}
-                    ignoreTx={ignoreTx}
-                    teachBella={teachBella}
-                    highlight={t.id === targetTxId}
-                  />
-                ))}
-              </ul>
-            </details>
-          </section>
+        <ImportDuplicates
+          duplicates={
+            (duplicateRows ?? []) as React.ComponentProps<
+              typeof ImportDuplicates
+            >["duplicates"]
+          }
+          publicId={publicId}
+        />
+
+        {nextInBatch ? (
+          <div className="mt-6 card flex flex-wrap items-center justify-between gap-3 p-5">
+            <div className="min-w-0">
+              <div className="display text-base text-forest-900">
+                Next file in this upload
+              </div>
+              <div className="mt-1 break-words text-xs text-ink-muted">
+                {formatImportPeriod(
+                  nextInBatch.period_start,
+                  nextInBatch.period_end,
+                ) ?? nextInBatch.filename}
+              </div>
+            </div>
+            <Link
+              href={`/c/${publicId}/import/${nextInBatch.id}`}
+              className="btn-ghost"
+            >
+              Review file {batchIndex + 2} of {siblings.length}
+            </Link>
+          </div>
         ) : null}
 
         {credits.length > 0 ? (

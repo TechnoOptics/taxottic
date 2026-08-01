@@ -7,6 +7,7 @@ import {
 } from "@/components/CategoryCombobox";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { formatCents } from "@/lib/tax/forecast";
+import type { Eligibility } from "@/lib/csv/selection";
 
 /**
  * Transaction row on the import-review page.
@@ -79,6 +80,28 @@ type Props = {
    *  scrolls this row into view and rings it briefly on mount so the
    *  user doesn't have to hunt for it in a long import. */
   highlight?: boolean;
+  /** Why this row can or cannot be saved as a business expense. Omitted
+   *  when the row is rendered outside the selection flow. */
+  eligibility?: Eligibility;
+  /** Ticked state, owned by the parent list. */
+  selected?: boolean;
+  /** Undefined means "no checkbox on this row". */
+  onToggleSelected?: (id: string, next: boolean) => void;
+};
+
+/**
+ * Short, plain reason a row cannot be saved. Every one of these was a case
+ * the old apply path skipped silently, which is how a row could vanish
+ * between "uploaded" and "applied" with nothing to explain the gap.
+ */
+const INELIGIBLE_REASON: Record<Eligibility, string | null> = {
+  eligible: null,
+  booked: "Already saved",
+  ignored: "Skipped",
+  needs_category: "Needs a category first",
+  needs_date: "No readable date",
+  out_of_range: "Outside this tax year",
+  not_an_expense: "Not an expense",
 };
 
 export function TxRow({
@@ -93,6 +116,9 @@ export function TxRow({
   ignoreTx,
   teachBella,
   highlight,
+  eligibility,
+  selected: isSelected,
+  onToggleSelected,
 }: Props) {
   const [phase, setPhase] = useState<"idle" | "leaving">("idle");
   const [_pending, startTransition] = useTransition();
@@ -181,7 +207,26 @@ export function TxRow({
         "data-[leaving=true]:overflow-hidden"
       }
     >
+      {/* flex-wrap below sm is deliberate: at 344px the amount drops to its
+          own line and the description keeps the full row width. Forcing
+          nowrap here is what squeezes a long description into a one-character
+          column. */}
       <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap min-w-0">
+        {onToggleSelected ? (
+          // 44px tap target around a 20px box, so the checkbox is reachable
+          // with a thumb on a 344px cover screen. `shrink-0` keeps it from
+          // being squeezed to nothing when the description is long.
+          <span className="-my-2 -ml-1.5 flex h-11 w-11 shrink-0 items-center justify-center">
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              disabled={eligibility !== "eligible"}
+              onChange={(e) => onToggleSelected(tx.id, e.target.checked)}
+              aria-label={`Save ${tx.description} as a business expense`}
+              className="h-5 w-5 cursor-pointer accent-[var(--accent-2)] disabled:cursor-not-allowed disabled:opacity-40"
+            />
+          </span>
+        ) : null}
         <div className="min-w-0 flex-1 max-w-full overflow-hidden">
           {/* break-words lets the description wrap on a hyphen / mid-
               token when the row is narrow (Opera in particular was
@@ -259,6 +304,14 @@ export function TxRow({
               ) : null}
             </span>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* Say why a row cannot be saved, rather than showing a dead checkbox
+          and leaving the user to guess. */}
+      {eligibility && eligibility !== "eligible" && eligibility !== "booked" ? (
+        <div className="mt-2 text-[11px] text-ink-muted">
+          {INELIGIBLE_REASON[eligibility]}
         </div>
       ) : null}
 

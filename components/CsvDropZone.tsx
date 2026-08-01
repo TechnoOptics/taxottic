@@ -23,9 +23,26 @@ import { useRouter } from "next/navigation";
  * the LAST successful import-review page, or back to the import page
  * with the error inline if anything failed.
  */
+type DuplicateFileInfo = {
+  importId: string;
+  filename: string;
+  uploadedAt: string;
+  rowCount: number;
+};
+
 type BatchResult =
-  | { ok: true; importId: string; publicId: string }
-  | { ok: false; error: string; publicId: string };
+  | {
+      ok: true;
+      importId: string;
+      publicId: string;
+      duplicateRowCount: number;
+    }
+  | {
+      ok: false;
+      error: string;
+      publicId: string;
+      duplicateOf?: DuplicateFileInfo;
+    };
 
 type Props = {
   /** Hidden field value embedded into every upload. */
@@ -37,7 +54,14 @@ type Props = {
 type FileStatus =
   | { phase: "queued" }
   | { phase: "uploading" }
-  | { phase: "done"; importId: string }
+  | { phase: "done"; importId: string; duplicateRowCount: number }
+  /**
+   * Stopped because this file's CONTENT is already imported, whatever it is
+   * named. Not an error: the user is asked, and can import anyway. Refusing
+   * outright would be wrong, a re-import is legitimate when the first one was
+   * deleted or landed on the wrong company.
+   */
+  | { phase: "duplicate"; info: DuplicateFileInfo; publicId: string }
   | { phase: "error"; message: string };
 
 export function CsvDropZone({ companyId, action }: Props) {
@@ -48,6 +72,9 @@ export function CsvDropZone({ companyId, action }: Props) {
   const [isPending, startTransition] = useTransition();
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Ties every file in this upload together so the review screens can be
+  // walked one at a time ("file 2 of 4").
+  const [batchId] = useState(() => crypto.randomUUID());
 
   function addFiles(incoming: FileList | File[]) {
     const list = Array.from(incoming).filter((f) =>
@@ -66,65 +93,100 @@ export function CsvDropZone({ companyId, action }: Props) {
     setStatuses((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  /**
+   * Upload one file. `force` re-sends a file the server flagged as an exact
+   * content duplicate, after the user has seen which import it matches.
+   */
+  async function uploadOne(
+    index: number,
+    batchId: string,
+    force: boolean,
+  ): Promise<BatchResult> {
+    setStatuses((prev) => {
+      const next = [...prev];
+      next[index] = { phase: "uploading" };
+      return next;
+    });
+    const fd = new FormData();
+    fd.set("company_id", companyId);
+    fd.set("account_type", accountType);
+    fd.set("file", files[index]);
+    fd.set("batch_id", batchId);
+    if (force) fd.set("force", "1");
+    const result = await action(fd);
+
+    setStatuses((prev) => {
+      const next = [...prev];
+      if (result.ok) {
+        next[index] = {
+          phase: "done",
+          importId: result.importId,
+          duplicateRowCount: result.duplicateRowCount,
+        };
+      } else if (result.duplicateOf) {
+        next[index] = {
+          phase: "duplicate",
+          info: result.duplicateOf,
+          publicId: result.publicId,
+        };
+      } else {
+        next[index] = { phase: "error", message: result.error };
+      }
+      return next;
+    });
+    return result;
+  }
+
+  function importAnyway(index: number) {
+    startTransition(async () => {
+      const result = await uploadOne(index, batchId, true);
+      if (result.ok) {
+        router.push(`/c/${result.publicId}/import/${result.importId}`);
+      }
+    });
+  }
+
   async function uploadAll() {
     if (files.length === 0) return;
     startTransition(async () => {
-      let lastImportId: string | null = null;
-      let lastPublicId = "";
-      let stopOnError: { i: number; msg: string; publicId: string } | null =
-        null;
+      let firstImportId: string | null = null;
+      let firstPublicId = "";
+      let stopOnError: { msg: string; publicId: string } | null = null;
 
       // Iterate sequentially. Each call returns a result (no
       // redirect), so the dropzone stays mounted across the whole
-      // queue and we can show per-row status. On first error we stop
-      // and navigate to the import page with the message.
+      // queue and we can show per-row status. A hard error stops the
+      // queue; a content-duplicate does not, since the remaining files
+      // are usually fine and the user can decide about that one file
+      // without losing the rest of the batch.
       for (let i = 0; i < files.length; i++) {
-        setStatuses((prev) => {
-          const next = [...prev];
-          next[i] = { phase: "uploading" };
-          return next;
-        });
-        const fd = new FormData();
-        fd.set("company_id", companyId);
-        fd.set("account_type", accountType);
-        fd.set("file", files[i]);
-        const result = await action(fd);
+        const result = await uploadOne(i, batchId, false);
         if (result.ok) {
-          lastImportId = result.importId;
-          lastPublicId = result.publicId;
-          setStatuses((prev) => {
-            const next = [...prev];
-            next[i] = { phase: "done", importId: result.importId };
-            return next;
-          });
+          if (!firstImportId) {
+            firstImportId = result.importId;
+            firstPublicId = result.publicId;
+          }
+        } else if (result.duplicateOf) {
+          continue;
         } else {
-          stopOnError = {
-            i,
-            msg: result.error,
-            publicId: result.publicId,
-          };
-          setStatuses((prev) => {
-            const next = [...prev];
-            next[i] = { phase: "error", message: result.error };
-            return next;
-          });
+          stopOnError = { msg: result.error, publicId: result.publicId };
           break;
         }
       }
 
-      // After the queue: navigate. Errors get priority, if any file
-      // failed, land on the import page with the inline banner. If
-      // every file succeeded, send the user to the last import's
-      // review page (a common pattern: upload 3 months of statements,
-      // jump straight into the most-recent one for review).
+      // After the queue: navigate. A hard failure lands on the import
+      // page with the inline banner. Otherwise open the FIRST import of
+      // the batch, not the last: the review screens are now chained
+      // ("file 1 of 4", with a Next button), and the user asked to review
+      // them one at a time, which means starting at the beginning.
       if (stopOnError) {
         router.push(
           `/c/${stopOnError.publicId}/import?error=${encodeURIComponent(
             stopOnError.msg,
           )}`,
         );
-      } else if (lastImportId && lastPublicId) {
-        router.push(`/c/${lastPublicId}/import/${lastImportId}`);
+      } else if (firstImportId && firstPublicId) {
+        router.push(`/c/${firstPublicId}/import/${firstImportId}`);
       }
     });
   }
@@ -249,25 +311,65 @@ export function CsvDropZone({ companyId, action }: Props) {
             return (
               <li
                 key={i}
-                className="flex items-center justify-between gap-2 rounded-lg border border-forest-100 bg-white/70 px-3 py-2 text-sm"
+                className="rounded-lg border border-forest-100 bg-white/70 px-3 py-2 text-sm"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-forest-900 truncate">
-                    {f.name}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-forest-900 truncate">
+                      {f.name}
+                    </div>
+                    <div className="text-xs text-ink-muted">
+                      {(f.size / 1024).toFixed(1)} KB · {statusLabel(s)}
+                    </div>
                   </div>
-                  <div className="text-xs text-ink-muted">
-                    {(f.size / 1024).toFixed(1)} KB · {statusLabel(s)}
-                  </div>
+                  {s?.phase === "queued" || s?.phase === "error" ? (
+                    <button
+                      type="button"
+                      onClick={() => removeAt(i)}
+                      className="text-xs text-ink-muted hover:text-red-700"
+                      disabled={isPending}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
-                {s.phase === "queued" || s.phase === "error" ? (
-                  <button
-                    type="button"
-                    onClick={() => removeAt(i)}
-                    className="text-xs text-ink-muted hover:text-red-700"
-                    disabled={isPending}
-                  >
-                    Remove
-                  </button>
+
+                {/* Same content, different filename. Say which import it
+                    matches and let the user decide, rather than silently
+                    refusing or silently importing a second copy. */}
+                {s?.phase === "duplicate" ? (
+                  <div className="mt-2 rounded-lg border border-gold-300 bg-gold-50/60 px-3 py-2">
+                    <p className="text-xs leading-relaxed text-forest-900">
+                      Already imported. The contents match{" "}
+                      <span className="font-medium break-words">
+                        {s.info.filename}
+                      </span>{" "}
+                      ({s.info.rowCount} rows), uploaded{" "}
+                      {new Date(s.info.uploadedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                      . The file name is different but the contents are
+                      identical.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <a
+                        href={`/c/${s.publicId}/import/${s.info.importId}`}
+                        className="btn-ghost text-xs"
+                      >
+                        Open the existing import
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => importAnyway(i)}
+                        disabled={isPending}
+                        className="btn-ghost text-xs"
+                      >
+                        Import it again anyway
+                      </button>
+                    </div>
+                  </div>
                 ) : null}
               </li>
             );
@@ -299,7 +401,13 @@ function statusLabel(s: FileStatus | undefined): string {
     case "uploading":
       return "uploading…";
     case "done":
-      return "done";
+      return s.duplicateRowCount > 0
+        ? `done · ${s.duplicateRowCount} duplicate ${
+            s.duplicateRowCount === 1 ? "row" : "rows"
+          } held back`
+        : "done";
+    case "duplicate":
+      return "already imported, needs your decision";
     case "error":
       return `error: ${s.message}`;
   }
