@@ -176,7 +176,15 @@ export default async function IncomePage({ params }: { params: Params }) {
                     );
                     const isCurrent = month === currentMonth;
                     return (
-                      <li key={month}>
+                      // min-w-0 defeats the grid item's automatic minimum
+                      // size. A grid item defaults to `min-width: auto`, so
+                      // the track cannot shrink below the item's min-content
+                      // width. The expanded rows contain `truncate` text
+                      // (white-space: nowrap), whose min-content is the FULL
+                      // untruncated string, so opening a month blew the whole
+                      // accordion out to ~486px inside a 264px column and
+                      // pushed Edit / Remove off a 344px screen.
+                      <li key={month} className="min-w-0">
                         <details
                           open={isCurrent}
                           className="group rounded-xl border border-forest-100 bg-white overflow-hidden"

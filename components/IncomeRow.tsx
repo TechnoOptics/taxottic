@@ -86,7 +86,7 @@ export function IncomeRow({
 
   if (editing) {
     return (
-      <li className="rounded-lg border border-gold-300 bg-cream/50 px-4 py-3">
+      <li className="min-w-0 rounded-lg border border-gold-300 bg-cream/50 px-4 py-3">
         <form
           action={updateAction}
           onSubmit={() => {
@@ -177,7 +177,11 @@ export function IncomeRow({
     // drop to a second line on narrow phones instead of pushing the row
     // past the viewport; the label column is the only shrinkable piece
     // (min-w-0 + truncate) and the cadence badge / amount never break.
-    <li className="flex flex-wrap items-center justify-between rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm gap-x-3 gap-y-1">
+    // min-w-0: this <li> is a grid item (the month accordion's row list), and
+    // a grid item's default `min-width: auto` floors it at min-content. The
+    // truncating label + notes below are `white-space: nowrap`, so their
+    // min-content is the whole string and the row refused to shrink.
+    <li className="min-w-0 flex flex-wrap items-center justify-between rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm gap-x-3 gap-y-1">
       <div className="min-w-0 flex-1 basis-40">
         <div className="font-medium text-forest-900 flex items-center gap-2 min-w-0">
           <span className="truncate min-w-0">

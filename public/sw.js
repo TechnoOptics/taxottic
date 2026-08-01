@@ -834,7 +834,17 @@
 // first two controls, General survives unchanged as one row among
 // them, and an unread dot is backed by a new reads table. Markup
 // changed across the chat surface, so cached shells must not be reused.
-const CACHE_VERSION = "v142";
+// v143: Fold cover screen fixes. The income year-to-date rows
+// overflowed their grid column (a grid item defaults to min-width:auto
+// and the rows use truncate, so min-content was the full untruncated
+// string) and Edit/Remove were literally untappable. The main menu did
+// not scroll: its height cap sat on a plain-block wrapper so the nav
+// never became a scroll container, and the page behind moved instead.
+// The profile menu measured its cap from the viewport top rather than
+// its anchor, so Sign out sat below the fold with no way to scroll to
+// it; Switch accounts and Sign out are now pinned outside the scroll
+// region and the long segments collapse.
+const CACHE_VERSION = "v143";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
