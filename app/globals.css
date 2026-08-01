@@ -1145,7 +1145,18 @@ main, footer, nav {
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: co-gold-pan 8s ease-in-out infinite;
+    /* Frame budget: `background-clip: text` cannot be composited, so every
+       distinct background-position re-rasterizes the glyph mask on the main
+       thread. Measured on the component harness at 6x CPU throttle, the
+       marketing home's ten headline runs cost 644ms of paint per 2.5s of idle
+       time (26% of the main thread doing nothing but shimmer). `steps(240)`
+       advances the gradient 30 times a second instead of once per frame,
+       which drops that to 271ms. The sheen travels one element width per
+       4s, so a step is ~2.5px on a headline: below the perceptual floor.
+       The timing function has to carry the stepping, so the eased travel is
+       now linear. Do not restore a continuous timing function here without
+       re-measuring. */
+    animation: co-gold-pan 8s steps(240, end) infinite;
   }
   @keyframes co-gold-pan {
     0%, 100% { background-position: 0% 50%; }
@@ -1182,7 +1193,16 @@ main, footer, nav {
     box-shadow:
       0 1px 0 rgba(213, 187, 126, 0.18) inset,
       0 -10px 24px -10px rgba(0, 0, 0, 0.35) inset;
-    animation: reward-drift 16s ease-in-out infinite;
+    /* Frame budget: four stacked background layers, one of them an SVG
+       turbulence texture, composited with `background-blend-mode`. Panning
+       background-position re-rasterizes that whole stack per tile per frame,
+       and the dashboard shows up to 14 tiles at once. A full grid cost 494ms
+       of paint and 355ms of raster per 2.5s of idle time (component harness,
+       6x CPU throttle). Stepping to 15 updates a second halves both. The loop
+       still takes 16s, so a step nudges a soft radial gradient by roughly two
+       pixels on a phone-sized tile, which does not read as stepping. Do not
+       restore a continuous timing function without re-measuring. */
+    animation: reward-drift 16s steps(240, end) infinite;
   }
   .reward-tile-inner.is-locked {
     background-color: #1b2540;
@@ -1242,6 +1262,10 @@ main, footer, nav {
       0 8px 24px -10px rgba(18, 26, 42, 0.45);
     color: #fbf7e9;
     isolation: isolate;
+    /* Contains the gold sweep's horizontal overhang (see .app-header::after).
+       `clip` rather than `hidden` so this never becomes a scroll container,
+       and x-only so overflow-y stays visible for anything hanging below. */
+    overflow-x: clip;
     /* Always-on frosted backdrop. The gradient alphas above
        deliberately stay <1 so blur has something to blur. */
     backdrop-filter: blur(14px) saturate(140%);
@@ -1281,12 +1305,28 @@ main, footer, nav {
       radial-gradient(800px 200px at 20% 0%, rgba(213, 187, 126, 0.08), transparent 70%),
       radial-gradient(600px 200px at 100% 100%, rgba(213, 187, 126, 0.06), transparent 70%);
   }
-  /* Animated thin gold sweep along the bottom edge - the signature line */
+  /* Animated thin gold sweep along the bottom edge - the signature line.
+
+     Frame budget: this used to pan `background-position` across a
+     `background-size: 200%` gradient. That is a paint-every-frame property,
+     and because the header is on all 95 authenticated pages it burned 374ms
+     of paint plus 135ms of style recalc per 2.5s of *idle* time (measured on
+     the component harness at 6x CPU throttle) for a 1.5px line. Removing
+     just this animation took both to zero.
+
+     Same sweep, composited: the bar is twice the header's width and the
+     gradient fills it, so translating the bar by a quarter of its own width
+     puts the bright centre stop at the header's right edge, and -25% puts it
+     at the left edge - the exact travel the background-position keyframes
+     described. transform is a compositor property, so no main-thread paint.
+     The horizontal overhang is contained by `overflow-x: clip` on the header
+     (see .app-header), which leaves overflow-y visible so nothing anchored
+     below the bar is clipped. */
   .app-header::after {
     content: "";
     position: absolute;
-    left: 0;
-    right: 0;
+    left: -50%;
+    right: -50%;
     bottom: 0;
     height: 1.5px;
     background: linear-gradient(
@@ -1297,7 +1337,6 @@ main, footer, nav {
       rgba(213, 187, 126, 0.55) 65%,
       transparent 100%
     );
-    background-size: 200% 100%;
     animation: co-header-shimmer 14s ease-in-out infinite;
   }
 
@@ -1357,12 +1396,17 @@ main, footer, nav {
     .bella-fab::before { display: none; }
   }
 
-  /* Header glow line: faint gold sweep beneath sticky headers */
+  /* Header glow line: faint gold sweep beneath sticky headers. Same
+     composited construction as .app-header::after above; needs
+     `overflow-x: clip` on whatever carries the class. */
+  .header-glow-line {
+    overflow-x: clip;
+  }
   .header-glow-line::after {
     content: "";
     position: absolute;
-    left: 0;
-    right: 0;
+    left: -50%;
+    right: -50%;
     bottom: 0;
     height: 2px;
     background: linear-gradient(
@@ -1373,12 +1417,11 @@ main, footer, nav {
       rgba(213, 187, 126, 0.6) 70%,
       transparent 100%
     );
-    background-size: 200% 100%;
     animation: co-header-shimmer 12s ease-in-out infinite;
   }
   @keyframes co-header-shimmer {
-    0%, 100% { background-position: 0% 0%; }
-    50% { background-position: 100% 0%; }
+    0%, 100% { transform: translateX(25%); }
+    50% { transform: translateX(-25%); }
   }
 
   /* Mobile menu slide-up from the bottom-left FAB. The panel is

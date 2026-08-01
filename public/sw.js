@@ -844,7 +844,22 @@
 // its anchor, so Sign out sat below the fold with no way to scroll to
 // it; Switch accounts and Sign out are now pinned outside the scroll
 // region and the long segments collapse.
-const CACHE_VERSION = "v143";
+// v145: frame budget. Three continuous decorative animations were
+// driving main-thread paint every single frame: the header's gold
+// sweep panned background-position (374ms of paint plus 135ms of
+// style recalc per 2.5s of idle, on all 95 authenticated pages), and
+// the gold-shine headlines and the achievement tiles did the same
+// against a text clip and a four-layer blended background. The header
+// sweep is now a composited transform and the other two step at 30Hz
+// instead of once per frame; the sweep's markup is unchanged but its
+// pseudo-element geometry is not, so a cached shell paired with the
+// new stylesheet would render the line off-centre. The profile menu
+// and the tasks bell also stopped re-anchoring on every scroll event
+// (they hang off a fixed header, so the anchor never moved), and the
+// trip list reuses its Intl formatters and sorts each drive's GPS
+// fixes once instead of twice per render. v144 is skipped: it is
+// taken by an unmerged branch.
+const CACHE_VERSION = "v145";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
