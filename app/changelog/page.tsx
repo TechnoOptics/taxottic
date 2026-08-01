@@ -42,9 +42,9 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: "2026-08-01",
-    title: "Narrow-screen fixes for foldable cover displays",
-    body: "Three fixes for very narrow phone screens. Expanding a month under Year-to-date on the Income page no longer pushes the row past the edge of the screen, so Edit and Remove stay tappable. The main menu now scrolls its own content instead of scrolling the page behind it. The profile menu starts with its Switch portal and Preview plan sections collapsed, and Switch accounts and Sign out are pinned to the bottom so they are always reachable.",
-    tags: ["fix"],
+    title: "Chat opens on your conversations, not one company room",
+    body: "Chat now lands on a list of your conversations, with 'New message' and 'New group' as the first thing you see. Direct messages and private groups already existed but were hidden behind two small links, so chat felt like a single company-wide room. General is still there with all its history, now as one conversation among the rest. A direct message or private group is readable only by the people in it, enforced in the database, and losing your seat on a company now ends your access to its conversations immediately.",
+    tags: ["shipped", "security"],
   },
   {
     date: "2026-05-12",

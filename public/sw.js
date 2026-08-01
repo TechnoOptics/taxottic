@@ -826,7 +826,25 @@
 // no bell entry and no popup. Markup changed on the trip list, so the
 // bump keeps v137 clients from hydrating new server HTML against cached
 // chunks.
-const CACHE_VERSION = "v140";
+// v142: chat is an inbox instead of a forced redirect into General.
+// /chat listed nothing and redirected straight into the default
+// channel, so the direct-message and group features that shipped in
+// April were unreachable: production had zero DMs ever created. The
+// page now lists conversations with New message and New group as its
+// first two controls, General survives unchanged as one row among
+// them, and an unread dot is backed by a new reads table. Markup
+// changed across the chat surface, so cached shells must not be reused.
+// v143: Fold cover screen fixes. The income year-to-date rows
+// overflowed their grid column (a grid item defaults to min-width:auto
+// and the rows use truncate, so min-content was the full untruncated
+// string) and Edit/Remove were literally untappable. The main menu did
+// not scroll: its height cap sat on a plain-block wrapper so the nav
+// never became a scroll container, and the page behind moved instead.
+// The profile menu measured its cap from the viewport top rather than
+// its anchor, so Sign out sat below the fold with no way to scroll to
+// it; Switch accounts and Sign out are now pinned outside the scroll
+// region and the long segments collapse.
+const CACHE_VERSION = "v143";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

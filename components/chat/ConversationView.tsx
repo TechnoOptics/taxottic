@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { rethrowIfRedirect } from "@/lib/next/redirect-error";
 import { Monogram, displayName } from "./Monogram";
@@ -30,7 +31,10 @@ type Props = {
   sendAction: (formData: FormData) => Promise<void>;
   deleteAction: (formData: FormData) => Promise<void>;
   addGroupMemberAction: (formData: FormData) => Promise<void>;
+  removeGroupMemberAction: (formData: FormData) => Promise<void>;
   leaveAction: (formData: FormData) => Promise<void>;
+  /** Group creator, or a company manager: may remove other members. */
+  canManageMembers: boolean;
 };
 
 // File limits matched to the migration's 25MB hard cap.
@@ -55,7 +59,9 @@ export function ConversationView({
   sendAction,
   deleteAction,
   addGroupMemberAction,
+  removeGroupMemberAction,
   leaveAction,
+  canManageMembers,
 }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
@@ -158,6 +164,33 @@ export function ConversationView({
       supabase.removeChannel(channel);
     };
   }, [conversation.id, supabase]);
+
+  // Stamp this conversation as read. Drives the single dot on the chat
+  // inbox and nothing else: no rail badge, no push, no entry in the
+  // outstanding-tasks bell. RLS restricts the row to this user, so
+  // writing it straight from the client is safe.
+  useEffect(() => {
+    let cancelled = false;
+    const stamp = new Date().toISOString();
+    void supabase
+      .from("chat_conversation_reads")
+      .upsert(
+        {
+          conversation_id: conversation.id,
+          user_id: currentUserId,
+          last_read_at: stamp,
+        },
+        { onConflict: "conversation_id,user_id" },
+      )
+      .then(() => {
+        if (cancelled) return;
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Re-stamp when new messages land so leaving the tab open doesn't
+    // leave the inbox claiming there is something unread.
+  }, [conversation.id, currentUserId, supabase, messages.length]);
 
   // Autoscroll to the latest message when the list grows.
   useEffect(() => {
@@ -305,26 +338,47 @@ export function ConversationView({
   return (
     <div className="card flex flex-col h-[72vh] min-h-[520px] overflow-hidden">
       {/* Header */}
-      <div className="px-4 sm:px-5 py-3 border-b border-forest-100 flex items-center justify-between gap-3">
-        <div className="min-w-0">
+      <div className="px-2 sm:px-5 py-2 sm:py-3 border-b border-forest-100 flex items-center gap-1 sm:gap-3">
+        {/* On a phone this is the only way back to the conversation
+            list, since ChatShell hides the sidebar below md. */}
+        <Link
+          href={`/c/${companyPublicId}/chat`}
+          aria-label="Back to all chats"
+          className="md:hidden size-11 shrink-0 grid place-items-center rounded-lg text-ink-soft hover:bg-cream/70 hover:text-forest-900"
+        >
+          <svg
+            viewBox="0 0 20 20"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 4 L6 10 L12 16" />
+          </svg>
+        </Link>
+        <div className="min-w-0 flex-1">
           <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
             {headerKindLabel}
           </div>
-          <div className="display text-lg text-forest-900 truncate">
+          <div className="display text-base sm:text-lg text-forest-900 truncate">
             {conversation.kind === "channel" ? `#${headerTitle}` : headerTitle}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={() => setShowMembers((v) => !v)}
-            className="text-xs text-ink-soft hover:text-forest-900 inline-flex items-center gap-1.5"
+            className="min-h-11 px-2 text-xs text-ink-soft hover:text-forest-900 inline-flex items-center gap-1.5"
             aria-pressed={showMembers}
           >
-            <span className="font-medium">
-              {visibleMemberIds.length}
+            <span className="font-medium">{visibleMemberIds.length}</span>
+            <span className="hidden sm:inline">
+              {visibleMemberIds.length === 1 ? "member" : "members"}
             </span>
-            <span>{visibleMemberIds.length === 1 ? "member" : "members"}</span>
           </button>
           {canLeave ? (
             <form action={leaveAction}>
@@ -335,7 +389,7 @@ export function ConversationView({
               />
               <button
                 type="submit"
-                className="text-xs text-ink-muted hover:text-red-700"
+                className="min-h-11 px-2 text-xs text-ink-muted hover:text-red-700"
                 title="Leave"
               >
                 Leave
@@ -345,7 +399,7 @@ export function ConversationView({
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col-reverse md:flex-row flex-1 min-h-0">
         {/* Messages */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div
@@ -547,19 +601,21 @@ export function ConversationView({
           </form>
         </div>
 
-        {/* Member rail (collapsible). Hidden on small screens unless toggled. */}
+        {/* Member rail. A right column on desktop; on a phone it drops
+            above the messages, which is why the container reverses. */}
         {showMembers ? (
-          <aside className="w-56 shrink-0 border-l border-forest-100 overflow-y-auto no-scrollbar p-3 hidden md:block">
+          <aside className="w-full md:w-56 shrink-0 max-h-56 md:max-h-none border-t md:border-t-0 md:border-l border-forest-100 overflow-y-auto no-scrollbar p-3">
             <MemberList
               memberIds={visibleMemberIds}
               memberById={memberById}
               currentUserId={currentUserId}
-              isManager={isManager}
               kind={conversation.kind}
               conversationId={conversation.id}
               companyMembers={companyMembers}
               conversationMemberIds={conversationMemberIds}
+              canManageMembers={canManageMembers}
               addAction={addGroupMemberAction}
+              removeAction={removeGroupMemberAction}
             />
           </aside>
         ) : null}
@@ -579,17 +635,20 @@ function MemberList({
   conversationId,
   companyMembers,
   conversationMemberIds,
+  canManageMembers,
   addAction,
+  removeAction,
 }: {
   memberIds: string[];
   memberById: Map<string, CompanyMember>;
   currentUserId: string;
-  isManager: boolean;
   kind: ConversationKind;
   conversationId: string;
   companyMembers: CompanyMember[];
   conversationMemberIds: string[];
+  canManageMembers: boolean;
   addAction: (formData: FormData) => Promise<void>;
+  removeAction: (formData: FormData) => Promise<void>;
 }) {
   const [adding, setAdding] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -622,6 +681,26 @@ function MemberList({
     }
   }
 
+  async function remove(userId: string) {
+    setAdding(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.set("conversation_id", conversationId);
+      fd.set("user_id", userId);
+      await removeAction(fd);
+    } catch (err) {
+      rethrowIfRedirect(err);
+      setError(err instanceof Error ? err.message : "Failed to remove member.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  // Only groups have a membership you can edit: channels include the
+  // whole company implicitly, and a DM is permanently the two of you.
+  const editable = kind === "group";
+
   return (
     <div>
       <div className="text-[10px] uppercase tracking-[0.22em] text-gold-700 font-medium px-1">
@@ -634,7 +713,7 @@ function MemberList({
           return (
             <li
               key={id}
-              className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-cream/60"
+              className="flex items-center gap-2.5 rounded-lg px-2 min-h-11 text-sm hover:bg-cream/60"
             >
               <Monogram userId={id} member={m} size={26} />
               <span className="truncate flex-1">
@@ -645,11 +724,34 @@ function MemberList({
                   </span>
                 ) : null}
               </span>
+              {editable && canManageMembers && id !== currentUserId ? (
+                <button
+                  type="button"
+                  disabled={adding}
+                  onClick={() => remove(id)}
+                  aria-label={`Remove ${displayName(m)} from this group`}
+                  title="Remove from group"
+                  className="size-11 -mr-2 shrink-0 grid place-items-center text-ink-muted hover:text-red-700 disabled:opacity-50"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 5 L15 15 M15 5 L5 15" />
+                  </svg>
+                </button>
+              ) : null}
             </li>
           );
         })}
       </ul>
-      {kind === "group" ? (
+      {editable ? (
         <div className="mt-3">
           {pickerOpen ? (
             <div className="grid gap-1.5">
@@ -668,7 +770,7 @@ function MemberList({
                         type="button"
                         disabled={adding}
                         onClick={() => add(m.user_id)}
-                        className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-cream/60 disabled:opacity-50 text-left"
+                        className="w-full flex items-center gap-2 rounded-lg px-2 min-h-11 text-xs hover:bg-cream/60 disabled:opacity-50 text-left"
                       >
                         <Monogram userId={m.user_id} member={m} size={20} />
                         <span className="truncate flex-1 text-forest-900">
@@ -682,7 +784,7 @@ function MemberList({
               <button
                 type="button"
                 onClick={() => setPickerOpen(false)}
-                className="text-[11px] text-ink-muted hover:text-forest-900 px-1 self-start"
+                className="min-h-11 text-[11px] text-ink-muted hover:text-forest-900 px-1 self-start"
               >
                 Cancel
               </button>
@@ -694,7 +796,7 @@ function MemberList({
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
-              className="text-xs text-forest-700 hover:text-forest-900 px-1"
+              className="min-h-11 text-xs text-forest-700 hover:text-forest-900 px-1"
             >
               + Add member
             </button>
