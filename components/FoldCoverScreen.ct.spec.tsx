@@ -55,6 +55,38 @@ async function horizontalOffenders(
   }, viewportWidth);
 }
 
+const MENU = '[role="menu"]';
+const ACCOUNT_BUTTON = 'button[aria-label="Account menu"]';
+
+/**
+ * Open the account menu and wait until it is actually in the DOM.
+ *
+ * The wait is required, not defensive padding. UserMenu gates its portal on
+ * `open && anchor && mounted`, and `anchor` is populated by a useEffect that
+ * runs AFTER the click's commit, so the menu is never present in the same
+ * task as the click. A bare `page.evaluate` straight after `click()` is
+ * therefore racing a render tick: locally the CDP round-trip is slower than
+ * the tick so the menu is always there, but on a loaded CI runner the
+ * evaluate can win the race and `querySelector` returns null. Measured with
+ * an in-page probe: same task -> absent, one tick later -> present.
+ *
+ * `expect(...).toBeVisible()` polls for that exact condition, so it costs
+ * nothing when the menu is already up and cannot mask a genuine regression
+ * the way a fixed sleep would.
+ */
+async function openAccountMenu(page: import("@playwright/test").Page, label = "") {
+  await page.locator(ACCOUNT_BUTTON).click();
+  await expect(
+    page.locator(MENU),
+    `account menu did not open${label ? ` (${label})` : ""}`,
+  ).toBeVisible();
+}
+
+async function closeAccountMenu(page: import("@playwright/test").Page) {
+  await page.locator(ACCOUNT_BUTTON).click();
+  await expect(page.locator(MENU)).toHaveCount(0);
+}
+
 // ---------------------------------------------------------------------------
 // Defect 1: the Year-to-date accordion on /c/[publicId]/income
 // ---------------------------------------------------------------------------
@@ -120,6 +152,12 @@ test.describe("Income year-to-date accordion", () => {
     // force: before the fix the button is pushed outside the viewport and is
     // literally un-tappable, which is the defect; force lets us still measure.
     await page.getByLabel("Edit income entry").first().click({ force: true });
+    // Wait for the edit form, otherwise the measurement below can capture the
+    // pre-click view state and silently prove nothing.
+    await expect(
+      page.locator('select[name="month"]'),
+      "the inline edit form did not open",
+    ).toBeVisible();
     const editOffenders = await horizontalOffenders(page);
      
     console.log("EDIT MODE offenders:", JSON.stringify(editOffenders, null, 1));
@@ -178,33 +216,49 @@ test.describe("Width sweep", () => {
       </div>,
     );
 
+    // Recorded per width so the run proves it covered every width. A crash at
+    // the first width used to abort the loop while the suite still read as a
+    // meaningful sweep; the length assertion at the end makes that impossible.
+    const covered: number[] = [];
+
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 882 });
-      await page.waitForTimeout(60);
+      // The menu re-anchors on resize, so let that settle before measuring.
+      await expect(page.locator(ACCOUNT_BUTTON)).toBeVisible();
 
       const offenders = await horizontalOffenders(page, width);
       expect(offenders, `horizontal overflow at ${width}px`).toEqual([]);
 
-      await page.getByLabel("Account menu").click();
+      await openAccountMenu(page, `${width}px`);
+
+      const signOut = page.locator(MENU).getByRole("button", { name: "Sign out", exact: true });
+      await expect(signOut, `Sign out missing from the menu at ${width}px`).toHaveCount(1);
+
       const fits = await page.evaluate(() => {
-        const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
-        const signOut = [...menu.querySelectorAll("button")].find(
+        const menu = document.querySelector<HTMLElement>('[role="menu"]');
+        if (!menu) throw new Error('[role="menu"] is not in the DOM');
+        const signOutEl = [...menu.querySelectorAll("button")].find(
           (b) => b.textContent?.trim() === "Sign out",
-        )!;
+        );
+        if (!signOutEl) throw new Error('no "Sign out" button inside [role="menu"]');
         return {
           menuBottom: Math.round(menu.getBoundingClientRect().bottom),
-          signOutBottom: Math.round(signOut.getBoundingClientRect().bottom),
-          signOutHeight: Math.round(signOut.getBoundingClientRect().height),
+          signOutBottom: Math.round(signOutEl.getBoundingClientRect().bottom),
+          signOutHeight: Math.round(signOutEl.getBoundingClientRect().height),
           vh: window.innerHeight,
         };
       });
-       
+
       console.log(`w=${width}`, JSON.stringify(fits));
       expect(fits.menuBottom, `menu overhangs at ${width}px`).toBeLessThanOrEqual(fits.vh);
       expect(fits.signOutBottom, `Sign out off-screen at ${width}px`).toBeLessThanOrEqual(fits.vh);
       expect(fits.signOutHeight, `Sign out tap target at ${width}px`).toBeGreaterThanOrEqual(44);
-      await page.getByLabel("Account menu").click();
+
+      covered.push(width);
+      await closeAccountMenu(page);
     }
+
+    expect(covered, "the sweep must measure every width").toEqual(WIDTHS);
   });
 });
 
@@ -232,9 +286,16 @@ test.describe("Mobile menu sheet", () => {
       window.__CT_PATHNAME__ = "/c/co_0/income";
     });
     await page.getByLabel("Open menu").click();
+    // Same discipline as the account menu: wait for the sheet itself rather
+    // than assuming the click and the render land in the same task.
+    await expect(
+      page.locator('nav[aria-label="Main menu"]'),
+      "the menu sheet did not open",
+    ).toBeVisible();
 
     const m = await page.evaluate(() => {
-      const nav = document.querySelector<HTMLElement>('nav[aria-label="Main menu"]')!;
+      const nav = document.querySelector<HTMLElement>('nav[aria-label="Main menu"]');
+      if (!nav) throw new Error('nav[aria-label="Main menu"] is not in the DOM');
       const wrap = nav.parentElement as HTMLElement;
       const cs = getComputedStyle(nav);
       const wr = wrap.getBoundingClientRect();
@@ -294,15 +355,33 @@ test.describe("Profile menu", () => {
         />
       </div>,
     );
-    await page.getByLabel("Account menu").click();
+    await openAccountMenu(page);
+
+    // Assert the pieces the measurement depends on BEFORE evaluating, so a
+    // missing element fails with its own name rather than a null dereference
+    // stack trace that says nothing about what was being checked.
+    for (const name of ["Switch accounts", "Sign out"]) {
+      await expect(
+        page.locator(MENU).getByRole("button", { name, exact: true }),
+        `"${name}" is missing from the profile menu`,
+      ).toHaveCount(1);
+    }
 
     const m = await page.evaluate(() => {
-      const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+      const menu = document.querySelector<HTMLElement>('[role="menu"]');
+      if (!menu) throw new Error('[role="menu"] is not in the DOM');
       const r = menu.getBoundingClientRect();
-      const find = (label: string) =>
-        [...menu.querySelectorAll("button")].find((b) => b.textContent?.trim() === label);
-      const rect = (el?: HTMLElement) =>
-        el ? { top: Math.round(el.getBoundingClientRect().top), bottom: Math.round(el.getBoundingClientRect().bottom) } : null;
+      const find = (label: string) => {
+        const el = [...menu.querySelectorAll("button")].find(
+          (b) => b.textContent?.trim() === label,
+        );
+        if (!el) throw new Error(`no "${label}" button inside [role="menu"]`);
+        return el;
+      };
+      const rect = (el: HTMLElement) => ({
+        top: Math.round(el.getBoundingClientRect().top),
+        bottom: Math.round(el.getBoundingClientRect().bottom),
+      });
       return {
         menuRect: { top: Math.round(r.top), bottom: Math.round(r.bottom), h: Math.round(r.height) },
         maxHeight: getComputedStyle(menu).maxHeight,
@@ -319,7 +398,7 @@ test.describe("Profile menu", () => {
     await page.screenshot({ path: "test-results/fold-profile.png" });
 
     expect(m.menuRect.bottom, "menu must not extend past the viewport").toBeLessThanOrEqual(m.viewportH);
-    expect(m.switchAccounts!.bottom).toBeLessThanOrEqual(m.viewportH);
-    expect(m.signOut!.bottom).toBeLessThanOrEqual(m.viewportH);
+    expect(m.switchAccounts.bottom, "Switch accounts must be on screen").toBeLessThanOrEqual(m.viewportH);
+    expect(m.signOut.bottom, "Sign out must be on screen").toBeLessThanOrEqual(m.viewportH);
   });
 });
