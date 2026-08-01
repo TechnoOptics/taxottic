@@ -1,5 +1,6 @@
-Android: the first drive of the day is no longer missed.
+Drive tracking and category picker fixes.
 
-- If the phone shuts the app down overnight, driving away from home now restarts recording on its own, instead of waiting until you next open the app.
-- The app says plainly when it cannot record, rather than showing a tracking notice while capturing nothing.
-- Drives still appear on their own, already sorted business or personal.
+- Android: if the phone shuts the app down overnight, driving away from home now restarts recording on its own, so the first drive of the day is no longer missed.
+- The category list on synced transactions is readable again instead of showing one giant option per screen.
+- Drives appear on their own, already sorted business or personal.
+- iPhone: drives record in full detail from the moment they start.
