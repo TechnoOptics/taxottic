@@ -31,6 +31,23 @@ const eslintConfig = defineConfig([
     rules: {
       "react-hooks/purity": "warn",
       "react-hooks/set-state-in-effect": "warn",
+
+      // <Wordmark> renders its own next/link anchor. Wrapping it in another
+      // <Link> nests <a> inside <a>, which is invalid HTML: the parser closes
+      // the outer anchor early, the parsed DOM stops matching React's tree,
+      // and every affected page throws a hydration error (minified React
+      // error #418) in production. Nineteen page headers shipped that way
+      // before it was caught, so make the pattern a lint error rather than a
+      // console warning nobody reads.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            'JSXElement[openingElement.name.name="Link"] JSXElement[openingElement.name.name="Wordmark"]',
+          message:
+            "Wordmark already renders its own link to home. Wrapping it in <Link> nests <a> inside <a> and causes a hydration error. Use <Wordmark href=... /> on its own.",
+        },
+      ],
     },
   },
 ]);

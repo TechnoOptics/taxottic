@@ -73,9 +73,7 @@ export default async function GetPage() {
         }}
       >
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/" aria-label="Taxottic home">
-            <Wordmark />
-          </Link>
+          <Wordmark />
           <SignInIconLink />
         </div>
       </header>

@@ -50,9 +50,7 @@ export function GuideShell({
         }}
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Link href="/" aria-label="Taxottic home">
-            <Wordmark size="md" tone="cream" />
-          </Link>
+          <Wordmark size="md" tone="cream" />
           <Link href="/login" className="text-sm text-cream/80 hover:text-cream">
             Sign in
           </Link>
