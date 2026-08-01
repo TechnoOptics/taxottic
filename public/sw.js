@@ -858,7 +858,14 @@
 // as a composited transform. Also stepped the gold-shine and reward-tile
 // animations, and stopped the profile menu and bell re-measuring their
 // anchor on every scroll event when the anchor sits in a fixed header.
-const CACHE_VERSION = "v146";
+// v147: nested-anchor hydration fix. Nineteen public page headers wrapped
+// <Wordmark> (which renders its own link to home) in a second link, so the
+// served HTML had an <a> inside an <a>. The parser closes the outer anchor
+// early, the parsed DOM stops matching the tree React expects, and seven of
+// the eight public pages threw minified React error #418 in production.
+// The redundant wrappers are gone and the header markup changed on every one
+// of those pages, so cached shells must not be reused.
+const CACHE_VERSION = "v147";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
