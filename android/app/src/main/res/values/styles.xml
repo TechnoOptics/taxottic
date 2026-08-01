@@ -10,20 +10,40 @@
         <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
     </style>
 
-    <!-- Explicit alert-dialog theme. Without this, the native <select>
-         element's Android picker (a framework AlertDialog + ListView,
-         confirmed via `uiautomator dump`: android:id/parentPanel /
-         android:id/text1 CheckedTextView rows) rendered the launch splash
-         drawable (@drawable/splash — the full-bleed dark-green logo image)
-         behind its option rows, making the text unreadable. Swapping
-         AppTheme.NoActionBar's own windowBackground to a diagnostic red
-         had ZERO effect on the dialog, proving the dialog wasn't resolving
-         windowBackground from the Activity's theme at all — it falls back
-         to a default alertDialogTheme neither of our themes declared,
-         which apparently chains back to the splash drawable. Declaring our
-         own clean alertDialogTheme removes that ambiguity entirely. -->
+    <!-- Explicit alert-dialog theme. The native <select> element's Android
+         picker is a framework AlertDialog + ListView (confirmed via
+         `uiautomator dump`: android:id/parentPanel, android:id/customPanel,
+         android:id/text1 CheckedTextView rows). It was rendering the launch
+         splash drawable (@drawable/splash, the full-bleed navy logo image)
+         behind every option row.
+
+         THE FIRST FIX WAS INCOMPLETE and the bug shipped in 1.3.2. It was
+         re-measured on a Galaxy Z Fold5 on 2026-07-31 with the option rows
+         at bounds [0,85][904,1485] and [0,1488][904,2277], so 1400px and
+         789px tall against a normal ~150px. One option filled the screen,
+         which made a 89-item category list unusable.
+
+         Two things were missed the first time:
+
+         1. AppTheme.NoActionBarLaunch is what AndroidManifest actually
+            declares on MainActivity, and it was the ONLY one of the three
+            themes not declaring android:alertDialogTheme. So the dialog
+            kept resolving the platform default. That is also why swapping
+            AppTheme.NoActionBar's windowBackground to a diagnostic red had
+            zero effect: the wrong theme was being edited.
+
+         2. android:background is NOT a window attribute. Set as a theme
+            item (which the launch theme does, for the pre-Android-12
+            splash) it becomes the default background for any VIEW that
+            does not set its own, including the dialog's CheckedTextView
+            rows. A row backed by a full-bleed bitmap inherits that
+            bitmap's intrinsic height, which is the single mechanism behind
+            both the giant rows and the repeated logo. Neutralising
+            android:background here is therefore the load-bearing line, not
+            windowBackground. -->
     <style name="AppTheme.AlertDialog" parent="android:Theme.DeviceDefault.Dialog.Alert">
         <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:background">@null</item>
     </style>
 
     <!-- Post-splash theme Capacitor's BridgeActivity switches to.
@@ -67,7 +87,7 @@
          on `windowSplashScreenBackground`. With neither set it fell
          back to the FULL adaptive launcher icon (@mipmap/ic_launcher =
          its own ic_launcher_background circle + the brand foreground),
-         which the OS then circle-masks — so the splash showed the
+         which the OS then circle-masks, so the splash showed the
          wrong icon (a mismatched background disc, not the clean brand
          mark on navy). Pin the brand mark (foreground only, white on
          transparent) on the brand navy, and hand back to the app theme
@@ -81,6 +101,15 @@
         <item name="windowSplashScreenBackground">#121a2a</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <!-- REQUIRED. This is the theme AndroidManifest declares on
+             MainActivity, so it is the one the native <select> picker
+             resolves its dialog theme from. Leaving it out is what let the
+             splash drawable below leak into the picker's option rows. -->
+        <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
+        <!-- Pre-Android-12 branded splash. Keep it: on API < 31 this is
+             what avoids a white flash on launch. It is also why the
+             alertDialogTheme above is not optional, since a theme-level
+             android:background is inherited by plain views. -->
         <item name="android:background">@drawable/splash</item>
         <item name="android:statusBarColor">#121a2a</item>
         <item name="android:navigationBarColor">#121a2a</item>
