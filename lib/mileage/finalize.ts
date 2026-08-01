@@ -102,6 +102,29 @@ export function isPlausibleTrip(
   return distanceMiles / hours <= MAX_PLAUSIBLE_AVG_MPH;
 }
 
+/**
+ * The deduction actually written to a trip row.
+ *
+ * A drive the machine ASSUMED is business (autoClassify's blanket
+ * default fired because no saved place could decide) has no evidence
+ * behind it, and an over-claim is an IRS problem where an under-claim
+ * is only money left on the table. So it is stored at zero cents until
+ * a human confirms it. Every deduction rollup in the app sums stored
+ * `deduction_cents` filtered to business, so a zero keeps the drive out
+ * of the tax totals with no changes to any money math, while the drive
+ * itself still appears on the map and in the trip list.
+ *
+ * Applied on the INSERT path and on the re-render path alike: a rebuild
+ * may grow a drive's miles but must never restore its claim.
+ * `null` is a pre-existing row from before the flag, left alone.
+ */
+export function persistedDeductionCents(
+  computedCents: number,
+  needsConfirmation: boolean | null,
+): number {
+  return needsConfirmation === true ? 0 : computedCents;
+}
+
 /** Calendar year of an instant in US-Central, the fleet default. UTC
  *  rolls over 6 hours early, misfiling US evening drives near Dec 31. */
 export function localTaxYear(
@@ -140,7 +163,7 @@ async function renderTripFromRaw(
 ): Promise<{ miles: number; deductionCents: number } | null> {
   const { data: trip } = await admin
     .from("mileage_trips")
-    .select("started_at, ended_at, classification, tax_year")
+    .select("started_at, ended_at, classification, tax_year, needs_confirmation")
     .eq("id", tripId)
     .maybeSingle();
   if (!trip) return null;
@@ -232,11 +255,18 @@ async function renderTripFromRaw(
   const taxYear = (trip.tax_year as number) ?? new Date(startIso).getUTCFullYear();
   const classification = (trip.classification as Classification) ?? "unclassified";
   const newStart = track.points[0].captured_at;
-  const deductionCents = tripDeductionCents(
-    { distanceMiles: track.distanceMiles },
-    classification,
-    taxYear,
-    newStart,
+  // Still unconfirmed? Then this rebuild rewrites the distance but must
+  // NOT resurrect the claim. Once a human has confirmed the drive the
+  // flag is false (reclassifyTripCore clears it), so their decision
+  // wins here and the real deduction is recomputed as before.
+  const deductionCents = persistedDeductionCents(
+    tripDeductionCents(
+      { distanceMiles: track.distanceMiles },
+      classification,
+      taxYear,
+      newStart,
+    ),
+    (trip.needs_confirmation as boolean | null) ?? null,
   );
   const newEnd = track.points[track.points.length - 1].captured_at;
   const { error: updErr } = await admin
@@ -523,11 +553,16 @@ export async function finalizeUserTrips(
     // A carried human call always wins, including a deliberate "review
     // later". Otherwise the machine decides, and with auto-apply on it
     // must decide fully: no drive is parked in a review queue.
+    //
+    // `needsConfirmation` records that the machine GUESSED rather than
+    // decided. A carried human call is never a guess, so inheriting one
+    // clears the flag: a re-render cannot resurrect it on a drive
+    // somebody already confirmed.
+    const auto = carried || !autoApply ? null : autoClassify(trip, places);
     const classification = carried
       ? carried.classification
-      : autoApply
-        ? autoClassify(trip, places)
-        : suggestClassification(trip, places);
+      : (auto?.classification ?? suggestClassification(trip, places));
+    const needsConfirmation = auto?.needsConfirmation ?? false;
     // Tax year from the trip's LOCAL date. A US evening drive on Dec 31
     // is already Jan 1 in UTC, so getUTCFullYear() filed it under the
     // WRONG tax year — the deduction landed in a return the user had
@@ -535,11 +570,14 @@ export async function finalizeUserTrips(
     // until a per-company timezone exists; any US zone puts a Dec-31
     // evening drive back in the right year.
     const taxYear = localTaxYear(trip.startTs);
-    const dCents = tripDeductionCents(
-      { distanceMiles: trip.distanceMiles },
-      classification,
-      taxYear,
-      startedAt,
+    const dCents = persistedDeductionCents(
+      tripDeductionCents(
+        { distanceMiles: trip.distanceMiles },
+        classification,
+        taxYear,
+        startedAt,
+      ),
+      needsConfirmation,
     );
 
     // Plausibility gate: refuse to CREATE an impossible trip. The
@@ -565,6 +603,7 @@ export async function finalizeUserTrips(
         classification,
         classified_by: carried?.classified_by ?? null,
         classified_at: carried?.classified_at ?? null,
+        needs_confirmation: needsConfirmation,
         notes: carried?.notes ?? null,
         tax_year: taxYear,
         deduction_cents: dCents,

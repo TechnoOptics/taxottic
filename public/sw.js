@@ -815,7 +815,18 @@
 // colour on the light and dark surfaces alike. Markup changed on those
 // pages, so the bump keeps v136 clients from hydrating new server HTML
 // against cached chunks.
-const CACHE_VERSION = "v137";
+// v138: a drive the tracker only ASSUMED was business no longer counts
+// as a deduction on its own. Auto-apply files a drive the moment it
+// materialises, but when no saved place can decide it falls back to a
+// blanket "business", and three of the four companies have no saved
+// places at all, so every one of their drives was that guess. Those
+// drives now store a zero deduction and carry a quiet "Assumed
+// business, confirm" badge on /mileage with a one-tap Confirm that
+// writes the real figure. They still appear automatically with no push,
+// no bell entry and no popup. Markup changed on the trip list, so the
+// bump keeps v137 clients from hydrating new server HTML against cached
+// chunks.
+const CACHE_VERSION = "v138";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

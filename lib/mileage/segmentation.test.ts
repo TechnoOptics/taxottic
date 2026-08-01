@@ -294,17 +294,38 @@ describe("suggestClassification", () => {
 
   describe("autoClassify", () => {
     it("never returns unclassified: unknown endpoints take the default", () => {
-      expect(autoClassify(trip(99999, 88888), [home, office])).toBe("business");
-      expect(autoClassify(trip(99999, 88888), [])).toBe("business");
+      expect(autoClassify(trip(99999, 88888), [home, office])).toEqual({
+        classification: "business",
+        needsConfirmation: true,
+      });
+      expect(autoClassify(trip(99999, 88888), [])).toEqual({
+        classification: "business",
+        needsConfirmation: true,
+      });
     });
 
-    it("still files a home-to-home errand personal", () => {
+    it("flags the blanket default as needing confirmation", () => {
+      // No place evidence at all: the company that never saved a place
+      // (three of four in production) hits this on EVERY drive, so the
+      // drive must be marked, not silently filed as a deduction.
+      expect(autoClassify(trip(99999, 88888), []).needsConfirmation).toBe(true);
+    });
+
+    it("still files a home-to-home errand personal, with no flag", () => {
       const home2: Place = { ...home, id: "h2", lat: BASE_LAT };
-      expect(autoClassify(trip(0, 5000), [home2, home])).toBe("personal");
+      expect(autoClassify(trip(0, 5000), [home2, home])).toEqual({
+        classification: "personal",
+        needsConfirmation: false,
+      });
     });
 
-    it("still files a work drive business", () => {
-      expect(autoClassify(trip(5000, 0), [home, office])).toBe("business");
+    it("still files a work drive business, with no flag", () => {
+      // The heuristic DID decide here (an office endpoint), so this drive
+      // carries evidence and must not be marked for confirmation.
+      expect(autoClassify(trip(5000, 0), [home, office])).toEqual({
+        classification: "business",
+        needsConfirmation: false,
+      });
     });
   });
 });

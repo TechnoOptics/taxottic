@@ -108,3 +108,33 @@ describe("isPlausibleTrip", () => {
     expect(isPlausibleTrip(2, 0, 0)).toBe(false); // 240 mph even floored
   });
 });
+
+// A drive the machine ASSUMED is business (the place heuristic could not
+// decide, so the blanket default fired) carries no evidence, and an
+// over-claim is an IRS problem while an under-claim is only money left on
+// the table. It is stored at zero cents until a human confirms it, which
+// keeps it out of every deduction rollup in the app without touching any
+// money math: they all sum stored deduction_cents filtered to business.
+import { persistedDeductionCents } from "./finalize";
+
+describe("persistedDeductionCents (assumed drives claim nothing)", () => {
+  it("an assumed-business drive stores zero, whatever the rate says", () => {
+    expect(persistedDeductionCents(254, true)).toBe(0);
+  });
+
+  it("an evidence-backed drive stores its real deduction", () => {
+    expect(persistedDeductionCents(254, false)).toBe(254);
+  });
+
+  it("a pre-existing row (flag NULL) is untouched, no silent backfill", () => {
+    expect(persistedDeductionCents(254, null)).toBe(254);
+  });
+
+  it("holds on the RE-RENDER path too: a rebuild cannot restore cents", () => {
+    // renderTripFromRaw recomputes distance and deduction from the raw
+    // window with no plausibility gate, which is how 808, 314 and 1,343
+    // "mile" trips once became $1,875 of false deduction. While the drive
+    // is unconfirmed the rebuild can grow the miles but never the claim.
+    expect(persistedDeductionCents(101_875, true)).toBe(0);
+  });
+});
