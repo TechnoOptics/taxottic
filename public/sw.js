@@ -844,7 +844,14 @@
 // its anchor, so Sign out sat below the fold with no way to scroll to
 // it; Switch accounts and Sign out are now pinned outside the scroll
 // region and the long segments collapse.
-const CACHE_VERSION = "v143";
+// v144: a waiting service worker is now adopted automatically on
+// cold start, on resume, and whenever the page is hidden, instead of
+// only on a tap of the "New version" toast. The geofence import fix sat
+// live in production for hours while the affected phone kept running
+// the broken bundle, because nobody knew there was a toast to tap. The
+// toast still applies mid-session, when swapping the bundle under an
+// open form would lose typed input.
+const CACHE_VERSION = "v144";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
