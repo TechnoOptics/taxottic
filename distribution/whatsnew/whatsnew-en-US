@@ -1,6 +1,4 @@
-Automatic drive tracking and phone screen fixes.
+Updates now apply themselves.
 
-- Android: the automatic restart after your phone shuts the app down overnight now actually arms, so the first drive of the day is captured.
-- The category list on synced transactions keeps the app's own look, and a tap outside closes it.
-- Expanded income rows no longer run off the screen, and Edit and Remove are reachable again.
-- The menu scrolls on its own instead of moving the page behind it.
+- The app picks up fixes on its own when you open it or return to it, instead of waiting for you to notice a Refresh prompt. You will still be asked before anything changes while you are in the middle of something.
+- Carries the earlier fixes to automatic drive restarting, the category list, income rows and menu scrolling.
