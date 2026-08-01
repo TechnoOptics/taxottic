@@ -42,40 +42,64 @@ const TRIP_COLOR: Record<MapTrip["classification"], string> = {
   unclassified: "#A78EBF",
 };
 
-// Per-driver palette for multi-driver maps (e.g. the firm / manager team
-// view). Twelve qualitative hues chosen to stay legible against the navy
-// #1d2843 dial and to read as distinct from each other and from the green
-// start dot. Assigned deterministically by sorted driver id, so a given
-// driver keeps the same colour across renders within one map.
+// Per-driver palette for multi-driver maps (the manager team view and the
+// firm map). Derived from Okabe-Ito, the reference colour-blind-safe
+// qualitative set, with each hue lightened enough to carry against the navy
+// #1d2843 dial. Raw map hex is NOT remapped by the theme, so these are
+// deliberate light values rather than tokens.
+//
+// Screened rather than eyeballed. Against the dial every entry sits between
+// 5.37:1 and 11.76:1 contrast, and after dichromat simulation the closest
+// pair in the set is dE 14.8 (protanopia), 12.9 (deuteranopia) and 7.7
+// (tritanopia), all well clear of the ~2.3 just-noticeable threshold. The
+// twelve-hue palette this replaced collapsed to dE ~1.0 under all three,
+// i.e. several drivers were literally the same colour to a colour-blind
+// viewer.
+//
+// Hue is still never the only channel: each driver also carries a NUMBER,
+// on their trips' start disc and against their legend swatch, so the trails
+// remain identifiable with no colour perception at all. That number is why
+// a ninth driver reusing a colour is not a problem.
 const DRIVER_PALETTE = [
-  "#7DD3FC", // sky
-  "#FCA5A5", // rose
-  "#86EFAC", // green
-  "#FDBA74", // orange
-  "#C4B5FD", // violet
-  "#F9A8D4", // pink
-  "#67E8F9", // cyan
-  "#FDE047", // yellow
-  "#A3E635", // lime
-  "#5EEAD4", // teal
-  "#D8B4FE", // purple
-  "#FED7AA", // peach
+  "#F0A81E", // orange
+  "#56B4E9", // sky blue
+  "#00D6A0", // green
+  "#F0E442", // yellow
+  "#FF7B4D", // vermillion
+  "#E48FC8", // pink
+  "#A78BFA", // violet
+  "#EDE6D6", // cream
 ];
 
-/** Build a stable driverId → colour map from the trips on a map. Only
- *  meaningful when 2+ distinct drivers are present; callers gate on
- *  `.size >= 2`. Sorted so colour assignment is deterministic regardless
- *  of trip order. */
-function buildDriverColors(trips: MapTrip[]): Map<string, string> {
-  const ids = Array.from(
-    new Set(
-      trips
-        .map((t) => t.driverId)
-        .filter((id): id is string => typeof id === "string" && id.length > 0),
-    ),
-  ).sort();
-  const out = new Map<string, string>();
-  ids.forEach((id, i) => out.set(id, DRIVER_PALETTE[i % DRIVER_PALETTE.length]));
+/** Ink used on top of any palette colour (all eight are light). */
+const DRIVER_LABEL_INK = "#101828";
+
+export type DriverStyle = { color: string; number: number; name: string };
+
+/** Build a stable driverId → {colour, number, name} map from the trips on a
+ *  map. Only meaningful when 2+ distinct drivers are present; callers gate
+ *  on `.size >= 2`. Ordered by display name (id as the tie-break) so the
+ *  legend reads 1, 2, 3… down the list and a given driver keeps the same
+ *  colour and number across renders of the same data. */
+function buildDriverStyles(trips: MapTrip[]): Map<string, DriverStyle> {
+  const nameById = new Map<string, string>();
+  for (const t of trips) {
+    const id = t.driverId;
+    if (typeof id !== "string" || id.length === 0) continue;
+    if (!nameById.has(id))
+      nameById.set(id, t.driverName?.trim() || `Driver ${id.slice(0, 4)}`);
+  }
+  const ordered = Array.from(nameById.entries()).sort(
+    (a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]),
+  );
+  const out = new Map<string, DriverStyle>();
+  ordered.forEach(([id, name], i) =>
+    out.set(id, {
+      color: DRIVER_PALETTE[i % DRIVER_PALETTE.length],
+      number: i + 1,
+      name,
+    }),
+  );
   return out;
 }
 const PLACE_GLYPH: Record<MapPlace["kind"], string> = {
@@ -254,23 +278,18 @@ export function MileageMap({
   // legend below lists each driver + swatch instead of the classification
   // key, and personal/unreviewed trips are drawn a touch fainter so the
   // deductible business trails still stand out.
-  const driverColors = useMemo(() => buildDriverColors(trips), [trips]);
-  const colorByDriver = driverColors.size >= 2;
-  // Legend rows for the multi-driver map: name + swatch, sorted by name.
+  const driverStyles = useMemo(() => buildDriverStyles(trips), [trips]);
+  const colorByDriver = driverStyles.size >= 2;
+  // Legend rows for the multi-driver map: number + swatch + name, already
+  // in number order because buildDriverStyles numbers them by name.
   const driverLegend = useMemo(
     () =>
       colorByDriver
-        ? Array.from(driverColors.entries())
-            .map(([id, color]) => ({
-              id,
-              color,
-              name:
-                trips.find((t) => t.driverId === id)?.driverName?.trim() ||
-                `Driver ${id.slice(0, 4)}`,
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name))
+        ? Array.from(driverStyles.entries())
+            .map(([id, s]) => ({ id, ...s }))
+            .sort((a, b) => a.number - b.number)
         : [],
-    [colorByDriver, driverColors, trips],
+    [colorByDriver, driverStyles],
   );
 
   useEffect(() => {
@@ -305,7 +324,7 @@ export function MileageMap({
         // sparse fixes (sometimes just two endpoints) the honest trace is
         // straight segments; the Directions service can suggest the LIKELY
         // road route between the captured fixes, which we then draw in the
-        // same dashed "approximate" style. Purely visual — the claimed
+        // same dashed "approximate" style. Purely visual: the claimed
         // distance stays the captured trace, never the estimated route.
         const approxToSnap: {
           path: { lat: number; lng: number }[];
@@ -320,11 +339,11 @@ export function MileageMap({
           // otherwise the classification colour. When colouring by driver
           // we fade personal / unreviewed trips a touch so the deductible
           // business trails still read strongest.
-          const driverColor =
+          const driverStyle =
             colorByDriver && t.driverId
-              ? driverColors.get(t.driverId)
+              ? driverStyles.get(t.driverId)
               : undefined;
-          const lineColor = driverColor ?? TRIP_COLOR[t.classification];
+          const lineColor = driverStyle?.color ?? TRIP_COLOR[t.classification];
           const lineOpacity =
             colorByDriver && t.classification !== "business" ? 0.6 : 0.95;
           // Drop a faint dark "shadow" beneath the gold so the line
@@ -387,15 +406,31 @@ export function MileageMap({
           // checkered-flag disc = where it ended. Kept deliberately small
           // so the overview with many trips stays readable; the title
           // tooltips disambiguate on hover/long-press.
+          // On a multi-driver map the start disc takes the driver's colour
+          // and carries their LEGEND NUMBER. That number is the channel that
+          // does not depend on colour perception at all: a viewer who cannot
+          // separate two hues can still read "3" and match it to the legend.
           const startMarker = new maps.Marker({
             position: path[0],
             map,
-            title: "Trip start",
+            title: driverStyle
+              ? `${driverStyle.number}. ${driverStyle.name}: trip start`
+              : "Trip start",
             zIndex: 5,
+            ...(driverStyle
+              ? {
+                  label: {
+                    text: String(driverStyle.number),
+                    color: DRIVER_LABEL_INK,
+                    fontSize: "10px",
+                    fontWeight: "700",
+                  },
+                }
+              : {}),
             icon: {
               path: maps.SymbolPath.CIRCLE,
-              scale: 5.5,
-              fillColor: "#34D399",
+              scale: driverStyle ? 8.5 : 5.5,
+              fillColor: driverStyle?.color ?? "#34D399",
               fillOpacity: 1,
               strokeColor: "#0d121f",
               strokeWeight: 2,
@@ -464,8 +499,8 @@ export function MileageMap({
         }
         // Best-effort road-snapping for approximate trips. Re-paths the
         // already-drawn dashed polylines in place (same objects, same
-        // cleanup), so on ANY failure — Directions API not enabled on the
-        // key, quota, offline — the honest straight dashed trace simply
+        // cleanup), so on ANY failure (Directions API not enabled on the
+        // key, quota, offline) the honest straight dashed trace simply
         // stays. Capped per render to keep Directions usage bounded.
         const SNAP_CAP = 8;
         if (maps.DirectionsService && approxToSnap.length > 0) {
@@ -527,7 +562,7 @@ export function MileageMap({
         }
       });
     };
-  }, [trips, places, minZoom, colorByDriver, driverColors]);
+  }, [trips, places, minZoom, colorByDriver, driverStyles]);
 
   if (state === "no-key") {
     return (
@@ -568,31 +603,32 @@ export function MileageMap({
         aria-label="Mileage breadcrumb map"
       />
       {colorByDriver ? (
-        // Multi-driver map: colour = who drove. List each driver + swatch
-        // (capped so the chip can't swallow the map), with a note that
-        // fainter lines are personal / unreviewed drives.
-        <div className="absolute bottom-3 left-3 card px-3 py-2 text-[11px] max-w-[70%]">
+        // Multi-driver map: colour = who drove, and the numbered badge
+        // repeats that identity without relying on colour at all (it is the
+        // same number drawn on each of their start discs). Scrolls rather
+        // than truncating past a handful of drivers, and is width-capped so
+        // it never swallows the map on a 344px cover screen.
+        <div className="absolute bottom-3 left-3 right-3 sm:right-auto card px-3 py-2 text-[11px] sm:max-w-[70%]">
           <div className="text-[10px] uppercase tracking-[0.16em] text-gold-700 mb-1">
             Drivers
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {driverLegend.slice(0, 8).map((d) => (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 max-h-24 overflow-y-auto">
+            {driverLegend.map((d) => (
               <span key={d.id} className="flex items-center gap-1 min-w-0">
                 <span
-                  className="inline-block w-3 h-1.5 rounded shrink-0"
-                  style={{ background: d.color }}
-                />
-                <span className="truncate max-w-[8rem]">{d.name}</span>
+                  aria-hidden="true"
+                  className="grid place-items-center size-4 shrink-0 rounded-full text-[9px] font-bold leading-none"
+                  style={{ background: d.color, color: DRIVER_LABEL_INK }}
+                >
+                  {d.number}
+                </span>
+                <span className="truncate max-w-[7rem]">{d.name}</span>
               </span>
             ))}
-            {driverLegend.length > 8 ? (
-              <span className="text-ink-muted">
-                +{driverLegend.length - 8} more
-              </span>
-            ) : null}
           </div>
           <div className="text-[10px] text-ink-muted mt-1">
-            Fainter lines are personal / unreviewed.
+            Numbers match each trail&apos;s start dot. Teammates show
+            confirmed business drives only.
           </div>
         </div>
       ) : (

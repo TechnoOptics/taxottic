@@ -14,7 +14,13 @@ import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
-import { DriverPicker, ALL_DRIVERS } from "@/components/mileage/DriverPicker";
+import { DriverPicker } from "@/components/mileage/DriverPicker";
+import {
+  ALL_DRIVERS,
+  loadScopedTrips,
+  resolveTripScope,
+  stripForeignPrivateTrips,
+} from "@/lib/mileage/team-scope";
 import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
@@ -140,19 +146,20 @@ export default async function MileagePage({
       })
       .sort((a, b) => a.label.localeCompare(b.label));
   }
-  const driverIds = new Set(drivers.map((d) => d.userId));
-  // Only honour ?driver= for managers, and only for a real co-member.
-  // Everyone else (and any bad id) is pinned to their own drives.
-  // "All drivers" team overlay (managers, ≥2 members). Distinct from
-  // picking a single teammate: the map shows everyone's trails at once,
-  // each a unique colour, as a read-only view.
-  const viewingAll =
-    isManager && driverParam === ALL_DRIVERS && drivers.length >= 2;
+  // Who this request may read. resolveTripScope owns the whole decision
+  // (see lib/mileage/team-scope.ts): a manager of a 2+ person team now
+  // DEFAULTS to the team overlay, everyone else, and any hand-edited
+  // ?driver= naming a stranger, collapses to their own drives.
+  const scope = resolveTripScope({
+    isManager,
+    viewerUserId: user.id,
+    driverParam,
+    driverIds: drivers.map((d) => d.userId),
+  });
+  const viewingAll = scope.kind === "team";
   const viewingDriverId =
-    isManager && driverParam && driverIds.has(driverParam)
-      ? driverParam
-      : user.id;
-  const viewingSelf = !viewingAll && viewingDriverId === user.id;
+    scope.kind === "team" ? user.id : scope.driverUserId;
+  const viewingSelf = scope.kind === "self";
   const viewingDriverLabel =
     drivers.find((d) => d.userId === viewingDriverId)?.label ?? null;
   const showDriverPicker = isManager && drivers.length >= 2;
@@ -196,58 +203,25 @@ export default async function MileagePage({
   // route's true start + end.
   const pointsByTrip = new Map<string, Pt[]>();
   if (company) {
-    const TRIP_SELECT =
-      "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, notes";
-    if (viewingAll) {
-      // Team overlay: MY drives (all classifications) + every teammate's
-      // BUSINESS drives. Two scoped queries so teammates' personal /
-      // unclassified trips are never read — same privacy rule as the
-      // single-driver review, just applied per-driver.
-      const [ownRes, teamRes] = await Promise.all([
-        admin
-          .from("mileage_trips")
-          .select(TRIP_SELECT)
-          .eq("company_id", company.id)
-          .eq("driver_user_id", user.id)
-          .gte("started_at", sinceIso)
-          .order("started_at", { ascending: false })
-          .limit(500),
-        admin
-          .from("mileage_trips")
-          .select(TRIP_SELECT)
-          .eq("company_id", company.id)
-          .neq("driver_user_id", user.id)
-          .eq("classification", "business")
-          .gte("started_at", sinceIso)
-          .order("started_at", { ascending: false })
-          .limit(500),
-      ]);
-      trips = [
-        ...(ownRes.data ?? []),
-        ...(teamRes.data ?? []),
-      ] as unknown as ServerTripRow[];
-    } else {
-      let tripQuery = admin
-        .from("mileage_trips")
-        .select(TRIP_SELECT)
-        .eq("company_id", company.id)
-        .eq("driver_user_id", viewingDriverId)
-        .gte("started_at", sinceIso);
-      // Privacy: a manager reviewing a TEAMMATE's log only sees the drives
-      // that teammate marked BUSINESS, their personal + unclassified drives
-      // are nobody else's business. Viewing your OWN log still shows
-      // everything (you triage your own unclassified drives there).
-      if (!viewingSelf) tripQuery = tripQuery.eq("classification", "business");
-      const { data: tripData } = await tripQuery
-        .order("started_at", { ascending: false })
-        .limit(500);
-      trips = (tripData ?? []) as unknown as ServerTripRow[];
-    }
+    // PRIVACY. Every restriction is applied in the query, server side:
+    // your own drives come back whole, anyone else's are narrowed to
+    // confirmed business trips. Nothing personal is fetched and then
+    // hidden. See lib/mileage/team-scope.ts + team-scope.test.ts; RLS
+    // does NOT enforce this, a manager may read every trip in the
+    // company, so these filters are the only barrier.
+    trips = stripForeignPrivateTrips(
+      await loadScopedTrips<ServerTripRow>(admin, {
+        companyId: company.id,
+        scope,
+        sinceIso,
+      }),
+      user.id,
+    );
 
     if (trips.length > 0) {
       // PostgREST truncates ANY response at max-rows (1000). 500 trips x
       // 250 points blows through that, so only the first ~4 trips (in
-      // uuid order — effectively random) got polylines back and every
+      // uuid order, effectively random) got polylines back and every
       // other row rendered NO thumbnail. Page through with .range()
       // until a short page.
       const polyRows: ({ trip_id: string } & Pt)[] = [];
@@ -427,14 +401,20 @@ export default async function MileagePage({
             ) : null}
 
             {viewingAll ? (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
+              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
                 <MapIcon className="size-4 shrink-0" />
                 <span>
-                  Team view: every driver&apos;s trails in their own colour.
-                  Your drives show all classifications; teammates&apos; show
-                  business trips only. Pick a single driver to re-classify or
-                  remove their trips.
+                  Team view: every driver&apos;s trails in their own colour,
+                  numbered to match the legend. Teammates show confirmed
+                  business drives only, never their personal miles. Your own
+                  drives show every classification.
                 </span>
+                <Link
+                  href={`/mileage?range=${range}&driver=${user.id}`}
+                  className="underline decoration-dotted whitespace-nowrap hover:text-forest-900"
+                >
+                  My drive log →
+                </Link>
               </div>
             ) : !viewingSelf ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
@@ -488,8 +468,12 @@ export default async function MileagePage({
                 Confirm tab for users without a watch. Big amber CTA
                 links to the phone-side swipe deck at
                 /mileage/classify. Hidden when nothing is pending, and
-                when reviewing another driver (that deck is your own). */}
-            {viewingSelf && unclassifiedCount > 0 ? (
+                when reviewing another driver (that deck is your own).
+                Shown in the team view too: a teammate's unclassified drives
+                are never fetched, so this count is only ever the viewer's,
+                and making the team view the default must not silently cost
+                a manager their own triage queue. */}
+            {(viewingSelf || viewingAll) && unclassifiedCount > 0 ? (
               <Link
                 href="/mileage/classify"
                 className="mt-4 block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-400"
@@ -522,7 +506,15 @@ export default async function MileagePage({
               {Object.entries(RANGES).map(([k, v]) => (
                 <Link
                   key={k}
-                  href={`/mileage?range=${k}`}
+                  // Carry the driver scope across a range change. Without
+                  // it, switching range drops ?driver= and, now that no
+                  // param means the team view, would throw a manager out
+                  // of whichever single log they were reading.
+                  href={
+                    isManager && driverParam
+                      ? `/mileage?range=${k}&driver=${driverParam}`
+                      : `/mileage?range=${k}`
+                  }
                   className={
                     "text-xs px-3 h-8 inline-flex items-center rounded-full border " +
                     (k === range
@@ -664,7 +656,7 @@ export default async function MileagePage({
                     it in a Link to the swipe deck so the stat itself is
                     the tap target (mirroring the amber banner above -
                     some users tap the stat instead of the banner). */}
-                {viewingSelf && unclassifiedCount > 0 ? (
+                {(viewingSelf || viewingAll) && unclassifiedCount > 0 ? (
                   <Link
                     href="/mileage/classify"
                     className="col-span-2 sm:col-span-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
