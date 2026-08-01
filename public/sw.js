@@ -826,7 +826,7 @@
 // no bell entry and no popup. Markup changed on the trip list, so the
 // bump keeps v137 clients from hydrating new server HTML against cached
 // chunks.
-const CACHE_VERSION = "v138";
+const CACHE_VERSION = "v141";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
