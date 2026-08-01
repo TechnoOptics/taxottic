@@ -41,6 +41,12 @@ type Entry = {
 
 const ENTRIES: Entry[] = [
   {
+    date: "2026-08-01",
+    title: "Narrow-screen fixes for foldable cover displays",
+    body: "Three fixes for very narrow phone screens. Expanding a month under Year-to-date on the Income page no longer pushes the row past the edge of the screen, so Edit and Remove stay tappable. The main menu now scrolls its own content instead of scrolling the page behind it. The profile menu starts with its Switch portal and Preview plan sections collapsed, and Switch accounts and Sign out are pinned to the bottom so they are always reachable.",
+    tags: ["fix"],
+  },
+  {
     date: "2026-05-12",
     title: "May 2026 audit fixes",
     body: "Public pricing page, /help, /changelog, /example, DMCA + accessibility policies, OpenGraph image, canonical links, WCAG-compliant viewport (zoom no longer capped), and stricter CORS on app responses. Plus a short 'Single sign-on across Techno Optics products' section in /legal/security explaining why the same Google account signs into multiple products of ours.",

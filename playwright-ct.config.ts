@@ -39,7 +39,19 @@ export default defineConfig({
       plugins: [react() as any],
       // `@` → repo root (matches tsconfig "@/*": ["./*"]). process.cwd() is
       // the repo root when run via the npm script.
-      resolve: { alias: { "@": process.cwd() } },
+      //
+      // next/link + next/navigation are stubbed: the harness mounts client
+      // components outside the App Router, where usePathname() throws. The
+      // stubs are layout-identical (an <a>, and location.pathname), which is
+      // all these tests measure. Without them, nav-bearing components such as
+      // LeftRail / UserMenu can't be component-tested at all.
+      resolve: {
+        alias: {
+          "next/navigation": process.cwd() + "/playwright/next-stubs/navigation.tsx",
+          "next/link": process.cwd() + "/playwright/next-stubs/link.tsx",
+          "@": process.cwd(),
+        },
+      },
     },
   },
   projects: [

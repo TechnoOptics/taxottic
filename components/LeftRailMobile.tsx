@@ -115,8 +115,12 @@ export function LeftRailMobile({
             // disorienting.
             className="fixed inset-0 z-[60]"
           >
+            {/* touch-none: the backdrop is not a scroll container, so a drag
+                that starts on it would otherwise be handed to the page behind
+                the sheet and scroll it. Taps still land, so tap-to-dismiss is
+                unaffected. */}
             <div
-              className="absolute inset-0 bg-forest-900/50 backdrop-blur-sm animate-[fadeIn_.15s_ease]"
+              className="absolute inset-0 bg-forest-900/50 backdrop-blur-sm animate-[fadeIn_.15s_ease] touch-none"
               onClick={() => setOpen(false)}
             />
             {/* Menu panel anchored to bottom-left, above the FAB.
@@ -125,8 +129,16 @@ export function LeftRailMobile({
                 or the brand strip. Width is content-driven via
                 LeftRail's sheet mode (~w-64) and capped at 85vw on
                 phones. Slides up from the FAB with a small spring. */}
+            {/* `flex` is load-bearing, not cosmetic. This wrapper carries the
+                maxHeight cap, but a plain block child sizes to its own content
+                and simply overflows the cap, so LeftRail's `overflow-y-auto`
+                never had anything to scroll and the menu ran off the top of a
+                cover screen. As a flex container the cap reaches the child:
+                the nav stretches to the capped height, becomes a real scroll
+                container, and (with `overscroll-contain` on it) keeps the
+                gesture instead of handing it to the page. */}
             <div
-              className="absolute origin-bottom-left animate-[slideUpFromCorner_.22s_cubic-bezier(.2,.8,.2,1)]"
+              className="absolute origin-bottom-left animate-[slideUpFromCorner_.22s_cubic-bezier(.2,.8,.2,1)] flex"
               style={{
                 bottom:
                   "calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 5rem)",

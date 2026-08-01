@@ -431,7 +431,12 @@ export function LeftRail({
         // next to the rest of the app's uniformly-rounded `.card`
         // surfaces. Full rounding + a touch more padding brings it in
         // line with that language.
-        "card card-opaque relative w-64 max-w-[85vw] !rounded-2xl p-2.5 flex flex-col";
+        // `min-h-0` is load-bearing: LeftRailMobile caps the sheet's height on
+        // the WRAPPER, and only a flex item that may shrink below its content
+        // height actually receives that cap. Without it the nav sizes to its
+        // content, the `overflow-y-auto` below never has anything to scroll,
+        // and a drag inside the menu chains straight through to the page.
+        "card card-opaque relative w-64 max-w-[85vw] !rounded-2xl p-2.5 flex flex-col min-h-0";
 
   const railStyle =
     mode === "rail"
@@ -712,7 +717,10 @@ export function LeftRail({
 
   return (
     <nav
-      className={railClass + " group overflow-y-auto"}
+      // `overscroll-contain` stops scroll chaining: when the menu is scrolled
+      // to either end (or is short enough not to scroll at all), the gesture
+      // must die here instead of being handed to the page behind the sheet.
+      className={railClass + " group overflow-y-auto overscroll-contain"}
       style={railStyle}
       aria-label="Main menu"
       suppressHydrationWarning

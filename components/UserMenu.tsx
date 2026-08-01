@@ -58,7 +58,12 @@ type Props = {
   setPreviewPlanAction?: (formData: FormData) => Promise<void>;
 };
 
-type AnchorRect = { top: number; right: number };
+// `maxH` is the space actually left between the bottom of the avatar button
+// and the bottom of the viewport. It has to be measured rather than written
+// as `calc(100vh - 32px)`: the menu is positioned at `top`, so a cap phrased
+// against the full viewport height overhangs the bottom edge by `top`, and a
+// position:fixed overhang can never be scrolled into view.
+type AnchorRect = { top: number; right: number; maxH: number };
 
 // Plan tiers for the super-admin preview switcher, cheapest → richest.
 // The hint is the human-readable gist of what each tier unlocks, so a
@@ -125,9 +130,16 @@ export function UserMenu({
     function recompute() {
       const r = buttonRef.current?.getBoundingClientRect();
       if (!r) return;
+      const top = r.bottom + 8;
+      // visualViewport is the honest number inside a mobile WebView, where
+      // innerHeight can include chrome the user cannot see.
+      const vh = window.visualViewport?.height ?? window.innerHeight;
       setAnchor({
-        top: r.bottom + 8,
+        top,
         right: window.innerWidth - r.right,
+        // 12px breathing room at the bottom; floor so a very short viewport
+        // still yields a usable (scrollable) menu rather than a sliver.
+        maxH: Math.max(200, vh - top - 12),
       });
     }
     recompute();
@@ -196,12 +208,17 @@ export function UserMenu({
               right: anchor.right,
               zIndex: 9999,
               maxWidth: "calc(100vw - 16px)",
-              maxHeight: "calc(100vh - 32px)",
-              overflowY: "auto",
+              // Measured cap (see AnchorRect), minus whatever the device
+              // reserves at the bottom for a gesture bar / home indicator.
+              maxHeight: `calc(${anchor.maxH}px - max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)))`,
             }}
-            className="w-72 card card-opaque p-2 shadow-2xl"
+            // Column layout: identity header and the sign-out footer are
+            // fixed rails, only the middle scrolls. Sign out / Switch
+            // accounts are terminal actions and must never be the thing that
+            // falls off the bottom of a small screen.
+            className="w-72 card card-opaque p-2 shadow-2xl flex flex-col min-h-0"
           >
-            <div className="px-3 py-2.5 border-b border-forest-100">
+            <div className="shrink-0 px-3 py-2.5 border-b border-forest-100">
               <div className="text-sm font-medium text-forest-900 truncate">
                 {fullName || "Your account"}
               </div>
@@ -215,6 +232,11 @@ export function UserMenu({
               ) : null}
             </div>
 
+            {/* Everything between the identity header and the sign-out rail
+                scrolls. overscroll-contain keeps a flick inside the menu
+                instead of handing it to the page behind. */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+
             {/* Theme toggle, Light / Dark. Persisted in localStorage;
                 DarkThemeMount picks up the change without a reload. */}
             <ThemeToggle />
@@ -224,10 +246,7 @@ export function UserMenu({
                 target platform; the action persists the choice and
                 redirects to that platform's landing page. */}
             {showSwitcher ? (
-              <div className="px-1 py-2 border-b border-forest-100">
-                <div className="px-2 pt-1 pb-2 text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
-                  Switch portal
-                </div>
+              <MenuSection label="Switch portal">
                 <ul className="grid gap-1">
                   {(Object.keys(PLATFORM_META) as Platform[]).map((p) => {
                     const meta = PLATFORM_META[p];
@@ -275,7 +294,7 @@ export function UserMenu({
                     );
                   })}
                 </ul>
-              </div>
+              </MenuSection>
             ) : null}
 
             {/* Plan preview (super-admins only). Pins the admin's
@@ -284,10 +303,7 @@ export function UserMenu({
                 plan. Server-enforced via profiles.preview_plan →
                 getActivePlan, so it flows through every gate. */}
             {showPlanPreview ? (
-              <div className="px-1 py-2 border-b border-forest-100">
-                <div className="px-2 pt-1 text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
-                  Preview plan · QA
-                </div>
+              <MenuSection label="Preview plan · QA">
                 <div className="px-2 pb-2 pt-0.5 text-[11px] text-ink-muted leading-snug">
                   Pin your plan to walk each tier&rsquo;s gated view.
                 </div>
@@ -335,7 +351,7 @@ export function UserMenu({
                     );
                   })}
                 </ul>
-              </div>
+              </MenuSection>
             ) : null}
 
             <ul className="py-1.5">
@@ -439,6 +455,8 @@ export function UserMenu({
 
             <div className="border-t border-forest-100 pt-1.5">
               {/* Refresh app, always-available escape hatch when the
+                  (scrollable region, unlike the two terminal actions
+                  pinned to the rail below)
                   WebView (Capacitor) or PWA is serving stale cached
                   content. Unregisters all service workers, deletes
                   every cache, then force-reloads from network. Users
@@ -492,6 +510,16 @@ export function UserMenu({
                 </svg>
                 Refresh app
               </button>
+            </div>
+
+            {/* end of the scrollable region */}
+            </div>
+
+            {/* Terminal actions, pinned. These are the two things a user
+                comes to this menu for when something is wrong, so they sit
+                outside the scroll area and stay on screen no matter how many
+                segments are open above. 44px minimum tap target. */}
+            <div className="shrink-0 border-t border-forest-100 pt-1.5">
               {/* Switch accounts, clears the current session AND tells the
                   login page to force Google/Microsoft's account picker (via
                   ?force_picker=1, which the login page translates into
@@ -508,7 +536,7 @@ export function UserMenu({
                 />
                 <button
                   type="submit"
-                  className="w-full text-left rounded-lg px-3 py-2 text-sm text-forest-800 hover:bg-cream flex items-center gap-2"
+                  className="w-full min-h-11 text-left rounded-lg px-3 py-2 text-sm text-forest-800 hover:bg-cream flex items-center gap-2"
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -530,7 +558,7 @@ export function UserMenu({
               <form action="/auth/signout" method="post">
                 <button
                   type="submit"
-                  className="w-full text-left rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-cream hover:text-forest-900"
+                  className="w-full min-h-11 text-left rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-cream hover:text-forest-900"
                 >
                   Sign out
                 </button>
@@ -576,6 +604,51 @@ export function UserMenu({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A collapsed-by-default segment of the account menu.
+ *
+ * Reported by the owner from a Galaxy Z Fold5 cover screen (~344x882 CSS px):
+ * a super-admin's menu carries nine extra rows across "Switch portal" and
+ * "Preview plan", which pushed Sign out and Switch accounts past the bottom
+ * of the screen. These are occasional-use segments, so they now start closed
+ * and the menu opens at a length that fits any phone.
+ *
+ * Native <details>/<summary>: no JS, keyboard and screen-reader behaviour for
+ * free, and the same disclosure language as the Income / Expenses month
+ * accordions. The chevron is stroked with currentColor because authenticated
+ * routes are dark-themed and raw hex is not remapped by the theme.
+ */
+function MenuSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group px-1 py-1 border-b border-forest-100">
+      <summary className="flex min-h-11 items-center gap-2 rounded-lg px-2 cursor-pointer select-none list-none hover:bg-cream">
+        <svg
+          className="size-3.5 shrink-0 text-gold-700 transition-transform group-open:rotate-90"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M7 5l6 5-6 5" />
+        </svg>
+        <span className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+          {label}
+        </span>
+      </summary>
+      <div className="pb-2">{children}</div>
+    </details>
   );
 }
 
