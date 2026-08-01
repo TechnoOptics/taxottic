@@ -844,22 +844,21 @@
 // its anchor, so Sign out sat below the fold with no way to scroll to
 // it; Switch accounts and Sign out are now pinned outside the scroll
 // region and the long segments collapse.
-// v145: frame budget. Three continuous decorative animations were
-// driving main-thread paint every single frame: the header's gold
-// sweep panned background-position (374ms of paint plus 135ms of
-// style recalc per 2.5s of idle, on all 95 authenticated pages), and
-// the gold-shine headlines and the achievement tiles did the same
-// against a text clip and a four-layer blended background. The header
-// sweep is now a composited transform and the other two step at 30Hz
-// instead of once per frame; the sweep's markup is unchanged but its
-// pseudo-element geometry is not, so a cached shell paired with the
-// new stylesheet would render the line off-centre. The profile menu
-// and the tasks bell also stopped re-anchoring on every scroll event
-// (they hang off a fixed header, so the anchor never moved), and the
-// trip list reuses its Intl formatters and sorts each drive's GPS
-// fixes once instead of twice per render. v144 is skipped: it is
-// taken by an unmerged branch.
-const CACHE_VERSION = "v145";
+// v144: a waiting service worker is now adopted automatically on
+// cold start, on resume, and whenever the page is hidden, instead of
+// only on a tap of the "New version" toast. The geofence import fix sat
+// live in production for hours while the affected phone kept running
+// the broken bundle, because nobody knew there was a toast to tap. The
+// toast still applies mid-session, when swapping the bundle under an
+// open form would lose typed input.
+// v146: frame-budget work. The header gold sweep panned
+// background-position, which cannot be composited, on a header that
+// renders on 95 authenticated pages: it alone accounted for roughly 20
+// percent of idle main-thread paint (371ms to 0ms per 2.5s). Rewritten
+// as a composited transform. Also stepped the gold-shine and reward-tile
+// animations, and stopped the profile menu and bell re-measuring their
+// anchor on every scroll event when the anchor sits in a fixed header.
+const CACHE_VERSION = "v146";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
