@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { MileageMap, type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
+import { loadFirmVisibleTrips } from "@/lib/mileage/team-scope";
 
 // Account-manager mileage map. Across every company the firm has
 // an engagement with, the team's driving trails (colour-coded
@@ -58,43 +59,22 @@ export default async function FirmMileagePage({
     started_at: string;
     distance_miles: number;
     classification: "business" | "personal" | "unclassified";
+    needs_confirmation: boolean | null;
     deduction_cents: number;
     mileage_points: { lat: number; lng: number; captured_at: string }[];
   };
-  let trips: TripRow[] = [];
+  // Confirmed business drives only, restricted in the QUERY by the same
+  // shared rule the in-company team view uses. mapTrips below maps over
+  // every row it is given and serialises the joined mileage_points into
+  // the client payload, so a personal trip fetched here would be a
+  // personal route drawn on an outside firm's map. See
+  // lib/mileage/team-scope.ts for why RLS does not stop that.
+  const trips = await loadFirmVisibleTrips<TripRow>(admin, {
+    companyIds,
+    sinceIso,
+  });
   let places: MapPlace[] = [];
   if (companyIds.length > 0) {
-    const { data: tripData } = await admin
-      .from("mileage_trips")
-      .select(
-        "id, company_id, driver_user_id, started_at, distance_miles, classification, deduction_cents, notes, mileage_points(lat, lng, captured_at)",
-      )
-      .in("company_id", companyIds)
-      // Business only, filtered in the QUERY, not after the fetch.
-      //
-      // This reads through the service-role client, so RLS is not a
-      // barrier here: these two lines are the only thing between an
-      // external accounting firm and an employee's private movements.
-      // mapTrips below maps over every row it is given and serialises
-      // the joined mileage_points into the client payload, so a personal
-      // trip fetched here is a personal route rendered on the firm's map.
-      //
-      // needs_confirmation is excluded for the same reason it is excluded
-      // from the in-company team view: the system sets it when it had no
-      // evidence and applied a blanket "business" guess, and writes a zero
-      // deduction because it does not trust the label. A drive we refuse
-      // to count is not one to show an outside firm.
-      //
-      // .not(..., "is", true) rather than .neq(): the column is NULL on
-      // every pre-existing row, and NULL fails .neq() under SQL's
-      // three-valued logic, which would blank the map entirely.
-      .eq("classification", "business")
-      .not("needs_confirmation", "is", true)
-      .gte("started_at", sinceIso)
-      .order("started_at", { ascending: false })
-      .limit(1000);
-    trips = (tripData ?? []) as unknown as TripRow[];
-
     const { data: placeData } = await admin
       .from("mileage_places")
       .select("id, kind, label, lat, lng")

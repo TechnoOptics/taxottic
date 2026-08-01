@@ -110,17 +110,53 @@ function selfQuery(
     .limit(limit);
 }
 
+/** The subset of the PostgREST builder this filter needs, so the same
+ *  function composes onto any mileage_trips query regardless of what has
+ *  already been chained onto it. Deliberately NOT self-referential
+ *  (`eq(): Q`): the builder's own type is recursive, and constraining a
+ *  generic against it makes tsc give up with "type instantiation is
+ *  excessively deep". The two casts in the body are the price of keeping
+ *  the caller's exact builder type on the way out, so `.gte(...).limit(...)`
+ *  still type-check after this. */
+type Filterable = {
+  eq(col: string, val: unknown): unknown;
+  not(col: string, op: string, val: unknown): unknown;
+};
+
 /**
- * Someone else's drives. THIS IS THE PRIVACY FILTER. Every restriction is
- * applied in the query, so a personal or merely-assumed drive is never
- * fetched, never serialized to the client, and never contributes a trip id
- * to the polyline lookup that draws the routes.
+ * THIS IS THE PRIVACY FILTER, and it is a single function so that both
+ * surfaces that show one person's drives to somebody else (the in-company
+ * team view and the outside firm's map) are restricted by the same code.
+ * Widening it in one place cannot silently leave the other narrow, and
+ * narrowing it cannot silently leave the other wide.
  *
- * `.eq("company_id", companyId)` compiles to `NOT (col IS TRUE)`,
+ * Apply it in the QUERY, never after the fetch: a personal or
+ * merely-assumed drive must never be fetched, never serialized to the
+ * client, and never contribute a trip id to the polyline lookup that draws
+ * the routes.
+ *
+ * `.not("needs_confirmation", "is", true)` compiles to `NOT (col IS TRUE)`,
  * which keeps FALSE and NULL. Do not "simplify" it to
  * `.neq("needs_confirmation", true)`: that is NULL-unsafe and would hide
  * every drive recorded before the column existed.
  */
+/** A mileage_trips query, reduced to just the chain the firm read needs.
+ *  Small and self-referential on purpose: TS handles this fine, whereas
+ *  generics resolved against the real builder hit TS2589. */
+type TripQuery = Filterable & {
+  eq(col: string, val: unknown): TripQuery;
+  not(col: string, op: string, val: unknown): TripQuery;
+  gte(col: string, val: string): TripQuery;
+  order(col: string, opts: { ascending: boolean }): TripQuery;
+  limit(n: number): PromiseLike<{ data: unknown[] | null }>;
+};
+
+export function restrictToSharedBusiness<Q extends Filterable>(query: Q): Q {
+  const business = query.eq("classification", "business") as Filterable;
+  return business.not("needs_confirmation", "is", true) as Q;
+}
+
+/** Someone else's drives, restricted by {@link restrictToSharedBusiness}. */
 function othersQuery(
   admin: SupabaseClient,
   companyId: string,
@@ -136,9 +172,7 @@ function othersQuery(
     "only" in target
       ? base.eq("driver_user_id", target.only)
       : base.neq("driver_user_id", target.except);
-  return scoped
-    .eq("classification", "business")
-    .not("needs_confirmation", "is", true)
+  return restrictToSharedBusiness(scoped)
     .gte("started_at", sinceIso)
     .order("started_at", { ascending: false })
     .limit(limit);
@@ -192,11 +226,83 @@ export async function loadScopedTrips<T>(
   ];
 }
 
+/**
+ * Every column the firm's map reads. `needs_confirmation` is selected even
+ * though the query already filters on it, so that
+ * {@link stripPrivateTrips} below can actually see the flag: an unselected
+ * column arrives as `undefined`, which passes a `!== true` test and would
+ * make the in-memory backstop a no-op.
+ */
+export const FIRM_TRIP_SELECT =
+  "id, company_id, driver_user_id, started_at, distance_miles, classification, needs_confirmation, deduction_cents, notes, mileage_points(lat, lng, captured_at)";
+
+/**
+ * What an outside accounting firm may read across the companies it has an
+ * active engagement with.
+ *
+ * A firm is a different actor from a company manager and gets strictly less:
+ * a manager sees their OWN drives unrestricted because that is their own
+ * data, whereas the firm is a counterparty outside the company and has no
+ * drives of its own here. So there is no `self` branch, and
+ * {@link restrictToSharedBusiness} applies to every row without exception.
+ *
+ * The stakes are higher than on the in-company view. This reads through the
+ * service-role client, so RLS is not the barrier: the
+ * `mileage_trips manager + firm read` policy
+ * (supabase/migrations/20260514000016_mileage_tracker.sql) already grants a
+ * firm select on EVERY trip of an engaged company via
+ * `firm_has_active_engagement_with`, and `mileage_points follow trip
+ * visibility` grants the matching GPS breadcrumbs. This function is the only
+ * thing standing between an external accountant and an employee's private
+ * movements, and the caller serialises the joined mileage_points straight
+ * into the client payload.
+ */
+export async function loadFirmVisibleTrips<T>(
+  admin: SupabaseClient,
+  {
+    companyIds,
+    sinceIso,
+    limit = 1000,
+  }: { companyIds: readonly string[]; sinceIso: string; limit?: number },
+): Promise<T[]> {
+  if (companyIds.length === 0) return [];
+  // Widened to the small self-referential shape above before the filter is
+  // applied. Inferring the generic straight off the PostgREST builder makes
+  // tsc bail with TS2589 on this chain, because `.select()` with an embedded
+  // resource (`mileage_points(...)`) produces a very deep conditional type.
+  const base = admin
+    .from("mileage_trips")
+    .select(FIRM_TRIP_SELECT)
+    .in("company_id", companyIds as string[]) as unknown as TripQuery;
+  const { data } = await restrictToSharedBusiness(base)
+    .gte("started_at", sinceIso)
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  return stripPrivateTrips((data ?? []) as unknown as (T &
+    PrivacyShapedRow)[]);
+}
+
 type PrivacyShapedRow = {
   driver_user_id?: string | null;
   classification?: string | null;
   needs_confirmation?: boolean | null;
 };
+
+/**
+ * The rule for showing one person's drive to somebody else: it is business,
+ * and it was not merely ASSUMED to be business.
+ */
+function isSharedBusinessTrip(r: PrivacyShapedRow): boolean {
+  return r.classification === "business" && r.needs_confirmation !== true;
+}
+
+/**
+ * The firm's counterpart to {@link stripForeignPrivateTrips}: no `viewerUserId`
+ * exemption, because to an outside firm every drive belongs to somebody else.
+ */
+export function stripPrivateTrips<T extends PrivacyShapedRow>(rows: T[]): T[] {
+  return rows.filter(isSharedBusinessTrip);
+}
 
 /**
  * Belt-and-braces, in the same spirit as the explicit `.eq("user_id", uid)`
@@ -215,6 +321,6 @@ export function stripForeignPrivateTrips<T extends PrivacyShapedRow>(
 ): T[] {
   return rows.filter((r) => {
     if (r.driver_user_id && r.driver_user_id === viewerUserId) return true;
-    return r.classification === "business" && r.needs_confirmation !== true;
+    return isSharedBusinessTrip(r);
   });
 }
