@@ -127,24 +127,52 @@ export function UserMenu({
   // button when the user resizes / rotates / scrolls a foldable open.
   useEffect(() => {
     if (!open || !buttonRef.current) return;
-    function recompute() {
+    let queued = false;
+    let last: AnchorRect | null = null;
+
+    function measure() {
+      queued = false;
       const r = buttonRef.current?.getBoundingClientRect();
       if (!r) return;
       const top = r.bottom + 8;
       // visualViewport is the honest number inside a mobile WebView, where
       // innerHeight can include chrome the user cannot see.
       const vh = window.visualViewport?.height ?? window.innerHeight;
-      setAnchor({
+      const next: AnchorRect = {
         top,
         right: window.innerWidth - r.right,
         // 12px breathing room at the bottom; floor so a very short viewport
         // still yields a usable (scrollable) menu rather than a sliver.
         maxH: Math.max(200, vh - top - 12),
-      });
+      };
+      // The avatar lives in a position:fixed header, so scrolling moves it
+      // by exactly nothing. Writing an identical anchor re-rendered the whole
+      // menu subtree on every scroll event for no visible change; bail when
+      // the numbers match.
+      if (
+        last &&
+        last.top === next.top &&
+        last.right === next.right &&
+        last.maxH === next.maxH
+      ) {
+        return;
+      }
+      last = next;
+      setAnchor(next);
     }
-    recompute();
-    window.addEventListener("resize", recompute);
-    window.addEventListener("scroll", recompute, true);
+
+    // Scroll fires far faster than the compositor can present. Coalescing to
+    // one measurement per frame keeps the forced layout that
+    // getBoundingClientRect triggers off the scroll hot path.
+    function recompute() {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(measure);
+    }
+
+    measure();
+    window.addEventListener("resize", recompute, { passive: true });
+    window.addEventListener("scroll", recompute, { capture: true, passive: true });
     return () => {
       window.removeEventListener("resize", recompute);
       window.removeEventListener("scroll", recompute, true);

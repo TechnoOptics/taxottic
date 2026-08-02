@@ -108,7 +108,11 @@ export function OutstandingTasksBell({ count, items }: Props) {
 
   useEffect(() => {
     if (!open || !buttonRef.current) return;
-    function recompute() {
+    let queued = false;
+    let last: AnchorRect | null = null;
+
+    function measure() {
+      queued = false;
       const r = buttonRef.current?.getBoundingClientRect();
       if (!r) return;
       const vw = window.innerWidth;
@@ -122,11 +126,33 @@ export function OutstandingTasksBell({ count, items }: Props) {
         EDGE_MARGIN,
         Math.min(idealLeft, vw - width - EDGE_MARGIN),
       );
-      setAnchor({ top: r.bottom + 8, left, width });
+      const next: AnchorRect = { top: r.bottom + 8, left, width };
+      // The bell sits in a position:fixed header, so scrolling does not move
+      // it. Writing an identical anchor re-rendered the whole panel on every
+      // scroll event for no visible change; bail when the numbers match.
+      if (
+        last &&
+        last.top === next.top &&
+        last.left === next.left &&
+        last.width === next.width
+      ) {
+        return;
+      }
+      last = next;
+      setAnchor(next);
     }
-    recompute();
-    window.addEventListener("resize", recompute);
-    window.addEventListener("scroll", recompute, true);
+
+    // One measurement per frame at most, so the forced layout that
+    // getBoundingClientRect triggers stays off the scroll hot path.
+    function recompute() {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(measure);
+    }
+
+    measure();
+    window.addEventListener("resize", recompute, { passive: true });
+    window.addEventListener("scroll", recompute, { capture: true, passive: true });
     return () => {
       window.removeEventListener("resize", recompute);
       window.removeEventListener("scroll", recompute, true);

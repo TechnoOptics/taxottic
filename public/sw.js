@@ -851,14 +851,31 @@
 // the broken bundle, because nobody knew there was a toast to tap. The
 // toast still applies mid-session, when swapping the bundle under an
 // open form would lose typed input.
-// v145: legal pages corrected against the code. The privacy policy
-// said location is never shared, which was false (coordinates go to
-// Google Static Maps and Geocoding, and business drives go to the
-// employer), stated no location retention window, and omitted document
-// OCR, device telemetry, chat, push, TINs and learned home/work places.
-// A new "Who can see your drives" page covers employer visibility, and
-// the tracking consent screen no longer claims data is never shared.
-const CACHE_VERSION = "v145";
+// v146: frame-budget work. The header gold sweep panned
+// background-position, which cannot be composited, on a header that
+// renders on 95 authenticated pages: it alone accounted for roughly 20
+// percent of idle main-thread paint (371ms to 0ms per 2.5s). Rewritten
+// as a composited transform. Also stepped the gold-shine and reward-tile
+// animations, and stopped the profile menu and bell re-measuring their
+// anchor on every scroll event when the anchor sits in a fixed header.
+// v147: nested-anchor hydration fix. Nineteen public page headers wrapped
+// <Wordmark> (which renders its own link to home) in a second link, so the
+// served HTML had an <a> inside an <a>. The parser closes the outer anchor
+// early, the parsed DOM stops matching the tree React expects, and seven of
+// the eight public pages threw minified React error #418 in production.
+// The redundant wrappers are gone and the header markup changed on every one
+// of those pages, so cached shells must not be reused.
+// v148: legal pages rewritten to describe what the app actually
+// does. The privacy policy said location is "never shared", which was
+// untrue: coordinates go to Google for static maps and geocoding, and
+// business drives go to the employer. It also stated no location
+// retention window, and omitted document OCR, device telemetry, chat,
+// encrypted TINs and the learned home/work places entirely. New
+// /legal/location-monitoring page, and the tracking consent screen no
+// longer claims location is never shared or that turning tracking off
+// retains nothing. Footer attribution is now "Powered by Techno Optics
+// LLC".
+const CACHE_VERSION = "v148";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

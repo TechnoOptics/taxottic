@@ -110,9 +110,7 @@ export default async function ExamplePage() {
         }}
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Link href="/" aria-label="Taxottic home">
-            <Wordmark size="md" tone="cream" />
-          </Link>
+          <Wordmark size="md" tone="cream" />
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             {/* Single, high-contrast CTA. Gold reads clearly on the dark
                 navy header, the old btn-primary navy button blended in.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 import { SelectMenu } from "@/components/ui/SelectMenu";
@@ -76,14 +76,35 @@ type Bucket = {
   trips: TripRow[];
 };
 
+/* Intl formatters are built once per module, not once per call. Each
+   `toLocaleString` / `toLocaleDateString` call constructs a fresh formatter,
+   and this list renders five of them per drive across hundreds of drives.
+   Reusing the instances keeps identical output (same default locale, same
+   options) at a fraction of the cost. `undefined` locale still means "the
+   browser's locale", which is the whole reason this list is a client
+   component. */
+const MILES_FMT = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 1,
+});
+const USD_FMT = new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency: "USD",
+});
+const DATE_FMT = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+const TIME_FMT = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 function fmtMiles(m: number) {
-  return m.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return MILES_FMT.format(m);
 }
 function fmtUsd(cents: number) {
-  return (cents / 100).toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-  });
+  return USD_FMT.format(cents / 100);
 }
 
 /** Local-day key like "2026-05-23" in the browser's timezone. */
@@ -201,28 +222,34 @@ function TripCard({
   const moveFormRef = useRef<HTMLFormElement | null>(null);
 
   // First + last GPS fix = the drive's start / end, for reverse-geocoded
-  // place labels ("Shakopee, MN → Mounds View, MN").
-  const sortedPts = [...trip.points].sort((a, b) =>
-    a.captured_at < b.captured_at ? -1 : 1,
+  // place labels ("Shakopee, MN → Mounds View, MN"). A drive carries
+  // hundreds of fixes and this list renders hundreds of drives, so the sort
+  // is memoised: it used to run twice per row per render (once here, once
+  // inline in the TripThumbnail prop below) and every re-render of any row
+  // in the list paid for it again. `trip.points` is the identity to key on -
+  // the array is replaced wholesale when the server action revalidates.
+  const sortedPts = useMemo(
+    () =>
+      [...trip.points].sort((a, b) => (a.captured_at < b.captured_at ? -1 : 1)),
+    [trip.points],
   );
   const startPt = sortedPts[0];
   const endPt = sortedPts[sortedPts.length - 1];
+  const thumbPts = useMemo(
+    () => sortedPts.map((p) => ({ lat: p.lat, lng: p.lng })),
+    [sortedPts],
+  );
 
   const start = new Date(trip.startedAtISO);
   const end = new Date(trip.endedAtISO);
 
-  const dateLabel = start.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-  const timeLabel = `${start.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  })} → ${end.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  })}`;
+  // Module-level formatters (declared at the top of this file). Constructing
+  // a DateTimeFormat is the expensive half of toLocaleDateString, and doing
+  // it three times per row dominated mount time on a long list. Timezone is
+  // still the browser's: the module is evaluated in the browser, which is
+  // the whole reason this list is a client component.
+  const dateLabel = DATE_FMT.format(start);
+  const timeLabel = `${TIME_FMT.format(start)} → ${TIME_FMT.format(end)}`;
 
   const doReclassify = (c: "business" | "personal" | "unclassified") => {
     // Optimistic-ish: no local optimistic state because the server
@@ -260,11 +287,7 @@ function TripCard({
     >
       <div className="flex items-start gap-3 min-w-0">
         <TripThumbnail
-          points={[...trip.points]
-            .sort((a, b) =>
-              a.captured_at < b.captured_at ? -1 : 1,
-            )
-            .map((p) => ({ lat: p.lat, lng: p.lng }))}
+          points={thumbPts}
           classification={
             trip.classification === "business" ||
             trip.classification === "personal"
