@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { CompanyNav } from "@/components/CompanyNav";
 import { CsvDropZone } from "@/components/CsvDropZone";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
+import { isSuperAdmin } from "@/lib/plans/usage";
 import { uploadCsvBatch } from "./actions";
 
 type Params = Promise<{ publicId: string }>;
@@ -19,15 +20,26 @@ export default async function ImportPage({
   const sp = (await searchParams) ?? {};
   const errRaw = sp.error;
   const errorMessage = Array.isArray(errRaw) ? errRaw[0] : errRaw;
-  const { supabase, user, company } = await loadCompanyByPublicId(publicId);
+  const { supabase, user, company, isManager } =
+    await loadCompanyByPublicId(publicId);
+  // Uploading stays open to any member (the plan meters it per user),
+  // but "Past imports" is not a company-wide list: a manager or super
+  // admin reconciles everything, everyone else sees only their own.
+  const canReadAnyImport = isManager || (await isSuperAdmin(supabase));
 
-  const { data: imports } = await supabase
+  // Filtered here as well as in RLS on purpose. The policy is the real
+  // boundary; this makes the intent legible at the call site and keeps
+  // the page correct on its own if the policy is ever relaxed again.
+  let importsQuery = supabase
     .from("bank_imports")
     .select(
       "id, filename, status, row_count, applied_count, account_type, created_at",
     )
-    .eq("company_id", company.id)
-    .order("created_at", { ascending: false });
+    .eq("company_id", company.id);
+  if (!canReadAnyImport) importsQuery = importsQuery.eq("user_id", user.id);
+  const { data: imports } = await importsQuery.order("created_at", {
+    ascending: false,
+  });
 
   return (
     <main id="main" className="min-h-screen">

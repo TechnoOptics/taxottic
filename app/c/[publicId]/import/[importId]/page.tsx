@@ -39,17 +39,27 @@ export default async function ImportReviewPage({
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
   const superAdmin = await isSuperAdmin(supabase);
-  const canDelete = isManager || superAdmin;
+  // A manager (or super admin) reconciles the whole company's bank
+  // data; everybody else is limited to the imports they uploaded
+  // themselves. Same shape the RLS policies now enforce.
+  const canReadAnyImport = isManager || superAdmin;
+  const canDelete = canReadAnyImport;
 
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
+      "id, user_id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
     .single();
   if (!imp) notFound();
+  // Defence in depth. RLS is the real boundary, but this route used to
+  // reach for the rows first and only call notFound() when the import
+  // row was missing, so a direct URL was enough to read somebody
+  // else's bank statement the moment the policy was too broad. Check
+  // before rendering, not after.
+  if (!canReadAnyImport && imp.user_id !== user.id) notFound();
   const isCredit = imp.account_type === "credit";
 
   const [{ data: txs }, { data: categories }] = await Promise.all([
