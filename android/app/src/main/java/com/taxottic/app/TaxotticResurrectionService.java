@@ -72,6 +72,22 @@ public class TaxotticResurrectionService extends Service {
     static final String ACTION_STOP = "com.taxottic.app.RESURRECTION_STOP";
 
     /**
+     * Which wake source started this session.
+     *
+     * Two Tier 1 sources now reach this service: a learned-place
+     * geofence exit and a car Bluetooth connect. They are recorded
+     * separately on every buffered fix because they answer different
+     * questions after the fact. "Did the Bluetooth wake actually fire on
+     * the driver's Samsung, or did every recovered drive come from the
+     * mesh" is not answerable from a buffer whose points all claim the
+     * same origin, and that question is the only way to find out which
+     * of the two is carrying the feature on real hardware.
+     */
+    static final String EXTRA_SOURCE = "source";
+    static final String SOURCE_GEOFENCE = "geofence_resurrection";
+    static final String SOURCE_BLUETOOTH = "car_bluetooth";
+
+    /**
      * Distinct from the @capgo plugin's 28351. Two location foreground
      * services must never share a notification id, or one silently
      * replaces the other's notification and the user sees a status that
@@ -118,7 +134,9 @@ public class TaxotticResurrectionService extends Service {
     private LocationListener listener;
     private PowerManager.WakeLock wakeLock;
 
+    private boolean promotedToForeground;
     private String placeId;
+    private String source;
     private long startedAtMs;
     private int fixCount;
     private boolean blind;
@@ -143,6 +161,20 @@ public class TaxotticResurrectionService extends Service {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             // The WebView tracker has taken over. Hand off cleanly
             // rather than running two location services at once.
+            //
+            // startForeground first, even though we are about to stop.
+            // A stop can arrive as the FIRST command this service ever
+            // processes: startForegroundService only queues the start, so
+            // a wake source and a JS handoff issued within the same
+            // moment can be delivered in either order. Stopping without
+            // ever promoting breaks the startForegroundService contract
+            // and the platform kills the app with
+            // ForegroundServiceDidNotStartInTimeException. That was
+            // reproduced on an API 36 emulator, not reasoned about, and
+            // it became reachable in ordinary use once a second wake
+            // source (car Bluetooth) started racing the same handoff.
+            // The notification exists for milliseconds.
+            if (!promotedToForeground) promoteToForeground(NotificationState.WAITING);
             stopWithState(TaxotticGeofenceStore.CAPTURE_ENDED, "handoff_to_watcher");
             return START_NOT_STICKY;
         }
@@ -154,9 +186,19 @@ public class TaxotticResurrectionService extends Service {
         }
 
         placeId = intent == null ? null : intent.getStringExtra(EXTRA_PLACE_ID);
+        source = intent == null ? null : intent.getStringExtra(EXTRA_SOURCE);
+        if (source == null || source.isEmpty()) source = SOURCE_GEOFENCE;
         startedAtMs = System.currentTimeMillis();
         fixCount = 0;
         blind = false;
+
+        // Projection state is only observable from a live process and
+        // this is one. If the wake came from a car Bluetooth connect and
+        // the head unit also projects, that confirmation is worth having
+        // on the record next to the fixes. Idempotent; also started by
+        // the plugin when the Activity exists.
+        TaxotticCarProjectionMonitor.start(this);
+        TaxotticCarPowerReceiver.register(this);
 
         if (!promoteToForeground(NotificationState.WAITING)) {
             // Could not become a foreground service. Recorded, not
@@ -238,7 +280,7 @@ public class TaxotticResurrectionService extends Service {
             blind = false;
             updateNotification(NotificationState.CAPTURING);
         }
-        boolean written = TaxotticGeofenceStore.appendFix(this, location, placeId);
+        boolean written = TaxotticGeofenceStore.appendFix(this, location, placeId, source);
         fixCount++;
         if (!written) {
             updateNotification(NotificationState.BUFFER_FULL);
@@ -299,6 +341,7 @@ public class TaxotticResurrectionService extends Service {
             } else {
                 startForeground(NOTIFICATION_ID, buildNotification(state));
             }
+            promotedToForeground = true;
             return true;
         } catch (Exception e) {
             // Includes ForegroundServiceStartNotAllowedException on

@@ -52,6 +52,14 @@ dependencies {
     // playServicesLocationVersion = '21.3.0') so the two modules cannot
     // resolve to different versions of the same package.
     implementation "com.google.android.gms:play-services-location:21.3.0"
+    // CarConnection, for Android Auto / projection presence
+    // (TaxotticCarProjectionMonitor). Only the connection API is used:
+    // Taxottic ships no car UI, declares no CarAppService, and is not an
+    // Android Auto app. The library is here because CarConnection is the
+    // supported way to ask "is this phone projecting", and hand-rolling
+    // a query against the androidx.car.app.connection provider would be
+    // reimplementing a published API against an undocumented contract.
+    implementation "androidx.car.app:app:1.7.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

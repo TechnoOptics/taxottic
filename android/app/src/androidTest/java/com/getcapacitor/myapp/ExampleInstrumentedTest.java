@@ -21,6 +21,10 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-        assertEquals("com.getcapacitor.app", appContext.getPackageName());
+        // The Capacitor template ships this asserting its own scaffold
+        // package name, so it has been failing since the app was renamed
+        // and made `connectedDebugAndroidTest` red for every native
+        // change. Corrected to the real applicationId.
+        assertEquals("com.taxottic.app", appContext.getPackageName());
     }
 }

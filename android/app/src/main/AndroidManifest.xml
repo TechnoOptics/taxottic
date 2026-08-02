@@ -122,7 +122,69 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Car Bluetooth connect / disconnect: the second Tier 1 wake
+             source, alongside the learned-place geofence mesh above.
+
+             MileIQ's engineers published that a Bluetooth connection
+             event beats location and motion as a trip-start signal, and
+             on Android the platform will start a dead process to deliver
+             it. It fires before the car has moved a metre and works at
+             an address we have never learned, which is exactly where the
+             geofence mesh cannot help. Neither source is a superset of
+             the other, so both ship.
+
+             Manifest-declared and not runtime-registered, deliberately:
+             a runtime receiver lives in a process, and a process that is
+             alive did not need waking. Android 8 blocks most implicit
+             broadcasts from manifest receivers, but ACTION_ACL_CONNECTED
+             and ACTION_ACL_DISCONNECTED are on Google's published
+             exemption list.
+
+             exported="false" is correct: these are protected system
+             broadcasts, and the system may deliver them to a
+             non-exported receiver. Nothing else should be able to fake a
+             car connection into our wake path.
+
+             On API 31+ these broadcasts are sent with BLUETOOTH_CONNECT
+             as a required permission, so a driver who refuses the
+             runtime prompt is simply never delivered them. There is no
+             callback for that, so the permission state is reported in
+             health rather than left to look like "no car". -->
+        <receiver
+            android:name=".TaxotticCarBluetoothReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- TaxotticCarPowerReceiver is deliberately NOT declared here.
+
+             It was, and it was measured on an API 36 emulator:
+             `dumpsys battery set ac 1` produced a real system broadcast
+             that SystemUI logged receiving, and the manifest receiver was
+             never called, with the app process alive and again with it
+             killed. ACTION_POWER_CONNECTED is an implicit broadcast and
+             is not on Android 8's exemption list, so a manifest entry for
+             it is dead code that reads like a working feature.
+
+             It is registered at runtime instead, from the plugin and from
+             the capture service. Nothing is lost: charging is a
+             corroborating signal that can only corroborate something a
+             live process already noticed, and a live process is exactly
+             when a runtime receiver works. -->
     </application>
+
+    <!-- Android 11+ package visibility. CarConnection reads the Android
+         Auto host's content provider, and without this declaration the
+         provider is invisible to us and the projection signal silently
+         reports "unavailable" on every device. -->
+    <queries>
+        <provider android:authorities="androidx.car.app.connection" />
+    </queries>
 
     <!-- Permissions -->
 
@@ -200,6 +262,37 @@
          a permission our own receiver depends on must not be inherited
          from a dependency that could drop it in any future version. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Car Bluetooth as a trip-start / trip-end signal
+         (TaxotticCarBluetoothReceiver).
+
+         BLUETOOTH_CONNECT is a RUNTIME permission on Android 12+ (API
+         31+), and on those levels the ACL_CONNECTED / ACL_DISCONNECTED
+         broadcasts are sent with it as a required permission. Without
+         the grant we are not delivered the broadcast at all, so there is
+         nothing to catch and no error to log: the feature is simply
+         absent. That is why the prompt is asked from a setup moment that
+         explains itself (TaxotticCarSignalsPlugin.requestBluetoothPermission)
+         and why the grant state is reported in health state rather than
+         assumed.
+
+         Refusal is a fully supported state. Nothing else changes: the
+         geofence resurrection mesh, the foreground service, and every
+         existing capture path behave exactly as they do today, and the
+         driver is told which signal is missing rather than left with a
+         feature that quietly does nothing.
+
+         The pre-31 BLUETOOTH permission is install-time and covers API
+         24 to 30, where the same broadcasts are gated on it instead.
+
+         uses-feature required="false" so Play does not filter Taxottic
+         off Bluetooth-less devices; the app is a tax tool that happens
+         to use a car radio as a hint, not a Bluetooth app. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="false" />
     <!-- Battery-exemption request dialog (mileage tracking breaks under
          Doze; Google's acceptable-use list covers this case). The setup
          wizard drives it; the policy-safe settings-list intent is the

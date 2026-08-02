@@ -311,8 +311,11 @@ final class TaxotticGeofenceStore {
     /**
      * Append one fix. Returns false if the write was refused, which the
      * caller must treat as a visible failure and not as success.
+     *
+     * @param source which wake source started the capture session, from
+     *               TaxotticResurrectionService.SOURCE_*.
      */
-    static boolean appendFix(Context context, Location location, String placeId) {
+    static boolean appendFix(Context context, Location location, String placeId, String source) {
         synchronized (BUFFER_LOCK) {
             File file = bufferFile(context);
             if (file.length() > BUFFER_MAX_BYTES) {
@@ -329,7 +332,12 @@ final class TaxotticGeofenceStore {
                 fix.put("bearing", location.hasBearing() ? (double) location.getBearing() : JSONObject.NULL);
                 fix.put("simulated", location.isFromMockProvider());
                 fix.put("time", location.getTime());
-                fix.put("source", "geofence_resurrection");
+                // Which wake source started the session that captured
+                // this fix. Defaulted rather than allowed to be null so
+                // fixes buffered by older builds and fixes buffered by
+                // this one read the same way downstream.
+                fix.put("source", source == null || source.isEmpty()
+                        ? "geofence_resurrection" : source);
                 fix.put("placeId", placeId == null ? JSONObject.NULL : placeId);
                 try (OutputStreamWriter writer = new OutputStreamWriter(
                         new FileOutputStream(file, true), StandardCharsets.UTF_8)) {

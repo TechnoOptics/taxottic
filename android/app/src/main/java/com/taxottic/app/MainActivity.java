@@ -32,6 +32,14 @@ public class MainActivity extends BridgeActivity {
         // all. This only lets the web layer push places down, read
         // health, and drain what was captured while it was dead.
         registerPlugin(TaxotticGeofencePlugin.class);
+        // Car-connection signals (Bluetooth, Android Auto projection,
+        // charging). Same warning as above and it matters differently
+        // here: the manifest receivers record signals with no bridge at
+        // all, so forgetting this line would not stop the signals, it
+        // would only stop anything reading them. That failure looks like
+        // silence rather than an error, which is the kind this codebase
+        // has already shipped once.
+        registerPlugin(TaxotticCarSignalsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
