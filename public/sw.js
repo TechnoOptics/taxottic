@@ -939,7 +939,18 @@
 // markup and the server actions behind it both changed. A cached shell
 // posting to an action that no longer exists is the failure this bump
 // prevents.
-const CACHE_VERSION = "v158";
+// v159: two changes land together. First, dead-code removal:
+// BellaFAB and StudioFamilyFAB (both zero call sites, both running a
+// per-frame conic-gradient animation), their .bella-fab CSS chain, the
+// unused .header-glow-line rules, and components/ui/Primitives.tsx are
+// deleted. Nothing rendered changes, but globals.css does, so the bump
+// stops v157 clients serving the old stylesheet. Second, the splash
+// screens now show the brand mark on Android and iOS instead of a flat
+// navy rectangle; those are native platform assets outside the SW's
+// reach and need no cache bump of their own, but they ship in this same
+// release. Also lands the mileage re-render plausibility gate (FMEA
+// C6, server-only, no client markup change, no bump needed for it).
+const CACHE_VERSION = "v159";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

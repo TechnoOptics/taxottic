@@ -7,15 +7,17 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // AndroidManifest assigns AppTheme.NoActionBarLaunch (Theme.SplashScreen,
-        // windowBackground = @drawable/splash) to this Activity for cold start.
-        // That theme must be swapped for the real post-splash theme here, or the
-        // Activity's window keeps the splash drawable as its background for its
-        // entire lifetime — invisible while the WebView covers it, but it leaks
-        // through anything that inherits windowBackground with no background of
-        // its own, e.g. the native <select> dropdown's AlertDialog rendered the
-        // splash logo behind its option rows. See
-        // https://developer.android.com/develop/ui/views/launch/splash-screen/migrate
+        // AndroidManifest assigns AppTheme.NoActionBarLaunch (Theme.SplashScreen)
+        // to this Activity for cold start. Swap in the real post-splash theme
+        // here so the Activity runs with AppTheme.NoActionBar's window
+        // background, bar colours and edge-to-edge opt-out rather than the
+        // launch theme's. Note that setTheme MERGES (Resources.Theme.applyStyle
+        // with force=true) rather than replaces, so anything the launch theme
+        // sets and this one does not restate survives for the Activity's whole
+        // life. That is why the launch theme sets no android:background: it used
+        // to, and the value leaked into every view built from the Activity
+        // context, including the ListView the Chromium <select> popup builds.
+        // See https://developer.android.com/develop/ui/views/launch/splash-screen/migrate
         setTheme(R.style.AppTheme_NoActionBar);
 
         // Register the native bridges before the WebView bridge boots so
