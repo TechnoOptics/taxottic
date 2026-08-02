@@ -875,7 +875,22 @@
 // longer claims location is never shared or that turning tracking off
 // retains nothing. Footer attribution is now "Powered by Techno Optics
 // LLC".
-const CACHE_VERSION = "v148";
+// v149: measured performance wins. The Supabase browser client is no
+// longer statically imported by the root layout, so the shared chunk
+// set every route loads drops from 261 KB to 201 KB gzip (223 KB to
+// 163 KB on the modern path) and the realtime transport stops shipping
+// to anonymous marketing pages. The root layout no longer reads
+// headers() in generateMetadata, which takes the build from 3 static
+// routes to 41: every guide, legal, compare, pricing, help and login
+// page is now CDN-cacheable instead of no-store (the admin-host noindex
+// moved to an X-Robots-Tag in middleware plus static metadata on
+// /admin and /login). /mileage/business now draws a 60-point sample per
+// drive and pages at 100 drives, taking the largest response in the app
+// from 995 KB to 652 KB, with both bounds stated on screen and the
+// Schedule C totals still computed over every drive. The chunk hashes
+// and the served markup change on every route, so cached shells must
+// not be reused.
+const CACHE_VERSION = "v149";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

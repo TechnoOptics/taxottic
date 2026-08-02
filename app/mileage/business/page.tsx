@@ -26,7 +26,66 @@ import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 
 export const dynamic = "force-dynamic";
 
-type SP = Promise<{ range?: string; trip?: string }>;
+type SP = Promise<{ range?: string; trip?: string; page?: string }>;
+
+// How many drives one page of this view renders.
+//
+// PAYLOAD, AND WHY THIS IS A VISIBLE BOUND RATHER THAN A QUIET ONE
+// ----------------------------------------------------------------
+// Everything expensive on this page is per-drive: each row emits a Static
+// Maps thumbnail URL carrying up to 60 encoded fixes (~1.5 KB of HTML), and
+// each drive's breadcrumb is serialised into the RSC flight payload for
+// <MileageMap>. Measured on one real account in August 2026: 74 business
+// drives YTD produced 995 KB of decoded HTML, the largest response in the
+// application, of which 530 KB (52%) was breadcrumb points and 130 KB (13%)
+// was thumbnail URLs. Both scale linearly with drives, and the old
+// `.limit(1000)` allowed 13x that account before it started dropping drives
+// on the floor.
+//
+// The mileage rule in AGENTS.md is that a fabricated mile is worse than a
+// missed one, and that a gap must be surfaced rather than hidden. So this
+// bound is deliberately NOT a silent truncation:
+//
+//   - The three totals (drives, miles, deduction) are computed over EVERY
+//     matching drive in the range, by paging the full set server-side. They
+//     are the Schedule C numbers and they are never a page subtotal.
+//   - The list says "Showing 1-100 of N drives" and offers Previous / Next,
+//     so every drive stays reachable.
+//   - The map caption says it is drawing this page's drives.
+//
+// This also FIXES a pre-existing quiet truncation: the old `.limit(1000)`
+// capped the trip set used to compute totalMiles and totalDeduction, so an
+// account with more than 1000 business drives in the range was shown an
+// understated mileage deduction with nothing on screen saying so.
+const PAGE_SIZE = 100;
+
+// PostgREST caps any single response at 1000 rows, so both the totals sweep
+// and the polyline fetch page in 1000-row chunks.
+const DB_PAGE = 1000;
+
+// Vertices per drive requested from mileage_trip_polylines.
+//
+// The overview map is a 520 px dial fitted to a whole year of driving, so a
+// drive occupies a few hundred pixels at most and 250 vertices is far more
+// than the line can show. The measured account carried a median of 175 fixes
+// per drive into the flight payload, and breadcrumb points were 52% of the
+// entire 995 KB response.
+//
+// 60 is the same budget the row thumbnails have always used
+// (lib/maps/static-map.ts). Measured on that account: 13,212 points down to
+// 4,473, and 995 KB down to 652 KB.
+//
+// The single-drive view (?trip=<id>) keeps the full 250, because that is the
+// screen where the user is inspecting one route rather than scanning a year.
+//
+// This thins a DRAWING, never a record. `distance_miles` and
+// `deduction_cents` are stored on mileage_trips, computed from the raw track
+// by the finalize pass; nothing on this page derives a mile from the polyline
+// it draws. The RPC's own sampling always keeps the first and last fix, so a
+// thinner trail still reaches the drive's true endpoints. The caption under
+// the map says the trail is a sample.
+const OVERVIEW_POLY_POINTS = 60;
+const SINGLE_TRIP_POLY_POINTS = 250;
 
 const RANGES: Record<
   string,
@@ -66,7 +125,7 @@ export default async function BusinessTripsPage({
   searchParams: SP;
 }) {
   const { user, admin } = await requireUserWithAdmin();
-  const { range = "ytd", trip: tripId } = await searchParams;
+  const { range = "ytd", trip: tripId, page: pageParam } = await searchParams;
   // Single-trip focus: when the user opens a specific drive from the
   // Expenses mileage line (?trip=<id>), scope the whole page to just
   // that one drive, the map auto-fits to its bounds and the list shows
@@ -76,6 +135,8 @@ export default async function BusinessTripsPage({
   const singleTrip = typeof tripId === "string" && tripId.length > 0;
   const rangeCfg = RANGES[range] ?? RANGES.ytd;
   const sinceIso = rangeCfg.sinceFn(new Date()).toISOString();
+  // Clamped to the real page count once we know it (see the count query).
+  let pageNum = Math.max(1, Math.floor(Number(pageParam)) || 1);
 
   const memberships = await getMyCompanies();
   const company = memberships[0]?.company ?? null;
@@ -94,6 +155,13 @@ export default async function BusinessTripsPage({
 
   let trips: TripRow[] = [];
   let places: MapPlace[] = [];
+  // Totals over the WHOLE filtered set, not over the rendered page. These
+  // three numbers feed the Schedule C mileage deduction, so they are the one
+  // thing on this page that must never be a subtotal of what happens to be
+  // on screen.
+  let totalCount = 0;
+  let totalMiles = 0;
+  let totalDeduction = 0;
   // Route polylines via the mileage_trip_polylines RPC, NOT an embedded
   // mileage_points(...) join, PostgREST caps embedded arrays at 1000
   // rows, which truncated long drives mid-route. The RPC returns a
@@ -104,38 +172,101 @@ export default async function BusinessTripsPage({
     // hydrate the breadcrumbs we'll actually render, important at
     // YTD scale where a heavy-driving business can have thousands
     // of trips.
-    let tripQuery = admin
-      .from("mileage_trips")
-      .select(
-        "id, started_at, ended_at, distance_miles, classification, deduction_cents, start_place_id, end_place_id, notes",
-      )
-      .eq("company_id", company.id)
-      .eq("driver_user_id", user.id)
-      .eq("classification", "business");
-    tripQuery = singleTrip
-      ? tripQuery.eq("id", tripId)
-      : tripQuery.gte("started_at", sinceIso);
-    const { data: tripData } = await tripQuery
+    const scope = () => {
+      const q = admin
+        .from("mileage_trips")
+        .select(
+          "id, started_at, ended_at, distance_miles, classification, deduction_cents, start_place_id, end_place_id, notes",
+        )
+        .eq("company_id", company.id)
+        .eq("driver_user_id", user.id)
+        .eq("classification", "business");
+      return singleTrip ? q.eq("id", tripId) : q.gte("started_at", sinceIso);
+    };
+
+    // Pass 1: the tax numbers, over every matching drive.
+    //
+    // `count: "exact"` gives us N for the "showing X of N" disclosure, and
+    // then we sweep the two numeric columns in 1000-row pages so the totals
+    // stay whole no matter how many drives the range holds. The rows are two
+    // numbers each, so this stays cheap even for a heavy-driving account;
+    // the expensive per-drive payload is the breadcrumb and the thumbnail,
+    // and neither is fetched here.
+    if (!singleTrip) {
+      const { count } = await admin
+        .from("mileage_trips")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", company.id)
+        .eq("driver_user_id", user.id)
+        .eq("classification", "business")
+        .gte("started_at", sinceIso);
+      totalCount = count ?? 0;
+      // A ?page= past the end would otherwise render the "no business
+      // drives" empty state, which reads as "your drives are gone".
+      pageNum = Math.min(pageNum, Math.max(1, Math.ceil(totalCount / PAGE_SIZE)));
+    }
+
+    if (!singleTrip && totalCount > 0) {
+      for (let from = 0; from < totalCount; from += DB_PAGE) {
+        const { data: sumRows } = await admin
+          .from("mileage_trips")
+          .select("distance_miles, deduction_cents")
+          .eq("company_id", company.id)
+          .eq("driver_user_id", user.id)
+          .eq("classification", "business")
+          .gte("started_at", sinceIso)
+          .order("started_at", { ascending: false })
+          .range(from, from + DB_PAGE - 1);
+        for (const r of (sumRows ?? []) as {
+          distance_miles: number;
+          deduction_cents: number;
+        }[]) {
+          totalMiles += Number(r.distance_miles);
+          totalDeduction += Number(r.deduction_cents);
+        }
+      }
+    }
+
+    // Pass 2: the drives this page actually renders.
+    const offset = singleTrip ? 0 : (pageNum - 1) * PAGE_SIZE;
+    const { data: tripData } = await scope()
       .order("started_at", { ascending: false })
-      .limit(singleTrip ? 1 : 1000);
+      .range(offset, offset + (singleTrip ? 1 : PAGE_SIZE) - 1);
     trips = (tripData ?? []) as unknown as TripRow[];
+
+    if (singleTrip) {
+      // One drive: its own numbers are the totals.
+      totalCount = trips.length;
+      totalMiles = trips.reduce((a, t) => a + Number(t.distance_miles), 0);
+      totalDeduction = trips.reduce(
+        (a, t) => a + Number(t.deduction_cents),
+        0,
+      );
+    }
 
     if (trips.length > 0) {
       // Paginated: PostgREST truncates any response at max-rows (1000),
       // which silently dropped polylines for all but the first few trips
-      // (same fix as app/mileage/page.tsx).
+      // (same fix as app/mileage/page.tsx). Bounded by PAGE_SIZE drives at
+      // p_max points each, so the old 60-page ceiling is now unreachable.
       const polyRows: ({ trip_id: string } & Pt)[] = [];
-      const POLY_PAGE = 1000;
-      for (let from = 0; from < 60_000; from += POLY_PAGE) {
+      const pMax = singleTrip
+        ? SINGLE_TRIP_POLY_POINTS
+        : OVERVIEW_POLY_POINTS;
+      // The RPC's stride is integer division, so it returns up to roughly
+      // 2 * p_max per drive before thinning starts. Size the ceiling for
+      // that rather than for p_max exactly.
+      const POLY_MAX = trips.length * pMax * 2;
+      for (let from = 0; from < POLY_MAX; from += DB_PAGE) {
         const { data: pageRows } = await admin
           .rpc("mileage_trip_polylines", {
             p_trip_ids: trips.map((t) => t.id),
-            p_max: 250,
+            p_max: pMax,
           })
-          .range(from, from + POLY_PAGE - 1);
+          .range(from, from + DB_PAGE - 1);
         const rows = (pageRows ?? []) as ({ trip_id: string } & Pt)[];
         polyRows.push(...rows);
-        if (rows.length < POLY_PAGE) break;
+        if (rows.length < DB_PAGE) break;
       }
       for (const r of polyRows) {
         const arr = pointsByTrip.get(r.trip_id);
@@ -154,14 +285,14 @@ export default async function BusinessTripsPage({
     places = (placeData ?? []) as unknown as MapPlace[];
   }
 
-  const totalMiles = trips.reduce(
-    (a, t) => a + Number(t.distance_miles),
-    0,
-  );
-  const totalDeduction = trips.reduce(
-    (a, t) => a + Number(t.deduction_cents),
-    0,
-  );
+  // Where this page sits in the full set, for the disclosure line and the
+  // Previous / Next links.
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const firstOnPage = totalCount === 0 ? 0 : (pageNum - 1) * PAGE_SIZE + 1;
+  const lastOnPage = (pageNum - 1) * PAGE_SIZE + trips.length;
+  const isPaged = !singleTrip && totalCount > PAGE_SIZE;
+  const pageHref = (p: number) =>
+    `/mileage/business?range=${range}${p > 1 ? `&page=${p}` : ""}`;
 
   // MileageMap takes generic MapTrip[]; every trip we pass is
   // already classification="business" so the map renders one
@@ -277,9 +408,11 @@ export default async function BusinessTripsPage({
             )}
 
             <div className="mt-6 grid sm:grid-cols-3 gap-3">
+              {/* Every Stat below counts the WHOLE range, not this page.
+                  These are the Schedule C numbers. */}
               <Stat
                 label="Business trips"
-                value={trips.length.toLocaleString()}
+                value={totalCount.toLocaleString()}
               />
               <Stat
                 label="Business miles"
@@ -299,12 +432,34 @@ export default async function BusinessTripsPage({
                   Taller than /mileage's default since the
                   breadcrumb is the whole story here. */}
               <MileageMap trips={mapTrips} places={places} height={520} />
+              {/* Say plainly what the map is and is not. The trail is a
+                  sample of each drive's fixes; the miles and the deduction
+                  come from the recorded drive, never from the drawn line. */}
+              {!singleTrip && trips.length > 0 && (
+                <p className="mt-2 text-xs text-ink-muted leading-relaxed">
+                  {isPaged ? (
+                    <>
+                      The map draws the {trips.length.toLocaleString()} drives
+                      on this page, out of {totalCount.toLocaleString()} in{" "}
+                      {rangeCfg.label.toLowerCase()}. The totals above cover
+                      all {totalCount.toLocaleString()}.{" "}
+                    </>
+                  ) : null}
+                  Each trail is drawn from an evenly spaced sample of the
+                  drive&apos;s GPS fixes, start and end always included, so a
+                  whole range fits one map. Miles and deduction come from the
+                  recorded drive, not from the drawn line. Open a drive from
+                  its expense line to see the route at full resolution.
+                </p>
+              )}
             </div>
 
             <h2 className="display text-xl text-forest-900 mt-8">
               Trips
               <span className="ml-2 text-sm text-ink-muted">
-                {trips.length} {trips.length === 1 ? "drive" : "drives"}
+                {isPaged
+                  ? `Showing ${firstOnPage.toLocaleString()}-${lastOnPage.toLocaleString()} of ${totalCount.toLocaleString()} drives`
+                  : `${trips.length} ${trips.length === 1 ? "drive" : "drives"}`}
               </span>
             </h2>
             {trips.length === 0 ? (
@@ -417,6 +572,40 @@ export default async function BusinessTripsPage({
                   );
                 })}
               </ul>
+            )}
+
+            {/* Pager. Every drive in the range stays reachable: this view
+                bounds what one response carries, it never drops a drive. */}
+            {isPaged && (
+              <nav
+                aria-label="Business drives pages"
+                className="mt-4 flex items-center justify-between gap-3"
+              >
+                {pageNum > 1 ? (
+                  <Link
+                    href={pageHref(pageNum - 1)}
+                    className="text-xs px-3 h-8 inline-flex items-center rounded-full border border-forest-200 text-forest-800 hover:border-gold-300"
+                  >
+                    &larr; Newer drives
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                <span className="text-xs text-ink-muted tabular-nums">
+                  Page {pageNum.toLocaleString()} of{" "}
+                  {pageCount.toLocaleString()}
+                </span>
+                {pageNum < pageCount ? (
+                  <Link
+                    href={pageHref(pageNum + 1)}
+                    className="text-xs px-3 h-8 inline-flex items-center rounded-full border border-forest-200 text-forest-800 hover:border-gold-300"
+                  >
+                    Older drives &rarr;
+                  </Link>
+                ) : (
+                  <span />
+                )}
+              </nav>
             )}
 
             <p className="mt-6 text-xs text-ink-muted leading-relaxed">

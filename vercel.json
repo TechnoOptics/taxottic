@@ -36,6 +36,10 @@
     {
       "path": "/api/cron/mileage-retention",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/recycle-bin-purge",
+      "schedule": "0 2 * * *"
     }
   ]
 }

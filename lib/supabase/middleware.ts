@@ -126,7 +126,35 @@ const ADMIN_PASSTHROUGH_EXACT = new Set([
   "/enterprise-welcome",
 ]);
 
+// Admin-host crawl posture, moved here from app/layout.tsx.
+//
+// It used to be a `robots` block in the root layout's generateMetadata,
+// selected by reading `headers()`. That one dynamic call opted every route
+// in the application out of static generation (3 static routes instead of
+// 40), so all the public marketing, guides and legal pages were rendered on
+// demand and returned `no-store`. Middleware already knows the host, so the
+// directive belongs here.
+//
+// This is strictly broader than the meta tag it replaces. A meta tag only
+// exists inside HTML that inherits the root layout; X-Robots-Tag applies to
+// every response on the admin hosts including /login, /auth/*,
+// /enterprise-welcome, redirects, and non-HTML bodies. Google and Bing treat
+// the header and the meta tag as equivalent. app/robots.ts still returns a
+// blanket `Disallow: /` for these hosts, so this is the second layer that
+// catches anything that fetches in spite of robots.txt.
+const ADMIN_ROBOTS_TAG =
+  "noindex, nofollow, noarchive, nosnippet, noimageindex";
+
 export async function updateSession(request: NextRequest) {
+  const response = await resolveRequest(request);
+  const host = (request.headers.get("host") ?? "").toLowerCase();
+  if (host === HQ_HOST || host === ENTERPRISE_HOST) {
+    response.headers.set("X-Robots-Tag", ADMIN_ROBOTS_TAG);
+  }
+  return response;
+}
+
+async function resolveRequest(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").toLowerCase();
   // Three portals on three real subdomains:
   //   - taxottic.com               → consumer app (default)
