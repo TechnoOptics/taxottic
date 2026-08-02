@@ -875,7 +875,16 @@
 // longer claims location is never shared or that turning tracking off
 // retains nothing. Footer attribution is now "Powered by Techno Optics
 // LLC".
-const CACHE_VERSION = "v148";
+// v149: iOS vehicle-presence confirmation signals. lib/mileage/
+// device-status.ts gained a typed bridge to the new native signal
+// buffer (drain/clear/queryMotionHistory/auditCaptureGap) plus three
+// new DeviceStatus fields, so the shipped client bundle changed. The
+// signals are Tier 2 only: nothing here can wake a terminated app, so
+// none of it may start a trip. The valuable one is the seven-day
+// CMMotionActivity history query, which makes an invisible capture
+// blackout detectable and explainable instead of looking like a day
+// with no driving.
+const CACHE_VERSION = "v149";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -24,6 +24,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // always present even on a genuine location launch.
         TaxotticBackgroundLocation.shared.restoreOnLaunch()
 
+        // Vehicle-presence CONFIRMATION signals. Installs an audio
+        // route observer and takes one route reading; starts no
+        // sensors, so a launch that turns out not to be a drive costs
+        // nothing. Nothing here can wake the app: it rides on the
+        // CoreLocation revival above, which is the only thing that can.
+        TaxotticVehicleSignals.shared.restoreOnLaunch()
+
         // Interactive notification categories for the Phase-2
         // "Business / Personal" actions (mileage / clarify). iOS only
         // renders action buttons — on the lock screen and a paired
@@ -84,6 +91,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+
+        // Re-read the audio route and, if the device went dark for a
+        // while, ask the OS what it recorded during the gap. Foreground
+        // only, and only when Motion is ALREADY granted, so this can
+        // never raise a permission prompt the user did not ask for.
+        TaxotticVehicleSignals.shared.onBecameActive()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
