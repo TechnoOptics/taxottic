@@ -52,9 +52,17 @@
          emulator: the picker's background sampled (18,26,42), the exact
          pixel of @drawable/splash and not the white set below, and
          setting a diagnostic red on AppTheme.NoActionBar (the theme
-         MainActivity switches to) turned the picker red. The real
-         severing is therefore the android:background @null on
-         AppTheme.NoActionBar; this one stays as the second layer. -->
+         MainActivity switches to) turned the picker red.
+
+         RESOLVED AT SOURCE. AppTheme.NoActionBarLaunch no longer sets
+         android:background at all - it was only ever there on the false
+         premise that it drove the pre-Android-12 splash - so nothing
+         merges into the Activity theme and nothing reaches the popup's
+         ListView. The @null restatement on AppTheme.NoActionBar that
+         chased this bug through three releases is gone with it. The
+         @null below is kept as a plain statement of intent for this
+         dialog's own views, not as a defence against a drawable that no
+         longer exists. -->
     <style name="AppTheme.AlertDialog" parent="android:Theme.DeviceDefault.Dialog.Alert">
         <!-- Dark on purpose. See picker_dialog_background.xml: the parent
              is the DARK DeviceDefault variant, so its list text is
@@ -121,20 +129,15 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowBackground">#121a2a</item>
-        <!-- Severs the splash drawable from every view in the app, and is
-             what finally stopped the native <select> picker painting
-             brand navy. MainActivity.onCreate calls
-             setTheme(AppTheme_NoActionBar), but Activity.setTheme MERGES
-             (Resources.Theme.applyStyle with force=true) onto the theme
-             already resolved from the manifest, so any attribute this
-             theme does not restate survives from
-             AppTheme.NoActionBarLaunch for the Activity's whole life.
-             android:background was one of those: @drawable/splash stayed
-             live as the default background for every view built from the
-             Activity context, including the ListView the Chromium select
-             popup constructs. @null restores the framework default (no
-             background); the window still paints #121a2a above. -->
-        <item name="android:background">@null</item>
+        <!-- android:background is deliberately absent, and that is now the
+             fix rather than a workaround. It used to be restated as @null
+             here to neutralise the @drawable/splash that
+             AppTheme.NoActionBarLaunch set and that Activity.setTheme
+             MERGED (Resources.Theme.applyStyle with force=true) into this
+             theme for the Activity's whole life. The launch theme no longer
+             sets android:background at all, so there is nothing to inherit
+             and nothing to neutralise: the framework default (no view
+             background) applies, and the window still paints #121a2a. -->
         <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
         <item name="android:statusBarColor">#121a2a</item>
         <item name="android:navigationBarColor">#121a2a</item>
@@ -148,56 +151,75 @@
 
     <!-- Launch/splash theme.
 
-         Android 12+ (API 31+) SplashScreen API: the OS IGNORES
-         android:windowBackground / android:background for the splash
-         content and instead centres `windowSplashScreenAnimatedIcon`
-         on `windowSplashScreenBackground`. With neither set it fell
-         back to the FULL adaptive launcher icon (@mipmap/ic_launcher =
-         its own ic_launcher_background circle + the brand foreground),
-         which the OS then circle-masks, so the splash showed the
-         wrong icon (a mismatched background disc, not the clean brand
-         mark on navy). Pin the brand mark (foreground only, white on
-         transparent) on the brand navy, and hand back to the app theme
-         once the WebView is ready. These are the androidx
-         core-splashscreen compat attrs (no android: prefix); they map
-         to the platform attrs on API 31+ and are back-ported below.
+         Both launch paths render the brand mark from the SAME two
+         compat attributes below. These are the androidx
+         core-splashscreen attrs (no android: prefix); the library maps
+         them to the platform attrs on API 31+ and back-ports them
+         below that.
 
-         Pre-12: the branded full-window splash and the dark bars come
-         from the SAME two windowSplashScreen* attrs, which the androidx
-         library back-ports into an android:windowBackground. See the
-         correction on android:background below. -->
+         Android 12+ (API 31+): the OS centres
+         `windowSplashScreenAnimatedIcon` on
+         `windowSplashScreenBackground` and applies its own masking. It
+         ignores android:windowBackground for the splash content. The
+         mapping lives in the library's values-v31 Theme.SplashScreen.
+
+         API 24-30: Theme.SplashScreen.Common (no values-v31 variant)
+         sets android:windowBackground to
+         @drawable/compat_splash_screen_no_icon_background. Because
+         minSdk is 24, that drawable has exactly ONE config in the APK,
+         res/drawable-v23, which is a layer-list of: the background
+         colour, the icon centred at
+         @dimen/splashscreen_icon_size_no_background = 288dp, then an
+         oval STROKE 109dp wide on a 410dp box painted in the
+         background colour. An Android shape stroke is centred on its
+         path, so that ring covers everything outside a
+         410 - 2x109 = 192dp circle. The library's own comment: "We
+         mask the outer bounds of the icon like we do on Android 12."
+
+         So the icon asset has to be built for that treatment: a 288dp
+         transparent square with the artwork inside the centred 192dp
+         circle. @drawable/splash_logo is exactly that - the brand mark
+         (public/brand/icon-mark-1024.png, white column-T + gold growth
+         chart) in a centred 132dp box, whose 186.7dp diagonal clears
+         the 192dp circle with margin.
+
+         DO NOT point this at @mipmap/ic_launcher, and do not leave it
+         unset. Unset is what produced the earlier incident: the OS
+         fell back to the full ADAPTIVE launcher icon, which carries
+         its own ic_launcher_background layer, and then circle-masked
+         it, so the splash showed a mismatched background disc instead
+         of the clean mark on navy. splash_logo is foreground artwork
+         only, with no background layer for a mask to expose.
+
+         (@drawable/splash, the full-bleed navy plate, is NOT used by
+         this theme. It belongs to the @capacitor/splash-screen plugin,
+         which looks it up by name and shows it for launchShowDuration
+         after this theme has handed over.) -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#121a2a</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <!-- REQUIRED. This is the theme AndroidManifest declares on
              MainActivity, so it is the one the native <select> picker
-             resolves its dialog theme from. Leaving it out is what let the
-             splash drawable below leak into the picker's option rows. -->
+             resolves its dialog theme from. Without it the picker falls
+             back to the platform default dialog theme, which follows the
+             system light/dark setting, and the option labels go
+             unreadable on the app's dark pages. -->
         <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
-        <!-- Pre-Android-12 branded splash.
+        <!-- There is deliberately no android:background here. It used to
+             carry @drawable/splash "for the pre-Android-12 splash", which
+             was never true: android:background is a VIEW attribute and can
+             never be a window background, and no view exists yet at launch.
+             The pre-31 branded window comes from windowSplashScreenBackground
+             via the library's android:windowBackground, as described above.
 
-             CORRECTION, verified against core-splashscreen 1.2.0: this
-             line is NOT what avoids the white launch flash. The parent
-             Theme.SplashScreen already sets, via Theme.SplashScreen.Common
-             in the library's res/values/values.xml,
-               android:windowBackground =
-                   @drawable/compat_splash_screen_no_icon_background
-             built from windowSplashScreenBackground (#121a2a), and that
-             is the attribute the OS paints the launch window with on
-             API < 31. android:background is a VIEW attribute; it can never
-             be a window background, and no view exists yet at launch.
-
-             It is kept only because it is what the two themes below have
-             to defend against, and removing it is a separate change: as a
-             theme item it becomes the default background of every plain
-             view, and MainActivity.setTheme MERGES rather than replaces,
-             so it leaked out of launch and into the whole app. That is why
-             it and the alertDialogTheme above travel together, and why
-             AppTheme.NoActionBar now restates android:background as @null.
-             Deleting this line would end the leak at source; it is left
-             in place here so this change stays scoped to the picker. -->
-        <item name="android:background">@drawable/splash</item>
+             What the line did do was leak. As a theme item it became the
+             default background of every plain view, and Activity.setTheme
+             MERGES rather than replaces, so it survived into
+             AppTheme.NoActionBar for the Activity's whole life and the
+             Chromium <select> popup built its ListView with a full-bleed
+             bitmap background - 1400px tall option rows with the splash
+             painted behind the text. Removing it ends that at source. -->
         <item name="android:statusBarColor">#121a2a</item>
         <item name="android:navigationBarColor">#121a2a</item>
         <item name="android:windowLightStatusBar">false</item>

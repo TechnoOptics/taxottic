@@ -875,7 +875,13 @@
 // longer claims location is never shared or that turning tracking off
 // retains nothing. Footer attribution is now "Powered by Techno Optics
 // LLC".
-const CACHE_VERSION = "v148";
+// v149: dead-code removal. BellaFAB and StudioFamilyFAB (both
+// zero call sites, both running a per-frame conic-gradient
+// animation), their .bella-fab CSS chain, the unused
+// .header-glow-line rules, and components/ui/Primitives.tsx are
+// deleted. Nothing rendered changes, but globals.css does, so the
+// bump stops v148 clients serving the old stylesheet.
+const CACHE_VERSION = "v149";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
