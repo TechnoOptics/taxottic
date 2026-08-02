@@ -27,7 +27,7 @@ These are the ones that will bite next.
 | C3 | Unconsumed raw points are silently marked consumed at 45 days and deleted at 75, destroying the only evidence from which a lost drive could ever be recovered. | `app/api/cron/mileage-retention/route.ts:47-56` |
 | C4 | The fleet canary has no notification channel at all. Its verdict goes to `console.error` and a JSON response field. Nothing pages, emails, pushes or persists an alert. | `app/api/cron/mileage-finalize/route.ts:427-431,446-453` |
 | C5 | The canary's own input is an unpaginated PostgREST select, so its day histogram is built from a truncated, unordered sample. | `app/api/cron/mileage-finalize/route.ts:381-388,397-404` |
-| C6 | `renderTripFromRaw` rewrites `distance_miles` and `deduction_cents` with no plausibility gate. `isPlausibleTrip` guards only the insert path. | `lib/mileage/finalize.ts:241-249` vs `:505-511` |
+| C6 | GATED 2026-08-01. `renderTripFromRaw` rewrote `distance_miles` and `deduction_cents` with no plausibility gate. `isPlausibleTrip` guarded only the insert path. Now gated by `assessRenderedTrack`, with refusals recorded in `mileage_render_refusals`. See the C6 detail below. | `lib/mileage/finalize.ts:241-249` vs `:505-511` |
 | C7 | Three concurrent finalize callers do read-then-insert with no isolation. The unique index only catches byte-identical `started_at`, so overlapping-but-not-identical trips can both land and double-count the miles. | `lib/mileage/finalize.ts:374-382`, `supabase/migrations/20260711120000_mileage_finalize_race_backstop.sql` |
 | C8 | A `started_at` unique-index collision aborts the update that carries the corrected distance, but the rendered track has ALREADY been replaced. The map and the claimed miles diverge permanently. | `lib/mileage/finalize.ts:241-255` |
 | H1 | The "parked device" detector is dead on exactly the devices that break: a device whose `speed_mps` is always null or 0 has `lastMovementMs = null`, which the evaluator treats as healthy. | `lib/mileage/device-health.ts:93-97`, `app/api/cron/mileage-finalize/route.ts:292-300` |
@@ -210,6 +210,24 @@ See "Answers to the two suspected live bugs" above.
   a rebuild that adds points while adding a fabricated hop passes.
 - **Recovered?** No. `reconcileBrokenTrips` will happily re-run the same render.
 - **Severity**: Critical.
+- **GATED (2026-08-01).** `assessRenderedTrack` now runs on the rebuilt track
+  after the never-shrink check and before the destructive `mileage_points`
+  delete, so a refusal leaves the trip exactly as it was. Two checks, because
+  the insert gate alone does not cover this path: (1) `isPlausibleTrip` over the
+  rebuilt span, the mode that produced 808 / 314 / 1,343 "mile" trips; and (2)
+  an unsupported-gap check, the mode described above, which check (1) misses
+  entirely because two real drives three hours apart average an innocent
+  18 mph. A rendered leg spanning more than `MAX_CAPTURE_GAP_MS` and carrying
+  at least `MIN_TRIP_METERS` is refused: those are the segmenter's own "a
+  capture gap longer than this ends the open trip" and "shorter than this is
+  GPS noise, not a drive", so no new threshold is invented. A long gap carrying
+  no displacement is a parked phone and stays allowed, preserving the widened
+  `TRIP_END_DWELL_MS` behaviour. Detection: every refusal writes
+  `public.mileage_render_refusals` (one row per trip, with `occurrences`,
+  `first_seen_at`, `last_seen_at`, and the miles refused vs kept) and the
+  finalize cron logs and returns a non-zero `renderRefused`. Note the method
+  note at the top of this file: the ledger is real detection, the log line is
+  not. What remains open is that nothing PAGES on it, same gap as C4.
 
 #### C7. Concurrent finalize can double-count a drive
 - **Mode**: The same drive materialises as two overlapping trips, and both
