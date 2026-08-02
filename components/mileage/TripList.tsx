@@ -45,6 +45,12 @@ export type TripRow = {
    *  it, so the drive is stored at zero cents and stays out of the
    *  deduction total until the driver confirms it. */
   needsConfirmation: boolean;
+  /** Plain-language reasons the confidence engine was not sure this was
+   *  a drive, e.g. "No car connection detected". Empty when it was sure,
+   *  or when there was nothing to read. Shown in place of the generic
+   *  line so the driver knows what to check, not just that we are
+   *  unsure. */
+  confidenceReasons?: string[];
   points: { lat: number; lng: number; captured_at: string }[];
   /** Which company/business this drive currently belongs to. */
   companyId: string;
@@ -376,8 +382,9 @@ function TripCard({
                 : "Assumed business, confirm"}
             </div>
             <div className="text-[11px] text-amber-800 mt-0.5 leading-snug">
-              No saved place matched this drive, so it is not in your
-              deduction yet.
+              {trip.confidenceReasons && trip.confidenceReasons.length > 0
+                ? `${trip.confidenceReasons.join(". ")}. Not in your deduction yet.`
+                : "No saved place matched this drive, so it is not in your deduction yet."}
             </div>
           </div>
           <button

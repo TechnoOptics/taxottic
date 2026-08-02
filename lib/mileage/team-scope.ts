@@ -83,7 +83,7 @@ export function resolveTripScope({
 }
 
 export const TRIP_SELECT =
-  "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, notes";
+  "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, confidence_reasons, notes";
 
 type TripQueryInput = {
   companyId: string;

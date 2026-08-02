@@ -188,6 +188,7 @@ export default async function MileagePage({
     tax_year: number;
     deduction_cents: number;
     needs_confirmation: boolean | null;
+    confidence_reasons?: string[] | null;
   };
   type Pt = { lat: number; lng: number; captured_at: string };
 
@@ -617,6 +618,9 @@ export default async function MileagePage({
                   classification: t.classification,
                   deductionCents: Number(t.deduction_cents),
                   needsConfirmation: t.needs_confirmation === true,
+                  confidenceReasons: Array.isArray(t.confidence_reasons)
+                    ? t.confidence_reasons
+                    : [],
                   points: pointsByTrip.get(t.id) ?? [],
                   companyId: company.id,
                 }))}

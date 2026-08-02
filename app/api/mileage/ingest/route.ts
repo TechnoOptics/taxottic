@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { type GpsPoint } from "@/lib/mileage/segmentation";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
+import { parseSignalReport } from "@/lib/mileage/signals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,13 @@ type Body = {
   // of being stranded open until the next heartbeat (which won't come,
   // because the flush timer was just cleared).
   sessionEnded?: boolean;
+  // Vehicle-presence and motion observations drained from the native
+  // producers' buffer, alongside the points they belong with. Rides on
+  // this route deliberately rather than getting its own: the producers
+  // already flush here, and a second parallel ingest path would be one
+  // more thing to keep in step. Shape: `SignalReport` in lib/mileage/
+  // signals.ts. Optional, and an older build sends none.
+  signals?: unknown;
 };
 
 function isFinitePoint(p: unknown): p is GpsPoint {
@@ -167,6 +175,49 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
+  }
+
+  // 1b. Stage any signal observations that came with the batch, BEFORE
+  // segmenting, so the confidence engine scores this run's trips with
+  // the evidence that belongs to them rather than one flush late.
+  //
+  // A bad signal payload must never cost us the points: everything here
+  // is best-effort and the failure is logged, not returned.
+  const signalReport = parseSignalReport(body.signals, Date.now());
+  if (signalReport.observations.length > 0) {
+    const rows = signalReport.observations.map((o) => ({
+      driver_user_id: user.id,
+      company_id: companyId,
+      kind: o.kind,
+      platform: o.platform,
+      started_at: new Date(o.startedAtMs).toISOString(),
+      last_seen_at: new Date(o.lastSeenAtMs).toISOString(),
+      ended_at: o.endedAtMs === null ? null : new Date(o.endedAtMs).toISOString(),
+      strength: o.strength ?? null,
+      source: o.source ?? null,
+      detail: o.detail,
+    }));
+    // Same identity contract as the raw points: a retried flush must not
+    // multiply a device's own evidence.
+    const { error: sigErr } = await admin
+      .from("mileage_signal_events")
+      .upsert(rows, {
+        onConflict: "driver_user_id,company_id,kind,started_at",
+        ignoreDuplicates: false,
+      });
+    if (sigErr) {
+      console.error("[ingest] signal upsert failed", sigErr.message);
+    }
+  }
+  if (signalReport.rejected.length > 0) {
+    // Never absorbed. A producer emitting nonsense has to be visible, or
+    // it looks exactly like a quiet device.
+    console.error(
+      `[ingest] signal payload rejected user=${user.id} ` +
+        signalReport.rejected
+          .map((r) => `${r.kind ?? "?"}:${r.reason}`)
+          .join(" "),
+    );
   }
 
   // 2. Segment the unconsumed staging pool into closed trips. forceClose

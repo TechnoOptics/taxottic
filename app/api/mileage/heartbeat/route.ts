@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { parseSignalReport } from "@/lib/mileage/signals";
 
 export const runtime = "nodejs";
 
@@ -109,6 +110,21 @@ export async function POST(req: NextRequest) {
     return v && allowed.has(v) ? v : null;
   };
 
+  // Signal availability, sanitised through the shared registry. An
+  // unrecognised key is dropped and an unrecognised verdict becomes
+  // "unknown": the one thing that must never happen is silence reading
+  // as "available".
+  const rawAvailability = (body as Record<string, unknown>).signalAvailability;
+  const parsedSignals = parseSignalReport(
+    { availability: rawAvailability, observations: [] },
+    Date.now(),
+  );
+  const signalAvailability =
+    Object.keys(parsedSignals.availability).length > 0
+      ? parsedSignals.availability
+      : null;
+  const signalRejections = num("signalRejections");
+
   const reportedAt = new Date().toISOString();
   const payload = {
     driver_user_id: user.id,
@@ -194,6 +210,17 @@ export async function POST(req: NextRequest) {
     geofence_count: num("geofenceCount"),
     geofence_capture: str("geofenceCapture", 40),
     geofence_buffered_fixes: num("geofenceBufferedFixes"),
+    // Which drive signals this device can actually read, and why not
+    // when it cannot. Sanitised through the same registry the scorer
+    // uses, so an unknown key or an unknown verdict cannot reach the
+    // column, and an unreported signal reads as "unknown" rather than
+    // as health. This is what the degraded-mode ladder runs on.
+    signal_availability: signalAvailability,
+    signal_rejections: signalRejections,
+    // iOS CMMotionActivity grant, deliberately separate from the
+    // pedometer flag above: without it the seven-day gap audit is inert,
+    // and an inert audit looks exactly like a clean record.
+    motion_activity_authorization: str("motionActivityAuthorization", 20),
     reported_at: reportedAt,
   };
 

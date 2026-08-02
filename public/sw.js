@@ -875,7 +875,15 @@
 // longer claims location is never shared or that turning tracking off
 // retains nothing. Footer attribution is now "Powered by Techno Optics
 // LLC".
-const CACHE_VERSION = "v148";
+// v150: multi-signal confidence engine. Trip rows can now carry a
+// plain-language reason the drive was not certain ("No car connection
+// detected"), rendered in place of the generic line on the amber
+// confirm card, and the tracker status panel grew a "Detection health"
+// card listing every degraded rung the device is on. Both are new
+// client markup on /mileage, and page.tsx now selects a new trip
+// column, so a v148 or v149 client hydrating against the new server
+// HTML would mismatch. v149 was taken by the iOS vehicle-signal branch.
+const CACHE_VERSION = "v150";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -9,6 +9,20 @@ import {
 } from "./segmentation";
 import { tripDeductionCents } from "./deduction";
 import { buildTrackFromRaw, type RawPoint } from "./track";
+import {
+  deriveTrackSignals,
+  resolveTripConfidence,
+  scoreDrive,
+  type DriveConfidence,
+} from "./confidence";
+import {
+  isSignalKind,
+  type SignalAvailability,
+  type SignalKind,
+  type SignalObservation,
+  type SignalObservationSource,
+  type SignalPlatform,
+} from "./signals";
 import { notify } from "@/lib/push";
 
 /**
@@ -43,7 +57,87 @@ export type FinalizeResult = {
   businessMiles: number;
   deductionCents: number;
   poolSize: number;
+  /** Candidates the confidence engine refused to materialise, with
+   *  counter-evidence. Reported so a prune is never invisible. */
+  tripsPruned?: number;
 };
+
+/** How far before a trip's start a signal may still be evidence for it.
+ *  A car link established while walking to the car is exactly the case
+ *  this window exists to catch. */
+const SIGNAL_LOOKBACK_MS = 15 * 60_000;
+
+/**
+ * Signal observations overlapping one drive's window, plus the device's
+ * own account of what it could and could not read.
+ *
+ * Returns an empty availability map on any failure, which the scorer
+ * reads as "unevaluated" and therefore acts on not at all. A database
+ * hiccup must not turn into a fleet of zeroed deductions.
+ */
+async function loadSignalObservations(
+  admin: SupabaseClient,
+  userId: string,
+  companyId: string,
+  startMs: number,
+  endMs: number,
+): Promise<SignalObservation[]> {
+  const observations: SignalObservation[] = [];
+
+  const { data, error } = await admin
+    .from("mileage_signal_events")
+    .select("kind, platform, started_at, last_seen_at, ended_at, strength, source")
+    .eq("driver_user_id", userId)
+    .eq("company_id", companyId)
+    .gte("started_at", new Date(startMs - SIGNAL_LOOKBACK_MS).toISOString())
+    .lte("started_at", new Date(endMs).toISOString())
+    .order("started_at", { ascending: true })
+    .limit(200);
+  if (error) {
+    console.error("[finalize] signal events fetch failed", error.message);
+    return observations;
+  }
+  for (const row of data ?? []) {
+    const kind = row.kind as string;
+    if (!isSignalKind(kind)) continue;
+    const strength = row.strength as number | null;
+    const o: SignalObservation = {
+      kind,
+      platform: (row.platform as SignalPlatform) ?? "web",
+      startedAtMs: Date.parse(row.started_at as string),
+      lastSeenAtMs: Date.parse(row.last_seen_at as string),
+      endedAtMs: row.ended_at ? Date.parse(row.ended_at as string) : null,
+      source: (row.source as SignalObservationSource | null) ?? undefined,
+      detail: null,
+    };
+    if (strength != null) o.strength = strength;
+    observations.push(o);
+  }
+  return observations;
+}
+
+/** The device's own account of which signals it can read. Per driver,
+ *  not per trip, so it is loaded once per finalize run. */
+async function loadSignalAvailability(
+  admin: SupabaseClient,
+  userId: string,
+  companyId: string,
+): Promise<Partial<Record<SignalKind, SignalAvailability>>> {
+  const availability: Partial<Record<SignalKind, SignalAvailability>> = {};
+  const { data: status } = await admin
+    .from("mileage_device_status")
+    .select("signal_availability")
+    .eq("driver_user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  const raw = status?.signal_availability as Record<string, string> | null;
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) {
+      if (isSignalKind(k)) availability[k] = v as SignalAvailability;
+    }
+  }
+  return availability;
+}
 
 export type OverlapAction =
   | { action: "insert" }
@@ -396,6 +490,13 @@ export async function finalizeUserTrips(
   // the automatic behaviour.
   const autoApply = await autoApplyEnabled(admin, userId);
 
+  // Per-driver, so it is read once rather than per candidate.
+  const signalAvailability = await loadSignalAvailability(
+    admin,
+    userId,
+    companyId,
+  );
+
   // Close the open trip when the caller forces it (sessionEnded /
   // walked-away: an explicit, evidence-backed end) or when the user
   // has been parked for the SAME 10-minute dwell the in-stream
@@ -413,11 +514,15 @@ export async function finalizeUserTrips(
   let tripsCreated = 0;
   let businessMiles = 0;
   let deductionCents = 0;
+  let tripsPruned = 0;
 
   const consumeRange = async (
     startedAtIso: string,
     endedAtIso: string,
-    tripId: string,
+    /** Null when the window was evaluated and deliberately NOT made into
+     *  a trip. The raw points stay in the table either way, so a wrong
+     *  prune is still recoverable from the pool. */
+    tripId: string | null,
   ) => {
     const { error } = await admin
       .from("mileage_points_raw")
@@ -562,7 +667,57 @@ export async function finalizeUserTrips(
     const classification = carried
       ? carried.classification
       : (auto?.classification ?? suggestClassification(trip, places));
-    const needsConfirmation = auto?.needsConfirmation ?? false;
+
+    // ── Multi-signal confidence ──────────────────────────────────────
+    //
+    // Scored here, on the server, with the whole track in hand. The
+    // device's job stays "stream raw points"; it computes only enough to
+    // decide whether to escalate capture right now.
+    //
+    // Two sources of evidence, one shape: what the native producers
+    // observed, and what the track itself says. The derived half means
+    // the engine is not vacuous before any producer ships.
+    const signalObservations = await loadSignalObservations(
+      admin,
+      userId,
+      companyId,
+      trip.startTs,
+      trip.endTs,
+    );
+    const confidence: DriveConfidence = scoreDrive({
+      observations: [
+        ...signalObservations,
+        ...deriveTrackSignals(trip.points),
+      ],
+      availability: signalAvailability,
+      referenceMs: trip.startTs,
+      phase: "retrospective",
+    });
+    const verdict = resolveTripConfidence({
+      confidence,
+      autoNeedsConfirmation: auto?.needsConfirmation ?? false,
+      humanClassified: carried !== null,
+    });
+    const needsConfirmation = verdict.needsConfirmation;
+
+    // Retrospective prune. Only ever with positive counter-evidence (a
+    // walking track, a stay inside a 300 m box), never on a merely quiet
+    // score, and never on a drive a person already classified. Logged
+    // loudly: a drive that silently fails to exist is the exact failure
+    // this pipeline was built to stop.
+    if (verdict.prune) {
+      tripsPruned++;
+      console.error(
+        `[finalize] PRUNED non-drive candidate: ${trip.distanceMiles.toFixed(2)} mi, ` +
+          `score ${confidence.score}, counter-evidence ` +
+          `[${confidence.contributions
+            .filter((c) => c.baseWeight < 0)
+            .map((c) => c.kind)
+            .join(", ")}] (driver=${userId})`,
+      );
+      await consumeRange(startedAt, endedAt, null);
+      continue;
+    }
     // Tax year from the trip's LOCAL date. A US evening drive on Dec 31
     // is already Jan 1 in UTC, so getUTCFullYear() filed it under the
     // WRONG tax year — the deduction landed in a return the user had
@@ -607,6 +762,23 @@ export async function finalizeUserTrips(
         notes: carried?.notes ?? null,
         tax_year: taxYear,
         deduction_cents: dCents,
+        // Advisory and auditable. `needs_confirmation` is what gates the
+        // money; these columns are how a driver asking in March why a
+        // January drive was not deducted gets an answer from the row.
+        confidence_score: confidence.evaluated ? confidence.score : null,
+        confidence_tier: confidence.tier,
+        confidence_reasons:
+          confidence.reasons.length > 0 ? confidence.reasons : null,
+        confidence_signals: confidence.evaluated
+          ? {
+              contributions: confidence.contributions.map((c) => ({
+                kind: c.kind,
+                effective: c.effective,
+                ageMs: c.ageMs,
+              })),
+              unavailable: confidence.unavailable,
+            }
+          : null,
       })
       .select("id")
       .single();
@@ -713,6 +885,7 @@ export async function finalizeUserTrips(
     businessMiles,
     deductionCents,
     poolSize: allPoints.length,
+    tripsPruned,
   };
 }
 

@@ -6,6 +6,10 @@ import {
   getGeofenceState,
   type GeofenceHealth,
 } from "@/lib/mileage/geofence";
+import {
+  evaluateDegradedLadder,
+  type LadderResult,
+} from "@/lib/mileage/degraded";
 
 /**
  * "Is the tracker actually running?", the diagnostic strip the user
@@ -64,6 +68,13 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
   // happens.
   const [geofence, setGeofence] = useState<GeofenceHealth | null>(null);
 
+  // The degraded-mode ladder. Same motivation as the mesh card above,
+  // one level up: not "is the restart net armed" but "what, overall, is
+  // this device unable to do". Every rung is named and every rung is
+  // on-page. Nothing here pushes; the ladder's own type has no
+  // notification surface, by construction.
+  const [ladder, setLadder] = useState<LadderResult | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -72,6 +83,32 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
       // Null means no native side to ask (web, or an older binary).
       // Say nothing rather than claim anything.
       if (state) setGeofence(describeGeofenceHealth(state));
+
+      const { getDeviceStatus } = await import("@/lib/mileage/device-status");
+      const status = await getDeviceStatus();
+      if (cancelled || !status) return;
+      setLadder(
+        evaluateDegradedLadder({
+          platform:
+            status.platform === "ios" || status.platform === "android"
+              ? status.platform
+              : "web",
+          manufacturer: status.manufacturer ?? null,
+          trackingEnabled: true,
+          locationAuthorization: status.locationAuthorization ?? null,
+          backgroundRefresh: status.backgroundRefresh ?? null,
+          batteryOptimized: status.batteryOptimized ?? null,
+          geofenceStatus: state ? describeGeofenceHealth(state).status : null,
+          // Server-side expected-wake accounting is not built yet, so
+          // this is honestly false rather than speculatively true.
+          expectedWakeMissed: false,
+          motionActivityAuthorization: null,
+          // No signal producer has reported to this build. An empty map
+          // is the truthful input and the ladder says so out loud
+          // instead of letting silence read as health.
+          signalAvailability: {},
+        }),
+      );
     })();
     return () => {
       cancelled = true;
@@ -269,6 +306,36 @@ export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {
             ) : null}
           </div>
         </div>
+      </div>
+    ) : null}
+    {ladder && ladder.active.some((d) => d.surface !== "silent") ? (
+      <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <div className="text-sm font-medium text-forest-900">
+          Detection health
+        </div>
+        <ul className="mt-2 space-y-2">
+          {ladder.active
+            .filter((d) => d.surface !== "silent")
+            .map((d) => (
+              <li key={d.id} className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className={
+                    "mt-1.5 size-2.5 rounded-full shrink-0 " +
+                    (d.surface === "blocking" ? "bg-rose-500" : "bg-amber-500")
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-forest-900">
+                    {d.headline}
+                  </div>
+                  <div className="text-[11px] text-ink-muted mt-0.5 leading-snug">
+                    {d.detail}
+                  </div>
+                </div>
+              </li>
+            ))}
+        </ul>
       </div>
     ) : null}
     </>
