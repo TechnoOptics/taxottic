@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   autoClassify,
+  haversineMeters,
+  MAX_CAPTURE_GAP_MS,
+  METERS_PER_MILE,
+  MIN_TRIP_METERS,
   segmentTrips,
   suggestClassification,
   TRIP_END_DWELL_MS,
@@ -102,6 +106,120 @@ export function isPlausibleTrip(
   return distanceMiles / hours <= MAX_PLAUSIBLE_AVG_MPH;
 }
 
+/** Why a rebuilt track was refused. Both modes fabricate distance; they
+ *  are separated because they have different causes and different fixes. */
+export type RenderRefusal =
+  | { reason: "implausible_average_speed"; miles: number; minutes: number }
+  | {
+      reason: "unsupported_gap";
+      miles: number;
+      gapMiles: number;
+      gapMinutes: number;
+    };
+
+/**
+ * The plausibility gate for the RE-RENDER path (FMEA C6).
+ *
+ * `renderTripFromRaw` recomputes `distance_miles` and `deduction_cents`
+ * from whatever raw falls in a window and writes them. `isPlausibleTrip`
+ * guards only the INSERT, so a rebuild could fabricate distance on a
+ * drive a human had already confirmed, at the full IRS rate.
+ *
+ * Two checks, because the insert gate alone is NOT sufficient here:
+ *
+ *  1. Impossible average speed. The insert-path test, reused verbatim.
+ *     Catches the mode already seen in production: a time-shifted
+ *     backlog rendered into a short window as 808, 314 and 1,343 "mile"
+ *     trips, \$1,875 of false deduction in one evening.
+ *
+ *  2. An unsupported gap. This is the mode check 1 misses and the one
+ *     FMEA C6 is actually about. On the `consume_to_keeper` path the
+ *     render window is the UNION of the keeper's span and the
+ *     candidate's, clamped only by neighbouring trips, so it can reach
+ *     across a long stretch that produced no trip at all. The rebuild
+ *     then joins the surviving points with a straight line and sums the
+ *     haversine. Two real 5-mile drives 3 hours apart become one
+ *     60-mile trip whose average speed is a perfectly innocent 18 mph.
+ *
+ * Neither threshold in check 2 is invented. `MAX_CAPTURE_GAP_MS` is the
+ * segmenter's own "a capture gap longer than this ends the open trip";
+ * a rebuilt track that draws across a longer gap is claiming miles for a
+ * stretch the pipeline's own rules say was not one continuous drive.
+ * `MIN_TRIP_METERS` is the segmenter's own "shorter than this is GPS
+ * noise, not a drive": a phone parked at a dead stop emits no fixes at
+ * all (the 25 m distanceFilter), so a long gap carrying no displacement
+ * is evidence of PARKING, and refusing it would undo the deliberate
+ * widening of `TRIP_END_DWELL_MS` that stopped train crossings and
+ * drive-throughs severing a drive.
+ *
+ * The asymmetry is deliberate. A false refusal keeps the trip's existing
+ * distance, which is the last value the gated insert (or a human)
+ * blessed: nothing shrinks, nothing is lost, and the refusal is recorded
+ * so the noise surfaces. A false accept claims a fabricated mile against
+ * the IRS. A fabricated mile is worse than a missed one.
+ *
+ * Pure, so the whole safety argument is unit-tested without a database.
+ */
+export function assessRenderedTrack(
+  points: readonly RawPoint[],
+  distanceMiles: number,
+): RenderRefusal | null {
+  if (points.length < 2) return null; // caller already refuses to render
+  const startMs = Date.parse(points[0].captured_at);
+  const endMs = Date.parse(points[points.length - 1].captured_at);
+  if (!isPlausibleTrip(distanceMiles, startMs, endMs)) {
+    return {
+      reason: "implausible_average_speed",
+      miles: distanceMiles,
+      minutes: (endMs - startMs) / 60_000,
+    };
+  }
+
+  let gapMiles = 0;
+  let gapMinutes = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dtMs =
+      Date.parse(points[i].captured_at) - Date.parse(points[i - 1].captured_at);
+    if (dtMs <= MAX_CAPTURE_GAP_MS) continue;
+    const meters = haversineMeters(points[i - 1], points[i]);
+    if (meters < MIN_TRIP_METERS) continue; // parked, not travelled
+    const legMiles = meters / METERS_PER_MILE;
+    if (legMiles > gapMiles) {
+      gapMiles = legMiles;
+      gapMinutes = dtMs / 60_000;
+    }
+  }
+  if (gapMiles > 0) {
+    return {
+      reason: "unsupported_gap",
+      miles: distanceMiles,
+      gapMiles,
+      gapMinutes,
+    };
+  }
+  return null;
+}
+
+/** One human-readable line for a refusal: the mode, the distance that
+ *  was refused, the distance the trip keeps instead, and enough of the
+ *  offending shape to start an investigation from a log search alone. */
+export function describeRenderRefusal(
+  refusal: RenderRefusal,
+  keptMiles: number | null,
+): string {
+  const kept =
+    keptMiles == null ? "unknown" : `${keptMiles.toFixed(2)} mi`;
+  const shape =
+    refusal.reason === "implausible_average_speed"
+      ? `over ${refusal.minutes.toFixed(1)} min`
+      : `including a ${refusal.gapMiles.toFixed(2)} mi straight line across a ` +
+        `${refusal.gapMinutes.toFixed(0)} min capture gap`;
+  return (
+    `${refusal.reason}: refused a rebuild of ${refusal.miles.toFixed(2)} mi ` +
+    `${shape}; trip keeps ${kept}`
+  );
+}
+
 /**
  * The deduction actually written to a trip row.
  *
@@ -139,6 +257,57 @@ export function localTaxYear(
 }
 
 /**
+ * Make a refused rebuild visible. Two surfaces, because they answer
+ * different questions:
+ *   - a loud log line, for "what did the pipeline just do"; and
+ *   - a row in mileage_render_refusals, for "which trips are frozen and
+ *     since when", which a log search cannot answer weeks later.
+ *
+ * Never throws and never blocks the refusal itself: the trip is already
+ * safe (the write was declined), so a ledger failure must not turn a
+ * successful refusal into a crashed finalize run.
+ */
+async function recordRenderRefusal(
+  admin: SupabaseClient,
+  args: {
+    tripId: string;
+    userId: string;
+    companyId: string;
+    refusal: RenderRefusal;
+    keptMiles: number | null;
+    windowStartIso: string;
+    windowEndIso: string;
+  },
+): Promise<void> {
+  const detail = describeRenderRefusal(args.refusal, args.keptMiles);
+  console.error(
+    `[finalize] RENDER REFUSED trip=${args.tripId} driver=${args.userId} ${detail}`,
+  );
+  try {
+    const { error } = await admin.rpc("mileage_record_render_refusal", {
+      p_trip_id: args.tripId,
+      p_driver_user_id: args.userId,
+      p_company_id: args.companyId,
+      p_reason: args.refusal.reason,
+      p_refused_miles: Number(args.refusal.miles.toFixed(3)),
+      p_kept_miles:
+        args.keptMiles == null ? null : Number(args.keptMiles.toFixed(3)),
+      p_detail: detail,
+      p_window_start: args.windowStartIso,
+      p_window_end: args.windowEndIso,
+    });
+    if (error) {
+      console.error("[finalize] refusal ledger write failed", error.message);
+    }
+  } catch (err) {
+    console.error(
+      "[finalize] refusal ledger write threw",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
+/**
  * Rebuild a trip's rendered track (mileage_points) + distance from ALL
  * raw staging points inside its own time window, then persist. This is
  * what keeps the rendered polyline honest: the segmentation pool only
@@ -160,10 +329,13 @@ async function renderTripFromRaw(
   tripId: string,
   candStartIso: string,
   candEndIso: string,
+  hooks?: { onRefusal?: (refusal: RenderRefusal) => void },
 ): Promise<{ miles: number; deductionCents: number } | null> {
   const { data: trip } = await admin
     .from("mileage_trips")
-    .select("started_at, ended_at, classification, tax_year, needs_confirmation")
+    .select(
+      "started_at, ended_at, classification, tax_year, needs_confirmation, distance_miles",
+    )
     .eq("id", tripId)
     .maybeSingle();
   if (!trip) return null;
@@ -226,6 +398,28 @@ async function renderTripFromRaw(
     .select("*", { count: "exact", head: true })
     .eq("trip_id", tripId);
   if (!shouldReplaceTrack(existingCount ?? 0, track.points.length)) {
+    return null;
+  }
+
+  // Plausibility gate for the re-render (FMEA C6). Deliberately sits
+  // AFTER the never-shrink check and BEFORE the destructive delete
+  // below: a refusal must leave the trip exactly as it was, track and
+  // distance both. The trip keeps whatever the gated insert (or a human)
+  // last blessed, and the refusal is recorded so a frozen trip is
+  // findable instead of silent.
+  const refusal = assessRenderedTrack(track.points, track.distanceMiles);
+  if (refusal) {
+    const keptMiles = Number(trip.distance_miles);
+    await recordRenderRefusal(admin, {
+      tripId,
+      userId,
+      companyId,
+      refusal,
+      keptMiles: Number.isFinite(keptMiles) ? keptMiles : null,
+      windowStartIso: startIso,
+      windowEndIso: endIso,
+    });
+    hooks?.onRefusal?.(refusal);
     return null;
   }
 
@@ -716,7 +910,14 @@ export async function finalizeUserTrips(
   };
 }
 
-export type ReconcileResult = { scanned: number; healed: number };
+export type ReconcileResult = {
+  scanned: number;
+  healed: number;
+  /** Rebuilds the plausibility gate declined to write. Non-zero here is
+   *  the alarm: the reconciler is repeatedly trying to write a
+   *  fabricated distance onto real trips. */
+  refused: number;
+};
 
 /**
  * Self-healing safety net. Scans recent trips for the "straight line
@@ -742,7 +943,7 @@ export async function reconcileBrokenTrips(
   });
   if (error) {
     console.error("[reconcile] broken-trip scan failed", error.message);
-    return { scanned: 0, healed: 0 };
+    return { scanned: 0, healed: 0, refused: 0 };
   }
   const rows = (data ?? []) as Array<{
     trip_id: string;
@@ -752,6 +953,7 @@ export async function reconcileBrokenTrips(
     ended_at: string;
   }>;
   let healed = 0;
+  let refused = 0;
   for (const r of rows) {
     try {
       const res = await renderTripFromRaw(
@@ -761,6 +963,7 @@ export async function reconcileBrokenTrips(
         r.trip_id,
         r.started_at,
         r.ended_at,
+        { onRefusal: () => refused++ },
       );
       if (res) {
         healed++;
@@ -776,5 +979,5 @@ export async function reconcileBrokenTrips(
       );
     }
   }
-  return { scanned: rows.length, healed };
+  return { scanned: rows.length, healed, refused };
 }
