@@ -2,9 +2,9 @@ import Link from "next/link";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
-  title: "Legal, privacy, security, terms, DPA, DMCA, accessibility",
+  title: "Legal, privacy, location tracking, security, terms, DPA, DMCA",
   description:
-    "Plain-English policies for Taxottic. Privacy, security overview, terms of service, DPA, subprocessors, cookies, DMCA, accessibility, acceptable use.",
+    "Plain-English policies for Taxottic. Privacy, location tracking and team visibility, security overview, terms of service, DPA, subprocessors, cookies, DMCA, accessibility, acceptable use.",
   alternates: { canonical: "/legal" },
   openGraph: {
     title: "Taxottic Legal",
@@ -37,6 +37,7 @@ const LEGAL_BREADCRUMB_LD = {
 const PAGES = [
   { href: "/legal/privacy", title: "Privacy Policy", body: "What we collect, why, where it lives, and how to ask for it back." },
   { href: "/legal/terms", title: "Terms of Service", body: "The agreement between you and Techno Optics LLC for using Taxottic." },
+  { href: "/legal/location-monitoring", title: "Location Tracking and Team Visibility", body: "What automatic mileage tracking records, how long it is kept, and exactly what a manager can see." },
   { href: "/legal/security", title: "Security Overview", body: "How we encrypt, isolate, monitor, and respond to incidents." },
   { href: "/legal/subprocessors", title: "Subprocessors", body: "The vendors that process customer data on our behalf." },
   { href: "/legal/cookies", title: "Cookie Policy", body: "Just the cookies we need for sign-in, passkeys, and consent." },

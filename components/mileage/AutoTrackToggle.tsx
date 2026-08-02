@@ -249,9 +249,19 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
             <p className="mt-1 text-xs text-ink-muted leading-relaxed">
               The app detects when you drive and stop, then logs the trip
               so you can mark it business or personal. Location is used
-              only to compute your mileage deduction, sent straight to
-              your Taxottic account, and never sold or shared. Turn this
-              off any time; you can still add drives by hand.
+              only to compute your mileage deduction and is never sold.
+              Drives you mark business are visible to a manager at your
+              company; personal and unclassified drives are not. Turn
+              this off any time; you can still add drives by hand.{" "}
+              <a
+                href="/legal/location-monitoring"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-forest-900"
+              >
+                Full notice
+              </a>
+              .
             </p>
           ) : null}
         </div>
@@ -362,6 +372,16 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
               your Schedule C without you having to remember.
             </p>
             <ul className="mt-3 grid gap-2 text-[12.5px] text-ink-soft leading-relaxed">
+              {/* These three bullets are a consent disclosure, so they
+                  have to match the code. Two earlier bullets did not:
+                  "never shared" was contradicted by the fact that
+                  coordinates go to Google Maps and that business trips
+                  are visible to a manager (lib/mileage/team-scope.ts),
+                  and "no data retained" was contradicted by
+                  mileage_trips and mileage_points having no expiry job
+                  (app/api/cron/mileage-retention/route.ts covers only
+                  raw fixes and heartbeats). Do not soften these back
+                  without changing the behaviour first. */}
               <li className="flex gap-2">
                 <span aria-hidden="true" className="text-gold-700">
                   ✓
@@ -369,7 +389,7 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
                 <span>
                   Location is used only to compute the deduction -{" "}
                   <span className="font-medium text-forest-900">
-                    never sold, never shared.
+                    never sold, never used for ads.
                   </span>
                 </span>
               </li>
@@ -378,8 +398,19 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
                   ✓
                 </span>
                 <span>
-                  You can turn it off any time from this screen, no data
-                  retained.
+                  If you drive for a company, a manager there can see the
+                  drives you mark <span className="font-medium text-forest-900">business</span>,
+                  including the route. Personal and unclassified drives
+                  stay private to you.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span aria-hidden="true" className="text-gold-700">
+                  ✓
+                </span>
+                <span>
+                  You can turn it off any time from this screen. Drives
+                  already logged stay until you delete them.
                 </span>
               </li>
               <li className="flex gap-2">
@@ -395,7 +426,17 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
             <p className="mt-4 text-[11px] text-ink-muted">
               Your phone will ask for permission next. Pick &quot;While
               using the app&quot; (or &quot;Allow all the time&quot; for
-              background drives).
+              background drives). Full detail on what is recorded, how
+              long it is kept, and who can see it:{" "}
+              <a
+                href="/legal/location-monitoring"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-forest-900"
+              >
+                Location tracking and team visibility
+              </a>
+              .
             </p>
             <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
               <button

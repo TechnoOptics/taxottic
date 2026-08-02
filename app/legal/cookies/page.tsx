@@ -1,30 +1,94 @@
-export const metadata = { title: "Cookies - Taxottic" };
+/**
+ * UNREVIEWED DRAFT. Not legal advice, not a final legal instrument.
+ *
+ * Revised 2026-08-01. The previous table was wrong in three ways and
+ * was corrected against the code:
+ *   1. It listed `tx_gdpr_consent`, which does not exist. Consent is a
+ *      column on the profiles table (app/actions/consent.ts:6-13), not
+ *      a cookie. Removed.
+ *   2. It used the supabase-js v1 cookie names `sb-access-token` and
+ *      `sb-refresh-token`. @supabase/ssr writes a single chunked
+ *      `sb-<project-ref>-auth-token`. Corrected.
+ *   3. It omitted six real cookies: the three OAuth handshake cookies
+ *      set in app/api/auth/{google,azure}/start/route.ts, the
+ *      client-side `_oauth_next` from app/login/page.tsx:264, and the
+ *      two one-shot invite flash cookies from
+ *      app/c/[publicId]/manage/actions.ts:212,219. Added.
+ *
+ * The substantive claims (no advertising cookies, no third-party
+ * tracking pixels, no analytics SDK) were verified and are accurate:
+ * there is no Sentry, PostHog, GA, Plausible, Mixpanel or Segment in
+ * the tree, and @vercel/analytics is not installed. Note that
+ * next.config.ts still allow-lists *.vercel-insights.com in the CSP;
+ * that is a stale allowance, not evidence of collection.
+ *
+ * If any non-essential cookie is ever added, the GdprBanner is
+ * notice-only today (components/GdprBanner.tsx) and would need to
+ * become a real consent gate with a reject path.
+ */
+
+export const metadata = {
+  title: "Cookies - Taxottic",
+  description:
+    "Every cookie Taxottic sets, what it is for, and how long it lasts. All of them are strictly necessary.",
+  alternates: { canonical: "/legal/cookies" },
+};
 
 const COOKIES = [
   {
-    name: "sb-access-token",
-    purpose: "Holds your signed-in session.",
-    duration: "1 hour, refreshed with sb-refresh-token.",
-    type: "Strictly necessary",
-  },
-  {
-    name: "sb-refresh-token",
-    purpose: "Renews the access token without re-typing your password.",
-    duration: "Up to 7 days, rotated on use.",
+    name: "sb-<project>-auth-token",
+    purpose:
+      "Holds your signed-in session. Split across numbered chunks when it is too large for one cookie.",
+    duration: "Rotated on use, cleared when you sign out.",
     type: "Strictly necessary",
   },
   {
     name: "tx_passkey_challenge",
     purpose:
       "Holds a short-lived challenge during a passkey sign-in or registration.",
-    duration: "5 minutes.",
+    duration: "A few minutes.",
     type: "Strictly necessary",
   },
   {
-    name: "tx_gdpr_consent",
+    name: "taxottic_oauth_state",
     purpose:
-      "Remembers that you accepted the GDPR banner so we don't show it again.",
-    duration: "12 months.",
+      "Guards the Google and Microsoft sign-in handshake against cross-site request forgery.",
+    duration: "10 minutes.",
+    type: "Strictly necessary",
+  },
+  {
+    name: "taxottic_oauth_nonce",
+    purpose:
+      "Ties the identity token returned by Google or Microsoft to the sign-in you started.",
+    duration: "10 minutes.",
+    type: "Strictly necessary",
+  },
+  {
+    name: "taxottic_oauth_next",
+    purpose:
+      "Remembers the page you were heading to so we can return you there after sign-in.",
+    duration: "10 minutes.",
+    type: "Strictly necessary",
+  },
+  {
+    name: "_oauth_next",
+    purpose:
+      "The same return-to-page memory, set in the browser for the mobile app and installed-app sign-in path.",
+    duration: "10 minutes.",
+    type: "Strictly necessary",
+  },
+  {
+    name: "taxottic_last_invite_link",
+    purpose:
+      "Carries the invite link you just generated across one page reload so it can be shown to you.",
+    duration: "Read once, then cleared.",
+    type: "Strictly necessary",
+  },
+  {
+    name: "taxottic_last_invite_email_status",
+    purpose:
+      "Carries the result of sending an invite email across one page reload so it can be shown to you.",
+    duration: "Read once, then cleared.",
     type: "Strictly necessary",
   },
 ];
@@ -39,15 +103,22 @@ export default function CookiesPage() {
         <h1 className="display mt-2 text-3xl text-forest-900">
           The short cookie story.
         </h1>
-        <p className="mt-2 text-xs text-ink-muted">Last updated: 2026-05-04</p>
+        <p className="mt-2 text-xs text-ink-muted">Last updated: 2026-08-01</p>
 
         <div className="mt-8 text-sm text-ink-soft leading-relaxed grid gap-6">
           <p>
             Taxottic uses only the cookies it needs to keep you signed in
-            and to make passkeys, GDPR consent, and basic security work.
-            We do not set advertising cookies. We do not load third-party
-            tracking pixels. We do not sell or share your data with ad
-            networks.
+            and to make sign-in, passkeys, and basic security work. We do
+            not set advertising cookies. We do not load third-party
+            tracking pixels. We do not run an analytics or crash-reporting
+            SDK. We do not sell or share your data with ad networks.
+          </p>
+          <p>
+            The banner you may have seen asking you to accept is a notice
+            about how we process your data generally, not a cookie
+            consent, because every cookie below is strictly necessary.
+            Your acknowledgement is recorded on your account rather than
+            in a cookie.
           </p>
 
           <div className="card overflow-hidden">

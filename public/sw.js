@@ -865,7 +865,17 @@
 // the eight public pages threw minified React error #418 in production.
 // The redundant wrappers are gone and the header markup changed on every one
 // of those pages, so cached shells must not be reused.
-const CACHE_VERSION = "v147";
+// v148: legal pages rewritten to describe what the app actually
+// does. The privacy policy said location is "never shared", which was
+// untrue: coordinates go to Google for static maps and geocoding, and
+// business drives go to the employer. It also stated no location
+// retention window, and omitted document OCR, device telemetry, chat,
+// encrypted TINs and the learned home/work places entirely. New
+// /legal/location-monitoring page, and the tracking consent screen no
+// longer claims location is never shared or that turning tracking off
+// retains nothing. Footer attribution is now "Powered by Techno Optics
+// LLC".
+const CACHE_VERSION = "v148";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

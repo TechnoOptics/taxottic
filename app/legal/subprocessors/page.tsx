@@ -1,4 +1,43 @@
-export const metadata = { title: "Subprocessors - Taxottic" };
+/**
+ * UNREVIEWED DRAFT. Not legal advice, not a final legal instrument.
+ *
+ * Revised 2026-08-01 against the code. The previous list named six
+ * vendors and was missing every one of these live integrations:
+ *   Resend            lib/email/transport.ts:97
+ *   Google Maps       lib/maps/static-map.ts:107, geocode.ts:40,
+ *                     google-maps-loader.ts:102, reverseGeocode.ts:59
+ *   Apple APNs        lib/push/providers.ts:38-94
+ *   Google FCM        lib/push/providers.ts:300
+ *   Documenso         lib/firm/esignature/documenso.ts:10
+ *   DocuSign          lib/firm/esignature/docusign.ts:12-72
+ *   Zoom              lib/firm/scheduling/zoom.ts
+ * Google Maps is the important omission: precise trip coordinates are
+ * put in a Static Maps URL and sent to Google.
+ *
+ * Two claims were also corrected:
+ *   - Anthropic's entry asserted an "Enterprise agreement: zero data
+ *     retention for training". Nothing in this repo evidences such an
+ *     agreement and no code sets a ZDR header or beta flag. Softened.
+ *     OWNER/ATTORNEY: confirm what the Anthropic contract actually
+ *     says and restore a precise statement, or leave it as is.
+ *   - Anthropic's data scope said "messages you send to Bella +
+ *     minimal account context". It also receives complete uploaded
+ *     document images (lib/ocr/extract-*.ts) and bank transaction
+ *     descriptions (lib/csv/bella-categorize.ts). Corrected.
+ *
+ * Certification claims on this page (SOC 2, ISO 27001, PCI DSS) are
+ * about the VENDORS, restated from their own marketing. They are not
+ * claims about Taxottic. Taxottic itself has had no third-party audit,
+ * and docs/store-listing/PRIVACY_DATA_MAP.md:79-81 is explicit that we
+ * must not claim one.
+ */
+
+export const metadata = {
+  title: "Subprocessors - Taxottic",
+  description:
+    "Every vendor that processes Taxottic customer data on our behalf, what each one receives, and where it is processed.",
+  alternates: { canonical: "/legal/subprocessors" },
+};
 
 type Sub = {
   name: string;
@@ -36,35 +75,84 @@ const SUBPROCESSORS: Sub[] = [
   },
   {
     name: "Anthropic",
-    role: "Powers Bella, our in-app AI tax guide.",
-    data: "Messages you send to Bella + minimal account context (display name, plan tier).",
+    role: "Powers Bella (our in-app AI guide), reads the receipts, pay stubs, W-2s and prior-year tax documents you scan, and suggests categories for imported bank transactions.",
+    data: "Your questions to Bella and recent conversation turns, a summary of your tax and company situation including year-to-date income and expense totals, the complete file you scan (the whole image or PDF is sent, not only the fields we ask for), and bank transaction descriptions, amounts and dates.",
     region: "United States.",
-    certs: "SOC 2 Type II. Enterprise agreement: zero data retention for training.",
+    certs:
+      "SOC 2 Type II. Under our commercial terms, customer content is not used to train general models.",
     url: "https://www.anthropic.com/legal/privacy",
   },
   {
     name: "Stripe",
-    role: "Subscription billing for paid tiers.",
-    data: "Email, billing address, last-four card digits via Stripe-hosted checkout. Full card numbers never reach Taxottic.",
+    role: "Subscription and credit-pack billing, and, if you connect one, Stripe as an income source.",
+    data: "Email, billing address and payment details you enter in Stripe-hosted checkout. Card numbers never reach Taxottic and we store none. For a connected Stripe account, the payout and charge records we sync back.",
     region: "United States.",
     certs: "PCI DSS Level 1, SOC 1 / SOC 2 Type II, ISO 27001.",
     url: "https://stripe.com/privacy",
   },
   {
-    name: "Google",
-    role: "Optional sign-in via Google OAuth.",
-    data: "Name, email, profile photo from the openid email profile scopes.",
+    name: "Google Maps Platform",
+    role: "Draws the maps and route thumbnails on the mileage screens, turns coordinates into place names, and geocodes addresses you type.",
+    data: "Precise trip coordinates. Route points are included in the map-image request, and the first and last point of a drive are sent to be resolved to a street address and a nearby business name. Addresses you type for saved places are also sent.",
+    region: "United States and Google's global infrastructure.",
+    certs: "ISO 27001, SOC 2/3.",
+    url: "https://policies.google.com/privacy",
+  },
+  {
+    name: "Google (sign-in and push)",
+    role: "Optional sign-in via Google OAuth, optional Google Calendar connection, and delivery of Android push notifications via Firebase Cloud Messaging.",
+    data: "Name, email, profile photo from the openid email profile scopes. Calendar data only if you connect a calendar. For push: your device token and the short notification text.",
     region: "United States.",
     certs: "ISO 27001, SOC 2/3, FedRAMP.",
     url: "https://policies.google.com/privacy",
   },
   {
+    name: "Apple",
+    role: "Delivery of push notifications to iPhones and iPads.",
+    data: "Your device token and the short notification text.",
+    region: "United States and Apple's global infrastructure.",
+    certs: "ISO 27001, SOC 2.",
+    url: "https://www.apple.com/legal/privacy/",
+  },
+  {
     name: "Microsoft",
-    role: "Optional sign-in via Microsoft Identity Platform.",
-    data: "Name, email, profile photo from the openid email profile scopes.",
+    role: "Optional sign-in via Microsoft Identity Platform, and optional Outlook calendar connection for firms.",
+    data: "Name, email, profile photo from the openid email profile scopes. Calendar data only if you connect a calendar.",
     region: "United States and EU (per Microsoft's regional model).",
     certs: "SOC 1/2/3, ISO 27001, FedRAMP.",
     url: "https://privacy.microsoft.com/en-us/privacystatement",
+  },
+  {
+    name: "Resend",
+    role: "Sends transactional email: sign-in links, invitations, receipts, reminders, and security notices.",
+    data: "Your email address and the contents of the message we send you.",
+    region: "United States.",
+    certs: "SOC 2 Type II, GDPR-aligned DPA.",
+    url: "https://resend.com/legal/privacy-policy",
+  },
+  {
+    name: "Documenso",
+    role: "Electronic signature for firm documents, on an instance we run.",
+    data: "The document sent for signature, and the signer's name, email, and signature event record.",
+    region: "United States.",
+    certs: "Self-hosted by Techno Optics LLC on our own infrastructure.",
+    url: "https://documenso.com/privacy",
+  },
+  {
+    name: "DocuSign",
+    role: "Alternative electronic signature provider for firms that choose it.",
+    data: "The document sent for signature, and the signer's name, email, and signature event record.",
+    region: "United States.",
+    certs: "SOC 1/2 Type II, ISO 27001, PCI DSS.",
+    url: "https://www.docusign.com/company/privacy-policy",
+  },
+  {
+    name: "Zoom",
+    role: "Optional meeting links for firms that connect Zoom to their scheduling.",
+    data: "Meeting metadata for appointments a firm creates. Meeting contents are not sent to or stored by Taxottic.",
+    region: "United States.",
+    certs: "SOC 2 Type II, ISO 27001.",
+    url: "https://www.zoom.com/en/trust/privacy/",
   },
 ];
 
@@ -79,7 +167,7 @@ export default function SubprocessorsPage() {
           Who else processes your data.
         </h1>
         <p className="mt-2 text-xs text-ink-muted">
-          Last updated: 2026-05-04
+          Last updated: 2026-08-01
         </p>
 
         <p className="mt-6 text-sm text-ink-soft leading-relaxed max-w-2xl">
@@ -88,6 +176,12 @@ export default function SubprocessorsPage() {
           security practices and data-protection commitments. We update
           this page when we add or change a vendor and announce material
           changes in-app at least 30 days before they take effect.
+        </p>
+
+        <p className="mt-3 text-xs text-ink-muted leading-relaxed max-w-2xl">
+          The certifications listed below are the vendors&apos; own, not
+          Taxottic&apos;s. Taxottic has not been through a third-party
+          security audit, and we do not claim one.
         </p>
 
         <div className="mt-8 grid gap-3">
