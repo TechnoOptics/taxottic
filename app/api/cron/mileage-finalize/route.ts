@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { finalizeUserTrips, reconcileBrokenTrips } from "@/lib/mileage/finalize";
-import { evaluateTrackerStall, WATCH_WINDOW_MS } from "@/lib/mileage/stall";
+import {
+  evaluateTrackerStall,
+  nextEscalatedAt,
+  WATCH_WINDOW_MS,
+} from "@/lib/mileage/stall";
 import {
   evaluateDriveTrackingHealth,
   MOVEMENT_SPEED_MPS,
@@ -187,7 +191,10 @@ export async function GET(req: NextRequest) {
 
       const { data: alert } = await admin
         .from("mileage_tracker_alerts")
-        .select("notified_at, delivery_failed_at")
+        // escalated_at is read back because the upsert below rewrites the
+        // whole row: without it, `nextEscalatedAt` has nothing to preserve
+        // and the escalation timestamp is erased on the very next tick.
+        .select("notified_at, delivery_failed_at, escalated_at")
         .eq("driver_user_id", driver)
         .eq("company_id", company)
         .eq("kind", "silent")
@@ -354,7 +361,7 @@ export async function GET(req: NextRequest) {
           // makes "we told them" auditable rather than assumed.
           notified_at: reached ? new Date(nowMs).toISOString() : null,
           delivery_failed_at: reached ? null : new Date(nowMs).toISOString(),
-          escalated_at: escalatedAt,
+          escalated_at: nextEscalatedAt(alert?.escalated_at, escalatedAt),
         },
         { onConflict: "driver_user_id,company_id,kind" },
       );
