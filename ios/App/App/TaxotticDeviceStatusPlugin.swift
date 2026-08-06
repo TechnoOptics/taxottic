@@ -30,7 +30,11 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
         CAPPluginMethod(name: "disableBackgroundRevival", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "drainBufferedLocations", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clearBufferedLocations", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getExitInfo", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getExitInfo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "drainVehicleSignals", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearVehicleSignals", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "queryMotionHistory", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "auditCaptureGap", returnType: CAPPluginReturnPromise)
     ]
 
     private var manager: CLLocationManager?
@@ -64,7 +68,19 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
             // pedometer query triggers the Motion & Fitness prompt).
             "motionPermission": CMPedometer.isStepCountingAvailable()
                 && CMPedometer.authorizationStatus() != .denied
-                && CMPedometer.authorizationStatus() != .restricted
+                && CMPedometer.authorizationStatus() != .restricted,
+            // Motion ACTIVITY, distinct from the pedometer above: this
+            // is what powers gap auditing against the OS's seven-day
+            // history. Reported explicitly rather than collapsed into
+            // motionPermission so a denied grant is VISIBLE in health
+            // state instead of silently degrading the blackout audit to
+            // nothing. Neither read prompts the user.
+            "motionActivityAvailable": TaxotticVehicleSignals.shared.motionAvailable(),
+            "motionActivityAuthorization":
+                TaxotticVehicleSignals.shared.motionAuthorizationString(),
+            // Tier 2 confirmation only. A car audio route can never wake
+            // this app, so nothing may start a trip from it.
+            "carAudioConnected": TaxotticVehicleSignals.shared.isCarAudioConnected()
         ]
         // Background App Refresh off = no relaunch events ever fire;
         // the wizard warns on this. Main-thread only API.
@@ -204,6 +220,70 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
             "badAccess": exits.cumulativeBadAccessExitCount,
             "illegalInstruction": exits.cumulativeIllegalInstructionExitCount,
         ])
+    }
+
+    // ── Vehicle-presence confirmation signals ──────────────────────
+    //
+    // Bridge only. Everything real lives in TaxotticVehicleSignals,
+    // which is owned by AppDelegate rather than by this plugin, for the
+    // same reason TaxotticBackgroundLocation is: on a background
+    // relaunch the bridge and its view controller may never be built,
+    // and a signal recorded during that window is exactly the signal
+    // that matters.
+    //
+    // Every method degrades to an empty, explained answer rather than an
+    // error, so a consumer that runs on a device with Motion denied
+    // behaves precisely as the app does today.
+
+    @objc func drainVehicleSignals(_ call: CAPPluginCall) {
+        call.resolve([
+            "events": TaxotticVehicleSignals.shared.drainSignals(),
+            "bootMs": TaxotticVehicleSignals.shared.currentBootMs(),
+            "motionAvailable": TaxotticVehicleSignals.shared.motionAvailable(),
+            "motionAuthorization": TaxotticVehicleSignals.shared.motionAuthorizationString(),
+        ])
+    }
+
+    @objc func clearVehicleSignals(_ call: CAPPluginCall) {
+        // Only ever called after a consumer accepted the events, so a
+        // failed upload cannot lose evidence of a missed drive.
+        TaxotticVehicleSignals.shared.clearSignals(upTo: call.getInt("upToTs") ?? 0)
+        call.resolve(["remaining": TaxotticVehicleSignals.shared.signalCount()])
+    }
+
+    /// Read-only: what the OS recorded as automotive in a window. Emits
+    /// no signal events and never prompts.
+    @objc func queryMotionHistory(_ call: CAPPluginCall) {
+        let fromMs = call.getInt("fromMs") ?? 0
+        let toMs = call.getInt("toMs") ?? Int(Date().timeIntervalSince1970 * 1000)
+        TaxotticVehicleSignals.shared.queryAutomotiveSegments(fromMs: fromMs, toMs: toMs) {
+            status, segments in
+            call.resolve([
+                "status": status,
+                "segments": segments,
+                "fromTsMs": fromMs,
+                "toTsMs": toMs,
+            ])
+        }
+    }
+
+    /// The "never fail silently" call: reconcile a capture gap against
+    /// the OS's own seven-day motion history and RECORD the finding.
+    ///
+    /// Returns duration only. There is no location in motion history, so
+    /// there is no distance to report. Surfacing the gap is the whole
+    /// deliverable, and inventing miles to fill it would be worse than
+    /// the gap itself.
+    @objc func auditCaptureGap(_ call: CAPPluginCall) {
+        let fromMs = call.getInt("fromMs") ?? 0
+        let toMs = call.getInt("toMs") ?? Int(Date().timeIntervalSince1970 * 1000)
+        guard fromMs > 0 else {
+            call.resolve(["status": "emptyWindow", "segments": [], "automotiveMs": 0])
+            return
+        }
+        TaxotticVehicleSignals.shared.auditGap(fromMs: fromMs, toMs: toMs) { summary in
+            call.resolve(summary)
+        }
     }
 
     public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

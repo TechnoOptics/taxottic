@@ -92,7 +92,7 @@
 	     and that it runs while the app is backgrounded — App Review
 	     requires the background justification to be explicit. -->
 	<key>NSMotionUsageDescription</key>
-	<string>Taxottic uses motion and step activity to tell when a drive has ended (you\u2019ve parked and walked away), so your mileage trips close and appear promptly.</string>
+	<string>Taxottic uses motion and step activity to tell when a drive has ended (you\u2019ve parked and walked away), so your mileage trips close and appear promptly, and to check afterwards whether a drive was missed while the app was closed.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Taxottic uses your location while you drive to measure trip distance for your IRS mileage tax deduction. You choose whether each trip is business or personal.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

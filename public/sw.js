@@ -897,7 +897,16 @@
 // owner's Fold5 shows the app being killed with reason=3 LOW_MEMORY at
 // 142 MB and 256 MB RSS, so shrinking the process is what keeps the
 // tracker alive.
-const CACHE_VERSION = "v153";
+// v154: iOS vehicle-presence signals reach the client. Car audio
+// route is polled on each CoreLocation wake rather than observed, since
+// an NSNotification only reaches a running process and surviving
+// backgrounding would need an always-active audio session in an app that
+// plays no audio. Events carry source event vs poll so a consumer can
+// never read "we looked at 08:14" as "the car connected at 08:14".
+// Also drains the seven-day CoreMotion history, which can prove a drive
+// happened but never where it went, so a gap is reported and never
+// filled.
+const CACHE_VERSION = "v154";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

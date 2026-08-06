@@ -41,6 +41,104 @@ export type DeviceStatus = {
    *  permission not denied). */
   motionPermission?: boolean;
   backgroundRefresh?: boolean;
+  /** iOS only. Motion ACTIVITY (CMMotionActivity), distinct from the
+   *  pedometer that backs `motionPermission`. Reported separately so a
+   *  denied grant is visible in health state rather than silently
+   *  disabling the seven-day gap audit. Capture is unaffected either
+   *  way. */
+  motionActivityAvailable?: boolean;
+  motionActivityAuthorization?:
+    | "authorized"
+    | "denied"
+    | "restricted"
+    | "notDetermined";
+  /** iOS only. Phone's audio output is currently a car head unit.
+   *  Tier 2 confirmation ONLY: this can never wake a terminated app, so
+   *  it must never be load-bearing for starting a trip. */
+  carAudioConnected?: boolean;
+};
+
+/* ------------------------------------------------------------------ *
+ * Vehicle-presence signals (iOS native)
+ *
+ * The native layer EMITS timestamped observations and decides nothing;
+ * scoring lives elsewhere. Everything below is a read of a bounded,
+ * self-aging native buffer, and every entry point returns null/empty on
+ * web, on Android, and on older binaries, so a consumer that never
+ * arrives costs nothing.
+ * ------------------------------------------------------------------ */
+
+export type VehicleSignalKind =
+  /** Audio output is (or is not) a car head unit. */
+  | "carAudioRoute"
+  /** Live CMMotionActivity update observed while the process ran. */
+  | "motionActivity"
+  /** An automotive segment recovered from the OS's 7-day history. */
+  | "motionHistory"
+  /** Result of reconciling a capture gap against that history. */
+  | "captureAudit";
+
+export type VehicleSignalSource =
+  /** A real route-change notification. Precise instant. */
+  | "event"
+  /** currentRoute read at wake/launch/foreground. `tsMs` is when we
+   *  LOOKED, not when the car connected. */
+  | "poll"
+  /** Live sensor callback. */
+  | "live"
+  /** Reconstructed after the fact from OS history. */
+  | "history"
+  /** Summary emitted by a gap audit. */
+  | "audit";
+
+export type VehicleSignalEvent = {
+  kind: VehicleSignalKind;
+  /** Kind-specific vocabulary, e.g. "connected" | "automotive" |
+   *  "drivingMissed". Treated as an opaque string by transport. */
+  state: string;
+  /** Wall-clock epoch ms, for lining events up against captured GPS
+   *  points (which are also wall clock). */
+  tsMs: number;
+  /** Milliseconds since device boot at the moment of observation.
+   *  Ordering and elapsed time computed from this survive a wall-clock
+   *  change; these numbers are only comparable within one `bootMs`. */
+  monotonicMs: number;
+  /** Wall-clock instant the device booted. Identifies the monotonic
+   *  epoch; a change without a reboot means the clock moved. */
+  bootMs: number;
+  source: VehicleSignalSource;
+  /** 0..1 where the API supplies one (CMMotionActivity's low/medium/
+   *  high map to 0.3/0.6/0.9). Null where it does not: an audio route
+   *  either is or is not car audio, so no number is invented. */
+  confidence: number | null;
+  detail?: Record<string, unknown>;
+};
+
+/** One automotive stretch as the OS recorded it. Contains NO location,
+ *  so it can establish that a drive happened and for how long, but
+ *  never where it went and never how far. */
+export type MotionHistorySegment = {
+  startTsMs: number;
+  endTsMs: number;
+  durationMs: number;
+  confidence: number;
+  /** True when the run included stationary-but-automotive time, i.e.
+   *  stopped at lights. Those are part of the drive, not breaks in it. */
+  includedStationary: boolean;
+};
+
+export type CaptureGapAudit = {
+  /** "ok" when the OS answered; otherwise why it could not
+   *  ("unavailable" | "denied" | "restricted" | "notDetermined" |
+   *  "emptyWindow" | "error"). */
+  status: string;
+  fromTsMs: number;
+  toTsMs: number;
+  gapMs: number;
+  /** Total automotive time the OS recorded inside the gap. */
+  automotiveMs: number;
+  segmentCount: number;
+  segments: MotionHistorySegment[];
 };
 
 type DeviceStatusPlugin = {
@@ -69,6 +167,23 @@ type DeviceStatusPlugin = {
   clearBufferedLocations(opts: { upToTs: number }): Promise<{ remaining: number }>;
   getExitInfo(): Promise<Record<string, unknown>>;
   setExitBreadcrumb(opts: { note: string }): Promise<void>;
+  drainVehicleSignals(): Promise<{
+    events: VehicleSignalEvent[];
+    bootMs: number;
+    motionAvailable: boolean;
+    motionAuthorization: string;
+  }>;
+  clearVehicleSignals(opts: { upToTs: number }): Promise<{ remaining: number }>;
+  queryMotionHistory(opts: { fromMs: number; toMs: number }): Promise<{
+    status: string;
+    segments: MotionHistorySegment[];
+    fromTsMs: number;
+    toTsMs: number;
+  }>;
+  auditCaptureGap(opts: {
+    fromMs: number;
+    toMs: number;
+  }): Promise<CaptureGapAudit>;
   addListener(
     event: "authorizationChanged",
     cb: (data: {
@@ -575,6 +690,111 @@ export async function getOsExitInfoProbed(onStage?: StageSink): Promise<{
     value: { reason: "ios_normal", atMs: null, detail: raw },
     outcome: "ok",
   };
+}
+
+/**
+ * Collect the vehicle-presence signals the native layer recorded, and
+ * clear only what the caller says it accepted.
+ *
+ * Read-then-acknowledge, deliberately, exactly like the location
+ * buffer: nothing is deleted until a consumer confirms it took the
+ * data, so a failed hand-off cannot lose the evidence that a drive was
+ * missed.
+ *
+ * Returns an empty list on web, on Android and on binaries without the
+ * native side, so a caller needs no platform check.
+ */
+export async function drainVehicleSignals(): Promise<{
+  events: VehicleSignalEvent[];
+  bootMs: number;
+  motionAvailable: boolean;
+  motionAuthorization: string;
+}> {
+  const empty = {
+    events: [] as VehicleSignalEvent[],
+    bootMs: 0,
+    motionAvailable: false,
+    motionAuthorization: "notDetermined",
+  };
+  const plugin = await guard();
+  if (!plugin) return empty;
+  try {
+    const r = await plugin.drainVehicleSignals();
+    return {
+      events: Array.isArray(r?.events) ? r.events : [],
+      bootMs: typeof r?.bootMs === "number" ? r.bootMs : 0,
+      motionAvailable: r?.motionAvailable === true,
+      motionAuthorization: r?.motionAuthorization ?? "notDetermined",
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/** Acknowledge signals up to and including `upToTs` (wall-clock ms).
+ *  Call only after the events have actually been consumed. */
+export async function clearVehicleSignals(upToTs: number): Promise<void> {
+  const plugin = await guard();
+  if (!plugin) return;
+  try {
+    await plugin.clearVehicleSignals({ upToTs });
+  } catch {
+    /* older binary without the native side */
+  }
+}
+
+/**
+ * Ask the OS what it recorded as automotive in a past window.
+ *
+ * iOS retains roughly seven days of motion history, which is the only
+ * mechanism available that makes an iOS blackout VISIBLE: instead of a
+ * blank day that looks like a day off, we can say "you were in a
+ * vehicle for 34 minutes at 08:12 and we captured none of it".
+ *
+ * Duration only. Motion history contains no location, so it can never
+ * yield distance, and a gap must be surfaced rather than filled, because a
+ * fabricated mile is worse than a missed one.
+ *
+ * Read-only: emits no signal events and never triggers a permission
+ * prompt. Returns an empty list with an explanatory status when Motion
+ * is unavailable or not granted.
+ */
+export async function queryMotionHistory(
+  fromMs: number,
+  toMs: number,
+): Promise<{ status: string; segments: MotionHistorySegment[] }> {
+  const plugin = await guard();
+  if (!plugin) return { status: "unavailable", segments: [] };
+  try {
+    const r = await plugin.queryMotionHistory({ fromMs, toMs });
+    return {
+      status: r?.status ?? "error",
+      segments: Array.isArray(r?.segments) ? r.segments : [],
+    };
+  } catch {
+    return { status: "unavailable", segments: [] };
+  }
+}
+
+/**
+ * Reconcile a capture gap against the OS's motion history AND record
+ * the finding as a signal event, so the answer survives to the next
+ * drain even if this call site dies mid-flight.
+ *
+ * A gap the OS says contained no driving is just as worth recording as
+ * one it says did: it turns "we do not know" into "nothing was missed".
+ */
+export async function auditCaptureGap(
+  fromMs: number,
+  toMs: number,
+): Promise<CaptureGapAudit | null> {
+  const plugin = await guard();
+  if (!plugin) return null;
+  try {
+    return await plugin.auditCaptureGap({ fromMs, toMs });
+  } catch {
+    return null;
+  }
 }
 
 /** Record what we were doing, so the NEXT exit record explains itself.

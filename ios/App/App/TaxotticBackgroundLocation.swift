@@ -152,12 +152,19 @@ import CoreLocation
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()
+        // Confirmation signals ride along with fine capture and only
+        // with fine capture: this is the window where we already hold
+        // the GPS open and already believe a drive is happening, so
+        // motion sampling adds no standing battery cost. It confirms
+        // nothing about STARTING, since escalation already happened.
+        TaxotticVehicleSignals.shared.startLiveUpdates()
     }
 
     private func stopFineUpdates() {
         guard fineUpdatesActive else { return }
         fineUpdatesActive = false
         manager.stopUpdatingLocation()
+        TaxotticVehicleSignals.shared.stopLiveUpdates()
     }
 
     /// Speed in m/s, DERIVED from the previous fix when CoreLocation does
@@ -198,6 +205,12 @@ import CoreLocation
             // Negative accuracy means the fix is invalid.
             guard loc.horizontalAccuracy >= 0 else { continue }
             append(loc)
+            // Watermark for the gap audit. Throttled inside, and it can
+            // only ever move forward, so a late fix cannot reopen an
+            // already-audited window. Purely observational: it does not
+            // touch capture.
+            TaxotticVehicleSignals.shared.noteCapture(
+                atMs: Int(loc.timestamp.timeIntervalSince1970 * 1000))
             let speed = effectiveSpeed(of: loc)
             lastFix = loc
             // Unknown speed with nothing to derive from means this is the
