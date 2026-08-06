@@ -31,6 +31,8 @@
 // removed from the candidate pool so a single $11.20 charge can't
 // satisfy two unrelated $11.20 refunds.
 
+import { interpretAmount, type SignConvention } from "./sign-convention";
+
 const MATCH_DAYS = 120; // Most refund windows are 30-90 days; 120 buys slack.
 const MERCHANT_KEY_TOKENS = 3;
 
@@ -80,7 +82,10 @@ function daysBetween(a: string | null, b: string | null): number {
  *
  * Pure function, no DB I/O. Easy to unit-test.
  */
-export function findRefundPairs(txs: NettableTx[]): RefundPair[] {
+export function findRefundPairs(
+  txs: NettableTx[],
+  convention: SignConvention = "charges_negative",
+): RefundPair[] {
   const eligible = txs.filter(
     (t) =>
       !t.ignored &&
@@ -91,14 +96,19 @@ export function findRefundPairs(txs: NettableTx[]): RefundPair[] {
   );
 
   // Group by (merchant, abs amount). For each bucket, walk both
-  // sides and pair closest-by-date.
+  // sides and pair closest-by-date. A row's direction under the
+  // import's convention decides which side it's on: expense goes
+  // to charges, refund goes to refunds. Income (a chequing deposit
+  // under charges_negative, for example) goes to neither, so it can
+  // never pair against a charge.
   type Bucket = { charges: NettableTx[]; refunds: NettableTx[] };
   const buckets = new Map<string, Bucket>();
   for (const t of eligible) {
     const key = `${normalizeMerchant(t.description)}|${Math.abs(t.amount_cents)}`;
     const b = buckets.get(key) ?? { charges: [], refunds: [] };
-    if (t.amount_cents > 0) b.charges.push(t);
-    else b.refunds.push(t);
+    const direction = interpretAmount(t.amount_cents, convention).direction;
+    if (direction === "expense") b.charges.push(t);
+    else if (direction === "refund") b.refunds.push(t);
     buckets.set(key, b);
   }
 

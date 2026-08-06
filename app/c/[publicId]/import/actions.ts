@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { logCompanyActivity } from "@/lib/activity/log";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
-import { detectSignConvention } from "@/lib/csv/sign-convention";
+import {
+  detectSignConvention,
+  interpretAmount,
+  type SignConvention,
+} from "@/lib/csv/sign-convention";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
   categorizeBatch,
@@ -389,12 +393,14 @@ export async function applyTransactions(formData: FormData) {
   // since issuers don't agree on charge-vs-payment sign conventions.
   const { data: imp } = await admin
     .from("bank_imports")
-    .select("account_type")
+    .select("account_type, sign_convention")
     .eq("id", importId)
     .eq("company_id", companyId)
     .maybeSingle();
   const accountType = (imp?.account_type as string | null) ?? "checking";
   const isCredit = accountType === "credit";
+  const convention =
+    (imp?.sign_convention as SignConvention | null) ?? "charges_negative";
 
   const { data: txs } = await admin
     .from("bank_transactions")
@@ -497,21 +503,20 @@ export async function applyTransactions(formData: FormData) {
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
 
-    // Credit-card sign convention (audited against Discover/Amex/Chase
-    // export on May 23 2026):
-    //   POSITIVE amount → real charge → becomes an expense.
-    //   NEGATIVE amount → refund OR card payment from another account.
-    //     - Card-payment-back rows match looksLikeCardPayment → skip;
-    //       they're inter-account transfers, never deductible.
-    //     - Everything else negative is a refund → also skip from
-    //       auto-apply. A refund offsets an earlier charge that was
-    //       already booked; auto-booking it as either a positive expense
-    //       (the prior abs() bug, inflated deductions) or a negative
-    //       expense (would surface as an income tile, also wrong) gets
-    //       it wrong either way. Leave for user review.
+    // Credit-card sign convention:
+    //   Card-payment-back rows match looksLikeCardPayment → skip; they're
+    //   inter-account transfers, never deductible.
+    //   Everything the sign convention reads as a refund → also skip from
+    //   auto-apply, under any convention. A refund offsets an earlier
+    //   charge that was already booked; auto-booking it as either a
+    //   positive expense (inflates the deduction) or a negative expense
+    //   (would surface as an income tile, also wrong) gets it wrong
+    //   either way. Leave for user review.
     if (isCredit) {
       if (looksLikeCardPayment(tx.description)) continue;
-      if (tx.amount_cents < 0) continue; // refund, surface for review
+      if (interpretAmount(tx.amount_cents, convention).direction === "refund") {
+        continue;
+      }
       expenseInserts.push({
         company_id: companyId,
         user_id: user.id,
@@ -773,13 +778,15 @@ async function runBellaCategorize(args: {
 
   const { data: imp } = await admin
     .from("bank_imports")
-    .select("id, account_type, company_id")
+    .select("id, account_type, sign_convention, company_id")
     .eq("id", importId)
     .eq("company_id", companyId)
     .maybeSingle();
   if (!imp) throw new Error("Import not found");
   const accountType = (imp.account_type as string | null) ?? "checking";
   const isCredit = accountType === "credit";
+  const convention =
+    (imp.sign_convention as SignConvention | null) ?? "charges_negative";
 
   const { data: txs } = await admin
     .from("bank_transactions")
@@ -1024,14 +1031,13 @@ async function runBellaCategorize(args: {
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
 
-    // Credit-card refund (negative amount on a credit account that
-    // isn't a card-payment-back) → don't auto-book. Same rationale as
-    // applyTransactions above: refunds offset an earlier charge and
-    // need user judgement to either re-categorize the original or
-    // mark the pair as a wash. Auto-applying a negative as either a
-    // positive expense (inflates deduction) or a negative income
-    // (phantom revenue) is wrong both ways.
-    if (isCredit && tx.amount_cents < 0) continue;
+    // Refunds are never auto-booked, under any convention. Booking one as
+    // a positive expense inflates the deduction and as a negative expense
+    // invents income. This guard existed for credit imports only; the
+    // convention makes it correct everywhere.
+    if (interpretAmount(tx.amount_cents, convention).direction === "refund") {
+      continue;
+    }
 
     if (d.kind === "expense" && d.code) {
       expenseInserts.push({
@@ -1179,7 +1185,7 @@ async function runBellaCategorize(args: {
     )
     .eq("import_id", importId)
     .eq("company_id", companyId);
-  const pairs = findRefundPairs((pairTxs ?? []) as NettableTx[]);
+  const pairs = findRefundPairs((pairTxs ?? []) as NettableTx[], convention);
   if (pairs.length > 0) {
     const allIds = pairs.flatMap((p) => [p.chargeId, p.refundId]);
     await admin

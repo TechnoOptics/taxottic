@@ -16,6 +16,7 @@ import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
 import { TxRow } from "@/components/import/TxRow";
+import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 
 type Params = Promise<{ publicId: string; importId: string }>;
 type Search = Promise<{ highlight?: string; error?: string | string[] }>;
@@ -41,7 +42,7 @@ export default async function ImportReviewPage({
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, filename, status, row_count, applied_count, account_type, created_at",
+      "id, filename, status, row_count, applied_count, account_type, sign_convention, created_at",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
@@ -144,16 +145,17 @@ export default async function ImportReviewPage({
     .slice(0, 8)
     .map(([code]) => code);
 
-  // For credit-card imports every non-ignored, non-zero row is an
-  // expense. For other accounts we keep the conventional debit (out)
-  // / credit (in) split.
+  const convention = (imp.sign_convention ?? "charges_negative") as SignConvention;
+  const direction = (t: { amount_cents: number }) =>
+    interpretAmount(t.amount_cents, convention).direction;
+
+  // Expense candidates are rows the convention says are charges. Refunds
+  // and income are deliberately excluded: a refund booked as an expense
+  // inflates a deduction, which is what happened to a $24.45 return on
+  // the 2026-08-01 import.
   const allActive = (txs ?? []).filter((t) => !t.ignored);
-  const debits = isCredit
-    ? allActive.filter((t) => t.amount_cents !== 0)
-    : allActive.filter((t) => t.amount_cents < 0);
-  const credits = isCredit
-    ? []
-    : allActive.filter((t) => t.amount_cents > 0);
+  const debits = allActive.filter((t) => direction(t) === "expense");
+  const credits = allActive.filter((t) => direction(t) !== "expense");
   const ignoredRows = (txs ?? []).filter((t) => t.ignored);
   const pendingApply = debits.filter(
     (t) => t.applied_category_code && !t.applied_expense_id,
