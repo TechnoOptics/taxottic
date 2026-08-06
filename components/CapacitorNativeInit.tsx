@@ -180,6 +180,48 @@ export function CapacitorNativeInit() {
       }
 
       // --- Push notifications: request + register ---
+      //
+      // Report the OUTCOME of this whole block, whatever it is. iOS
+      // produced zero device_tokens rows for a month while Android
+      // registered fine, and the only reporting was on registrationError
+      // — which never fires if register() was never reached. A device
+      // that bails at the plugin check, the flag, or the permission
+      // prompt used to say nothing at all, and "nothing" is
+      // indistinguishable from "nobody looked". Every branch below now
+      // ends in a reportPush(...) call.
+      // Best-effort: the build number tells us whether a device is even
+      // running the binary that contains a given fix, which is the first
+      // question asked of every "it doesn't work on my phone" report.
+      let pushAppVersion: string | undefined;
+      try {
+        const { App } = await import("@capacitor/app");
+        const info = await App.getInfo();
+        pushAppVersion = `${info.version} (${info.build})`;
+      } catch {
+        /* not native, or the plugin is absent: version stays undefined */
+      }
+
+      const reportPush = (status: string, detail?: string) => {
+        void fetch("/api/push/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            platform: Capacitor.getPlatform(),
+            status,
+            failure: detail ? String(detail).slice(0, 300) : undefined,
+            appVersion: pushAppVersion,
+          }),
+        }).catch(() => {});
+      };
+
+      if (!cancelled && !Capacitor.isPluginAvailable("PushNotifications")) {
+        // The plugin is not in this binary. On iOS that is the difference
+        // between "the user declined" and "we never shipped the code",
+        // and those demand completely different fixes.
+        reportPush("plugin_unavailable");
+      }
+
       if (
         !cancelled &&
         Capacitor.isPluginAvailable("PushNotifications")
@@ -214,15 +256,10 @@ export function CapacitorNativeInit() {
               // the cause was a missing entitlement, a declined prompt,
               // or a plugin that wasn't in the binary. The failure is
               // the single most useful fact we have about that device.
-              void fetch("/api/push/register", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({
-                  platform,
-                  failure: String(e?.error ?? "unknown").slice(0, 300),
-                }),
-              }).catch(() => {});
+              reportPush(
+                "registration_error",
+                String(e?.error ?? "unknown"),
+              );
             },
           );
           // Phase 2: a tapped action button (Business / Personal, or
@@ -271,11 +308,35 @@ export function CapacitorNativeInit() {
           // a registered token.
           const pushEnabled =
             process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1";
+          // Report the branch BEFORE acting on it. These two conditions
+          // are the ones that produce total silence today: neither calls
+          // register(), so neither can ever fire registrationError, and
+          // both leave device_tokens empty with no explanation. `receive`
+          // is carried as the detail because "denied" and
+          // "prompt-with-rationale" mean different things to the user.
+          if (!pushEnabled) {
+            reportPush("flag_disabled", `receive=${receive}`);
+          } else if (receive !== "granted") {
+            reportPush("permission_denied", `receive=${receive}`);
+          }
           if (receive === "granted" && pushEnabled) {
+            // Stamped before the call. If this status is still what the
+            // table holds hours later, then register() was reached and
+            // APNs answered with neither a token nor an error — a silent
+            // hang that no error handler could ever have surfaced, and a
+            // completely different bug from a refused permission.
+            reportPush("register_called", `receive=${receive}`);
             await PushNotifications.register();
           }
-        } catch {
-          /* not in this binary / no APNs entitlement yet, ignore */
+        } catch (err) {
+          // Previously swallowed entirely. A throw here (dynamic import
+          // failing, a plugin API that moved between versions) left the
+          // device looking identical to one that simply never ran the
+          // code, which is the ambiguity that cost a month.
+          reportPush(
+            "init_threw",
+            err instanceof Error ? err.message : String(err),
+          );
         }
       }
 
