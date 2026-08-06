@@ -406,7 +406,8 @@ export async function applyTransactions(formData: FormData) {
   // are expenses is decided by sign_convention (detected per-file, see
   // detectSignConvention), not by a hardcoded rule for the account
   // type; account_type still decides the credit-only card-payment skip
-  // and the checking-only income booking below.
+  // below (this function only ever books expenses, income booking
+  // lives in runBellaCategorize).
   const { data: imp } = await admin
     .from("bank_imports")
     .select("account_type, sign_convention")
@@ -762,6 +763,10 @@ export async function setSignConvention(formData: FormData) {
     .eq("id", importId);
 
   revalidatePath("/c/[publicId]/import/[importId]", "page");
+  // A flip can clear applied_category_code (plan.clearTag above), which
+  // changes the outstanding-items count that lib/tasks/outstanding.ts
+  // reads, same reason setTxCategory / ignoreTx revalidate this path.
+  revalidatePath("/dashboard");
 }
 
 /**

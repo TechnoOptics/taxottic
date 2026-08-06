@@ -44,7 +44,7 @@ export default async function ImportReviewPage({
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_confidence, created_at",
+      "id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
@@ -152,18 +152,27 @@ export default async function ImportReviewPage({
     interpretAmount(t.amount_cents, convention).direction;
 
   // Rows already booked into monthly_expenses whose direction would
-  // read differently under the other convention. A flip never rewrites
-  // these (planFlip always returns booked rows to the caller for
-  // review, never modifies them), so if the user does flip, these are
-  // the rows worth double-checking against this month's totals.
+  // read differently under the previous convention. Only meaningful
+  // after an actual user flip (sign_convention_source === 'user'):
+  // for every non-zero amount the direction always differs between
+  // the two conventions, so without this gate the count would just be
+  // "booked and non-zero" and fire a false "review these" banner on
+  // every import that has ever been applied, even ones that were
+  // never flipped. A flip never rewrites these rows (planFlip always
+  // returns booked rows to the caller for review, never modifies
+  // them), so once the user does flip, these are the rows worth
+  // double-checking against this month's totals.
   const other: SignConvention =
     convention === "charges_positive" ? "charges_negative" : "charges_positive";
-  const bookedUnderPrevious = (txs ?? []).filter(
-    (t) =>
-      t.applied_expense_id &&
-      interpretAmount(t.amount_cents, convention).direction !==
-        interpretAmount(t.amount_cents, other).direction,
-  ).length;
+  const bookedUnderPrevious =
+    imp.sign_convention_source === "user"
+      ? (txs ?? []).filter(
+          (t) =>
+            t.applied_expense_id &&
+            interpretAmount(t.amount_cents, convention).direction !==
+              interpretAmount(t.amount_cents, other).direction,
+        ).length
+      : 0;
 
   // Expense candidates are rows the convention says are charges. Refunds
   // and income are deliberately excluded: a refund booked as an expense
@@ -457,7 +466,7 @@ export default async function ImportReviewPage({
                         cats={catOptions}
                         frequentCodes={frequentCodes}
                         catById={catById}
-                        isCredit={isCredit}
+                        convention={convention}
                         setTxCategory={setTxCategory}
                         ignoreTx={ignoreTx}
                         teachBella={teachBella}
@@ -503,7 +512,7 @@ export default async function ImportReviewPage({
                     cats={catOptions}
                     frequentCodes={frequentCodes}
                     catById={catById}
-                    isCredit={isCredit}
+                    convention={convention}
                     setTxCategory={setTxCategory}
                     ignoreTx={ignoreTx}
                     teachBella={teachBella}

@@ -151,7 +151,7 @@ describe("the live 62-row import", () => {
     expect(out.confidence).toBeGreaterThanOrEqual(0.95);
   });
 
-  it("offers all 62 rows as candidates, not 2", () => {
+  it("offers 60 of 62 rows as candidates (2 are refunds), not 2", () => {
     const candidates = LIVE_IMPORT_ROWS.filter(
       (r) => interpretAmount(r.amountCents, "charges_positive").direction
         === "expense",

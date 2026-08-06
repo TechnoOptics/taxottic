@@ -7,6 +7,7 @@ import {
 } from "@/components/CategoryCombobox";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { formatCents } from "@/lib/tax/forecast";
+import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 
 /**
  * Transaction row on the import-review page.
@@ -71,7 +72,7 @@ type Props = {
   cats: CategoryOption[];
   frequentCodes: string[];
   catById: Map<string, CatInfo>;
-  isCredit?: boolean;
+  convention: SignConvention;
   setTxCategory: (formData: FormData) => Promise<void>;
   ignoreTx: (formData: FormData) => Promise<void>;
   teachBella: (formData: FormData) => Promise<void>;
@@ -88,7 +89,7 @@ export function TxRow({
   cats,
   frequentCodes,
   catById,
-  isCredit,
+  convention,
   setTxCategory,
   ignoreTx,
   teachBella,
@@ -197,7 +198,8 @@ export function TxRow({
           </div>
         </div>
         {(() => {
-          const isMoneyBack = !!isCredit && tx.amount_cents < 0;
+          const isMoneyBack =
+            interpretAmount(tx.amount_cents, convention).direction !== "expense";
           if (isMoneyBack) {
             return (
               <div className="text-emerald-700 tabular-nums font-medium shrink-0">

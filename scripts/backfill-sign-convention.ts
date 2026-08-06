@@ -8,6 +8,10 @@
 // Pass --dry-run to print what would be written, for every import, without
 // writing anything. Run that first and read the output before running for
 // real, there is no undo once sign_convention_source is set to "detected".
+//
+// Skips any import whose sign_convention_source is already "user": if a
+// human already corrected that import's reading, a re-run of this script
+// must never silently revert their correction back to a software guess.
 import { createClient } from "@supabase/supabase-js";
 import { detectSignConvention } from "../lib/csv/sign-convention";
 
@@ -19,10 +23,16 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const FALLBACK_THRESHOLD = 0.75;
 
 async function main() {
+  // sign_convention_source is nullable (legacy imports predating this
+  // column never got one), and plain .neq("sign_convention_source",
+  // "user") would exclude those NULL rows too under SQL's three-valued
+  // logic, which would silently skip the exact rows this script exists
+  // to backfill. .or() below keeps NULL alongside anything not "user".
   const { data: imports, error } = await admin
     .from("bank_imports")
     .select("id, filename, account_type, sign_convention")
-    .eq("account_type", "credit");
+    .eq("account_type", "credit")
+    .or("sign_convention_source.is.null,sign_convention_source.neq.user");
   if (error) throw new Error(error.message);
 
   if (DRY_RUN) {

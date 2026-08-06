@@ -1,7 +1,8 @@
 // The 2026-08-01 import that exposed the sign-convention bug.
 // Charges positive, refunds negative, uploaded as business_checking.
 // 62 rows: 60 positive, 2 negative. 48 booked as expenses at the time
-// this fixture was taken, 1 booked as income, 13 unresolved.
+// this fixture was taken, 14 unresolved (including one income-looking
+// positive row that was never booked to anything).
 export type FixtureRow = {
   id: string;
   amountCents: number;
