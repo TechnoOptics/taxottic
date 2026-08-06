@@ -16,8 +16,21 @@
 
 /** Silence longer than this = the tracker is considered stalled.
  *  Generous vs the minutes-scale heartbeat so a phone that is merely
- *  offline for a stretch (flight, dead zone) doesn't false-alarm. */
-export const STALL_AFTER_MS = 3 * 60 * 60_000; // 3h
+ *  offline for a stretch (flight, dead zone) doesn't false-alarm.
+ *
+ *  Lowered from 3h to 90m on 2026-08-06. The 3h floor was chosen to
+ *  tolerate a flight or a dead zone, but the cost of waiting is a
+ *  whole morning of driving that no longer exists: capture is the only
+ *  record, so a mile missed is a mile gone, while a false alarm costs
+ *  one dismissed notification. Those are not symmetric.
+ *
+ *  90m still clears the common false-alarm cases: a domestic flight
+ *  segment, a tunnel, a rural stretch, or a phone left on the charger
+ *  through lunch, because the device BUFFERS while offline and the
+ *  flush backdates nothing (detection reads created_at, the upload
+ *  time, so a reconnect inside the window closes the episode before it
+ *  ever notifies). */
+export const STALL_AFTER_MS = 90 * 60_000; // 90m
 
 /** While a stall persists, remind at most this often. */
 export const RENOTIFY_MS = 24 * 60 * 60_000; // 24h

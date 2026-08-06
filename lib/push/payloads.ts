@@ -60,7 +60,17 @@ export type PushEvent =
    * often the cron sweeps, at most one fires per driver per day.
    */
   | { kind: "tracker_stalled"; dayKey: string }
-  | { kind: "tracker_parked"; dayKey: string };
+  | { kind: "tracker_parked"; dayKey: string }
+  /** Sent to a MANAGER when a driver's tracker is dead AND the driver
+   *  themselves could not be reached (no registered device, or every
+   *  token failed). Carries no location and no distance: it is a
+   *  "someone needs a nudge" signal, not a report on where they were. */
+  | {
+      kind: "driver_tracker_unreachable";
+      driverLabel: string;
+      driverId: string;
+      dayKey: string;
+    };
 
 export type PushPayload = {
   title: string;
@@ -182,6 +192,21 @@ export function buildPayload(e: PushEvent): PushPayload {
           "Taxottic is running here, but this phone hasn't been on a drive in days. If you drive with a different phone, set up tracking there.",
         data: { kind: e.kind },
         dedupeKey: `tracker_parked:${e.dayKey}`,
+      };
+    case "driver_tracker_unreachable":
+      return {
+        // The escalation of last resort. A driver whose tracker is dead
+        // and whose phone we cannot reach is invisible to everyone: the
+        // in-app banner needs the app open, and the push needs a
+        // registered device. Telling the manager is the only remaining
+        // channel, and it is how Grace's iOS device stayed dark for two
+        // days in August 2026 while the alert row claimed she was told.
+        title: "A driver's mileage tracking stopped",
+        body: `${e.driverLabel} hasn't sent drive data in a while, and we couldn't reach their phone. They may need to reopen Taxottic.`,
+        data: { kind: e.kind, driverId: e.driverId },
+        // Per driver per day: one manager nudge a day per affected
+        // driver, not one per cron tick.
+        dedupeKey: `driver_tracker_unreachable:${e.driverId}:${e.dayKey}`,
       };
   }
 }

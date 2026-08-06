@@ -140,3 +140,51 @@ describe("tracker_stalled", () => {
     expect(p.body).not.toMatch(/mi\b|\$|@/);
   });
 });
+
+describe("driver_tracker_unreachable", () => {
+  it("dedupes per driver per day so two dark drivers both get through", async () => {
+    const { buildPayload } = await import("./payloads");
+    const a = buildPayload({
+      kind: "driver_tracker_unreachable",
+      driverLabel: "Grace",
+      driverId: "driver-a",
+      dayKey: "2026-08-06",
+    });
+    const b = buildPayload({
+      kind: "driver_tracker_unreachable",
+      driverLabel: "Sam",
+      driverId: "driver-b",
+      dayKey: "2026-08-06",
+    });
+    // Keyed on the driver, not just the day. Keyed on the day alone, the
+    // first unreachable driver would claim the dedupe and silence every
+    // other one for the rest of the day — the exact failure this
+    // escalation exists to prevent.
+    expect(a.dedupeKey).not.toBe(b.dedupeKey);
+    expect(a.dedupeKey).toBe("driver_tracker_unreachable:driver-a:2026-08-06");
+    // Same driver, same day, twice = one nudge.
+    expect(
+      buildPayload({
+        kind: "driver_tracker_unreachable",
+        driverLabel: "Grace",
+        driverId: "driver-a",
+        dayKey: "2026-08-06",
+      }).dedupeKey,
+    ).toBe(a.dedupeKey);
+  });
+
+  it("carries a name but never a location, a distance, or an id in the text", async () => {
+    const { buildPayload } = await import("./payloads");
+    const p = buildPayload({
+      kind: "driver_tracker_unreachable",
+      driverLabel: "Grace",
+      driverId: "c6218e2c-c971-4321-a768-744f047c708c",
+      dayKey: "2026-08-06",
+    });
+    expect(p.body).toContain("Grace");
+    // A manager gets told WHO needs a nudge, never where they were or
+    // how far they drove. The routing id stays in data, out of sight.
+    expect(p.body).not.toMatch(/\d+\.\d+|mi\b|\$|@|c6218e2c/);
+    expect(p.data.driverId).toBe("c6218e2c-c971-4321-a768-744f047c708c");
+  });
+});

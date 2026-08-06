@@ -148,6 +148,7 @@ export async function GET(req: NextRequest) {
   // escalation is a push. Pure decision logic in lib/mileage/stall.ts;
   // episode state in mileage_tracker_alerts (service-role only).
   let stallsNotified = 0;
+  let stallsUndeliverable = 0;
   let parkedNotified = 0;
   try {
     const nowMs = Date.now();
@@ -186,11 +187,26 @@ export async function GET(req: NextRequest) {
 
       const { data: alert } = await admin
         .from("mileage_tracker_alerts")
-        .select("notified_at")
+        .select("notified_at, delivery_failed_at")
         .eq("driver_user_id", driver)
         .eq("company_id", company)
         .eq("kind", "silent")
         .maybeSingle();
+
+      // An undeliverable episode leaves notified_at NULL on purpose, so
+      // the sweep keeps trying instead of going quiet. Without a floor
+      // that means a fresh attempt every 10 minutes forever; the dedupe
+      // claim makes each one cheap, but it is still noise. Retry hourly.
+      const failedAt = alert?.delivery_failed_at
+        ? Date.parse(alert.delivery_failed_at as string)
+        : null;
+      if (
+        alert?.notified_at == null &&
+        failedAt != null &&
+        nowMs - failedAt < 60 * 60_000
+      ) {
+        continue;
+      }
 
       const decision = evaluateTrackerStall({
         lastUploadMs,
@@ -250,21 +266,93 @@ export async function GET(req: NextRequest) {
       }
       if (decision !== "notify" && !deviceStall) continue;
 
-      await notify(driver, {
-        kind: "tracker_stalled",
-        dayKey: new Date(nowMs).toISOString().slice(0, 10),
-      });
+      const dayKey = new Date(nowMs).toISOString().slice(0, 10);
+      const res = await notify(driver, { kind: "tracker_stalled", dayKey });
+
+      // Whether the driver was actually REACHED, not merely whether we
+      // tried. This row used to record notified_at unconditionally, so a
+      // driver with no registered device looked notified forever: the
+      // episode was marked handled, the 24h re-notify kept resetting the
+      // timestamp, and nobody learned that nothing had been delivered.
+      // Measured on a real iOS device that sat dark from Aug 4 to Aug 6
+      // 2026 with zero rows in device_tokens.
+      //
+      // delivered === 0 covers both "no device registered" and "every
+      // token failed". sent === false means the dedupe claim was already
+      // held, i.e. this episode was delivered on an earlier tick, so it
+      // is NOT an unreachable driver.
+      const reached = res.delivered > 0;
+      let escalatedAt: string | null = null;
+
+      // Escalate whenever this episode has NO record of ever reaching the
+      // driver. Deliberately not gated on res.sent: sent === false means
+      // the dedupe claim was already held, which happens on the very
+      // ticks that matter — the first attempt claims the key, delivers to
+      // nobody, and every later tick then reports sent:false, delivered:0.
+      // Gating on res.sent would have made the escalation unreachable for
+      // the rest of the day, i.e. silent in exactly the case it exists
+      // for. The manager notify carries its own per-driver-per-day dedupe
+      // key, so re-entering here cannot produce a second nudge.
+      if (!reached && alert?.notified_at == null) {
+        // Last resort: tell the managers. A driver we cannot reach is
+        // invisible to every other channel, because the in-app banner
+        // needs the app open and the push needs a registered device.
+        try {
+          const { data: mgrs } = await admin
+            .from("company_members")
+            .select("user_id, role")
+            .eq("company_id", company)
+            .in("role", ["manager", "lead"]);
+          const { data: who } = await admin
+            .from("profiles")
+            .select("full_name")
+            .eq("id", driver)
+            .maybeSingle();
+          // Never leak an email or an id into a notification body.
+          const driverLabel =
+            (who?.full_name as string | null)?.trim() || "A driver";
+          let anyManagerReached = false;
+          for (const m of mgrs ?? []) {
+            const mid = m.user_id as string;
+            if (mid === driver) continue; // don't tell them about themselves
+            const r = await notify(mid, {
+              kind: "driver_tracker_unreachable",
+              driverLabel,
+              driverId: driver,
+              dayKey,
+            });
+            if (r.delivered > 0) anyManagerReached = true;
+          }
+          if (anyManagerReached) escalatedAt = new Date(nowMs).toISOString();
+        } catch (e) {
+          // An escalation failure must not abort the sweep for every
+          // other driver behind this one.
+          console.log(
+            `[mileage-finalize] manager escalation failed driver=${driver}: ${
+              (e as Error)?.message ?? "unknown"
+            }`,
+          );
+        }
+      }
+
       await admin.from("mileage_tracker_alerts").upsert(
         {
           driver_user_id: driver,
           company_id: company,
           kind: "silent",
           stalled_since: new Date(lastUploadMs).toISOString(),
-          notified_at: new Date(nowMs).toISOString(),
+          // Only stamp notified_at when the driver was genuinely
+          // reached. Leaving it null on a failed delivery is what makes
+          // the next tick try again instead of going quiet, and what
+          // makes "we told them" auditable rather than assumed.
+          notified_at: reached ? new Date(nowMs).toISOString() : null,
+          delivery_failed_at: reached ? null : new Date(nowMs).toISOString(),
+          escalated_at: escalatedAt,
         },
         { onConflict: "driver_user_id,company_id,kind" },
       );
-      stallsNotified++;
+      if (reached) stallsNotified++;
+      else stallsUndeliverable++;
     }
 
     // ── Parked-device escalation ──────────────────────────────────
@@ -440,7 +528,7 @@ export async function GET(req: NextRequest) {
   }
 
   console.log(
-    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified} parkedNotified=${parkedNotified} fleet=${fleetStatus}`,
+    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified} stallsUndeliverable=${stallsUndeliverable} parkedNotified=${parkedNotified} fleet=${fleetStatus}`,
   );
 
   return NextResponse.json({
