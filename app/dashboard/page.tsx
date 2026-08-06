@@ -43,7 +43,6 @@ import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 import { checkCompanyLimit } from "@/lib/plans/usage";
 import { completeWelcomeTour } from "@/app/actions/tour";
 import { GoalDismissButton } from "@/components/GoalDismissButton";
-import { purgeExpiredRecycleBin } from "@/app/actions/recycle-bin";
 import { ReminderDismissButton } from "@/components/ReminderDismissButton";
 import { ReadinessHelp } from "@/components/ReadinessHelp";
 import { WebOnly } from "@/components/WebOnly";
@@ -630,18 +629,15 @@ export default async function DashboardPage() {
   // per user lifetime.
   await runTrialGuard({ admin, userId: user.id });
 
-  // Lazy recycle-bin sweep: every dashboard render takes a peek at
-  // expired soft-deletes and hard-deletes anything past 30 days. The
-  // SQL function enforces the cutoff regardless of caller, so this is
-  // a safe no-op when there's nothing to purge. Cron is the proper
-  // backstop for users who don't sign in often, but having this on
-  // every active user's dashboard means the recycle bin stays
-  // accurate for everyone who's actually using the product.
-  try {
-    await purgeExpiredRecycleBin();
-  } catch {
-    // Non-fatal: dashboard still renders; the cron picks up the slack.
-  }
+  // The recycle-bin sweep used to run here, as a blocking hard-delete on
+  // every dashboard render. It now runs nightly at 02:00 in
+  // app/api/cron/recycle-bin-purge, which is both faster (one unconditional
+  // RPC off the critical path of the most-visited page) and more correct (a
+  // destructive write no longer rides on a render that React may retry or
+  // abandon, and accounts nobody signs into finally get swept). The 30-day
+  // cutoff lives inside the SQL function, so nothing about what gets deleted
+  // has changed. /settings/recycle-bin still purges on view so the page a
+  // user opens to check the bin is never stale.
   const trial = await getTrialState(supabase, user.id);
 
   // Personal deductions logged YTD, for the hero stat band.

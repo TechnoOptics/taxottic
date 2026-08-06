@@ -888,7 +888,16 @@
 // install itself. Measured: both drivers sat on a v135-to-v141 bundle for
 // four days while production served v148, so every capture fix in that
 // window reached nobody.
-const CACHE_VERSION = "v151";
+// v153: payload cuts that are really memory cuts. The Supabase
+// browser client came out of the root layout (a 19-line component whose
+// own comment calls it inert on web was dragging auth, postgrest,
+// realtime and websocket onto every route), /mileage/business went from
+// 995 KB decoded to 652 KB with paging, and 40 public routes became
+// static. Framed as speed when written, but ApplicationExitInfo on the
+// owner's Fold5 shows the app being killed with reason=3 LOW_MEMORY at
+// 142 MB and 256 MB RSS, so shrinking the process is what keeps the
+// tracker alive.
+const CACHE_VERSION = "v153";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

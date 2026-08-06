@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { headers } from "next/headers";
 import { Fraunces, Hanken_Grotesk } from "next/font/google";
 import { PWASetup } from "@/components/PWASetup";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
@@ -53,15 +52,35 @@ const SITE_TITLE = "Taxottic, Tax forecasting for freelancers & small business";
 const SITE_DESCRIPTION =
   "Bank-synced quarterly tax forecasts, 1,025 IRS-cited deductions, Schedule C export, multi-state. Calm, accurate, and built for self-employed filers.";
 
-const ADMIN_HOSTS = new Set(["hq.taxottic.com", "enterprise.taxottic.com"]);
-
+// --------------------------------------------------------------------
+// PERFORMANCE + WHERE THE ADMIN noindex WENT
+//
+// This function used to read `headers()` to detect hq./enterprise.
+// taxottic.com and return a noindex payload for them. Calling a dynamic
+// API in the ROOT layout opts EVERY route that inherits it out of static
+// generation, so all 40 public pages (every /guides/*, /legal/*,
+// /compare/*, /pricing, /help, /changelog, /calculators, /firms, /login)
+// were server-rendered on demand and returned `no-store`, missing the CDN
+// entirely. Measured: 3 static routes before, 40 after removing the call.
+//
+// The noindex was NOT deleted, it moved to two places that are stronger
+// than a root-layout meta tag was:
+//
+//   1. lib/supabase/middleware.ts stamps `X-Robots-Tag: noindex, nofollow,
+//      noarchive, nosnippet, noimageindex` on EVERY response served from
+//      an admin host. Middleware sees the real request host, covers every
+//      path on those hosts (including /login, /auth/*, /enterprise-welcome
+//      and non-HTML responses, which a root-layout meta tag never did),
+//      and cannot be bypassed by a route that overrides its own metadata.
+//   2. app/admin/layout.tsx carries the cockpit title and the same robots
+//      directives as static metadata, so the /admin/** tree, which is what
+//      both admin hosts rewrite to, still emits a real <meta name="robots">
+//      and still reads "Taxottic cockpit" in the tab.
+//
+// Do not reintroduce headers(), cookies() or any other dynamic API here.
+// One call in this file costs the whole application its static routes.
+// --------------------------------------------------------------------
 export async function generateMetadata(): Promise<Metadata> {
-  // Host-aware metadata. Admin subdomains get a hard noindex / nofollow
-  // so the operator console never appears in any crawler's index.
-  // Consumer host gets the full keyword-aware SEO payload.
-  const host = (await headers()).get("host")?.toLowerCase() ?? "";
-  const isAdminHost = ADMIN_HOSTS.has(host);
-
   const base: Metadata = {
     // metadataBase anchors relative URLs (og:image, twitter:image,
     // alternates.canonical) at the production origin. Without it,
@@ -93,42 +112,6 @@ export async function generateMetadata(): Promise<Metadata> {
     // Likewise we don't set `openGraph.images` here, Next.js picks
     // up app/opengraph-image.tsx automatically.
   };
-
-  if (isAdminHost) {
-    // Admin subdomains: zero search visibility. We pass title +
-    // description through so the browser tab and OG previews
-    // (e.g., when an operator shares a link internally) still render
-    // sensibly, but every robots directive says "don't index, don't
-    // follow, don't cache, don't archive."
-    return {
-      ...base,
-      title: {
-        default: "Taxottic cockpit",
-        template: "%s | Taxottic cockpit",
-      },
-      description: "Operator console, not for public access.",
-      robots: {
-        index: false,
-        follow: false,
-        nocache: true,
-        googleBot: {
-          index: false,
-          follow: false,
-          noimageindex: true,
-          "max-snippet": 0,
-          "max-image-preview": "none",
-          "max-video-preview": 0,
-        },
-      },
-      openGraph: {
-        title: "Taxottic cockpit",
-        description: "Operator console, not for public access.",
-        url: "/",
-        siteName: "Taxottic",
-        type: "website",
-      },
-    };
-  }
 
   // Consumer host, full SEO payload.
   return {
