@@ -78,3 +78,56 @@ export function interpretAmount(
     magnitudeCents,
   };
 }
+
+export type FlipRow = {
+  id: string;
+  amountCents: number;
+  appliedCategoryCode: string | null;
+  appliedExpenseId: string | null;
+};
+
+/**
+ * What changing the convention does to the rows already in an import.
+ *
+ * Three buckets, and the ordering of the checks is the whole point:
+ *
+ *   needsReview  already booked into monthly_expenses. NEVER modified.
+ *                Returned so the UI can list them for explicit un-apply.
+ *   clearTag     categorized but not booked, and the direction changes.
+ *                A "Supplies" pick on a row that is now a refund is
+ *                meaningless, so the row returns to the candidate list.
+ *   reinterpret  everything else. Nothing to write; it just reads
+ *                differently now.
+ *
+ * A booked row is checked FIRST and unconditionally, so no later branch
+ * can reach monthly_expenses. That table is a filed-deduction surface.
+ *
+ * A no-op flip (from === to) puts everything in reinterpret rather than
+ * churning tags for no reason.
+ */
+export function planFlip(
+  rows: FlipRow[],
+  from: SignConvention,
+  to: SignConvention,
+): { reinterpret: string[]; clearTag: string[]; needsReview: string[] } {
+  const reinterpret: string[] = [];
+  const clearTag: string[] = [];
+  const needsReview: string[] = [];
+
+  for (const r of rows ?? []) {
+    if (from === to) {
+      reinterpret.push(r.id);
+      continue;
+    }
+    if (r.appliedExpenseId) {
+      needsReview.push(r.id);
+      continue;
+    }
+    const changed =
+      interpretAmount(r.amountCents, from).direction !==
+        interpretAmount(r.amountCents, to).direction;
+    if (changed && r.appliedCategoryCode) clearTag.push(r.id);
+    else reinterpret.push(r.id);
+  }
+  return { reinterpret, clearTag, needsReview };
+}

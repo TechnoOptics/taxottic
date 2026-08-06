@@ -3,6 +3,8 @@ import {
   detectSignConvention,
   interpretAmount,
   SIGN_CONFIDENCE_BANNER,
+  planFlip,
+  type FlipRow,
 } from "./sign-convention";
 
 const rows = (...amounts: (number | null)[]) =>
@@ -81,5 +83,54 @@ describe("interpretAmount", () => {
   it("falls back to charges_negative on an unknown convention", () => {
     const bogus = "nonsense" as unknown as "charges_negative";
     expect(interpretAmount(-100, bogus).direction).toBe("expense");
+  });
+});
+
+const row = (o: Partial<FlipRow> & { id: string; amountCents: number }): FlipRow => ({
+  appliedCategoryCode: null,
+  appliedExpenseId: null,
+  ...o,
+});
+
+describe("planFlip", () => {
+  it("never puts a booked row anywhere but needsReview", () => {
+    const rows = [
+      row({ id: "a", amountCents: 1000, appliedExpenseId: "e1" }),
+      row({ id: "b", amountCents: 1000, appliedExpenseId: "e2",
+            appliedCategoryCode: "supplies" }),
+    ];
+    const out = planFlip(rows, "charges_positive", "charges_negative");
+    expect(out.needsReview).toEqual(["a", "b"]);
+    expect(out.clearTag).toEqual([]);
+    expect(out.reinterpret).toEqual([]);
+  });
+
+  it("clears a tag only when the direction actually changes", () => {
+    const rows = [
+      row({ id: "flips", amountCents: 1000, appliedCategoryCode: "supplies" }),
+      row({ id: "stays", amountCents: 0, appliedCategoryCode: "supplies" }),
+    ];
+    const out = planFlip(rows, "charges_positive", "charges_negative");
+    expect(out.clearTag).toEqual(["flips"]);
+    expect(out.reinterpret).toContain("stays");
+  });
+
+  it("reinterprets untouched rows without clearing anything", () => {
+    const rows = [row({ id: "u", amountCents: -500 })];
+    const out = planFlip(rows, "charges_negative", "charges_positive");
+    expect(out.reinterpret).toEqual(["u"]);
+    expect(out.clearTag).toEqual([]);
+    expect(out.needsReview).toEqual([]);
+  });
+
+  it("is a no-op when the convention does not change", () => {
+    const rows = [
+      row({ id: "a", amountCents: 1000, appliedCategoryCode: "supplies" }),
+      row({ id: "b", amountCents: -1000, appliedExpenseId: "e1" }),
+    ];
+    const out = planFlip(rows, "charges_positive", "charges_positive");
+    expect(out.clearTag).toEqual([]);
+    expect(out.needsReview).toEqual([]);
+    expect(out.reinterpret).toEqual(["a", "b"]);
   });
 });
