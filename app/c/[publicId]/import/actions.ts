@@ -30,6 +30,7 @@ import {
   type RulePatternType,
 } from "@/lib/csv/categorization-rules";
 import { findRefundPairs, type NettableTx } from "@/lib/csv/net-refunds";
+import { bellaErrorMessage } from "@/lib/csv/bella-errors";
 
 /**
  * Heuristic: looks like a credit-card payment from another account, not
@@ -677,28 +678,56 @@ export async function bellaAutoApply(formData: FormData) {
   if (!(await userBelongsToCompany(admin, user.id, companyId))) {
     throw new Error("Not a member of this company");
   }
-  await runBellaCategorize({
-    supabase,
-    admin,
-    userId: user.id,
-    importId,
-    companyId,
-    onInsufficientCredits: (msg) => {
-      throw new Error(msg);
-    },
-  });
-  // The action HAS to revalidate or the user clicks "Re-run Bella"
-  // and sees no change, the categorize pass updated
-  // bank_transactions but the page's RSC cache holds the old rows.
-  // Reported as "rerun bella not working" on May 23 2026.
+  // Resolve public_id up front: we need it for the error redirect as
+  // well as the revalidate, and it must be available even when the
+  // categorize pass below throws.
   const { data: company } = await admin
     .from("companies")
     .select("public_id")
     .eq("id", companyId)
     .maybeSingle();
-  if (company) {
-    revalidatePath(`/c/${company.public_id}/import/${importId}`);
-    revalidatePath(`/c/${company.public_id}/import`);
+  const publicId = (company?.public_id as string | undefined) ?? "";
+
+  // Every failure inside runBellaCategorize used to escape this Server
+  // Action untouched, and React redacts an uncaught Server Action error
+  // in production. The user got "An error occurred in the Server
+  // Components render ... A digest property is included" instead of the
+  // reason, and the reason never reached the logs either. Catch, log
+  // the real cause server-side, and hand the user readable copy via
+  // ?error= exactly like uploadCsv does.
+  let failure: string | null = null;
+  try {
+    await runBellaCategorize({
+      supabase,
+      admin,
+      userId: user.id,
+      importId,
+      companyId,
+      onInsufficientCredits: (msg) => {
+        throw new Error(msg);
+      },
+    });
+  } catch (err) {
+    console.error("bellaAutoApply failed:", err);
+    failure = bellaErrorMessage(err);
+  }
+
+  // The action HAS to revalidate or the user clicks "Re-run Bella"
+  // and sees no change, the categorize pass updated
+  // bank_transactions but the page's RSC cache holds the old rows.
+  // Reported as "rerun bella not working" on May 23 2026.
+  if (publicId) {
+    revalidatePath(`/c/${publicId}/import/${importId}`);
+    revalidatePath(`/c/${publicId}/import`);
+  }
+
+  // redirect() throws NEXT_REDIRECT, so it has to sit outside the
+  // try/catch above or the catch would swallow the navigation.
+  if (failure) {
+    if (!publicId) throw new Error(failure);
+    redirect(
+      `/c/${publicId}/import/${importId}?error=${encodeURIComponent(failure)}`,
+    );
   }
 }
 
@@ -867,9 +896,14 @@ async function runBellaCategorize(args: {
     raw_category: t.raw_category,
   }));
 
-  // Chunk to ~150 rows per Anthropic call so we stay under context
-  // limits even with chatty descriptions. Each chunk is independent.
-  const CHUNK = 150;
+  // Chunk size is bounded by the OUTPUT budget, not the input context:
+  // the model must emit one object per row, at roughly 55-70 tokens
+  // each (a 36-char UUID plus JSON scaffolding plus an <= 80-char
+  // reason). 150 rows needed ~9000 output tokens against a 4000-token
+  // cap, so a large import could only ever come back truncated. 60
+  // rows against the categorizer's 8000-token cap leaves better than
+  // 2x headroom. Each chunk is independent.
+  const CHUNK = 60;
   const decisions: Awaited<ReturnType<typeof categorizeBatch>> = [];
   for (let i = 0; i < inputs.length; i += CHUNK) {
     const slice = inputs.slice(i, i + CHUNK);
