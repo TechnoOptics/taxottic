@@ -99,11 +99,12 @@ export type FlipRow = {
  *   reinterpret  everything else. Nothing to write; it just reads
  *                differently now.
  *
- * A booked row is checked FIRST and unconditionally, so no later branch
- * can reach monthly_expenses. That table is a filed-deduction surface.
- *
- * A no-op flip (from === to) puts everything in reinterpret rather than
- * churning tags for no reason.
+ * The invariants guarding the filed-deduction surface (monthly_expenses):
+ * A booked row is never written to and never enters clearTag, under any
+ * inputs. On a no-op flip (from === to), every row, booked or not, lands
+ * in reinterpret, because nothing is written in that case either. These
+ * guarantees ensure that filed tax deductions are safe from unintended
+ * modification.
  */
 export function planFlip(
   rows: FlipRow[],
