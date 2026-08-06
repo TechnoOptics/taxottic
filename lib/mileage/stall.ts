@@ -42,6 +42,28 @@ export const WATCH_WINDOW_MS = 7 * 24 * 60 * 60_000; // 7 days
 
 export type StallDecision = "notify" | "silent" | "clear";
 
+/**
+ * What `escalated_at` should be after this tick.
+ *
+ * The escalation notify carries a per-driver-per-day dedupe key, so only
+ * the FIRST tick of an episode gets `delivered > 0`; every tick after it
+ * is deduped and reports zero. Writing that zero straight into the row
+ * erases the timestamp of an escalation that really happened — the same
+ * defect as stamping notified_at for a delivery that never happened,
+ * just inverted, and it lands on the one field that proves a manager was
+ * warned.
+ *
+ * So: a fresh escalation always wins, otherwise keep whatever the
+ * episode already recorded. The episode is cleared wholesale when points
+ * flow again, which is what resets this for the next stall.
+ */
+export function nextEscalatedAt(
+  existing: string | null | undefined,
+  fresh: string | null,
+): string | null {
+  return fresh ?? existing ?? null;
+}
+
 export function evaluateTrackerStall(args: {
   /** Newest mileage_points_raw.created_at for the driver (ms epoch). */
   lastUploadMs: number;

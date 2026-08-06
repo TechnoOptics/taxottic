@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   evaluateTrackerStall,
+  nextEscalatedAt,
   STALL_AFTER_MS,
   RENOTIFY_MS,
   WATCH_WINDOW_MS,
@@ -72,5 +73,35 @@ describe("evaluateTrackerStall", () => {
         lastNotifiedMs: null,
       }),
     ).toBe("silent");
+  });
+});
+
+describe("nextEscalatedAt", () => {
+  const T1 = "2026-08-06T19:29:56.000Z";
+  const T2 = "2026-08-06T20:31:01.000Z";
+
+  it("keeps an earlier escalation when this tick escalated nobody", () => {
+    // The regression: the manager notify is deduped per driver per day,
+    // so every tick after the first reports delivered:0 and passes null
+    // here. Writing that null erased a real escalation.
+    expect(nextEscalatedAt(T1, null)).toBe(T1);
+  });
+
+  it("takes a fresh escalation over the stored one", () => {
+    expect(nextEscalatedAt(T1, T2)).toBe(T2);
+  });
+
+  it("records the first escalation of an episode", () => {
+    expect(nextEscalatedAt(null, T1)).toBe(T1);
+  });
+
+  it("stays null while nobody has been escalated to", () => {
+    expect(nextEscalatedAt(null, null)).toBeNull();
+  });
+
+  it("treats a missing column as no escalation, not a crash", () => {
+    // alert?.escalated_at is undefined when the row or select omits it.
+    expect(nextEscalatedAt(undefined, null)).toBeNull();
+    expect(nextEscalatedAt(undefined, T1)).toBe(T1);
   });
 });
