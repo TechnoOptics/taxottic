@@ -9,6 +9,7 @@ import {
   bellaAutoApply,
   deleteImport,
   ignoreTx,
+  setSignConvention,
   setTxCategory,
   teachBella,
 } from "../actions";
@@ -16,6 +17,7 @@ import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
 import { TxRow } from "@/components/import/TxRow";
+import { SignConventionBar } from "@/components/import/SignConventionBar";
 import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 
 type Params = Promise<{ publicId: string; importId: string }>;
@@ -42,7 +44,7 @@ export default async function ImportReviewPage({
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, filename, status, row_count, applied_count, account_type, sign_convention, created_at",
+      "id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_confidence, created_at",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
@@ -148,6 +150,20 @@ export default async function ImportReviewPage({
   const convention = (imp.sign_convention ?? "charges_negative") as SignConvention;
   const direction = (t: { amount_cents: number }) =>
     interpretAmount(t.amount_cents, convention).direction;
+
+  // Rows already booked into monthly_expenses whose direction would
+  // read differently under the other convention. A flip never rewrites
+  // these (planFlip always returns booked rows to the caller for
+  // review, never modifies them), so if the user does flip, these are
+  // the rows worth double-checking against this month's totals.
+  const other: SignConvention =
+    convention === "charges_positive" ? "charges_negative" : "charges_positive";
+  const bookedUnderPrevious = (txs ?? []).filter(
+    (t) =>
+      t.applied_expense_id &&
+      interpretAmount(t.amount_cents, convention).direction !==
+        interpretAmount(t.amount_cents, other).direction,
+  ).length;
 
   // Expense candidates are rows the convention says are charges. Refunds
   // and income are deliberately excluded: a refund booked as an expense
@@ -379,6 +395,16 @@ export default async function ImportReviewPage({
             </div>
           </div>
         </section>
+
+        <div className="mt-6">
+          <SignConventionBar
+            importId={importId}
+            convention={convention}
+            confidence={imp.sign_convention_confidence as number | null}
+            bookedUnderPrevious={bookedUnderPrevious}
+            setSignConvention={setSignConvention}
+          />
+        </div>
 
         <section className="mt-6 card p-6">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">

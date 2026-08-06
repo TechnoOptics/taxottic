@@ -8,6 +8,7 @@ import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import {
   detectSignConvention,
   interpretAmount,
+  planFlip,
   SIGN_CONFIDENCE_BANNER,
   type SignConvention,
 } from "@/lib/csv/sign-convention";
@@ -682,6 +683,85 @@ export async function ignoreTx(formData: FormData) {
     .eq("id", id);
   revalidatePath("/c/[publicId]/import/[importId]", "page");
   revalidatePath("/dashboard");
+}
+
+/**
+ * Change how one import's signs are read.
+ *
+ * Re-reads everything uncommitted and touches nothing that is already in
+ * monthly_expenses. Booked rows (applied_expense_id set) always land in
+ * planFlip's needsReview bucket and are never written to here: that
+ * table is a filed-deduction surface, not something a sign correction
+ * gets to silently restate.
+ *
+ * Writes, and only these:
+ *   - bank_transactions.applied_category_code, cleared to null, but
+ *     only for the ids planFlip puts in clearTag.
+ *   - bank_imports.sign_convention, sign_convention_source,
+ *     sign_convention_confidence, sign_convention_set_at.
+ * Nothing else. applied_expense_id is never cleared and
+ * monthly_expenses is never touched.
+ */
+export async function setSignConvention(formData: FormData) {
+  const importId = String(formData.get("import_id") ?? "");
+  const next = String(formData.get("convention") ?? "");
+  if (!importId) return;
+  if (next !== "charges_negative" && next !== "charges_positive") return;
+
+  const { admin, user } = await requireUserWithAdmin();
+
+  // Authorization pattern copied from setTxCategory / ignoreTx above:
+  // resolve the owning company from the resource itself (not from a
+  // client-supplied company_id) and check membership against that.
+  const { data: imp } = await admin
+    .from("bank_imports")
+    .select("id, company_id, sign_convention")
+    .eq("id", importId)
+    .maybeSingle();
+  if (!imp || !(await userBelongsToCompany(admin, user.id, imp.company_id as string))) {
+    throw new Error("Not authorized");
+  }
+
+  const from = (imp.sign_convention as SignConvention | null) ?? "charges_negative";
+  if (from === next) return; // already reading this way, nothing to do
+
+  const { data: txs } = await admin
+    .from("bank_transactions")
+    .select("id, amount_cents, applied_category_code, applied_expense_id")
+    .eq("import_id", importId);
+
+  const plan = planFlip(
+    (txs ?? []).map((t) => ({
+      id: t.id as string,
+      amountCents: t.amount_cents as number,
+      appliedCategoryCode: t.applied_category_code as string | null,
+      appliedExpenseId: t.applied_expense_id as string | null,
+    })),
+    from,
+    next,
+  );
+
+  if (plan.clearTag.length > 0) {
+    await admin
+      .from("bank_transactions")
+      .update({ applied_category_code: null })
+      .in("id", plan.clearTag);
+  }
+
+  await admin
+    .from("bank_imports")
+    .update({
+      sign_convention: next,
+      sign_convention_source: "user",
+      // An explicit user correction is as confident as this column
+      // gets, and it keeps the review page from showing the
+      // low-confidence banner right after the user just resolved it.
+      sign_convention_confidence: 1,
+      sign_convention_set_at: new Date().toISOString(),
+    })
+    .eq("id", importId);
+
+  revalidatePath("/c/[publicId]/import/[importId]", "page");
 }
 
 /**
