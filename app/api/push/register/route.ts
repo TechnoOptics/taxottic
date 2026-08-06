@@ -25,9 +25,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { token?: unknown; platform?: unknown };
+  let body: { token?: unknown; platform?: unknown; failure?: unknown };
   try {
-    body = (await req.json()) as { token?: unknown; platform?: unknown };
+    body = (await req.json()) as {
+      token?: unknown;
+      platform?: unknown;
+      failure?: unknown;
+    };
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
@@ -35,6 +39,26 @@ export async function POST(req: NextRequest) {
   const token = typeof body.token === "string" ? body.token.trim() : "";
   const platform =
     typeof body.platform === "string" ? body.platform : "";
+
+  // A registration FAILURE report carries no token, by definition. It
+  // used to be discarded on the client (an empty registrationError
+  // handler), which is how an iOS device went a month with no row in
+  // device_tokens and no way to tell whether the cause was a missing
+  // entitlement, a declined prompt, or a plugin missing from the
+  // binary. Log it against the validated user so the answer exists
+  // somewhere. Never 400 on it: a rejected diagnostic teaches the
+  // client to stop reporting.
+  const failure =
+    typeof body.failure === "string" ? body.failure.slice(0, 300) : "";
+  if (!token && failure) {
+    console.log(
+      `[push] register FAILED user=${user.id} platform=${
+        PLATFORMS.has(platform) ? platform : "unknown"
+      } reason=${failure}`,
+    );
+    return NextResponse.json({ ok: true, recorded: "failure" });
+  }
+
   if (!token || token.length > 4096 || !PLATFORMS.has(platform)) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }

@@ -207,8 +207,22 @@ export function CapacitorNativeInit() {
           );
           await PushNotifications.addListener(
             "registrationError",
-            () => {
-              /* APNs/FCM not provisioned yet, nothing to store */
+            (e: { error?: string }) => {
+              // Do NOT swallow this. It was an empty handler until
+              // 2026-08-06, which is why an iOS device could go a month
+              // without ever registering and nobody could tell whether
+              // the cause was a missing entitlement, a declined prompt,
+              // or a plugin that wasn't in the binary. The failure is
+              // the single most useful fact we have about that device.
+              void fetch("/api/push/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  platform,
+                  failure: String(e?.error ?? "unknown").slice(0, 300),
+                }),
+              }).catch(() => {});
             },
           );
           // Phase 2: a tapped action button (Business / Personal, or
