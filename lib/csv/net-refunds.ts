@@ -97,10 +97,17 @@ export function findRefundPairs(
 
   // Group by (merchant, abs amount). For each bucket, walk both
   // sides and pair closest-by-date. A row's direction under the
-  // import's convention decides which side it's on: expense goes
-  // to charges, refund goes to refunds. Income (a chequing deposit
-  // under charges_negative, for example) goes to neither, so it can
-  // never pair against a charge.
+  // import's convention decides which side it's on: expense goes to
+  // charges, everything else (refund or income) goes to the counter
+  // side. This is deliberately not "only direction === refund":
+  // under charges_negative, interpretAmount never returns "refund"
+  // (a positive row there is "income"), and bucketing strictly by
+  // that label would leave the refund side permanently empty and
+  // silently stop all netting for every charges_negative import,
+  // which is most of them. The eligibility filter above already
+  // dropped amount_cents === 0, so the counter side here is always a
+  // genuine opposite-signed row, matching the "opposite signs" rule
+  // this function has always paired on.
   type Bucket = { charges: NettableTx[]; refunds: NettableTx[] };
   const buckets = new Map<string, Bucket>();
   for (const t of eligible) {
@@ -108,7 +115,7 @@ export function findRefundPairs(
     const b = buckets.get(key) ?? { charges: [], refunds: [] };
     const direction = interpretAmount(t.amount_cents, convention).direction;
     if (direction === "expense") b.charges.push(t);
-    else if (direction === "refund") b.refunds.push(t);
+    else b.refunds.push(t);
     buckets.set(key, b);
   }
 

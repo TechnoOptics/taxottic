@@ -265,9 +265,10 @@ export default async function ImportReviewPage({
         </div>
         {isCredit ? (
           <p className="mt-2 text-xs text-ink-muted max-w-2xl leading-relaxed">
-            Credit-card import: every charge counts as an expense regardless
-            of CSV sign. We auto-skip rows that look like card payments
-            (autopay, payment received, etc.) so they aren&apos;t
+            Credit-card import: charges are read using this file&apos;s
+            detected sign convention, not a fixed rule, so refunds aren&apos;t
+            offered as expenses. We auto-skip rows that look like card
+            payments (autopay, payment received, etc.) so they aren&apos;t
             double-counted.
           </p>
         ) : null}
