@@ -38,23 +38,30 @@ export async function computeReadiness(
   // Bank connections → accounts → tx, scoped to this company. Three small
   // queries beat a single deeply-nested PostgREST select for readability and
   // gives us a clean account-id list to count against.
-  const { data: connections } = await admin
-    .from("bank_connections")
-    .select("id")
-    .eq("company_id", companyId)
-    .neq("status", "revoked");
-  const connectionIds = (connections ?? []).map((c) => c.id as string);
+  //
+  // That chain is genuinely sequential: each step needs the ids the previous
+  // one returned. The deduction-category count is not, it only needs
+  // companyId and taxYear. It used to sit AFTER the chain, so this function
+  // cost four sequential round trips, once per company, on every dashboard
+  // render. Running the two independent halves concurrently makes it three,
+  // with byte-identical results.
+  const [bank, { data: catRows }] = await Promise.all([
+    (async () => {
+      const { data: connections } = await admin
+        .from("bank_connections")
+        .select("id")
+        .eq("company_id", companyId)
+        .neq("status", "revoked");
+      const connectionIds = (connections ?? []).map((c) => c.id as string);
+      if (connectionIds.length === 0) return { totalTx: 0, triagedTx: 0 };
 
-  let totalTx = 0;
-  let triagedTx = 0;
-  if (connectionIds.length > 0) {
-    const { data: accounts } = await admin
-      .from("bank_accounts")
-      .select("id")
-      .in("connection_id", connectionIds);
-    const accountIds = (accounts ?? []).map((a) => a.id as string);
+      const { data: accounts } = await admin
+        .from("bank_accounts")
+        .select("id")
+        .in("connection_id", connectionIds);
+      const accountIds = (accounts ?? []).map((a) => a.id as string);
+      if (accountIds.length === 0) return { totalTx: 0, triagedTx: 0 };
 
-    if (accountIds.length > 0) {
       const [{ count: total }, { count: triaged }] = await Promise.all([
         admin
           .from("account_transactions")
@@ -68,19 +75,19 @@ export async function computeReadiness(
           .gte("posted_date", windowStart)
           .neq("user_action", "pending"),
       ]);
-      totalTx = total ?? 0;
-      triagedTx = triaged ?? 0;
-    }
-  }
+      return { totalTx: total ?? 0, triagedTx: triaged ?? 0 };
+    })(),
+    // Distinct deduction categories claimed via monthly_expenses in the
+    // current tax year. Counting at app level rather than DB level so we
+    // don't need a dedicated RPC just for one number.
+    admin
+      .from("monthly_expenses")
+      .select("category_code")
+      .eq("company_id", companyId)
+      .eq("tax_year", taxYear),
+  ]);
 
-  // Distinct deduction categories claimed via monthly_expenses in the current
-  // tax year. Counting at app level rather than DB level so we don't need a
-  // dedicated RPC just for one number.
-  const { data: catRows } = await admin
-    .from("monthly_expenses")
-    .select("category_code")
-    .eq("company_id", companyId)
-    .eq("tax_year", taxYear);
+  const { totalTx, triagedTx } = bank;
   const categoriesUsed = new Set(
     (catRows ?? []).map((r) => r.category_code as string),
   ).size;
