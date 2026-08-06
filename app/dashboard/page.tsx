@@ -24,11 +24,7 @@ import { runTrialGuard } from "@/lib/security/trial-guard";
 import { MedalCelebration } from "@/components/MedalCelebration";
 import { WelcomeTour } from "@/components/WelcomeTour";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
-import {
-  formatCents,
-  forecast,
-  type ForecastResult,
-} from "@/lib/tax/forecast";
+import { formatCents, forecast, type ForecastResult } from "@/lib/tax/forecast";
 import { buildPersonalForecastInput } from "@/lib/tax/personal-forecast-input";
 import {
   buildCompanyForecast,
@@ -48,7 +44,15 @@ import { ReadinessHelp } from "@/components/ReadinessHelp";
 import { WebOnly } from "@/components/WebOnly";
 import { OutstandingTasksBanner } from "@/components/OutstandingTasksBanner";
 import { OutstandingTasksPopup } from "@/components/OutstandingTasksPopup";
-import { getOutstandingTasks, type OutstandingItem } from "@/lib/tasks/outstanding";
+import {
+  getOutstandingTasks,
+  type OutstandingItem,
+} from "@/lib/tasks/outstanding";
+import {
+  parseWorkspaceMode,
+  resolveDashboardLanding,
+} from "@/lib/workspace/mode";
+import { clearWorkspaceMode } from "@/app/actions/workspace-mode";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
@@ -69,7 +73,7 @@ export default async function DashboardPage() {
     .maybeSingle();
   if (pendingOnboarding?.company_id) {
     redirect(
-      `/onboarding/employee-role?company_id=${pendingOnboarding.company_id}`,
+      `/onboarding/employee-role?company_id=${pendingOnboarding.company_id}`
     );
   }
 
@@ -99,6 +103,7 @@ export default async function DashboardPage() {
     companies,
     companyLimit,
     profileResult,
+    workspaceModeResult,
   ] = await Promise.all([
     evaluateBadges(admin, user.id),
     ensureQuarterlyReminders(admin, user.id, taxYear),
@@ -107,8 +112,29 @@ export default async function DashboardPage() {
     admin
       .from("profiles")
       .select(
-        "full_name, tour_completed_at, tax_filer_type, tax_disclaimer_accepted_at, combine_personal_business",
+        "full_name, tour_completed_at, tax_filer_type, tax_disclaimer_accepted_at, combine_personal_business, active_company_id"
       )
+      .eq("id", user.id)
+      .maybeSingle(),
+    // workspace_mode is read SEPARATELY, and deliberately so.
+    //
+    // PostgREST fails a select wholesale when any one column is missing, so
+    // folding this into the query above would mean that a database without
+    // 20260806000000_profiles_workspace_mode.sql applied returns no profile
+    // at all. Every gate below is written `if (profile && ...)`, so the
+    // failure would not throw, it would silently skip the legal-disclaimer
+    // and filer-type redirects and drop the user's name from the greeting.
+    // A remembered UI preference must never be able to do that: it is the
+    // least important thing on this page and it was sharing a fate with the
+    // most important ones.
+    //
+    // Split out, a missing column costs exactly the feature itself. The mode
+    // reads as "never chosen", which is precisely the pre-feature behavior,
+    // and it starts working on its own the moment the migration lands. Runs
+    // inside the same Promise.all, so it adds no round trip.
+    admin
+      .from("profiles")
+      .select("workspace_mode")
       .eq("id", user.id)
       .maybeSingle(),
   ]);
@@ -152,6 +178,42 @@ export default async function DashboardPage() {
   if (profile && !profile.tax_filer_type) {
     redirect("/onboarding/filer-type");
   }
+
+  // Restore the workspace the user last chose. /dashboard is the only
+  // mode-ambiguous route in the app and it's where sign-in, the wordmark, and
+  // opening the phone app all land, so without this it silently reset every
+  // business owner back to the Personal rail on every visit.
+  //
+  // Placed AFTER the onboarding gates (disclaimer, filer-type) so an
+  // un-onboarded user still finishes onboarding first, and after
+  // personalLocked's /mileage bounce above.
+  //
+  // Only "business" ever redirects, and only to a company the user is still a
+  // member of. resolveDashboardLanding returns no redirect when the
+  // membership list is empty, so a personal-only user can't be stranded on a
+  // business surface. See lib/workspace/mode.ts.
+  const landing = resolveDashboardLanding({
+    // Errors read as "never chosen" (see the split query above), so an
+    // unmigrated database degrades to the pre-feature behavior.
+    storedMode: parseWorkspaceMode(workspaceModeResult.data?.workspace_mode),
+    companies: companies.map((m) => ({
+      id: m.company.id,
+      publicId: m.company.public_id,
+    })),
+    activeCompanyId: (profile?.active_company_id as string | null) ?? null,
+  });
+  if (landing.clearStoredMode) {
+    // Their last company went away; drop the stale preference so we stop
+    // trying on every load. Fire-and-forget: a failed write just means we
+    // re-evaluate (and no-op again) next time, never a broken dashboard.
+    try {
+      await clearWorkspaceMode();
+    } catch {
+      /* best-effort self-heal */
+    }
+  }
+  if (landing.redirectTo) redirect(landing.redirectTo);
+
   if (profile?.tax_filer_type === "w2") {
     return (
       <PersonalDashboard
@@ -242,8 +304,7 @@ export default async function DashboardPage() {
                   {recycledCompanies.length > 3
                     ? ` + ${recycledCompanies.length - 3} more`
                     : ""}
-                  . Restore in one click before the 30-day grace window
-                  ends.
+                  . Restore in one click before the 30-day grace window ends.
                 </p>
                 <Link
                   href="/settings/recycle-bin"
@@ -389,7 +450,7 @@ export default async function DashboardPage() {
       companies.map(async (m) => {
         const r = await computeReadiness(admin, m.company_id, taxYear);
         return [m.company_id, r] as const;
-      }),
+      })
     ).then((entries) => new Map<string, Readiness>(entries)),
     // Personal (1040) tax profile + logged personal deductions. The
     // dashboard is the owner's PERSONAL hub, so it leads with their own
@@ -445,7 +506,7 @@ export default async function DashboardPage() {
   // "fresh account" check below can also factor in whether they've
   // actually started using the product at all.
   const monthStart = new Date(
-    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)
   ).toISOString();
   const { count: thisMonthExpenseCount } = await admin
     .from("monthly_expenses")
@@ -462,18 +523,20 @@ export default async function DashboardPage() {
   if (overdueReminders && overdueReminders.length > 0) {
     if (treatAsFirstVisit) {
       recap.push({
-        title: `${overdueReminders.length} earlier-quarter reminder${overdueReminders.length === 1 ? "" : "s"} on your calendar`,
-        body:
-          "Welcome, these are the standard quarterly tax dates that fell before today. Open the list to mark off ones you already handled.",
+        title: `${overdueReminders.length} earlier-quarter reminder${
+          overdueReminders.length === 1 ? "" : "s"
+        } on your calendar`,
+        body: "Welcome, these are the standard quarterly tax dates that fell before today. Open the list to mark off ones you already handled.",
         href: "/reminders",
         tone: "info",
         dismissAction: "overdue-reminders",
       });
     } else {
       recap.push({
-        title: `${overdueReminders.length} overdue reminder${overdueReminders.length === 1 ? "" : "s"}`,
-        body:
-          "These tax-payment dates already passed. Knock them out so they stop nagging.",
+        title: `${overdueReminders.length} overdue reminder${
+          overdueReminders.length === 1 ? "" : "s"
+        }`,
+        body: "These tax-payment dates already passed. Knock them out so they stop nagging.",
         href: "/reminders",
         tone: "warn",
         dismissAction: "overdue-reminders",
@@ -503,7 +566,7 @@ export default async function DashboardPage() {
     const { data: engagementNudges } = await admin
       .from("firm_engagements")
       .select(
-        "id, status, tax_year, kind, company_id, firm:firms(name, public_id)",
+        "id, status, tax_year, kind, company_id, firm:firms(name, public_id)"
       )
       .in("company_id", companyIds)
       .in("status", ["pending_client", "pending_firm"]);
@@ -518,17 +581,19 @@ export default async function DashboardPage() {
       firm: FirmRow | FirmRow[] | null;
     };
     const compById = new Map(
-      companies.map((m) => [m.company_id, m.company.public_id]),
+      companies.map((m) => [m.company_id, m.company.public_id])
     );
-    const awaitingMine = ((engagementNudges ?? []) as unknown as EngRow[]).filter(
-      (e) => e.status === "pending_client",
-    );
-    const awaitingFirm = ((engagementNudges ?? []) as unknown as EngRow[]).filter(
-      (e) => e.status === "pending_firm",
-    );
+    const awaitingMine = (
+      (engagementNudges ?? []) as unknown as EngRow[]
+    ).filter((e) => e.status === "pending_client");
+    const awaitingFirm = (
+      (engagementNudges ?? []) as unknown as EngRow[]
+    ).filter((e) => e.status === "pending_firm");
 
     for (const e of awaitingMine) {
-      const firm = (Array.isArray(e.firm) ? e.firm[0] : e.firm) as FirmRow | null;
+      const firm = (
+        Array.isArray(e.firm) ? e.firm[0] : e.firm
+      ) as FirmRow | null;
       const compPub = compById.get(e.company_id);
       if (!compPub) continue;
       recap.push({
@@ -542,9 +607,10 @@ export default async function DashboardPage() {
       const firstComp = compById.get(awaitingFirm[0].company_id);
       if (firstComp) {
         recap.push({
-          title: `${awaitingFirm.length} preparer request${awaitingFirm.length === 1 ? "" : "s"} sent, awaiting acceptance`,
-          body:
-            "The firm hasn't responded yet. You'll get a heads-up here when they do.",
+          title: `${awaitingFirm.length} preparer request${
+            awaitingFirm.length === 1 ? "" : "s"
+          } sent, awaiting acceptance`,
+          body: "The firm hasn't responded yet. You'll get a heads-up here when they do.",
           href: `/c/${firstComp}/preparer`,
           tone: "info",
         });
@@ -559,7 +625,7 @@ export default async function DashboardPage() {
         g.target_cents > 0 &&
         g.saved_cents / g.target_cents < 0.25 &&
         g.deadline &&
-        new Date(g.deadline).getTime() - Date.now() < 60 * 86_400_000,
+        new Date(g.deadline).getTime() - Date.now() < 60 * 86_400_000
     );
     if (lagging) {
       recap.push({
@@ -672,8 +738,8 @@ export default async function DashboardPage() {
         buildPersonalForecastInput(
           personalTaxProfile,
           personalExpenseRows ?? [],
-          taxYear,
-        ),
+          taxYear
+        )
       )
     : null;
 
@@ -684,9 +750,8 @@ export default async function DashboardPage() {
   // exactly what's folded in. Uses the same engine + real personal profile
   // as that company's own forecast, so the number matches /c/.../forecast.
   const primaryManaged = companies.find((m) => m.role === "manager") ?? null;
-  let combinedBusiness:
-    | { companyName: string; result: ForecastResult }
-    | null = null;
+  let combinedBusiness: { companyName: string; result: ForecastResult } | null =
+    null;
   if (primaryManaged && personalTaxProfile) {
     const cid = primaryManaged.company_id;
     const [
@@ -715,7 +780,7 @@ export default async function DashboardPage() {
       admin
         .from("monthly_expenses")
         .select(
-          "amount_cents, month, category_code, recurrence, recurrence_end_month",
+          "amount_cents, month, category_code, recurrence, recurrence_end_month"
         )
         .eq("classification", "business")
         .eq("company_id", cid)
@@ -729,7 +794,7 @@ export default async function DashboardPage() {
     ]);
     const combined = resolveCombine(
       profile?.combine_personal_business,
-      bizCompany?.entity_type ?? null,
+      bizCompany?.entity_type ?? null
     );
     if (combined) {
       const trips = (bizTrips ?? []) as { deduction_cents: number }[];
@@ -747,7 +812,7 @@ export default async function DashboardPage() {
         expenses: (bizExpenses ?? []) as ExpenseRow[],
         trackedYtdMileageCents: trips.reduce(
           (a, t) => a + Number(t.deduction_cents ?? 0),
-          0,
+          0
         ),
         trackedTripCount: trips.length,
         // TRUE combined 1040: this line is the owner's own return with
@@ -763,16 +828,15 @@ export default async function DashboardPage() {
   const nextReminder =
     upcomingReminders && upcomingReminders.length
       ? [...dedupeReminders(upcomingReminders)].sort(
-          (a, b) =>
-            new Date(a.due_at).getTime() - new Date(b.due_at).getTime(),
+          (a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime()
         )[0]
       : null;
   const nextDeadlineDays = nextReminder
     ? Math.max(
         0,
         Math.ceil(
-          (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000,
-        ),
+          (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000
+        )
       )
     : null;
 
@@ -845,8 +909,8 @@ export default async function DashboardPage() {
                     : `${formatCents(personalForecast.stillOwedCents)} owed`}
                 </div>
                 <div className="text-[13px] text-ink-muted mt-0.5 truncate">
-                  Projected 1040 ·{" "}
-                  {formatCents(personalForecast.totalTaxCents)} total tax
+                  Projected 1040 · {formatCents(personalForecast.totalTaxCents)}{" "}
+                  total tax
                 </div>
                 {/* Combine is on: show the with-business bottom line under
                     the personal-only figure, clearly labeled with the
@@ -855,8 +919,12 @@ export default async function DashboardPage() {
                   <div className="text-[13px] text-gold-700 mt-1 truncate">
                     incl. {combinedBusiness.companyName}:{" "}
                     {combinedBusiness.result.refundCents > 0
-                      ? `${formatCents(combinedBusiness.result.refundCents)} back`
-                      : `${formatCents(combinedBusiness.result.stillOwedCents)} owed`}
+                      ? `${formatCents(
+                          combinedBusiness.result.refundCents
+                        )} back`
+                      : `${formatCents(
+                          combinedBusiness.result.stillOwedCents
+                        )} owed`}
                   </div>
                 ) : null}
               </>
@@ -977,7 +1045,7 @@ export default async function DashboardPage() {
                 const dueDate = new Date(r.due_at);
                 const days = Math.max(
                   0,
-                  Math.ceil((dueDate.getTime() - Date.now()) / 86_400_000),
+                  Math.ceil((dueDate.getTime() - Date.now()) / 86_400_000)
                 );
                 // Absolute date underneath the relative label. CPAs (P3
                 // from the May 2026 audit) need the actual day-of-month.
@@ -1049,8 +1117,7 @@ export default async function DashboardPage() {
                   className="text-sm text-ink-muted hover:text-forest-900 inline-flex items-center gap-1.5 whitespace-nowrap"
                   title={newCompanyTooltip}
                 >
-                  <LockIcon className="size-4 shrink-0" />
-                  + New company (Pro)
+                  <LockIcon className="size-4 shrink-0" />+ New company (Pro)
                 </Link>
               </WebOnly>
             )}
@@ -1075,15 +1142,27 @@ export default async function DashboardPage() {
               const breakdown = r?.hasBankFeed
                 ? `${r.triagedTx}/${r.totalTx} tx · ${catsLabel}`
                 : r
-                  ? r.categoriesUsed >= r.targetCategories
-                    ? `${r.categoriesUsed} categories ✓`
-                    : `${r.categoriesUsed}/${r.targetCategories} categories`
-                  : "-";
+                ? r.categoriesUsed >= r.targetCategories
+                  ? `${r.categoriesUsed} categories ✓`
+                  : `${r.categoriesUsed}/${r.targetCategories} categories`
+                : "-";
               const tooltip = r?.hasBankFeed
-                ? `${r.triagedTx} of ${r.totalTx} bank transactions triaged in the last 90 days, and ${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year${r.categoriesUsed > r.targetCategories ? " (target met)" : ""}.`
+                ? `${r.triagedTx} of ${
+                    r.totalTx
+                  } bank transactions triaged in the last 90 days, and ${
+                    r.categoriesUsed
+                  } of ${
+                    r.targetCategories
+                  } starter deduction categories claimed this tax year${
+                    r.categoriesUsed > r.targetCategories ? " (target met)" : ""
+                  }.`
                 : r
-                  ? `${r.categoriesUsed} of ${r.targetCategories} starter deduction categories claimed this tax year${r.categoriesUsed > r.targetCategories ? " (target met)" : ""}. Connect a bank to add expensing-engagement to this score.`
-                  : "Tax readiness - start logging expenses to see this fill in.";
+                ? `${r.categoriesUsed} of ${
+                    r.targetCategories
+                  } starter deduction categories claimed this tax year${
+                    r.categoriesUsed > r.targetCategories ? " (target met)" : ""
+                  }. Connect a bank to add expensing-engagement to this score.`
+                : "Tax readiness - start logging expenses to see this fill in.";
               return (
                 <li
                   key={m.company_id}
@@ -1200,10 +1279,10 @@ export default async function DashboardPage() {
                     Goals to absorb your tax bill
                   </h2>
                   <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-2xl">
-                    Personalized retirement, health, education, and energy
-                    moves with step-by-step instructions, built from your
-                    actual filing status, income, and state. None are new
-                    business expenses.
+                    Personalized retirement, health, education, and energy moves
+                    with step-by-step instructions, built from your actual
+                    filing status, income, and state. None are new business
+                    expenses.
                   </p>
                 </div>
                 <span className="text-sm font-medium text-gold-700 shrink-0">
@@ -1232,7 +1311,7 @@ export default async function DashboardPage() {
                   g.target_cents > 0
                     ? Math.min(
                         100,
-                        Math.round((g.saved_cents / g.target_cents) * 100),
+                        Math.round((g.saved_cents / g.target_cents) * 100)
                       )
                     : 0;
                 return (
@@ -1358,7 +1437,7 @@ async function renderMemberDashboard(args: {
 
   const nowIso = new Date().toISOString();
   const monthStart = new Date(
-    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)
   ).toISOString();
 
   const [
@@ -1395,7 +1474,7 @@ async function renderMemberDashboard(args: {
     admin
       .from("monthly_expenses")
       .select(
-        "id, month, amount_cents, notes, created_at, category:deduction_categories(label)",
+        "id, month, amount_cents, notes, created_at, category:deduction_categories(label)"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -1405,17 +1484,17 @@ async function renderMemberDashboard(args: {
   const mileageTrips = mileageTripRows ?? [];
   const mileageYtdCents = mileageTrips.reduce(
     (a, t) => a + Number(t.deduction_cents ?? 0),
-    0,
+    0
   );
   const mileageYtdMiles = mileageTrips.reduce(
     (a, t) => a + Number(t.distance_miles ?? 0),
-    0,
+    0
   );
   const thisMonthExpenses = thisMonthExpenseCount ?? 0;
   const nextReminder = upcomingReminders?.[0] ?? null;
   const nextDeadlineDays = nextReminder
     ? Math.ceil(
-        (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000,
+        (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000
       )
     : null;
 
@@ -1444,7 +1523,10 @@ async function renderMemberDashboard(args: {
             />
           </div>
         ) : null}
-        <OutstandingTasksPopup count={outstanding.count} items={outstanding.items} />
+        <OutstandingTasksPopup
+          count={outstanding.count}
+          items={outstanding.items}
+        />
 
         {/* Quick actions, the three things a member actually does day
             to day. Big, obvious tap targets rather than nav-menu hunting. */}
@@ -1521,8 +1603,8 @@ async function renderMemberDashboard(args: {
               {nextDeadlineDays === null
                 ? "-"
                 : nextDeadlineDays <= 0
-                  ? "Today"
-                  : `${nextDeadlineDays}d`}
+                ? "Today"
+                : `${nextDeadlineDays}d`}
             </div>
             <div className="text-[13px] text-ink-muted mt-0.5 truncate">
               {nextReminder ? nextReminder.title : "Nothing scheduled"}
@@ -1570,7 +1652,9 @@ async function renderMemberDashboard(args: {
               {badges?.length ?? 0} earned
             </span>
           </div>
-          <AchievementsGrid earnedCodes={(badges ?? []).map((b) => b.badge_code)} />
+          <AchievementsGrid
+            earnedCodes={(badges ?? []).map((b) => b.badge_code)}
+          />
         </section>
       </section>
 
@@ -1592,9 +1676,9 @@ async function renderMemberDashboard(args: {
  * that view. Audit Low finding: three identical "Q2 estimated tax
  * (2026)" rows for a three-company user.
  */
-function dedupeReminders<R extends { id: string; title: string; due_at: string }>(
-  rows: ReadonlyArray<R>,
-): R[] {
+function dedupeReminders<
+  R extends { id: string; title: string; due_at: string }
+>(rows: ReadonlyArray<R>): R[] {
   const seen = new Set<string>();
   const out: R[] = [];
   for (const r of rows) {

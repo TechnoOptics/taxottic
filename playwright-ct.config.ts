@@ -45,10 +45,18 @@ export default defineConfig({
       // stubs are layout-identical (an <a>, and location.pathname), which is
       // all these tests measure. Without them, nav-bearing components such as
       // LeftRail / UserMenu can't be component-tested at all.
+      // NOTE: order matters. The "@" catch-all must come LAST, otherwise it
+      // swallows the more specific server-action alias below it.
       resolve: {
         alias: {
           "next/navigation": process.cwd() + "/playwright/next-stubs/navigation.tsx",
           "next/link": process.cwd() + "/playwright/next-stubs/link.tsx",
+          // "use server" module: it reaches for the Supabase server client and
+          // next/headers, which don't exist under Vite, so LeftRail couldn't
+          // mount at all without a stub. The stub records its calls on window
+          // so a test can assert when the rail persists the workspace mode.
+          "@/app/actions/workspace-mode":
+            process.cwd() + "/playwright/next-stubs/workspace-mode-action.ts",
           "@": process.cwd(),
         },
       },

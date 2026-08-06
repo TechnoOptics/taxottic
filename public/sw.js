@@ -916,7 +916,13 @@
 // arithmetic: 150 rows per model call could not fit a 4000-token cap,
 // so a large import could only come back truncated, and truncation was
 // misreported as invalid JSON. 60 rows per call against 8000 tokens.
-const CACHE_VERSION = "v155";
+// v156: the app remembers whether the user last worked in the Personal
+// or the Business workspace (profiles.workspace_mode) and /dashboard
+// restores the business side instead of resetting the rail to Personal
+// on every sign-in and app open. LeftRail gained the mode-sync effect
+// and a 44px toggle, so the markup changed and stale clients need the
+// new bundle.
+const CACHE_VERSION = "v156";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

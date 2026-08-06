@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { modeForPathname, type WorkspaceMode } from "@/lib/workspace/mode";
+import { setWorkspaceMode } from "@/app/actions/workspace-mode";
 
 /**
  * Fixed left rail with a company-aware navigation tree.
@@ -88,6 +90,10 @@ type Props = {
    *  personal workspace is replaced by an upgrade upsell (they get the
    *  business side only). Owners/subscribers see the full personal nav. */
   personalLocked?: boolean;
+  /** profiles.workspace_mode, the workspace the user last chose. Server-read
+   *  in AppHeader. The rail keeps it in step when the URL says otherwise; see
+   *  the sync effect below. */
+  storedMode?: WorkspaceMode | null;
 };
 
 // Shared icon frame, outline style, 24×24, matched to the app's UI weight.
@@ -296,14 +302,60 @@ function extractActivePublicId(pathname: string | null): string | null {
 
 const LAST_COMPANY_KEY = "taxottic.last_company_public_id";
 
+// Last workspace mode we've persisted during this SPA session.
+//
+// Module-scoped on purpose: on phones BOTH the desktop rail (mounted but
+// CSS-hidden at `< lg`) and the mobile sheet can be LeftRail instances at the
+// same time, and a per-component ref would let each of them fire the same
+// write. Sharing it here means one write per actual mode change, not two.
+let lastSyncedMode: WorkspaceMode | null = null;
+
 export function LeftRail({
   mode = "rail",
   onDismiss,
   companies = [],
   personalLocked = false,
+  storedMode = null,
 }: Props) {
   const pathname = usePathname();
   const urlPublicId = extractActivePublicId(pathname);
+
+  // ---- keep profiles.workspace_mode in step with where the user actually is ----
+  //
+  // The Personal/Business toggle below is a pair of plain links, so "the user
+  // clicked Business" and "the user followed a link into a company" are the
+  // same event as far as this component can tell, and they should be: both
+  // are choosing that workspace. So instead of a click handler we watch the
+  // route: whenever it lands on a surface that unambiguously declares a mode
+  // and that disagrees with what's stored, persist the new one.
+  //
+  // That also gives deep links the right behaviour for free. A push
+  // notification into /c/{id}/expenses renders exactly what was linked (no
+  // redirect ever happens off a mode-declaring route) AND updates the
+  // remembered mode, so the next app open lands on business.
+  //
+  // modeForPathname returns null for /dashboard and for shared routes
+  // (/goals, /settings), so passing through them leaves the preference alone.
+  // /dashboard in particular MUST stay ambiguous: it's the route the restore
+  // exists to fix, and treating it as a personal signal would wipe a
+  // remembered "business" the instant the user landed on it.
+  //
+  // Steady state costs zero requests; crossing modes costs exactly one.
+  const routeMode = modeForPathname(pathname);
+  useEffect(() => {
+    if (!routeMode) return;
+    // Once we've written a value this session, trust that over the prop: the
+    // action deliberately doesn't revalidate, so `storedMode` stays stale.
+    const known = lastSyncedMode ?? storedMode;
+    if (routeMode === known) return;
+    lastSyncedMode = routeMode;
+    void setWorkspaceMode(routeMode).catch(() => {
+      // Offline / server hiccup. Roll back so a later navigation retries
+      // rather than silently leaving the preference behind. Never surfaced to
+      // the user: failing to remember a tab is not worth an error toast.
+      lastSyncedMode = null;
+    });
+  }, [routeMode, storedMode]);
 
   // Resolve the "effective" active company. If the URL is a /c/[publicId]
   // route, that wins. Otherwise we fall back to the last-visited company
@@ -463,8 +515,12 @@ export function LeftRail({
   const businessHref = effectivePublicId
     ? `/c/${effectivePublicId}/forecast`
     : "/companies/new";
+  // `min-h-[44px]` + grid centering: this is the primary control on a phone
+  // (it's the thing users were tapping over and over), and the design system
+  // fixes .btn / .input at 44px for exactly this reason, see
+  // docs/design-system-from-techottic.md section 5.1. It was ~30px before.
   const segBase =
-    "rounded-lg px-2 py-1.5 text-[13px] font-medium text-center transition-colors ";
+    "grid place-items-center min-h-[44px] rounded-lg px-2 text-[13px] font-medium text-center transition-colors ";
   const segActive = "bg-surface text-foreground shadow-sm";
   const segIdle = "text-muted hover:text-foreground";
 

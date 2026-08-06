@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LeftRail } from "./LeftRail";
+import type { WorkspaceMode } from "@/lib/workspace/mode";
 import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 type Company = {
@@ -37,9 +38,12 @@ type Company = {
 export function LeftRailMobile({
   companies = [],
   personalLocked = false,
+  storedMode = null,
 }: {
   companies?: Company[];
   personalLocked?: boolean;
+  /** profiles.workspace_mode, forwarded to the sheet's LeftRail. */
+  storedMode?: WorkspaceMode | null;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -154,6 +158,7 @@ export function LeftRailMobile({
                 onDismiss={() => setOpen(false)}
                 companies={companies}
                 personalLocked={personalLocked}
+                storedMode={storedMode}
               />
             </div>
           </div>,

@@ -3,7 +3,10 @@ import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { WebOnly } from "./WebOnly";
 import { DarkThemeMount } from "./DarkThemeMount";
-import { isPersonalLocked, type MembershipRole } from "@/lib/entitlements/personal-access";
+import {
+  isPersonalLocked,
+  type MembershipRole,
+} from "@/lib/entitlements/personal-access";
 import { LeftRail } from "./LeftRail";
 import { LeftRailMobile } from "./LeftRailMobile";
 import { SmartSearch } from "./SmartSearch";
@@ -16,7 +19,11 @@ import { getActiveFeatureGates, asPlanOrNull } from "@/lib/plans/usage";
 import type { Plan } from "@/lib/plans/limits";
 import { PlanPreviewBanner } from "./PlanPreviewBanner";
 import { getMyCompanies, isSuperAdminCached } from "@/lib/auth";
-import { getOutstandingTasks, type OutstandingItem } from "@/lib/tasks/outstanding";
+import {
+  getOutstandingTasks,
+  type OutstandingItem,
+} from "@/lib/tasks/outstanding";
+import { parseWorkspaceMode, type WorkspaceMode } from "@/lib/workspace/mode";
 
 type AppHeaderProps = {
   email?: string;
@@ -56,6 +63,9 @@ export async function AppHeader({
   let currentPlatform: "user" | "enterprise" | "hq" = "user";
   let activeCompanyId: string | null = null;
   let previewPlan: Plan | null = null;
+  // The workspace the user last chose. Passed to the rail so it can keep the
+  // column in step when a deep link lands them on the other side.
+  let workspaceMode: WorkspaceMode | null = null;
   // The header's per-user reads all depend only on the validated user id,
   // so fan them out concurrently instead of awaiting in series (was
   // profile → gates → super-admin → memberships, ~4 sequential round
@@ -66,26 +76,41 @@ export async function AppHeader({
   // only (admin/HQ hosts render no rail, so we skip that fetch).
   let memberships: Awaited<ReturnType<typeof getMyCompanies>> = [];
   if (user) {
-    const [profile, gatesResult, superAdmin, myCompanies] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select(
-          "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search, active_company_id, preview_plan",
-        )
-        .eq("id", user.id)
-        .maybeSingle()
-        .then((r) => r.data),
-      getActiveFeatureGates(supabase, user.id),
-      isSuperAdminCached(),
-      homeHref === "/"
-        ? Promise.resolve<Awaited<ReturnType<typeof getMyCompanies>>>([])
-        : getMyCompanies(),
-    ]);
+    const [profile, workspaceModeRow, gatesResult, superAdmin, myCompanies] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "full_name, avatar_url, gdpr_consented_at, active_platform, show_smart_search, active_company_id, preview_plan"
+          )
+          .eq("id", user.id)
+          .maybeSingle()
+          .then((r) => r.data),
+        // Read separately, for the same reason as /dashboard: PostgREST fails a
+        // select wholesale on one unknown column, and this header renders on
+        // every authenticated page. Folded into the query above, a database
+        // without 20260806000000_profiles_workspace_mode.sql applied would
+        // return no profile, and `needsConsent = !profile?.gdpr_consented_at`
+        // would then show the GDPR consent banner to every user, everywhere.
+        // A remembered rail position is not allowed to cost that.
+        supabase
+          .from("profiles")
+          .select("workspace_mode")
+          .eq("id", user.id)
+          .maybeSingle()
+          .then((r) => r.data),
+        getActiveFeatureGates(supabase, user.id),
+        isSuperAdminCached(),
+        homeHref === "/"
+          ? Promise.resolve<Awaited<ReturnType<typeof getMyCompanies>>>([])
+          : getMyCompanies(),
+      ]);
 
     fullName = profile?.full_name ?? null;
     avatarUrl = profile?.avatar_url ?? null;
     needsConsent = !profile?.gdpr_consented_at;
     activeCompanyId = (profile?.active_company_id as string | null) ?? null;
+    workspaceMode = parseWorkspaceMode(workspaceModeRow?.workspace_mode);
     const rawPlatform = (profile?.active_platform as string | null) ?? "user";
     if (
       rawPlatform === "user" ||
@@ -287,7 +312,13 @@ export async function AppHeader({
           {/* Consumer surface only: hamburger that opens the same
               left rail in a sheet on < lg widths. Admin / HQ host
               still renders only the wordmark + UserMenu pair. */}
-          {homeHref !== "/" ? <LeftRailMobile companies={companies} personalLocked={personalLocked} /> : null}
+          {homeHref !== "/" ? (
+            <LeftRailMobile
+              companies={companies}
+              personalLocked={personalLocked}
+              storedMode={workspaceMode}
+            />
+          ) : null}
           <Wordmark href={homeHref} size="sm" tone="cream" />
           {/* Smart search powered by Bella. OPT-IN per user via
               /settings (profile.show_smart_search). When on, it
@@ -353,7 +384,14 @@ export async function AppHeader({
           handles those via the hamburger). Consumer surfaces only -
           admin / HQ host doesn't get it because the rail's items
           don't apply. */}
-      {homeHref !== "/" ? <LeftRail mode="rail" companies={companies} personalLocked={personalLocked} /> : null}
+      {homeHref !== "/" ? (
+        <LeftRail
+          mode="rail"
+          companies={companies}
+          personalLocked={personalLocked}
+          storedMode={workspaceMode}
+        />
+      ) : null}
       {/* Flip <html data-theme="dark"> for the duration of any
           authenticated page render. Public marketing routes don't
           mount <AppHeader> so they stay light by default. See
