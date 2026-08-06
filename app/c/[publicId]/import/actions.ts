@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { logCompanyActivity } from "@/lib/activity/log";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
+import { detectSignConvention } from "@/lib/csv/sign-convention";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
   categorizeBatch,
@@ -205,6 +206,17 @@ async function runCsvImport(formData: FormData): Promise<
 
     const dataRows = rows.slice(1);
 
+    // Decide once, at upload, how this file's signs should be read, and
+    // record it so the review page can state it and the user can
+    // correct it. Amounts are stored exactly as parsed below (line
+    // ~237); this only records how to read the signs already parsed,
+    // it does not change parsing.
+    const detected = detectSignConvention(
+      dataRows.map((r) => ({
+        amountCents: parseAmountCents(r[cols.amount] ?? ""),
+      })),
+    );
+
     const { data: importRow, error: importErr } = await admin
       .from("bank_imports")
       .insert({
@@ -214,6 +226,10 @@ async function runCsvImport(formData: FormData): Promise<
         row_count: dataRows.length,
         status: "reviewing",
         account_type: accountType,
+        sign_convention: detected.convention,
+        sign_convention_source: "detected",
+        sign_convention_confidence: detected.confidence,
+        sign_convention_set_at: new Date().toISOString(),
       })
       .select("id")
       .single();
