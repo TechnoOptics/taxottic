@@ -1,0 +1,114 @@
+-- Recovered 20260430011424 (enterprise_part4_firm_read_access_to_customer_data) from supabase_migrations.schema_migrations.
+-- Applied out-of-band via the Supabase MCP/SQL editor and never
+-- committed. Statements are verbatim from the history table, not
+-- reconstructed from the schema. See docs/migration-history-state.md.
+
+-- Let an enterprise firm with an ACTIVE engagement read the linked
+-- customer company's books (read-only). Each existing client-owned
+-- table gets a parallel SELECT policy that piggy-backs on
+-- firm_has_active_engagement_with(company_id). We deliberately do NOT
+-- give firms write access; the firm can prepare returns and audits
+-- using exports + their own audit_cases / audit_documents tables.
+
+-- companies: view firm-engaged client basics (already member-readable)
+drop policy if exists "companies: firm engaged read" on public.companies;
+create policy "companies: firm engaged read"
+  on public.companies for select
+  using (public.firm_has_active_engagement_with(id));
+
+-- business_profiles
+drop policy if exists "business_profiles: firm engaged read" on public.business_profiles;
+create policy "business_profiles: firm engaged read"
+  on public.business_profiles for select
+  using (public.firm_has_active_engagement_with(company_id));
+
+-- monthly_income / monthly_expenses
+drop policy if exists "monthly_income: firm engaged read" on public.monthly_income;
+create policy "monthly_income: firm engaged read"
+  on public.monthly_income for select
+  using (public.firm_has_active_engagement_with(company_id));
+
+drop policy if exists "monthly_expenses: firm engaged read" on public.monthly_expenses;
+create policy "monthly_expenses: firm engaged read"
+  on public.monthly_expenses for select
+  using (public.firm_has_active_engagement_with(company_id));
+
+-- tax_profiles is keyed by user_id, not company_id. The firm should
+-- only see the profile of users who manage the engaged company.
+drop policy if exists "tax_profiles: firm engaged read" on public.tax_profiles;
+create policy "tax_profiles: firm engaged read"
+  on public.tax_profiles for select
+  using (
+    exists (
+      select 1
+      from public.firm_engagements e
+      join public.firm_members fm on fm.firm_id = e.firm_id
+      join public.company_members cm on cm.company_id = e.company_id
+      where e.status = 'active'
+        and fm.user_id = auth.uid()
+        and cm.user_id = tax_profiles.user_id
+        and cm.role = 'manager'
+        and tax_profiles.tax_year = e.tax_year
+    )
+  );
+
+-- Audit document bucket: 50MB max, private, firm members of the
+-- engagement on the audit_case can read/write.
+insert into storage.buckets (id, name, public)
+values ('audit-documents', 'audit-documents', false)
+on conflict (id) do nothing;
+
+-- Path convention: <firm_public_id>/<audit_case_id>/<filename>
+drop policy if exists "audit-docs: firm read" on storage.objects;
+create policy "audit-docs: firm read"
+  on storage.objects for select
+  using (
+    bucket_id = 'audit-documents'
+    and exists (
+      select 1
+      from public.firms f
+      join public.audit_cases ac on ac.id::text = (storage.foldername(storage.objects.name))[2]
+      join public.firm_engagements e on e.id = ac.engagement_id and e.firm_id = f.id
+      where f.public_id = (storage.foldername(storage.objects.name))[1]
+        and public.is_firm_member(f.id)
+    )
+  );
+
+drop policy if exists "audit-docs: firm insert" on storage.objects;
+create policy "audit-docs: firm insert"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'audit-documents'
+    and exists (
+      select 1
+      from public.firms f
+      join public.audit_cases ac on ac.id::text = (storage.foldername(storage.objects.name))[2]
+      join public.firm_engagements e on e.id = ac.engagement_id and e.firm_id = f.id
+      where f.public_id = (storage.foldername(storage.objects.name))[1]
+        and public.is_firm_member(f.id)
+    )
+  );
+
+drop policy if exists "audit-docs: firm delete" on storage.objects;
+create policy "audit-docs: firm delete"
+  on storage.objects for delete
+  using (
+    bucket_id = 'audit-documents'
+    and (owner = auth.uid() or exists (
+      select 1
+      from public.firms f
+      where f.public_id = (storage.foldername(storage.objects.name))[1]
+        and public.is_firm_owner_or_manager(f.id)
+    ))
+  );
+
+-- Realtime: stream engagement + audit changes
+do $$ begin
+  alter publication supabase_realtime add table public.firm_engagements;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.audit_cases;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.audit_notes;
+exception when others then null; end $$;
