@@ -208,12 +208,21 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      // `alert?.notified_at` and not `alert`: since notified_at became
+      // nullable, an open-but-undeliverable episode is a row that EXISTS
+      // with a null timestamp. Testing the row rather than the field fed
+      // Date.parse(null) -> NaN into the decision, and `nowMs - NaN >=
+      // RENOTIFY_MS` is false, so a driver we had never actually reached
+      // read as "notified recently" and was skipped on every tick. Caught
+      // by invoking the cron against production and watching the row not
+      // change.
+      const lastNotifiedMs = alert?.notified_at
+        ? Date.parse(alert.notified_at as string)
+        : null;
       const decision = evaluateTrackerStall({
         lastUploadMs,
         nowMs,
-        lastNotifiedMs: alert
-          ? Date.parse(alert.notified_at as string)
-          : null,
+        lastNotifiedMs,
       });
 
       // Device-truth escalation (workstream C): the app's heartbeat can
@@ -244,9 +253,7 @@ export async function GET(req: NextRequest) {
             (auth != null && auth !== "always");
         }
         if (deviceStall) {
-          const lastNotified = alert
-            ? Date.parse(alert.notified_at as string)
-            : null;
+          const lastNotified = lastNotifiedMs;
           if (lastNotified != null && nowMs - lastNotified < 24 * 60 * 60_000) {
             deviceStall = false; // already told them this episode
           }
@@ -421,7 +428,13 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const lastNotified = parkedAlert
+      // Field, not row. The parked path still writes notified_at
+      // unconditionally so this cannot be null today, but the column is
+      // nullable now and Date.parse(null) is NaN, which slips past a
+      // `!= null` guard and then compares false — over-notifying instead
+      // of skipping. Same trap as the silent sweep above, opposite
+      // symptom.
+      const lastNotified = parkedAlert?.notified_at
         ? Date.parse(parkedAlert.notified_at as string)
         : null;
       if (lastNotified != null && nowMs - lastNotified < PARKED_RENOTIFY_MS) {
