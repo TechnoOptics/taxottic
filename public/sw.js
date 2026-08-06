@@ -3,10 +3,16 @@
  * Strategy: network-first for HTML/data, cache-first for static assets.
  * Goal: snappy navigations + survives a brief network blip.
  *
- * Update flow: when a new SW version is installed, it sits in the "waiting"
- * state until the client explicitly tells it to take over. The client (see
- * PWASetup) shows a "New version - Refresh" toast and posts SKIP_WAITING
- * when the user taps it.
+ * Update flow: a new SW takes over as soon as it installs (skipWaiting in
+ * the install handler, clients.claim in activate). PWASetup reloads on
+ * controllerchange, so the page picks up the new bundle by itself.
+ *
+ * This used to wait for the user to tap a "New version - Refresh" toast.
+ * That deadlocked: the auto-adopt that would have posted SKIP_WAITING
+ * without a tap ships in the bundle the OLD worker serves, so it could
+ * never install itself. Two devices sat four days behind production as a
+ * result. See the v151 note below. The SKIP_WAITING message handler is
+ * kept so any client still running the old bundle continues to work.
  */
 // Bump on every behavior change to this SW. Bumping forces existing
 // clients to drop stale caches in the `activate` handler below.
@@ -875,22 +881,23 @@
 // longer claims location is never shared or that turning tracking off
 // retains nothing. Footer attribution is now "Powered by Techno Optics
 // LLC".
-// v149: measured performance wins. The Supabase browser client is no
-// longer statically imported by the root layout, so the shared chunk
-// set every route loads drops from 261 KB to 201 KB gzip (223 KB to
-// 163 KB on the modern path) and the realtime transport stops shipping
-// to anonymous marketing pages. The root layout no longer reads
-// headers() in generateMetadata, which takes the build from 3 static
-// routes to 41: every guide, legal, compare, pricing, help and login
-// page is now CDN-cacheable instead of no-store (the admin-host noindex
-// moved to an X-Robots-Tag in middleware plus static metadata on
-// /admin and /login). /mileage/business now draws a 60-point sample per
-// drive and pages at 100 drives, taking the largest response in the app
-// from 995 KB to 652 KB, with both bounds stated on screen and the
-// Schedule C totals still computed over every drive. The chunk hashes
-// and the served markup change on every route, so cached shells must
-// not be reused.
-const CACHE_VERSION = "v149";
+// v151: the service worker now takes over on install instead of
+// waiting to be invited. A new worker only stopped waiting when the page
+// posted SKIP_WAITING, and the auto-adopt that would post it without a
+// tap ships in the bundle the OLD worker serves, so the fix could never
+// install itself. Measured: both drivers sat on a v135-to-v141 bundle for
+// four days while production served v148, so every capture fix in that
+// window reached nobody.
+// v153: payload cuts that are really memory cuts. The Supabase
+// browser client came out of the root layout (a 19-line component whose
+// own comment calls it inert on web was dragging auth, postgrest,
+// realtime and websocket onto every route), /mileage/business went from
+// 995 KB decoded to 652 KB with paging, and 40 public routes became
+// static. Framed as speed when written, but ApplicationExitInfo on the
+// owner's Fold5 shows the app being killed with reason=3 LOW_MEMORY at
+// 142 MB and 256 MB RSS, so shrinking the process is what keeps the
+// tracker alive.
+const CACHE_VERSION = "v153";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
@@ -905,8 +912,39 @@ self.addEventListener("install", (event) => {
       }),
     ),
   );
-  // NOTE: do NOT self.skipWaiting() here. We want the new SW to wait so the
-  // client can prompt the user before we replace the running version.
+  // Take over immediately instead of waiting to be invited.
+  //
+  // This line replaces a deliberate "do NOT self.skipWaiting() here", and
+  // the reason it has to change is a deadlock that was measured on two real
+  // devices, not a preference.
+  //
+  // The old design: a new worker installs, then waits. It only stops waiting
+  // when the PAGE posts SKIP_WAITING, which the page only does when the user
+  // taps a toast. An auto-adopt was later added to PWASetup so the page would
+  // post it on cold start and resume without a tap. But PWASetup ships in the
+  // BUNDLE, and the bundle is served by the currently active worker. So the
+  // fix that stops a worker waiting can only run once that worker is already
+  // active. It cannot install itself.
+  //
+  // Measured consequence: both drivers' devices sat on a bundle from the
+  // v135 to v141 range for four days while production served v148. Their
+  // heartbeats carried the v135 probe fields and null for every v141 geofence
+  // field, which is how the stale range was pinned. Every capture fix shipped
+  // in that window reached nobody, and the missing drives that prompted this
+  // investigation were being diagnosed against code the phones were not
+  // running.
+  //
+  // A waiting worker cannot be rescued from the page, but it can decide for
+  // itself. skipWaiting() is evaluated in the NEW worker, so it needs no
+  // cooperation from the old bundle. activate() already calls clients.claim(),
+  // and both old and new PWASetup reload on controllerchange, so control
+  // transfers cleanly.
+  //
+  // The cost is real and accepted: a bundle swap can now interrupt an open
+  // form mid-session. For a background mileage tracker where a stale bundle
+  // means silently lost tax records, that trade is the right way round. The
+  // SKIP_WAITING message handler below is kept so older clients still work.
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
