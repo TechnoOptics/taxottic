@@ -6,6 +6,7 @@ import {
   planFlip,
   type FlipRow,
 } from "./sign-convention";
+import { LIVE_IMPORT_ROWS } from "./fixtures/import-62-row";
 
 const rows = (...amounts: (number | null)[]) =>
   amounts.map((amountCents) => ({ amountCents }));
@@ -132,5 +133,44 @@ describe("planFlip", () => {
     expect(out.clearTag).toEqual([]);
     expect(out.needsReview).toEqual([]);
     expect(out.reinterpret).toEqual(["a", "b"]);
+  });
+});
+
+describe("the live 62-row import", () => {
+  it("has the shape the bug report described", () => {
+    expect(LIVE_IMPORT_ROWS).toHaveLength(62);
+    expect(LIVE_IMPORT_ROWS.filter((r) => r.amountCents < 0)).toHaveLength(2);
+    expect(LIVE_IMPORT_ROWS.filter((r) => r.appliedExpenseId)).toHaveLength(48);
+  });
+
+  it("is detected as charges_positive with high confidence", () => {
+    const out = detectSignConvention(
+      LIVE_IMPORT_ROWS.map((r) => ({ amountCents: r.amountCents })),
+    );
+    expect(out.convention).toBe("charges_positive");
+    expect(out.confidence).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it("offers all 62 rows as candidates, not 2", () => {
+    const candidates = LIVE_IMPORT_ROWS.filter(
+      (r) => interpretAmount(r.amountCents, "charges_positive").direction
+        === "expense",
+    );
+    expect(candidates).toHaveLength(60);
+    const underOldReading = LIVE_IMPORT_ROWS.filter(
+      (r) => interpretAmount(r.amountCents, "charges_negative").direction
+        === "expense",
+    );
+    expect(underOldReading).toHaveLength(2);
+  });
+
+  it("puts every booked row in needsReview and none in clearTag", () => {
+    const out = planFlip(
+      LIVE_IMPORT_ROWS,
+      "charges_positive",
+      "charges_negative",
+    );
+    expect(out.needsReview).toHaveLength(48);
+    expect(out.clearTag).toHaveLength(0);
   });
 });
