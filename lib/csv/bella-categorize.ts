@@ -99,10 +99,28 @@ export async function categorizeBatch(args: {
 
   const response = await client.messages.create({
     model: ANTHROPIC_MODEL,
-    max_tokens: 4000,
+    // One output object per input row costs roughly 55-70 tokens: the
+    // 36-char UUID alone is ~15, plus the JSON scaffolding and an
+    // <= 80-char reason. The old pairing of max_tokens 4000 with the
+    // caller's 150-row chunk could not hold a full answer by simple
+    // arithmetic (150 x ~60 = ~9000), and a response cut off at the
+    // cap is invalid JSON, which surfaced as the misleading "Bella
+    // didn't return valid JSON" below. The caller now chunks to 60
+    // rows; 8000 leaves better than 2x headroom over that and stays
+    // well under the size where a non-streaming request risks an SDK
+    // HTTP timeout.
+    max_tokens: 8000,
     system: SYSTEM,
     messages: [{ role: "user", content: userMessage }],
   });
+
+  // Truncation is not a parse problem, and reporting it as one sent
+  // everyone looking in the wrong place. Name it explicitly.
+  if (response.stop_reason === "max_tokens") {
+    throw new Error(
+      `Bella ran out of room answering ${args.transactions.length} rows at once. The import is unchanged; try again.`,
+    );
+  }
 
   const text = response.content.find((c) => c.type === "text");
   if (!text || text.type !== "text") {

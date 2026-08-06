@@ -906,7 +906,17 @@
 // Also drains the seven-day CoreMotion history, which can prove a drive
 // happened but never where it went, so a gap is reported and never
 // filled.
-const CACHE_VERSION = "v154";
+// v155: "Re-run Bella" reported an opaque error. Every failure inside
+// the categorize pass escaped the Server Action uncaught, so React
+// redacted it in production and the user saw "An error occurred in the
+// Server Components render ... A digest property is included" instead
+// of the reason, with nothing in the logs either. The action now
+// catches, logs the real cause, and redirects back with ?error=; the
+// import review page renders that banner. Also fixes the output-token
+// arithmetic: 150 rows per model call could not fit a 4000-token cap,
+// so a large import could only come back truncated, and truncation was
+// misreported as invalid JSON. 60 rows per call against 8000 tokens.
+const CACHE_VERSION = "v155";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -18,7 +18,7 @@ import { type CategoryOption } from "@/components/CategoryCombobox";
 import { TxRow } from "@/components/import/TxRow";
 
 type Params = Promise<{ publicId: string; importId: string }>;
-type Search = Promise<{ highlight?: string }>;
+type Search = Promise<{ highlight?: string; error?: string | string[] }>;
 
 export default async function ImportReviewPage({
   params,
@@ -28,7 +28,11 @@ export default async function ImportReviewPage({
   searchParams: Search;
 }) {
   const { publicId, importId } = await params;
-  const { highlight: targetTxId } = await searchParams;
+  const { highlight: targetTxId, error: errRaw } = await searchParams;
+  // bellaAutoApply redirects here with ?error= when the categorize
+  // pass fails, so the reason is visible instead of React's redacted
+  // production digest.
+  const errorMessage = Array.isArray(errRaw) ? errRaw[0] : errRaw;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
   const superAdmin = await isSuperAdmin(supabase);
@@ -269,6 +273,15 @@ export default async function ImportReviewPage({
         <div className="mt-6">
           <CompanyNav publicId={publicId} active="import" />
         </div>
+
+        {errorMessage ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+          >
+            {errorMessage}
+          </div>
+        ) : null}
 
         {canDelete ? (
           <DeleteImportButton
