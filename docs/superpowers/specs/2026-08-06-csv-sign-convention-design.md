@@ -215,14 +215,31 @@ reading.
 `account_type` itself is left alone. It is still used by the card-payment
 skip heuristic.
 
-## Known consequence: refunds already booked as expenses
+## Known consequence: a refund already booked as an expense
 
-Under `credit`, negative rows were booked as expenses. The live import has
-two: a $24.45 Lowe's return, already applied as Supplies, and a $0.84
-Vercel credit still in candidates. About $25 of overstated deduction.
+Correcting an earlier draft of this spec: `credit` imports do **not** book
+negative rows. Both `applyTransactions` and `bellaAutoApply` already carry
 
-Once signs mean something these are correctly typed as refunds, but this
-spec does **not** retroactively un-apply them, that is a restatement of
-`monthly_expenses`, which requires the explicit un-apply flow. After
-migration they appear in the booked-row review list, which is where a
-human decides.
+```ts
+if (isCredit && tx.amount_cents < 0) continue; // refund, surface for review
+```
+
+with a comment explaining that booking a refund as a positive expense
+inflates the deduction and as a negative one invents income. The instinct
+is already right; it is just conditioned on `account_type` instead of on
+what the sign actually means.
+
+The live import's $24.45 Lowe's return was booked while the import was
+still `business_checking`, where a negative amount genuinely is an
+expense. Under a charges-positive file that reading is wrong, and there
+was no way to say so. The $0.84 Vercel credit is still in candidates and
+became skippable only once the import was switched to `credit`.
+
+This spec generalizes the existing guard: the skip becomes
+`direction === 'refund'` under any convention, rather than
+`isCredit && amount < 0`. One rule, every account type.
+
+It does **not** retroactively un-apply the Lowe's row. That is a
+restatement of `monthly_expenses` and goes through the explicit un-apply
+flow. After migration it appears in the booked-row review list, which is
+where a human decides.
