@@ -91,3 +91,6 @@ android/app/google-services.json
 ios/App/App/GoogleService-Info.plist
 ios/App/App/AuthKey_*.p8
 .env*.local
+
+# Supabase CLI link state (per-machine)
+supabase/.temp/
