@@ -52,7 +52,57 @@ recorded in the history table, so on any rebuilt database exactly one of them
 would silently never run. `tracker_alerts_kind` was renamed to
 `20260725000001`.
 
-## What is still wrong, and it matters
+## Resolved 2026-08-06: the folder can now rebuild the database
+
+The 121 migrations that existed only as history rows have been recovered into
+`supabase/migrations/`. Their SQL was read verbatim out of
+`supabase_migrations.schema_migrations.statements`, not reconstructed from the
+schema, so RLS policies, grants, indexes, constraints and triggers came back
+intact rather than being inferred.
+
+Recovery route, for the record: the Supabase MCP was returning `net::ERR_FAILED`
+on every call, so a temporary table `public._ddl_recovery` was created by
+migration `20260806010000`, populated from the history table, read out through
+PostgREST with the service-role key, and dropped by `20260806010001`. It had RLS
+enabled with no policies and `revoke all from anon, authenticated`; an anon read
+was confirmed to return 401 while it existed. Both migrations are committed, and
+replaying them is a no-op (create then drop).
+
+Verified afterwards:
+
+| Check | Result |
+| --- | --- |
+| Live tables with a local `create table` | 89 / 89 |
+| Live functions with a local `create function` | 32 / 34 |
+| `supabase migration list` local pending | 0 |
+| `supabase migration list` remote without a file | 0 |
+| `supabase db push --dry-run` | "Remote database is up to date." |
+
+The two uncovered functions are `show_limit` and `show_trgm`, which belong to
+the `pg_trgm` extension rather than to this project. The extension itself is
+created by `20260428145741_phase3_bella_kb.sql`, so a rebuild produces them.
+
+Security-relevant DDL now present in the folder, none of which is recoverable
+from `gen types` and all of which would have been lost had the orphan history
+rows been marked reverted instead:
+
+- 477 `create policy`
+- 163 `enable row level security`
+- 278 `create index`
+- 44 `create trigger`
+
+### Remaining caveat
+
+Coverage was verified at the level of "every live table and function has a
+create statement". It does not prove every column, policy and constraint on
+those objects matches production exactly. The strongest available evidence that
+it does is that the statements are verbatim history rows rather than
+reconstructions. A true end-to-end proof needs a rebuild into a scratch database
+followed by a schema diff, which is worth doing before relying on this for a
+real restore.
+
+## Historical: what was wrong before the recovery
+
 
 **This folder cannot rebuild the database.** 15 tables that exist in production
 have no `create table` statement anywhere in `supabase/migrations/`:
