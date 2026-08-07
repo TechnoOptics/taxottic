@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { logCompanyActivity } from "@/lib/activity/log";
+import { formatCents } from "@/lib/tax/forecast";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import {
   detectSignConvention,
@@ -526,6 +527,200 @@ export async function ignoreTx(formData: FormData) {
     .eq("id", id);
   revalidatePath("/c/[publicId]/import/[importId]", "page");
   revalidatePath("/dashboard");
+}
+
+/**
+ * Move one BOOKED transaction across, income to expense or back.
+ *
+ * Requested by the owner, verbatim: "PLEASE ALSO HAVE A FEATURE WHERE
+ * THE USER CAN MOVE AN INCOME TO AN EXPENSE AND VICE VERSA". It is also
+ * the only remedy when something is booked wrongly: on 2026-08-06 a
+ * $4,000 row coded legal_pro was booked as income and had to be
+ * corrected by hand in the SQL editor, against production, because
+ * nothing in the app could move it back.
+ *
+ * ATOMICITY. The move is four writes that must all land or none: insert
+ * the destination row, repoint bank_transactions at it, null the other
+ * pointer, delete the source row. supabase-js has no transaction, and
+ * every half-failure here is a corrupt tax record. A row pointing at
+ * BOTH a monthly_income and a monthly_expenses row is counted twice on
+ * the Schedule C; one pointing at NEITHER silently drops a line off the
+ * return. So the whole move is one plpgsql function,
+ * move_booked_transaction, whose body is a single transaction: any
+ * failure inside it rolls everything back and the row stays exactly
+ * where it was. This action does no financial writes of its own.
+ *
+ * AUTHORIZATION, the setSignConvention / setTxCategory pattern:
+ * company_id is resolved FROM THE TRANSACTION ROW, never from a
+ * client-supplied field, and the actor must be a manager of that
+ * company or the owner of the booked row. The function re-checks the
+ * same rule so it cannot be lost by a future caller.
+ *
+ * AUDIT. A reclassification is a restatement of a filed number, so it
+ * records why and by whom, twice over: a sentence into the destination
+ * row's manager_note, which the expenses page already renders, and a
+ * company_activity row, which is immutable and carries the actor and
+ * the timestamp. A CPA reviewing the return next April can see that a
+ * line was moved, from what, by whom, and on what grounds.
+ */
+export async function moveBookedTransaction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  const categoryCode = String(formData.get("category_code") ?? "").trim();
+  const incomeSource = String(formData.get("income_source") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!id) return;
+  if (direction !== "to_income" && direction !== "to_expense") return;
+
+  const { admin, user } = await requireUserWithAdmin();
+
+  const { data: tx } = await admin
+    .from("bank_transactions")
+    .select("id, company_id, import_id, applied_expense_id, applied_income_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!tx || !(await userBelongsToCompany(admin, user.id, tx.company_id))) {
+    throw new Error("Not authorized");
+  }
+  const companyId = tx.company_id as string;
+  const importId = (tx.import_id as string | null) ?? "";
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .maybeSingle();
+  const publicId = (company?.public_id as string | undefined) ?? "";
+  const back = importId
+    ? `/c/${publicId}/import/${importId}`
+    : `/c/${publicId}/import`;
+
+  const fail = (message: string): never =>
+    redirect(`${back}?error=${encodeURIComponent(message)}`);
+
+  const sourceTable =
+    direction === "to_expense" ? "monthly_income" : "monthly_expenses";
+  const sourceId =
+    direction === "to_expense" ? tx.applied_income_id : tx.applied_expense_id;
+  if (!sourceId) {
+    fail(
+      direction === "to_expense"
+        ? "That row is not booked as income, so there is nothing to move."
+        : "That row is not booked as an expense, so there is nothing to move.",
+    );
+  }
+
+  // A category is what makes a line a deduction, so refuse the move
+  // rather than invent one. Checked here as well as in the function so
+  // the user gets this sentence instead of a Postgres error code.
+  if (direction === "to_expense" && !categoryCode) {
+    fail("Pick the expense category this belongs to before moving it.");
+  }
+  if (direction === "to_income" && !incomeSource) {
+    fail("Pick the income source this belongs to before moving it.");
+  }
+
+  const { data: booked } = await admin
+    .from(sourceTable)
+    .select("id, user_id, tax_year, month, amount_cents")
+    .eq("id", sourceId as string)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!booked) {
+    fail("The booked entry behind this row no longer exists. Reload the page.");
+  }
+
+  // Managers, and the person who booked the row. Same shape as
+  // reclassifyTripCore: own row, else manager of the row's company.
+  if (booked!.user_id !== user.id) {
+    const { data: mem } = await admin
+      .from("company_members")
+      .select("role")
+      .eq("company_id", companyId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (mem?.role !== "manager") {
+      fail("Only a manager, or whoever booked this entry, can move it.");
+    }
+  }
+
+  const actorName = user.email ?? user.id;
+  const note =
+    (direction === "to_expense"
+      ? `Moved from income to expense on ${new Date().toISOString().slice(0, 10)} by ${actorName}.`
+      : `Moved from expense to income on ${new Date().toISOString().slice(0, 10)} by ${actorName}.`) +
+    (reason ? ` Reason: ${reason}` : "");
+
+  const { data: moved, error } = await admin.rpc("move_booked_transaction", {
+    p_transaction_id: id,
+    p_actor_user_id: user.id,
+    p_direction: direction,
+    p_category_code: direction === "to_expense" ? categoryCode : null,
+    p_income_source: direction === "to_income" ? incomeSource : null,
+    p_note: note,
+  });
+
+  if (error) {
+    // The migration is committed but deliberately unapplied (see
+    // supabase/migrations/20260808010000_move_booked_transaction.sql).
+    // Say so plainly rather than showing PGRST202 to a user who cannot
+    // act on it, and write nothing: a partial fallback done with
+    // separate awaits is the exact failure mode this action exists to
+    // avoid.
+    const raw = `${error.code ?? ""} ${error.message ?? ""}`;
+    if (raw.includes("PGRST202") || raw.includes("does not exist")) {
+      fail(
+        "Moving a booked row needs a database update that has not been applied yet. Nothing was changed.",
+      );
+    }
+    if (raw.includes("not_authorized")) {
+      fail("Only a manager, or whoever booked this entry, can move it.");
+    }
+    if (raw.includes("category_required")) {
+      fail("Pick the expense category this belongs to before moving it.");
+    }
+    fail(`The move did not go through, so nothing was changed. ${error.message ?? ""}`.trim());
+  }
+
+  const amountCents = Number(booked!.amount_cents ?? 0);
+  await logCompanyActivity(admin, {
+    companyId,
+    actorUserId: user.id,
+    kind:
+      direction === "to_expense" ? "income.moved_to_expense" : "expense.moved_to_income",
+    summary:
+      direction === "to_expense"
+        ? `Moved ${formatCents(amountCents)} from income to expenses (${categoryCode}), month ${booked!.month}`
+        : `Moved ${formatCents(amountCents)} from expenses to income (${incomeSource}), month ${booked!.month}`,
+    payload: {
+      transaction_id: id,
+      import_id: importId,
+      direction,
+      tax_year: booked!.tax_year,
+      month: booked!.month,
+      amount_cents: amountCents,
+      category_code: direction === "to_expense" ? categoryCode : null,
+      income_source: direction === "to_income" ? incomeSource : null,
+      removed_row_id: booked!.id,
+      new_row_id:
+        (moved as { new_row_id?: string } | null)?.new_row_id ?? null,
+      reason: reason || null,
+    },
+  });
+
+  revalidatePath(back);
+  revalidatePath(`/c/${publicId}/import`);
+  revalidatePath(`/c/${publicId}/expenses`);
+  revalidatePath(`/c/${publicId}/income`);
+  revalidatePath(`/c/${publicId}/forecast`);
+  revalidatePath("/dashboard");
+  redirect(
+    `${back}?notice=${encodeURIComponent(
+      direction === "to_expense"
+        ? `Moved ${formatCents(amountCents)} from income to expenses. The change is noted on the expense entry.`
+        : `Moved ${formatCents(amountCents)} from expenses to income. The change is noted on the income entry.`,
+    )}`,
+  );
 }
 
 /**
