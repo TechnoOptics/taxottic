@@ -163,13 +163,21 @@ function SelectAllHeader({
   return (
     <div className="mt-6 card px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
       <label className="flex items-center gap-2.5 text-sm text-forest-900 cursor-pointer select-none">
-        <input
-          ref={ref}
-          type="checkbox"
-          checked={allSelected}
-          onChange={(e) => onSetAll(e.target.checked)}
-          className="h-4 w-4 rounded border-forest-300 text-forest-800 focus:ring-forest-700"
-        />
+        {/* The checkbox stays a visually-unchanged 16px box; the tappable
+            region is grown to the 44px minimum with an absolutely
+            positioned overlay so it adds no width or height to the
+            header bar. See RowCheckbox below for the same pattern and
+            why it matters on the Fold5 cover screen (344px). */}
+        <span className="relative inline-flex h-4 w-4 shrink-0">
+          <span className="checkbox-hit-area absolute -inset-4" aria-hidden="true" />
+          <input
+            ref={ref}
+            type="checkbox"
+            checked={allSelected}
+            onChange={(e) => onSetAll(e.target.checked)}
+            className="relative h-4 w-4 rounded border-forest-300 text-forest-800 focus:ring-forest-700"
+          />
+        </span>
         <span>Select all {total}</span>
       </label>
       <span className="text-[11px] text-ink-muted">
@@ -195,12 +203,23 @@ export function RowCheckbox({
   const ctx = useBatchSelection();
   if (!ctx || !ctx.isSelectable(id)) return null;
   return (
-    <input
-      type="checkbox"
-      checked={ctx.isSelected(id)}
-      onChange={() => ctx.toggle(id)}
-      aria-label={`Select ${label}`}
-      className="mt-0.5 h-4 w-4 shrink-0 rounded border-forest-300 text-forest-800 focus:ring-forest-700"
-    />
+    // A <label> with no visible text: clicking anywhere inside it,
+    // including the invisible overlay below, toggles the wrapped input.
+    // The checkbox stays a visually-unchanged 16px box; the tappable
+    // region is grown to the 44px minimum with an absolutely positioned
+    // overlay so it adds no width to the row's flex layout. The Fold5
+    // cover screen (344px) is the narrowest device this app ships to,
+    // and a bare 16px checkbox in a dense row list is a genuinely hard
+    // target there, on the primary control for the whole feature.
+    <label className="relative mt-0.5 inline-flex h-4 w-4 shrink-0 cursor-pointer">
+      <span className="checkbox-hit-area absolute -inset-4" aria-hidden="true" />
+      <input
+        type="checkbox"
+        checked={ctx.isSelected(id)}
+        onChange={() => ctx.toggle(id)}
+        aria-label={`Select ${label}`}
+        className="relative h-4 w-4 shrink-0 rounded border-forest-300 text-forest-800 focus:ring-forest-700"
+      />
+    </label>
   );
 }
