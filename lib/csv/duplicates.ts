@@ -187,6 +187,15 @@ export type ExistingChargeRow = {
  * set and the suppressed set can never diverge; the previous version of
  * this file computed them separately and they did.
  *
+ * Cross-tenant scoping is the CALLER's responsibility, not this
+ * function's: ExistingChargeRow carries no companyId, so there is
+ * nothing here to compare `companyId` against. The single existing
+ * caller (runCsvImport in app/c/[publicId]/import/actions.ts) queries
+ * `existing` with `.eq("company_id", companyId)` before this runs, so
+ * there is no leak today. If a second caller is ever added, it must
+ * scope its own query the same way; this function will not catch a
+ * caller that forgets to.
+ *
  * Pure: takes the existing rows, does not query.
  */
 export function splitAlreadyBookedCharges(
@@ -278,6 +287,13 @@ export function dedupeFindings(findings: DuplicateFinding[]): DuplicateFinding[]
  * duplicates found" rather than blocking the import - the rows are
  * already parsed and stored by the time this runs, so a missing
  * duplicate flag is a degraded upload, not a broken one.
+ *
+ * Writes in batches of 500, mirroring the adjacent bank_transactions
+ * insert in runCsvImport, for the same reason: priorRows caps at
+ * 10,000, so a large re-import can produce thousands of already_booked
+ * findings, and one oversized or rejected insert would lose every
+ * record of what was suppressed while the rows themselves stayed
+ * suppressed, the exact silence this feature exists to end.
  */
 export async function detectDuplicates(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
@@ -299,6 +315,10 @@ export async function detectDuplicates(
     existing_import_id: f.existingImportId,
   }));
 
-  const { error } = await admin.from("bank_import_duplicates").insert(records);
-  if (error) throw error;
+  const BATCH = 500;
+  for (let i = 0; i < records.length; i += BATCH) {
+    const slice = records.slice(i, i + BATCH);
+    const { error } = await admin.from("bank_import_duplicates").insert(slice);
+    if (error) throw error;
+  }
 }
