@@ -42,6 +42,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  migration-order:
+    name: migration order guard
+    runs-on: ubuntu-latest
+    # A git diff and a directory listing, no npm install needed.
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch origin/main
+        # The guard needs origin/main's supabase/migrations as it stood
+        # before this PR, not just the PR's own commits, and the default
+        # checkout above only fetches the PR ref.
+        run: git fetch origin main:refs/remotes/origin/main --depth=1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Guard against out-of-order and duplicate migration timestamps
+        # A migration file that sorts before the newest one already on
+        # origin/main gets silently skipped by `supabase db push`, or
+        # forces --include-all and then replays out of order on the next
+        # fresh environment. A duplicate timestamp means one of the two
+        # files can never be recorded as applied and silently never runs.
+        # Both hit this project three times in one night (2026-08-06/07);
+        # see docs/migration-history-state.md and
+        # scripts/check-migration-order.mjs for the specifics. This check
+        # needs no database credentials: it compares against origin/main,
+        # not production.
+        run: node scripts/check-migration-order.mjs
+
   verify:
     name: tests + typecheck + lint
     runs-on: ubuntu-latest

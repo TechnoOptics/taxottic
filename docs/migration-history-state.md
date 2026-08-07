@@ -101,6 +101,37 @@ reconstructions. A true end-to-end proof needs a rebuild into a scratch database
 followed by a schema diff, which is worth doing before relying on this for a
 real restore.
 
+## CI guard added 2026-08-07: out-of-order and duplicate migration timestamps
+
+The night of 2026-08-06/07, the same failure mode hit three times in a row:
+a migration file whose timestamp did not sort after everything already
+applied, which either gets silently skipped or forces an out-of-order
+replay later.
+
+1. `20260801000200_bank_import_scoped_visibility.sql` (RLS fix for a live
+   cross-user data leak). Production had already applied migrations
+   through `20260808000100`. The Supabase CLI refused the pending
+   migration and suggested `--include-all`.
+2. `20260801000200_mileage_render_refusals.sql` (fabricated-mileage
+   gate). `supabase db push` printed "Remote database is up to date" and
+   exited 0 having done nothing. Had it merged, the code would have
+   shipped writing to a table that was never created.
+3. `20260808000000_bank_imports_complete.sql`. `--include-all` would have
+   worked that day, then run out of order on the next fresh replay (`db
+   reset`, CI, a new environment), because it sorted before a migration
+   it depended on.
+
+Each was caught only because a human read dry-run output instead of
+trusting the exit code. `.github/workflows/ci.yml` now runs a
+`migration-order` job on every pull request that fails the build instead:
+`scripts/check-migration-order.mjs` fails any new migration file whose
+timestamp does not sort after the newest one already on `origin/main`,
+and separately fails on any two files sharing a timestamp (the same bug
+as the `20260725000000` duplicate above). It compares against
+`origin/main`, not production, so it needs no database credentials; see
+the script's own header comment for what that trade-off does and does not
+catch. Tests: `scripts/check-migration-order.test.mjs`.
+
 ## Historical: what was wrong before the recovery
 
 
