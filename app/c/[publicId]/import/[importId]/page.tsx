@@ -21,6 +21,10 @@ import { summarizeImport } from "@/lib/csv/import-summary";
 import { summarizeSelection } from "@/lib/csv/import-selection";
 import { fetchAllPages } from "@/lib/db/paginate";
 import { BatchSelectionProvider } from "@/components/import/BatchSelection";
+import {
+  DuplicateSummaryBanner,
+  type SuppressedRow,
+} from "@/components/import/DuplicateSummaryBanner";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
@@ -98,45 +102,77 @@ export default async function ImportReviewPage({
     // not null in the schema (bank_transactions.ignored, default false).
     ignored: boolean;
   };
-  const [txs, { data: categories }] = await Promise.all([
-    // PAGED, for the same reason as the import list and the batch
-    // actions: PostgREST truncates at max-rows silently. Unpaged, an
-    // import over 1000 rows would render a partial list AND compute
-    // `progress` over it, which could offer the Complete button on an
-    // import that still has unresolved rows further down. The action
-    // re-checks server-side so nothing would actually be mis-completed,
-    // but the button would be lying, and this screen exists because a
-    // number on it lied. The id ordering is the paging tiebreaker:
-    // posted_at and description are not unique, so without it pages can
-    // overlap or skip.
-    fetchAllPages<TxRowData>((from, to) =>
+  const [txs, { data: categories }, { data: alreadyBookedRows }] =
+    await Promise.all([
+      // PAGED, for the same reason as the import list and the batch
+      // actions: PostgREST truncates at max-rows silently. Unpaged, an
+      // import over 1000 rows would render a partial list AND compute
+      // `progress` over it, which could offer the Complete button on an
+      // import that still has unresolved rows further down. The action
+      // re-checks server-side so nothing would actually be mis-completed,
+      // but the button would be lying, and this screen exists because a
+      // number on it lied. The id ordering is the paging tiebreaker:
+      // posted_at and description are not unique, so without it pages can
+      // overlap or skip.
+      fetchAllPages<TxRowData>((from, to) =>
+        supabase
+          .from("bank_transactions")
+          .select(
+            "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
+          )
+          .eq("import_id", importId)
+          .order("posted_at", { ascending: false })
+          .order("description")
+          .order("id")
+          .range(from, to),
+      ),
       supabase
-        .from("bank_transactions")
+        .from("deduction_categories")
+        // Now includes 'personal' so charity / SALT / mortgage-interest
+        // / volunteer-mileage are tag-able from a credit-card import
+        // (those rows are often mixed in with business charges on the
+        // same card). applySelected routes personal AND transfer
+        // picks via ignored=true so they never inflate the Schedule C
+        // deduction, they're labels, not bookings.
+        // Pull irc_section + irs_pub so the TxRow can show the
+        // citation next to each detected category.
         .select(
-          "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
+          "code, label, scope, schedule_c_line, irc_section, irs_pub, irs_url, display_group",
+        )
+        .in("scope", ["business", "both", "transfer", "personal", "credit"])
+        .order("display_order"),
+      // Rows this import dropped before insert because they matched
+      // something already booked (see splitAlreadyBookedCharges in
+      // lib/csv/duplicates.ts). Read here for the first time since that
+      // table started being written: without this, a re-import produces
+      // a review page that looks empty with no explanation why.
+      supabase
+        .from("bank_import_duplicates")
+        .select(
+          "id, description, posted_at, amount_cents, existing_transaction_id, existing_import_id",
         )
         .eq("import_id", importId)
-        .order("posted_at", { ascending: false })
-        .order("description")
-        .order("id")
-        .range(from, to),
-    ),
-    supabase
-      .from("deduction_categories")
-      // Now includes 'personal' so charity / SALT / mortgage-interest
-      // / volunteer-mileage are tag-able from a credit-card import
-      // (those rows are often mixed in with business charges on the
-      // same card). applySelected routes personal AND transfer
-      // picks via ignored=true so they never inflate the Schedule C
-      // deduction, they're labels, not bookings.
-      // Pull irc_section + irs_pub so the TxRow can show the
-      // citation next to each detected category.
-      .select(
-        "code, label, scope, schedule_c_line, irc_section, irs_pub, irs_url, display_group",
-      )
-      .in("scope", ["business", "both", "transfer", "personal", "credit"])
-      .order("display_order"),
-  ]);
+        .eq("company_id", company.id)
+        .eq("kind", "already_booked")
+        .order("posted_at", { ascending: false }),
+    ]);
+
+  const alreadyBookedDuplicates: SuppressedRow[] = (alreadyBookedRows ?? [])
+    .filter(
+      (r): r is typeof r & {
+        posted_at: string;
+        existing_transaction_id: string;
+        existing_import_id: string;
+      } => !!r.posted_at && !!r.existing_transaction_id && !!r.existing_import_id,
+    )
+    .map((r) => ({
+      id: r.id,
+      description: r.description,
+      postedAt: r.posted_at,
+      amountCents: r.amount_cents,
+      existingTransactionId: r.existing_transaction_id,
+      existingImportId: r.existing_import_id,
+    }));
 
   const cats =
     (categories as {
@@ -391,7 +427,15 @@ export default async function ImportReviewPage({
         </h1>
         <div className="text-xs text-ink-muted mt-1 tracking-wide">
           {prettyAccountType(imp.account_type)} ·{" "}
-          {progress.total} rows uploaded -{" "}
+          {/* imp.row_count is the count parsed from the CSV, progress.total
+              is what's actually in bank_transactions for this import. They
+              differ exactly when the exact-charge dedupe dropped rows as
+              already booked (see alreadyBookedDuplicates below), and
+              stating both is what stops a re-import from claiming rows
+              exist that were never added. */}
+          {imp.row_count !== progress.total
+            ? `${imp.row_count} rows in the file, ${progress.total} added, ${alreadyBookedDuplicates.length} already imported -`
+            : `${progress.total} rows uploaded -`}{" "}
           {progress.applied > 0
             ? `${progress.applied} applied`
             : "not yet applied"}
@@ -429,6 +473,18 @@ export default async function ImportReviewPage({
             {noticeMessage}
           </div>
         ) : null}
+
+        {/* The headline case this feature exists for: a re-uploaded
+            statement whose rows all matched something already booked.
+            Placed above the resting-state / Complete cards so a user who
+            uploads the same sheet twice sees the explanation before an
+            otherwise-empty candidate list. */}
+        <DuplicateSummaryBanner
+          publicId={publicId}
+          totalRowsInFile={imp.row_count ?? progress.total}
+          addedCount={progress.total}
+          duplicates={alreadyBookedDuplicates}
+        />
 
         {/* The resting state. Nothing here writes to monthly_expenses:
             every row this import contributes to a filed deduction was

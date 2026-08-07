@@ -35,7 +35,6 @@ import {
   isSubscriptionLike,
   subscriptionFallbackKey,
   findCoveringRecurringRow,
-  chargeFingerprint,
   type CoverCandidate,
 } from "@/lib/banking/subscription-dedupe";
 import {
@@ -48,6 +47,15 @@ import {
 } from "@/lib/csv/categorization-rules";
 import { findRefundPairs, type NettableTx } from "@/lib/csv/net-refunds";
 import { bellaErrorMessage } from "@/lib/csv/bella-errors";
+import {
+  detectDuplicates,
+  splitAlreadyBookedCharges,
+  findWithinFileDuplicates,
+  type ChargeCandidate,
+  type ExistingChargeRow,
+  type ImportRow,
+  type DuplicateFinding,
+} from "@/lib/csv/duplicates";
 
 /**
  * Heuristic: looks like a credit-card payment from another account, not
@@ -286,46 +294,95 @@ async function runCsvImport(formData: FormData): Promise<
 
     // Exact-charge dedupe: a re-uploaded statement (or an overlapping
     // export) must not book the same charge twice. Identity = posted
-    // date + exact cents + normalized description (chargeFingerprint):
+    // date + exact cents + normalized description (chargeFingerprint),
     // "master the dates so we know it's the exact same charge". Compare
-    // against every prior import for this company in the batch's date
+    // against every prior row for this company in the batch's date
     // range and drop matches before insert.
+    //
+    // splitAlreadyBookedCharges IS this decision (same chargeFingerprint
+    // call), not a second opinion on it: it returns which rows to keep
+    // AND a bank_import_duplicates record for every row it drops, with
+    // the real existing_transaction_id/existing_import_id of the prior
+    // row each one matched. That guarantees the flagged set equals the
+    // suppressed set, because both come from one pass over one Map.
+    // Before this, a silent drop here produced an import that looked
+    // clean (row_count still said 62) with no record of why nothing
+    // landed; that silence, not double-booked expenses, is the actual
+    // bug this feature exists to fix.
     const dates = transactions
       .map((t) => t.posted_at)
       .filter((d): d is string => !!d)
       .sort();
-    let toInsert = transactions;
+    // keptIndexes holds each surviving row's position in `transactions`.
+    // Defaults to "keep everything" when there's no date range to check
+    // against (dates.length === 0); splitAlreadyBookedCharges overwrites
+    // it below when there is one. toInsert and insertedRows (further
+    // down) both derive from this SAME Set, so a row's index means the
+    // same thing in alreadyBookedDuplicates and in the within-file pass
+    // - dedupeFindings inside detectDuplicates relies on that to
+    // recognize the same physical row from either source.
+    let keptIndexes = new Set<number>(transactions.map((_, i) => i));
+    let alreadyBookedDuplicates: DuplicateFinding[] = [];
     if (dates.length > 0) {
       const { data: priorRows } = await admin
         .from("bank_transactions")
-        .select("posted_at, amount_cents, description")
+        .select("id, import_id, posted_at, amount_cents, description")
         .eq("company_id", companyId)
         .gte("posted_at", dates[0])
         .lte("posted_at", dates[dates.length - 1])
         .limit(10_000);
-      const seen = new Set(
-        (priorRows ?? []).map((r) =>
-          chargeFingerprint(
-            String(r.posted_at ?? ""),
-            r.amount_cents as number,
-            r.description as string | null,
-          ),
-        ),
-      );
-      toInsert = transactions.filter(
-        (t) =>
-          !t.posted_at ||
-          !seen.has(
-            chargeFingerprint(t.posted_at, t.amount_cents, t.description),
-          ),
-      );
+      const existingCharges: ExistingChargeRow[] = (priorRows ?? []).map((r) => ({
+        id: String(r.id),
+        importId: String(r.import_id),
+        postedAt: (r.posted_at as string | null) ?? null,
+        amountCents: r.amount_cents as number,
+        description: r.description as string | null,
+      }));
+      const chargeCandidates: ChargeCandidate[] = transactions.map((t, i) => ({
+        index: i,
+        description: t.description,
+        postedAt: t.posted_at,
+        amountCents: t.amount_cents,
+      }));
+      const split = splitAlreadyBookedCharges(companyId, chargeCandidates, existingCharges);
+      keptIndexes = split.keptIndexes;
+      alreadyBookedDuplicates = split.duplicates;
     }
+    const toInsert = transactions.filter((_, i) => keptIndexes.has(i));
 
     const BATCH = 500;
     for (let i = 0; i < toInsert.length; i += BATCH) {
       const slice = toInsert.slice(i, i + BATCH);
       const { error } = await admin.from("bank_transactions").insert(slice);
       if (error) throw new Error(error.message);
+    }
+
+    // Flag likely duplicates for the review page: the already_booked
+    // findings captured above (rows the dedupe just dropped), plus
+    // within-file repeats found among the rows that actually landed in
+    // `toInsert` (two identical rows in this file DO both get inserted
+    // today; the exact-charge dedupe above only looks at prior imports,
+    // not sibling rows in this one). Never blocks or fails the upload:
+    // a missing duplicate flag is a degraded upload, not a broken one,
+    // and reads the same as a clean file.
+    try {
+      const insertedRows: ImportRow[] = transactions
+        .map((t, i) => ({ t, i }))
+        .filter(({ i }) => keptIndexes.has(i))
+        .map(({ t, i }) => ({
+          index: i,
+          companyId: t.company_id,
+          description: t.description,
+          postedAt: t.posted_at,
+          amountCents: t.amount_cents,
+        }));
+      const withinFileDuplicates = findWithinFileDuplicates(insertedRows);
+      await detectDuplicates(admin, importRow.id, [
+        ...alreadyBookedDuplicates,
+        ...withinFileDuplicates,
+      ]);
+    } catch (err) {
+      console.error("duplicate detection on upload failed:", err);
     }
 
     // Auto-run Bella over the freshly-imported batch. Failures here
