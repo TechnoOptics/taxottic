@@ -7,7 +7,6 @@ import { logCompanyActivity } from "@/lib/activity/log";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
 import {
   detectSignConvention,
-  interpretAmount,
   planFlip,
   SIGN_CONFIDENCE_BANNER,
   type SignConvention,
@@ -21,6 +20,7 @@ import {
   type BatchSkipReason,
 } from "@/lib/csv/import-selection";
 import { planExpenseBooking } from "@/lib/csv/expense-booking";
+import { planIncomeBooking } from "@/lib/csv/income-booking";
 import { fetchAllPages } from "@/lib/db/paginate";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
@@ -1419,39 +1419,42 @@ async function runBellaCategorize(args: {
       continue;
     }
 
+    // `!isCredit` stays here rather than inside planIncomeBooking:
+    // income on a credit account is always a payment-back, which is a
+    // fact about the ACCOUNT, not about this row, and the same fact
+    // already gates the candidate list upstream.
     if (d.kind === "income" && d.code && !isCredit) {
-      // Income keeps its own guards. planExpenseBooking is about
-      // expenses, and its last check refuses everything the convention
-      // does not read as a charge, which is the opposite of what this
-      // branch needs. Same guards as before, in the same order.
-      if (!tx.posted_at) continue;
-      const posted = new Date(tx.posted_at + "T00:00:00Z");
-      const txYear = posted.getUTCFullYear();
-      const txMonth = posted.getUTCMonth() + 1;
-      if (txYear !== taxYear) continue;
-      if (txMonth > currentMonth) continue;
+      // ONE copy of the income-booking rules. This branch used to carry
+      // the only copy, inline and untested, and it is what booked a
+      // $4,000 row the owner had coded legal_pro as $4,000 of income on
+      // 2026-08-06. planIncomeBooking now decides, and its first check
+      // is that a category a human typed outranks any inference drawn
+      // from the sign. See lib/csv/income-booking.ts.
+      const decision = planIncomeBooking(
+        {
+          amountCents: tx.amount_cents,
+          postedAt: tx.posted_at,
+          // applied_category_code only. suggested_category_code is
+          // Bella's own guess and must never be able to veto Bella.
+          appliedCategoryCode: tx.applied_category_code,
+        },
+        {
+          convention,
+          taxYear,
+          currentMonth,
+          isSubscription: isSubscriptionLike(tx.description),
+        },
+      );
+      if (decision.kind !== "book") continue;
 
-      const absCents = Math.abs(tx.amount_cents);
-      if (absCents === 0) continue;
-
-      // Mirror of the expense check: never book an actual charge as
-      // income.
-      if (
-        interpretAmount(tx.amount_cents, convention).direction === "expense"
-      ) {
-        continue;
-      }
-      // Income on a credit account is always a payment-back; don't
-      // create a phantom revenue line.
-      const subLike = isSubscriptionLike(tx.description);
       const incKey =
-        subLike && tx.description
-          ? subscriptionFallbackKey(tx.description, absCents)
+        decision.recurrence === "monthly" && tx.description
+          ? subscriptionFallbackKey(tx.description, decision.amountCents)
           : null;
       const covering = findCoveringRecurringRow(incomeCandidates, {
         tax_year: taxYear,
-        month: txMonth,
-        amount_cents: absCents,
+        month: decision.month,
+        amount_cents: decision.amountCents,
         recurring_key: incKey,
       });
       if (covering) {
@@ -1463,10 +1466,10 @@ async function runBellaCategorize(args: {
         company_id: companyId,
         user_id: user.id,
         tax_year: taxYear,
-        month: txMonth,
-        amount_cents: absCents,
+        month: decision.month,
+        amount_cents: decision.amountCents,
         source: d.code,
-        recurrence: subLike ? "monthly" : "one_off",
+        recurrence: decision.recurrence,
         recurring_key: incKey,
         notes: tx.description ?? "",
       });
