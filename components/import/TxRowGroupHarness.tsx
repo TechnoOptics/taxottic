@@ -93,6 +93,7 @@ export function TxRowGroupHarness({
             setTxCategory={noop}
             ignoreTx={noop}
             teachBella={noop}
+            moveBookedTransaction={noop}
           />
         ))}
       </ul>
