@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { reclassifyTripCore } from "@/lib/mileage/reclassify";
 import { resolveWatchUserId } from "@/lib/watch/device-auth";
+import {
+  clarifyBankTransactionCore,
+  clarifyStatus,
+} from "@/lib/watch/clarify-tx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,39 +80,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, did: "reclassify_trip" });
     }
 
-    // expense / income, a bank_transactions row.
-    const { data: tx } = await admin
-      .from("bank_transactions")
-      .select("id, company_id, suggested_category_code")
-      .eq("id", id)
-      .maybeSingle();
-    if (!tx) {
-      return NextResponse.json({ error: "not_found" }, { status: 404 });
-    }
-    const { data: membership } = await admin
-      .from("company_members")
-      .select("user_id")
-      .eq("company_id", (tx as { company_id: string }).company_id)
-      .eq("user_id", uid)
-      .maybeSingle();
-    if (!membership) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
-    if (business) {
-      await admin
-        .from("bank_transactions")
-        .update({
-          applied_category_code:
-            (tx as { suggested_category_code: string | null })
-              .suggested_category_code ?? null,
-          ignored: false,
-        })
-        .eq("id", id);
-    } else {
-      await admin
-        .from("bank_transactions")
-        .update({ ignored: true, applied_category_code: null })
-        .eq("id", id);
+    // expense / income, a bank_transactions row. Same shared core as
+    // /api/watch/confirm: manager of the transaction's company, or the
+    // member who uploaded the import it came from. A bare membership
+    // lookup used to be enough here, which let an expenser categorise
+    // or ignore rows out of the owner's import.
+    const res = await clarifyBankTransactionCore(admin, uid, id, business);
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: res.reason },
+        { status: clarifyStatus(res.reason) },
+      );
     }
     return NextResponse.json({ ok: true, did: "clarify_expense" });
   }
