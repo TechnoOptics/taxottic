@@ -201,12 +201,22 @@ function ImportListRow({
   publicId: string;
   summary: ReturnType<typeof summarizeImport>;
 }) {
+  // isComplete, not `unresolved > 0`. They differ on an import with no
+  // rows: summarizeImport deliberately reports isComplete false there,
+  // because there is nothing for a human to have agreed with, and the
+  // review page correctly withholds the Complete button. Deriving the
+  // word here from `unresolved` instead made a zero-row import read
+  // "READY TO COMPLETE" beside a page that would never offer it. That
+  // was a fifth definition of resolved, and four subtly different
+  // filters is how applied_count drifted in the first place.
   const state =
     imp.status === "complete"
       ? "complete"
-      : summary.unresolved > 0
-        ? `${summary.unresolved} to review`
-        : "ready to complete";
+      : summary.isComplete
+        ? "ready to complete"
+        : summary.total === 0
+          ? "no rows"
+          : `${summary.unresolved} to review`;
   return (
     <li className="flex items-center justify-between gap-3 rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm">
       <div className="min-w-0 flex-1">
