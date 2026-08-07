@@ -24,6 +24,7 @@ export type CompanyActivityKind =
   | "bank.connected"
   | "bank.disconnected"
   | "import.applied"
+  | "import.completed"
   | "mileage.added"
   | "mileage.classified"
   | "mileage.deleted"

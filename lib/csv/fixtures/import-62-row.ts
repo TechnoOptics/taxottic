@@ -46,3 +46,86 @@ LIVE_IMPORT_ROWS.push({
   appliedCategoryCode: null,
   appliedExpenseId: null,
 });
+
+// ---------------------------------------------------------------------
+// The same 62 rows with every column the completion and batch-selection
+// work reads. FixtureRow above carries only what planFlip needs; these
+// add the ignore flag, the income link, the Bella suggestion, and the
+// owning import and company, so a batch action's server-side re-derivation
+// can be tested without a database.
+//
+// Two variants, because the two specs photograph the import one row
+// apart and both counts are worth pinning:
+//
+//   LIVE_IMPORT_62               the file exactly as it sits today. The
+//                                +$250.00 row reads as an expense under
+//                                charges_positive and is not booked to
+//                                anything, so it is one of the 14
+//                                unresolved rows and one of the 13 that
+//                                a select-all may offer.
+//   LIVE_IMPORT_62_INCOME_BOOKED the same import after that row is
+//                                booked as income, which is the shape
+//                                the completion spec quotes: 48 booked,
+//                                1 income, 13 unresolved.
+//
+// The refunds are the point of both. Under charges_positive a negative
+// amount is money coming back:
+//   lowes_refund   -$24.45  already booked as a deduction, the live
+//                           error these specs exist to stop repeating.
+//   vercel_credit   -$0.84  still unresolved, and must never be
+//                           reachable by select-all plus Apply.
+// Neither is ever selectable: the first because it is booked, the
+// second because it is a refund.
+// ---------------------------------------------------------------------
+
+export const LIVE_IMPORT_ID = "imp_2026_08_01";
+export const LIVE_COMPANY_ID = "co_live";
+/** The convention detected for this file: charges positive, refunds negative. */
+export const LIVE_CONVENTION = "charges_positive" as const;
+
+export type ImportFixtureRow = {
+  id: string;
+  importId: string;
+  companyId: string;
+  amountCents: number;
+  suggestedCategoryCode: string | null;
+  appliedCategoryCode: string | null;
+  appliedExpenseId: string | null;
+  appliedIncomeId: string | null;
+  ignored: boolean;
+};
+
+/**
+ * Derived from LIVE_IMPORT_ROWS so the two views of this import can
+ * never drift apart. A row that is unresolved and reads as a charge
+ * carries a Bella suggestion, which is exactly what the user sees:
+ * thirteen rows displaying a category that looks chosen and is not,
+ * because suggested_category_code is not applied_category_code.
+ */
+export const LIVE_IMPORT_62: ImportFixtureRow[] = LIVE_IMPORT_ROWS.map((r) => {
+  const isCharge = r.amountCents > 0;
+  const unresolved = !r.appliedExpenseId;
+  return {
+    id: r.id,
+    importId: LIVE_IMPORT_ID,
+    companyId: LIVE_COMPANY_ID,
+    amountCents: r.amountCents,
+    suggestedCategoryCode: unresolved && isCharge ? "supplies" : null,
+    appliedCategoryCode: r.appliedCategoryCode,
+    appliedExpenseId: r.appliedExpenseId,
+    appliedIncomeId: null,
+    ignored: false,
+  };
+});
+
+/** LIVE_IMPORT_62 with the +$250.00 row booked as income. */
+export const LIVE_IMPORT_62_INCOME_BOOKED: ImportFixtureRow[] =
+  LIVE_IMPORT_62.map((r) =>
+    r.id === "income1"
+      ? {
+          ...r,
+          suggestedCategoryCode: null,
+          appliedIncomeId: "inc_income1",
+        }
+      : r,
+  );

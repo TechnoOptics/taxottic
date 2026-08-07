@@ -8,6 +8,7 @@ import {
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { formatCents } from "@/lib/tax/forecast";
 import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
+import { RowCheckbox, useBatchSelection } from "@/components/import/BatchSelection";
 
 /**
  * Transaction row on the import-review page.
@@ -108,6 +109,16 @@ export function TxRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount
   }, []);
 
+  const batch = useBatchSelection();
+  const direction = interpretAmount(tx.amount_cents, convention).direction;
+  // Refunds carry a short reason in the row instead of a disabled
+  // checkbox. A refund booked as an expense inflates a filed deduction,
+  // which is what happened to a $24.45 return on the 2026-08-01 import,
+  // so refunds are absent from the selection model rather than greyed
+  // out in it.
+  const refundNote =
+    batch && direction === "refund" ? "Refund, not deductible" : null;
+
   const isApplied = !!tx.applied_expense_id;
   const selected =
     tx.applied_category_code ?? tx.suggested_category_code ?? "";
@@ -183,6 +194,7 @@ export function TxRow({
       }
     >
       <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap min-w-0">
+        <RowCheckbox id={tx.id} label={tx.description} />
         <div className="min-w-0 flex-1 max-w-full overflow-hidden">
           {/* break-words lets the description wrap on a hyphen / mid-
               token when the row is narrow (Opera in particular was
@@ -198,8 +210,7 @@ export function TxRow({
           </div>
         </div>
         {(() => {
-          const isMoneyBack =
-            interpretAmount(tx.amount_cents, convention).direction !== "expense";
+          const isMoneyBack = direction !== "expense";
           if (isMoneyBack) {
             return (
               <div className="text-emerald-700 tabular-nums font-medium shrink-0">
@@ -214,6 +225,12 @@ export function TxRow({
           );
         })()}
       </div>
+
+      {refundNote ? (
+        <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-emerald-800">
+          {refundNote}
+        </div>
+      ) : null}
 
       {selected && cat ? (
         <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">

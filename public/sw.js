@@ -933,7 +933,13 @@
 // home-screen-widget snapshot, which was reading bank rows through the
 // service-role client; that needs no cache bump of its own because
 // /api/ is never cached (see the fetch handler), but it ships here.
-const CACHE_VERSION = "v157";
+// v158: batch selection on the import review screen. Every expense
+// candidate gained a checkbox, a select-all header and a bottom action
+// bar, and the old "Apply manually selected" button was removed, so the
+// markup and the server actions behind it both changed. A cached shell
+// posting to an action that no longer exists is the failure this bump
+// prevents.
+const CACHE_VERSION = "v158";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

@@ -5,14 +5,22 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 import {
-  applyTransactions,
+  acceptSuggestions,
+  applySelected,
   bellaAutoApply,
+  completeImport,
   deleteImport,
+  ignoreSelected,
   ignoreTx,
+  reopenImport,
   setSignConvention,
   setTxCategory,
   teachBella,
 } from "../actions";
+import { summarizeImport } from "@/lib/csv/import-summary";
+import { summarizeSelection } from "@/lib/csv/import-selection";
+import { fetchAllPages } from "@/lib/db/paginate";
+import { BatchSelectionProvider } from "@/components/import/BatchSelection";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
@@ -21,7 +29,11 @@ import { SignConventionBar } from "@/components/import/SignConventionBar";
 import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 
 type Params = Promise<{ publicId: string; importId: string }>;
-type Search = Promise<{ highlight?: string; error?: string | string[] }>;
+type Search = Promise<{
+  highlight?: string;
+  error?: string | string[];
+  notice?: string | string[];
+}>;
 
 export default async function ImportReviewPage({
   params,
@@ -31,11 +43,19 @@ export default async function ImportReviewPage({
   searchParams: Search;
 }) {
   const { publicId, importId } = await params;
-  const { highlight: targetTxId, error: errRaw } = await searchParams;
+  const {
+    highlight: targetTxId,
+    error: errRaw,
+    notice: noticeRaw,
+  } = await searchParams;
   // bellaAutoApply redirects here with ?error= when the categorize
   // pass fails, so the reason is visible instead of React's redacted
   // production digest.
   const errorMessage = Array.isArray(errRaw) ? errRaw[0] : errRaw;
+  // Batch actions redirect here with ?notice= carrying their plain
+  // tally: "Applied 39. Skipped 1 refund. 0 failed." A silent skip on a
+  // deduction surface is indistinguishable from a bug.
+  const noticeMessage = Array.isArray(noticeRaw) ? noticeRaw[0] : noticeRaw;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
   const superAdmin = await isSuperAdmin(supabase);
@@ -48,7 +68,10 @@ export default async function ImportReviewPage({
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, user_id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
+      // applied_count is deliberately NOT selected. It drifts, nothing
+      // renders it any more, and leaving it out makes "no longer read"
+      // something grep can prove.
+      "id, user_id, filename, status, row_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
@@ -62,21 +85,48 @@ export default async function ImportReviewPage({
   if (!canReadAnyImport && imp.user_id !== user.id) notFound();
   const isCredit = imp.account_type === "credit";
 
-  const [{ data: txs }, { data: categories }] = await Promise.all([
-    supabase
-      .from("bank_transactions")
-      .select(
-        "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, ignored",
-      )
-      .eq("import_id", importId)
-      .order("posted_at", { ascending: false })
-      .order("description"),
+  type TxRowData = {
+    id: string;
+    description: string;
+    amount_cents: number;
+    posted_at: string | null;
+    raw_category: string | null;
+    suggested_category_code: string | null;
+    applied_category_code: string | null;
+    applied_expense_id: string | null;
+    applied_income_id: string | null;
+    // not null in the schema (bank_transactions.ignored, default false).
+    ignored: boolean;
+  };
+  const [txs, { data: categories }] = await Promise.all([
+    // PAGED, for the same reason as the import list and the batch
+    // actions: PostgREST truncates at max-rows silently. Unpaged, an
+    // import over 1000 rows would render a partial list AND compute
+    // `progress` over it, which could offer the Complete button on an
+    // import that still has unresolved rows further down. The action
+    // re-checks server-side so nothing would actually be mis-completed,
+    // but the button would be lying, and this screen exists because a
+    // number on it lied. The id ordering is the paging tiebreaker:
+    // posted_at and description are not unique, so without it pages can
+    // overlap or skip.
+    fetchAllPages<TxRowData>((from, to) =>
+      supabase
+        .from("bank_transactions")
+        .select(
+          "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
+        )
+        .eq("import_id", importId)
+        .order("posted_at", { ascending: false })
+        .order("description")
+        .order("id")
+        .range(from, to),
+    ),
     supabase
       .from("deduction_categories")
       // Now includes 'personal' so charity / SALT / mortgage-interest
       // / volunteer-mileage are tag-able from a credit-card import
       // (those rows are often mixed in with business charges on the
-      // same card). applyTransactions routes personal AND transfer
+      // same card). applySelected routes personal AND transfer
       // picks via ignored=true so they never inflate the Schedule C
       // deduction, they're labels, not bookings.
       // Pull irc_section + irs_pub so the TxRow can show the
@@ -157,6 +207,19 @@ export default async function ImportReviewPage({
     .slice(0, 8)
     .map(([code]) => code);
 
+  // Progress is derived from the rows on every render, never read from
+  // bank_imports.applied_count. That column reads 0 on the 2026-08-01
+  // import while 48 of its rows are booked, because the upload-time
+  // auto-categorize path that booked most of them never writes it.
+  const progress = summarizeImport(
+    (txs ?? []).map((t) => ({
+      appliedExpenseId: t.applied_expense_id,
+      appliedIncomeId: t.applied_income_id,
+      ignored: !!t.ignored,
+    })),
+  );
+  const isCompleted = imp.status === "complete";
+
   const convention = (imp.sign_convention ?? "charges_negative") as SignConvention;
   const direction = (t: { amount_cents: number }) =>
     interpretAmount(t.amount_cents, convention).direction;
@@ -192,8 +255,43 @@ export default async function ImportReviewPage({
   const debits = allActive.filter((t) => direction(t) === "expense");
   const credits = allActive.filter((t) => direction(t) !== "expense");
   const ignoredRows = (txs ?? []).filter((t) => t.ignored);
+
+  // What a checkbox may appear on, decided here by the same isSelectable
+  // the server actions re-run over the posted ids. Refunds, income and
+  // already-booked rows are absent from this list, so a select-all
+  // cannot reach them. That is the guarantee, and it is structural: a
+  // disabled checkbox would be one markup change away from reachable.
+  const selectionRows = (txs ?? []).map((t) => ({
+    id: t.id,
+    importId,
+    companyId: company.id,
+    amountCents: t.amount_cents,
+    suggestedCategoryCode: t.suggested_category_code,
+    appliedCategoryCode: t.applied_category_code,
+    appliedExpenseId: t.applied_expense_id,
+    appliedIncomeId: t.applied_income_id,
+    ignored: !!t.ignored,
+  }));
+  const selection = summarizeSelection(selectionRows, [], convention);
+  const selectableIds = selection.selectableIds;
+  const selectableSet = new Set(selectableIds);
+
+  // Rows a human already gave a category and that are not booked yet.
+  // The old "Apply manually selected" button applied exactly these while
+  // claiming they had been selected; nothing on the page could be
+  // selected, so the count was a residue of pressing Save row by row.
   const pendingApply = debits.filter(
-    (t) => t.applied_category_code && !t.applied_expense_id,
+    (t) => selectableSet.has(t.id) && t.applied_category_code,
+  );
+  // Bella's ungrafted suggestions: the reported backlog. These display a
+  // category that looks chosen and is not, because
+  // suggested_category_code is a different column from
+  // applied_category_code and nothing on screen said so.
+  const pendingSuggestions = debits.filter(
+    (t) =>
+      selectableSet.has(t.id) &&
+      t.suggested_category_code &&
+      !t.applied_category_code,
   );
 
   // Bella detection rollup, shown at the top of the review section
@@ -293,10 +391,12 @@ export default async function ImportReviewPage({
         </h1>
         <div className="text-xs text-ink-muted mt-1 tracking-wide">
           {prettyAccountType(imp.account_type)} ·{" "}
-          {imp.row_count} rows uploaded -{" "}
-          {imp.applied_count > 0
-            ? `${imp.applied_count} applied`
+          {progress.total} rows uploaded -{" "}
+          {progress.applied > 0
+            ? `${progress.applied} applied`
             : "not yet applied"}
+          {progress.income > 0 ? ` - ${progress.income} booked as income` : ""}
+          {progress.ignored > 0 ? ` - ${progress.ignored} ignored` : ""}
         </div>
         {isCredit ? (
           <p className="mt-2 text-xs text-ink-muted max-w-2xl leading-relaxed">
@@ -319,6 +419,59 @@ export default async function ImportReviewPage({
           >
             {errorMessage}
           </div>
+        ) : null}
+
+        {noticeMessage ? (
+          <div
+            role="status"
+            className="mt-6 rounded-lg border border-forest-200 bg-white/70 px-4 py-3 text-sm text-forest-900"
+          >
+            {noticeMessage}
+          </div>
+        ) : null}
+
+        {/* The resting state. Nothing here writes to monthly_expenses:
+            every row this import contributes to a filed deduction was
+            written when it was applied, so this is a confirmation, not
+            a commit, and it is deliberately not called Commit. The
+            button is absent while anything is unresolved, because a
+            Complete offered over unsorted rows is a way to lose work. */}
+        {isCompleted ? (
+          <section className="mt-6 card p-5 flex items-center justify-between gap-4 flex-wrap border-emerald-200">
+            <div>
+              <div className="display text-base text-forest-900">
+                This import is complete
+              </div>
+              <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+                All {progress.total} rows are sorted and it has moved to the
+                completed section of the import list. Reopening changes the
+                status back, nothing was destroyed to get here.
+              </p>
+            </div>
+            <form action={reopenImport}>
+              <input type="hidden" name="import_id" value={importId} />
+              <button className="btn-ghost">Reopen import</button>
+            </form>
+          </section>
+        ) : progress.isComplete ? (
+          <section className="mt-6 card p-5 flex items-center justify-between gap-4 flex-wrap border-emerald-200">
+            <div>
+              <div className="display text-base text-forest-900">
+                All {progress.total} rows are sorted
+              </div>
+              <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+                {progress.applied} applied
+                {progress.income > 0 ? `, ${progress.income} booked as income` : ""}
+                {progress.ignored > 0 ? `, ${progress.ignored} ignored` : ""}.
+                Your expenses and forecast already reflect this. Completing
+                files the import away, and you can reopen it at any time.
+              </p>
+            </div>
+            <form action={completeImport}>
+              <input type="hidden" name="import_id" value={importId} />
+              <button className="btn-primary">Complete import</button>
+            </form>
+          </section>
         ) : null}
 
         {canDelete ? (
@@ -353,25 +506,61 @@ export default async function ImportReviewPage({
           <button className="btn-ghost">Re-run Bella</button>
         </form>
 
-        {pendingApply.length > 0 ? (
+        {/* The standing action that clears the reported backlog in one
+            press. Deliberately separate from Apply: Bella's own
+            confidence threshold already decides what she books
+            unattended, and this is the explicit accept of what she was
+            not confident enough to book alone. Keeping the two apart
+            preserves whether a human ever agreed with the software,
+            which is worth preserving on a tax record. */}
+        {pendingSuggestions.length > 0 ? (
           <form
-            action={applyTransactions}
-            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap"
+            action={acceptSuggestions}
+            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap border-gold-300/60"
           >
             <input type="hidden" name="import_id" value={importId} />
-            <input type="hidden" name="company_id" value={company.id} />
+            {pendingSuggestions.map((t) => (
+              <input key={t.id} type="hidden" name="tx_ids" value={t.id} />
+            ))}
             <div>
               <div className="display text-base text-forest-900">
-                {pendingApply.length} transaction
-                {pendingApply.length === 1 ? "" : "s"} ready to apply
+                Bella suggested categories for {pendingSuggestions.length} row
+                {pendingSuggestions.length === 1 ? "" : "s"}
               </div>
-              <div className="text-xs text-ink-muted mt-1">
-                Each will become a deductible expense entry on the corresponding
-                month.
+              <div className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+                Those rows show a suggestion, not a decision. Accepting sets
+                the category and books each one as a deductible expense in
+                the month it was posted. Refunds are never included.
               </div>
             </div>
             <button className="btn-ghost">
-              Apply manually selected ({pendingApply.length})
+              Accept all {pendingSuggestions.length}
+            </button>
+          </form>
+        ) : null}
+
+        {pendingApply.length > 0 ? (
+          <form
+            action={applySelected}
+            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap"
+          >
+            <input type="hidden" name="import_id" value={importId} />
+            {pendingApply.map((t) => (
+              <input key={t.id} type="hidden" name="tx_ids" value={t.id} />
+            ))}
+            <div>
+              <div className="display text-base text-forest-900">
+                {pendingApply.length} row
+                {pendingApply.length === 1 ? "" : "s"} you categorized are not
+                booked yet
+              </div>
+              <div className="text-xs text-ink-muted mt-1">
+                Each becomes a deductible expense entry on the month it was
+                posted.
+              </div>
+            </div>
+            <button className="btn-ghost">
+              Apply these {pendingApply.length}
             </button>
           </form>
         ) : null}
@@ -425,6 +614,18 @@ export default async function ImportReviewPage({
           />
         </div>
 
+        {/* Selection spans both piles below, so one Apply commits what
+            the user ticked wherever it sits. Selection is client state
+            only: nothing is persisted, because a stored "selected" flag
+            would be a second source of truth about what the user meant,
+            and that is how applied_count came to read 0. */}
+        <BatchSelectionProvider
+          importId={importId}
+          selectableIds={selectableIds}
+          applySelected={applySelected}
+          ignoreSelected={ignoreSelected}
+          acceptSuggestions={acceptSuggestions}
+        >
         <section className="mt-6 card p-6">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
             <h2 className="display text-xl text-forest-900">
@@ -448,11 +649,9 @@ export default async function ImportReviewPage({
             </p>
           ) : activeDebits.length === 0 ? (
             <p className="mt-4 text-sm text-ink-soft">
-              Every row has been categorized or skipped. Click{" "}
-              <span className="font-medium text-forest-900">
-                Apply manually selected
-              </span>{" "}
-              above to book the tagged ones into your monthly expenses.
+              Every row has been categorized or skipped. Tick the rows you
+              want and use the bar at the bottom, or use the buttons above
+              to book them all into your monthly expenses.
             </p>
           ) : (
             <div className="mt-4 grid gap-6">
@@ -533,22 +732,25 @@ export default async function ImportReviewPage({
             </details>
           </section>
         ) : null}
+        </BatchSelectionProvider>
 
         {credits.length > 0 ? (
           <section className="mt-6 card p-6">
             <h2 className="display text-xl text-forest-900">
               Deposits ({credits.length})
             </h2>
-            <p className="text-xs text-ink-muted mt-1">
+            <p className="text-xs text-ink-muted mt-1 max-w-2xl leading-relaxed">
               Deposits are not auto-applied. Add income manually via the Income
               tab if any of these are taxable revenue (and not transfers or
-              refunds).
+              refunds). Anything you do not need to account for can be
+              dismissed with Skip, which resolves the row without booking
+              anything.
             </p>
             <ul className="mt-4 grid gap-2">
               {credits.map((t) => (
                 <li
                   key={t.id}
-                  className="flex items-center justify-between rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-forest-900 truncate">
@@ -556,11 +758,29 @@ export default async function ImportReviewPage({
                     </div>
                     <div className="text-xs text-ink-muted">
                       {t.posted_at ?? "-"}
+                      {direction(t) === "refund"
+                        ? " · Refund, not deductible"
+                        : ""}
                     </div>
                   </div>
-                  <div className="text-forest-900 tabular-nums font-medium">
+                  <div className="text-forest-900 tabular-nums font-medium shrink-0">
                     {formatCents(t.amount_cents)}
                   </div>
+                  {/* Without this, a deposit or an unpaired refund could
+                      never be resolved. Neither is bookable as an expense
+                      and neither carries a checkbox, so on the live import
+                      the $0.84 Vercel credit would sit unresolved forever
+                      and the Complete step would never appear. A row the
+                      user does not want to account for has to be
+                      dismissible. Per-row only: these rows stay out of the
+                      batch selection model entirely. */}
+                  <form action={ignoreTx} className="shrink-0">
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="import_id" value={importId} />
+                    <button className="text-xs text-ink-muted hover:text-red-700 px-2 py-1">
+                      Skip
+                    </button>
+                  </form>
                 </li>
               ))}
             </ul>

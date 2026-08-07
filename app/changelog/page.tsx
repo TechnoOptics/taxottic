@@ -41,6 +41,12 @@ type Entry = {
 
 const ENTRIES: Entry[] = [
   {
+    date: "2026-08-06",
+    title: "Tick the rows you mean, and finish an import when it is done",
+    body: "Every expense candidate on an import now has a checkbox, with select-all, and one bar at the bottom that applies, accepts Bella's category, or ignores whatever you ticked. The old button read 'Apply manually selected' while nothing on the page could be selected, and it only counted rows you had already saved one at a time, so an import with thirteen suggestions waiting showed a button for one. Refunds and rows already booked have no checkbox at all: a refund is not a deduction, and select-all must not be able to turn one into one. When nothing is left unresolved, a Complete step files the import away, and it can be reopened at any time. The row counts on the import list are now counted from the rows themselves, which fixes imports that said '0 applied' while dozens of their rows were already booked.",
+    tags: ["shipped", "fix"],
+  },
+  {
     date: "2026-08-01",
     title: "Clearer answers about location, and who can see your drives",
     body: "A new policy page, Location tracking and team visibility, sets out exactly what automatic mileage tracking records, how long each part of it is kept, and what a manager at your company or an engaged accounting firm can see. Short version: only drives you mark as business become visible to your company, and personal or unclassified drives never leave your own account. The screen that asks for location permission now says the same thing before you agree to it. The privacy policy, cookie list, and subprocessor list have also been brought in line with what the app actually does, including the vendors that were live but unlisted.",

@@ -5,6 +5,8 @@ import { CsvDropZone } from "@/components/CsvDropZone";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { uploadCsvBatch } from "./actions";
+import { summarizeImport, summarizeImports } from "@/lib/csv/import-summary";
+import { fetchAllPages } from "@/lib/db/paginate";
 
 type Params = Promise<{ publicId: string }>;
 type SearchParams = Promise<{ error?: string | string[] }>;
@@ -33,13 +35,63 @@ export default async function ImportPage({
   let importsQuery = supabase
     .from("bank_imports")
     .select(
-      "id, filename, status, row_count, applied_count, account_type, created_at",
+      // applied_count is deliberately NOT selected. Nothing renders it
+      // any more, it drifts, and leaving it out makes "no longer read"
+      // something grep can prove.
+      "id, filename, status, row_count, account_type, created_at",
     )
     .eq("company_id", company.id);
   if (!canReadAnyImport) importsQuery = importsQuery.eq("user_id", user.id);
   const { data: imports } = await importsQuery.order("created_at", {
     ascending: false,
   });
+
+  // Row counts, tallied per import from the rows themselves. This list
+  // used to render bank_imports.applied_count verbatim, and that column
+  // reads 0 on an import with 48 booked rows: four code paths write it
+  // and the upload-time auto-categorize that books most rows is not one
+  // of them.
+  //
+  // Scoped to the imports actually listed, which keeps it consistent
+  // with the own-rows-or-manager filter above, and PAGED, because
+  // PostgREST truncates at max-rows without saying so. An unpaged read
+  // past 1000 lifetime rows would undercount every import and drop the
+  // ones outside the window out of the map entirely, falling back to
+  // `empty`. That would reinstate a counter that lies, which is the one
+  // thing this screen is not allowed to do. Ordered by id so the pages
+  // cannot overlap or skip.
+  const listedImportIds = (imports ?? []).map((i) => i.id as string);
+  const allRows =
+    listedImportIds.length === 0
+      ? []
+      : await fetchAllPages<{
+          import_id: string;
+          applied_expense_id: string | null;
+          applied_income_id: string | null;
+          ignored: boolean | null;
+        }>((from, to) =>
+          supabase
+            .from("bank_transactions")
+            .select("import_id, applied_expense_id, applied_income_id, ignored")
+            .eq("company_id", company.id)
+            .in("import_id", listedImportIds)
+            .order("id")
+            .range(from, to),
+        );
+  const summaries = summarizeImports(
+    allRows.map((r) => ({
+      importId: r.import_id,
+      appliedExpenseId: r.applied_expense_id,
+      appliedIncomeId: r.applied_income_id,
+      ignored: !!r.ignored,
+    })),
+  );
+  const empty = summarizeImport([]);
+  // Completed imports collapse out of the active list rather than
+  // disappearing: reopening is a status change, so hiding them entirely
+  // would make a reversible action feel destructive.
+  const active = (imports ?? []).filter((i) => i.status !== "complete");
+  const completed = (imports ?? []).filter((i) => i.status === "complete");
 
   return (
     <main id="main" className="min-h-screen">
@@ -81,42 +133,110 @@ export default async function ImportPage({
         <div className="card mt-6 p-6">
           <h2 className="display text-xl text-forest-900">Past imports</h2>
           <ul className="mt-4 grid gap-2">
-            {imports && imports.length > 0 ? (
-              imports.map((imp) => (
-                <li
+            {active.length > 0 ? (
+              active.map((imp) => (
+                <ImportListRow
                   key={imp.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-forest-900 truncate">
-                      {imp.filename}
-                    </div>
-                    <div className="text-xs text-ink-muted mt-0.5">
-                      {prettyAccountType(imp.account_type)} ·{" "}
-                      {imp.row_count} rows - {imp.applied_count} applied -{" "}
-                      <span className="uppercase tracking-wide">
-                        {imp.status}
-                      </span>{" "}
-                      - {new Date(imp.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <Link
-                    href={`/c/${publicId}/import/${imp.id}`}
-                    className="btn-ghost text-xs px-3 h-9"
-                  >
-                    Review
-                  </Link>
-                </li>
+                  imp={imp}
+                  publicId={publicId}
+                  summary={summaries.get(imp.id) ?? empty}
+                />
               ))
             ) : (
               <li className="py-6 text-sm text-ink-muted">
-                No imports yet. Upload one above to get started.
+                {completed.length > 0
+                  ? "Nothing left to review. Completed imports are below."
+                  : "No imports yet. Upload one above to get started."}
               </li>
             )}
           </ul>
         </div>
+
+        {completed.length > 0 ? (
+          <div className="card mt-6 p-6">
+            <details>
+              <summary className="cursor-pointer select-none flex items-baseline justify-between gap-3 flex-wrap">
+                <h2 className="display text-xl text-forest-900">
+                  Completed ({completed.length})
+                </h2>
+                <span className="text-xs text-ink-muted">
+                  Click to review or reopen
+                </span>
+              </summary>
+              <ul className="mt-4 grid gap-2">
+                {completed.map((imp) => (
+                  <ImportListRow
+                    key={imp.id}
+                    imp={imp}
+                    publicId={publicId}
+                    summary={summaries.get(imp.id) ?? empty}
+                  />
+                ))}
+              </ul>
+            </details>
+          </div>
+        ) : null}
       </section>
     </main>
+  );
+}
+
+/**
+ * One import in the list. Every number here comes from the summary,
+ * never from imp.applied_count, and the status word shown is the
+ * derived state rather than the stored one wherever they can disagree.
+ */
+function ImportListRow({
+  imp,
+  publicId,
+  summary,
+}: {
+  imp: {
+    id: string;
+    filename: string;
+    status: string;
+    account_type: string | null;
+    created_at: string;
+  };
+  publicId: string;
+  summary: ReturnType<typeof summarizeImport>;
+}) {
+  // isComplete, not `unresolved > 0`. They differ on an import with no
+  // rows: summarizeImport deliberately reports isComplete false there,
+  // because there is nothing for a human to have agreed with, and the
+  // review page correctly withholds the Complete button. Deriving the
+  // word here from `unresolved` instead made a zero-row import read
+  // "READY TO COMPLETE" beside a page that would never offer it. That
+  // was a fifth definition of resolved, and four subtly different
+  // filters is how applied_count drifted in the first place.
+  const state =
+    imp.status === "complete"
+      ? "complete"
+      : summary.isComplete
+        ? "ready to complete"
+        : summary.total === 0
+          ? "no rows"
+          : `${summary.unresolved} to review`;
+  return (
+    <li className="flex items-center justify-between gap-3 rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm">
+      <div className="min-w-0 flex-1">
+        <div className="font-medium text-forest-900 truncate">
+          {imp.filename}
+        </div>
+        <div className="text-xs text-ink-muted mt-0.5">
+          {prettyAccountType(imp.account_type)} · {summary.total} rows -{" "}
+          {summary.applied} applied -{" "}
+          <span className="uppercase tracking-wide">{state}</span> -{" "}
+          {new Date(imp.created_at).toLocaleDateString()}
+        </div>
+      </div>
+      <Link
+        href={`/c/${publicId}/import/${imp.id}`}
+        className="btn-ghost text-xs px-3 h-9"
+      >
+        Review
+      </Link>
+    </li>
   );
 }
 
