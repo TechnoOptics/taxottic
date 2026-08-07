@@ -1320,41 +1320,70 @@ async function runBellaCategorize(args: {
     // Below the auto-apply threshold → leave it for the user.
     if (d.confidence < 0.85) continue;
 
-    if (!tx.posted_at) continue;
-    const posted = new Date(tx.posted_at + "T00:00:00Z");
-    const txYear = posted.getUTCFullYear();
-    const txMonth = posted.getUTCMonth() + 1;
-    if (txYear !== taxYear) continue;
-    if (txMonth > currentMonth) continue;
-
-    const absCents = Math.abs(tx.amount_cents);
-    if (absCents === 0) continue;
-
-    const direction = interpretAmount(tx.amount_cents, convention).direction;
-
     if (d.kind === "expense" && d.code) {
-      // Bella's own read of the row (d.kind) is not enough on its own:
-      // never book as an expense unless the sign convention agrees this
-      // row is actually a charge. Booking a refund, or an income row
-      // Bella mis-called an expense, as a positive expense inflates the
-      // deduction, the exact failure this task exists to prevent.
-      if (direction !== "expense") continue;
+      // ONE copy of the expense-booking rules, shared with
+      // applySelected. This branch used to carry its own: the same date
+      // guards, the same zero check, and its own restatement of "never
+      // book unless the convention agrees this row is a charge". Bella
+      // books the LARGER share of rows on an import, at upload time and
+      // unattended, so a second copy living here is the drift that
+      // matters most, and it was the one with no tests.
+      //
+      // Bella only ever picks from the business and both scopes (see
+      // allowedExpenseCodes above), so a non-business category cannot
+      // arise on this path. Card payments are filtered out of
+      // `candidates` upstream on credit imports, which makes label_only
+      // unreachable here; the flag is passed anyway so this call stays
+      // correct if that filter ever moves, and the unreachable branch
+      // skips rather than booking.
+      const decision = planExpenseBooking(
+        { amountCents: tx.amount_cents, postedAt: tx.posted_at },
+        {
+          convention,
+          taxYear,
+          currentMonth,
+          isNonBusinessCategory: false,
+          isCardPayment: isCredit && looksLikeCardPayment(tx.description),
+          isSubscription: isSubscriptionLike(tx.description),
+        },
+      );
+      if (decision.kind !== "book") continue;
       expenseInserts.push({
         company_id: companyId,
         user_id: user.id,
         tax_year: taxYear,
-        month: txMonth,
-        amount_cents: absCents,
+        month: decision.month,
+        amount_cents: decision.amountCents,
         category_code: d.code,
-        // "Subscription" in the line → monthly from day one (user rule).
-        recurrence: isSubscriptionLike(tx.description) ? "monthly" : "one_off",
+        recurrence: decision.recurrence,
         notes: tx.description ?? "",
       });
       expenseTxIds.push(tx.id);
-    } else if (d.kind === "income" && d.code && !isCredit) {
-      // Mirror of the expense check above: never book an actual charge
-      // as income.
-      if (direction === "expense") continue;
+      continue;
+    }
+
+    if (d.kind === "income" && d.code && !isCredit) {
+      // Income keeps its own guards. planExpenseBooking is about
+      // expenses, and its last check refuses everything the convention
+      // does not read as a charge, which is the opposite of what this
+      // branch needs. Same guards as before, in the same order.
+      if (!tx.posted_at) continue;
+      const posted = new Date(tx.posted_at + "T00:00:00Z");
+      const txYear = posted.getUTCFullYear();
+      const txMonth = posted.getUTCMonth() + 1;
+      if (txYear !== taxYear) continue;
+      if (txMonth > currentMonth) continue;
+
+      const absCents = Math.abs(tx.amount_cents);
+      if (absCents === 0) continue;
+
+      // Mirror of the expense check: never book an actual charge as
+      // income.
+      if (
+        interpretAmount(tx.amount_cents, convention).direction === "expense"
+      ) {
+        continue;
+      }
       // Income on a credit account is always a payment-back; don't
       // create a phantom revenue line.
       const subLike = isSubscriptionLike(tx.description);
