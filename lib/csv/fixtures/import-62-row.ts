@@ -3,39 +3,76 @@
 // 62 rows: 60 positive, 2 negative. 48 booked as expenses at the time
 // this fixture was taken, 14 unresolved (including one income-looking
 // positive row that was never booked to anything).
+//
+// description/postedAt were added for the import-duplicate-detection
+// spec (2026-08-06). Every row gets a distinct amount_cents (the b/o
+// series already varied theirs for the sign-convention fixture), so
+// no row collides with any other on fingerprint except the two Delta
+// rows, which are the deliberate duplicate pair described in the
+// spec: same merchant, same day, same amount.
 export type FixtureRow = {
   id: string;
   amountCents: number;
   appliedCategoryCode: string | null;
   appliedExpenseId: string | null;
+  description: string;
+  postedAt: string;
 };
 
-const booked = (id: string, amountCents: number, code: string): FixtureRow => ({
+const booked = (
+  id: string,
+  amountCents: number,
+  code: string,
+  description: string,
+  postedAt: string,
+): FixtureRow => ({
   id,
   amountCents,
   appliedCategoryCode: code,
   appliedExpenseId: `exp_${id}`,
+  description,
+  postedAt,
 });
-const open = (id: string, amountCents: number): FixtureRow => ({
+const open = (
+  id: string,
+  amountCents: number,
+  description: string,
+  postedAt: string,
+): FixtureRow => ({
   id,
   amountCents,
   appliedCategoryCode: null,
   appliedExpenseId: null,
+  description,
+  postedAt,
 });
 
 export const LIVE_IMPORT_ROWS: FixtureRow[] = [
-  booked("delta1", 1168463, "travel"),
-  booked("delta2", 1168463, "travel"),
-  booked("sams1", 20647, "supplies"),
-  booked("autozone", 6773, "vehicle_repairs"),
-  booked("lowes_refund", -2445, "supplies"),
+  booked("delta1", 1168463, "travel", "DELTA AIR LINES ATLANTA", "2026-07-07"),
+  booked("delta2", 1168463, "travel", "DELTA AIR LINES ATLANTA", "2026-07-07"),
+  booked("sams1", 20647, "supplies", "SAMS CLUB #4471", "2026-07-01"),
+  booked("autozone", 6773, "vehicle_repairs", "AUTOZONE STORE 3390", "2026-07-02"),
+  booked("lowes_refund", -2445, "supplies", "LOWES HOME IMPROVEMENT", "2026-07-03"),
   ...Array.from({ length: 43 }, (_, i) =>
-    booked(`b${i}`, 1000 + i * 37, "software_subscriptions"),
+    booked(
+      `b${i}`,
+      1000 + i * 37,
+      "software_subscriptions",
+      `SOFTWARE VENDOR ${i}`,
+      `2026-06-${String((i % 28) + 1).padStart(2, "0")}`,
+    ),
   ),
-  open("ojala", 400000),
-  open("target1", 40653),
-  open("vercel_credit", -84),
-  ...Array.from({ length: 10 }, (_, i) => open(`o${i}`, 500 + i * 211)),
+  open("ojala", 400000, "OJALA CONSULTING LLC", "2026-07-05"),
+  open("target1", 40653, "TARGET T-1122", "2026-07-06"),
+  open("vercel_credit", -84, "VERCEL INC", "2026-07-04"),
+  ...Array.from({ length: 10 }, (_, i) =>
+    open(
+      `o${i}`,
+      500 + i * 211,
+      `OTHER MERCHANT ${i}`,
+      `2026-07-${String((i % 20) + 8).padStart(2, "0")}`,
+    ),
+  ),
 ];
 
 // Row count: 5 + 43 booked = 48 booked, 3 + 10 open = 13 open, plus
@@ -45,6 +82,8 @@ LIVE_IMPORT_ROWS.push({
   amountCents: 25000,
   appliedCategoryCode: null,
   appliedExpenseId: null,
+  description: "CLIENT PAYMENT RECEIVED",
+  postedAt: "2026-07-10",
 });
 
 // ---------------------------------------------------------------------
