@@ -5,10 +5,12 @@ import {
   type ImportRowState,
 } from "./import-summary";
 import {
+  LIVE_CONVENTION,
   LIVE_IMPORT_62,
   LIVE_IMPORT_62_INCOME_BOOKED,
   LIVE_IMPORT_ID,
 } from "./fixtures/import-62-row";
+import { summarizeSelection } from "./import-selection";
 
 const row = (over: Partial<ImportRowState> = {}): ImportRowState => ({
   appliedExpenseId: null,
@@ -140,6 +142,79 @@ describe("summarizeImport on the live 62-row import", () => {
   it("never reports complete while any row is unresolved", () => {
     expect(summarizeImport(LIVE_IMPORT_62).isComplete).toBe(false);
     expect(summarizeImport(LIVE_IMPORT_62_INCOME_BOOKED).isComplete).toBe(false);
+  });
+});
+
+describe("finishing the live import end to end", () => {
+  // The headline feature has to actually become reachable on the import
+  // that motivated it. summarizeImport counts a row unresolved unless it
+  // is applied, income, or ignored, and the unpaired $0.84 Vercel refund
+  // is none of those: it is not bookable as an expense, exact-pair
+  // netting never claims it because it has no matching charge, and it
+  // carries no checkbox. Without a per-row Skip on non-expense rows the
+  // Complete button would never appear here.
+  const selectable = summarizeSelection(
+    LIVE_IMPORT_62,
+    [],
+    LIVE_CONVENTION,
+  ).selectableIds;
+
+  const asStates = (rows: typeof LIVE_IMPORT_62): ImportRowState[] =>
+    rows.map((r) => ({
+      appliedExpenseId: r.appliedExpenseId,
+      appliedIncomeId: r.appliedIncomeId,
+      ignored: r.ignored,
+    }));
+
+  /** What the rows look like after "Accept all 13" books every candidate. */
+  const afterAcceptAll = LIVE_IMPORT_62.map((r) =>
+    selectable.includes(r.id)
+      ? { ...r, appliedExpenseId: `exp_${r.id}`, appliedCategoryCode: "supplies" }
+      : r,
+  );
+
+  it("still has exactly one unresolved row after accepting all 13", () => {
+    const s = summarizeImport(asStates(afterAcceptAll));
+    expect(s.applied).toBe(61);
+    expect(s.unresolved).toBe(1);
+    expect(s.isComplete).toBe(false);
+  });
+
+  it("names the unpaired refund as the row still blocking Complete", () => {
+    const stuck = afterAcceptAll.filter(
+      (r) => !r.appliedExpenseId && !r.appliedIncomeId && !r.ignored,
+    );
+    expect(stuck.map((r) => r.id)).toEqual(["vercel_credit"]);
+  });
+
+  it("becomes complete once the unpaired refund is skipped", () => {
+    const afterSkip = afterAcceptAll.map((r) =>
+      r.id === "vercel_credit" ? { ...r, ignored: true } : r,
+    );
+    const s = summarizeImport(asStates(afterSkip));
+    expect(s.total).toBe(62);
+    expect(s.applied).toBe(61);
+    expect(s.ignored).toBe(1);
+    expect(s.unresolved).toBe(0);
+    expect(s.isComplete).toBe(true);
+  });
+
+  it("skipping the refund books nothing", () => {
+    // Skip resolves a row, it does not turn it into a deduction. The
+    // refund must never gain an applied_expense_id.
+    const afterSkip = afterAcceptAll.map((r) =>
+      r.id === "vercel_credit" ? { ...r, ignored: true } : r,
+    );
+    const refund = afterSkip.find((r) => r.id === "vercel_credit")!;
+    expect(refund.appliedExpenseId).toBeNull();
+    expect(refund.appliedIncomeId).toBeNull();
+    expect(refund.ignored).toBe(true);
+  });
+
+  it("leaves the already-booked Lowe's refund exactly as it was", () => {
+    const lowes = afterAcceptAll.find((r) => r.id === "lowes_refund")!;
+    expect(lowes.appliedExpenseId).toBe("exp_lowes_refund");
+    expect(lowes.ignored).toBe(false);
   });
 });
 

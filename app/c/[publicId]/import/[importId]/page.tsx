@@ -739,16 +739,18 @@ export default async function ImportReviewPage({
             <h2 className="display text-xl text-forest-900">
               Deposits ({credits.length})
             </h2>
-            <p className="text-xs text-ink-muted mt-1">
+            <p className="text-xs text-ink-muted mt-1 max-w-2xl leading-relaxed">
               Deposits are not auto-applied. Add income manually via the Income
               tab if any of these are taxable revenue (and not transfers or
-              refunds).
+              refunds). Anything you do not need to account for can be
+              dismissed with Skip, which resolves the row without booking
+              anything.
             </p>
             <ul className="mt-4 grid gap-2">
               {credits.map((t) => (
                 <li
                   key={t.id}
-                  className="flex items-center justify-between rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-forest-900 truncate">
@@ -761,9 +763,24 @@ export default async function ImportReviewPage({
                         : ""}
                     </div>
                   </div>
-                  <div className="text-forest-900 tabular-nums font-medium">
+                  <div className="text-forest-900 tabular-nums font-medium shrink-0">
                     {formatCents(t.amount_cents)}
                   </div>
+                  {/* Without this, a deposit or an unpaired refund could
+                      never be resolved. Neither is bookable as an expense
+                      and neither carries a checkbox, so on the live import
+                      the $0.84 Vercel credit would sit unresolved forever
+                      and the Complete step would never appear. A row the
+                      user does not want to account for has to be
+                      dismissible. Per-row only: these rows stay out of the
+                      batch selection model entirely. */}
+                  <form action={ignoreTx} className="shrink-0">
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="import_id" value={importId} />
+                    <button className="text-xs text-ink-muted hover:text-red-700 px-2 py-1">
+                      Skip
+                    </button>
+                  </form>
                 </li>
               ))}
             </ul>
