@@ -13,7 +13,14 @@ import {
   type SignConvention,
 } from "@/lib/csv/sign-convention";
 import { summarizeImport } from "@/lib/csv/import-summary";
-import { type BatchRow } from "@/lib/csv/import-selection";
+import {
+  describeBatchOutcome,
+  partitionBatch,
+  type BatchIntent,
+  type BatchRow,
+  type BatchSkipReason,
+} from "@/lib/csv/import-selection";
+import { planExpenseBooking } from "@/lib/csv/expense-booking";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
   categorizeBatch,
@@ -843,6 +850,239 @@ async function loadImportForAction(
     rows,
     summary: summarizeImport(rows),
   };
+}
+
+/**
+ * Which of the chosen category codes never reach Schedule C.
+ *
+ * Three scopes are labels rather than deductions: transfer (moves
+ * between accounts), personal (Schedule A items such as charity, SALT
+ * and mortgage interest, which show up on a business card often enough
+ * to be worth tagging), and credit (federal tax credits, which reduce
+ * tax dollar for dollar rather than income). All three route through
+ * ignored = true so the row stays labelled and categorized without
+ * inflating the business deduction.
+ */
+async function loadNonBusinessCodes(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  codes: string[],
+): Promise<Set<string>> {
+  if (codes.length === 0) return new Set();
+  const { data } = await admin
+    .from("deduction_categories")
+    .select("code, scope")
+    .in("code", codes);
+  return new Set(
+    (data ?? [])
+      .filter((c) => {
+        const scope = (c as { scope?: string }).scope;
+        return scope === "transfer" || scope === "personal" || scope === "credit";
+      })
+      .map((c) => (c as { code: string }).code),
+  );
+}
+
+/**
+ * Run one batch over the ids a form posted.
+ *
+ * The client's selection is a request, not an authorization. Every id is
+ * re-derived server-side from rows loaded fresh out of the database:
+ * partitionBatch drops anything that is a refund, already booked,
+ * ignored, or owned by another import or company, and planExpenseBooking
+ * decides row by row whether a write happens at all. A stale tab is the
+ * ordinary case here, not an attack. The user opens the page, walks
+ * away, Bella's cron books four rows, and they come back and press Apply
+ * on a selection that includes them.
+ *
+ * Deliberately NOT atomic. Rows are inserted one at a time and a failure
+ * on row 17 keeps the other 39. An all-or-nothing transaction sounds
+ * safer and is not: it turns one bad row into zero progress, on a screen
+ * whose entire complaint is that progress is too slow. The count of what
+ * happened, and of everything that did not, goes back to the page in a
+ * banner.
+ */
+async function runBatch(formData: FormData, intent: BatchIntent) {
+  const importId = String(formData.get("import_id") ?? "");
+  const postedIds = formData.getAll("tx_ids").map((v) => String(v));
+  if (!importId) return;
+
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await loadImportForAction(admin, user.id, importId);
+  const back = `/c/${ctx.publicId}/import/${importId}`;
+
+  const plan = partitionBatch(ctx.rows, postedIds, ctx.convention, {
+    importId,
+    companyId: ctx.companyId,
+  }, intent);
+  const skipped: { id: string; reason: BatchSkipReason }[] = [...plan.skipped];
+
+  if (plan.actionable.length === 0 && skipped.length === 0) {
+    redirect(`${back}?notice=${encodeURIComponent("Nothing was selected.")}`);
+  }
+
+  let done = 0;
+  let labelled = 0;
+  let failed = 0;
+
+  if (intent === "ignore") {
+    const ids = plan.actionable.map((a) => a.row.id);
+    if (ids.length > 0) {
+      const { error } = await admin
+        .from("bank_transactions")
+        .update({ ignored: true, applied_category_code: null })
+        .in("id", ids);
+      if (!error) {
+        done = ids.length;
+      } else {
+        // One statement failed for the whole set, so retry row by row:
+        // the batch is not atomic and the rows that can succeed should.
+        for (const id of ids) {
+          const { error: rowErr } = await admin
+            .from("bank_transactions")
+            .update({ ignored: true, applied_category_code: null })
+            .eq("id", id);
+          if (rowErr) failed++;
+          else done++;
+        }
+      }
+    }
+  } else {
+    const isCredit = ctx.accountType === "credit";
+    const nonBusiness = await loadNonBusinessCodes(
+      admin,
+      Array.from(
+        new Set(
+          plan.actionable
+            .map((a) => a.categoryCode)
+            .filter((c): c is string => !!c),
+        ),
+      ),
+    );
+    const now = new Date();
+    const taxYear = now.getUTCFullYear();
+    const currentMonth = now.getUTCMonth() + 1;
+    let booked = false;
+
+    for (const { row, categoryCode } of plan.actionable) {
+      const code = categoryCode as string;
+      const decision = planExpenseBooking(
+        { amountCents: row.amountCents, postedAt: row.postedAt },
+        {
+          convention: ctx.convention,
+          taxYear,
+          currentMonth,
+          isNonBusinessCategory: nonBusiness.has(code),
+          isCardPayment: isCredit && looksLikeCardPayment(row.description),
+          isSubscription: isSubscriptionLike(row.description),
+        },
+      );
+
+      if (decision.kind === "skip") {
+        skipped.push({ id: row.id, reason: decision.reason });
+        continue;
+      }
+
+      if (decision.kind === "label_only") {
+        const { error } = await admin
+          .from("bank_transactions")
+          .update({ applied_category_code: code, ignored: true })
+          .eq("id", row.id);
+        if (error) failed++;
+        else labelled++;
+        continue;
+      }
+
+      const { data: created, error: insErr } = await admin
+        .from("monthly_expenses")
+        .insert({
+          company_id: ctx.companyId,
+          user_id: user.id,
+          tax_year: taxYear,
+          month: decision.month,
+          amount_cents: decision.amountCents,
+          category_code: code,
+          recurrence: decision.recurrence,
+          notes: row.description,
+        })
+        .select("id")
+        .single();
+      if (insErr || !created) {
+        failed++;
+        continue;
+      }
+      const { error: linkErr } = await admin
+        .from("bank_transactions")
+        .update({
+          applied_expense_id: created.id,
+          applied_category_code: code,
+        })
+        .eq("id", row.id);
+      if (linkErr) {
+        // The expense exists but nothing points at it. Roll back this
+        // one row rather than leaving an orphan on the deduction
+        // surface that no import can ever un-apply.
+        await admin.from("monthly_expenses").delete().eq("id", created.id);
+        failed++;
+        continue;
+      }
+      done++;
+      booked = true;
+    }
+
+    if (booked) {
+      await logCompanyActivity(admin, {
+        companyId: ctx.companyId,
+        actorUserId: user.id,
+        kind: "import.applied",
+        summary: `Applied ${done} transaction${done === 1 ? "" : "s"} from an import`,
+        payload: { import_id: importId, count: done, intent },
+      });
+      // The same recurring-stream detector the bank syncs run: a CSV
+      // import is just another updated expense sheet.
+      await applyRecurringExpenseDetection(admin, ctx.companyId, taxYear);
+    }
+  }
+
+  const verb =
+    intent === "ignore" ? "Ignored" : intent === "accept" ? "Accepted" : "Applied";
+  const notice = describeBatchOutcome({ verb, done, skipped, failed, labelled });
+
+  revalidatePath(back);
+  revalidatePath(`/c/${ctx.publicId}/import`);
+  revalidatePath(`/c/${ctx.publicId}/expenses`);
+  revalidatePath(`/c/${ctx.publicId}/forecast`);
+  revalidatePath("/dashboard");
+  redirect(`${back}?notice=${encodeURIComponent(notice)}`);
+}
+
+/**
+ * Book the selected rows that a human has already given a category.
+ *
+ * Reads applied_category_code and never falls back to
+ * suggested_category_code: accepting Bella's proposal is
+ * acceptSuggestions, a separate press. Keeping them apart preserves
+ * something worth preserving on a tax record, which is whether a person
+ * ever agreed with the software.
+ */
+export async function applySelected(formData: FormData) {
+  await runBatch(formData, "apply");
+}
+
+/** Resolve the selected rows as not deductible. Writes no expense. */
+export async function ignoreSelected(formData: FormData) {
+  await runBatch(formData, "ignore");
+}
+
+/**
+ * Take Bella up on her suggestions for the selected rows, and book them.
+ *
+ * This is the press that clears the reported backlog: thirteen rows
+ * displaying a suggested category that looked chosen and was not,
+ * because suggested_category_code is not applied_category_code and
+ * nothing on the screen said so.
+ */
+export async function acceptSuggestions(formData: FormData) {
+  await runBatch(formData, "accept");
 }
 
 /**

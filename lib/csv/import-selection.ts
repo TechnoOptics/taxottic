@@ -18,6 +18,7 @@
 // See docs/superpowers/specs/2026-08-06-import-batch-selection-design.md.
 
 import { interpretAmount, type SignConvention } from "./sign-convention";
+import type { BookingSkipReason } from "./expense-booking";
 
 /** Everything a selection decision reads. Callers may pass richer rows. */
 export type SelectionRow = {
@@ -59,6 +60,9 @@ export type SkipReason =
   | "no_category"
   /** Accept had no Bella suggestion to accept. */
   | "no_suggestion";
+
+/** Everything a batch can decline to do, from either stage. */
+export type BatchSkipReason = SkipReason | BookingSkipReason;
 
 export type BatchPlanItem<T extends SelectionRow> = {
   row: T;
@@ -268,38 +272,53 @@ export function partitionBatch<T extends SelectionRow>(
   return { actionable, skipped };
 }
 
+const SKIP_LABELS: Record<BatchSkipReason, [string, string]> = {
+  unknown: ["row no longer in this import", "rows no longer in this import"],
+  foreign: ["row from another import", "rows from another import"],
+  duplicate: ["duplicate", "duplicates"],
+  refund: ["refund", "refunds"],
+  income: ["non-expense row", "non-expense rows"],
+  already_booked: ["already booked", "already booked"],
+  ignored: ["already ignored", "already ignored"],
+  no_category: ["row with no category", "rows with no category"],
+  no_suggestion: ["row with no suggestion", "rows with no suggestion"],
+  no_date: ["row with no date", "rows with no date"],
+  other_tax_year: ["row from another tax year", "rows from another tax year"],
+  future_month: ["row dated ahead of this month", "rows dated ahead of this month"],
+  zero_amount: ["zero-value row", "zero-value rows"],
+  not_an_expense: ["row that is not a charge", "rows that are not charges"],
+};
+
 /**
  * One line stating what a batch did, for the banner after the redirect.
  *
  * Plain counts, no celebration. "Applied 39. Skipped 1 refund. 0 failed."
- * is the whole message, and the skip reasons are named because a silent
- * skip on a deduction surface is indistinguishable from a bug.
+ * is the whole message, and every skip reason is named because a silent
+ * skip on a deduction surface is indistinguishable from a bug. Anything
+ * a batch declined to do has to be legible from the banner alone, since
+ * the rows themselves have already slid off the list.
  */
 export function describeBatchOutcome(args: {
   verb: string;
   done: number;
-  skipped: readonly { reason: SkipReason }[];
+  skipped: readonly { reason: BatchSkipReason }[];
   failed: number;
+  /** Rows kept as a label rather than booked: transfers, Schedule A, card payments. */
+  labelled?: number;
 }): string {
   const parts = [`${args.verb} ${args.done}.`];
-  const counts = new Map<SkipReason, number>();
+  if (args.labelled && args.labelled > 0) {
+    parts.push(
+      `Labelled ${args.labelled} as not deductible without booking ${args.labelled === 1 ? "it" : "them"}.`,
+    );
+  }
+  const counts = new Map<BatchSkipReason, number>();
   for (const s of args.skipped ?? []) {
     counts.set(s.reason, (counts.get(s.reason) ?? 0) + 1);
   }
-  const labels: Record<SkipReason, [string, string]> = {
-    unknown: ["row no longer in this import", "rows no longer in this import"],
-    foreign: ["row from another import", "rows from another import"],
-    duplicate: ["duplicate", "duplicates"],
-    refund: ["refund", "refunds"],
-    income: ["non-expense row", "non-expense rows"],
-    already_booked: ["already booked", "already booked"],
-    ignored: ["already ignored", "already ignored"],
-    no_category: ["row with no category", "rows with no category"],
-    no_suggestion: ["row with no suggestion", "rows with no suggestion"],
-  };
   const phrases: string[] = [];
   for (const [reason, n] of counts) {
-    const [one, many] = labels[reason];
+    const [one, many] = SKIP_LABELS[reason];
     phrases.push(`${n} ${n === 1 ? one : many}`);
   }
   if (phrases.length > 0) parts.push(`Skipped ${phrases.join(", ")}.`);

@@ -380,4 +380,31 @@ describe("describeBatchOutcome", () => {
       describeBatchOutcome({ verb: "Ignored", done: 5, skipped: [], failed: 0 }),
     ).toBe("Ignored 5. 0 failed.");
   });
+
+  it("names rows kept as a label rather than booked", () => {
+    expect(
+      describeBatchOutcome({
+        verb: "Applied",
+        done: 8,
+        skipped: [],
+        failed: 0,
+        labelled: 2,
+      }),
+    ).toBe(
+      "Applied 8. Labelled 2 as not deductible without booking them. 0 failed.",
+    );
+  });
+
+  it("reports the booking-stage reasons too", () => {
+    expect(
+      describeBatchOutcome({
+        verb: "Applied",
+        done: 1,
+        skipped: [{ reason: "other_tax_year" }, { reason: "no_date" }],
+        failed: 0,
+      }),
+    ).toBe(
+      "Applied 1. Skipped 1 row from another tax year, 1 row with no date. 0 failed.",
+    );
+  });
 });
