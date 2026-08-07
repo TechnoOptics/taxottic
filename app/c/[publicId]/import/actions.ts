@@ -48,6 +48,7 @@ import {
 } from "@/lib/csv/categorization-rules";
 import { findRefundPairs, type NettableTx } from "@/lib/csv/net-refunds";
 import { bellaErrorMessage } from "@/lib/csv/bella-errors";
+import { detectDuplicates, type ImportRow } from "@/lib/csv/duplicates";
 
 /**
  * Heuristic: looks like a credit-card payment from another account, not
@@ -326,6 +327,26 @@ async function runCsvImport(formData: FormData): Promise<
       const slice = toInsert.slice(i, i + BATCH);
       const { error } = await admin.from("bank_transactions").insert(slice);
       if (error) throw new Error(error.message);
+    }
+
+    // Flag likely duplicates for the review page: two identical rows
+    // in this file, or a row that matches something already booked
+    // from a prior import. Runs against every parsed row (not just
+    // `toInsert`, which the exact-charge dedupe above may have
+    // trimmed) so a full re-import still gets flagged even though its
+    // rows never reach bank_transactions a second time. Never blocks
+    // or fails the upload: a missing duplicate flag is a degraded
+    // upload, not a broken one, and reads the same as a clean file.
+    try {
+      const duplicateRows: ImportRow[] = transactions.map((t) => ({
+        companyId: t.company_id,
+        description: t.description,
+        postedAt: t.posted_at,
+        amountCents: t.amount_cents,
+      }));
+      await detectDuplicates(admin, importRow.id, duplicateRows);
+    } catch (err) {
+      console.error("duplicate detection on upload failed:", err);
     }
 
     // Auto-run Bella over the freshly-imported batch. Failures here
