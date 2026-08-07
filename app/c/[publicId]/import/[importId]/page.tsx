@@ -7,12 +7,15 @@ import { formatCents } from "@/lib/tax/forecast";
 import {
   applyTransactions,
   bellaAutoApply,
+  completeImport,
   deleteImport,
   ignoreTx,
+  reopenImport,
   setSignConvention,
   setTxCategory,
   teachBella,
 } from "../actions";
+import { summarizeImport } from "@/lib/csv/import-summary";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
@@ -21,7 +24,11 @@ import { SignConventionBar } from "@/components/import/SignConventionBar";
 import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 
 type Params = Promise<{ publicId: string; importId: string }>;
-type Search = Promise<{ highlight?: string; error?: string | string[] }>;
+type Search = Promise<{
+  highlight?: string;
+  error?: string | string[];
+  notice?: string | string[];
+}>;
 
 export default async function ImportReviewPage({
   params,
@@ -31,11 +38,19 @@ export default async function ImportReviewPage({
   searchParams: Search;
 }) {
   const { publicId, importId } = await params;
-  const { highlight: targetTxId, error: errRaw } = await searchParams;
+  const {
+    highlight: targetTxId,
+    error: errRaw,
+    notice: noticeRaw,
+  } = await searchParams;
   // bellaAutoApply redirects here with ?error= when the categorize
   // pass fails, so the reason is visible instead of React's redacted
   // production digest.
   const errorMessage = Array.isArray(errRaw) ? errRaw[0] : errRaw;
+  // Batch actions redirect here with ?notice= carrying their plain
+  // tally: "Applied 39. Skipped 1 refund. 0 failed." A silent skip on a
+  // deduction surface is indistinguishable from a bug.
+  const noticeMessage = Array.isArray(noticeRaw) ? noticeRaw[0] : noticeRaw;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
   const superAdmin = await isSuperAdmin(supabase);
@@ -66,7 +81,7 @@ export default async function ImportReviewPage({
     supabase
       .from("bank_transactions")
       .select(
-        "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, ignored",
+        "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
       )
       .eq("import_id", importId)
       .order("posted_at", { ascending: false })
@@ -156,6 +171,19 @@ export default async function ImportReviewPage({
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([code]) => code);
+
+  // Progress is derived from the rows on every render, never read from
+  // bank_imports.applied_count. That column reads 0 on the 2026-08-01
+  // import while 48 of its rows are booked, because the upload-time
+  // auto-categorize path that booked most of them never writes it.
+  const progress = summarizeImport(
+    (txs ?? []).map((t) => ({
+      appliedExpenseId: t.applied_expense_id,
+      appliedIncomeId: t.applied_income_id,
+      ignored: !!t.ignored,
+    })),
+  );
+  const isCompleted = imp.status === "complete";
 
   const convention = (imp.sign_convention ?? "charges_negative") as SignConvention;
   const direction = (t: { amount_cents: number }) =>
@@ -293,10 +321,12 @@ export default async function ImportReviewPage({
         </h1>
         <div className="text-xs text-ink-muted mt-1 tracking-wide">
           {prettyAccountType(imp.account_type)} ·{" "}
-          {imp.row_count} rows uploaded -{" "}
-          {imp.applied_count > 0
-            ? `${imp.applied_count} applied`
+          {progress.total} rows uploaded -{" "}
+          {progress.applied > 0
+            ? `${progress.applied} applied`
             : "not yet applied"}
+          {progress.income > 0 ? ` - ${progress.income} booked as income` : ""}
+          {progress.ignored > 0 ? ` - ${progress.ignored} ignored` : ""}
         </div>
         {isCredit ? (
           <p className="mt-2 text-xs text-ink-muted max-w-2xl leading-relaxed">
@@ -319,6 +349,59 @@ export default async function ImportReviewPage({
           >
             {errorMessage}
           </div>
+        ) : null}
+
+        {noticeMessage ? (
+          <div
+            role="status"
+            className="mt-6 rounded-lg border border-forest-200 bg-white/70 px-4 py-3 text-sm text-forest-900"
+          >
+            {noticeMessage}
+          </div>
+        ) : null}
+
+        {/* The resting state. Nothing here writes to monthly_expenses:
+            every row this import contributes to a filed deduction was
+            written when it was applied, so this is a confirmation, not
+            a commit, and it is deliberately not called Commit. The
+            button is absent while anything is unresolved, because a
+            Complete offered over unsorted rows is a way to lose work. */}
+        {isCompleted ? (
+          <section className="mt-6 card p-5 flex items-center justify-between gap-4 flex-wrap border-emerald-200">
+            <div>
+              <div className="display text-base text-forest-900">
+                This import is complete
+              </div>
+              <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+                All {progress.total} rows are sorted and it has moved to the
+                completed section of the import list. Reopening changes the
+                status back, nothing was destroyed to get here.
+              </p>
+            </div>
+            <form action={reopenImport}>
+              <input type="hidden" name="import_id" value={importId} />
+              <button className="btn-ghost">Reopen import</button>
+            </form>
+          </section>
+        ) : progress.isComplete ? (
+          <section className="mt-6 card p-5 flex items-center justify-between gap-4 flex-wrap border-emerald-200">
+            <div>
+              <div className="display text-base text-forest-900">
+                All {progress.total} rows are sorted
+              </div>
+              <p className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+                {progress.applied} applied
+                {progress.income > 0 ? `, ${progress.income} booked as income` : ""}
+                {progress.ignored > 0 ? `, ${progress.ignored} ignored` : ""}.
+                Your expenses and forecast already reflect this. Completing
+                files the import away, and you can reopen it at any time.
+              </p>
+            </div>
+            <form action={completeImport}>
+              <input type="hidden" name="import_id" value={importId} />
+              <button className="btn-primary">Complete import</button>
+            </form>
+          </section>
         ) : null}
 
         {canDelete ? (

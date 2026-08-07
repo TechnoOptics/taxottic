@@ -12,6 +12,8 @@ import {
   SIGN_CONFIDENCE_BANNER,
   type SignConvention,
 } from "@/lib/csv/sign-convention";
+import { summarizeImport } from "@/lib/csv/import-summary";
+import { type BatchRow } from "@/lib/csv/import-selection";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
   categorizeBatch,
@@ -767,6 +769,167 @@ export async function setSignConvention(formData: FormData) {
   // changes the outstanding-items count that lib/tasks/outstanding.ts
   // reads, same reason setTxCategory / ignoreTx revalidate this path.
   revalidatePath("/dashboard");
+}
+
+/**
+ * Load one import, prove the caller is in its company, and tally its
+ * rows the derived way.
+ *
+ * Every batch and completion action starts here. The company is resolved
+ * from the import itself and never from a client-supplied company_id, so
+ * a forged field cannot widen the blast radius, and the tally comes from
+ * summarizeImport rather than bank_imports.applied_count, which reads 0
+ * on an import with 48 booked rows.
+ */
+async function loadImportForAction(
+  admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
+  userId: string,
+  importId: string,
+): Promise<{
+  companyId: string;
+  publicId: string;
+  status: string;
+  convention: SignConvention;
+  accountType: string;
+  rows: BatchRow[];
+  summary: ReturnType<typeof summarizeImport>;
+}> {
+  const { data: imp } = await admin
+    .from("bank_imports")
+    .select("id, company_id, status, sign_convention, account_type")
+    .eq("id", importId)
+    .maybeSingle();
+  if (!imp) throw new Error("Import not found");
+  const companyId = imp.company_id as string;
+  if (!(await userBelongsToCompany(admin, userId, companyId))) {
+    throw new Error("Not authorized");
+  }
+
+  const { data: txs } = await admin
+    .from("bank_transactions")
+    .select(
+      "id, import_id, company_id, description, amount_cents, posted_at, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
+    )
+    .eq("import_id", importId)
+    .eq("company_id", companyId);
+
+  const rows: BatchRow[] = (txs ?? []).map((t) => ({
+    id: t.id as string,
+    importId: t.import_id as string,
+    companyId: t.company_id as string,
+    amountCents: t.amount_cents as number,
+    suggestedCategoryCode: t.suggested_category_code as string | null,
+    appliedCategoryCode: t.applied_category_code as string | null,
+    appliedExpenseId: t.applied_expense_id as string | null,
+    appliedIncomeId: t.applied_income_id as string | null,
+    ignored: !!t.ignored,
+    description: (t.description as string | null) ?? "",
+    postedAt: t.posted_at as string | null,
+  }));
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("public_id")
+    .eq("id", companyId)
+    .maybeSingle();
+
+  return {
+    companyId,
+    publicId: (company?.public_id as string | undefined) ?? "",
+    status: (imp.status as string | null) ?? "reviewing",
+    convention:
+      (imp.sign_convention as SignConvention | null) ?? "charges_negative",
+    accountType: (imp.account_type as string | null) ?? "checking",
+    rows,
+    summary: summarizeImport(rows),
+  };
+}
+
+/**
+ * Record that a human saw a fully sorted import and agreed.
+ *
+ * Touches bank_imports.status, completed_at and completed_by. Nothing
+ * else, and monthly_expenses least of all: every row this import will
+ * ever contribute to a filed deduction was written when it was applied,
+ * and Complete is a confirmation, not a commit. Calling it "Commit"
+ * would imply the work had been held in escrow, and a user who believed
+ * that might reasonably think abandoning an import discards it.
+ *
+ * Re-checks completeness from the rows rather than trusting the caller.
+ * The button is absent while anything is unresolved, so this guard is
+ * for stale tabs and direct posts, which are the ordinary case on a page
+ * a user leaves open while Bella's cron works underneath them.
+ *
+ * Completing an already-complete import is a no-op, not an error.
+ */
+export async function completeImport(formData: FormData) {
+  const importId = String(formData.get("import_id") ?? "");
+  if (!importId) return;
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await loadImportForAction(admin, user.id, importId);
+  const back = `/c/${ctx.publicId}/import/${importId}`;
+
+  if (ctx.status === "complete") {
+    revalidatePath(back);
+    return;
+  }
+  if (!ctx.summary.isComplete) {
+    const n = ctx.summary.unresolved;
+    redirect(
+      `${back}?error=${encodeURIComponent(
+        n === 0
+          ? "This import has no rows to complete."
+          : `${n} row${n === 1 ? "" : "s"} still need${n === 1 ? "s" : ""} a category or an Ignore before this import can be completed.`,
+      )}`,
+    );
+  }
+
+  const { error } = await admin
+    .from("bank_imports")
+    .update({
+      status: "complete",
+      completed_at: new Date().toISOString(),
+      completed_by: user.id,
+    })
+    .eq("id", importId);
+  if (error) {
+    redirect(
+      `${back}?error=${encodeURIComponent(`Could not complete this import: ${error.message}`)}`,
+    );
+  }
+
+  await logCompanyActivity(admin, {
+    companyId: ctx.companyId,
+    actorUserId: user.id,
+    kind: "import.completed",
+    summary: `Completed an import of ${ctx.summary.total} rows`,
+    payload: { import_id: importId, rows: ctx.summary.total },
+  });
+
+  revalidatePath(`/c/${ctx.publicId}/import`);
+  revalidatePath(back);
+  redirect(`/c/${ctx.publicId}/import`);
+}
+
+/**
+ * Undo a Complete. A status change and two nulls, because nothing was
+ * destroyed to get here: discovering a mis-signed file after finishing
+ * an import is precisely the case that has to stay recoverable.
+ */
+export async function reopenImport(formData: FormData) {
+  const importId = String(formData.get("import_id") ?? "");
+  if (!importId) return;
+  const { admin, user } = await requireUserWithAdmin();
+  const ctx = await loadImportForAction(admin, user.id, importId);
+  if (ctx.status !== "complete") return;
+
+  await admin
+    .from("bank_imports")
+    .update({ status: "reviewing", completed_at: null, completed_by: null })
+    .eq("id", importId);
+
+  revalidatePath(`/c/${ctx.publicId}/import`);
+  revalidatePath(`/c/${ctx.publicId}/import/${importId}`);
 }
 
 /**

@@ -27,6 +27,7 @@ const KIND_META: Record<string, { label: string; tone: string }> = {
   "bank.connected": { label: "Bank connected", tone: "text-emerald-700" },
   "bank.disconnected": { label: "Bank disconnected", tone: "text-red-700" },
   "import.applied": { label: "Import applied", tone: "text-forest-700" },
+  "import.completed": { label: "Import completed", tone: "text-emerald-700" },
   "mileage.added": { label: "Trip logged", tone: "text-emerald-700" },
   "mileage.classified": { label: "Trip reclassified", tone: "text-forest-700" },
   "mileage.deleted": { label: "Trip removed", tone: "text-red-700" },
