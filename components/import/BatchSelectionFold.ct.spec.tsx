@@ -176,6 +176,42 @@ test.describe("fold cover screen, 344px", () => {
     await expect(page.getByRole("button", { name: /^Apply \(3\)/ })).toBeVisible();
   });
 
+  // The checkboxes are the primary control of the whole feature. Both
+  // render visually at 16px so the row does not get heavier, but each
+  // carries an absolutely positioned ".checkbox-hit-area" overlay meant
+  // to grow the tappable region to the 44px minimum this repo enforces
+  // elsewhere (see components/LeftRailMode.ct.spec.tsx). Measured the same
+  // way that spec measures a tap target: boundingBox() on the actual
+  // rendered element, not the source that produced it.
+  test("row checkbox and header checkbox both meet the 44px tap target", async ({
+    mount,
+    page,
+  }) => {
+    await mount(<TxRowGroupHarness {...PROPS} />);
+
+    const headerHit = page.locator(".card .checkbox-hit-area").first();
+    const headerBox = (await headerHit.boundingBox())!;
+    expect(
+      Math.round(headerBox.width),
+      "header checkbox tap target width is under 44px",
+    ).toBeGreaterThanOrEqual(44);
+    expect(
+      Math.round(headerBox.height),
+      "header checkbox tap target height is under 44px",
+    ).toBeGreaterThanOrEqual(44);
+
+    const rowHit = page.locator("li .checkbox-hit-area").first();
+    const rowBox = (await rowHit.boundingBox())!;
+    expect(
+      Math.round(rowBox.width),
+      "row checkbox tap target width is under 44px",
+    ).toBeGreaterThanOrEqual(44);
+    expect(
+      Math.round(rowBox.height),
+      "row checkbox tap target height is under 44px",
+    ).toBeGreaterThanOrEqual(44);
+  });
+
   test("screenshot", async ({ mount, page }) => {
     await mount(<TxRowGroupHarness {...PROPS} />);
     await expect(page).toHaveScreenshot("import-batch-selection-fold.png", {
