@@ -87,9 +87,9 @@ export function FeedbackModal({ open, onClose, submitAction }: Props) {
     <div
       role="dialog"
       aria-modal="true"
-      // z-[60] keeps the modal above any FAB / fixed UI; the BellaFAB
-      // is z-40 and the avatar dropdown is portaled at z-9999, so the
-      // modal sits comfortably above either when open.
+      // z-[60] keeps the modal above any fixed UI; the avatar dropdown
+      // is portaled at z-9999, so the modal sits comfortably above
+      // anything below that when open.
       className="fixed inset-0 z-[60] grid place-items-end sm:place-items-center px-3 pb-3 sm:p-6"
       onClick={onClose}
     >

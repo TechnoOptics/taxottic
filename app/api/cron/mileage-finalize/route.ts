@@ -126,15 +126,26 @@ export async function GET(req: NextRequest) {
   // untouched; a future regression self-heals within one cron interval.
   // Wrapped so a reconcile failure can never break finalization.
   let healed = 0;
+  let renderRefused = 0;
   try {
     const reconcile = await reconcileBrokenTrips(admin, {
       sinceIso: new Date(Date.now() - 45 * 24 * 60 * 60_000).toISOString(),
       limit: 200,
     });
     healed = reconcile.healed;
+    renderRefused = reconcile.refused;
     if (reconcile.scanned > 0) {
       console.log(
-        `[mileage-finalize] reconcile scanned=${reconcile.scanned} healed=${reconcile.healed}`,
+        `[mileage-finalize] reconcile scanned=${reconcile.scanned} healed=${reconcile.healed} refused=${reconcile.refused}`,
+      );
+    }
+    // A refusal is the pipeline declining to write a fabricated
+    // distance. It is the right outcome, but a NON-ZERO count means
+    // something upstream keeps producing one, so it must not be a debug
+    // line nobody reads. Per-trip detail is in mileage_render_refusals.
+    if (renderRefused > 0) {
+      console.error(
+        `[mileage-finalize] RENDER REFUSALS: ${renderRefused} implausible rebuild(s) declined this tick. See mileage_render_refusals.`,
       );
     }
   } catch (err) {
@@ -548,7 +559,7 @@ export async function GET(req: NextRequest) {
   }
 
   console.log(
-    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} stallsNotified=${stallsNotified} stallsUndeliverable=${stallsUndeliverable} parkedNotified=${parkedNotified} fleet=${fleetStatus}`,
+    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} renderRefused=${renderRefused} stallsNotified=${stallsNotified} stallsUndeliverable=${stallsUndeliverable} parkedNotified=${parkedNotified} fleet=${fleetStatus}`,
   );
 
   return NextResponse.json({
@@ -557,6 +568,7 @@ export async function GET(req: NextRequest) {
     processed,
     tripsCreated: totalTrips,
     healed,
+    renderRefused,
     fleet: fleetStatus,
   });
 }
