@@ -19,6 +19,7 @@ import {
 } from "../actions";
 import { summarizeImport } from "@/lib/csv/import-summary";
 import { summarizeSelection } from "@/lib/csv/import-selection";
+import { fetchAllPages } from "@/lib/db/paginate";
 import { BatchSelectionProvider } from "@/components/import/BatchSelection";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
@@ -67,7 +68,10 @@ export default async function ImportReviewPage({
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, user_id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
+      // applied_count is deliberately NOT selected. It drifts, nothing
+      // renders it any more, and leaving it out makes "no longer read"
+      // something grep can prove.
+      "id, user_id, filename, status, row_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
@@ -81,15 +85,42 @@ export default async function ImportReviewPage({
   if (!canReadAnyImport && imp.user_id !== user.id) notFound();
   const isCredit = imp.account_type === "credit";
 
-  const [{ data: txs }, { data: categories }] = await Promise.all([
-    supabase
-      .from("bank_transactions")
-      .select(
-        "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
-      )
-      .eq("import_id", importId)
-      .order("posted_at", { ascending: false })
-      .order("description"),
+  type TxRowData = {
+    id: string;
+    description: string;
+    amount_cents: number;
+    posted_at: string | null;
+    raw_category: string | null;
+    suggested_category_code: string | null;
+    applied_category_code: string | null;
+    applied_expense_id: string | null;
+    applied_income_id: string | null;
+    // not null in the schema (bank_transactions.ignored, default false).
+    ignored: boolean;
+  };
+  const [txs, { data: categories }] = await Promise.all([
+    // PAGED, for the same reason as the import list and the batch
+    // actions: PostgREST truncates at max-rows silently. Unpaged, an
+    // import over 1000 rows would render a partial list AND compute
+    // `progress` over it, which could offer the Complete button on an
+    // import that still has unresolved rows further down. The action
+    // re-checks server-side so nothing would actually be mis-completed,
+    // but the button would be lying, and this screen exists because a
+    // number on it lied. The id ordering is the paging tiebreaker:
+    // posted_at and description are not unique, so without it pages can
+    // overlap or skip.
+    fetchAllPages<TxRowData>((from, to) =>
+      supabase
+        .from("bank_transactions")
+        .select(
+          "id, description, amount_cents, posted_at, raw_category, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
+        )
+        .eq("import_id", importId)
+        .order("posted_at", { ascending: false })
+        .order("description")
+        .order("id")
+        .range(from, to),
+    ),
     supabase
       .from("deduction_categories")
       // Now includes 'personal' so charity / SALT / mortgage-interest

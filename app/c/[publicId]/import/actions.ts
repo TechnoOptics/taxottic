@@ -21,6 +21,7 @@ import {
   type BatchSkipReason,
 } from "@/lib/csv/import-selection";
 import { planExpenseBooking } from "@/lib/csv/expense-booking";
+import { fetchAllPages } from "@/lib/db/paginate";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
   categorizeBatch,
@@ -587,15 +588,27 @@ async function loadImportForAction(
     throw new Error("Not authorized");
   }
 
-  const { data: txs } = await admin
-    .from("bank_transactions")
-    .select(
-      "id, import_id, company_id, description, amount_cents, posted_at, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
-    )
-    .eq("import_id", importId)
-    .eq("company_id", companyId);
+  // PAGED. PostgREST truncates at max-rows silently, so an import of
+  // more than 1000 rows came back short with no error and no flag. On
+  // this path that is not a display bug: ctx.summary below feeds
+  // completeImport's guard, so a truncated read could report "nothing
+  // unresolved" and let an import be marked complete while unresolved
+  // rows sat outside the window. It would also hide rows from
+  // partitionBatch, which would then skip a legitimately selected id as
+  // "unknown". Ordered by id so pages cannot overlap or skip.
+  const txs = await fetchAllPages<Record<string, unknown>>((from, to) =>
+    admin
+      .from("bank_transactions")
+      .select(
+        "id, import_id, company_id, description, amount_cents, posted_at, suggested_category_code, applied_category_code, applied_expense_id, applied_income_id, ignored",
+      )
+      .eq("import_id", importId)
+      .eq("company_id", companyId)
+      .order("id")
+      .range(from, to),
+  );
 
-  const rows: BatchRow[] = (txs ?? []).map((t) => ({
+  const rows: BatchRow[] = txs.map((t) => ({
     id: t.id as string,
     importId: t.import_id as string,
     companyId: t.company_id as string,
