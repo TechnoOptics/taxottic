@@ -55,7 +55,11 @@ export type RefundPair = {
   daysApart: number;
 };
 
-function normalizeMerchant(desc: string | null): string {
+// Exported so lib/csv/duplicates.ts can reuse the exact same merchant
+// key. Two features deciding independently what counts as "the same
+// merchant" is how they end up disagreeing; sharing this function is
+// the guard against that.
+export function normalizeMerchant(desc: string | null): string {
   if (!desc) return "";
   return desc
     .toUpperCase()
