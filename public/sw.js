@@ -950,7 +950,11 @@
 // reach and need no cache bump of their own, but they ship in this same
 // release. Also lands the mileage re-render plausibility gate (FMEA
 // C6, server-only, no client markup change, no bump needed for it).
-const CACHE_VERSION = "v160";
+// v161: the landing page carries real photography now, six licensed
+// photographs plus a new three-audience band, so the home markup grew
+// by about 1,700px. A cached v160 shell would serve the old page with
+// none of the images.
+const CACHE_VERSION = "v161";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

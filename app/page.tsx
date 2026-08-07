@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/Wordmark";
@@ -323,7 +324,9 @@ export default async function Home({
       />
 
       <Hero audience={audience} />
+      <HeroFigure audience={audience} />
       <Capabilities audience={audience} />
+      <WhoItsFor audience={audience} />
       <ProductTour audience={audience} />
       <ProofBand />
       <FomoBand audience={audience} />
@@ -468,6 +471,80 @@ function Hero({ audience }: { audience: Audience }) {
         <p className="mt-6 text-xs uppercase tracking-[0.2em] text-gold-300">
           {h.footnote}
         </p>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero figure
+//
+// One photograph per audience, placed across the seam between the navy hero
+// above and the cream page below rather than inside either one. The top 60%
+// of this section repeats #121a2a, the closing stop of the hero gradient, so
+// the navy field carries down behind the frame and releases into cream at the
+// picture's waist. That makes the photograph the hinge between the promise
+// and the product, which is the one place on this page a real photograph
+// earns its keep.
+//
+// The frame itself borrows MockupFrame's language (gold bloom, 2xl radius,
+// long soft shadow) so the photograph reads as part of this page and not as
+// something pulled off a stock library.
+//
+// Every image is documentary, licensed under the Unsplash Licence, and
+// recorded with its source and photographer in public/marketing/CREDITS.md.
+// Alt text describes what is actually in the frame.
+// ---------------------------------------------------------------------------
+
+const HERO_FIGURE: Record<Audience, { src: string; alt: string }> = {
+  personal: {
+    src: "/marketing/hero-personal.jpg",
+    alt: "A person sorting IRS Publication 505 and a Schedule D form across a table, with a calculator open on a phone beside the papers.",
+  },
+  business: {
+    src: "/marketing/hero-business.jpg",
+    alt: "A woodworker at a bench in a small timber-framed workshop, with wood shavings and hand planes across the foreground.",
+  },
+  firm: {
+    src: "/marketing/hero-firm.jpg",
+    alt: "Hands turning the pages of a thick ring binder of client invoices and statements on a wooden desk.",
+  },
+};
+
+function HeroFigure({ audience }: { audience: Audience }) {
+  const f = HERO_FIGURE[audience];
+  return (
+    <section className="relative">
+      {/* Carries the hero's closing navy down behind the top of the frame.
+          Positioned rather than negative-z so it stacks by DOM order and
+          can't fall behind the page background. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-[60%]"
+        style={{ background: "#121a2a" }}
+      />
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
+        <figure className="relative m-0">
+          <div
+            aria-hidden="true"
+            className="absolute -inset-4 rounded-[28px] opacity-60 blur-2xl"
+            style={{
+              backgroundImage:
+                "radial-gradient(60% 60% at 50% 40%, rgba(213,187,126,0.25), transparent 70%)",
+            }}
+          />
+          <div className="relative overflow-hidden rounded-2xl border border-gold-300/25 shadow-[0_30px_70px_-35px_rgba(18,26,42,0.65)]">
+            <Image
+              src={f.src}
+              alt={f.alt}
+              width={1600}
+              height={900}
+              priority
+              sizes="(min-width: 1152px) 1088px, 100vw"
+              className="block w-full aspect-[16/9] lg:aspect-[2.4/1] object-cover"
+            />
+          </div>
+        </figure>
       </div>
     </section>
   );
@@ -640,6 +717,135 @@ function Capabilities({ audience }: { audience: Audience }) {
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Who it's for
+//
+// The audience toggle exists only at the very top of the page, so a reader who
+// scrolled past it has no way back to the other two views. This band is that
+// way back, and it is photographic on purpose: the three pictures are the
+// three audiences, so the imagery is the control rather than decoration
+// sitting next to one.
+//
+// The card for the audience currently being shown is not a link. It is marked
+// as the current view and carries aria-current, so the band never offers a
+// route to where the reader already is.
+// ---------------------------------------------------------------------------
+
+const WHO: {
+  id: Audience;
+  label: string;
+  src: string;
+  alt: string;
+  line: string;
+}[] = [
+  {
+    id: "personal",
+    label: "For me",
+    src: "/marketing/who-personal.jpg",
+    alt: "A person working at a laptop at a home desk between two tall windows, with a desk lamp lit beside them.",
+    line: "W-2, freelance, or some of both. Your own return, your own deductions, one forecast that keeps up.",
+  },
+  {
+    id: "business",
+    label: "For my business",
+    src: "/marketing/who-business.jpg",
+    alt: "A brick main-street shopfront with striped awnings, a lit OPEN sign in the window and a chalkboard beside the door.",
+    line: "Sole prop, LLC, or S-corp. Bank-synced expenses, business miles, and a Schedule C that assembles itself.",
+  },
+  {
+    id: "firm",
+    label: "For my firm",
+    src: "/marketing/who-firm.jpg",
+    alt: "An open bound accounts ledger showing ruled columns of handwritten figures.",
+    line: "Every client's books in one console, bulk exports, and a client portal branded as your practice.",
+  },
+];
+
+function WhoCard({ w, current }: { w: (typeof WHO)[number]; current: boolean }) {
+  return (
+    <>
+      <Image
+        src={w.src}
+        alt={w.alt}
+        width={720}
+        height={540}
+        sizes="(min-width: 1024px) 352px, (min-width: 640px) 50vw, 100vw"
+        className="block w-full aspect-[4/3] object-cover"
+      />
+      <div className="flex flex-1 flex-col gap-2 p-6">
+        <h3 className="display text-xl text-forest-900 leading-snug">
+          {w.label}
+        </h3>
+        <p className="text-sm text-ink-soft leading-relaxed">{w.line}</p>
+        <div className="mt-auto pt-3 text-[11px] uppercase tracking-[0.18em] text-gold-700">
+          {current ? (
+            "Current view"
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              See this view
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 16 16"
+                className="h-3 w-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 8h10M9 4l4 4-4 4" />
+              </svg>
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function WhoItsFor({ audience }: { audience: Audience }) {
+  return (
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20 sm:pb-28">
+      <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
+        Who it&apos;s for
+      </div>
+      <h2 className="display mt-3 text-3xl sm:text-5xl text-forest-900 max-w-3xl">
+        Three ways in.
+      </h2>
+      <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
+        One workspace, described three ways. Switch whenever you like. The
+        features, the pricing, and the guidance follow.
+      </p>
+
+      <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {WHO.map((w) => {
+          const current = w.id === audience;
+          return (
+            <li key={w.id} className="flex">
+              {current ? (
+                <div
+                  aria-current="true"
+                  className="card flex w-full flex-col overflow-hidden ring-2 ring-gold-400/70"
+                >
+                  <WhoCard w={w} current />
+                </div>
+              ) : (
+                <Link
+                  href={`/?audience=${w.id}`}
+                  scroll={false}
+                  className="card card-hover flex w-full flex-col overflow-hidden"
+                >
+                  <WhoCard w={w} current={false} />
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

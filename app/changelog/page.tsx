@@ -47,6 +47,12 @@ const ENTRIES: Entry[] = [
     tags: ["shipped", "fix"],
   },
   {
+    date: "2026-08-06",
+    title: "The home page shows the people it is built for",
+    body: "The front page now carries real photographs instead of type alone: someone working through their own estimated-tax paperwork, a one-person workshop, a practice going through a client's file. They change with the view you pick, and a new 'Three ways in' section lower down lets you switch between the personal, business, and firm views without scrolling back to the top. Every photograph is a real photograph, licensed for commercial use, with the source and photographer recorded.",
+    tags: ["shipped"],
+  },
+  {
     date: "2026-08-01",
     title: "Clearer answers about location, and who can see your drives",
     body: "A new policy page, Location tracking and team visibility, sets out exactly what automatic mileage tracking records, how long each part of it is kept, and what a manager at your company or an engaged accounting firm can see. Short version: only drives you mark as business become visible to your company, and personal or unclassified drives never leave your own account. The screen that asks for location permission now says the same thing before you agree to it. The privacy policy, cookie list, and subprocessor list have also been brought in line with what the app actually does, including the vendors that were live but unlisted.",
