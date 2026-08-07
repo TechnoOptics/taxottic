@@ -5,6 +5,13 @@ import { revalidatePath } from "next/cache";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { logCompanyActivity } from "@/lib/activity/log";
 import { parseCsv, sniffColumns, parseAmountCents } from "@/lib/csv/parse";
+import {
+  detectSignConvention,
+  interpretAmount,
+  planFlip,
+  SIGN_CONFIDENCE_BANNER,
+  type SignConvention,
+} from "@/lib/csv/sign-convention";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
 import {
   categorizeBatch,
@@ -205,6 +212,29 @@ async function runCsvImport(formData: FormData): Promise<
 
     const dataRows = rows.slice(1);
 
+    // Decide once, at upload, how this file's signs should be read, and
+    // record it so the review page can state it and the user can
+    // correct it. Amounts are stored exactly as parsed below (line
+    // ~237); this only records how to read the signs already parsed,
+    // it does not change parsing.
+    const detected = detectSignConvention(
+      dataRows.map((r) => ({
+        amountCents: parseAmountCents(r[cols.amount] ?? ""),
+      })),
+    );
+    // Credit-card statements conventionally list charges positive. When
+    // the file is too thin to detect confidently, prefer that over the
+    // charges_negative default: charges_negative on a credit import
+    // reads every real charge as income and every refund as the only
+    // expense candidate, which is emptier than the import actually is.
+    // Same fallback as scripts/backfill-sign-convention.ts, scoped the
+    // same way (credit imports only; a thin checking import keeps the
+    // charges_negative default, which is what it has always meant).
+    const signConvention: SignConvention =
+      accountType === "credit" && detected.confidence < SIGN_CONFIDENCE_BANNER
+        ? "charges_positive"
+        : detected.convention;
+
     const { data: importRow, error: importErr } = await admin
       .from("bank_imports")
       .insert({
@@ -214,6 +244,10 @@ async function runCsvImport(formData: FormData): Promise<
         row_count: dataRows.length,
         status: "reviewing",
         account_type: accountType,
+        sign_convention: signConvention,
+        sign_convention_source: "detected",
+        sign_convention_confidence: detected.confidence,
+        sign_convention_set_at: new Date().toISOString(),
       })
       .select("id")
       .single();
@@ -368,17 +402,22 @@ export async function applyTransactions(formData: FormData) {
     throw new Error("Not a member of this company");
   }
 
-  // Pull the import's account_type, credit-card imports take the
-  // absolute value of every charge as an expense regardless of sign,
-  // since issuers don't agree on charge-vs-payment sign conventions.
+  // Pull the import's account_type and sign_convention. Which amounts
+  // are expenses is decided by sign_convention (detected per-file, see
+  // detectSignConvention), not by a hardcoded rule for the account
+  // type; account_type still decides the credit-only card-payment skip
+  // below (this function only ever books expenses, income booking
+  // lives in runBellaCategorize).
   const { data: imp } = await admin
     .from("bank_imports")
-    .select("account_type")
+    .select("account_type, sign_convention")
     .eq("id", importId)
     .eq("company_id", companyId)
     .maybeSingle();
   const accountType = (imp?.account_type as string | null) ?? "checking";
   const isCredit = accountType === "credit";
+  const convention =
+    (imp?.sign_convention as SignConvention | null) ?? "charges_negative";
 
   const { data: txs } = await admin
     .from("bank_transactions")
@@ -481,21 +520,23 @@ export async function applyTransactions(formData: FormData) {
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
 
-    // Credit-card sign convention (audited against Discover/Amex/Chase
-    // export on May 23 2026):
-    //   POSITIVE amount → real charge → becomes an expense.
-    //   NEGATIVE amount → refund OR card payment from another account.
-    //     - Card-payment-back rows match looksLikeCardPayment → skip;
-    //       they're inter-account transfers, never deductible.
-    //     - Everything else negative is a refund → also skip from
-    //       auto-apply. A refund offsets an earlier charge that was
-    //       already booked; auto-booking it as either a positive expense
-    //       (the prior abs() bug, inflated deductions) or a negative
-    //       expense (would surface as an income tile, also wrong) gets
-    //       it wrong either way. Leave for user review.
+    // Credit-card sign convention:
+    //   Card-payment-back rows match looksLikeCardPayment → skip; they're
+    //   inter-account transfers, never deductible.
+    //   Only rows the sign convention reads as an expense get booked.
+    //   Under charges_positive that excludes refunds (negative); under
+    //   charges_negative it also excludes income (positive), since
+    //   nothing on this branch is ever supposed to be booked as income.
+    //   A refund offsets an earlier charge that was already booked;
+    //   auto-booking it as either a positive expense (inflates the
+    //   deduction) or a negative expense (would surface as an income
+    //   tile, also wrong) gets it wrong either way. Leave for user
+    //   review.
     if (isCredit) {
       if (looksLikeCardPayment(tx.description)) continue;
-      if (tx.amount_cents < 0) continue; // refund, surface for review
+      if (interpretAmount(tx.amount_cents, convention).direction !== "expense") {
+        continue;
+      }
       expenseInserts.push({
         company_id: companyId,
         user_id: user.id,
@@ -512,11 +553,16 @@ export async function applyTransactions(formData: FormData) {
       continue;
     }
 
-    // Non-credit (checking/savings/other): keep the existing sign
-    // convention, only negative amounts are expenses. Positive
-    // amounts are income or transfers; the user can categorize those
-    // manually for now.
-    if (tx.amount_cents < 0) {
+    // Non-credit (checking/savings/other): the sign convention decides
+    // which amounts are expenses, not a hardcoded "negative means
+    // expense". That was only ever true under charges_negative; a
+    // non-credit import detected as charges_positive has its charges
+    // on the positive side like a credit statement, and hardcoding the
+    // old check would book its refunds as expenses while silently
+    // booking nothing for its real charges. Non-expense rows are
+    // income or transfers; the user can categorize those manually for
+    // now.
+    if (interpretAmount(tx.amount_cents, convention).direction === "expense") {
       expenseInserts.push({
         company_id: companyId,
         user_id: user.id,
@@ -641,6 +687,89 @@ export async function ignoreTx(formData: FormData) {
 }
 
 /**
+ * Change how one import's signs are read.
+ *
+ * Re-reads everything uncommitted and touches nothing that is already in
+ * monthly_expenses. Booked rows (applied_expense_id set) always land in
+ * planFlip's needsReview bucket and are never written to here: that
+ * table is a filed-deduction surface, not something a sign correction
+ * gets to silently restate.
+ *
+ * Writes, and only these:
+ *   - bank_transactions.applied_category_code, cleared to null, but
+ *     only for the ids planFlip puts in clearTag.
+ *   - bank_imports.sign_convention, sign_convention_source,
+ *     sign_convention_confidence, sign_convention_set_at.
+ * Nothing else. applied_expense_id is never cleared and
+ * monthly_expenses is never touched.
+ */
+export async function setSignConvention(formData: FormData) {
+  const importId = String(formData.get("import_id") ?? "");
+  const next = String(formData.get("convention") ?? "");
+  if (!importId) return;
+  if (next !== "charges_negative" && next !== "charges_positive") return;
+
+  const { admin, user } = await requireUserWithAdmin();
+
+  // Authorization pattern copied from setTxCategory / ignoreTx above:
+  // resolve the owning company from the resource itself (not from a
+  // client-supplied company_id) and check membership against that.
+  const { data: imp } = await admin
+    .from("bank_imports")
+    .select("id, company_id, sign_convention")
+    .eq("id", importId)
+    .maybeSingle();
+  if (!imp || !(await userBelongsToCompany(admin, user.id, imp.company_id as string))) {
+    throw new Error("Not authorized");
+  }
+
+  const from = (imp.sign_convention as SignConvention | null) ?? "charges_negative";
+  if (from === next) return; // already reading this way, nothing to do
+
+  const { data: txs } = await admin
+    .from("bank_transactions")
+    .select("id, amount_cents, applied_category_code, applied_expense_id")
+    .eq("import_id", importId);
+
+  const plan = planFlip(
+    (txs ?? []).map((t) => ({
+      id: t.id as string,
+      amountCents: t.amount_cents as number,
+      appliedCategoryCode: t.applied_category_code as string | null,
+      appliedExpenseId: t.applied_expense_id as string | null,
+    })),
+    from,
+    next,
+  );
+
+  if (plan.clearTag.length > 0) {
+    await admin
+      .from("bank_transactions")
+      .update({ applied_category_code: null })
+      .in("id", plan.clearTag);
+  }
+
+  await admin
+    .from("bank_imports")
+    .update({
+      sign_convention: next,
+      sign_convention_source: "user",
+      // An explicit user correction is as confident as this column
+      // gets, and it keeps the review page from showing the
+      // low-confidence banner right after the user just resolved it.
+      sign_convention_confidence: 1,
+      sign_convention_set_at: new Date().toISOString(),
+    })
+    .eq("id", importId);
+
+  revalidatePath("/c/[publicId]/import/[importId]", "page");
+  // A flip can clear applied_category_code (plan.clearTag above), which
+  // changes the outstanding-items count that lib/tasks/outstanding.ts
+  // reads, same reason setTxCategory / ignoreTx revalidate this path.
+  revalidatePath("/dashboard");
+}
+
+/**
  * Auto-categorize an entire import in one shot using Bella.
  *
  * Flow:
@@ -757,13 +886,15 @@ async function runBellaCategorize(args: {
 
   const { data: imp } = await admin
     .from("bank_imports")
-    .select("id, account_type, company_id")
+    .select("id, account_type, sign_convention, company_id")
     .eq("id", importId)
     .eq("company_id", companyId)
     .maybeSingle();
   if (!imp) throw new Error("Import not found");
   const accountType = (imp.account_type as string | null) ?? "checking";
   const isCredit = accountType === "credit";
+  const convention =
+    (imp.sign_convention as SignConvention | null) ?? "charges_negative";
 
   const { data: txs } = await admin
     .from("bank_transactions")
@@ -1008,16 +1139,15 @@ async function runBellaCategorize(args: {
     const absCents = Math.abs(tx.amount_cents);
     if (absCents === 0) continue;
 
-    // Credit-card refund (negative amount on a credit account that
-    // isn't a card-payment-back) → don't auto-book. Same rationale as
-    // applyTransactions above: refunds offset an earlier charge and
-    // need user judgement to either re-categorize the original or
-    // mark the pair as a wash. Auto-applying a negative as either a
-    // positive expense (inflates deduction) or a negative income
-    // (phantom revenue) is wrong both ways.
-    if (isCredit && tx.amount_cents < 0) continue;
+    const direction = interpretAmount(tx.amount_cents, convention).direction;
 
     if (d.kind === "expense" && d.code) {
+      // Bella's own read of the row (d.kind) is not enough on its own:
+      // never book as an expense unless the sign convention agrees this
+      // row is actually a charge. Booking a refund, or an income row
+      // Bella mis-called an expense, as a positive expense inflates the
+      // deduction, the exact failure this task exists to prevent.
+      if (direction !== "expense") continue;
       expenseInserts.push({
         company_id: companyId,
         user_id: user.id,
@@ -1031,6 +1161,9 @@ async function runBellaCategorize(args: {
       });
       expenseTxIds.push(tx.id);
     } else if (d.kind === "income" && d.code && !isCredit) {
+      // Mirror of the expense check above: never book an actual charge
+      // as income.
+      if (direction === "expense") continue;
       // Income on a credit account is always a payment-back; don't
       // create a phantom revenue line.
       const subLike = isSubscriptionLike(tx.description);
@@ -1163,7 +1296,7 @@ async function runBellaCategorize(args: {
     )
     .eq("import_id", importId)
     .eq("company_id", companyId);
-  const pairs = findRefundPairs((pairTxs ?? []) as NettableTx[]);
+  const pairs = findRefundPairs((pairTxs ?? []) as NettableTx[], convention);
   if (pairs.length > 0) {
     const allIds = pairs.flatMap((p) => [p.chargeId, p.refundId]);
     await admin

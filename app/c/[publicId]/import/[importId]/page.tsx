@@ -9,6 +9,7 @@ import {
   bellaAutoApply,
   deleteImport,
   ignoreTx,
+  setSignConvention,
   setTxCategory,
   teachBella,
 } from "../actions";
@@ -16,6 +17,8 @@ import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
 import { TxRow } from "@/components/import/TxRow";
+import { SignConventionBar } from "@/components/import/SignConventionBar";
+import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 
 type Params = Promise<{ publicId: string; importId: string }>;
 type Search = Promise<{ highlight?: string; error?: string | string[] }>;
@@ -41,7 +44,7 @@ export default async function ImportReviewPage({
   const { data: imp } = await supabase
     .from("bank_imports")
     .select(
-      "id, filename, status, row_count, applied_count, account_type, created_at",
+      "id, filename, status, row_count, applied_count, account_type, sign_convention, sign_convention_source, sign_convention_confidence, created_at",
     )
     .eq("id", importId)
     .eq("company_id", company.id)
@@ -144,16 +147,40 @@ export default async function ImportReviewPage({
     .slice(0, 8)
     .map(([code]) => code);
 
-  // For credit-card imports every non-ignored, non-zero row is an
-  // expense. For other accounts we keep the conventional debit (out)
-  // / credit (in) split.
+  const convention = (imp.sign_convention ?? "charges_negative") as SignConvention;
+  const direction = (t: { amount_cents: number }) =>
+    interpretAmount(t.amount_cents, convention).direction;
+
+  // Rows already booked into monthly_expenses whose direction would
+  // read differently under the previous convention. Only meaningful
+  // after an actual user flip (sign_convention_source === 'user'):
+  // for every non-zero amount the direction always differs between
+  // the two conventions, so without this gate the count would just be
+  // "booked and non-zero" and fire a false "review these" banner on
+  // every import that has ever been applied, even ones that were
+  // never flipped. A flip never rewrites these rows (planFlip always
+  // returns booked rows to the caller for review, never modifies
+  // them), so once the user does flip, these are the rows worth
+  // double-checking against this month's totals.
+  const other: SignConvention =
+    convention === "charges_positive" ? "charges_negative" : "charges_positive";
+  const bookedUnderPrevious =
+    imp.sign_convention_source === "user"
+      ? (txs ?? []).filter(
+          (t) =>
+            t.applied_expense_id &&
+            interpretAmount(t.amount_cents, convention).direction !==
+              interpretAmount(t.amount_cents, other).direction,
+        ).length
+      : 0;
+
+  // Expense candidates are rows the convention says are charges. Refunds
+  // and income are deliberately excluded: a refund booked as an expense
+  // inflates a deduction, which is what happened to a $24.45 return on
+  // the 2026-08-01 import.
   const allActive = (txs ?? []).filter((t) => !t.ignored);
-  const debits = isCredit
-    ? allActive.filter((t) => t.amount_cents !== 0)
-    : allActive.filter((t) => t.amount_cents < 0);
-  const credits = isCredit
-    ? []
-    : allActive.filter((t) => t.amount_cents > 0);
+  const debits = allActive.filter((t) => direction(t) === "expense");
+  const credits = allActive.filter((t) => direction(t) !== "expense");
   const ignoredRows = (txs ?? []).filter((t) => t.ignored);
   const pendingApply = debits.filter(
     (t) => t.applied_category_code && !t.applied_expense_id,
@@ -263,9 +290,10 @@ export default async function ImportReviewPage({
         </div>
         {isCredit ? (
           <p className="mt-2 text-xs text-ink-muted max-w-2xl leading-relaxed">
-            Credit-card import: every charge counts as an expense regardless
-            of CSV sign. We auto-skip rows that look like card payments
-            (autopay, payment received, etc.) so they aren&apos;t
+            Credit-card import: charges are read using this file&apos;s
+            detected sign convention, not a fixed rule, so refunds aren&apos;t
+            offered as expenses. We auto-skip rows that look like card
+            payments (autopay, payment received, etc.) so they aren&apos;t
             double-counted.
           </p>
         ) : null}
@@ -377,6 +405,16 @@ export default async function ImportReviewPage({
           </div>
         </section>
 
+        <div className="mt-6">
+          <SignConventionBar
+            importId={importId}
+            convention={convention}
+            confidence={imp.sign_convention_confidence as number | null}
+            bookedUnderPrevious={bookedUnderPrevious}
+            setSignConvention={setSignConvention}
+          />
+        </div>
+
         <section className="mt-6 card p-6">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
             <h2 className="display text-xl text-forest-900">
@@ -428,7 +466,7 @@ export default async function ImportReviewPage({
                         cats={catOptions}
                         frequentCodes={frequentCodes}
                         catById={catById}
-                        isCredit={isCredit}
+                        convention={convention}
                         setTxCategory={setTxCategory}
                         ignoreTx={ignoreTx}
                         teachBella={teachBella}
@@ -474,7 +512,7 @@ export default async function ImportReviewPage({
                     cats={catOptions}
                     frequentCodes={frequentCodes}
                     catById={catById}
-                    isCredit={isCredit}
+                    convention={convention}
                     setTxCategory={setTxCategory}
                     ignoreTx={ignoreTx}
                     teachBella={teachBella}
