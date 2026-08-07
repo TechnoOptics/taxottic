@@ -95,7 +95,7 @@ export default async function ImportReviewPage({
       // Now includes 'personal' so charity / SALT / mortgage-interest
       // / volunteer-mileage are tag-able from a credit-card import
       // (those rows are often mixed in with business charges on the
-      // same card). applyTransactions routes personal AND transfer
+      // same card). applySelected routes personal AND transfer
       // picks via ignored=true so they never inflate the Schedule C
       // deduction, they're labels, not bookings.
       // Pull irc_section + irs_pub so the TxRow can show the

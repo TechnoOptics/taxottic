@@ -1,7 +1,7 @@
 // Whether one selected row becomes a monthly_expenses record, and what
 // that record says.
 //
-// applyTransactions makes this decision inline, in a loop, with two
+// The removed applyTransactions made this decision inline, in a loop, with two
 // nearly-identical branches for credit and non-credit accounts and four
 // `continue` statements that drop a row without telling anyone. That was
 // survivable when the button applied whatever happened to be tagged. It
