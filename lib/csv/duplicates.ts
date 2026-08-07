@@ -1,49 +1,51 @@
 // Duplicate detection for CSV bank imports.
 // See docs/superpowers/specs/2026-08-06-import-duplicate-detection-design.md
 //
-// Re-importing the same CSV silently doubles a user's expenses. Nothing
-// detected that before this file existed. This module flags candidates
-// for the review page; it never removes or blocks anything. A row that
-// turns out to be two genuinely separate charges (two Delta tickets
-// bought on the same day, at the same price) is common, not an error,
-// so the output here is always a question for the user, never a
-// decision made on their behalf.
+// Fix round 1 (2026-08-06) corrected the original premise. Re-importing
+// the same CSV does NOT double a user's expenses: runCsvImport already
+// drops exact-charge matches (chargeFingerprint, in
+// lib/banking/subscription-dedupe.ts) before insert. The actual bug is
+// that the drop is SILENT: a re-import produces an empty-looking review
+// page that still says "62 rows uploaded", with nothing explaining why
+// none of them are there. `bank_import_duplicates` was always meant to
+// record what the dedupe dropped (see the table comment in
+// supabase/migrations/20260801224316_csv_import_review.sql), not a
+// second, independent opinion about which rows look like duplicates.
 //
-// `bank_import_duplicates` already exists in production with exactly
-// the right schema (see supabase/migrations/20260801224316_csv_import_review.sql).
-// This file is what finally writes to it.
+// So this file now builds on that dedupe instead of routing around it.
+// splitAlreadyBookedCharges below IS the drop decision (it uses
+// chargeFingerprint, the exact same identity runCsvImport already
+// filters `toInsert` with) and produces the already_booked findings in
+// the same pass that decides which rows to insert. That is the only
+// way to guarantee the flagged set equals the suppressed set: one
+// decision, not two that can drift apart.
 //
-// Purity: fingerprintRow, findWithinFileDuplicates and
-// findAlreadyBookedDuplicates touch no database and are exhaustively
-// tested in duplicates.test.ts. detectDuplicates is the only impure
-// piece: it queries, delegates to the pure matchers above, then
-// writes. Keeping the matching logic pure is not stylistic here - on
+// findWithinFileDuplicates is unrelated to that drop and still uses its
+// own normalizeMerchant-based fingerprint (see fingerprintRow), because
+// within-file repeats DO get inserted today (the exact-charge dedupe
+// only looks at prior imports, not sibling rows in this one) and an
+// inline notice helps there. Duplicates are flagged, never removed:
+// nothing in this file deletes or blocks a row.
+//
+// Purity: fingerprintRow, findWithinFileDuplicates,
+// splitAlreadyBookedCharges and dedupeFindings touch no database and
+// are exhaustively tested in duplicates.test.ts. detectDuplicates is
+// the only impure piece: it writes the findings the caller already
+// computed. Keeping the matching logic pure is not stylistic here - on
 // 2026-08-06 five defects shipped in this exact file area, and every
 // one lived in caller code wrapping otherwise-correct pure functions.
 
 import { normalizeMerchant } from "./net-refunds";
-
-export type ImportRow = {
-  companyId: string;
-  description: string;
-  postedAt: string | null; // "YYYY-MM-DD", or null if unparsed
-  amountCents: number | null; // null if unparsed
-};
-
-export type ExistingBookedRow = {
-  id: string; // bank_transactions.id
-  importId: string; // bank_transactions.import_id (the import that booked it)
-  companyId: string;
-  description: string;
-  postedAt: string | null;
-  amountCents: number;
-  appliedExpenseId: string | null;
-  appliedIncomeId: string | null;
-};
+import { chargeFingerprint } from "@/lib/banking/subscription-dedupe";
 
 export type DuplicateKind = "within_file" | "already_booked";
 
 export type DuplicateFinding = {
+  // Position of the source row in the caller's original parsed-row
+  // array. Bookkeeping only, used by dedupeFindings to recognize two
+  // findings that describe the same physical row; never written to
+  // bank_import_duplicates.
+  rowIndex: number;
   companyId: string;
   postedAt: string;
   description: string;
@@ -54,12 +56,37 @@ export type DuplicateFinding = {
   existingImportId: string | null;
 };
 
+// ---------------------------------------------------------------------
+// Within-file matching (normalizeMerchant-based)
+// ---------------------------------------------------------------------
+
+export type ImportRow = {
+  index: number;
+  companyId: string;
+  description: string;
+  postedAt: string | null; // "YYYY-MM-DD", or null if unparsed
+  amountCents: number | null; // null if unparsed
+};
+
 /**
  * normalizeMerchant(description) | posted_at | amount_cents
  *
- * All three parts are load-bearing: merchant alone collapses a month
- * of Sam's Club runs, date alone collapses a busy day, amount alone
- * collapses every $20 subscription.
+ * Used ONLY by findWithinFileDuplicates, for rows within one file.
+ * Already-booked matching does NOT use this function: it is derived
+ * directly from the exact-charge dedupe's own decision (see
+ * splitAlreadyBookedCharges below), which fingerprints with
+ * chargeFingerprint / normalizeDesc (lib/banking/subscription-dedupe.ts),
+ * a different normalizer. The two disagree on punctuation: normalizeDesc
+ * turns non-alphanumeric runs into spaces and truncates at 40 chars,
+ * normalizeMerchant only splits on whitespace and keeps three tokens, so
+ * "SAM'S CLUB 6311 SHAKOPEE" and "SAM S CLUB 6311 SHAKOPEE" fingerprint
+ * identically under one and differently under the other. Do not assume
+ * they ever agree, and do not try to reconcile them here: this
+ * function's only job is within-file matching.
+ *
+ * All three parts of the key are load-bearing: merchant alone collapses
+ * a month of Sam's Club runs, date alone collapses a busy day, amount
+ * alone collapses every $20 subscription.
  *
  * A row with no posted_at or an unparseable amount is never
  * fingerprinted and never flagged - silence is correct there, a
@@ -85,6 +112,12 @@ export function fingerprintRow(row: {
  * third), and so on - the first occurrence of any fingerprint is never
  * itself flagged, only the repeats after it.
  *
+ * Intended to run over the rows that actually survive the exact-charge
+ * dedupe (`toInsert` in runCsvImport), not the full parsed set: a row
+ * already dropped as already_booked never reaches bank_transactions, so
+ * flagging it as a within-file repeat too would be describing a row
+ * that was never inserted.
+ *
  * Pure, no DB I/O.
  */
 export function findWithinFileDuplicates(rows: ImportRow[]): DuplicateFinding[] {
@@ -98,6 +131,7 @@ export function findWithinFileDuplicates(rows: ImportRow[]): DuplicateFinding[] 
     seenCount.set(fingerprint, count);
     if (count === 1) continue;
     findings.push({
+      rowIndex: row.index,
       companyId: row.companyId,
       postedAt: row.postedAt as string,
       description: row.description,
@@ -112,47 +146,81 @@ export function findWithinFileDuplicates(rows: ImportRow[]): DuplicateFinding[] 
   return findings;
 }
 
+// ---------------------------------------------------------------------
+// Already-booked matching (chargeFingerprint-based: the exact-charge
+// dedupe's own decision, not a second opinion on it)
+// ---------------------------------------------------------------------
+
+export type ChargeCandidate = {
+  index: number;
+  description: string | null;
+  postedAt: string | null;
+  amountCents: number;
+};
+
+export type ExistingChargeRow = {
+  id: string; // bank_transactions.id
+  importId: string; // bank_transactions.import_id
+  postedAt: string | null;
+  amountCents: number;
+  description: string | null;
+};
+
 /**
- * Match parsed rows against the company's already-booked transactions
- * (applied_expense_id or applied_income_id set). Rows still under
- * review (neither field set) never count as "existing" - matching
- * against an import the user hasn't acted on yet would flag rows they
- * may still ignore.
+ * The exact-charge dedupe's decision, expressed as data instead of a
+ * side effect. Uses chargeFingerprint (day-precision posted date +
+ * exact cents + normalized description), the SAME function runCsvImport
+ * has always used to decide which rows to drop before insert. A row
+ * with no posted_at is always kept, matching that dedupe's existing
+ * behavior (it has never treated a dateless row as a duplicate
+ * candidate).
  *
- * companyId is checked on both sides even though the caller's query is
- * expected to already scope `existing` to one company: a duplicate is
- * a duplicate within one company's books, and this is the second,
- * defense-in-depth place that guarantees cross-tenant rows can never
- * match, independent of whether the caller's query is correct.
+ * Returns both halves of the same decision:
+ *   keptIndexes  row indexes (matching ChargeCandidate.index) that
+ *                should still be inserted.
+ *   duplicates   a DuplicateFinding per dropped row, carrying the real
+ *                existing_transaction_id / existing_import_id of the
+ *                prior row it matched.
+ *
+ * This is the only place that decides "already booked". Computing it
+ * once and reading both outputs off it is what guarantees the flagged
+ * set and the suppressed set can never diverge; the previous version of
+ * this file computed them separately and they did.
  *
  * Pure: takes the existing rows, does not query.
  */
-export function findAlreadyBookedDuplicates(
-  rows: ImportRow[],
-  existing: ExistingBookedRow[],
-): DuplicateFinding[] {
-  const booked = existing.filter((r) => r.appliedExpenseId || r.appliedIncomeId);
-
-  const byKey = new Map<string, ExistingBookedRow>();
-  for (const ex of booked) {
-    const fingerprint = fingerprintRow(ex);
-    if (!fingerprint) continue;
-    const key = `${ex.companyId}|${fingerprint}`;
-    if (!byKey.has(key)) byKey.set(key, ex);
+export function splitAlreadyBookedCharges(
+  companyId: string,
+  rows: ChargeCandidate[],
+  existing: ExistingChargeRow[],
+): { keptIndexes: Set<number>; duplicates: DuplicateFinding[] } {
+  const byFingerprint = new Map<string, ExistingChargeRow>();
+  for (const ex of existing) {
+    if (!ex.postedAt) continue;
+    const fingerprint = chargeFingerprint(ex.postedAt, ex.amountCents, ex.description);
+    if (!byFingerprint.has(fingerprint)) byFingerprint.set(fingerprint, ex);
   }
 
-  const findings: DuplicateFinding[] = [];
+  const keptIndexes = new Set<number>();
+  const duplicates: DuplicateFinding[] = [];
+
   for (const row of rows) {
-    const fingerprint = fingerprintRow(row);
-    if (!fingerprint) continue;
-    const key = `${row.companyId}|${fingerprint}`;
-    const match = byKey.get(key);
-    if (!match) continue;
-    findings.push({
-      companyId: row.companyId,
-      postedAt: row.postedAt as string,
-      description: row.description,
-      amountCents: row.amountCents as number,
+    if (!row.postedAt) {
+      keptIndexes.add(row.index);
+      continue;
+    }
+    const fingerprint = chargeFingerprint(row.postedAt, row.amountCents, row.description);
+    const match = byFingerprint.get(fingerprint);
+    if (!match) {
+      keptIndexes.add(row.index);
+      continue;
+    }
+    duplicates.push({
+      rowIndex: row.index,
+      companyId,
+      postedAt: row.postedAt,
+      description: row.description ?? "",
+      amountCents: row.amountCents,
       fingerprint,
       kind: "already_booked",
       existingTransactionId: match.id,
@@ -160,18 +228,53 @@ export function findAlreadyBookedDuplicates(
     });
   }
 
-  return findings;
+  return { keptIndexes, duplicates };
+}
+
+// ---------------------------------------------------------------------
+// Combine, dedupe, write
+// ---------------------------------------------------------------------
+
+/**
+ * Collapse findings that describe the same physical row (by rowIndex)
+ * down to one record. In the current wiring this never actually
+ * triggers: a row dropped by splitAlreadyBookedCharges never reaches
+ * `toInsert`, so it can never also be seen by findWithinFileDuplicates,
+ * meaning the two finding sets are disjoint by construction. This still
+ * runs before every write as a defensive guarantee rather than a
+ * proof-dependent one: a row flagged twice would make a count-based
+ * summary ("N of M rows look like duplicates") read higher than the
+ * import's own row count, and that invariant should not rest on nobody
+ * ever changing what feeds findWithinFileDuplicates.
+ *
+ * already_booked wins over within_file on a collision: it carries a
+ * real existing_transaction_id the review page can link to, which
+ * within_file never has.
+ *
+ * Pure.
+ */
+export function dedupeFindings(findings: DuplicateFinding[]): DuplicateFinding[] {
+  const byRow = new Map<number, DuplicateFinding>();
+  for (const finding of findings) {
+    const prior = byRow.get(finding.rowIndex);
+    if (!prior || (prior.kind === "within_file" && finding.kind === "already_booked")) {
+      byRow.set(finding.rowIndex, finding);
+    }
+  }
+  return [...byRow.values()];
 }
 
 /**
- * The only impure piece: queries the company's already-booked
- * transactions in this row set's date range, delegates to the two
- * pure matchers above, then writes findings to
- * public.bank_import_duplicates.
+ * The only impure piece: writes already-computed findings to
+ * public.bank_import_duplicates. Both matchers above are pure by
+ * design, so the caller (runCsvImport in
+ * app/c/[publicId]/import/actions.ts) computes the already-booked
+ * findings at the exact-charge dedupe site (where the priorRows query
+ * already exists) and the within-file findings from `toInsert`, then
+ * passes both here to be deduped and written.
  *
- * Detection failing must never fail an upload. The caller
- * (runCsvImport in app/c/[publicId]/import/actions.ts) wraps this call
- * in its own try/catch so a thrown error here degrades to "no
+ * Detection failing must never fail an upload. The caller wraps this
+ * call in its own try/catch so a thrown error here degrades to "no
  * duplicates found" rather than blocking the import - the rows are
  * already parsed and stored by the time this runs, so a missing
  * duplicate flag is a degraded upload, not a broken one.
@@ -179,49 +282,12 @@ export function findAlreadyBookedDuplicates(
 export async function detectDuplicates(
   admin: ReturnType<typeof import("@/lib/supabase/server").createServiceClient>,
   importId: string,
-  rows: ImportRow[],
+  findings: DuplicateFinding[],
 ): Promise<void> {
-  if (rows.length === 0) return;
-  const companyId = rows[0].companyId;
+  const deduped = dedupeFindings(findings);
+  if (deduped.length === 0) return;
 
-  const dates = rows
-    .map((r) => r.postedAt)
-    .filter((d): d is string => !!d)
-    .sort();
-
-  let existing: ExistingBookedRow[] = [];
-  if (dates.length > 0) {
-    const { data, error } = await admin
-      .from("bank_transactions")
-      .select(
-        "id, import_id, company_id, description, posted_at, amount_cents, applied_expense_id, applied_income_id",
-      )
-      .eq("company_id", companyId)
-      .neq("import_id", importId)
-      .gte("posted_at", dates[0])
-      .lte("posted_at", dates[dates.length - 1])
-      .or("applied_expense_id.not.is.null,applied_income_id.not.is.null")
-      .limit(10_000);
-    if (error) throw error;
-    existing = ((data ?? []) as Record<string, unknown>[]).map((r) => ({
-      id: String(r.id),
-      importId: String(r.import_id),
-      companyId: String(r.company_id),
-      description: (r.description as string | null) ?? "",
-      postedAt: (r.posted_at as string | null) ?? null,
-      amountCents: Number(r.amount_cents),
-      appliedExpenseId: (r.applied_expense_id as string | null) ?? null,
-      appliedIncomeId: (r.applied_income_id as string | null) ?? null,
-    }));
-  }
-
-  const findings = [
-    ...findWithinFileDuplicates(rows),
-    ...findAlreadyBookedDuplicates(rows, existing),
-  ];
-  if (findings.length === 0) return;
-
-  const records = findings.map((f) => ({
+  const records = deduped.map((f) => ({
     import_id: importId,
     company_id: f.companyId,
     posted_at: f.postedAt,
@@ -233,6 +299,6 @@ export async function detectDuplicates(
     existing_import_id: f.existingImportId,
   }));
 
-  const { error: insertError } = await admin.from("bank_import_duplicates").insert(records);
-  if (insertError) throw insertError;
+  const { error } = await admin.from("bank_import_duplicates").insert(records);
+  if (error) throw error;
 }
