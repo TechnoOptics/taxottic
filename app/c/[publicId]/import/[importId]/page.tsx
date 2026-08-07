@@ -5,10 +5,12 @@ import { CompanyNav } from "@/components/CompanyNav";
 import { loadCompanyByPublicId } from "@/lib/tax/company-context";
 import { formatCents } from "@/lib/tax/forecast";
 import {
-  applyTransactions,
+  acceptSuggestions,
+  applySelected,
   bellaAutoApply,
   completeImport,
   deleteImport,
+  ignoreSelected,
   ignoreTx,
   reopenImport,
   setSignConvention,
@@ -16,6 +18,8 @@ import {
   teachBella,
 } from "../actions";
 import { summarizeImport } from "@/lib/csv/import-summary";
+import { summarizeSelection } from "@/lib/csv/import-selection";
+import { BatchSelectionProvider } from "@/components/import/BatchSelection";
 import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
@@ -220,8 +224,43 @@ export default async function ImportReviewPage({
   const debits = allActive.filter((t) => direction(t) === "expense");
   const credits = allActive.filter((t) => direction(t) !== "expense");
   const ignoredRows = (txs ?? []).filter((t) => t.ignored);
+
+  // What a checkbox may appear on, decided here by the same isSelectable
+  // the server actions re-run over the posted ids. Refunds, income and
+  // already-booked rows are absent from this list, so a select-all
+  // cannot reach them. That is the guarantee, and it is structural: a
+  // disabled checkbox would be one markup change away from reachable.
+  const selectionRows = (txs ?? []).map((t) => ({
+    id: t.id,
+    importId,
+    companyId: company.id,
+    amountCents: t.amount_cents,
+    suggestedCategoryCode: t.suggested_category_code,
+    appliedCategoryCode: t.applied_category_code,
+    appliedExpenseId: t.applied_expense_id,
+    appliedIncomeId: t.applied_income_id,
+    ignored: !!t.ignored,
+  }));
+  const selection = summarizeSelection(selectionRows, [], convention);
+  const selectableIds = selection.selectableIds;
+  const selectableSet = new Set(selectableIds);
+
+  // Rows a human already gave a category and that are not booked yet.
+  // The old "Apply manually selected" button applied exactly these while
+  // claiming they had been selected; nothing on the page could be
+  // selected, so the count was a residue of pressing Save row by row.
   const pendingApply = debits.filter(
-    (t) => t.applied_category_code && !t.applied_expense_id,
+    (t) => selectableSet.has(t.id) && t.applied_category_code,
+  );
+  // Bella's ungrafted suggestions: the reported backlog. These display a
+  // category that looks chosen and is not, because
+  // suggested_category_code is a different column from
+  // applied_category_code and nothing on screen said so.
+  const pendingSuggestions = debits.filter(
+    (t) =>
+      selectableSet.has(t.id) &&
+      t.suggested_category_code &&
+      !t.applied_category_code,
   );
 
   // Bella detection rollup, shown at the top of the review section
@@ -436,25 +475,61 @@ export default async function ImportReviewPage({
           <button className="btn-ghost">Re-run Bella</button>
         </form>
 
-        {pendingApply.length > 0 ? (
+        {/* The standing action that clears the reported backlog in one
+            press. Deliberately separate from Apply: Bella's own
+            confidence threshold already decides what she books
+            unattended, and this is the explicit accept of what she was
+            not confident enough to book alone. Keeping the two apart
+            preserves whether a human ever agreed with the software,
+            which is worth preserving on a tax record. */}
+        {pendingSuggestions.length > 0 ? (
           <form
-            action={applyTransactions}
-            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap"
+            action={acceptSuggestions}
+            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap border-gold-300/60"
           >
             <input type="hidden" name="import_id" value={importId} />
-            <input type="hidden" name="company_id" value={company.id} />
+            {pendingSuggestions.map((t) => (
+              <input key={t.id} type="hidden" name="tx_ids" value={t.id} />
+            ))}
             <div>
               <div className="display text-base text-forest-900">
-                {pendingApply.length} transaction
-                {pendingApply.length === 1 ? "" : "s"} ready to apply
+                Bella suggested categories for {pendingSuggestions.length} row
+                {pendingSuggestions.length === 1 ? "" : "s"}
               </div>
-              <div className="text-xs text-ink-muted mt-1">
-                Each will become a deductible expense entry on the corresponding
-                month.
+              <div className="text-xs text-ink-muted mt-1 max-w-xl leading-relaxed">
+                Those rows show a suggestion, not a decision. Accepting sets
+                the category and books each one as a deductible expense in
+                the month it was posted. Refunds are never included.
               </div>
             </div>
             <button className="btn-ghost">
-              Apply manually selected ({pendingApply.length})
+              Accept all {pendingSuggestions.length}
+            </button>
+          </form>
+        ) : null}
+
+        {pendingApply.length > 0 ? (
+          <form
+            action={applySelected}
+            className="mt-4 card p-5 flex items-center justify-between gap-4 flex-wrap"
+          >
+            <input type="hidden" name="import_id" value={importId} />
+            {pendingApply.map((t) => (
+              <input key={t.id} type="hidden" name="tx_ids" value={t.id} />
+            ))}
+            <div>
+              <div className="display text-base text-forest-900">
+                {pendingApply.length} row
+                {pendingApply.length === 1 ? "" : "s"} you categorized are not
+                booked yet
+              </div>
+              <div className="text-xs text-ink-muted mt-1">
+                Each becomes a deductible expense entry on the month it was
+                posted.
+              </div>
+            </div>
+            <button className="btn-ghost">
+              Apply these {pendingApply.length}
             </button>
           </form>
         ) : null}
@@ -508,6 +583,18 @@ export default async function ImportReviewPage({
           />
         </div>
 
+        {/* Selection spans both piles below, so one Apply commits what
+            the user ticked wherever it sits. Selection is client state
+            only: nothing is persisted, because a stored "selected" flag
+            would be a second source of truth about what the user meant,
+            and that is how applied_count came to read 0. */}
+        <BatchSelectionProvider
+          importId={importId}
+          selectableIds={selectableIds}
+          applySelected={applySelected}
+          ignoreSelected={ignoreSelected}
+          acceptSuggestions={acceptSuggestions}
+        >
         <section className="mt-6 card p-6">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
             <h2 className="display text-xl text-forest-900">
@@ -531,11 +618,9 @@ export default async function ImportReviewPage({
             </p>
           ) : activeDebits.length === 0 ? (
             <p className="mt-4 text-sm text-ink-soft">
-              Every row has been categorized or skipped. Click{" "}
-              <span className="font-medium text-forest-900">
-                Apply manually selected
-              </span>{" "}
-              above to book the tagged ones into your monthly expenses.
+              Every row has been categorized or skipped. Tick the rows you
+              want and use the bar at the bottom, or use the buttons above
+              to book them all into your monthly expenses.
             </p>
           ) : (
             <div className="mt-4 grid gap-6">
@@ -616,6 +701,7 @@ export default async function ImportReviewPage({
             </details>
           </section>
         ) : null}
+        </BatchSelectionProvider>
 
         {credits.length > 0 ? (
           <section className="mt-6 card p-6">
@@ -639,6 +725,9 @@ export default async function ImportReviewPage({
                     </div>
                     <div className="text-xs text-ink-muted">
                       {t.posted_at ?? "-"}
+                      {direction(t) === "refund"
+                        ? " · Refund, not deductible"
+                        : ""}
                     </div>
                   </div>
                   <div className="text-forest-900 tabular-nums font-medium">

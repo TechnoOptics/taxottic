@@ -285,7 +285,7 @@ async function runCsvImport(formData: FormData): Promise<
 
     // Exact-charge dedupe: a re-uploaded statement (or an overlapping
     // export) must not book the same charge twice. Identity = posted
-    // date + exact cents + normalized description (chargeFingerprint) —
+    // date + exact cents + normalized description (chargeFingerprint):
     // "master the dates so we know it's the exact same charge". Compare
     // against every prior import for this company in the batch's date
     // range and drop matches before insert.
@@ -1581,7 +1581,7 @@ async function runBellaCategorize(args: {
         recurring_key: incKey,
       });
       if (covering) {
-        // Already forecast by a recurring row — link, don't double-count.
+        // Already forecast by a recurring row, so link rather than double-count.
         coveredIncomeLinks.push({ txId: tx.id, incomeId: covering.id });
         continue;
       }
