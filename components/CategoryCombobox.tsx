@@ -72,6 +72,11 @@ type Props = {
    *  with empty value. Matches the previous select's first option. */
   allowEmpty?: boolean;
   emptyLabel?: string;
+  /** Fires with the picked code (empty string when cleared). For forms
+   *  that are NOT auto-submitting and need to gate their own submit
+   *  button on a pick having been made, e.g. the move-to-expenses
+   *  control, where a category is what makes the line a deduction. */
+  onPick?: (code: string) => void;
 };
 
 function rankScore(opt: CategoryOption, q: string, freq: Set<string>): number {
@@ -106,6 +111,7 @@ export function CategoryCombobox({
   className,
   allowEmpty = true,
   emptyLabel = "Skip / not deductible",
+  onPick,
 }: Props) {
   const [value, setValue] = useState<string>(defaultValue ?? "");
   const [open, setOpen] = useState(false);
@@ -181,6 +187,7 @@ export function CategoryCombobox({
     setValue(code);
     setOpen(false);
     setQuery("");
+    onPick?.(code);
     // setTimeout so React applies the value update before form submit;
     // the hidden input reads .value via DOM at submit time.
     if (autoSubmit && hiddenRef.current) {

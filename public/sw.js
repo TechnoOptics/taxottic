@@ -950,7 +950,7 @@
 // reach and need no cache bump of their own, but they ship in this same
 // release. Also lands the mileage re-render plausibility gate (FMEA
 // C6, server-only, no client markup change, no bump needed for it).
-const CACHE_VERSION = "v159";
+const CACHE_VERSION = "v160";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

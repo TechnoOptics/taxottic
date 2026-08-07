@@ -203,3 +203,16 @@ export function ChartIcon({ className }: IconProps) {
     </Frame>
   );
 }
+
+/**
+ * Two arrows, opposite directions. Marks the control that moves a booked
+ * line across the income/expense divide, in either direction.
+ */
+export function ArrowSwapIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <path d="M4 8.5h14M14.5 5l3.5 3.5-3.5 3.5" />
+      <path d="M20 15.5H6M9.5 12 6 15.5 9.5 19" />
+    </Frame>
+  );
+}

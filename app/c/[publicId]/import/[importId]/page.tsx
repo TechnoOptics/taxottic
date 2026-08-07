@@ -12,6 +12,7 @@ import {
   deleteImport,
   ignoreSelected,
   ignoreTx,
+  moveBookedTransaction,
   reopenImport,
   setSignConvention,
   setTxCategory,
@@ -29,6 +30,7 @@ import { isSuperAdmin } from "@/lib/plans/usage";
 import { DeleteImportButton } from "@/components/DeleteImportButton";
 import { type CategoryOption } from "@/components/CategoryCombobox";
 import { TxRow } from "@/components/import/TxRow";
+import { MoveBookedRow } from "@/components/import/MoveBookedRow";
 import { SignConventionBar } from "@/components/import/SignConventionBar";
 import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 
@@ -334,6 +336,11 @@ export default async function ImportReviewPage({
   // so the user can see at a glance "Bella tagged X, you tagged Y,
   // these N are still untouched." Computed from in-memory debits
   // (already loaded above), no extra round-trip.
+  // `!t.applied_income_id` on every arm: a row booked into monthly_income
+  // is settled, whichever pile the convention puts it in, and it must
+  // never be reported as "still untouched". That combination is now
+  // reachable, because moveBookedTransaction can book a row as income
+  // and clear its category while the sign still reads as a charge.
   const stats = {
     total: debits.length,
     appliedAsExpense: debits.filter((t) => t.applied_expense_id).length,
@@ -341,16 +348,21 @@ export default async function ImportReviewPage({
       (t) =>
         t.suggested_category_code &&
         !t.applied_category_code &&
-        !t.applied_expense_id,
+        !t.applied_expense_id &&
+        !t.applied_income_id,
     ).length,
     userTagged: debits.filter(
-      (t) => t.applied_category_code && !t.applied_expense_id,
+      (t) =>
+        t.applied_category_code &&
+        !t.applied_expense_id &&
+        !t.applied_income_id,
     ).length,
     untouched: debits.filter(
       (t) =>
         !t.suggested_category_code &&
         !t.applied_category_code &&
-        !t.applied_expense_id,
+        !t.applied_expense_id &&
+        !t.applied_income_id,
     ).length,
   };
 
@@ -366,7 +378,9 @@ export default async function ImportReviewPage({
   const activeDebits: Debit[] = [];
   const taggedDebits: Debit[] = [];
   for (const t of debits) {
-    if (t.applied_expense_id || t.applied_category_code) {
+    // applied_income_id counts as sorted for the same reason: the row is
+    // booked, it just went the other way.
+    if (t.applied_expense_id || t.applied_income_id || t.applied_category_code) {
       taggedDebits.push(t);
     } else {
       activeDebits.push(t);
@@ -735,6 +749,7 @@ export default async function ImportReviewPage({
                         setTxCategory={setTxCategory}
                         ignoreTx={ignoreTx}
                         teachBella={teachBella}
+                        moveBookedTransaction={moveBookedTransaction}
                         highlight={t.id === targetTxId}
                       />
                     ))}
@@ -781,6 +796,7 @@ export default async function ImportReviewPage({
                     setTxCategory={setTxCategory}
                     ignoreTx={ignoreTx}
                     teachBella={teachBella}
+                    moveBookedTransaction={moveBookedTransaction}
                     highlight={t.id === targetTxId}
                   />
                 ))}
@@ -806,37 +822,70 @@ export default async function ImportReviewPage({
               {credits.map((t) => (
                 <li
                   key={t.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
+                  className="rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-forest-900 truncate">
-                      {t.description}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-forest-900 truncate">
+                        {t.description}
+                      </div>
+                      <div className="text-xs text-ink-muted">
+                        {t.posted_at ?? "-"}
+                        {direction(t) === "refund"
+                          ? " · Refund, not deductible"
+                          : ""}
+                      </div>
                     </div>
-                    <div className="text-xs text-ink-muted">
-                      {t.posted_at ?? "-"}
-                      {direction(t) === "refund"
-                        ? " · Refund, not deductible"
-                        : ""}
+                    <div className="text-forest-900 tabular-nums font-medium shrink-0">
+                      {formatCents(t.amount_cents)}
                     </div>
+                    {/* Without this, a deposit or an unpaired refund could
+                        never be resolved. Neither is bookable as an expense
+                        and neither carries a checkbox, so on the live import
+                        the $0.84 Vercel credit would sit unresolved forever
+                        and the Complete step would never appear. A row the
+                        user does not want to account for has to be
+                        dismissible. Per-row only: these rows stay out of the
+                        batch selection model entirely.
+
+                        A row that is already BOOKED is not skippable: Skip
+                        would clear the category and leave monthly_income
+                        pointing at nothing. Those rows get the move control
+                        below instead, which is the actual remedy. */}
+                    {t.applied_income_id || t.applied_expense_id ? null : (
+                      <form action={ignoreTx} className="shrink-0">
+                        <input type="hidden" name="id" value={t.id} />
+                        <input type="hidden" name="import_id" value={importId} />
+                        <button className="text-xs text-ink-muted hover:text-red-700 px-2 py-1">
+                          Skip
+                        </button>
+                      </form>
+                    )}
                   </div>
-                  <div className="text-forest-900 tabular-nums font-medium shrink-0">
-                    {formatCents(t.amount_cents)}
-                  </div>
-                  {/* Without this, a deposit or an unpaired refund could
-                      never be resolved. Neither is bookable as an expense
-                      and neither carries a checkbox, so on the live import
-                      the $0.84 Vercel credit would sit unresolved forever
-                      and the Complete step would never appear. A row the
-                      user does not want to account for has to be
-                      dismissible. Per-row only: these rows stay out of the
-                      batch selection model entirely. */}
-                  <form action={ignoreTx} className="shrink-0">
-                    <input type="hidden" name="id" value={t.id} />
-                    <input type="hidden" name="import_id" value={importId} />
-                    <button className="text-xs text-ink-muted hover:text-red-700 px-2 py-1">
-                      Skip
-                    </button>
-                  </form>
+                  {/* This is where the 2026-08-06 row ended up: booked as
+                      $4,000 of income while carrying an expense code, with
+                      nothing on the page able to move it back. */}
+                  {t.applied_income_id || t.applied_expense_id ? (
+                    <>
+                      <div className="mt-2">
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+                          {t.applied_income_id
+                            ? "Booked as income"
+                            : "Booked as an expense"}
+                        </span>
+                      </div>
+                      <MoveBookedRow
+                        txId={t.id}
+                        importId={importId}
+                        direction={
+                          t.applied_income_id ? "to_expense" : "to_income"
+                        }
+                        cats={catOptions}
+                        frequentCodes={frequentCodes}
+                        moveBookedTransaction={moveBookedTransaction}
+                      />
+                    </>
+                  ) : null}
                 </li>
               ))}
             </ul>
