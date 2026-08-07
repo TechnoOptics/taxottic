@@ -922,7 +922,18 @@
 // on every sign-in and app open. LeftRail gained the mode-sync effect
 // and a 44px toggle, so the markup changed and stale clients need the
 // new bundle.
-const CACHE_VERSION = "v156";
+// v157: bank import privacy. bank_imports and bank_transactions were
+// readable by every company member, so an expenser could read the
+// owner's imported bank statements (merchant, amount, date) and the
+// notification bell surfaced them on every page. RLS is now
+// own-rows-or-manager, and /c/[id]/banks plus the import routes gate on
+// role before rendering. The markup of those pages changed for
+// non-managers (banks now 404s, "Past imports" lists only your own), so
+// cached shells must not be reused. The same release scopes the watch /
+// home-screen-widget snapshot, which was reading bank rows through the
+// service-role client; that needs no cache bump of its own because
+// /api/ is never cached (see the fetch handler), but it ships here.
+const CACHE_VERSION = "v157";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

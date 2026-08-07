@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { ScrollToHighlight } from "@/components/ScrollToHighlight";
 import { CompanyNav } from "@/components/CompanyNav";
@@ -23,7 +24,7 @@ const INCOME_SOURCE_OPTIONS = [
   { code: "royalty", label: "Royalty / licensing" },
   { code: "other", label: "Other" },
 ];
-import { getActiveFeatureGates } from "@/lib/plans/usage";
+import { getActiveFeatureGates, isSuperAdmin } from "@/lib/plans/usage";
 import { findMasterForExpense } from "@/lib/deductions/matcher";
 import { disconnectBank } from "@/app/actions/recycle-bin";
 import { relativeTime, freshnessLevel } from "@/lib/format/relative-time";
@@ -74,6 +75,17 @@ export default async function BanksPage({
     : stripeErrorRaw;
   const { supabase, user, company, isManager } =
     await loadCompanyByPublicId(publicId);
+
+  // Bank feeds are a manager/owner function: reconciling the company's
+  // own accounts. Everything on this page below the fold comes from
+  // bank_connections / bank_accounts / account_transactions, all three
+  // of which are manager-only at the RLS layer, and every control here
+  // is already wrapped in `isManager`. So a non-manager who typed the
+  // URL got a shell with empty lists and no actions -- and relied on
+  // RLS alone to keep it empty. Refuse the route outright instead: a
+  // page that renders before it checks is a page that leaks the day a
+  // policy regresses. Hiding it from the nav is not access control.
+  if (!isManager && !(await isSuperAdmin(supabase))) notFound();
 
   // Free plan: render the upgrade card instead of the live page.
   const { gates } = await getActiveFeatureGates(supabase, user.id);

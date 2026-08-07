@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { reclassifyTripCore } from "@/lib/mileage/reclassify";
 import { resolveWatchUserId } from "@/lib/watch/device-auth";
+import {
+  clarifyBankTransactionCore,
+  clarifyStatus,
+} from "@/lib/watch/clarify-tx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,47 +70,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, did: "reclassify_trip" });
   }
 
-  // expense / income, a bank_transactions row.
-  const { data: tx } = await admin
-    .from("bank_transactions")
-    .select("id, company_id, suggested_category_code")
-    .eq("id", id)
-    .maybeSingle();
-  if (!tx) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
-
-  // Authorise: the tx's company must be one the user is a member of
-  // (same check as import/actions.ts userBelongsToCompany).
-  const { data: membership } = await admin
-    .from("company_members")
-    .select("user_id")
-    .eq("company_id", (tx as { company_id: string }).company_id)
-    .eq("user_id", uid)
-    .maybeSingle();
-  if (!membership) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-
-  if (business) {
-    // Mirrors setTxCategory: keep it, staged with its suggested
-    // deduction category (null is allowed, leaves it for the
-    // in-app apply step, but un-ignored).
-    await admin
-      .from("bank_transactions")
-      .update({
-        applied_category_code:
-          (tx as { suggested_category_code: string | null })
-            .suggested_category_code ?? null,
-        ignored: false,
-      })
-      .eq("id", id);
-  } else {
-    // Mirrors ignoreTx: personal → off the books.
-    await admin
-      .from("bank_transactions")
-      .update({ ignored: true, applied_category_code: null })
-      .eq("id", id);
+  // expense / income, a bank_transactions row. Authorisation (manager,
+  // or the member who uploaded the import) and the write both live in
+  // the shared core, so this route and /api/watch/action cannot drift.
+  const res = await clarifyBankTransactionCore(admin, uid, id, business);
+  if (!res.ok) {
+    return NextResponse.json(
+      { error: res.reason },
+      { status: clarifyStatus(res.reason) },
+    );
   }
   return NextResponse.json({ ok: true, did: "clarify_expense" });
 }

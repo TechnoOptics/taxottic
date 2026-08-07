@@ -5,6 +5,7 @@ import { resolveWatchUserId } from "@/lib/watch/device-auth";
 import { computeReadiness } from "@/lib/dashboard/readiness";
 import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
 import { buildWatchSnapshot, type SnapshotInput } from "@/lib/watch/snapshot";
+import { companyAccountIds } from "@/lib/banking/scope";
 import { EMPTY_WATCH_SNAPSHOT, type WatchSnapshot } from "@/lib/watch/types";
 import {
   buildCompanyForecast,
@@ -57,6 +58,11 @@ export async function GET(req: NextRequest) {
   let latestBadgeCode: string | null = null;
   let newBadgeCode: string | null = null;
   let companyId: string | null = null;
+  // Role in `companyId`, resolved from the caller's own memberships.
+  // The bank sections below read through the service-role client, which
+  // bypasses RLS, so they have to re-derive the boundary the policies
+  // would otherwise apply.
+  let isCompanyManager = false;
   let forecastOut: WatchSnapshot["forecast"] = undefined;
   let reward: SnapshotInput["reward"] = null;
 
@@ -83,6 +89,8 @@ export async function GET(req: NextRequest) {
       ? companies.some((c) => c.company.id === active)
       : false;
     companyId = belongs ? active : companies[0]?.company.id ?? null;
+    isCompanyManager =
+      companies.find((c) => c.company.id === companyId)?.role === "manager";
     if (companyId) {
       readinessScore = (await computeReadiness(admin, companyId, taxYear))
         .score;
@@ -205,73 +213,110 @@ export async function GET(req: NextRequest) {
   if (hitGoal) reward = { title: "Goal reached!", detail: hitGoal.title };
 
   // Bank-synced transactions awaiting a business-or-personal call -
-  // the swipe deck's expense cards. Two sources: CSV-imported
-  // (bank_transactions, scoped by company_id) and Plaid-synced
-  // (account_transactions, RLS-scoped via the account→connection→
-  // company chain, same simplification the header bell uses, since
-  // account_transactions carries no company_id column directly).
+  // the swipe deck's expense cards, and the home-screen widget's, since
+  // lib/widget/bridge.ts and lib/watch/bridge.ts both pull this same
+  // endpoint from the phone.
+  //
+  // BOTH sources below are read with `admin`, the service-role client,
+  // which bypasses RLS entirely. Nothing about these queries is
+  // "RLS-scoped"; every filter that keeps one tenant's bank data off
+  // another tenant's wrist has to be written out here by hand, and it
+  // has to reproduce what the policies say:
+  //
+  //   bank_transactions    manager sees the company's rows; anyone else
+  //                        sees only transactions from imports they
+  //                        uploaded (ownership lives on
+  //                        bank_imports.user_id, there is no user_id on
+  //                        the transaction).
+  //   account_transactions manager-only, and reachable only through
+  //                        account -> connection -> company, since the
+  //                        table carries no company_id of its own.
   if (companyId) {
     try {
-      const { data, count } = await admin
-        .from("bank_transactions")
-        .select("id, description, amount_cents", { count: "exact" })
-        .eq("company_id", companyId)
-        .eq("ignored", false)
-        .is("applied_category_code", null)
-        .is("applied_expense_id", null)
-        .is("applied_income_id", null)
-        .order("posted_at", { ascending: false })
-        .limit(8);
-      outstandingCount += count ?? 0;
-      pendingExpenses.push(
-        ...(data ?? []).map((row) => {
-          const t = row as {
-            id: string;
-            description: string | null;
-            amount_cents: number;
-          };
-          return {
-            id: t.id,
-            kind: "expense" as const,
-            label: (t.description || "Bank expense").slice(0, 40),
-            note: "needs business or personal",
-            amountCents: Math.abs(Number(t.amount_cents || 0)),
-          };
-        }),
-      );
+      // Non-managers: restrict to their own imports first, so the
+      // transaction query can be a plain `import_id in (...)`.
+      let ownImportIds: string[] | null = null;
+      if (!isCompanyManager) {
+        const { data: mine } = await admin
+          .from("bank_imports")
+          .select("id")
+          .eq("company_id", companyId)
+          .eq("user_id", uid);
+        ownImportIds = (mine ?? []).map((r) => (r as { id: string }).id);
+      }
+      if (ownImportIds === null || ownImportIds.length > 0) {
+        let q = admin
+          .from("bank_transactions")
+          .select("id, description, amount_cents", { count: "exact" })
+          .eq("company_id", companyId)
+          .eq("ignored", false)
+          .is("applied_category_code", null)
+          .is("applied_expense_id", null)
+          .is("applied_income_id", null);
+        if (ownImportIds !== null) q = q.in("import_id", ownImportIds);
+        const { data, count } = await q
+          .order("posted_at", { ascending: false })
+          .limit(8);
+        outstandingCount += count ?? 0;
+        pendingExpenses.push(
+          ...(data ?? []).map((row) => {
+            const t = row as {
+              id: string;
+              description: string | null;
+              amount_cents: number;
+            };
+            return {
+              id: t.id,
+              kind: "expense" as const,
+              label: (t.description || "Bank expense").slice(0, 40),
+              note: "needs business or personal",
+              amountCents: Math.abs(Number(t.amount_cents || 0)),
+            };
+          }),
+        );
+      }
     } catch {
       /* no CSV bank feed yet */
     }
     try {
-      const { data, count } = await admin
-        .from("account_transactions")
-        .select("id, description, merchant_name, amount_cents", {
-          count: "exact",
-        })
-        .eq("user_action", "pending")
-        .order("posted_date", { ascending: false })
-        .limit(8);
-      outstandingCount += count ?? 0;
-      pendingExpenses.push(
-        ...(data ?? []).map((row) => {
-          const t = row as {
-            id: string;
-            description: string | null;
-            merchant_name: string | null;
-            amount_cents: number;
-          };
-          return {
-            id: t.id,
-            kind: "expense" as const,
-            label: (t.merchant_name || t.description || "Bank expense").slice(
-              0,
-              40,
-            ),
-            note: "needs business or personal",
-            amountCents: Math.abs(Number(t.amount_cents || 0)),
-          };
-        }),
-      );
+      // Manager-only, matching the "acct_tx: manager read" policy. A
+      // non-manager has no live-feed rows to triage, so there is
+      // nothing to fetch.
+      const accountIds = isCompanyManager
+        ? await companyAccountIds(admin, companyId)
+        : [];
+      if (accountIds.length > 0) {
+        const { data, count } = await admin
+          .from("account_transactions")
+          .select("id, description, merchant_name, amount_cents", {
+            count: "exact",
+          })
+          .in("account_id", accountIds)
+          .eq("user_action", "pending")
+          .order("posted_date", { ascending: false })
+          .limit(8);
+        outstandingCount += count ?? 0;
+        pendingExpenses.push(
+          ...(data ?? []).map((row) => {
+            const t = row as {
+              id: string;
+              description: string | null;
+              merchant_name: string | null;
+              amount_cents: number;
+            };
+            return {
+              id: t.id,
+              kind: "expense" as const,
+              label: (t.merchant_name || t.description || "Bank expense").slice(
+                0,
+                40,
+              ),
+              note: "needs business or personal",
+              amountCents: Math.abs(Number(t.amount_cents || 0)),
+            };
+          }),
+        );
+      }
     } catch {
       /* no Plaid-synced feed yet */
     }
