@@ -18,6 +18,12 @@ export type CompanyActivityKind =
   | "expense.updated"
   | "expense.deleted"
   | "expense.reclassified"
+  // A booked line moved across the income/expense divide. Two kinds, not
+  // one, because the direction is the fact a CPA is looking for: these
+  // rows are the permanent record that a filed number was restated, and
+  // by whom. Written by moveBookedTransaction.
+  | "expense.moved_to_income"
+  | "income.moved_to_expense"
   | "expense.recurrence_stopped"
   | "expense.recurrence_resumed"
   | "profile.updated"

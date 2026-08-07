@@ -9,6 +9,7 @@ import { SelectMenu } from "@/components/ui/SelectMenu";
 import { formatCents } from "@/lib/tax/forecast";
 import { interpretAmount, type SignConvention } from "@/lib/csv/sign-convention";
 import { RowCheckbox, useBatchSelection } from "@/components/import/BatchSelection";
+import { MoveBookedRow } from "@/components/import/MoveBookedRow";
 
 /**
  * Transaction row on the import-review page.
@@ -54,6 +55,11 @@ type Tx = {
   suggested_category_code: string | null;
   applied_category_code: string | null;
   applied_expense_id: string | null;
+  /** Set when this row was booked into monthly_income instead. A row
+   *  can be here and booked as income: the convention decides which
+   *  pile it renders in, and a flipped convention (or a wrong booking)
+   *  puts an income-booked row among the debits. */
+  applied_income_id: string | null;
   ignored: boolean;
 };
 
@@ -77,6 +83,7 @@ type Props = {
   setTxCategory: (formData: FormData) => Promise<void>;
   ignoreTx: (formData: FormData) => Promise<void>;
   teachBella: (formData: FormData) => Promise<void>;
+  moveBookedTransaction: (formData: FormData) => Promise<void>;
   /** Deep-linked from the outstanding-items list (?highlight=<id>) -
    *  scrolls this row into view and rings it briefly on mount so the
    *  user doesn't have to hunt for it in a long import. */
@@ -94,6 +101,7 @@ export function TxRow({
   setTxCategory,
   ignoreTx,
   teachBella,
+  moveBookedTransaction,
   highlight,
 }: Props) {
   const [phase, setPhase] = useState<"idle" | "leaving">("idle");
@@ -120,6 +128,7 @@ export function TxRow({
     batch && direction === "refund" ? "Refund, not deductible" : null;
 
   const isApplied = !!tx.applied_expense_id;
+  const isBookedAsIncome = !isApplied && !!tx.applied_income_id;
   const selected =
     tx.applied_category_code ?? tx.suggested_category_code ?? "";
   const label = cats.find((c) => c.code === selected)?.label;
@@ -286,6 +295,10 @@ export function TxRow({
           <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
             Applied as {label}
           </span>
+        ) : isBookedAsIncome ? (
+          <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+            Booked as income
+          </span>
         ) : (
           <>
             <form
@@ -313,6 +326,22 @@ export function TxRow({
           </>
         )}
       </div>
+
+      {/* The way back. A booked row previously had no controls at all,
+          so a wrong booking could only be undone by deleting the import
+          and re-uploading it. Sits under the badge that states where the
+          row currently is, so the direction offered always reads as the
+          opposite of what is on screen. */}
+      {isApplied || isBookedAsIncome ? (
+        <MoveBookedRow
+          txId={tx.id}
+          importId={importId}
+          direction={isApplied ? "to_income" : "to_expense"}
+          cats={cats}
+          frequentCodes={frequentCodes}
+          moveBookedTransaction={moveBookedTransaction}
+        />
+      ) : null}
 
       <details className="mt-2">
         <summary className="text-[11px] text-forest-700 hover:text-forest-900 cursor-pointer select-none inline-flex items-center gap-1">
