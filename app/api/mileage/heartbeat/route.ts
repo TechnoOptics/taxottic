@@ -177,6 +177,15 @@ export async function POST(req: NextRequest) {
     // visibilityState, recorded as the weaker cross-check only.
     probe_visibility: str("probeVisibility", 12),
     timer_lag_ms: num("timerLagMs"),
+    // Non-null when a stop-then-start arm sequence began and never
+    // finished, i.e. WE tore the background service down and never put it
+    // back. Reported as epoch ms by the client; stored as a timestamp.
+    // Distinguishes a self-inflicted outage from an OS kill, which are
+    // identical from every other angle and want different fixes.
+    arm_interrupted_at: (() => {
+      const ms = num("armInterruptedAt");
+      return ms == null ? null : new Date(ms).toISOString();
+    })(),
     // Provenance of the five device-truth columns above.
     // device_status_age_s = 0 means this heartbeat's live probe
     // answered; a larger number is the age of the last successful
