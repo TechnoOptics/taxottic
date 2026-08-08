@@ -7,10 +7,31 @@ import {
   CHALLENGE_TTL_SECONDS,
   RP_ID,
 } from "@/lib/webauthn/config";
+import { checkRateLimit, clientKey } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  // ACCOUNT-EXISTENCE ORACLE. This endpoint is unauthenticated, and its
+  // response shape answers "does this email have a Taxottic passkey?":
+  // allowCredentials is populated for a registered user and omitted
+  // otherwise. Without a limit that is a free, unthrottled way to test an
+  // arbitrary email list against the user base.
+  //
+  // The sibling verify route has carried this guard since it shipped
+  // (app/api/passkeys/auth/verify/route.ts:24); only this one was missed,
+  // which is why the oracle survived the 2026-08-02 revoke that closed the
+  // underlying RPC to anon. Revoking the RPC stopped direct PostgREST
+  // calls; it did nothing about the route that legitimately proxies it.
+  if (
+    !checkRateLimit(`passkey-options:${clientKey(req)}`, {
+      capacity: 10,
+      refillPerMinute: 10,
+    })
+  ) {
+    return NextResponse.json({ error: "too_many_requests" }, { status: 429 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const email: string | undefined = body?.email
     ? String(body.email).trim().toLowerCase()

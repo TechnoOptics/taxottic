@@ -267,6 +267,14 @@ export default async function FirmPage() {
   const { data: nextReminder } = await admin
     .from("reminders")
     .select("title, due_at")
+    // SECURITY: scope to the signed-in user. `admin` is the service-role
+    // client, so RLS is not enforcing anything here and this filter is the
+    // ONLY thing standing between this tile and every other tenant's
+    // reminders. Without it the query returned the soonest upcoming
+    // reminder in the entire system, so a firm user saw the title and date
+    // of a stranger's deadline, and the comment above ("live on the user")
+    // described an intent the code did not implement.
+    .eq("user_id", user.id)
     .is("dismissed_at", null)
     .gte("due_at", nowIso)
     .order("due_at", { ascending: true })
