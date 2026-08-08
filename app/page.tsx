@@ -746,14 +746,14 @@ const WHO: {
     id: "personal",
     label: "For me",
     src: "/marketing/who-personal.jpg",
-    alt: "A person working at a laptop at a home desk between two tall windows, with a desk lamp lit beside them.",
+    alt: "A woman in a blazer working on a laptop balanced on her knee, seated on a leather sofa.",
     line: "W-2, freelance, or some of both. Your own return, your own deductions, one forecast that keeps up.",
   },
   {
     id: "business",
     label: "For my business",
     src: "/marketing/who-business.jpg",
-    alt: "A brick main-street shopfront with striped awnings, a lit OPEN sign in the window and a chalkboard beside the door.",
+    alt: "A hair stylist blow-drying and brushing out a client's hair at a salon chair.",
     line: "Sole prop, LLC, or S-corp. Bank-synced expenses, business miles, and a Schedule C that assembles itself.",
   },
   {
