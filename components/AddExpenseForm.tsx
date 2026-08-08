@@ -71,6 +71,39 @@ export function AddExpenseForm({
   const [categoryCode, setCategoryCode] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [month, setMonth] = useState<number>(currentMonth);
+  const [error, setError] = useState<string | null>(null);
+
+  // addExpense rejects with sentences written for this person to read:
+  // "A receipt is required for expenses over $75. Use \"Scan a receipt\"
+  // above to capture one.", "You cannot add entries for a future
+  // month." The form used to hand the action straight to <form action>,
+  // so every one of those threw out of the Server Action and hit the
+  // root error boundary: the whole page was replaced by "We couldn't
+  // load that page", and the amount, category and vendor the user had
+  // just typed went with it. Catch it here, keep everything on screen,
+  // and put the sentence next to the button that caused it.
+  //
+  // `month` became controlled state in the same change. React resets an
+  // uncontrolled field once the action resolves, and this wrapper
+  // resolves on the failure path too, so the one field that was not
+  // already state would have snapped back to the current month while
+  // the rest of the entry survived.
+  const submit = async (fd: FormData) => {
+    setError(null);
+    try {
+      await action(fd);
+    } catch (err) {
+      const digest = (err as { digest?: unknown } | null)?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_")) throw err;
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "That did not save. Check the amount and try again.",
+      );
+    }
+  };
+
   const recurringHint =
     categories.find((c) => c.code === categoryCode)?.is_typically_recurring ??
     false;
@@ -101,7 +134,7 @@ export function AddExpenseForm({
   }
 
   return (
-    <form action={action} className="mt-4 grid sm:grid-cols-2 gap-3">
+    <form action={submit} className="mt-4 grid sm:grid-cols-2 gap-3">
       {lastExpense ? (
         <div className="sm:col-span-2 -mb-1 flex items-center justify-between gap-2 flex-wrap">
           <span className="text-[11px] text-ink-muted">
@@ -131,7 +164,12 @@ export function AddExpenseForm({
 
       <label className="grid gap-1.5">
         <span className="text-sm font-medium text-forest-800">Month</span>
-        <select name="month" className="input" defaultValue={currentMonth}>
+        <select
+          name="month"
+          className="input"
+          value={month}
+          onChange={(e) => setMonth(Number(e.target.value))}
+        >
           {MONTH_LABELS.slice(0, currentMonth).map((m, i) => (
             <option key={i} value={i + 1}>
               {m}
@@ -227,6 +265,15 @@ export function AddExpenseForm({
           </datalist>
         ) : null}
       </label>
+
+      {error ? (
+        <div
+          role="alert"
+          className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 leading-relaxed"
+        >
+          This expense was not added. {error}
+        </div>
+      ) : null}
 
       <div className="sm:col-span-2">
         <button
