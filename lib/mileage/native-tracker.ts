@@ -36,6 +36,7 @@ import {
 } from "./drive-end";
 import { removeUploadedPoints, capBuffer } from "./buffer";
 import { isArmInterrupted, parseArmLatch } from "./arm-latch";
+import { WEB_BUILD_ID } from "@/lib/build-id";
 import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
@@ -985,6 +986,13 @@ async function sendHeartbeat(): Promise<void> {
         companyId,
         platform: cap?.getPlatform?.() ?? "web",
         appVersion,
+        // WHICH JS BUNDLE produced this heartbeat. `appVersion` above is the
+        // NATIVE binary and says nothing about the web code actually running,
+        // because this app is a WebView on a remote url whose service worker
+        // can serve a bundle days older than the binary. Without this, a
+        // device-truth failure cannot be told apart from a device that never
+        // received the fix for it. See lib/build-id.ts.
+        webBuild: WEB_BUILD_ID,
         trackingEnabled: tracking,
         bufferSize: buffer.length,
         lastCbAgeS: trackerDiag.lastCbAt
