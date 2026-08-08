@@ -1,0 +1,127 @@
+name: iOS — Beta review status
+
+# Read-only. Answers "can our external testers install the build yet?"
+#
+# This is NOT the same question as ios-review-status.yml, which reports
+# APP STORE review of an appStoreVersion. A TestFlight build for EXTERNAL
+# testers goes through a separate, earlier gate: Beta App Review. A build
+# can be VALID, attached to an external group, with invites already sent,
+# and still be uninstallable because that beta gate has not cleared.
+#
+# Why this exists: on 2026-08-08 build 36 was submitted for beta review
+# and nothing in this repo could report on it. Every workflow either
+# mutated state or read App Store review instead, so the only ways to
+# check were Apple's email or the console. That mattered more than usual,
+# because tester assignment 409s while a group's build sits in review
+# (see the ordering note in ios-testflight-external.yml), which makes
+# "has beta review cleared" the gate on a driver receiving the build at
+# all.
+#
+# Reuses the same ASC_* secrets as the other iOS workflows. Queries only:
+# it never creates, submits, attaches, or invites.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: "CFBundleVersion to report on (blank = latest build)"
+        required: false
+        default: ""
+
+jobs:
+  beta-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Beta App Review state
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          cat > /tmp/beta-status.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+          const KID = process.env.ASC_KEY_ID;
+          const ISS = process.env.ASC_ISSUER_ID;
+          const PK = process.env.ASC_PRIVATE_KEY;
+          const WANT = (process.env.BUILD_NUMBER || "").trim();
+          const APP_ID = "6767039803";
+          if (!KID || !ISS || !PK) {
+            console.error("::error::ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY missing");
+            process.exit(1);
+          }
+          const b64u = (x) => Buffer.from(x).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const head = b64u(JSON.stringify({ alg: "ES256", kid: KID, typ: "JWT" }));
+          const body = b64u(JSON.stringify({
+            iss: ISS, iat: now, exp: now + 900, aud: "appstoreconnect-v1",
+          }));
+          const sig = crypto
+            .sign("sha256", Buffer.from(`${head}.${body}`), { key: PK, dsaEncoding: "ieee-p1363" })
+            .toString("base64url");
+          const TOK = `${head}.${body}.${sig}`;
+          const api = async (path) => {
+            const r = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              headers: { Authorization: `Bearer ${TOK}` },
+            });
+            const t = await r.text();
+            if (!r.ok) { console.error("::error::" + t.slice(0, 400)); process.exit(1); }
+            return t ? JSON.parse(t) : {};
+          };
+
+          // Newest builds first. A specific build_number is matched exactly
+          // so a report can never silently describe a DIFFERENT build than
+          // the one asked about, which is the mistake that would make this
+          // tool worse than useless.
+          const builds = await api(
+            `/v1/builds?filter[app]=${APP_ID}&sort=-version&limit=20`,
+          );
+          const list = builds.data ?? [];
+          if (list.length === 0) { console.log("no builds found"); process.exit(0); }
+
+          const build = WANT
+            ? list.find((b) => String(b.attributes.version) === WANT)
+            : list[0];
+          if (!build) {
+            console.error(`::error::build ${WANT} not found in the latest 20`);
+            process.exit(1);
+          }
+
+          const num = build.attributes.version;
+          const processing = build.attributes.processingState;
+          const expired = build.attributes.expired;
+          console.log(`Build ${num}  processingState=${processing}  expired=${expired}`);
+
+          // processingState gates everything else: a build still PROCESSING
+          // has no meaningful beta review state yet, and reporting one would
+          // invite exactly the wrong conclusion.
+          if (processing !== "VALID") {
+            console.log("");
+            console.log(`NOT READY. The build is ${processing}, so it cannot be installed or reviewed yet.`);
+            process.exit(0);
+          }
+
+          const sub = await api(`/v1/builds/${build.id}/betaAppReviewSubmission`);
+          const state = sub?.data?.attributes?.betaReviewState ?? null;
+
+          console.log("");
+          if (!state) {
+            console.log("NOT SUBMITTED for Beta App Review.");
+            console.log("Internal testers can install it now. External testers cannot until it is submitted and approved.");
+            process.exit(0);
+          }
+          console.log(`betaReviewState = ${state}`);
+          if (state === "APPROVED") {
+            console.log("CLEARED. External testers can install this build.");
+            console.log("If a tester assignment 409'd earlier, re-run ios-testflight-external.yml now: it succeeds once the build is out of review.");
+          } else if (state === "IN_REVIEW") {
+            console.log("NOT YET. Apple is actively reviewing it.");
+          } else if (state === "WAITING_FOR_REVIEW") {
+            console.log("NOT YET. Queued, beta review has not started.");
+          } else if (state === "REJECTED") {
+            console.log("REJECTED. Check Resolution Center in App Store Connect.");
+          } else {
+            console.log(`State is ${state}.`);
+          }
+          SCRIPT
+          node /tmp/beta-status.mjs
