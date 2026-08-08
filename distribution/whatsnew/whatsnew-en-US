@@ -1,4 +1,5 @@
-Updates now apply themselves.
+Drives record again while the app is closed.
 
-- The app picks up fixes on its own when you open it or return to it, instead of waiting for you to notice a Refresh prompt. You will still be asked before anything changes while you are in the middle of something.
-- Carries the earlier fixes to automatic drive restarting, the category list, income rows and menu scrolling.
+- Fixes a problem that could stop drive tracking from running in the background, so trips taken with Taxottic closed were not recorded. Open the app once after updating and tracking restarts itself.
+- Notifications now reach iPhones. An alert about a tracking problem goes to the driver directly instead of only to a manager.
+- A phone that quietly stops recording in the background is now spotted on its own, rather than going unnoticed.
