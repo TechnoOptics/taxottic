@@ -94,3 +94,13 @@ ios/App/App/AuthKey_*.p8
 
 # Supabase CLI link state (per-machine)
 supabase/.temp/
+
+# Raw security audit reports. THIS REPO IS PUBLIC.
+#
+# These enumerate live findings with file paths, proofs, and blast radius.
+# Committing one before its findings are fixed publishes an exploitation
+# guide. Keep them out of the repo entirely, or in a private location, and
+# land only the FIXES here. A fix commit describing an issue that is now
+# closed is fine and normal; a document describing one that is still open
+# is not.
+docs/security-audit-*.md
