@@ -235,6 +235,45 @@ describe("splitAlreadyBookedCharges", () => {
     expect(duplicates).toHaveLength(1);
     expect(duplicates[0].rowIndex).toBe(0);
   });
+
+  // One prior charge is evidence that ONE charge was already booked, not
+  // that every identical charge was. Two $6.50 parking charges on the
+  // same day at the same garage is an ordinary Tuesday, and re-importing
+  // an overlapping export used to drop both against a single prior row,
+  // silently deleting a real deduction from a file the user watched
+  // upload successfully.
+  it("lets one existing charge absorb only one incoming row", () => {
+    const rows = [
+      chargeCandidate({ index: 0, description: "PARKING RAMP A", amountCents: 650 }),
+      chargeCandidate({ index: 1, description: "PARKING RAMP A", amountCents: 650 }),
+    ];
+    const existing = [
+      existingCharge({ id: "tx-1", description: "PARKING RAMP A", amountCents: 650 }),
+    ];
+    const { keptIndexes, duplicates } = splitAlreadyBookedCharges("company-1", rows, existing);
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0].rowIndex).toBe(0);
+    expect(keptIndexes.has(0)).toBe(false);
+    expect(keptIndexes.has(1)).toBe(true);
+  });
+
+  it("absorbs both rows when two identical charges were already booked", () => {
+    const rows = [
+      chargeCandidate({ index: 0, description: "PARKING RAMP A", amountCents: 650 }),
+      chargeCandidate({ index: 1, description: "PARKING RAMP A", amountCents: 650 }),
+    ];
+    const existing = [
+      existingCharge({ id: "tx-1", description: "PARKING RAMP A", amountCents: 650 }),
+      existingCharge({ id: "tx-2", description: "PARKING RAMP A", amountCents: 650 }),
+    ];
+    const { keptIndexes, duplicates } = splitAlreadyBookedCharges("company-1", rows, existing);
+    expect(duplicates).toHaveLength(2);
+    expect(duplicates.map((d) => d.existingTransactionId).sort()).toEqual([
+      "tx-1",
+      "tx-2",
+    ]);
+    expect(keptIndexes.size).toBe(0);
+  });
 });
 
 describe("dedupeFindings", () => {

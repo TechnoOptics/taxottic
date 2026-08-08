@@ -14,7 +14,6 @@ import {
   subscriptionFallbackKey,
   findCoveringRecurringRow,
   type CoverCandidate,
-  coverageKey,
 } from "@/lib/banking/subscription-dedupe";
 
 /**
@@ -580,6 +579,13 @@ async function autoApplyPendingStripe(args: {
           recurringKey = subscriptionFallbackKey(desc, Math.abs(cents));
       }
 
+      // Claim atomically before writing (idempotency under concurrent
+      // syncs), and before the coverage lookup below: the lookup
+      // consumes the (row, month) slot it matches, so asking on behalf
+      // of a transaction another runner already owns would burn a slot
+      // this run is not going to use.
+      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
+        continue;
       // Already forecast? If an existing recurring income row projects
       // this exact stream (same year, same whole-dollar amount, same or
       // no subscription key) into this month, the money is ALREADY in
@@ -595,15 +601,11 @@ async function autoApplyPendingStripe(args: {
         },
         consumedCoverage,
       );
-      // Claim atomically before writing (idempotency under concurrent syncs).
-      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
-        continue;
       if (coveringIncome) {
         await admin
           .from("account_transactions")
           .update({ applied_to_income_id: coveringIncome.id })
           .eq("id", tx.id);
-        consumedCoverage.add(coverageKey(coveringIncome.id, month));
         income++;
         continue;
       }

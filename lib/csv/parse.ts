@@ -86,8 +86,23 @@ export type ColumnMap = {
 
 export function sniffColumns(headers: string[]): ColumnMap {
   const norm = headers.map((h) => h.toLowerCase().trim());
-  const find = (...needles: string[]) =>
-    norm.findIndex((h) => needles.some((n) => h.includes(n)));
+  // Needles are tried IN ORDER, each against every header, and the first
+  // needle that hits anywhere wins. Scanning headers first instead meant
+  // the leftmost header matching ANY needle won, which on a Chase
+  // credit-card export ("Transaction Date, Post Date, Description, ...")
+  // made the "transaction" fallback claim the date column and left every
+  // row's description reading "08/01/2026". That is not cosmetic: the
+  // description is what autoCategorize and Bella read, and it is one
+  // third of chargeFingerprint, so two unrelated charges of the same
+  // amount on the same day became the same charge and the second was
+  // dropped as already booked.
+  const find = (...needles: string[]) => {
+    for (const n of needles) {
+      const i = norm.findIndex((h) => h.includes(n));
+      if (i !== -1) return i;
+    }
+    return -1;
+  };
   return {
     date: find("posted date", "transaction date", "date"),
     description: find("description", "memo", "name", "payee", "transaction"),
