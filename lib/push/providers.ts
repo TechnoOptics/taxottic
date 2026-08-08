@@ -364,6 +364,7 @@ function webUrlFromData(data: Record<string, string>): string {
     case "trip_logged":
     case "tracker_stalled":
     case "tracker_parked":
+    case "tracker_foreground_only":
       return "/mileage";
     case "clarify":
       return data.subject === "trip" ? "/mileage" : "/expenses";

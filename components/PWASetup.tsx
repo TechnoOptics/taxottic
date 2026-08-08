@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ensureWebPushSubscribed } from "@/lib/push/web";
+import { shouldAdoptWaitingWorker } from "@/lib/pwa/adopt-policy";
 
 type DeferredPrompt = Event & {
   prompt: () => Promise<void>;
@@ -78,16 +79,41 @@ export function PWASetup() {
         // knew there was a toast to tap. A fix that cannot reach the device
         // is not a fix.
         //
-        // Adopting is safe at exactly the moments nothing is in progress:
-        // a cold start (this effect runs once per page life), a resume from
-        // background, and any time the page is hidden. Mid-session, with
-        // the user actually looking at a form, the toast still applies:
-        // swapping the bundle under someone's hands is how you lose typed
-        // input, which is presumably why the original author chose to wait.
+        // NEVER ADOPT WHILE HIDDEN (regression fix, 2026-08-08).
+        //
+        // Adopting posts SKIP_WAITING, which fires controllerchange, which
+        // reloads the page. The original version of this code did that while
+        // the page was hidden, on the reasoning that a reload the user cannot
+        // see costs them nothing. On a phone that is tracking a drive it costs
+        // the whole drive, because the tracker is armed from this page:
+        // native-tracker's arm path calls `await stopBgSafely(bg)` to kill any
+        // orphaned service BEFORE `bg.start()`. A fresh page life booting in a
+        // backgrounded iOS WebView therefore stops the live background service
+        // first, and iOS suspends the WebView's JS at that await, so start()
+        // never runs. Tracking is left off until the user next opens the app.
+        //
+        // Observed: Grace's iPhone logged 284 background heartbeats on 1.3.6,
+        // then exactly one on 1.3.7 (the release carrying this code) before
+        // going silent for four days. Every contact since has been foreground
+        // only, in bursts of 2 to 5 points, which is the signature of a tracker
+        // that only ever arms while she is looking at the screen.
+        //
+        // So: adoption is gated on the page being visible. A worker that
+        // installs while hidden simply stays waiting, and onResume below takes
+        // it the moment the app comes forward. That keeps the property #484
+        // was built for (a fix reaches the device without anyone tapping a
+        // toast) while never tearing down the tracker behind the user's back.
         const adopt = (w: ServiceWorker | null | undefined) => {
-          if (!w || adopted.current) return;
+          if (
+            !shouldAdoptWaitingWorker({
+              visibility: document.visibilityState,
+              alreadyAdopted: adopted.current,
+              hasWaitingWorker: Boolean(w),
+            })
+          )
+            return;
           adopted.current = true;
-          w.postMessage({ type: "SKIP_WAITING" });
+          w!.postMessage({ type: "SKIP_WAITING" });
         };
 
         // Cold start: a worker left waiting by a previous session.
@@ -102,11 +128,12 @@ export function PWASetup() {
               newWorker.state === "installed" &&
               navigator.serviceWorker.controller
             ) {
-              // Hidden means backgrounded or another tab is in front, so a
-              // reload costs the user nothing and they never see it.
-              if (document.visibilityState === "hidden") adopt(newWorker);
+              // Hidden: leave it waiting. adopt() would refuse anyway, but
+              // being explicit here keeps the reason next to the decision.
+              // onResume takes it on the next foreground.
+              if (document.visibilityState === "hidden") return;
               // Visible and mid-session: ask, do not seize.
-              else setWaitingWorker(newWorker);
+              setWaitingWorker(newWorker);
             }
           });
         });
