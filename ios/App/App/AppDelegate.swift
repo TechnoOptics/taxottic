@@ -103,6 +103,54 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
     }
 
+    // MARK: - APNs registration
+    //
+    // WITHOUT THESE TWO METHODS PUSH IS SILENTLY DEAD ON iOS.
+    //
+    // @capacitor/push-notifications does not hook UIApplicationDelegate
+    // itself. register() calls UIApplication.registerForRemoteNotifications(),
+    // iOS answers on the APP DELEGATE, and the plugin only ever learns the
+    // outcome because the delegate re-posts it on NotificationCenter under
+    // the two names below. This file had neither method, so iOS handed the
+    // app a perfectly good APNs token and it went straight in the bin: the
+    // JS `registration` listener never fired, and neither did
+    // `registrationError`, because there was no error, only silence.
+    //
+    // What that looked like from the outside, and why it cost weeks: zero
+    // rows in device_tokens for iOS while Android registered normally, so
+    // the driver could never be sent a push and every tracker alert for
+    // that device had to be escalated to a manager instead. The telemetry
+    // added on 2026-08-06 is what finally pinned it, by recording the
+    // branch REACHED rather than only errors. The affected phone reported
+    // status='register_called', detail='receive=granted', app 1.3.7 (35),
+    // attempts=10: permission granted, flag on, plugin present, register()
+    // called ten times across twenty hours, and APNs returned neither a
+    // token nor an error. A missing entitlement or a refused prompt would
+    // both have produced an ERROR here; only a missing delegate hop
+    // produces nothing at all.
+    //
+    // Copied verbatim from the plugin README's iOS setup section. Do not
+    // delete them when regenerating or hand-editing this file: nothing in
+    // the JS, the entitlements, or the Apple portal can compensate, and
+    // the failure is invisible without the telemetry above.
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications,
+            object: deviceToken)
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        NotificationCenter.default.post(
+            name: .capacitorDidFailToRegisterForRemoteNotifications,
+            object: error)
+    }
+
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Called when the app was launched with a url. Feel free to add additional processing here,
         // but if you want the App API to support tracking app url opens, make sure to keep this call

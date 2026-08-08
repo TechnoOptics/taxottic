@@ -35,6 +35,7 @@ import {
   WALK_ARM_STOP_MS as DE_WALK_ARM_STOP_MS,
 } from "./drive-end";
 import { removeUploadedPoints, capBuffer } from "./buffer";
+import { isArmInterrupted, parseArmLatch } from "./arm-latch";
 import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
@@ -90,6 +91,11 @@ const LS_BUFFER = "taxottic.mileage.buffer";
  *  start(). "1" enables eco; anything else (including missing) is
  *  the default full-fidelity mode. */
 const LS_ECO = "taxottic.mileage.eco";
+/** Set immediately before the stop-then-start arm sequence and cleared
+ *  once start() returns. A latch that survives means the sequence was
+ *  interrupted with the background service already torn down. See
+ *  lib/mileage/arm-latch.ts for why that is otherwise undetectable. */
+const LS_ARMING = "taxottic.mileage.arming";
 /** Poison batches the server permanently rejected (400/413): moved out
  *  of the live buffer so they stop blocking the queue head, kept for
  *  diagnosis. Capped; oldest quarantined batches are discarded first. */
@@ -1038,6 +1044,22 @@ async function sendHeartbeat(): Promise<void> {
         // Whether a plain 1 s timer ran on time while the probes were in
         // flight. See measureTimerLag.
         timerLagMs,
+        // When an arm sequence was started and never finished. Non-null
+        // means a previous stop-then-start died between the two calls,
+        // leaving the background service DOWN with the UI still claiming
+        // tracking is on. Distinguishes "we tore it down and never put it
+        // back" from "the OS killed it", which look identical otherwise
+        // and want different fixes. See lib/mileage/arm-latch.ts.
+        armInterruptedAt: (() => {
+          try {
+            const latch = parseArmLatch(
+              window.localStorage.getItem(LS_ARMING),
+            );
+            return isArmInterrupted(latch, Date.now()) ? latch : null;
+          } catch {
+            return null;
+          }
+        })(),
         // Learned-place geofence mesh. Without these, a device whose
         // mesh silently failed to register looks identical to one that
         // simply had no drives, which is the ambiguity that let a
@@ -1192,6 +1214,26 @@ export async function startMileageTracking(
   // with our live callback. stopBgSafely never awaits `.then` on the
   // native proxy (see its doc) so it can't throw the
   // "BackgroundGeolocation.then()" error this used to spew on launch.
+  //
+  // ARMING LATCH. Stamped immediately BEFORE the stop and cleared after
+  // start() returns, so an arm that dies in between leaves proof.
+  //
+  // The stop is mandatory (see ALREADY_STARTED above), but it means that
+  // for the duration of this sequence the background service is DOWN. If
+  // this JS context is suspended or killed at the await (a backgrounded
+  // iOS WebView, an Android process kill, a page reload), the service
+  // stays down and nothing here runs again to restart it. The UI still
+  // reads "tracking on" and the device still heartbeats whenever the app
+  // is opened, so the outage is invisible from the server and looks
+  // exactly like a parked phone. Without this latch there is no way,
+  // after the fact, to tell "never armed" from "armed and then torn down
+  // by us halfway through".
+  try {
+    window.localStorage.setItem(LS_ARMING, String(Date.now()));
+  } catch {
+    /* private mode: we lose the evidence, not the tracking */
+  }
+
   await stopBgSafely(bg);
 
   // Fire-and-forget start(). Promise rejection / callback errors
@@ -1363,6 +1405,15 @@ export async function startMileageTracking(
     );
     tracking = true;
     trackerDiag.startResult = "resolved";
+    // Arm completed: the service is back up, so the latch has nothing
+    // left to prove. Cleared here rather than in a finally, because the
+    // catch path below genuinely DID leave the tracker stopped and the
+    // latch should survive to say so.
+    try {
+      window.localStorage.removeItem(LS_ARMING);
+    } catch {
+      /* private mode */
+    }
     for (const cb of startListeners) {
       try {
         cb({ ok: true });
