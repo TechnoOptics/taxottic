@@ -16,7 +16,6 @@ import {
   subscriptionFallbackKey,
   findCoveringRecurringRow,
   type CoverCandidate,
-  coverageKey,
 } from "@/lib/banking/subscription-dedupe";
 
 /**
@@ -292,13 +291,28 @@ async function applyPendingTransactions(
     .select("id, tax_year, month, amount_cents, recurrence, recurring_key")
     .eq("company_id", companyId)
     .neq("recurrence", "one_off");
-  const { data: recExpense } = await admin
+  // No recurring_key here: that column exists on monthly_income only.
+  // Asking for it made PostgREST answer 42703 with data = null, so
+  // expenseCandidates below was ALWAYS empty and the audit #27 guard
+  // never once fired: every subscription-like charge was written
+  // `recurrence: 'monthly'` and projected to December from its own
+  // month. Expense streams are matched on category_code, which is what
+  // the recurring-expense detector groups by, so the key was never
+  // needed. lib/db/schema-contract.test.ts now fails on a select naming
+  // a column the migrations do not define.
+  const { data: recExpense, error: recExpenseErr } = await admin
     .from("monthly_expenses")
-    .select(
-      "id, tax_year, month, amount_cents, recurrence, recurring_key, category_code",
-    )
+    .select("id, tax_year, month, amount_cents, recurrence, category_code")
     .eq("company_id", companyId)
     .neq("recurrence", "one_off");
+  // Loud, because the failure mode of this query is a disabled guard
+  // rather than a visible error.
+  if (recExpenseErr) {
+    console.error(
+      "[plaid] recurring expense candidates failed; double-count guard is off:",
+      recExpenseErr.message,
+    );
+  }
   const incomeCandidates = (recIncome ?? []) as CoverCandidate[];
   // One absorption per (recurring row, month) — see coverageKey.
   const consumedCoverage = new Set<string>();
@@ -373,9 +387,7 @@ async function applyPendingTransactions(
           .from("account_transactions")
           .update({ applied_to_expense_id: row.id })
           .eq("id", tx.id);
-        if (coveringExpense) {
-          consumedCoverage.add(coverageKey(coveringExpense.id, month));
-        } else if (expRecurrence !== "one_off") {
+        if (!coveringExpense && expRecurrence !== "one_off") {
           expenseCandidates.push({
             id: row.id as string,
             tax_year: taxYear,
@@ -398,6 +410,13 @@ async function applyPendingTransactions(
         subLike && desc
           ? subscriptionFallbackKey(desc, Math.abs(cents))
           : null;
+      // Claim BEFORE the coverage lookup. The lookup consumes the
+      // (row, month) slot it matches, so asking on behalf of a
+      // transaction another runner already owns would burn a slot this
+      // run is not going to use, and the next real charge in the same
+      // month would book a second countable row.
+      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
+        continue;
       const coveringIncome = findCoveringRecurringRow(
         incomeCandidates,
         {
@@ -408,14 +427,11 @@ async function applyPendingTransactions(
         },
         consumedCoverage,
       );
-      if (!(await claimPendingTransaction(admin, tx.id as string, userId)))
-        continue;
       if (coveringIncome) {
         await admin
           .from("account_transactions")
           .update({ applied_to_income_id: coveringIncome.id })
           .eq("id", tx.id);
-        consumedCoverage.add(coverageKey(coveringIncome.id, month));
         income++;
         continue;
       }

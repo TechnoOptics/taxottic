@@ -203,11 +203,21 @@ export function splitAlreadyBookedCharges(
   rows: ChargeCandidate[],
   existing: ExistingChargeRow[],
 ): { keptIndexes: Set<number>; duplicates: DuplicateFinding[] } {
-  const byFingerprint = new Map<string, ExistingChargeRow>();
+  // A queue per fingerprint, not a single winner. One prior charge is
+  // evidence that ONE charge was already booked; it cannot vouch for a
+  // second identical one. Two $6.50 charges at the same garage on the
+  // same day are an ordinary day, and matching both against one prior
+  // row dropped a real deduction with no way to get it back: the row is
+  // suppressed from bank_transactions, so no amount of re-uploading the
+  // file recovers it. Mirrors the consumed-coverage rule in
+  // findCoveringRecurringRow, and for the same reason.
+  const byFingerprint = new Map<string, ExistingChargeRow[]>();
   for (const ex of existing) {
     if (!ex.postedAt) continue;
     const fingerprint = chargeFingerprint(ex.postedAt, ex.amountCents, ex.description);
-    if (!byFingerprint.has(fingerprint)) byFingerprint.set(fingerprint, ex);
+    const queue = byFingerprint.get(fingerprint);
+    if (queue) queue.push(ex);
+    else byFingerprint.set(fingerprint, [ex]);
   }
 
   const keptIndexes = new Set<number>();
@@ -219,7 +229,7 @@ export function splitAlreadyBookedCharges(
       continue;
     }
     const fingerprint = chargeFingerprint(row.postedAt, row.amountCents, row.description);
-    const match = byFingerprint.get(fingerprint);
+    const match = byFingerprint.get(fingerprint)?.shift();
     if (!match) {
       keptIndexes.add(row.index);
       continue;

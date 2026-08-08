@@ -137,10 +137,21 @@ export function coverageKey(rowId: string, month: number): string {
 export function findCoveringRecurringRow(
   rows: readonly CoverCandidate[],
   probe: CoverProbe,
-  /** Coverage keys already used in this sync run. Callers mutate their
-   *  own Set after each absorption so one recurring row can't cover two
-   *  charges in the same month. */
-  consumed?: ReadonlySet<string>,
+  /**
+   * Coverage keys already used in this run. REQUIRED, and MUTATED here:
+   * an absorption marks its own (row, month) before returning.
+   *
+   * Both properties are load-bearing. Optional-and-caller-marked is what
+   * this parameter used to be, and the CSV import path passed no set at
+   * all, so one hand-forecast $2,000/mo income row absorbed every
+   * $2,000 deposit in the same month. Making it required means a new
+   * ingest path cannot compile without one; marking it here means a
+   * caller that has one cannot forget to use it.
+   *
+   * Pass a fresh Set per run. Call this only for a charge you are
+   * actually going to act on, since a lookup consumes the slot.
+   */
+  consumed: Set<string>,
 ): CoverCandidate | null {
   const bucket = dollarBucket(probe.amount_cents);
   for (const row of rows) {
@@ -165,7 +176,8 @@ export function findCoveringRecurringRow(
     // match (amount + month only) let a single row swallow EVERY
     // same-dollar deposit in every covered month, silently deleting
     // real revenue from the forecast (audit #26).
-    if (consumed?.has(coverageKey(row.id, probe.month))) continue;
+    if (consumed.has(coverageKey(row.id, probe.month))) continue;
+    consumed.add(coverageKey(row.id, probe.month));
     return row;
   }
   return null;

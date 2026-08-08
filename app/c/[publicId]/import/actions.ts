@@ -1543,6 +1543,13 @@ async function runBellaCategorize(args: {
     .eq("company_id", companyId)
     .neq("recurrence", "one_off");
   const incomeCandidates = (recIncome ?? []) as CoverCandidate[];
+  // One absorption per (recurring row, month), for this whole import.
+  // Without it a single hand-forecast $2,000/mo row absorbed EVERY
+  // $2,000 deposit in the same month, so three real client payments
+  // booked as one and $4,000 of March revenue never reached the
+  // forecast. The bank syncs have always carried this set; this path
+  // was the one that did not.
+  const consumedIncomeCoverage = new Set<string>();
   const coveredIncomeLinks: Array<{ txId: string; incomeId: string }> = [];
   const ignoreTxIds: string[] = [];
   const suggestionUpdates: Array<{
@@ -1642,12 +1649,16 @@ async function runBellaCategorize(args: {
         decision.recurrence === "monthly" && tx.description
           ? subscriptionFallbackKey(tx.description, decision.amountCents)
           : null;
-      const covering = findCoveringRecurringRow(incomeCandidates, {
-        tax_year: taxYear,
-        month: decision.month,
-        amount_cents: decision.amountCents,
-        recurring_key: incKey,
-      });
+      const covering = findCoveringRecurringRow(
+        incomeCandidates,
+        {
+          tax_year: taxYear,
+          month: decision.month,
+          amount_cents: decision.amountCents,
+          recurring_key: incKey,
+        },
+        consumedIncomeCoverage,
+      );
       if (covering) {
         // Already forecast by a recurring row, so link rather than double-count.
         coveredIncomeLinks.push({ txId: tx.id, incomeId: covering.id });
