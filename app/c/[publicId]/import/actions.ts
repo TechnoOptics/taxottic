@@ -21,6 +21,7 @@ import {
   type BatchSkipReason,
 } from "@/lib/csv/import-selection";
 import { planExpenseBooking } from "@/lib/csv/expense-booking";
+import { bookExpenseForTransaction } from "@/lib/csv/book-expense";
 import { planIncomeBooking } from "@/lib/csv/income-booking";
 import { fetchAllPages } from "@/lib/db/paginate";
 import { autoCategorize } from "@/lib/csv/auto-categorize";
@@ -1032,37 +1033,32 @@ async function runBatch(formData: FormData, intent: BatchIntent) {
         continue;
       }
 
-      const { data: created, error: insErr } = await admin
-        .from("monthly_expenses")
-        .insert({
-          company_id: ctx.companyId,
-          user_id: user.id,
-          tax_year: taxYear,
-          month: decision.month,
-          amount_cents: decision.amountCents,
-          category_code: code,
-          recurrence: decision.recurrence,
-          notes: row.description,
-        })
-        .select("id")
-        .single();
-      if (insErr || !created) {
+      // One call, one expense, or none. This used to be an insert
+      // followed by a separate link, and the gap between them is where
+      // 32 phantom rows worth $25,061.22 were written on 2026-08-06.
+      // See lib/csv/book-expense.ts.
+      const claim = await bookExpenseForTransaction(admin, {
+        transactionId: row.id,
+        companyId: ctx.companyId,
+        actorUserId: user.id,
+        taxYear,
+        month: decision.month,
+        amountCents: decision.amountCents,
+        categoryCode: code,
+        recurrence: decision.recurrence,
+        notes: row.description,
+      });
+      if (claim.status === "failed") {
         failed++;
         continue;
       }
-      const { error: linkErr } = await admin
-        .from("bank_transactions")
-        .update({
-          applied_expense_id: created.id,
-          applied_category_code: code,
-        })
-        .eq("id", row.id);
-      if (linkErr) {
-        // The expense exists but nothing points at it. Roll back this
-        // one row rather than leaving an orphan on the deduction
-        // surface that no import can ever un-apply.
-        await admin.from("monthly_expenses").delete().eq("id", created.id);
-        failed++;
+      if (claim.status === "already_booked") {
+        // Not a failure. The row is booked exactly once, which is what
+        // the press asked for; the banner names it as a skip so the
+        // count still matches what the user can see. The ordinary cause
+        // is a stale tab: Bella's cron booked the row while the page
+        // was open.
+        skipped.push({ id: row.id, reason: "already_booked" });
         continue;
       }
       done++;
@@ -1673,29 +1669,44 @@ async function runBellaCategorize(args: {
   }
 
   // Apply expense rows.
-  if (expenseInserts.length > 0) {
-    const { data: created } = await admin
-      .from("monthly_expenses")
-      .insert(expenseInserts)
-      .select("id");
-    if (created) {
-      for (let i = 0; i < created.length; i++) {
-        const txId = expenseTxIds[i];
-        const exId = created[i]?.id;
-        if (txId && exId) {
-          await admin
-            .from("bank_transactions")
-            .update({
-              applied_expense_id: exId,
-              applied_category_code: expenseInserts[i].category_code,
-            })
-            .eq("id", txId);
-        }
-      }
-      // Same recurring-stream detector the bank syncs run, Bella's
-      // auto-apply is just another path new expense rows land through.
-      await applyRecurringExpenseDetection(admin, companyId, taxYear);
-    }
+  //
+  // One claim per transaction, not one bulk insert followed by a loop of
+  // links. The bulk version is what produced the 2026-08-06 incident:
+  // 25 July rows and 7 June rows, all inserted at 18:40:08.05693+00 and
+  // all inserted again by a second run at 18:40:29, which then took the
+  // links and left the first 32 orphaned but still counted. It also
+  // depended on `created[i]` lining up with `expenseInserts[i]`, an
+  // ordering postgres does not promise, so a reordered RETURNING would
+  // have linked every transaction to the wrong expense silently.
+  //
+  // Same number of round trips as before (one per row, instead of one
+  // insert plus one update per row), and now each row's expense and its
+  // link land together or not at all.
+  let expensesBooked = 0;
+  for (let i = 0; i < expenseInserts.length; i++) {
+    const row = expenseInserts[i];
+    const txId = expenseTxIds[i];
+    if (!row || !txId) continue;
+    const claim = await bookExpenseForTransaction(admin, {
+      transactionId: txId,
+      companyId,
+      actorUserId: user.id,
+      taxYear: row.tax_year,
+      month: row.month,
+      amountCents: row.amount_cents,
+      categoryCode: row.category_code,
+      recurrence: row.recurrence === "monthly" ? "monthly" : "one_off",
+      notes: row.notes,
+    });
+    if (claim.status === "booked") expensesBooked++;
+    // already_booked: somebody (a concurrent run, or the user pressing
+    // Apply) got there first. Nothing to do, and nothing to report:
+    // Bella's pass is unattended, and the row is booked once.
+  }
+  if (expensesBooked > 0) {
+    // Same recurring-stream detector the bank syncs run, Bella's
+    // auto-apply is just another path new expense rows land through.
+    await applyRecurringExpenseDetection(admin, companyId, taxYear);
   }
 
   // Apply income rows.
@@ -1747,7 +1758,10 @@ async function runBellaCategorize(args: {
   }
 
   // Refresh applied_count + status on the import.
-  const totalApplied = expenseInserts.length + incomeInserts.length;
+  // expensesBooked, not expenseInserts.length: a row another run had
+  // already booked is not something this pass applied, and counting it
+  // would restate the same inflation the claim function exists to stop.
+  const totalApplied = expensesBooked + incomeInserts.length;
   await admin
     .from("bank_imports")
     .update({
@@ -1851,9 +1865,10 @@ export async function deleteImport(formData: FormData) {
   // transactions), so the dangling state never persists.
   const { data: applied } = await admin
     .from("bank_transactions")
-    .select("applied_expense_id, applied_income_id")
+    .select("id, applied_expense_id, applied_income_id")
     .eq("import_id", importId);
 
+  const txIds = (applied ?? []).map((t) => t.id as string);
   const expenseIds = (applied ?? [])
     .map((t) => t.applied_expense_id)
     .filter((id): id is string => !!id);
@@ -1863,6 +1878,33 @@ export async function deleteImport(formData: FormData) {
 
   if (expenseIds.length > 0) {
     await admin.from("monthly_expenses").delete().in("id", expenseIds);
+  }
+  // Then by provenance, which catches what the pointer cannot: an
+  // expense this import created whose link was lost or stolen. Those are
+  // exactly the 32 rows from 2026-08-06, and under the old code deleting
+  // the import left every one of them behind, still counted, with the
+  // transactions that could have identified them cascaded away.
+  //
+  // Safe to run unconditionally: source_transaction_id is only ever set
+  // by the booking path, is UNIQUE, and a manual expense (the Stripe fee
+  // rows among them) has it null and matches nothing here.
+  //
+  // Before 20260808020000 is applied the column does not exist and this
+  // fails with "column does not exist", deleting nothing, which is the
+  // behaviour this line replaces. The error is read and ignored rather
+  // than left unexamined so that a different failure is still visible in
+  // the logs.
+  if (txIds.length > 0) {
+    const { error: provenanceErr } = await admin
+      .from("monthly_expenses")
+      .delete()
+      .in("source_transaction_id", txIds);
+    if (provenanceErr && provenanceErr.code !== "42703") {
+      console.error(
+        "deleteImport: provenance sweep failed",
+        provenanceErr.message,
+      );
+    }
   }
   if (incomeIds.length > 0) {
     await admin.from("monthly_income").delete().in("id", incomeIds);
