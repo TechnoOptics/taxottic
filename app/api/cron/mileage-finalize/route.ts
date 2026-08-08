@@ -15,6 +15,11 @@ import {
   evaluateFleetCapture,
   MIN_BASELINE_DAYS,
 } from "@/lib/mileage/fleet-canary";
+import {
+  evaluateForegroundOnlyTracker,
+  BASELINE_WINDOW_MS as FG_BASELINE_WINDOW_MS,
+  RECENT_WINDOW_MS as FG_RECENT_WINDOW_MS,
+} from "@/lib/mileage/foreground-only";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -165,6 +170,8 @@ export async function GET(req: NextRequest) {
   let stallsNotified = 0;
   let stallsUndeliverable = 0;
   let parkedNotified = 0;
+  let foregroundOnlyNotified = 0;
+  let foregroundOnlyUndeliverable = 0;
   try {
     const nowMs = Date.now();
     const watchSinceIso = new Date(nowMs - WATCH_WINDOW_MS).toISOString();
@@ -477,6 +484,107 @@ export async function GET(req: NextRequest) {
       );
       parkedNotified++;
     }
+
+    // ── Foreground-only escalation ────────────────────────────────
+    // The THIRD way tracking silently loses drives, and the one that
+    // actually happened: the tracker only arms while the app is open,
+    // so every drive taken with it closed is lost.
+    //
+    // Neither sweep above can see it. The device is not silent (each
+    // time the user opens the app it uploads a trickle of points, and
+    // that upload CLEARS the silent episode, so the failure actively
+    // hides from silence detection) and it is not parked (those points
+    // do move, there are just far too few of them). Measured on a real
+    // iOS device: 284 background heartbeats on 1.3.6, then zero on
+    // 1.3.7 while foreground contact continued, for four days, with
+    // every alarm we had reporting nothing wrong.
+    //
+    // Reads heartbeats rather than the native plugin on purpose: the
+    // plugin probe still times out on both devices (device_status_source
+    // = 'none'), so anything depending on it is blind on exactly the
+    // device in trouble.
+    for (const { driver, company } of watched.values()) {
+      const countHeartbeats = async (foreground: boolean, sinceMs: number) => {
+        const { count } = await admin
+          .from("mileage_device_heartbeats")
+          .select("id", { count: "exact", head: true })
+          .eq("driver_user_id", driver)
+          .eq("company_id", company)
+          // probe_foreground is nullable: builds predating the probe send
+          // NULL, and `eq` excludes those rather than counting them as
+          // background. An old build therefore reads as zero baseline and
+          // is never judged, which is the fail-safe direction.
+          .eq("probe_foreground", foreground)
+          .gte("reported_at", new Date(sinceMs).toISOString());
+        return count ?? 0;
+      };
+
+      const recentSince = nowMs - FG_RECENT_WINDOW_MS;
+      const [recentBackground, recentForeground, baselineBackground] =
+        await Promise.all([
+          countHeartbeats(false, recentSince),
+          countHeartbeats(true, recentSince),
+          countHeartbeats(false, nowMs - FG_BASELINE_WINDOW_MS),
+        ]);
+
+      const { data: fgAlert } = await admin
+        .from("mileage_tracker_alerts")
+        .select("notified_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .eq("kind", "foreground_only")
+        .maybeSingle();
+
+      const fgDecision = evaluateForegroundOnlyTracker({
+        baselineBackground,
+        recentBackground,
+        recentForeground,
+        nowMs,
+        lastNotifiedMs: fgAlert?.notified_at
+          ? Date.parse(fgAlert.notified_at as string)
+          : null,
+      });
+
+      if (fgDecision === "clear") {
+        if (fgAlert) {
+          await admin
+            .from("mileage_tracker_alerts")
+            .delete()
+            .eq("driver_user_id", driver)
+            .eq("company_id", company)
+            .eq("kind", "foreground_only");
+        }
+        continue;
+      }
+      if (fgDecision !== "notify") continue;
+
+      const fgDayKey = new Date(nowMs).toISOString().slice(0, 10);
+      const fgRes = await notify(driver, {
+        kind: "tracker_foreground_only",
+        dayKey: fgDayKey,
+      });
+      // Same reached-not-attempted rule as the silent sweep: a driver we
+      // never actually reached must not be recorded as told, or the
+      // episode goes quiet having achieved nothing. This device had zero
+      // rows in device_tokens throughout the incident, so the
+      // undeliverable path is the LIKELY path here, not the edge case.
+      const fgReached = fgRes.delivered > 0;
+      await admin.from("mileage_tracker_alerts").upsert(
+        {
+          driver_user_id: driver,
+          company_id: company,
+          kind: "foreground_only",
+          stalled_since: new Date(recentSince).toISOString(),
+          notified_at: fgReached ? new Date(nowMs).toISOString() : null,
+          delivery_failed_at: fgReached
+            ? null
+            : new Date(nowMs).toISOString(),
+        },
+        { onConflict: "driver_user_id,company_id,kind" },
+      );
+      if (fgReached) foregroundOnlyNotified++;
+      else foregroundOnlyUndeliverable++;
+    }
   } catch (err) {
     // The sweep must never break trip finalization.
     console.error(
@@ -559,7 +667,7 @@ export async function GET(req: NextRequest) {
   }
 
   console.log(
-    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} renderRefused=${renderRefused} stallsNotified=${stallsNotified} stallsUndeliverable=${stallsUndeliverable} parkedNotified=${parkedNotified} fleet=${fleetStatus}`,
+    `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} renderRefused=${renderRefused} stallsNotified=${stallsNotified} stallsUndeliverable=${stallsUndeliverable} parkedNotified=${parkedNotified} fgOnlyNotified=${foregroundOnlyNotified} fgOnlyUndeliverable=${foregroundOnlyUndeliverable} fleet=${fleetStatus}`,
   );
 
   return NextResponse.json({
@@ -569,6 +677,13 @@ export async function GET(req: NextRequest) {
     tripsCreated: totalTrips,
     healed,
     renderRefused,
+    // Surfaced in the response, not just the log, so a manual invocation
+    // can confirm the new sweep actually ran and what it decided. The
+    // undeliverable count matters as much as the notified one: an alarm
+    // firing into a device with no push token is the failure mode this
+    // whole area keeps hitting.
+    foregroundOnlyNotified,
+    foregroundOnlyUndeliverable,
     fleet: fleetStatus,
   });
 }

@@ -954,7 +954,16 @@
 // photographs plus a new three-audience band, so the home markup grew
 // by about 1,700px. A cached v160 shell would serve the old page with
 // none of the images.
-const CACHE_VERSION = "v161";
+// v162: PWASetup no longer adopts a waiting worker while the page is
+// hidden. Adopting reloads the page, and a reload in a backgrounded iOS
+// WebView boots a fresh page life that calls the tracker's
+// `await stopBgSafely(bg)` (which kills the live background service)
+// and is then suspended by iOS before `bg.start()` re-arms it. That is
+// how a phone loses a whole day of drives without anyone touching it.
+// A worker installed while hidden now stays waiting until the app is
+// next foregrounded. Every device must reach v162 to stop losing
+// background tracking, which is precisely why this bump matters.
+const CACHE_VERSION = "v162";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

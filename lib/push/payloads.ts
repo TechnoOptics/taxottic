@@ -61,6 +61,13 @@ export type PushEvent =
    */
   | { kind: "tracker_stalled"; dayKey: string }
   | { kind: "tracker_parked"; dayKey: string }
+  /** The tracker only runs while the app is open, so every drive taken
+   *  with it closed is lost. Distinct from tracker_stalled because the
+   *  device is NOT silent: it keeps uploading a trickle whenever the user
+   *  opens the app, which is precisely what hides it from the silence
+   *  alarm. The ask is to reopen the app and take the update, not to
+   *  turn tracking back on, because tracking is already on. */
+  | { kind: "tracker_foreground_only"; dayKey: string }
   /** Sent to a MANAGER when a driver's tracker is dead AND the driver
    *  themselves could not be reached (no registered device, or every
    *  token failed). Carries no location and no distance: it is a
@@ -192,6 +199,19 @@ export function buildPayload(e: PushEvent): PushPayload {
           "Taxottic is running here, but this phone hasn't been on a drive in days. If you drive with a different phone, set up tracking there.",
         data: { kind: e.kind },
         dedupeKey: `tracker_parked:${e.dayKey}`,
+      };
+    case "tracker_foreground_only":
+      return {
+        // Deliberately not "tracking stopped": from the driver's side it
+        // has not stopped, the toggle is on and the app looks fine, which
+        // is why this went unnoticed for four days. Name the symptom they
+        // can actually check (drives missing unless the app was open) and
+        // give the one action that fixes it.
+        title: "Drives are only being recorded while Taxottic is open",
+        body:
+          "Background tracking on this phone has stopped, so drives taken with the app closed are being missed. Open Taxottic and leave it open for a moment to restart it.",
+        data: { kind: e.kind },
+        dedupeKey: `tracker_foreground_only:${e.dayKey}`,
       };
     case "driver_tracker_unreachable":
       return {
