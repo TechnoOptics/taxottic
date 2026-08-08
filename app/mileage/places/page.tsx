@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { AddPlaceForm } from "@/components/mileage/AddPlaceForm";
+import { DeletePlaceButton } from "@/components/mileage/DeletePlaceButton";
 import { addMileagePlace, deleteMileagePlace } from "./actions";
 
 const KIND_LABEL: Record<string, { name: string; rule: string }> = {
@@ -73,23 +74,41 @@ export default async function MileagePlacesPage() {
 , only real drives (≥ 200 m, ≥ ~18 mph segments).
         </p>
 
-        <div className="card mt-8 p-6 sm:p-7">
-          <h2 className="display text-xl text-forest-900">Add a place</h2>
-          <p className="mt-1 text-sm text-ink-soft">
-            Office, client site, or home, pick the category that matches.
-          </p>
-          <div className="mt-5">
-            <AddPlaceForm addPlaceAction={addMileagePlace} />
+        {/* Without a company there is nothing to attach a place to, and
+            addMileagePlace refuses every submission for that reason. The
+            form used to render anyway, fully interactive: you searched an
+            address, set a radius, pressed Save, and only then were told
+            to set up a company. Ask for the company first instead. */}
+        {!companyId ? (
+          <div className="card mt-8 p-6 sm:p-7">
+            <h2 className="display text-xl text-forest-900">
+              Set up your business first
+            </h2>
+            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+              Saved places belong to a business, so there is nowhere to put
+              one yet. It takes a name and a minute, and your drives start
+              classifying themselves straight after.
+            </p>
+            <Link href="/onboarding/new-company" className="btn-primary mt-4">
+              Set up my business
+            </Link>
           </div>
-        </div>
+        ) : (
+          <div className="card mt-8 p-6 sm:p-7">
+            <h2 className="display text-xl text-forest-900">Add a place</h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              Office, client site, or home, pick the category that matches.
+            </p>
+            <div className="mt-5">
+              <AddPlaceForm addPlaceAction={addMileagePlace} />
+            </div>
+          </div>
+        )}
 
+        {companyId ? (
         <div className="card mt-6 p-6 sm:p-7">
           <h2 className="display text-xl text-forest-900">Your places</h2>
-          {!companyId ? (
-            <p className="mt-3 text-sm text-ink-muted">
-              Set up a company first, then come back to save places.
-            </p>
-          ) : places.length === 0 ? (
+          {places.length === 0 ? (
             <p className="mt-3 text-sm text-ink-muted">
               No saved places yet. Add one above and your next trip there
               will classify itself.
@@ -117,21 +136,18 @@ export default async function MileagePlacesPage() {
                         {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
                       </div>
                     </div>
-                    <form action={deleteMileagePlace}>
-                      <input type="hidden" name="place_id" value={p.id} />
-                      <button
-                        type="submit"
-                        className="text-xs text-red-700 hover:underline underline-offset-2"
-                      >
-                        Remove
-                      </button>
-                    </form>
+                    <DeletePlaceButton
+                      placeId={p.id}
+                      label={p.label}
+                      action={deleteMileagePlace}
+                    />
                   </li>
                 );
               })}
             </ul>
           )}
         </div>
+        ) : null}
 
         <p className="mt-6 text-[11px] leading-relaxed text-ink-muted">
           How it works: the phone tracker streams GPS points only when
