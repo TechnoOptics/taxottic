@@ -92,6 +92,27 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Inline a build identifier into the CLIENT bundle, without depending on
+  // Vercel's "Automatically expose System Environment Variables" toggle.
+  //
+  // lib/build-id.ts originally read NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA
+  // directly. Vercel only inlines that when the toggle above is ON, and
+  // there is no way to read the toggle's state from here, so the build id
+  // could silently have been the string "dev" on every device. That would
+  // make the whole web_build column a no-op, which is precisely the class
+  // of failure it was added to detect. Shipping a diagnostic that cannot
+  // itself be trusted is worse than not shipping one.
+  //
+  // VERCEL_GIT_COMMIT_SHA (no prefix) is always present in a Vercel build
+  // environment, and Next inlines anything listed here into the client at
+  // build time regardless of the toggle. Local builds fall through to
+  // "dev", which is correct and distinguishable.
+  env: {
+    NEXT_PUBLIC_BUILD_ID:
+      process.env.VERCEL_GIT_COMMIT_SHA ??
+      process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ??
+      "dev",
+  },
   // @napi-rs/canvas ships a prebuilt native binding (.node) that Turbopack
   // can't bundle into an ESM chunk; pdfjs-dist's legacy build also breaks
   // when Turbopack tries to inline it. Mark both as runtime externals so
