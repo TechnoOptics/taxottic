@@ -66,13 +66,21 @@ export type ExpenseRowProps = {
   // list isn't already filtered to a single person, so a solo operator
   // never sees a redundant "added by me" tag.
   addedByLabel?: string | null;
-  updateAction: (formData: FormData) => Promise<void>;
-  deleteAction: (formData: FormData) => Promise<void>;
-  // Manager-only review controls, reclassify to/from personal, leave a
-  // note, and stop/resume a recurring charge's forward projection. Only
-  // passed by the parent when the viewer is a manager; the note itself
-  // still renders for everyone (the point is the teammate sees it).
-  isManager?: boolean;
+  // Editing and removing are the row owner's, and only the owner's: both
+  // server actions scope their write by user_id. The parent passes these
+  // only when the viewer logged the row, so the controls are absent
+  // rather than present-and-inert. They used to be handed to every row a
+  // viewer could see, which on a manager's screen is the whole company,
+  // and pressing Remove on a teammate's expense ran a confirm dialog, a
+  // zero-row delete, and a page reload that changed nothing.
+  updateAction?: (formData: FormData) => Promise<void>;
+  deleteAction?: (formData: FormData) => Promise<void>;
+  // Review controls, reclassify to/from personal, leave a note, and
+  // stop/resume a recurring charge's forward projection. Each is passed
+  // by the parent only to a viewer the matching server action will
+  // accept, so the presence of the prop IS the permission; there is no
+  // separate boolean to fall out of step with it. The note itself still
+  // renders for everyone (the point is the teammate sees it).
   reclassifyAction?: (formData: FormData) => Promise<void>;
   setNoteAction?: (formData: FormData) => Promise<void>;
   setRecurrenceEndAction?: (formData: FormData) => Promise<void>;
@@ -87,7 +95,6 @@ export function ExpenseRow({
   addedByLabel,
   updateAction,
   deleteAction,
-  isManager = false,
   reclassifyAction,
   setNoteAction,
   setRecurrenceEndAction,
@@ -98,7 +105,7 @@ export function ExpenseRow({
   const isRecurring = !!row.recurrence && row.recurrence !== "one_off";
   const recurrenceStopped = row.recurrenceEndMonth != null;
 
-  if (editing) {
+  if (editing && updateAction) {
     return (
       <li className="rounded-lg border border-gold-300 bg-cream/50 px-4 py-3">
         <form
@@ -251,43 +258,63 @@ export function ExpenseRow({
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            aria-label="Edit expense entry"
-            className="text-xs text-ink-muted hover:text-forest-900 px-2 py-1"
-          >
-            Edit
-          </button>
-          <form
-            action={deleteAction}
-            onSubmit={(e) => {
-              if (
-                !window.confirm(
-                  "Remove this expense entry? This cannot be undone.",
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <input type="hidden" name="company_id" value={companyId} />
-            <input type="hidden" name="id" value={row.id} />
-            <button
-              type="submit"
-              className="text-xs text-ink-muted hover:text-red-700 px-2 py-1"
-            >
-              Remove
-            </button>
-          </form>
-        </div>
+        {updateAction || deleteAction ? (
+          <div className="flex items-center gap-1 shrink-0">
+            {updateAction ? (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                aria-label="Edit expense entry"
+                className="text-xs text-ink-muted hover:text-forest-900 px-2 py-1"
+              >
+                Edit
+              </button>
+            ) : null}
+            {deleteAction ? (
+              <form
+                action={deleteAction}
+                onSubmit={(e) => {
+                  if (
+                    !window.confirm(
+                      "Remove this expense entry? This cannot be undone.",
+                    )
+                  ) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                <input type="hidden" name="company_id" value={companyId} />
+                <input type="hidden" name="id" value={row.id} />
+                <button
+                  type="submit"
+                  className="text-xs text-ink-muted hover:text-red-700 px-2 py-1"
+                >
+                  Remove
+                </button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      {/* Manager review controls, reclassify, note, stop/resume a
-          recurring charge. Hidden from non-managers entirely (a member
-          still just SEES the note above, if one exists). */}
-      {isManager ? (
+      {/* Review controls, reclassify, note, stop/resume a recurring
+          charge. Each one renders only when the parent handed down its
+          action, and the parent hands those down only to viewers the
+          server action will actually accept.
+
+          The strip used to be gated on isManager as a whole, which made
+          "Stop recurring" unreachable for the one person it was written
+          for. setExpenseRecurrenceEnd authorizes `isOwner || canReview`
+          and its own comment says the point is to let "the person who
+          logged it" end the projection the day they cancel the
+          subscription; the expenses page duly passed the action to
+          owners, and then this gate threw it away. A member who
+          cancelled a $200/mo subscription had no way to stop it
+          projecting through December except deleting the row, which
+          also erases the months they really did pay. */}
+      {reclassifyAction ||
+      setNoteAction ||
+      (setRecurrenceEndAction && isRecurring) ? (
         <div className="mt-2 pt-2 border-t border-dashed border-forest-100 flex flex-wrap items-center gap-2">
           {reclassifyAction ? (
             <form action={reclassifyAction}>
