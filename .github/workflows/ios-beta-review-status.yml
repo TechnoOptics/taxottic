@@ -69,12 +69,22 @@ jobs:
             return t ? JSON.parse(t) : {};
           };
 
-          // Newest builds first. A specific build_number is matched exactly
-          // so a report can never silently describe a DIFFERENT build than
-          // the one asked about, which is the mistake that would make this
-          // tool worse than useless.
+          // Newest builds first, sorted by UPLOAD DATE, not by version.
+          //
+          // `builds.version` is CFBundleVersion and ASC types it as a STRING.
+          // Sorting on it risks lexicographic order, in which descending
+          // across builds 1..36 runs 9, 8, 7, 6, 5, 4, 36, 35, ... So
+          // `list[0]` would be build 9, and a blank build_number would report
+          // beta review state for a year-old build with total confidence.
+          // That is worse than no tool. uploadedDate is a real date and
+          // orders unambiguously.
+          //
+          // A specific build_number is still matched EXACTLY below, so a
+          // report can never silently describe a different build than the one
+          // asked about. The limit is generous so an explicitly named older
+          // build is still found.
           const builds = await api(
-            `/v1/builds?filter[app]=${APP_ID}&sort=-version&limit=20`,
+            `/v1/builds?filter[app]=${APP_ID}&sort=-uploadedDate&limit=50`,
           );
           const list = builds.data ?? [];
           if (list.length === 0) { console.log("no builds found"); process.exit(0); }
@@ -83,7 +93,7 @@ jobs:
             ? list.find((b) => String(b.attributes.version) === WANT)
             : list[0];
           if (!build) {
-            console.error(`::error::build ${WANT} not found in the latest 20`);
+            console.error(`::error::build ${WANT} not found in the latest 50 by upload date`);
             process.exit(1);
           }
 
