@@ -77,6 +77,17 @@ export type PushEvent =
       driverLabel: string;
       driverId: string;
       dayKey: string;
+    }
+  /** Sent to a MANAGER when a driver's tracker is recording only while the
+   *  app is open AND the driver could not be reached. Separate from
+   *  driver_tracker_unreachable because the diagnosis is different and so
+   *  is the remedy: that one says "they stopped sending data", which is
+   *  false here (they are sending, just far too little). */
+  | {
+      kind: "driver_tracker_foreground_only";
+      driverLabel: string;
+      driverId: string;
+      dayKey: string;
     };
 
 export type PushPayload = {
@@ -227,6 +238,18 @@ export function buildPayload(e: PushEvent): PushPayload {
         // Per driver per day: one manager nudge a day per affected
         // driver, not one per cron tick.
         dedupeKey: `driver_tracker_unreachable:${e.driverId}:${e.dayKey}`,
+      };
+    case "driver_tracker_foreground_only":
+      return {
+        // Names the actual symptom so the manager can act on it. "Stopped
+        // sending data" would be wrong and would send them looking for a
+        // dead phone: the phone is alive and reporting, it just only
+        // records while the app is open, so the drives are the thing that
+        // is missing rather than the device.
+        title: "A driver's drives are only recording while the app is open",
+        body: `${e.driverLabel}'s phone has stopped tracking in the background, so drives taken with Taxottic closed are being missed. We couldn't reach their phone to tell them.`,
+        data: { kind: e.kind, driverId: e.driverId },
+        dedupeKey: `driver_tracker_foreground_only:${e.driverId}:${e.dayKey}`,
       };
   }
 }

@@ -529,7 +529,11 @@ export async function GET(req: NextRequest) {
 
       const { data: fgAlert } = await admin
         .from("mileage_tracker_alerts")
-        .select("notified_at")
+        // escalated_at is read back because the upsert below rewrites the
+        // whole row: without it nextEscalatedAt has nothing to preserve and
+        // the escalation timestamp is erased on the very next tick. The
+        // silent sweep learned this the hard way; no reason to relearn it.
+        .select("notified_at, escalated_at")
         .eq("driver_user_id", driver)
         .eq("company_id", company)
         .eq("kind", "foreground_only")
@@ -569,6 +573,56 @@ export async function GET(req: NextRequest) {
       // rows in device_tokens throughout the incident, so the
       // undeliverable path is the LIKELY path here, not the edge case.
       const fgReached = fgRes.delivered > 0;
+
+      // Escalate to the managers when the driver could not be reached.
+      // Without this the sweep diagnoses the problem perfectly and tells
+      // NOBODY, which is worse than not detecting it: the alert row looks
+      // handled while the drives keep going missing. Measured on the first
+      // production run of this sweep, which correctly identified the
+      // affected device and then delivered to zero endpoints because that
+      // phone has no rows in device_tokens. Same shape as the silent
+      // sweep's escalation, and gated the same way: only when this episode
+      // has no record of ever reaching the driver.
+      let fgEscalatedAt: string | null = null;
+      if (!fgReached && fgAlert?.notified_at == null) {
+        try {
+          const { data: mgrs } = await admin
+            .from("company_members")
+            .select("user_id, role")
+            .eq("company_id", company)
+            .in("role", ["manager", "lead"]);
+          const { data: who } = await admin
+            .from("profiles")
+            .select("full_name")
+            .eq("id", driver)
+            .maybeSingle();
+          // Never leak an email or an id into a notification body.
+          const driverLabel =
+            (who?.full_name as string | null)?.trim() || "A driver";
+          let anyManagerReached = false;
+          for (const m of mgrs ?? []) {
+            const mid = m.user_id as string;
+            if (mid === driver) continue; // don't tell them about themselves
+            const r = await notify(mid, {
+              kind: "driver_tracker_foreground_only",
+              driverLabel,
+              driverId: driver,
+              dayKey: fgDayKey,
+            });
+            if (r.delivered > 0) anyManagerReached = true;
+          }
+          if (anyManagerReached) fgEscalatedAt = new Date(nowMs).toISOString();
+        } catch (e) {
+          // An escalation failure must not abort the sweep for the drivers
+          // queued behind this one.
+          console.log(
+            `[mileage-finalize] fg-only escalation failed driver=${driver}: ${
+              (e as Error)?.message ?? "unknown"
+            }`,
+          );
+        }
+      }
+
       await admin.from("mileage_tracker_alerts").upsert(
         {
           driver_user_id: driver,
@@ -579,6 +633,11 @@ export async function GET(req: NextRequest) {
           delivery_failed_at: fgReached
             ? null
             : new Date(nowMs).toISOString(),
+          // Preserve a real escalation across later ticks, same reason as
+          // the silent sweep: the manager notify carries a per-driver-per-day
+          // dedupe key, so only the FIRST tick reports delivered > 0 and
+          // writing that zero back would erase proof a manager was warned.
+          escalated_at: nextEscalatedAt(fgAlert?.escalated_at, fgEscalatedAt),
         },
         { onConflict: "driver_user_id,company_id,kind" },
       );
