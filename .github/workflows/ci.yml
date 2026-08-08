@@ -75,6 +75,45 @@ jobs:
         # not production.
         run: node scripts/check-migration-order.mjs
 
+  definer-grants:
+    name: definer grant guard
+    runs-on: ubuntu-latest
+    # A git diff and a file read, no npm install and no database.
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch origin/main
+        # Same reason as the migration-order job: the guard needs to know
+        # which migrations are NEW in this PR, and the default checkout
+        # only fetches the PR ref.
+        run: git fetch origin main:refs/remotes/origin/main --depth=1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Guard against new anon-executable SECURITY DEFINER functions
+        # Postgres grants EXECUTE on a new function to PUBLIC by default,
+        # PostgREST exposes public functions at /rest/v1/rpc/, and Supabase's
+        # `anon` role inherits PUBLIC. So a SECURITY DEFINER function is
+        # internet-facing from the moment it is created, running with the
+        # definer's privileges, unless the migration explicitly revokes.
+        #
+        # Five findings in this project were exactly that, closed one at a
+        # time: mileage_broken_trips (cross-tenant trip data to anyone),
+        # purge_expired_recycle_bin (unauthenticated destructive action),
+        # passkey_lookup_by_email (identity oracle), and lookup_w9_request /
+        # submit_w9_form (a plaintext TIN writable through PostgREST).
+        #
+        # Runs in PR mode ON PURPOSE, checking only migrations new since
+        # origin/main. It does NOT retroactively fail the ~85 historical
+        # definitions that predate this guard; that backlog is tracked
+        # separately. The job's job is to stop the number growing.
+        run: node scripts/check-definer-grants.mjs
+
   verify:
     name: tests + typecheck + lint
     runs-on: ubuntu-latest
