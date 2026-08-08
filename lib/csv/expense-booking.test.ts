@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { planExpenseBooking, type BookingContext } from "./expense-booking";
+import {
+  planExpenseBooking,
+  interpretBookingClaim,
+  type BookingContext,
+} from "./expense-booking";
 import { interpretAmount, type SignConvention } from "./sign-convention";
 
 const ctx = (over: Partial<BookingContext> = {}): BookingContext => ({
@@ -291,5 +295,92 @@ describe("planExpenseBooking matches the rules bellaAutoApply used to inline", (
         ).kind,
       ).toBe("skip");
     }
+  });
+});
+
+describe("interpretBookingClaim", () => {
+  const ok = (status: string, expenseId: string | null = null) => ({
+    data: { ok: true, status, expense_id: expenseId, transaction_id: "t1" },
+    error: null,
+  });
+
+  it("reports a fresh booking with the id of the row it wrote", () => {
+    expect(interpretBookingClaim(ok("booked", "e1"))).toEqual({
+      status: "booked",
+      expenseId: "e1",
+      functionMissing: false,
+    });
+  });
+
+  it("reports a duplicate attempt as already_booked, not as a failure", () => {
+    // The whole point. On 2026-08-06 a second run booked 32 expenses a
+    // first run had already booked. Under this mapping the second run
+    // writes nothing and says so, and the batch banner counts it as a
+    // skip rather than "failed", which would be a lie about a batch that
+    // ended in exactly the state the user asked for.
+    expect(interpretBookingClaim(ok("already_booked", "e1"))).toEqual({
+      status: "already_booked",
+      expenseId: "e1",
+      functionMissing: false,
+    });
+  });
+
+  it("accepts already_booked with no id, because the winner may be another company's business", () => {
+    expect(interpretBookingClaim(ok("already_booked"))).toMatchObject({
+      status: "already_booked",
+      expenseId: null,
+    });
+  });
+
+  it("refuses to book a transaction already counted as income", () => {
+    expect(interpretBookingClaim({
+      data: { ok: false, status: "booked_as_income", expense_id: null },
+      error: null,
+    })).toMatchObject({ status: "failed", expenseId: null });
+  });
+
+  it("treats a booked with no id as a failure, not as a booking", () => {
+    // A booking nobody can point at is the orphan state by another
+    // name. Counting it as done would put it in the deduction total
+    // with no way to reach it.
+    expect(interpretBookingClaim(ok("booked"))).toMatchObject({
+      status: "failed",
+      expenseId: null,
+    });
+  });
+
+  it("treats an unrecognised status as a failure rather than assuming success", () => {
+    expect(interpretBookingClaim(ok("something_new_and_unhandled"))).toMatchObject({
+      status: "failed",
+    });
+    expect(interpretBookingClaim({ data: null, error: null })).toMatchObject({
+      status: "failed",
+    });
+  });
+
+  it("flags a missing function so the caller can fall back, not so it can pretend it worked", () => {
+    for (const err of [
+      { code: "PGRST202", message: "Could not find the function public.book_bank_transaction_expense" },
+      { code: "42883", message: "function public.book_bank_transaction_expense(...) does not exist" },
+      { code: null, message: "Could not find the function in the schema cache" },
+    ]) {
+      const out = interpretBookingClaim({ data: null, error: err });
+      expect(out.status).toBe("failed");
+      expect(out.functionMissing).toBe(true);
+    }
+  });
+
+  it("does not mistake an ordinary database error for a missing function", () => {
+    // A foreign key violation must not send the caller down the
+    // fallback path, where it would try the same doomed insert again.
+    const out = interpretBookingClaim({
+      data: null,
+      error: {
+        code: "23503",
+        message:
+          'insert or update on table "monthly_expenses" violates foreign key constraint',
+      },
+    });
+    expect(out).toEqual({ status: "failed", expenseId: null, functionMissing: false });
   });
 });

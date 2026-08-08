@@ -104,3 +104,107 @@ export function planExpenseBooking(
     recurrence: ctx.isSubscription ? "monthly" : "one_off",
   };
 }
+
+// ---------------------------------------------------------------------
+// Claiming the transaction
+// ---------------------------------------------------------------------
+// planExpenseBooking answers "should this row become an expense". It
+// cannot answer "did it already", because that is a fact about the
+// database at the instant of the write, and the whole 2026-08-06
+// incident was 32 rows that answered it correctly and were wrong 21
+// seconds later.
+//
+// So the claim is made by book_bank_transaction_expense (see
+// 20260808020000_expense_source_transaction.sql), and what is left for
+// this file is the part worth testing without a database: reading that
+// function's answer, and in particular refusing to call a duplicate a
+// failure. A duplicate means the row is booked exactly once, which is
+// what the caller asked for. Counting it as failed would put "1 failed"
+// in a banner about a batch that did what the user wanted, and counting
+// it as done would report the same expense twice.
+
+/**
+ * What the caller should do with the row.
+ *
+ * - `booked`         a new expense exists and the transaction points at it
+ * - `already_booked` some expense already claims it, nothing was written
+ * - `failed`         nothing was written and the reason is not benign
+ */
+export type BookingClaimStatus = "booked" | "already_booked" | "failed";
+
+export type BookingClaimOutcome = {
+  status: BookingClaimStatus;
+  /** Present for `booked`, and for `already_booked` when the winner is known. */
+  expenseId: string | null;
+  /**
+   * The claim function is not in the database yet.
+   *
+   * Migrations here are applied by a human, deliberately and after the
+   * code merges (see docs/migration-history-state.md). Between the merge
+   * and the apply, the import must keep working, so the caller falls
+   * back to its older path. This flag is the only honest way to tell
+   * "the function said no" from "there is no function".
+   */
+  functionMissing: boolean;
+};
+
+/** PostgREST cannot find the function in its schema cache. */
+const PGRST_FUNCTION_MISSING = "PGRST202";
+/** Postgres undefined_function, if the call reaches the server at all. */
+const PG_UNDEFINED_FUNCTION = "42883";
+
+function looksLikeMissingFunction(code: string, message: string): boolean {
+  if (code === PGRST_FUNCTION_MISSING || code === PG_UNDEFINED_FUNCTION) {
+    return true;
+  }
+  const m = message.toLowerCase();
+  return (
+    m.includes("could not find the function") ||
+    m.includes("does not exist") &&
+      m.includes("book_bank_transaction_expense")
+  );
+}
+
+/**
+ * Read one book_bank_transaction_expense response.
+ *
+ * Pure, so the mapping from every answer the database can give to every
+ * number the banner shows is testable without a database. The statuses
+ * are the function's, verbatim, and an unrecognised one is `failed`
+ * rather than an assumption: silently treating an unknown answer as
+ * success on a deduction surface is how the counts stopped matching
+ * reality in the first place.
+ */
+export function interpretBookingClaim(result: {
+  data: unknown;
+  error: { code?: string | null; message?: string | null } | null;
+}): BookingClaimOutcome {
+  if (result.error) {
+    const code = result.error.code ?? "";
+    const message = result.error.message ?? "";
+    return {
+      status: "failed",
+      expenseId: null,
+      functionMissing: looksLikeMissingFunction(code, message),
+    };
+  }
+
+  const payload = result.data as
+    | { status?: unknown; expense_id?: unknown }
+    | null
+    | undefined;
+  const status = typeof payload?.status === "string" ? payload.status : "";
+  const expenseId =
+    typeof payload?.expense_id === "string" ? payload.expense_id : null;
+
+  if (status === "booked") {
+    // A "booked" with no id is not a booking anyone can point at.
+    if (!expenseId) return { status: "failed", expenseId: null, functionMissing: false };
+    return { status: "booked", expenseId, functionMissing: false };
+  }
+  if (status === "already_booked") {
+    return { status: "already_booked", expenseId, functionMissing: false };
+  }
+  // booked_as_income, or anything this version of the code has not seen.
+  return { status: "failed", expenseId: null, functionMissing: false };
+}
