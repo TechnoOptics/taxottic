@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ensureWebPushSubscribed } from "@/lib/push/web";
-import { shouldAdoptWaitingWorker } from "@/lib/pwa/adopt-policy";
+import {
+  shouldAdoptWaitingWorker,
+  shouldReloadOnControllerChange,
+} from "@/lib/pwa/adopt-policy";
 
 type DeferredPrompt = Event & {
   prompt: () => Promise<void>;
@@ -63,6 +66,16 @@ export function PWASetup() {
     if (typeof window === "undefined") return;
 
     let reg: ServiceWorkerRegistration | undefined;
+
+    // Teardown collected from the ASYNC registerSW below.
+    //
+    // registerSW is async, so anything it `return`s is a Promise value that
+    // React never sees. It used to return a cleanup closure, which was
+    // therefore dead code: the 60s update interval and the focus and
+    // visibilitychange listeners were registered and never removed. Under
+    // StrictMode's double mount that is two registrations and two intervals.
+    // Pushing teardown here lets the effect's real cleanup run it.
+    const teardown: Array<() => void> = [];
 
     async function registerSW() {
       if (!("serviceWorker" in navigator)) return;
@@ -150,14 +163,60 @@ export function PWASetup() {
         };
         document.addEventListener("visibilitychange", onResume);
 
-        // Once the new SW takes control (after we post SKIP_WAITING), reload
-        // so the page picks up the new build.
+        // THE RELOAD IS THE DANGEROUS PART, NOT THE ADOPT.
+        //
+        // Gating adopt() on visibility (above) is NOT sufficient on its own,
+        // and shipping it alone did not fix the outage it was written for.
+        // Since v151, sw.js calls `self.skipWaiting()` inside its OWN install
+        // handler and `clients.claim()` on activate. Both run in the NEW
+        // worker and need no cooperation from this page, so a new worker
+        // takes control whether or not adopt() was ever called. That fires
+        // controllerchange in EVERY client under scope, hidden ones included.
+        //
+        // So the reload below is reached on a backgrounded device by a path
+        // that never touches adopt(): the 60s update interval (or a resume)
+        // fetches a new sw.js, it self-skips, it claims, controllerchange
+        // fires here, and an unconditional reload tears down the page. The
+        // fresh page life then runs the tracker's arm sequence, whose first
+        // act is `await stopBgSafely(bg)` to clear an orphaned service. iOS
+        // suspends the backgrounded WebView at that await, `bg.start()` never
+        // runs, and the background location service stays DOWN until the user
+        // opens the app by hand. That is a lost day of drives, and it is what
+        // actually happened.
+        //
+        // Deferring is safe. A hidden page keeps running the OLD bundle for a
+        // while longer, which costs nothing, and it keeps its live GPS
+        // watcher, which is the entire product. Freshness loses to capture.
         let reloading = false;
-        navigator.serviceWorker.addEventListener("controllerchange", () => {
+        const reloadNow = () => {
           if (reloading) return;
           reloading = true;
           window.location.reload();
-        });
+        };
+        const onControllerChange = () => {
+          if (reloading) return;
+          if (
+            shouldReloadOnControllerChange({
+              visibility: document.visibilityState,
+              alreadyReloading: reloading,
+            })
+          ) {
+            reloadNow();
+            return;
+          }
+          // Hidden: wait for the user to come back, then pick up the new
+          // build. Registered once, and removed as soon as it fires.
+          const onVisibleReload = () => {
+            if (document.visibilityState !== "visible") return;
+            document.removeEventListener("visibilitychange", onVisibleReload);
+            reloadNow();
+          };
+          document.addEventListener("visibilitychange", onVisibleReload);
+        };
+        navigator.serviceWorker.addEventListener(
+          "controllerchange",
+          onControllerChange,
+        );
 
         // Periodic check for updates while the tab is open. Cheap.
         const interval = setInterval(() => {
@@ -167,12 +226,18 @@ export function PWASetup() {
         const onFocus = () => reg?.update().catch(() => {});
         window.addEventListener("focus", onFocus);
 
-        // Clean up on unmount (StrictMode double-mount safety).
-        return () => {
+        // Clean up on unmount (StrictMode double-mount safety). Pushed, not
+        // returned: this function is async, so a returned closure would be
+        // wrapped in a Promise and never invoked.
+        teardown.push(() => {
           clearInterval(interval);
           window.removeEventListener("focus", onFocus);
           document.removeEventListener("visibilitychange", onResume);
-        };
+          navigator.serviceWorker.removeEventListener(
+            "controllerchange",
+            onControllerChange,
+          );
+        });
       } catch {
         // SW failures are non-fatal.
       }
@@ -233,6 +298,14 @@ export function PWASetup() {
       if (iosTimer) clearTimeout(iosTimer);
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onAppInstalled);
+      // Whatever the async registerSW managed to register before unmount.
+      for (const fn of teardown) {
+        try {
+          fn();
+        } catch {
+          /* one bad teardown must not skip the rest */
+        }
+      }
     };
   }, []);
 

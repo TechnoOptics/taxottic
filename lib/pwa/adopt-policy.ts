@@ -38,3 +38,36 @@ export function shouldAdoptWaitingWorker(opts: {
   // The load-bearing clause. Reloading a hidden page disarms the tracker.
   return opts.visibility === "visible";
 }
+
+/**
+ * May the page reload NOW because a new service worker took control?
+ *
+ * THIS is the gate that actually protects the tracker, and gating adoption
+ * alone (above) is not enough. `sw.js` calls `self.skipWaiting()` in its own
+ * install handler and `clients.claim()` on activate, both evaluated in the
+ * NEW worker. A new worker therefore takes control with no cooperation from
+ * this page, firing `controllerchange` in every client under scope including
+ * hidden ones, on a path that never calls `shouldAdoptWaitingWorker` at all.
+ *
+ * An unconditional reload there tears down a backgrounded page. The fresh
+ * page life runs the tracker's arm sequence, whose first act is
+ * `await stopBgSafely(bg)`; iOS suspends the hidden WebView at that await,
+ * `bg.start()` never runs, and background location stays down until the user
+ * opens the app by hand.
+ *
+ * Deferring costs a hidden page nothing but staleness. Reloading it costs
+ * the drives. So: reload only while visible, and defer otherwise until the
+ * page next becomes visible.
+ */
+export function shouldReloadOnControllerChange(opts: {
+  /** document.visibilityState when controllerchange fired. */
+  visibility: DocumentVisibilityState;
+  /** True once a reload is already in flight for this page life. */
+  alreadyReloading: boolean;
+}): boolean {
+  // A reload is already committed; a second one would be a reload loop.
+  if (opts.alreadyReloading) return false;
+  // Allowlist, so an unfamiliar visibility state fails closed (no reload)
+  // rather than tearing down a page that might be holding a GPS watcher.
+  return opts.visibility === "visible";
+}

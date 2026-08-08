@@ -81,6 +81,43 @@ export const MIN_RECENT_FOREGROUND = 2;
  *  daily rather than every tick. */
 export const RENOTIFY_MS = 24 * 60 * 60_000; // 24h
 
+/** How far background reporting may fall, as a fraction of this device's own
+ *  expected rate, before it counts as broken.
+ *
+ *  This exists because the first version of this detector tested
+ *  `recentBackground > 0` and called anything above zero healthy. That is a
+ *  zero-test, not a ratio, and it has a cliff: a device that reported ~142
+ *  background heartbeats a DAY, then degrades to ONE per 48h, is losing
+ *  drives continuously while reading as perfectly fine. Worse, "clear" makes
+ *  the sweep DELETE the open episode row, erasing the alert.
+ *
+ *  That is not a hypothetical for the incident this was written for. In the
+ *  broken state the user opens the app, the tracker arms and runs, and when
+ *  they background it JS keeps running briefly and emits a background
+ *  heartbeat or two before the next reload tears it down. Landing at least
+ *  one background heartbeat in a 48h window is a likely outcome, not an edge
+ *  case. 0.2 means "less than a fifth of its own normal rate is broken". */
+export const HEALTHY_FRACTION_OF_BASELINE = 0.2;
+
+/**
+ * How many background heartbeats this device should show in the recent
+ * window before it counts as healthy.
+ *
+ * Scaled from the device's OWN baseline rate, never from a fleet-wide
+ * constant, so an iPhone that reports every few minutes and an Android that
+ * reports a handful a day are each judged against themselves.
+ *
+ * Floored at 1 so a device with a small baseline keeps the old, simpler
+ * behaviour: any background heartbeat at all clears it. That matters because
+ * a device below MIN_BASELINE_BACKGROUND is never judged anyway, and an
+ * episode opened before its baseline aged out must still be closeable.
+ */
+export function healthyBackgroundFloor(baselineBackground: number): number {
+  const windows = BASELINE_WINDOW_MS / RECENT_WINDOW_MS; // 14d / 48h = 7
+  const expectedRecent = baselineBackground / windows;
+  return Math.max(1, expectedRecent * HEALTHY_FRACTION_OF_BASELINE);
+}
+
 export type ForegroundOnlyDecision = "notify" | "silent" | "clear";
 
 export function evaluateForegroundOnlyTracker(args: {
@@ -103,10 +140,17 @@ export function evaluateForegroundOnlyTracker(args: {
     lastNotifiedMs,
   } = args;
 
-  // Background tracking is working. This is the ordinary healthy path and it
-  // is checked FIRST so a recovered device closes its episode immediately,
-  // even if it would not have qualified for judgement in the first place.
-  if (recentBackground > 0) return "clear";
+  // Background tracking is working AT THIS DEVICE'S OWN NORMAL RATE. Checked
+  // FIRST so a recovered device closes its episode immediately, even if it
+  // would no longer qualify to be judged.
+  //
+  // Deliberately not `recentBackground > 0`: see HEALTHY_FRACTION_OF_BASELINE.
+  // A single heartbeat from a device that used to send hundreds is evidence
+  // of the failure, not of health, and treating it as health would also
+  // delete the open episode.
+  if (recentBackground >= healthyBackgroundFloor(baselineBackground)) {
+    return "clear";
+  }
 
   // Never proven capable of background reporting, so there is no baseline to
   // have regressed from. Covers Android, fresh installs, and anyone who has

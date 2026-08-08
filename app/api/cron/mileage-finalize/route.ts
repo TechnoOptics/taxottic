@@ -533,7 +533,10 @@ export async function GET(req: NextRequest) {
         // whole row: without it nextEscalatedAt has nothing to preserve and
         // the escalation timestamp is erased on the very next tick. The
         // silent sweep learned this the hard way; no reason to relearn it.
-        .select("notified_at, escalated_at")
+        // stalled_since is read back for the same reason: the upsert below
+        // rewrites the whole row, so without it the episode start is reset on
+        // every tick.
+        .select("notified_at, escalated_at, stalled_since")
         .eq("driver_user_id", driver)
         .eq("company_id", company)
         .eq("kind", "foreground_only")
@@ -628,7 +631,18 @@ export async function GET(req: NextRequest) {
           driver_user_id: driver,
           company_id: company,
           kind: "foreground_only",
-          stalled_since: new Date(recentSince).toISOString(),
+          // When this episode was FIRST observed, preserved across ticks.
+          //
+          // This used to be `new Date(recentSince)`, i.e. always exactly
+          // now-minus-48h, rewritten every tick. That is a derived window
+          // boundary, not an event, so the column silently reported a
+          // fabricated "stalled since" that slid forward every ten minutes
+          // and could never show how long an episode had actually run. The
+          // silent sweep gets this right by using a real observed timestamp
+          // (the last upload); this one now records first observation.
+          stalled_since:
+            (fgAlert?.stalled_since as string | null) ??
+            new Date(nowMs).toISOString(),
           notified_at: fgReached ? new Date(nowMs).toISOString() : null,
           delivery_failed_at: fgReached
             ? null
