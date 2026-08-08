@@ -204,6 +204,42 @@ function plugin(): CarSignalsPlugin | null {
   }
 }
 
+/** Why a car-signals read produced nothing. Mirrors the device-status
+ *  probe deliberately: a bare null cannot distinguish "no native side"
+ *  from "the bridge never answered" from "the plugin returned nothing",
+ *  and that exact ambiguity has already cost this project weeks on the
+ *  device-truth fields. Never widen this to a boolean. */
+export type CarProbeOutcome =
+  | "ok"
+  | "unavailable"
+  | "null"
+  | "error"
+  | "timeout";
+
+/**
+ * getCarSignalsState, but it says WHY it failed.
+ *
+ * The caller time-boxes this (see sendHeartbeat). Read the outcome before
+ * reading the value: `unavailable` means we are not on a native platform
+ * and nothing is wrong, while `timeout` means the JS-to-native call never
+ * came back, which is the failure mode that has produced 450 of 450 NULL
+ * device-truth heartbeats and is the reason this reporting exists at all.
+ */
+export async function getCarSignalsProbed(): Promise<{
+  value: CarSignalsState | null;
+  outcome: CarProbeOutcome;
+}> {
+  const p = plugin();
+  if (!p) return { value: null, outcome: "unavailable" };
+  try {
+    const value = await p.getState();
+    if (!value) return { value: null, outcome: "null" };
+    return { value, outcome: "ok" };
+  } catch {
+    return { value: null, outcome: "error" };
+  }
+}
+
 /** Native health, or null when there is no native side to ask. */
 export async function getCarSignalsState(): Promise<CarSignalsState | null> {
   const p = plugin();

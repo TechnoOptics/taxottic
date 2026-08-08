@@ -37,6 +37,7 @@ import {
 import { removeUploadedPoints, capBuffer } from "./buffer";
 import { isArmInterrupted, parseArmLatch } from "./arm-latch";
 import { WEB_BUILD_ID } from "@/lib/build-id";
+import { getCarSignalsProbed } from "./car-signals";
 import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
@@ -952,6 +953,14 @@ async function sendHeartbeat(): Promise<void> {
     // everything else on the bridge.
     const exitProbe = await probeWithin(getOsExitInfoProbed, 2_000);
     const exitInfo = exitProbe.value;
+    // Car connection (CarPlay / Android Auto / car Bluetooth). Time-boxed
+    // like its siblings and for the same reason: this rides the JS-to-native
+    // call path that has never once answered for device truth, so it must
+    // never be able to hold up the heartbeat itself.
+    const carProbe = await probeWithin(
+      () => getCarSignalsProbed(),
+      2_000,
+    );
     const timerLagMs = Math.round(await timerLag);
     // Device truth, live if the probe answered and cached otherwise.
     // The cache is only ever written by a SUCCESSFUL read (see
@@ -1068,6 +1077,34 @@ async function sendHeartbeat(): Promise<void> {
             return null;
           }
         })(),
+        // CAR CONNECTION (CarPlay, Android Auto, car Bluetooth, car audio).
+        //
+        // The native detection for this has existed on BOTH platforms for
+        // some time (TaxotticCarSignalsPlugin on Android,
+        // TaxotticVehicleSignals on iOS) and has never reported a single
+        // row, because nothing ever called it and there was nowhere to put
+        // the answer. This is that wiring.
+        //
+        // Reported with an explicit OUTCOME, not just a value. The pull path
+        // it depends on is the same JS-to-native call that has failed on 450
+        // of 450 device-truth heartbeats, so there is a real chance this
+        // reports `timeout` forever. If it does, that is a FINDING and not a
+        // blank: `car_probe` will say so, and it doubles as a second
+        // independent probe of whether the bridge answers at all.
+        //
+        // Time-boxed at 2s, shorter than the 3s device probe, because a
+        // heartbeat that never sends is worse than one missing a field.
+        carProbe: carProbe.outcome,
+        carProbeMs: carProbe.ms,
+        // projectionType is the CarPlay / Android Auto signal specifically;
+        // the connect counters and adapter state separate "no car" from
+        // "we cannot see cars".
+        carProjectionType: carProbe.value?.projectionType ?? null,
+        carProjectionObserved: carProbe.value?.projectionObserved ?? null,
+        carConnects: carProbe.value?.vehicleConnects ?? null,
+        carDisconnects: carProbe.value?.vehicleDisconnects ?? null,
+        carBluetoothAdapter: carProbe.value?.bluetoothAdapter ?? null,
+        carPendingSignals: carProbe.value?.pendingSignals ?? null,
         // Learned-place geofence mesh. Without these, a device whose
         // mesh silently failed to register looks identical to one that
         // simply had no drives, which is the ambiguity that let a

@@ -62,6 +62,20 @@ const STAGE_VALUES = new Set(["start", "bridge", "call", "done"]);
  *  nothing. Always read alongside device_status_age_s. */
 const SOURCE_VALUES = new Set(["live", "cache", "none"]);
 
+/** Outcomes of the car-signals probe. Allowlisted like the others so a
+ *  client cannot write arbitrary text into a column that gets grouped on.
+ *  "timeout" is the EXPECTED value until the JS-to-native call path is
+ *  fixed, and it is a finding rather than a blank: it says the bridge did
+ *  not answer, which is exactly what device truth has been saying 450
+ *  times. See lib/mileage/car-signals.ts. */
+const CAR_PROBE_VALUES = new Set([
+  "ok",
+  "unavailable",
+  "null",
+  "error",
+  "timeout",
+]);
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -120,6 +134,26 @@ export async function POST(req: NextRequest) {
     // without this a "the fix does not work" report is indistinguishable
     // from "that device never got the fix". Those want opposite responses.
     web_build: str("webBuild", 16),
+    // CAR CONNECTION (CarPlay / Android Auto / car Bluetooth / car audio).
+    //
+    // car_probe is stored FIRST-CLASS, not as an afterthought. The native
+    // detection has existed on both platforms for some time and reported
+    // nothing, because nothing called it and there was nowhere to put the
+    // result. It rides the same JS-to-native call that has failed on 450 of
+    // 450 device-truth heartbeats, so `timeout` here is a likely outcome and
+    // is a FINDING rather than a blank. It also serves as an independent
+    // second probe of whether that bridge direction works at all.
+    car_probe: oneOf("carProbe", CAR_PROBE_VALUES),
+    car_probe_ms: num("carProbeMs"),
+    car_projection_type: str("carProjectionType", 32),
+    car_projection_observed:
+      typeof body.carProjectionObserved === "boolean"
+        ? body.carProjectionObserved
+        : null,
+    car_connects: num("carConnects"),
+    car_disconnects: num("carDisconnects"),
+    car_bluetooth_adapter: str("carBluetoothAdapter", 16),
+    car_pending_signals: num("carPendingSignals"),
     tracking_enabled: body.trackingEnabled === true,
     buffer_size: num("bufferSize") ?? 0,
     last_cb_age_s: num("lastCbAgeS"),
