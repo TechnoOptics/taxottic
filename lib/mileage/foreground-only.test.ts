@@ -114,6 +114,48 @@ describe("evaluateForegroundOnlyTracker", () => {
     ).toBe("silent");
   });
 
+  // THE CLIFF THAT THE FIRST VERSION HAD. `recentBackground > 0` returned
+  // "clear", so a device collapsing from ~142 background heartbeats a day to
+  // ONE per 48h read as healthy AND had its open alert row deleted. It is
+  // losing drives continuously. Reverting to a zero-test fails this.
+  it("still fires when background collapses to a trickle, not just to zero", () => {
+    expect(
+      evaluateForegroundOnlyTracker({
+        ...healthy,
+        baselineBackground: 285,
+        recentBackground: 1,
+        recentForeground: 3,
+      }),
+    ).toBe("notify");
+  });
+
+  it("clears when background returns at the device's own normal rate", () => {
+    // 285 over 14d is ~41 per 48h; a fifth of that is the floor.
+    expect(
+      evaluateForegroundOnlyTracker({
+        ...healthy,
+        baselineBackground: 285,
+        recentBackground: 41,
+        recentForeground: 3,
+      }),
+    ).toBe("clear");
+  });
+
+  it("judges each device against itself, not a fleet-wide number", () => {
+    // A low-baseline device is held to a floor of 1, so one background
+    // heartbeat is genuinely healthy FOR IT. The same single heartbeat from
+    // the 285-baseline device above is a failure. Same input, opposite and
+    // correct verdicts.
+    expect(
+      evaluateForegroundOnlyTracker({
+        ...healthy,
+        baselineBackground: 21,
+        recentBackground: 1,
+        recentForeground: 3,
+      }),
+    ).toBe("clear");
+  });
+
   it("clears the episode as soon as one background heartbeat returns", () => {
     // Checked before the baseline gate on purpose: recovery must close an
     // open episode even for a device that would no longer qualify to be
