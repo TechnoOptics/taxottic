@@ -119,21 +119,38 @@ export function analyzeMigrationSql(sql) {
   return findings;
 }
 
+/**
+ * Migrations present locally but not at baseRef, i.e. new in this PR.
+ *
+ * Uses `git ls-tree` and a set difference rather than `git diff base...HEAD`.
+ * That is not a style preference: the three-dot diff needs a MERGE BASE, and
+ * CI fetches main with --depth=1 onto an already-shallow PR checkout, so
+ * there is no common ancestor and git fails with
+ *   fatal: origin/main...HEAD: no merge base
+ * The guard then exited 2 and failed its own PR. ls-tree just reads a tree
+ * at a ref, needs no shared history, and is what check-migration-order.mjs
+ * already does for the same reason.
+ */
 function changedMigrationFiles(baseRef) {
+  let baseFiles;
   try {
     const out = execFileSync(
       "git",
-      ["diff", "--name-only", "--diff-filter=A", `${baseRef}...HEAD`, "--", MIGRATIONS_DIR],
+      ["ls-tree", "-r", "--name-only", baseRef, "--", MIGRATIONS_DIR],
       { encoding: "utf8" },
     );
-    return out.split("\n").map((s) => s.trim()).filter((s) => s.endsWith(".sql"));
-  } catch {
+    baseFiles = new Set(
+      out.split("\n").map((s) => s.trim()).filter((s) => s.endsWith(".sql")),
+    );
+  } catch (e) {
     console.error(
-      `Could not diff against ${baseRef}. Fetch it first, e.g.\n` +
+      `Could not read ${MIGRATIONS_DIR} at ${baseRef}: ${e.message}\n` +
+        `Fetch it first, e.g.\n` +
         `  git fetch origin main:refs/remotes/origin/main --depth=1`,
     );
     process.exit(2);
   }
+  return allMigrationFiles().filter((f) => !baseFiles.has(f));
 }
 
 function allMigrationFiles() {
