@@ -536,11 +536,33 @@ export async function GET(req: NextRequest) {
         // stalled_since is read back for the same reason: the upsert below
         // rewrites the whole row, so without it the episode start is reset on
         // every tick.
-        .select("notified_at, escalated_at, stalled_since")
+        .select("notified_at, escalated_at, stalled_since, delivery_failed_at")
         .eq("driver_user_id", driver)
         .eq("company_id", company)
         .eq("kind", "foreground_only")
         .maybeSingle();
+
+      // Retry floor for an UNDELIVERABLE episode, same as the silent sweep.
+      //
+      // An episode we cannot deliver leaves notified_at NULL on purpose, so
+      // the sweep keeps trying rather than going quiet. But notified_at is
+      // also the renotify anchor, so a permanently unreachable driver reads
+      // as "never notified" on every tick: the decision returns "notify", the
+      // escalation gate opens, and the whole block (a company_members query,
+      // a profiles query, and one notify() per manager) runs 144 times a day
+      // where one is intended. The per-day dedupe key means nobody is
+      // actually spammed, so this is pure waste rather than a user-visible
+      // bug, which is exactly the kind of thing that never gets noticed.
+      const fgFailedAt = fgAlert?.delivery_failed_at
+        ? Date.parse(fgAlert.delivery_failed_at as string)
+        : null;
+      if (
+        fgAlert?.notified_at == null &&
+        fgFailedAt != null &&
+        nowMs - fgFailedAt < 60 * 60_000
+      ) {
+        continue;
+      }
 
       const fgDecision = evaluateForegroundOnlyTracker({
         baselineBackground,
@@ -676,6 +698,36 @@ export async function GET(req: NextRequest) {
   //
   // Runs once per tick but only ACTS on a state change, so a persistent
   // outage doesn't spam the log every 10 minutes.
+  // ── Interrupted arms ──────────────────────────────────────────
+  // Give arm_interrupted_at a READER. The client stamps a latch before the
+  // stop-then-start arm sequence and clears it after start() returns, and
+  // the heartbeat carries any surviving latch, but until now nothing in the
+  // repo ever read the column. A signal with no consumer is the pattern
+  // that has cost this project weeks: a watch app with no build target, a
+  // plugin missing from the pbxproj, an AppDelegate missing its APNs
+  // methods. Each existed and reached nothing.
+  //
+  // This is a SELF-INFLICTED outage marker, distinct from every other
+  // alarm: it means our own arm sequence tore the background service down
+  // and never put it back, rather than the OS killing it. It belongs in
+  // the tick output so it is visible without anyone writing ad-hoc SQL.
+  let armInterrupted = 0;
+  try {
+    const { count } = await admin
+      .from("mileage_device_heartbeats")
+      .select("id", { count: "exact", head: true })
+      .not("arm_interrupted_at", "is", null)
+      .gte("reported_at", new Date(Date.now() - 24 * 60 * 60_000).toISOString());
+    armInterrupted = count ?? 0;
+    if (armInterrupted > 0) {
+      console.warn(
+        `[mileage-finalize] ARM INTERRUPTED on ${armInterrupted} heartbeat(s) in 24h: a stop-then-start arm did not complete, so the background service was left DOWN by us. See lib/mileage/arm-latch.ts.`,
+      );
+    }
+  } catch {
+    // Never let a diagnostic count break the sweep.
+  }
+
   let fleetStatus: string = "ok";
   try {
     const { data: rows } = await admin
@@ -757,6 +809,10 @@ export async function GET(req: NextRequest) {
     // whole area keeps hitting.
     foregroundOnlyNotified,
     foregroundOnlyUndeliverable,
+    // Heartbeats in the last 24h reporting an arm that never completed.
+    // Non-zero means WE left the background service down, which is a
+    // different fault from the OS killing it and wants a different fix.
+    armInterrupted,
     fleet: fleetStatus,
   });
 }

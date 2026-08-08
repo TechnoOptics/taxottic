@@ -366,6 +366,15 @@ function webUrlFromData(data: Record<string, string>): string {
     case "tracker_parked":
     case "tracker_foreground_only":
       return "/mileage";
+    // MANAGER-facing tracker alerts. These used to fall through to the
+    // default "/" and drop a manager on the app root with no indication of
+    // which driver or what to do, which is a notification that interrupts
+    // someone and then wastes the interruption. /firm/mileage is the
+    // per-driver rollup, the one screen where a manager can actually see
+    // whose capture has stopped.
+    case "driver_tracker_unreachable":
+    case "driver_tracker_foreground_only":
+      return "/firm/mileage";
     case "clarify":
       return data.subject === "trip" ? "/mileage" : "/expenses";
     case "expense_applied":
