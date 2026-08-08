@@ -115,6 +115,11 @@ export async function POST(req: NextRequest) {
     company_id: companyId,
     platform: str("platform"),
     app_version: str("appVersion"),
+    // The JS bundle, as distinct from the native binary above. A WebView on
+    // a remote url can run a bundle days older than its app version, so
+    // without this a "the fix does not work" report is indistinguishable
+    // from "that device never got the fix". Those want opposite responses.
+    web_build: str("webBuild", 16),
     tracking_enabled: body.trackingEnabled === true,
     buffer_size: num("bufferSize") ?? 0,
     last_cb_age_s: num("lastCbAgeS"),
