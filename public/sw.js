@@ -963,7 +963,20 @@
 // A worker installed while hidden now stays waiting until the app is
 // next foregrounded. Every device must reach v162 to stop losing
 // background tracking, which is precisely why this bump matters.
-const CACHE_VERSION = "v162";
+// v163: carries the REAL fix for the tracker-disarming reload (#525).
+// v162 shipped only the adopt() gate, which this worker bypasses entirely
+// by calling self.skipWaiting() in its own install handler below, so the
+// unconditional reload on controllerchange kept tearing down backgrounded
+// pages and leaving background location stopped. #525 defers that reload
+// while the page is hidden.
+//
+// Read the irony before removing this comment: bumping this constant is
+// what makes a device fetch the new worker, which self-skips, claims, and
+// fires controllerchange. On a device still running the v162 bundle that
+// reload is still unconditional, so THIS deploy is the last time the old
+// bug can fire on any given phone. After it, the page defers instead.
+// Taking that hit once is the only way to deliver the fix at all.
+const CACHE_VERSION = "v163";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
