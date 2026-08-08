@@ -1,5 +1,20 @@
-name: iOS — TestFlight external invite
+name: iOS — TestFlight invite one external tester
 
+# RENAMED 2026-08-08. This file and ios-testflight-external.yml both
+# carried the name "iOS — TestFlight external invite", so
+# `gh workflow run "iOS — TestFlight external invite"` failed with
+#   could not resolve to a unique workflow; found:
+#     ios-testflight-external.yml ios-testflight-invite.yml
+# and dispatched NOTHING. The wrapping script still exited 0, so the
+# release looked queued when no run existed. Workflow names must stay
+# unique to be dispatchable by name.
+#
+# Prefer ios-testflight-external.yml for a real release: it takes an
+# explicit build_number (this one silently uses the newest processed
+# build), accepts several testers, sets the beta review metadata, and
+# submits for Beta App Review, which THIS workflow never does. Without
+# that submission an external invite is never installable.
+#
 # Invites an EXTERNAL tester by email: creates/reuses the "External
 # Testers" beta group, adds the newest processed build to it, and
 # creates the tester (Apple sends the TestFlight invite email).
