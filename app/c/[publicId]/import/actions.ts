@@ -488,13 +488,20 @@ export async function setTxCategory(formData: FormData) {
     throw new Error("Not authorized");
   }
 
-  await admin
+  const { error } = await admin
     .from("bank_transactions")
     .update({
       applied_category_code: code || null,
       ignored: false,
     })
     .eq("id", id);
+  // The write used to be issued and its result dropped on the floor,
+  // then the page was revalidated regardless. A rejected update
+  // therefore rendered as a successful one: the row slid off the list
+  // (TxRow animates before it commits) and came back uncategorized with
+  // nothing said. Throw instead, so the row can put itself back and say
+  // why.
+  if (error) throw new Error(error.message);
   // Bug: this was `revalidatePath(\`/c/[publicId]/import/${importId}\`)` -
   // "[publicId]" as a literal string isn't a real path (a real URL is
   // /c/co_xyz/import/{importId}), so this never actually invalidated the
@@ -522,10 +529,57 @@ export async function ignoreTx(formData: FormData) {
     throw new Error("Not authorized");
   }
 
-  await admin
+  const { error } = await admin
     .from("bank_transactions")
     .update({ ignored: true, applied_category_code: null })
     .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/c/[publicId]/import/[importId]", "page");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Put an ignored row back in the review list.
+ *
+ * The way out of the Ignored pile, which until now had no way out. A row
+ * gets there from five places and only one of them is a deliberate human
+ * press: the per-row Ignore, the batch Ignore, Bella marking a decision
+ * "transfer", the credit-card-payment pre-tag, and the refund-netting
+ * pass. The last three run unattended, and an ignored row counts as
+ * resolved, so an import could report "all rows sorted" over charges the
+ * user never saw and could not reach. Reaching them meant deleting the
+ * whole import and starting again.
+ *
+ * Clears applied_category_code with the restore, the mirror of ignoreTx
+ * clearing it on the way in. The labels that live on ignored rows
+ * ('refunded', 'credit_card_payment', transfer-scope codes) are records
+ * of why the row was set aside, not decisions the user made, and
+ * carrying one back into the review queue would put the row straight
+ * into "sorted, awaiting Apply" wearing a category nobody chose.
+ *
+ * Never touches applied_expense_id or applied_income_id: a booked row is
+ * booked, and this is a visibility change, not a reversal of a filed
+ * number. Moving a booked row is moveBookedTransaction.
+ */
+export async function restoreTx(formData: FormData) {
+  const { admin, user } = await requireUserWithAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const { data: tx } = await admin
+    .from("bank_transactions")
+    .select("company_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!tx || !(await userBelongsToCompany(admin, user.id, tx.company_id))) {
+    throw new Error("Not authorized");
+  }
+
+  const { error } = await admin
+    .from("bank_transactions")
+    .update({ ignored: false, applied_category_code: null })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
   revalidatePath("/c/[publicId]/import/[importId]", "page");
   revalidatePath("/dashboard");
 }
