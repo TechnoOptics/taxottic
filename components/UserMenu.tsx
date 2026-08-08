@@ -98,6 +98,29 @@ const PLATFORM_META: Record<Platform, { label: string; hint: string }> = {
   },
 };
 
+/**
+ * Drop the service worker's caches as part of signing out.
+ *
+ * Sign-out clears cookies, but cookies were never what leaked. The service
+ * worker's RUNTIME cache held the previous user's rendered HTML, and nothing
+ * removed it, so on a shared or family device the offline fallback path could
+ * serve one person's dashboard or books to the next. public/sw.js now refuses
+ * to cache a signed-in user's pages at all; this clears what earlier versions
+ * already wrote.
+ *
+ * Deliberately fire-and-forget. The form navigates immediately and the worker
+ * finishes the deletion inside event.waitUntil, so nothing is lost by not
+ * awaiting. Awaiting would be actively wrong: a cache purge must never be
+ * able to delay, or worse block, someone signing out.
+ */
+function purgeCachesOnSignOut() {
+  try {
+    navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_CACHES" });
+  } catch {
+    /* no controller, so this worker cached nothing to begin with */
+  }
+}
+
 export function UserMenu({
   email,
   fullName,
@@ -556,7 +579,7 @@ export function UserMenu({
                   Chrome gets silently re-authenticated as whichever one
                   the provider considers "default", which is exactly the
                   "it auto-signs me into an account I don't want" complaint. */}
-              <form action="/auth/signout" method="post">
+              <form action="/auth/signout" method="post" onSubmit={purgeCachesOnSignOut}>
                 <input
                   type="hidden"
                   name="next"
@@ -583,7 +606,7 @@ export function UserMenu({
                   Switch accounts
                 </button>
               </form>
-              <form action="/auth/signout" method="post">
+              <form action="/auth/signout" method="post" onSubmit={purgeCachesOnSignOut}>
                 <button
                   type="submit"
                   className="w-full min-h-11 text-left rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-cream hover:text-forest-900"

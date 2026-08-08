@@ -976,7 +976,21 @@
 // reload is still unconditional, so THIS deploy is the last time the old
 // bug can fire on any given phone. After it, the page defers instead.
 // Taking that hit once is the only way to deliver the fix at all.
-const CACHE_VERSION = "v163";
+// v164: the worker no longer stores a signed-in user's HTML, and sign-out
+// now drops every cache it owns.
+//
+// The navigation handler cached every OK response, ignoring the
+// `private, no-store, must-revalidate` that lib/supabase/middleware.ts sets
+// on every authenticated response precisely to prevent cross-tenant cache
+// leaks. So a signed-in user's rendered pages sat in Cache Storage, survived
+// sign-out untouched, and the offline fallback could serve them to whoever
+// used the device next. It now honours that header, and UserMenu posts
+// CLEAR_CACHES on sign-out to remove what earlier versions already wrote.
+//
+// This bump matters more than most: a device only gets the fix by fetching
+// this file, and the stale pages it removes were written by the versions
+// before it.
+const CACHE_VERSION = "v164";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
@@ -1039,9 +1053,61 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+/**
+ * May this response be written to Cache Storage?
+ *
+ * Reads the header the SERVER already sends rather than inventing a second,
+ * divergent idea of what is private. lib/supabase/middleware.ts sets
+ * `private, no-store, must-revalidate` on every response served to an
+ * authenticated user (see its "defence in depth against cross-tenant cache
+ * leaks" comment), so honouring no-store and private is exactly equivalent
+ * to "do not store a signed-in user's page", and stays correct if the set of
+ * authenticated routes changes.
+ */
+function isStorable(res) {
+  const cc = (res.headers.get("Cache-Control") || "").toLowerCase();
+  return !cc.includes("no-store") && !cc.includes("private");
+}
+
+/**
+ * Drop every cache this worker owns.
+ *
+ * Sign-out clears cookies, but cookies were never what leaked: the RUNTIME
+ * cache held the previous user's rendered HTML, and nothing removed it. On a
+ * shared or family device the next person could be served it from the
+ * offline fallback path. isStorable above stops NEW authenticated pages
+ * being written; this removes what is already there, including on devices
+ * that cached pages under earlier versions of this worker.
+ */
+async function clearAllCaches() {
+  const keys = await caches.keys();
+  await Promise.all(keys.map((k) => caches.delete(k)));
+}
+
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
+  if (!event.data) return;
+  if (event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
+  }
+  // Posted by the sign-out path. waitUntil so the deletion is not cut short
+  // when the page navigates away immediately afterwards, which is exactly
+  // what sign-out does.
+  if (event.data.type === "CLEAR_CACHES") {
+    event.waitUntil(
+      clearAllCaches().then(() => {
+        // Tell the caller it is safe to continue. Sign-out does not block on
+        // this (a cache purge must never be able to trap someone in a
+        // session), but a caller that wants to wait can.
+        if (event.source && "postMessage" in event.source) {
+          try {
+            event.source.postMessage({ type: "CACHES_CLEARED" });
+          } catch {
+            /* the page navigated away, which is the normal case */
+          }
+        }
+      }),
+    );
   }
 });
 
@@ -1094,7 +1160,25 @@ self.addEventListener("fetch", (event) => {
       fetch(req)
         .then((res) => {
           const copy = res.clone();
-          if (res.ok) caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy));
+          // NEVER STORE A SIGNED-IN USER'S HTML.
+          //
+          // This used to cache every OK navigation. lib/supabase/middleware.ts
+          // sets `private, no-store, must-revalidate` on every response served
+          // to an authenticated user, explicitly as defence against
+          // cross-tenant cache leaks, and this handler ignored it. So a
+          // signed-in user's rendered page (dashboard, forecast, a client's
+          // books) was written to the Cache Storage of a shared device and
+          // outlived sign-out: nothing cleared it, and the offline fallback
+          // below would happily serve it back to whoever used the device
+          // next.
+          //
+          // Respecting the header the server already sends is the fix, rather
+          // than the SW inventing its own idea of what is private. Public
+          // marketing routes are unaffected and stay cacheable, which is what
+          // the offline shell is actually for.
+          if (res.ok && isStorable(res)) {
+            caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy));
+          }
           return res;
         })
         .catch(async () => {
