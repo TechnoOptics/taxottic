@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  HEARTBEAT_EVERY_MS,
+  __resetHeartbeatTimerForTest,
+  ensureHeartbeatTimer,
+  registerHeartbeatSender,
+} from "./heartbeat-timer";
 import { join } from "node:path";
 
 /**
@@ -110,5 +116,82 @@ describe("heartbeat is armed wherever points are ingested", () => {
   it("native-tracker still registers a sender, so the common path skips the import", () => {
     const src = readFileSync(join(MILEAGE_DIR, "native-tracker.ts"), "utf8");
     expect(src).toContain("registerHeartbeatSender(");
+  });
+});
+
+/**
+ * The behavioural half, and the one the static checks above cannot cover.
+ *
+ * These run with the interval deliberately never firing, because that is
+ * the measured production condition: a backgrounded WebView freezes
+ * timers while still delivering native location callbacks. Twelve hours
+ * of ingest on a real handset produced ~600 points and three heartbeats,
+ * all three from the two minutes the app was on screen.
+ */
+describe("the beat is driven by ingest, not by the timer", () => {
+  let beats: number;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    __resetHeartbeatTimerForTest();
+    beats = 0;
+    registerHeartbeatSender(() => {
+      beats++;
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    __resetHeartbeatTimerForTest();
+  });
+
+  it("beats on the first ingest", async () => {
+    ensureHeartbeatTimer();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(beats).toBe(1);
+  });
+
+  it("does not beat again on ingest inside the interval", async () => {
+    ensureHeartbeatTimer();
+    await vi.advanceTimersByTimeAsync(0);
+    // Points arrive every ~70s on a parked phone. None of these should beat.
+    for (let i = 0; i < 4; i++) {
+      vi.setSystemTime(Date.now() + 70_000);
+      ensureHeartbeatTimer();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(beats).toBe(1);
+  });
+
+  it("beats from ingest alone once the interval has elapsed, with the timer frozen", async () => {
+    ensureHeartbeatTimer();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(beats).toBe(1);
+
+    // Advance WALL CLOCK without running timers: exactly what a frozen
+    // backgrounded WebView does. If the beat depended on setInterval this
+    // stays at 1, which is the twelve-hour production silence.
+    vi.setSystemTime(Date.now() + HEARTBEAT_EVERY_MS + 1_000);
+    ensureHeartbeatTimer();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      beats,
+      "ingest after the interval must beat even though no timer fired",
+    ).toBe(2);
+  });
+
+  it("keeps beating across a long background stretch of ingest", async () => {
+    ensureHeartbeatTimer();
+    await vi.advanceTimersByTimeAsync(0);
+    // Twelve hours of parked-phone ingest, timers never running.
+    for (let i = 0; i < 12 * 51; i++) {
+      vi.setSystemTime(Date.now() + 70_000);
+      ensureHeartbeatTimer();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // 12h of wall clock at one beat per 5 min, minus the interval already
+    // spent, so well over a hundred rather than the three we shipped.
+    expect(beats).toBeGreaterThan(100);
   });
 });
