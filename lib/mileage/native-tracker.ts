@@ -98,6 +98,10 @@ const LS_ECO = "taxottic.mileage.eco";
  *  interrupted with the background service already torn down. See
  *  lib/mileage/arm-latch.ts for why that is otherwise undetectable. */
 const LS_ARMING = "taxottic.mileage.arming";
+// Last heartbeat attempt outcome. Persisted because trackerDiag lives on a
+// module object that every reload erases, and a reload is exactly when this
+// question matters most.
+const LS_HB_DIAG = "taxottic.mileage.heartbeatDiag";
 /** Poison batches the server permanently rejected (400/413): moved out
  *  of the live buffer so they stop blocking the queue head, kept for
  *  diagnosis. Capped; oldest quarantined batches are discarded first. */
@@ -1124,9 +1128,64 @@ async function sendHeartbeat(): Promise<void> {
     trackerDiag.hbLastResult = `${res.status} @ ${new Date()
       .toISOString()
       .slice(11, 19)}`;
+    writeHeartbeatDiag(res.ok ? "ok" : "http", String(res.status));
   } catch (e) {
     trackerDiag.hbLastResult =
       "err:" + String((e as Error)?.message ?? e).slice(0, 60);
+    writeHeartbeatDiag("throw", String((e as Error)?.message ?? e));
+  }
+}
+
+/**
+ * Persist the outcome of the last heartbeat attempt.
+ *
+ * trackerDiag.hbLastResult already recorded this, and NOTHING EVER READ IT.
+ * It lives on a module object, so it is also erased by every reload, which
+ * on this app happens whenever the service worker takes over. The result:
+ * both devices went 27+ hours without a single heartbeat row while their
+ * GPS upload kept working perfectly, and there was no way to tell whether
+ * the POST was failing, throwing, or never being attempted.
+ *
+ * That ambiguity is the bug. Every alarm built on 2026-08-08 (the stall
+ * sweep, the foreground-only detector, arm_interrupted_at, web_build) reads
+ * heartbeats, so a silent heartbeat outage blinds all of them at once while
+ * each individually looks healthy.
+ *
+ * Written to localStorage so it survives a reload, and rendered on the
+ * mileage diagnostics screen so it can be read ON THE PHONE without a
+ * cable, a console, or a working heartbeat. Deliberately not dependent on
+ * the heartbeat succeeding: a diagnostic that only reports when the thing
+ * it diagnoses is working is not a diagnostic.
+ */
+function writeHeartbeatDiag(kind: "ok" | "http" | "throw", detail: string) {
+  try {
+    window.localStorage.setItem(
+      LS_HB_DIAG,
+      JSON.stringify({ kind, detail: detail.slice(0, 120), atMs: Date.now() }),
+    );
+  } catch {
+    /* private mode: the in-memory trackerDiag above still has it */
+  }
+}
+
+export type HeartbeatDiag = {
+  kind: "ok" | "http" | "throw";
+  detail: string;
+  atMs: number;
+  ageMs: number;
+};
+
+/** Last heartbeat outcome, with its age. Null when none was ever attempted,
+ *  which is itself the answer to "is the heartbeat even being called". */
+export function readHeartbeatDiag(): HeartbeatDiag | null {
+  try {
+    const raw = window.localStorage.getItem(LS_HB_DIAG);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Omit<HeartbeatDiag, "ageMs">;
+    if (!p || typeof p.atMs !== "number") return null;
+    return { ...p, ageMs: Date.now() - p.atMs };
+  } catch {
+    return null;
   }
 }
 
