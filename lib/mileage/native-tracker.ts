@@ -916,7 +916,7 @@ async function probeWithin<T>(
 }
 
 
-async function sendHeartbeat(): Promise<void> {
+export async function sendHeartbeat(): Promise<void> {
   if (!companyId) return;
   installAppStateWatch();
   try {

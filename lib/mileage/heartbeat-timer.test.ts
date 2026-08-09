@@ -77,16 +77,37 @@ describe("heartbeat is armed wherever points are ingested", () => {
     ).toEqual([]);
   });
 
-  it("the timer module does not import native-tracker, so there is no cycle", () => {
+  it("the timer reaches native-tracker dynamically, never statically", () => {
     // native-tracker imports device-status, and device-status arms the
-    // timer. If the timer module reached back into native-tracker the cycle
-    // would resolve to undefined at module-init on exactly one path, which
-    // is the failure mode this subsystem can least afford.
+    // timer. A STATIC import back into native-tracker closes that cycle and
+    // resolves to undefined at module-init on exactly one path, which is the
+    // failure mode this subsystem can least afford.
+    //
+    // A DYNAMIC import is required, not merely tolerated: it is what lets a
+    // chunk that loaded geofence without native-tracker still get a sender.
     const src = readFileSync(join(MILEAGE_DIR, "heartbeat-timer.ts"), "utf8");
-    expect(src).not.toContain('from "./native-tracker"');
+    expect(src, "static import would close an init cycle").not.toMatch(
+      /^\s*import\s[^(]*from\s+["']\.\/native-tracker["']/m,
+    );
+    expect(src, "without this, a chunk with no native-tracker never beats").toContain(
+      'import("./native-tracker")',
+    );
   });
 
-  it("native-tracker registers a sender, or the timer can never fire", () => {
+  it("arming does not depend on a sender having registered", () => {
+    // The whole point. ensureHeartbeatTimer must start the timer even when
+    // nothing has registered, because app/mileage/page.tsx -> TrackerStatus
+    // -> geofence is a real chunk with no native-tracker in it. An early
+    // return on a null sender reproduces the original outage exactly.
+    const src = readFileSync(join(MILEAGE_DIR, "heartbeat-timer.ts"), "utf8");
+    const body = src.slice(src.indexOf("export function ensureHeartbeatTimer"));
+    const guard = body.slice(0, body.indexOf("setInterval"));
+    expect(guard, "timer must arm regardless of sender registration").not.toMatch(
+      /!\s*beat/,
+    );
+  });
+
+  it("native-tracker still registers a sender, so the common path skips the import", () => {
     const src = readFileSync(join(MILEAGE_DIR, "native-tracker.ts"), "utf8");
     expect(src).toContain("registerHeartbeatSender(");
   });

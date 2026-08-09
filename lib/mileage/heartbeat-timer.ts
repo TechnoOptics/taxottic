@@ -39,11 +39,53 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let beat: (() => void) | null = null;
 
 /**
- * Supply the actual heartbeat sender. Called once, at module scope, by
+ * Supply the actual heartbeat sender. Called at module scope by
  * native-tracker (which owns sendHeartbeat and everything it reads).
+ *
+ * This is an optimisation, not the contract. If native-tracker never loads,
+ * the timer fetches the sender itself. See ensureHeartbeatTimer.
  */
 export function registerHeartbeatSender(fn: () => void): void {
   beat = fn;
+}
+
+/**
+ * Resolve the heartbeat sender, importing native-tracker if nothing has
+ * registered one.
+ *
+ * The registration alone is NOT sufficient, and the reason is worth stating
+ * because the first draft of this file got it backwards.
+ *
+ * native-tracker imports device-status and geofence. That means loading
+ * native-tracker loads them. It does NOT mean loading them loads
+ * native-tracker, and the arrow only points one way:
+ *
+ *   app/mileage/page.tsx -> TrackerStatus -> geofence
+ *
+ * is a real chunk in this app that pulls in geofence with no native-tracker
+ * anywhere in the graph. On that chunk nothing ever registers a sender, so
+ * an ensureHeartbeatTimer() that bailed out on a null sender would arm
+ * nothing and go silent in precisely the way this whole change exists to
+ * prevent.
+ *
+ * A dynamic import is safe here where a static one is not: it runs inside a
+ * timer callback minutes after module init, so there is no cycle to resolve
+ * and nothing is half-initialised by the time it lands.
+ */
+async function resolveSender(): Promise<(() => void) | null> {
+  if (beat) return beat;
+  try {
+    const mod = await import("./native-tracker");
+    if (!beat && typeof mod.sendHeartbeat === "function") {
+      beat = () => {
+        void mod.sendHeartbeat();
+      };
+    }
+  } catch {
+    // Offline, or the chunk failed to load. The next tick tries again;
+    // a heartbeat is not worth surfacing an error to the driver over.
+  }
+  return beat;
 }
 
 /**
@@ -52,15 +94,14 @@ export function registerHeartbeatSender(fn: () => void): void {
  * Safe to call from anywhere, as often as you like: one null check. Call it
  * wherever points are successfully handed to the server.
  *
- * A no-op when no sender has registered, which only happens if this module
- * is loaded without native-tracker. That is not a silent failure worth
- * guarding: native-tracker imports both other ingest paths, so in any build
- * where points flow, the sender is registered.
+ * Deliberately does NOT require a registered sender. The timer starts
+ * regardless and resolves the sender on its first tick, so arming works on
+ * any chunk that can reach the ingest endpoint.
  */
 export function ensureHeartbeatTimer(): void {
-  if (timer || !beat) return;
+  if (timer) return;
   timer = setInterval(() => {
-    beat?.();
+    void resolveSender().then((fn) => fn?.());
   }, HEARTBEAT_EVERY_MS);
 }
 
