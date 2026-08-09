@@ -998,7 +998,16 @@
 // no way to tell whether the POST was failing, throwing, or never being
 // attempted. It is now persisted across reloads and shown on the mileage
 // diagnostics screen.
-const CACHE_VERSION = "v165";
+// v166: the heartbeat gets its own timer.
+//
+// It rode the flush interval (`flushCount % 10`), but points have TWO
+// upload triggers and the heartbeat had one: a location callback flushes
+// directly when the buffer fills, so a page life where the flush INTERVAL
+// was never installed uploaded GPS perfectly and never reported health
+// once. A real device did exactly that for 27 hours, blinding every alarm
+// that reads heartbeats. Now armed from the location callback too: if we
+// are capturing, we are reporting.
+const CACHE_VERSION = "v166";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
