@@ -163,12 +163,15 @@ jobs:
       #   Could not read script '.../cordova.variables.gradle' as it
       #   does not exist
       #
-      # `update` and not `sync`: sync is copy + update, and copy exists to
-      # stage web assets, which this app does not use (webDir is "public"
-      # only to satisfy the config; the WebView loads the remote URL).
-      # update does the native half alone, in about 50ms.
+      # `sync` and not `update`, learned the hard way one run apart.
+      # TWO artifacts are generated and gitignored, not one:
+      #   android/capacitor-cordova-android-plugins/    (needs update)
+      #   android/app/src/main/assets/capacitor.plugins.json (needs copy)
+      # `update` alone dies on the second with ENOENT. sync is copy +
+      # update, which is why the release workflow has always used it.
+      # Verified by deleting both locally and re-running: 0.11s.
       - name: Generate Capacitor native scaffolding
-        run: npx cap update android
+        run: npx cap sync android
 
       - name: Compile Android sources
         working-directory: android
