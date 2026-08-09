@@ -20,6 +20,7 @@
  */
 
 import { registerPlugin } from "@capacitor/core";
+import { ensureHeartbeatTimer } from "./heartbeat-timer";
 export type GeofenceArmState =
   | "armed"
   | "disarmed_no_places"
@@ -222,6 +223,11 @@ export async function drainGeofenceBuffer(companyId: string): Promise<number> {
   if (points.length === 0) return 0;
 
   try {
+    // Points are reaching the server through THIS path, so health must be
+    // reported alongside them. See ensureHeartbeatTimer: arming from the
+    // tracker's own loop alone left a device sending GPS for 27 hours with
+    // zero heartbeats, because this is the path it was actually using.
+    ensureHeartbeatTimer();
     const res = await fetch("/api/mileage/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

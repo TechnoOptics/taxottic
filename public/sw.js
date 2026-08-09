@@ -1007,7 +1007,15 @@
 // once. A real device did exactly that for 27 hours, blinding every alarm
 // that reads heartbeats. Now armed from the location callback too: if we
 // are capturing, we are reporting.
-const CACHE_VERSION = "v166";
+// v167: arm the heartbeat from ALL THREE ingest paths, not one.
+//
+// v166 armed it from the tracker's location callback only. Points reach the
+// server by three paths (tracker flush, geofence wake, native buffer drain),
+// and a device using either of the other two kept uploading GPS every few
+// seconds while sending no heartbeat at all. v166 changed nothing on that
+// device because I fixed the path it was not using. The timer now lives in
+// its own module and every ingest caller arms it.
+const CACHE_VERSION = "v167";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
