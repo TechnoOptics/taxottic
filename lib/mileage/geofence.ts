@@ -105,7 +105,16 @@ type GeofencePlugin = {
  * missing native side simply makes the call reject, which every caller
  * here handles.
  */
-async function guard(): Promise<GeofencePlugin | null> {
+/**
+ * Returns the plugin BOXED. Capacitor's registerPlugin proxy has a callable
+ * `.then` (its get trap special-cases only $$typeof, toJSON, addListener and
+ * removeListener), so it is a thenable, and returning it bare from an async
+ * function makes the runtime call proxy.then(...) — a native method that does
+ * not exist. The promise never settles and every caller here waits forever,
+ * which is why geofence_arm_state and geofence_count have always been NULL.
+ * See lib/mileage/plugin-box.test.ts.
+ */
+async function guard(): Promise<{ p: GeofencePlugin } | null> {
   try {
     if (typeof window === "undefined") return null;
     const w = window as unknown as {
@@ -125,7 +134,8 @@ async function guard(): Promise<GeofencePlugin | null> {
     // pending forever with no rejection for the catch below to see, so
     // every caller of guard() here silently waits and the mesh is never
     // registered.
-    return registerPlugin<GeofencePlugin>("TaxotticGeofence");
+    // BOXED, never bare. See the doc comment above.
+    return { p: registerPlugin<GeofencePlugin>("TaxotticGeofence") };
   } catch {
     return null;
   }
@@ -133,7 +143,7 @@ async function guard(): Promise<GeofencePlugin | null> {
 
 /** Native health, or null when there is no native side to ask. */
 export async function getGeofenceState(): Promise<GeofenceState | null> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return null;
   try {
     return await plugin.getState();
@@ -154,7 +164,7 @@ export async function syncLearnedPlaces(companyId: string): Promise<{
   synced: number;
   armState: GeofenceArmState | null;
 }> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin || !companyId) return { synced: 0, armState: null };
   let places: Array<{
     id: string;
@@ -201,7 +211,7 @@ export async function syncLearnedPlaces(companyId: string): Promise<{
  * morning commute uploaded at lunchtime still becomes a correct trip.
  */
 export async function drainGeofenceBuffer(companyId: string): Promise<number> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin || !companyId) return 0;
   let fixes: NativeFix[] = [];
   try {
@@ -272,7 +282,7 @@ export async function drainGeofenceBuffer(companyId: string): Promise<number> {
  * and the heartbeat should be able to say so.
  */
 export async function startGeofenceCapture(): Promise<boolean> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin?.startCapture) return false;
   try {
     const res = await plugin.startCapture();
@@ -295,7 +305,7 @@ export async function startGeofenceCapture(): Promise<boolean> {
  * no location data at all across a working day.
  */
 export async function stopGeofenceCapture(): Promise<void> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return;
   try {
     await plugin.stopCapture();

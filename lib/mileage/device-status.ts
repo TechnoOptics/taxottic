@@ -3,8 +3,16 @@
 // only exists in app builds that shipped it; on web and older installed
 // binaries every entry point no-ops to null.
 
-// STATIC, deliberately. This was `await import("@capacitor/core")` and it
-// is the reason device truth read NULL in production for weeks.
+// STATIC, deliberately. This was `await import("@capacitor/core")`.
+//
+// NOTE, 2026-08-09: the static import was NOT the fix, and the paragraphs
+// below overstate their case. #475 made this static and device truth stayed
+// NULL for another nine days. The real cause was the thenable trap: guard()
+// returned Capacitor's plugin PROXY bare from an async function, the runtime
+// assimilated it and called proxy.then(), and the await never completed.
+// See the doc comment on guard() and lib/mileage/plugin-box.test.ts. The
+// history below is kept because its measurements were sound; only its
+// conclusion was wrong.
 //
 // Proven on 2026-07-31, not inferred. The probe instrumentation reported
 // device_probe_stage = "bridge" on EVERY sampled heartbeat, meaning the
@@ -248,7 +256,25 @@ export type DeviceProbeStage =
 
 type StageSink = (stage: DeviceProbeStage) => void;
 
-async function guard(onStage?: StageSink): Promise<DeviceStatusPlugin | null> {
+/**
+ * Returns the plugin BOXED, never bare, and that box is the entire fix for
+ * a bug that was open for a month. See the note above registerPlugin's
+ * import and lib/mileage/plugin-box.test.ts.
+ *
+ * Capacitor's registerPlugin returns a Proxy whose get trap manufactures a
+ * method for ANY property except four special-cased names. `then` is not
+ * one of them. So the proxy has a callable `.then` and is a THENABLE, and
+ * returning it from an async function makes the runtime assimilate it:
+ * it calls proxy.then(resolve, reject), which dispatches a native call to
+ * a method named "then" that does not exist. Nothing ever calls back, so
+ * `await guard()` hangs forever with no rejection to catch.
+ *
+ * Boxing it means the async machinery sees a plain object with no `then`,
+ * resolves immediately, and hands back the proxy untouched.
+ */
+async function guard(
+  onStage?: StageSink,
+): Promise<{ p: DeviceStatusPlugin } | null> {
   try {
     onStage?.("bridge");
     const w = window as unknown as {
@@ -282,7 +308,8 @@ async function guard(onStage?: StageSink): Promise<DeviceStatusPlugin | null> {
     // invisible for weeks while we debugged permissions blind.
     const plugin = registerPlugin<DeviceStatusPlugin>("TaxotticDeviceStatus");
     onStage?.("bridge_reg");
-    return plugin;
+    // BOXED. Returning `plugin` bare here is the month-long bug.
+    return { p: plugin };
   } catch {
     return null;
   }
@@ -320,7 +347,7 @@ export async function getDeviceStatusProbed(onStage?: StageSink): Promise<{
   outcome: DeviceProbeOutcome;
 }> {
   onStage?.("start");
-  const plugin = await guard(onStage);
+  const plugin = (await guard(onStage))?.p ?? null;
   if (!plugin) return { value: null, outcome: "unavailable" };
   try {
     onStage?.("call");
@@ -419,7 +446,7 @@ export async function refreshDeviceStatusCache(): Promise<DeviceProbeOutcome> {
 }
 
 export async function requestAlwaysUpgrade(): Promise<void> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   try {
     await plugin?.requestAlwaysUpgrade();
   } catch {
@@ -435,7 +462,7 @@ export async function requestAlwaysUpgrade(): Promise<void> {
  * plugin's coarser openSettings() (which only reaches App info).
  */
 export async function openLocationSettingsPrecise(): Promise<boolean> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return false;
   try {
     await plugin.openLocationSettings();
@@ -463,7 +490,7 @@ const AUTO_EXEMPT_KEY = "taxottic.mileage.batteryPromptAt";
 const ATTEMPT_INTERVAL_MS = 3 * 24 * 60 * 60_000; // 3 days
 
 export async function ensureBatteryExemption(): Promise<void> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return;
   let status: DeviceStatus;
   try {
@@ -496,7 +523,7 @@ export async function ensureBatteryExemption(): Promise<void> {
 }
 
 export async function requestBatteryExemption(): Promise<boolean> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return false;
   try {
     await plugin.requestBatteryExemption();
@@ -521,7 +548,7 @@ export async function requestBatteryExemption(): Promise<boolean> {
 export async function onAuthorizationChanged(
   cb: (auth: DeviceStatus["locationAuthorization"]) => void,
 ): Promise<() => void> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return () => {};
   try {
     const handle = await plugin.addListener("authorizationChanged", (d) =>
@@ -541,7 +568,7 @@ export async function onAuthorizationChanged(
  * the stationary-timeout fallback, so a 0 is always safe.
  */
 export async function queryStepsSince(fromMs: number): Promise<number> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return 0;
   try {
     const r = await plugin.queryStepsSince({ fromMs });
@@ -558,7 +585,7 @@ export async function queryStepsSince(fromMs: number): Promise<number> {
  * Fitness prompt, so we fire a probe query instead.
  */
 export async function requestMotionPermission(): Promise<boolean> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return false;
   try {
     const r = await plugin.requestActivityRecognition();
@@ -588,7 +615,7 @@ export async function setBackgroundRevival(
   enabled: boolean,
   companyId: string,
 ): Promise<void> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return;
   try {
     if (enabled) await plugin.enableBackgroundRevival({ companyId });
@@ -611,7 +638,7 @@ export async function setBackgroundRevival(
  * nothing, or on any failure — the buffer is left intact to retry).
  */
 export async function drainNativeLocationBuffer(): Promise<number> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return 0;
   let points: Array<{
     ts: number;
@@ -682,7 +709,7 @@ export async function getOsExitInfoProbed(onStage?: StageSink): Promise<{
   outcome: DeviceProbeOutcome;
 }> {
   onStage?.("start");
-  const plugin = await guard(onStage);
+  const plugin = (await guard(onStage))?.p ?? null;
   if (!plugin) return { value: null, outcome: "unavailable" };
   let raw: Record<string, unknown>;
   try {
@@ -759,7 +786,7 @@ export async function drainVehicleSignals(): Promise<{
     motionAvailable: false,
     motionAuthorization: "notDetermined",
   };
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return empty;
   try {
     const r = await plugin.drainVehicleSignals();
@@ -777,7 +804,7 @@ export async function drainVehicleSignals(): Promise<{
 /** Acknowledge signals up to and including `upToTs` (wall-clock ms).
  *  Call only after the events have actually been consumed. */
 export async function clearVehicleSignals(upToTs: number): Promise<void> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return;
   try {
     await plugin.clearVehicleSignals({ upToTs });
@@ -806,7 +833,7 @@ export async function queryMotionHistory(
   fromMs: number,
   toMs: number,
 ): Promise<{ status: string; segments: MotionHistorySegment[] }> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return { status: "unavailable", segments: [] };
   try {
     const r = await plugin.queryMotionHistory({ fromMs, toMs });
@@ -831,7 +858,7 @@ export async function auditCaptureGap(
   fromMs: number,
   toMs: number,
 ): Promise<CaptureGapAudit | null> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return null;
   try {
     return await plugin.auditCaptureGap({ fromMs, toMs });
@@ -843,7 +870,7 @@ export async function auditCaptureGap(
 /** Record what we were doing, so the NEXT exit record explains itself.
  *  Android only; no-ops elsewhere. */
 export async function setExitBreadcrumb(note: string): Promise<void> {
-  const plugin = await guard();
+  const plugin = (await guard())?.p ?? null;
   if (!plugin) return;
   try {
     await plugin.setExitBreadcrumb({ note });
