@@ -77,15 +77,50 @@ export async function GET(req: NextRequest) {
     console.error("[mileage-retention] heartbeat purge failed", hbErr.message);
   }
 
+  // 4. Clear watch pairing tokens that were never collected.
+  //
+  // A pairing token is written in PLAINTEXT to watch_devices.pending_token
+  // by /api/watch/pair/redeem, and cleared by /api/watch/pair/poll the
+  // moment the watch collects it. That design is sound and its comment says
+  // "the plaintext never lingers".
+  //
+  // It lingers when nothing ever polls. The watch app has no build target
+  // and has never shipped, so nothing has EVER polled, and a plaintext
+  // token has been sitting in this table since 2026-05-21: eighty days, on
+  // a row that is already paired (token_hash set) and therefore has no use
+  // for it whatsoever.
+  //
+  // The lesson is the one running through this whole subsystem: a cleanup
+  // that only runs on the happy path is not cleanup. The sweep belongs on a
+  // timer, where it runs whether or not the counterparty ever appears.
+  //
+  // Two independent conditions, either sufficient:
+  //   token_hash is not null  the device is already paired, so a pending
+  //                           token is by definition spent
+  //   created_at < 1h ago     nobody is mid-pairing an hour later
+  const pendingCutoff = new Date(Date.now() - 60 * 60_000).toISOString();
+  const { error: ptErr, count: tokensCleared } = await admin
+    .from("watch_devices")
+    .update({ pending_token: null }, { count: "exact" })
+    .not("pending_token", "is", null)
+    .or(`token_hash.not.is.null,created_at.lt.${pendingCutoff}`);
+  if (ptErr) {
+    console.error(
+      "[mileage-retention] pending-token sweep failed",
+      ptErr.message,
+    );
+  }
+
   console.log(
     `[mileage-retention] deleted=${deleted ?? 0} swept=${swept ?? 0} heartbeats=${
       heartbeatsDeleted ?? 0
-    }`,
+    } watchTokensCleared=${tokensCleared ?? 0}`,
   );
   return NextResponse.json({
     ok: true,
     deleted: deleted ?? 0,
     swept: swept ?? 0,
     heartbeatsDeleted: heartbeatsDeleted ?? 0,
+    watchTokensCleared: tokensCleared ?? 0,
   });
 }
