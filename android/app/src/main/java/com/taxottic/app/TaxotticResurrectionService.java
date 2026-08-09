@@ -88,6 +88,26 @@ public class TaxotticResurrectionService extends Service {
     static final String SOURCE_BLUETOOTH = "car_bluetooth";
 
     /**
+     * The WebView tracker saw driving-speed fixes and asked to be held up.
+     *
+     * Not a resurrection: the process is already alive. This source exists
+     * because being alive is not the same as surviving, and the difference
+     * is what has been eating drives.
+     *
+     * Android killed this app four times in three days with reason=3
+     * (LOW_MEMORY) at importance=400. 400 is a CACHED process. The app is
+     * already on the doze allowlist in standby bucket 5 (EXEMPTED), so
+     * battery-optimisation settings were never the cause and no amount of
+     * user setting-changes would have helped: allowlisting exempts an app
+     * from Doze and App Standby, and grants it nothing whatsoever against
+     * the low-memory killer. Only foreground-service importance does that.
+     *
+     * One of those kills opened a 17.5 hour hole with zero location points,
+     * across a working day, on a driver who was driving.
+     */
+    static final String SOURCE_DRIVE = "webview_drive";
+
+    /**
      * Distinct from the @capgo plugin's 28351. Two location foreground
      * services must never share a notification id, or one silently
      * replaces the other's notification and the user sees a status that

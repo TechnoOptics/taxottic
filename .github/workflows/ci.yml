@@ -114,6 +114,69 @@ jobs:
         # separately. The job's job is to stop the number growing.
         run: node scripts/check-definer-grants.mjs
 
+  android-compile:
+    name: android compiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Until now the Android sources were compiled for the FIRST time by
+    # the release workflow, on the way to Google Play. So a native change
+    # that does not compile was discovered at the moment of shipping, by
+    # the one workflow whose failure is most expensive, and only if
+    # somebody happened to be cutting a release.
+    #
+    # The web half of this app is checked on every PR while the native
+    # half was checked at release. That asymmetry is not defensible for a
+    # mileage tracker whose hardest bugs (process death, foreground
+    # services, geofence wakes) live entirely in the native half.
+    #
+    # Compile only: no signing, no keystore, no Play credentials, nothing
+    # that could publish. It answers one question, does this Java build,
+    # which is the question that was going unasked.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Capacitor's Android toolchain targets 21. A local JDK 17 fails
+          # with "invalid source release: 21" before compiling a line,
+          # which is exactly how this gap stayed invisible.
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Needed for the Capacitor gradle modules under node_modules, which
+      # the android project includes by relative path.
+      - run: npm ci
+
+      # android/capacitor-cordova-android-plugins is GENERATED and
+      # gitignored, and android/build.gradle reads
+      # cordova.variables.gradle from it, so a fresh checkout cannot
+      # evaluate the build script at all without this. The first run of
+      # this job proved it, failing with:
+      #
+      #   Could not read script '.../cordova.variables.gradle' as it
+      #   does not exist
+      #
+      # `sync` and not `update`, learned the hard way one run apart.
+      # TWO artifacts are generated and gitignored, not one:
+      #   android/capacitor-cordova-android-plugins/    (needs update)
+      #   android/app/src/main/assets/capacitor.plugins.json (needs copy)
+      # `update` alone dies on the second with ENOENT. sync is copy +
+      # update, which is why the release workflow has always used it.
+      # Verified by deleting both locally and re-running: 0.11s.
+      - name: Generate Capacitor native scaffolding
+        run: npx cap sync android
+
+      - name: Compile Android sources
+        working-directory: android
+        run: ./gradlew :app:compileDebugJavaWithJavac --no-daemon
+
   verify:
     name: tests + typecheck + lint
     runs-on: ubuntu-latest
