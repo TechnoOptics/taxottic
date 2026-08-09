@@ -39,6 +39,10 @@ import { isArmInterrupted, parseArmLatch } from "./arm-latch";
 import { WEB_BUILD_ID } from "@/lib/build-id";
 import { getCarSignalsProbed } from "./car-signals";
 import {
+  ensureHeartbeatTimer,
+  registerHeartbeatSender,
+} from "./heartbeat-timer";
+import {
   setBackgroundRevival,
   drainNativeLocationBuffer,
   setExitBreadcrumb,
@@ -178,10 +182,6 @@ const DISTANCE_FILTER_M_ECO = 100;
 // parks, opens /mileage, sees the trip within a minute.
 const FLUSH_AT_POINTS = 40;
 const FLUSH_EVERY_MS = 30_000;
-// Heartbeat cadence. Matches the old effective rate (10 flush ticks at 30s),
-// now on its own timer so it cannot be skipped when the flush interval is
-// not the thing driving uploads.
-const HEARTBEAT_EVERY_MS = 5 * 60_000;
 /** Max points sent per flush. CRITICAL (2026-06-01 on-device forensics):
  *  the flush fetch used `keepalive: true`, which the browser caps at a
  *  64 KB total request body. Once the buffer grew past ~700 points
@@ -217,24 +217,6 @@ let plugin: BackgroundGeolocationPlugin | null = null;
 let tracking = false;
 let buffer: GpsPoint[] = [];
 let flushTimer: ReturnType<typeof setInterval> | null = null;
-/**
- * The heartbeat's OWN timer, independent of the flush timer.
- *
- * It used to ride the flush interval: `if (flushCount % 10 === 0)
- * sendHeartbeat()`. But points have TWO upload triggers and the heartbeat
- * had one. A location callback flushes directly when the buffer fills
- * (see FLUSH_AT_POINTS), so a page life where the flush INTERVAL was never
- * installed still uploads GPS perfectly while never once reporting health.
- *
- * That is not hypothetical. On 2026-08-08 a device uploaded points seconds
- * apart for 27 hours with zero heartbeat rows, which blinded every alarm
- * built on heartbeats at once: the stall sweep, the foreground-only
- * detector, arm_interrupted_at and web_build all read them.
- *
- * Tying the two together is the point. If we are capturing, we are
- * reporting. They must not be able to diverge again.
- */
-let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 // Drive-end detection state (see lib/mileage/drive-end.ts): whether this
 // session has actually driven, and the ts of the last moving fix (so the
 // stationary duration and step window are measured from there).
@@ -933,21 +915,8 @@ async function probeWithin<T>(
   return { ...settled, ms: Date.now() - startedAt, stage };
 }
 
-/**
- * Arm the heartbeat timer if it is not already running.
- *
- * Called from BOTH the arm path and the location callback, so any page life
- * that captures a point also reports health, regardless of which flush
- * trigger is doing the work. Idempotent and cheap: one null check.
- */
-function ensureHeartbeatTimer(): void {
-  if (heartbeatTimer) return;
-  heartbeatTimer = setInterval(() => {
-    void sendHeartbeat();
-  }, HEARTBEAT_EVERY_MS);
-}
 
-async function sendHeartbeat(): Promise<void> {
+export async function sendHeartbeat(): Promise<void> {
   if (!companyId) return;
   installAppStateWatch();
   try {
@@ -1171,6 +1140,14 @@ async function sendHeartbeat(): Promise<void> {
     writeHeartbeatDiag("throw", String((e as Error)?.message ?? e));
   }
 }
+
+
+// Hand the sender to the timer module. Module scope on purpose: any ingest
+// path can then arm the heartbeat without importing this file, which would
+// be a cycle (this file imports device-status, one of those paths).
+registerHeartbeatSender(() => {
+  void sendHeartbeat();
+});
 
 /**
  * Persist the outcome of the last heartbeat attempt.

@@ -25,6 +25,7 @@
 // anyway, and registerPlugin is a plain function with no side effects at
 // import time, so it is safe under SSR and on plain web.
 import { registerPlugin } from "@capacitor/core";
+import { ensureHeartbeatTimer } from "./heartbeat-timer";
 
 export type DeviceStatus = {
   platform: string;
@@ -592,6 +593,10 @@ export async function drainNativeLocationBuffer(): Promise<number> {
   if (points.length === 0 || !companyId) return 0;
   const maxTs = points.reduce((a, p) => Math.max(a, p.ts), 0);
   try {
+    // Same reason as geofence.ts: this drain is a real ingest path, so it
+    // must arm the heartbeat too. A device draining the native buffer was
+    // uploading points every few seconds and reporting no health at all.
+    ensureHeartbeatTimer();
     const res = await fetch("/api/mileage/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
