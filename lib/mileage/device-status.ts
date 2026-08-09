@@ -210,7 +210,41 @@ type DeviceStatusPlugin = {
  * Reported alongside the outcome so the next production sample answers
  * the question instead of narrowing it.
  */
-export type DeviceProbeStage = "start" | "bridge" | "call" | "done";
+/**
+ * How far a device-truth probe got before it stopped.
+ *
+ * The three `bridge_*` stages exist because "bridge" on its own stopped
+ * being an answer. Production reports device_probe = timeout, stage =
+ * bridge, ms = 3001, on a bundle we can now positively identify
+ * (web_build d5129d08cbc9), and that combination should be impossible:
+ * guard()'s body is entirely synchronous, @capacitor/core is a STATIC
+ * import, and the same heartbeat reports timer_lag_ms = 0, so the event
+ * loop is not blocked either. A synchronous function on a healthy loop
+ * cannot take three seconds.
+ *
+ * Which means one of those assumptions is wrong, and a single "bridge"
+ * bucket cannot say which. Each stage below is emitted AFTER the
+ * statement it names completes, so the last stage reported names the
+ * statement that hung:
+ *
+ *   bridge         entered guard, nothing attempted yet
+ *   bridge_win     read window.Capacitor        -> hang is isNativePlatform()
+ *   bridge_nat     isNativePlatform() returned  -> hang is registerPlugin()
+ *   bridge_reg     registerPlugin() returned    -> hang is after guard
+ *
+ * Kept at or under 12 characters: the heartbeat route truncates with
+ * str(k, 12) before allowlisting, so a longer name would be silently
+ * rejected to NULL and this whole exercise would report nothing. That is
+ * not a hypothetical, it is the bug that cost 2026-08-08.
+ */
+export type DeviceProbeStage =
+  | "start"
+  | "bridge"
+  | "bridge_win"
+  | "bridge_nat"
+  | "bridge_reg"
+  | "call"
+  | "done";
 
 type StageSink = (stage: DeviceProbeStage) => void;
 
@@ -223,7 +257,9 @@ async function guard(onStage?: StageSink): Promise<DeviceStatusPlugin | null> {
         isPluginAvailable?: (n: string) => boolean;
       };
     };
+    onStage?.("bridge_win");
     if (w.Capacitor?.isNativePlatform?.() !== true) return null;
+    onStage?.("bridge_nat");
     // Deliberately NOT gated on isPluginAvailable().
     //
     // Measured in production: every field sourced from this plugin was
@@ -244,7 +280,9 @@ async function guard(onStage?: StageSink): Promise<DeviceStatusPlugin | null> {
     // better than refusing to try: the old gate turned "maybe present"
     // into a permanent silent no, which is how device truth stayed
     // invisible for weeks while we debugged permissions blind.
-    return registerPlugin<DeviceStatusPlugin>("TaxotticDeviceStatus");
+    const plugin = registerPlugin<DeviceStatusPlugin>("TaxotticDeviceStatus");
+    onStage?.("bridge_reg");
+    return plugin;
   } catch {
     return null;
   }

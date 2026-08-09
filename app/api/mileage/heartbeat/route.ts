@@ -55,7 +55,19 @@ const PROBE_VALUES = new Set([
  * "call" is the bridge round-trip or the native side. Different bugs,
  * different fixes, and the previous probe could not tell them apart.
  */
-const STAGE_VALUES = new Set(["start", "bridge", "call", "done"]);
+/** Must stay in lockstep with DeviceProbeStage in lib/mileage/device-status.ts.
+ *  A stage the client sends and this set omits is rejected to NULL by oneOf(),
+ *  so new instrumentation would report exactly nothing while looking wired.
+ *  lib/mileage/probe-stage-contract.test.ts asserts the two agree. */
+const STAGE_VALUES = new Set([
+  "start",
+  "bridge",
+  "bridge_win",
+  "bridge_nat",
+  "bridge_reg",
+  "call",
+  "done",
+]);
 
 /** Where the device-truth fields in this row came from: this
  *  heartbeat's live probe, the last successful foreground read, or
