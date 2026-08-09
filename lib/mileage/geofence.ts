@@ -88,6 +88,12 @@ type GeofencePlugin = {
   readBuffer(): Promise<{ fixes: NativeFix[]; count: number }>;
   consumeBuffer(options: { count: number }): Promise<{ remaining: number }>;
   stopCapture(): Promise<void>;
+  /**
+   * Optional: absent on any binary built before the drive-protection
+   * change, and a remote-URL WebView routinely runs new JS against an old
+   * native shell. Call sites must feature-detect, never assume.
+   */
+  startCapture?(): Promise<{ started: boolean; reason: string }>;
   clearPlaces(): Promise<{ armState: GeofenceArmState }>;
 };
 
@@ -252,9 +258,41 @@ export async function drainGeofenceBuffer(companyId: string): Promise<number> {
 }
 
 /**
- * Tell a running resurrection capture to stand down because the normal
- * WebView watcher has taken over. Two location foreground services at
- * once is double the battery for one stream of points.
+ * Hold the Android process at foreground-service importance for the
+ * duration of a drive this WebView is already watching.
+ *
+ * Idempotent and cheap to call on every driving fix: the service returns
+ * START_STICKY without restarting its GPS stream when a session is live.
+ *
+ * Returns whether the process is actually protected, which is not the same
+ * as whether we asked. Android 12+ refuses a background foreground-service
+ * start unless the app is battery-optimisation allowlisted or acting on an
+ * exemption, and that refusal is worth recording rather than assuming away:
+ * a driver whose start is refused is tracked exactly as badly as before,
+ * and the heartbeat should be able to say so.
+ */
+export async function startGeofenceCapture(): Promise<boolean> {
+  const plugin = await guard();
+  if (!plugin?.startCapture) return false;
+  try {
+    const res = await plugin.startCapture();
+    return res?.started === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tell a running capture to stand down because THE DRIVE IS OVER.
+ *
+ * Deliberately not called on app launch any more. It used to be, on the
+ * reasoning that "two location foreground services at once is double the
+ * battery for one stream of points" — but the WebView watcher is not a
+ * foreground service, so what that actually did was drop the process from
+ * protected to CACHED at the exact moment a resurrected drive was starting.
+ * Android then reaped it under memory pressure: four LOW_MEMORY kills at
+ * importance 400 in three days, one of which opened a 17.5 hour hole with
+ * no location data at all across a working day.
  */
 export async function stopGeofenceCapture(): Promise<void> {
   const plugin = await guard();

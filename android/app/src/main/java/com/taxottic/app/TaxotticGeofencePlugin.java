@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
+import androidx.core.content.ContextCompat;
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -102,9 +104,58 @@ public class TaxotticGeofencePlugin extends Plugin {
     }
 
     /**
-     * Stop a resurrection capture session because the normal WebView
-     * watcher has taken over. Two location foreground services running
-     * at once is double battery for one stream of points.
+     * Hold the process at foreground-service importance for the duration of
+     * a drive the WebView tracker is already watching.
+     *
+     * WHY THIS EXISTS, AND WHY stopCapture BELOW IS NOW NARROWER.
+     *
+     * stopCapture used to be called on every app launch, on the reasoning
+     * that "two location foreground services at once is double battery for
+     * one stream of points". The premise is false. The WebView watcher is
+     * not a foreground service. It is a plain page in a process that, once
+     * the screen goes off, sits at importance 400 (CACHED) with nothing
+     * holding it up. So the handoff was not service-to-service; it was
+     * protected-to-unprotected, performed at the exact moment a drive was
+     * starting, and Android then reaped the survivor under memory pressure.
+     *
+     * Starting a foreground service from the background is restricted on
+     * Android 12+. Two things make this callable anyway, and neither is
+     * guaranteed for every user, so failure is recorded rather than assumed
+     * away:
+     *   - an app on the battery-optimisation allowlist is exempt from the
+     *     background-start restriction
+     *   - the geofence and Bluetooth paths carry their own exemptions
+     * When neither applies the start throws, we record it, and we are no
+     * worse off than before this method existed.
+     */
+    @PluginMethod
+    public void startCapture(PluginCall call) {
+        JSObject out = new JSObject();
+        try {
+            Intent intent = new Intent(getContext(), TaxotticResurrectionService.class);
+            intent.putExtra(TaxotticResurrectionService.EXTRA_SOURCE,
+                    TaxotticResurrectionService.SOURCE_DRIVE);
+            ContextCompat.startForegroundService(getContext(), intent);
+            out.put("started", true);
+            out.put("reason", "started");
+        } catch (Exception e) {
+            // ForegroundServiceStartNotAllowedException on an Android 12+
+            // device that is neither allowlisted nor acting on an exemption.
+            // Real and expected on some hardware; the drive is still tracked
+            // by the WebView exactly as it was before, just unprotected.
+            Log.d(TAG, "startCapture: foreground start refused", e);
+            out.put("started", false);
+            out.put("reason", e.getClass().getSimpleName());
+        }
+        call.resolve(out);
+    }
+
+    /**
+     * Stop a capture session because the drive is over.
+     *
+     * Called on drive end, NOT on app launch. Calling it at launch is what
+     * tore down the process protection at the start of every resurrected
+     * drive; see startCapture above.
      */
     @PluginMethod
     public void stopCapture(PluginCall call) {

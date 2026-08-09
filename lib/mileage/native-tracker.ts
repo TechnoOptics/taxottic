@@ -55,6 +55,7 @@ import type { DeviceProbeOutcome, DeviceProbeStage } from "./device-status";
 import {
   drainGeofenceBuffer,
   stopGeofenceCapture,
+  startGeofenceCapture,
   syncLearnedPlaces,
   getGeofenceState,
 } from "./geofence";
@@ -220,6 +221,14 @@ let flushTimer: ReturnType<typeof setInterval> | null = null;
 // Drive-end detection state (see lib/mileage/drive-end.ts): whether this
 // session has actually driven, and the ts of the last moving fix (so the
 // stationary duration and step window are measured from there).
+/**
+ * Whether we have already asked Android to hold this process at
+ * foreground-service importance for the drive in progress.
+ *
+ * Guards the bridge hop, not correctness: startCapture is idempotent on
+ * the native side. Cleared on drive end so the next drive re-requests.
+ */
+let fgsRequested = false;
 let deHasDriven = false;
 let driveEndPosting = false;
 let deLastMovingTs = 0;
@@ -304,6 +313,21 @@ export const trackerDiag = {
   deadlettered: 0 as number,
   /** Watchdog re-arms of a zombie watcher. */
   watchdogRestarts: 0 as number,
+  /**
+   * Whether Android agreed to hold this process at foreground-service
+   * importance for the current drive.
+   *
+   * "refused" is the one worth watching. Android 12+ blocks a background
+   * foreground-service start unless the app is battery-optimisation
+   * allowlisted or acting on an exemption, and a refused driver is exactly
+   * as exposed to the low-memory killer as before this existed. That has
+   * to be visible rather than inferred, because the failure it describes
+   * looks identical from the server to a driver who simply did not drive.
+   */
+  driveForegroundService: "untouched" as
+    | "untouched"
+    | "held"
+    | "refused",
   /** ms epoch of the most recent plugin callback (fix OR error). */
   lastCbAt: 0 as number,
   // Last flush round-trip, populated by flush() so the toggle UI
@@ -597,6 +621,16 @@ async function maybeCloseDrive(): Promise<void> {
       // late, but it can no longer be lost.
       const ok = await flush({ sessionEnded: true });
       if (ok) {
+        // The drive is over and the points are on the server, so release
+        // the process. This is the ONLY place the capture is stood down
+        // now; doing it at app launch is what dropped protection at the
+        // start of every resurrected drive.
+        //
+        // After the server confirmed, deliberately. A stand-down that
+        // ran before the flush could let the OS collect the process
+        // holding the only copy of the drive that just ended.
+        fgsRequested = false;
+        void stopGeofenceCapture();
         deHasDriven = false;
         deLastMovingTs = 0;
         deParkSet = false;
@@ -1475,10 +1509,27 @@ export async function startMileageTracking(
           deLastMovingTs = pt.ts;
         }
         if (spd > DE_WALK_MAX_MPS) {
-          // Unambiguous driving. Any walk evidence was traffic creep or
-          // noise — reset EVERYTHING, including the hard-stop clock, and
-          // update the driving heading (used to tell a walker leaving
-          // the road from a jam creeping along it).
+          // Unambiguous driving, so hold the process up for the rest of
+          // this drive. Idempotent: the service returns START_STICKY
+          // without restarting its GPS stream once a session is live, so
+          // calling it on every driving fix costs one bridge hop.
+          //
+          // This is the case the geofence and Bluetooth wake sources
+          // cannot cover, because there is nothing to wake — the app is
+          // already running. Already running is not the same as
+          // surviving, and the gap between the two is where drives have
+          // been disappearing: importance 400 is CACHED, and CACHED is
+          // what the low-memory killer takes first.
+          if (!fgsRequested) {
+            fgsRequested = true;
+            void startGeofenceCapture().then((ok) => {
+              trackerDiag.driveForegroundService = ok ? "held" : "refused";
+            });
+          }
+          // Any walk evidence was traffic creep or noise — reset
+          // EVERYTHING, including the hard-stop clock, and update the
+          // driving heading (used to tell a walker leaving the road from
+          // a jam creeping along it).
           if (dePrevDriveSet) {
             deDriveBearingDeg = bearingDegrees(
               { lat: dePrevDriveLat, lng: dePrevDriveLng },
@@ -1834,12 +1885,31 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   // killed us overnight and a learned-place geofence exit restarted
   // capture this morning, that drive is sitting in a native disk
   // buffer, because the @capgo plugin discards every fix whose saved
-  // PluginCall is gone. Upload it, then tell the native capture to
-  // stand down now that the WebView watcher is about to take over:
-  // two location foreground services is double battery for one stream.
+  // PluginCall is gone. Upload it.
+  //
+  // WE NO LONGER STAND THE NATIVE CAPTURE DOWN HERE, and that removal is
+  // the point of this change rather than an incidental tidy-up.
+  //
+  // This used to end with stopGeofenceCapture(), justified as "two
+  // location foreground services is double battery for one stream". The
+  // WebView watcher is not a foreground service. It is a page in a
+  // process that drops to importance 400 (CACHED) the moment the screen
+  // goes off. So the handoff was never service-to-service, it was
+  // protected-to-unprotected, and it fired at app launch — which, on a
+  // geofence resurrection, is precisely the start of a drive.
+  //
+  // Android then collects the survivor. Four kills in three days with
+  // reason=3 (LOW_MEMORY) at importance=400, on a phone already on the
+  // doze allowlist in standby bucket 5, because allowlisting exempts an
+  // app from Doze and App Standby and does nothing at all about the
+  // low-memory killer. One of those kills left 17.5 hours with zero
+  // points across a working day.
+  //
+  // The service now ends the way it always should have: on its own
+  // stationary rule, which already matches drive-end.ts, or on the
+  // explicit drive-end handoff below.
   void drainGeofenceBuffer(savedCompany).then((n) => {
     if (n > 0) trackerDiag.geofenceDrained = n;
-    return stopGeofenceCapture();
   });
   // Re-sync the mesh on every resume, not once. A permission change, a
   // reinstall, or Play services clearing its geofence table all leave
