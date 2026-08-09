@@ -43,9 +43,11 @@ function stripSqlComments(sql: string): string {
  * guarded table ends up with. Handles the four shapes this repo uses:
  * create table, add column, drop column, rename column.
  */
-function columnsFromMigrations(): Map<string, Set<string>> {
+function columnsFromMigrations(
+  tables: readonly string[] = GUARDED_TABLES,
+): Map<string, Set<string>> {
   const columns = new Map<string, Set<string>>(
-    GUARDED_TABLES.map((t) => [t as string, new Set<string>()]),
+    tables.map((t) => [t as string, new Set<string>()]),
   );
   const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
@@ -53,7 +55,7 @@ function columnsFromMigrations(): Map<string, Set<string>> {
 
   for (const file of files) {
     const sql = stripSqlComments(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-    for (const table of GUARDED_TABLES) {
+    for (const table of tables) {
       const set = columns.get(table)!;
 
       const createRe = new RegExp(
@@ -179,5 +181,93 @@ describe("PostgREST select columns exist in the migrations", () => {
       .filter((s) => !schema.get(s.table)!.has(s.column))
       .map((s) => `${s.file.slice(REPO_ROOT.length + 1)}: ${s.table}.${s.column}`);
     expect(unknown).toEqual([]);
+  });
+});
+
+/**
+ * The same 42703, on a WRITE instead of a read.
+ *
+ * The guard above checks SELECTs on the money tables. It could not see the
+ * bug that took the mileage heartbeat off the air for a day, because that
+ * one was an UPSERT, on a mileage table, of a payload object rather than a
+ * string literal. Three misses in one, so the guard is widened here to the
+ * shape that actually failed.
+ *
+ * app/api/mileage/heartbeat/route.ts builds ONE payload and writes it to
+ * BOTH tables, status first:
+ *
+ *     .from("mileage_device_status").upsert(payload, ...)
+ *     if (error) return 500        <- returns before the history append
+ *
+ * arm_interrupted_at, web_build and eight car_* columns were added to
+ * mileage_device_heartbeats only. So the status upsert named ten columns
+ * that did not exist, Postgres answered 42703, and every heartbeat from
+ * every device on both platforms died at the first write. Nothing logged a
+ * missing row, because the row was never attempted.
+ *
+ * Both tables are therefore asserted against the same payload: the two are
+ * written from one object and must stay one shape.
+ */
+const HEARTBEAT_TABLES = [
+  "mileage_device_status",
+  "mileage_device_heartbeats",
+] as const;
+
+/** Keys of the `const payload = { ... }` literal in the heartbeat route. */
+function heartbeatPayloadKeys(): string[] {
+  const src = readFileSync(
+    join(REPO_ROOT, "app", "api", "mileage", "heartbeat", "route.ts"),
+    "utf8",
+  );
+  const start = src.indexOf("const payload = {");
+  if (start === -1) throw new Error("heartbeat payload not found — test is stale");
+  const open = src.indexOf("{", start);
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  const body = src
+    .slice(open + 1, end)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  return [...body.matchAll(/^\s*([a-z_][a-z0-9_]*)\s*:/gm)].map((m) => m[1]);
+}
+
+describe("the heartbeat payload matches BOTH tables it is written to", () => {
+  const schema = columnsFromMigrations(HEARTBEAT_TABLES);
+  const keys = heartbeatPayloadKeys();
+
+  it("derives a non-empty column set for both tables", () => {
+    for (const t of HEARTBEAT_TABLES) {
+      expect(schema.get(t)!.size, t).toBeGreaterThan(10);
+    }
+  });
+
+  it("finds the payload keys it is meant to check", () => {
+    expect(keys.length).toBeGreaterThan(20);
+  });
+
+  it("names no column either table is missing", () => {
+    const missing: string[] = [];
+    for (const t of HEARTBEAT_TABLES) {
+      for (const k of keys) {
+        if (!schema.get(t)!.has(k)) missing.push(`${t}.${k}`);
+      }
+    }
+    expect(
+      missing,
+      "The heartbeat route upserts this payload into mileage_device_status " +
+        "BEFORE appending history, and returns 500 on error. A column the " +
+        "table lacks does not degrade the heartbeat, it deletes it: every " +
+        "device, both platforms, silently.",
+    ).toEqual([]);
   });
 });
