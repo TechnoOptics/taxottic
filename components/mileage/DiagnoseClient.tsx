@@ -48,6 +48,38 @@ export function DiagnoseClient({ companyId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [lastFixSec, setLastFixSec] = useState<number | null>(null);
+  // Last heartbeat attempt, read from localStorage rather than memory.
+  //
+  // Both devices went 27+ hours with no heartbeat row while GPS upload kept
+  // working, and there was no way to tell from the outside whether the POST
+  // was failing, throwing, or never being attempted. trackerDiag recorded it
+  // all along and nothing rendered it. This is that answer, on the phone,
+  // needing no cable and no working heartbeat.
+  const [hbDiag, setHbDiag] = useState<{
+    kind: string;
+    detail: string;
+    ageMs: number;
+  } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = async () => {
+      try {
+        const { readHeartbeatDiag } = await import(
+          "@/lib/mileage/native-tracker"
+        );
+        const d = readHeartbeatDiag();
+        if (alive) setHbDiag(d);
+      } catch {
+        /* module not loadable here, leave it null */
+      }
+    };
+    void read();
+    const t = setInterval(() => void read(), 5_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
   const pluginRef = useRef<{ stop: () => Promise<void> } | null>(null);
 
   // Cleanup on unmount.
@@ -302,8 +334,21 @@ export function DiagnoseClient({ companyId }: Props) {
           })}
         </ul>
 
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <Stat
+            label="Heartbeat"
+            value={
+              hbDiag === null
+                ? "never sent"
+                : hbDiag.kind === "ok"
+                  ? `ok ${Math.round(hbDiag.ageMs / 1000)}s ago`
+                  : `${hbDiag.kind}: ${hbDiag.detail}`.slice(0, 40)
+            }
+          />
+        </div>
+
         {running ? (
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
             <Stat label="Callbacks" value={String(cbCount)} />
             <Stat
               label="Last fix"

@@ -990,7 +990,15 @@
 // This bump matters more than most: a device only gets the fix by fetching
 // this file, and the stale pages it removes were written by the versions
 // before it.
-const CACHE_VERSION = "v164";
+// v165: the heartbeat now says why it failed, on the phone.
+//
+// trackerDiag.hbLastResult has recorded every heartbeat outcome for a long
+// time and NOTHING EVER RENDERED IT, so when both devices went 27+ hours
+// with no heartbeat row while GPS upload kept working perfectly, there was
+// no way to tell whether the POST was failing, throwing, or never being
+// attempted. It is now persisted across reloads and shown on the mileage
+// diagnostics screen.
+const CACHE_VERSION = "v165";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
