@@ -39,6 +39,38 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let beat: (() => void) | null = null;
 
 /**
+ * Wall-clock time of the last beat, and the reason this module no longer
+ * trusts its own timer.
+ *
+ * MEASURED, on the driver's Galaxy Fold, 2026-08-09 03:00 to 15:00 UTC:
+ * mileage_points_raw took ~50 points an hour for twelve straight hours,
+ * one every ~70 seconds, while mileage_device_heartbeats took exactly
+ * three, all of them in the two minutes the app was on screen.
+ *
+ * Neither platform has a native uploader (checked: nothing in
+ * android/app/src/main/java or ios/App/App posts to the ingest endpoint),
+ * so every one of those points went through a WebView fetch(). The JS
+ * page was therefore alive and running location callbacks all night, and
+ * each of those callbacks reached ensureHeartbeatTimer(). The interval
+ * fired zero times in twelve hours.
+ *
+ * That is the platform behaviour, not a bug in the app: a backgrounded
+ * WebView freezes timers while still delivering native callbacks. So a
+ * setInterval is the one primitive that cannot report during a
+ * background stretch, which is precisely the stretch worth reporting.
+ *
+ * The original heartbeat rode the flush loop (flushCount % 10) and was
+ * right about this. Giving it its own timer in #541/#542 fixed a real
+ * arming bug and simultaneously moved it onto a clock that stops.
+ *
+ * So the beat is driven by INGEST, on wall clock, and the timer stays
+ * only as a foreground convenience. Wall clock rather than a tick count
+ * because ingest cadence varies by two orders of magnitude between a
+ * parked phone and an active drive.
+ */
+let lastBeatAt = 0;
+
+/**
  * Supply the actual heartbeat sender. Called at module scope by
  * native-tracker (which owns sendHeartbeat and everything it reads).
  *
@@ -98,25 +130,41 @@ async function resolveSender(): Promise<(() => void) | null> {
  * regardless and resolves the sender on its first tick, so arming works on
  * any chunk that can reach the ingest endpoint.
  *
- * Beats once immediately as well as on the interval. Two reasons, and the
- * first is the one that matters:
+ * Beats from the INGEST call itself, on wall clock, not from the interval.
+ * See lastBeatAt above for the twelve hours of production measurement that
+ * forced this: in a backgrounded WebView the interval does not fire at all,
+ * while the location callbacks that reach this function keep running.
  *
- * A short-lived page that ingests a few points and unloads inside five
- * minutes would otherwise report nothing at all, which is the exact shape
- * of the blackout this change exists to end. A driver who opens the app at
- * a stop, uploads a buffer and closes it again is a normal user, not an
- * edge case, and on the interval-only version they stay invisible.
- *
- * Second, it makes the fix observable. A change to a five-minute timer that
- * can only be confirmed by waiting five minutes on a real handset is a
- * change that gets shipped on reasoning instead of evidence, and reasoning
- * is what produced v166 and the first draft of v167.
+ * It also means a short-lived page that drains a buffer and unloads inside
+ * five minutes still reports. A driver who opens the app at a stop and
+ * closes it again is a normal user, and on the interval-only version they
+ * were invisible.
  */
 export function ensureHeartbeatTimer(): void {
-  if (timer) return;
-  timer = setInterval(() => {
-    void resolveSender().then((fn) => fn?.());
-  }, HEARTBEAT_EVERY_MS);
+  if (!timer) {
+    // Foreground convenience only. Keeps the beat regular while the app is
+    // on screen and ingest happens to be quiet; contributes nothing in the
+    // background, where it does not fire at all.
+    timer = setInterval(maybeBeat, HEARTBEAT_EVERY_MS);
+  }
+  // The load-bearing call. Driven by ingest, so it runs on exactly the
+  // schedule the location callbacks run on, which is the schedule that
+  // survives backgrounding.
+  maybeBeat();
+}
+
+/**
+ * Beat if a heartbeat interval of wall clock has passed since the last one.
+ *
+ * lastBeatAt is stamped BEFORE the send rather than after, so a slow or
+ * failing send cannot queue a second beat behind it. Losing one beat to a
+ * failed request is the right trade against a stalled request letting
+ * every subsequent ingest fire another.
+ */
+function maybeBeat(): void {
+  const now = Date.now();
+  if (lastBeatAt && now - lastBeatAt < HEARTBEAT_EVERY_MS) return;
+  lastBeatAt = now;
   void resolveSender().then((fn) => fn?.());
 }
 
@@ -125,4 +173,5 @@ export function __resetHeartbeatTimerForTest(): void {
   if (timer) clearInterval(timer);
   timer = null;
   beat = null;
+  lastBeatAt = 0;
 }
