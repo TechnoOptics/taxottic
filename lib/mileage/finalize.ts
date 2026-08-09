@@ -7,10 +7,10 @@ import {
   MIN_TRIP_METERS,
   segmentTrips,
   suggestClassification,
-  TRIP_END_DWELL_MS,
   type Place,
   type Classification,
 } from "./segmentation";
+import { shouldCloseOpenTail } from "./tail-close";
 import { tripDeductionCents } from "./deduction";
 import { buildTrackFromRaw, type RawPoint } from "./track";
 import { notify } from "@/lib/push";
@@ -599,9 +599,27 @@ export async function finalizeUserTrips(
   // 30 s heartbeats keep re-running this test, and any train crossing
   // or drive-through longer than 5 minutes severed the drive into two
   // trips — shaving deductible connector miles every time.
-  const lastPointAgeMs = Date.now() - allPoints[allPoints.length - 1].ts;
-  const closeOpenAtEnd =
-    opts.forceClose || lastPointAgeMs >= TRIP_END_DWELL_MS;
+  // The device's own last word, used to tell an IDLE phone from a SILENT
+  // one. Heartbeats ride the same fetch path as the points, so an upload
+  // stall silences both; a heartbeat newer than the last point is
+  // therefore real evidence the phone was alive and simply not driving.
+  // See shouldCloseOpenTail for the day of measurements behind this.
+  const { data: statusRow } = await admin
+    .from("mileage_device_status")
+    .select("reported_at")
+    .eq("driver_user_id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  const reportedMs = statusRow?.reported_at
+    ? Date.parse(statusRow.reported_at as string)
+    : NaN;
+
+  const closeOpenAtEnd = shouldCloseOpenTail({
+    forceClose: opts.forceClose,
+    lastPointTs: allPoints[allPoints.length - 1].ts,
+    deviceReportedAtMs: Number.isFinite(reportedMs) ? reportedMs : null,
+    nowMs: Date.now(),
+  });
   const trips = segmentTrips(allPoints, { closeOpenAtEnd });
 
   let tripsCreated = 0;
