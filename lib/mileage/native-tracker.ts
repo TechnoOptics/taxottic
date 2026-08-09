@@ -917,6 +917,33 @@ async function probeWithin<T>(
 
 
 export async function sendHeartbeat(): Promise<void> {
+  // Hydrate the company from storage when this module was loaded WITHOUT
+  // the app-wide init having run.
+  //
+  // companyId is assigned in exactly one place, resumeMileageTrackingIfEnabled,
+  // which the app calls at startup. That was a safe assumption while
+  // native-tracker could only arrive via a component that also booted the
+  // tracker. It stopped being safe when heartbeat-timer started importing
+  // this module dynamically to rescue chunks that reach the ingest endpoint
+  // without native-tracker in their graph, because on exactly those chunks
+  // the init never ran, so companyId is "" and this function returned at the
+  // first line.
+  //
+  // That is the same defect as v166 and as the first draft of v167, for the
+  // third time: a heartbeat that silently does nothing on some code paths
+  // while the endpoint it guards keeps receiving GPS. The value is already
+  // persisted for the tracker's own restart path, so read it rather than
+  // depending on who loaded this module.
+  if (!companyId) {
+    try {
+      companyId = window.localStorage.getItem(LS_COMPANY) ?? "";
+    } catch {
+      /* storage unavailable; fall through to the guard below */
+    }
+  }
+  // Still nothing means no driver has ever enabled tracking on this device.
+  // There is genuinely no company to attribute a heartbeat to, so returning
+  // is correct here in a way it was not above.
   if (!companyId) return;
   installAppStateWatch();
   try {
