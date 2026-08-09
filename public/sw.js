@@ -1015,7 +1015,7 @@
 // seconds while sending no heartbeat at all. v166 changed nothing on that
 // device because I fixed the path it was not using. The timer now lives in
 // its own module and every ingest caller arms it.
-const CACHE_VERSION = "v168";
+const CACHE_VERSION = "v169";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

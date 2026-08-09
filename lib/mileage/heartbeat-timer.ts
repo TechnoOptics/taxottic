@@ -97,12 +97,27 @@ async function resolveSender(): Promise<(() => void) | null> {
  * Deliberately does NOT require a registered sender. The timer starts
  * regardless and resolves the sender on its first tick, so arming works on
  * any chunk that can reach the ingest endpoint.
+ *
+ * Beats once immediately as well as on the interval. Two reasons, and the
+ * first is the one that matters:
+ *
+ * A short-lived page that ingests a few points and unloads inside five
+ * minutes would otherwise report nothing at all, which is the exact shape
+ * of the blackout this change exists to end. A driver who opens the app at
+ * a stop, uploads a buffer and closes it again is a normal user, not an
+ * edge case, and on the interval-only version they stay invisible.
+ *
+ * Second, it makes the fix observable. A change to a five-minute timer that
+ * can only be confirmed by waiting five minutes on a real handset is a
+ * change that gets shipped on reasoning instead of evidence, and reasoning
+ * is what produced v166 and the first draft of v167.
  */
 export function ensureHeartbeatTimer(): void {
   if (timer) return;
   timer = setInterval(() => {
     void resolveSender().then((fn) => fn?.());
   }, HEARTBEAT_EVERY_MS);
+  void resolveSender().then((fn) => fn?.());
 }
 
 /** Test seam. Not used by the app. */
