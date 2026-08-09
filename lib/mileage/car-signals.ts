@@ -191,14 +191,24 @@ type CarSignalsPlugin = {
  * the moment we ask. registerPlugin is safe regardless, and a missing
  * native side simply makes the call reject, which every caller handles.
  */
-function plugin(): CarSignalsPlugin | null {
+/**
+ * BOXED, like every other registerPlugin site in this repo.
+ *
+ * This one is SYNC, so the thenable trap that hung device-status and
+ * geofence for a month does not fire here today: a bare `return proxy`
+ * only assimilates across an async boundary. It is boxed anyway, because
+ * the day someone makes this async or writes `await plugin()` it would
+ * hang forever with no rejection to catch, and nothing at the call site
+ * would look wrong. See lib/mileage/plugin-box.test.ts.
+ */
+function plugin(): { p: CarSignalsPlugin } | null {
   try {
     if (typeof window === "undefined") return null;
     const w = window as unknown as {
       Capacitor?: { isNativePlatform?: () => boolean };
     };
     if (w.Capacitor?.isNativePlatform?.() !== true) return null;
-    return registerPlugin<CarSignalsPlugin>("TaxotticCarSignals");
+    return { p: registerPlugin<CarSignalsPlugin>("TaxotticCarSignals") };
   } catch {
     return null;
   }
@@ -229,7 +239,7 @@ export async function getCarSignalsProbed(): Promise<{
   value: CarSignalsState | null;
   outcome: CarProbeOutcome;
 }> {
-  const p = plugin();
+  const p = plugin()?.p ?? null;
   if (!p) return { value: null, outcome: "unavailable" };
   try {
     const value = await p.getState();
@@ -242,7 +252,7 @@ export async function getCarSignalsProbed(): Promise<{
 
 /** Native health, or null when there is no native side to ask. */
 export async function getCarSignalsState(): Promise<CarSignalsState | null> {
-  const p = plugin();
+  const p = plugin()?.p ?? null;
   if (!p) return null;
   try {
     return await p.getState();
@@ -259,7 +269,7 @@ export async function getCarSignalsState(): Promise<CarSignalsState | null> {
  * are read twice are cheap; signals that vanish are a lost drive.
  */
 export async function readCarSignals(): Promise<CarSignal[]> {
-  const p = plugin();
+  const p = plugin()?.p ?? null;
   if (!p) return [];
   try {
     const read = await p.readSignals();
@@ -271,7 +281,7 @@ export async function readCarSignals(): Promise<CarSignal[]> {
 
 /** Drop the oldest N signals, after they have been durably handled. */
 export async function consumeCarSignals(count: number): Promise<void> {
-  const p = plugin();
+  const p = plugin()?.p ?? null;
   if (!p || count <= 0) return;
   try {
     await p.consumeSignals({ count });
@@ -298,7 +308,7 @@ export async function consumeCarSignals(count: number): Promise<void> {
  * describeCarSignalsHealth reports rather than hiding.
  */
 export async function requestCarBluetoothPermission(): Promise<boolean> {
-  const p = plugin();
+  const p = plugin()?.p ?? null;
   if (!p) return false;
   try {
     const result = await p.requestBluetoothPermission();
