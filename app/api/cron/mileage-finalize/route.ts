@@ -25,6 +25,17 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
+ * How long one escalation silences the others for the same driver.
+ *
+ * A manager needs to know a driver's phone is dark. They do not need to be
+ * told again ten minutes later by a different sweep, nor 144 times a day
+ * because the "have we told them" flag can never become true for a driver
+ * nobody can reach. 24h matches the renotify cadence the sweeps already
+ * use for the driver-facing push.
+ */
+const ESCALATION_QUIET_MS = 24 * 60 * 60_000;
+
+/**
  * Mileage finalizer cron.
  *
  * Why this exists: a trip only materialises when an ingest call sees the
@@ -325,7 +336,24 @@ export async function GET(req: NextRequest) {
       // the rest of the day, i.e. silent in exactly the case it exists
       // for. The manager notify carries its own per-driver-per-day dedupe
       // key, so re-entering here cannot produce a second nudge.
-      if (!reached && alert?.notified_at == null) {
+      // Same quiet window as the foreground-only sweep below, for the same
+      // reason: `notified_at` stays null forever for an unreachable driver,
+      // so this block re-entered on every one of the day's 144 ticks. The
+      // per-day dedupe key stopped a second DELIVERY but not the work, and
+      // it cannot dedupe against the other sweep, which escalates on the
+      // same fact. Read across kinds so whichever sweep escalates first
+      // silences the other.
+      const { data: priorEscSilent } = await admin
+        .from("mileage_tracker_alerts")
+        .select("escalated_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .not("escalated_at", "is", null);
+      const alreadyEscalated = (priorEscSilent ?? []).some((r) => {
+        const t = Date.parse(r.escalated_at as string);
+        return Number.isFinite(t) && nowMs - t < ESCALATION_QUIET_MS;
+      });
+      if (!reached && alert?.notified_at == null && !alreadyEscalated) {
         // Last resort: tell the managers. A driver we cannot reach is
         // invisible to every other channel, because the in-app banner
         // needs the app open and the push needs a registered device.
@@ -609,7 +637,35 @@ export async function GET(req: NextRequest) {
       // sweep's escalation, and gated the same way: only when this episode
       // has no record of ever reaching the driver.
       let fgEscalatedAt: string | null = null;
-      if (!fgReached && fgAlert?.notified_at == null) {
+      // ONE PROBLEM, ONE NOTIFICATION.
+      //
+      // `notified_at == null` is permanent for a driver who cannot be
+      // reached, which is the only kind of driver that gets here. So this
+      // block re-entered on EVERY tick: 144 times a day of manager lookups
+      // and notify() calls, for one fact that has not changed.
+      //
+      // Worse, the silent sweep escalates on the same underlying fact
+      // ("we cannot reach this driver"), so a manager received TWO pushes
+      // ten minutes apart about one phone. Observed on a real device:
+      // 19:20:22 and 19:30:22 local, matching escalated_at on the silent
+      // and foreground_only rows. The per-day dedupe key did its job; it
+      // simply cannot dedupe across two different alert kinds.
+      //
+      // So: any escalation for this driver inside the quiet window
+      // suppresses this one, whichever sweep sent it. Read across kinds
+      // deliberately. The manager needs to know a driver is dark, not
+      // which of our internal sweeps noticed first.
+      const { data: priorEsc } = await admin
+        .from("mileage_tracker_alerts")
+        .select("escalated_at")
+        .eq("driver_user_id", driver)
+        .eq("company_id", company)
+        .not("escalated_at", "is", null);
+      const escalatedRecently = (priorEsc ?? []).some((r) => {
+        const t = Date.parse(r.escalated_at as string);
+        return Number.isFinite(t) && nowMs - t < ESCALATION_QUIET_MS;
+      });
+      if (!fgReached && fgAlert?.notified_at == null && !escalatedRecently) {
         try {
           const { data: mgrs } = await admin
             .from("company_members")
