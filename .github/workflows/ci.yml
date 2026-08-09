@@ -154,6 +154,22 @@ jobs:
       # the android project includes by relative path.
       - run: npm ci
 
+      # android/capacitor-cordova-android-plugins is GENERATED and
+      # gitignored, and android/build.gradle reads
+      # cordova.variables.gradle from it, so a fresh checkout cannot
+      # evaluate the build script at all without this. The first run of
+      # this job proved it, failing with:
+      #
+      #   Could not read script '.../cordova.variables.gradle' as it
+      #   does not exist
+      #
+      # `update` and not `sync`: sync is copy + update, and copy exists to
+      # stage web assets, which this app does not use (webDir is "public"
+      # only to satisfy the config; the WebView loads the remote URL).
+      # update does the native half alone, in about 50ms.
+      - name: Generate Capacitor native scaffolding
+        run: npx cap update android
+
       - name: Compile Android sources
         working-directory: android
         run: ./gradlew :app:compileDebugJavaWithJavac --no-daemon
