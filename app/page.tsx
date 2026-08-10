@@ -115,9 +115,18 @@ const ORGANIZATION_LD = {
   // website P856), gives Google's Knowledge Graph a strong, mutually
   // confirmed identity for "Taxottic." Add Twitter / LinkedIn / GitHub
   // here as those profiles go live.
+  //
+  // The two store listings are the strongest additions available today:
+  // both are third-party-verified pages that Apple and Google publish
+  // under the Taxottic name, which is exactly the corroboration
+  // `sameAs` exists to supply. They come from lib/app-stores.ts rather
+  // than being retyped, so the store identity cannot drift between the
+  // download banner, the metadata, and this graph.
   sameAs: [
     "https://www.wikidata.org/wiki/Q140132105",
     "https://technooptics.com",
+    APP_STORE_URL,
+    PLAY_STORE_URL,
   ],
   // Honest, public contact channel. Real email > generic
   // "contact form" placeholder.

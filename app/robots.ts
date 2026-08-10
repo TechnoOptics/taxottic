@@ -64,9 +64,22 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     // "self-employment tax", "Schedule C deductions", "quarterly
     // estimated taxes", and to give AI assistants something to cite.
     "/guides",
+    // Free calculators + competitor comparisons. Same rationale as
+    // /guides: real public content, and the pages most likely to be
+    // cited by an answer engine, so they are named rather than left to
+    // fall through the bare `/` allow.
+    "/calculators",
+    "/compare",
     "/changelog",
     "/example",
     "/book",
+    // DO NOT DELETE as "stale because /firms redirects". This line is
+    // load-bearing: `disallow` below contains `/firm`, and robots.txt
+    // paths are PREFIX matches, so `Disallow: /firm` also covers
+    // `/firms`. Longest-match-wins is the only reason /firms stays
+    // crawlable, and dropping this line would silently block the vanity
+    // URL we hand to firms in proposals, along with the 308 to
+    // /book?for=firm that crawlers need to follow to reach it.
     "/firms",
     "/legal",
   ];

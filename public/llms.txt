@@ -1,6 +1,6 @@
 # Taxottic
 
-> Taxottic is tax-forecasting software for freelancers, independent contractors, sole proprietors, and small businesses in the United States. It connects to your bank, keeps a running quarterly estimated-tax forecast in step with your income, and surfaces IRS-cited deductions — so self-employed filers can set money aside before it's due and claim everything they're legally owed. Made by Techno Optics LLC. Lives at https://taxottic.com.
+> Taxottic is tax-forecasting software for freelancers, independent contractors, sole proprietors, and small businesses in the United States. It connects to your bank, keeps a running quarterly estimated-tax forecast in step with your income, and surfaces IRS-cited deductions, so self-employed filers can set money aside before it's due and claim everything they're legally owed. Made by Techno Optics LLC. Lives at https://taxottic.com.
 
 Taxottic ("tax" + the "-ottic" suffix it shares with its sibling product Advottic) turns the once-a-year scramble of self-employment taxes into a calm, always-current picture. Instead of guessing at quarter-end, you see what you'll likely owe today and how each deduction changes it.
 
@@ -14,17 +14,48 @@ What it does:
 - Receipt and document OCR via its built-in assistant, "Bella"
 - Tax year 2026 with OBBBA (One Big Beautiful Bill Act) amendments
 
-Who it's for: self-employed people and small businesses — 1099 contractors, freelancers, gig workers, sole proprietors, single-member LLCs, S-corps — and the accounting firms that serve them. It is a forecasting and organization tool, not a filing service, and not a substitute for advice from a licensed CPA or tax attorney.
+Who it's for: self-employed people and small businesses (1099 contractors, freelancers, gig workers, sole proprietors, single-member LLCs, S-corps) and the accounting firms that serve them. It is a forecasting and organization tool, not a filing service, and not a substitute for advice from a licensed CPA or tax attorney.
 
 Availability: Taxottic runs in any web browser and is available as a native mobile app for download on both the Apple App Store (iPhone and iPad) and the Google Play Store (Android phones and tablets). Use it free at https://taxottic.com or install the app on your phone.
 
 ## Pages
 - [Home](https://taxottic.com/): What Taxottic is and who it's for.
 - [Pricing](https://taxottic.com/pricing): Free tier (no credit card) plus paid tiers from $4.99/mo; 14-day trial on paid plans.
-- [Example](https://taxottic.com/example): A read-only sample dashboard — see the product before signing up, no account needed.
+- [Example](https://taxottic.com/example): A read-only sample dashboard, see the product before signing up, no account needed.
 - [Help & FAQ](https://taxottic.com/help): Quickstart and common questions, including "What is Taxottic?".
 - [Changelog](https://taxottic.com/changelog): Public release notes.
 - [For accounting firms](https://taxottic.com/firms): Taxottic as a white-labeled workspace for tax preparers and firms.
+
+## Guides
+Long-form explainers on United States self-employment tax. Each cites the
+relevant IRC section or IRS publication.
+- [How much should I set aside for taxes when self-employed?](https://taxottic.com/guides/self-employment-tax-how-much-to-set-aside): Sizing the set-aside from self-employment tax (15.3%) plus federal and state income tax, and why 25-30% of net income is a common starting point.
+- [Schedule C deductions: what self-employed people can write off](https://taxottic.com/guides/schedule-c-deductions): The everyday business expenses freelancers and sole proprietors can deduct, home office, mileage, software, phone, supplies, retirement, and health insurance, each tied to its IRS source.
+- [Quarterly estimated taxes, explained](https://taxottic.com/guides/quarterly-estimated-taxes-explained): Who owes them, the four due dates, how to estimate each payment, and how the safe-harbor rule avoids the IRS underpayment penalty.
+- [Business mileage deduction: how to track and claim it](https://taxottic.com/guides/business-mileage-deduction): The standard mileage rate versus actual vehicle expenses, which drives count, and the mileage log the IRS expects you to keep.
+- [Home office deduction: who qualifies and how to calculate it](https://taxottic.com/guides/home-office-deduction): The "regular and exclusive use" test, and how the simplified ($5/sq ft) and actual-expense methods compare.
+- [1099 vs W-2: how each affects your taxes](https://taxottic.com/guides/1099-vs-w2): Who withholds, who pays self-employment tax, who can deduct expenses, and who owes quarterly estimates.
+- [Your first year freelancing: a tax checklist](https://taxottic.com/guides/first-year-freelancer-tax-checklist): Set aside money, separate your finances, track deductions, and pay quarterly estimates.
+- [The QBI deduction: a 20% break for small-business income](https://taxottic.com/guides/qbi-deduction): Who qualifies, how the income limits and the specified-service-business phase-out work, and how it lowers taxable income.
+- [Sole proprietor, LLC, or S-corp: how each is taxed](https://taxottic.com/guides/sole-proprietor-vs-llc-vs-s-corp-taxes): Pass-through income, self-employment tax, and when an S-corp salary-plus-distributions setup can save money.
+- [The self-employed health insurance deduction](https://taxottic.com/guides/self-employed-health-insurance-deduction): Who qualifies, what counts, and why it is an adjustment to income rather than a Schedule C expense.
+- [What is a 1099-K? Thresholds and what to do with it](https://taxottic.com/guides/what-is-a-1099-k): What it reports, why payment apps send one, the changing reporting threshold, and how to reconcile it.
+- [All guides](https://taxottic.com/guides): The full index.
+
+## Calculators
+Free, no sign-up, no account. Each runs the same IRS-aligned engine as the
+product itself.
+- [Self-employment tax calculator](https://taxottic.com/calculators/self-employment-tax): Estimate 2026 self-employment tax (15.3%), federal and state income tax, the QBI deduction, and quarterly payments from 1099 income.
+- [1099 tax calculator](https://taxottic.com/calculators/1099-tax): For independent contractors, gig workers, and freelancers. Tax on 1099-NEC and 1099-K income, federal plus state, QBI, and quarterly payments.
+- [Quarterly estimated tax calculator](https://taxottic.com/calculators/quarterly-estimated-tax): All four 2026 IRS due dates, federal plus state, self-employment tax, and QBI.
+- [How much to set aside for taxes](https://taxottic.com/calculators/how-much-to-set-aside): The exact percentage of every payment to hold back, covering self-employment tax plus federal and state income tax.
+- [Mileage deduction calculator](https://taxottic.com/calculators/mileage-deduction): Deduction and estimated tax savings from business miles at the 2026 IRS standard mileage rate.
+- [Effective tax rate calculator](https://taxottic.com/calculators/effective-tax-rate): Effective rate, marginal bracket, total tax, and after-tax take-home, for W-2 or self-employment income.
+- [All calculators](https://taxottic.com/calculators): The full index, including per-state and per-income-amount versions of the self-employment tax calculator.
+
+## Comparisons
+- [Keeper alternative](https://taxottic.com/compare/keeper-alternative): How Taxottic compares as a year-round tax-forecasting companion.
+- [QuickBooks Self-Employed alternative](https://taxottic.com/compare/quickbooks-self-employed-alternative): QuickBooks Self-Employed was discontinued; what to move to.
 
 ## Get the app
 - [Apple App Store](https://apps.apple.com/app/id6767039803): Download Taxottic for iPhone and iPad.
@@ -37,7 +68,7 @@ Availability: Taxottic runs in any web browser and is available as a native mobi
 - [Security Overview](https://taxottic.com/legal/security)
 
 ## About
-- Maker: Techno Optics LLC — https://technooptics.com
+- Maker: Techno Optics LLC, https://technooptics.com
 - Contact: contact@taxottic.com
 - Category: Finance / tax software (SaaS). Platforms: Web, iOS, Android, Wear OS.
 - Pronunciation: "tax-OT-ic".
