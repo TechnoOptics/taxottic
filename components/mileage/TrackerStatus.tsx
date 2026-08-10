@@ -43,7 +43,7 @@ function relativeLabel(then: Date, now: Date): string {
   if (hours < 24) return `${hours} h ago`;
   const days = Math.round(hours / 24);
   if (days < 7) return `${days} d ago`;
-  return then.toLocaleDateString();
+  return then.toLocaleDateString("en-US");
 }
 
 export function TrackerStatus({ lastPointISO, lastTripISO }: Props) {

@@ -215,7 +215,7 @@ function GoalCard({ goal }: { goal: GoalRow }) {
           <div className="text-xs text-ink-muted mt-1 tracking-wide">
             {prettyType(goal.goal_type)}
             {goal.deadline
-              ? ` - by ${new Date(goal.deadline).toLocaleDateString()}`
+              ? ` - by ${new Date(goal.deadline).toLocaleDateString("en-US")}`
               : ""}
           </div>
         </div>

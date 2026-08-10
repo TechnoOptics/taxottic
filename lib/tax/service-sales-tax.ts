@@ -400,7 +400,7 @@ export function computeServiceSalesTax(
             Math.round(
               (sale.grossReceiptsCents / nexusCfg.salesThresholdCents) * 100,
             )
-          }% of $${(nexusCfg.salesThresholdCents / 100).toLocaleString()}). Register proactively before you cross.`,
+          }% of $${(nexusCfg.salesThresholdCents / 100).toLocaleString("en-US")}). Register proactively before you cross.`,
         );
       }
     }

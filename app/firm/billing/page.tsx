@@ -107,8 +107,8 @@ export default async function FirmBillingPage() {
               <div className="text-xs text-ink-muted mt-1">
                 {sub?.status === "active"
                   ? sub.cancel_at_period_end
-                    ? `Cancels on ${new Date(sub.current_period_end ?? "").toLocaleDateString()}`
-                    : `Renews on ${new Date(sub.current_period_end ?? "").toLocaleDateString()}`
+                    ? `Cancels on ${new Date(sub.current_period_end ?? "").toLocaleDateString("en-US")}`
+                    : `Renews on ${new Date(sub.current_period_end ?? "").toLocaleDateString("en-US")}`
                   : sub?.status
                     ? `Subscription status: ${sub.status}`
                     : "No active subscription"}

@@ -482,7 +482,7 @@ export function computeStateTaxFromBrackets(args: {
       : args.taxableIncomeCents;
     const surTax = Math.round(base * table.surcharge.rate);
     tax += surTax;
-    surchargeNote = ` Plus $${(surTax / 100).toLocaleString()} from the ${stateUpper} high-income surcharge (${table.surcharge.note}).`;
+    surchargeNote = ` Plus $${(surTax / 100).toLocaleString("en-US")} from the ${stateUpper} high-income surcharge (${table.surcharge.note}).`;
   }
 
   // Be honest about which year of brackets we're using. Currently all

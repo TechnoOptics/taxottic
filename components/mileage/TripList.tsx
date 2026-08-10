@@ -11,7 +11,7 @@ import { SelectMenu } from "@/components/ui/SelectMenu";
  *
  * Why client-side:
  *   1. Dates must render in the user's local timezone. Server is UTC;
- *      `new Date(iso).toLocaleString()` on the server uses Vercel's
+ *      `new Date(iso).toLocaleString("en-US")` on the server uses Vercel's
  *      UTC clock and the user complained that "the time zone is wrong".
  *      A Client Component runs `toLocaleString()` in the browser, so
  *      times read in the user's local zone.

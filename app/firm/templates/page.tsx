@@ -316,9 +316,9 @@ export default async function FirmTemplatesPage() {
                     </div>
                     <div className="text-[11px] text-ink-muted">
                       {t.next_issue_at && t.active
-                        ? `Next: ${new Date(t.next_issue_at).toLocaleDateString()}`
+                        ? `Next: ${new Date(t.next_issue_at).toLocaleDateString("en-US")}`
                         : t.last_issued_at
-                          ? `Last issued ${new Date(t.last_issued_at).toLocaleDateString()}`
+                          ? `Last issued ${new Date(t.last_issued_at).toLocaleDateString("en-US")}`
                           : "Never issued"}
                     </div>
                     <div className="flex gap-2 mt-1">

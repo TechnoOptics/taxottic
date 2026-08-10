@@ -97,7 +97,7 @@ export default async function DocumentVersionsPage({
                 <div className="text-xs text-ink-muted mt-0.5">
                   {doc.filename} ·{" "}
                   {formatBytes(doc.size_bytes ?? 0)} · Updated{" "}
-                  {new Date(doc.updated_at).toLocaleString()}
+                  {new Date(doc.updated_at).toLocaleString("en-US")}
                 </div>
               </div>
               <Link
@@ -125,7 +125,7 @@ export default async function DocumentVersionsPage({
                   <div className="text-xs text-ink-muted mt-0.5">
                     {v.filename} ·{" "}
                     {formatBytes(v.size_bytes ?? 0)} ·{" "}
-                    {new Date(v.created_at).toLocaleString()}
+                    {new Date(v.created_at).toLocaleString("en-US")}
                     {v.versioned_by && nameById.get(v.versioned_by)
                       ? ` · by ${nameById.get(v.versioned_by)}`
                       : ""}

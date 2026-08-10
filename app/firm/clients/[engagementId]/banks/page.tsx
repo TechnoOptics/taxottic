@@ -223,7 +223,7 @@ export default async function FirmBanksPage({
                     <div className="text-xs text-ink-muted mt-0.5">
                       {c.provider} ·{" "}
                       {c.last_synced_at
-                        ? `Synced ${new Date(c.last_synced_at).toLocaleString()}`
+                        ? `Synced ${new Date(c.last_synced_at).toLocaleString("en-US")}`
                         : "Never synced"}
                     </div>
                   </div>

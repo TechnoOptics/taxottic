@@ -157,9 +157,9 @@ export default async function DomainSettingsPage() {
                       ) : null}
                       <div className="text-[11px] text-ink-muted mt-1">
                         Added{" "}
-                        {new Date(d.added_at).toLocaleDateString()}
+                        {new Date(d.added_at).toLocaleDateString("en-US")}
                         {d.verified_at
-                          ? ` · Verified ${new Date(d.verified_at).toLocaleDateString()}`
+                          ? ` · Verified ${new Date(d.verified_at).toLocaleDateString("en-US")}`
                           : ""}
                       </div>
                     </div>

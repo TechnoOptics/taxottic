@@ -172,10 +172,10 @@ export default async function FilingsPage({
                         ) : null}
                         <div className="text-[11px] text-ink-muted mt-1">
                           {f.submitted_at
-                            ? `Submitted ${new Date(f.submitted_at).toLocaleDateString()}`
+                            ? `Submitted ${new Date(f.submitted_at).toLocaleDateString("en-US")}`
                             : null}
                           {f.accepted_at
-                            ? ` · Accepted ${new Date(f.accepted_at).toLocaleDateString()}`
+                            ? ` · Accepted ${new Date(f.accepted_at).toLocaleDateString("en-US")}`
                             : null}
                         </div>
                       </div>

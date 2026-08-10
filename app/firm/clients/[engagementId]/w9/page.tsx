@@ -158,10 +158,10 @@ export default async function W9Page({ params }: { params: Params }) {
                         ) : null}
                         <div className="text-[11px] text-ink-muted mt-1">
                           {w.signed_at
-                            ? `Signed ${new Date(w.signed_at).toLocaleDateString()}`
-                            : `Requested ${new Date(w.requested_at).toLocaleDateString()} · expires ${new Date(w.expires_at).toLocaleDateString()}`}
+                            ? `Signed ${new Date(w.signed_at).toLocaleDateString("en-US")}`
+                            : `Requested ${new Date(w.requested_at).toLocaleDateString("en-US")} · expires ${new Date(w.expires_at).toLocaleDateString("en-US")}`}
                           {w.verified_at
-                            ? ` · Verified ${new Date(w.verified_at).toLocaleDateString()}`
+                            ? ` · Verified ${new Date(w.verified_at).toLocaleDateString("en-US")}`
                             : ""}
                         </div>
                       </div>

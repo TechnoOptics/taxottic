@@ -80,9 +80,9 @@ export default async function SecuritySettingsPage() {
                         ? "Synced across devices"
                         : "This device only"}
                       {" - added "}
-                      {new Date(p.created_at).toLocaleDateString()}
+                      {new Date(p.created_at).toLocaleDateString("en-US")}
                       {p.last_used_at
-                        ? ` - last used ${new Date(p.last_used_at).toLocaleDateString()}`
+                        ? ` - last used ${new Date(p.last_used_at).toLocaleDateString("en-US")}`
                         : ""}
                     </div>
                   </div>
@@ -130,7 +130,7 @@ export default async function SecuritySettingsPage() {
               <ul className="mt-3 grid gap-2">
                 {pairedWatches.map((w) => {
                   const lastSeen = w.last_seen_at
-                    ? new Date(w.last_seen_at).toLocaleString()
+                    ? new Date(w.last_seen_at).toLocaleString("en-US")
                     : null;
                   return (
                     <li
@@ -144,7 +144,7 @@ export default async function SecuritySettingsPage() {
                         <div className="text-xs text-ink-muted mt-0.5">
                           {lastSeen
                             ? `Last seen ${lastSeen}`
-                            : `Paired ${new Date(w.created_at).toLocaleDateString()}`}
+                            : `Paired ${new Date(w.created_at).toLocaleDateString("en-US")}`}
                         </div>
                       </div>
                       <form action={revokeWatchDevice}>
