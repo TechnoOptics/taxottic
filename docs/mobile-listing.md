@@ -46,8 +46,8 @@ WHAT YOU GET
   Apr 15, Jun 15, Sep 15, and Jan 15
 • 50+ deduction categories — vehicle, home office, software,
   travel, meals, retirement, HSA, and more
-• Receipt scanning — snap a photo, our AI reads vendor, total,
-  date, and category in 3 seconds
+• Receipt scanning — snap a photo, our AI reads the vendor, total,
+  date, and category for you
 • Bank connections — link any major US bank, every transaction
   auto-categorized
 • W-2 + 1099 import — drop your forms, we extract the numbers

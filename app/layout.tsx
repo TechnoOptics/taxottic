@@ -41,8 +41,15 @@ const hanken = Hanken_Grotesk({
 // Brand voice rules: keep "calmer way" as the lead because it's the
 // brand line we've consistently surfaced (audit explicitly praised
 // it). Don't keyword-stuff. Don't make claims we can't substantiate.
-// "1,025 IRS-cited deductions" is verifiable from
-// /data/master-deductions-catalog.
+// "1,025 IRS-cited deductions" is verifiable, and this is where from.
+// The old pointer here was /data/master-deductions-catalog, a path that
+// does not exist, which makes a checkable claim look unfalsifiable.
+// The real source is lib/deductions/master.ts (generated from
+// master_business_deduction_checklist_by_entity.xlsx): 1025 entries
+// across 28 categories, every one carrying an irs.gov source URL.
+// Confirm with:
+//   npx tsx -e "import {MASTER_DEDUCTIONS} from './lib/deductions/master';
+//     console.log(MASTER_DEDUCTIONS.length)"
 //
 // Length budget:
 //   - Page title ≤ 60 chars (Google truncates at ~580px wide ≈ 55-60)

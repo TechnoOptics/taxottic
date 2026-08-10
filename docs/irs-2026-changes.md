@@ -56,14 +56,35 @@ Additional sanity in the engine:
 **Wired**: every forecast for a self-employed entity in TY 2026+ now emits a `hints[]` entry naming the year and the new threshold. The hint appears in the forecast page's "things to know" surface alongside other educational notes.
 **Still to build (feature, not constants)**: a "vendor 1099 dashboard" that aggregates per-vendor totals from `account_transactions` + `monthly_expenses` and pre-fills draft 1099s in Q1. That's its own product surface and isn't blocked on tax-year refresh.
 
-### Standard mileage rate — ⚠️ PROVISIONAL FALLBACK + EXPLICIT UI LABEL
-**Effect**: The 2026 standard business mileage rate is published in a separate IRS Notice (typically late December 2025 / early January 2026). The Notice hadn't landed when this update shipped, so `MILEAGE_RATE_2026_PER_MILE_CENTS` falls back to the 2025 value of $0.70/mile.
-**Wired**: `TaxYearConstants.isMileageRateProvisional` is set to `true` for 2026. When a forecast applies a mileage deduction, the assumption text now reads "applied at $0.70 per business mile (the 2026 IRS Notice hasn't been published yet; we're carrying forward last year's rate as a placeholder and will refresh once the Notice posts)" instead of pretending we have a confirmed 2026 rate.
-**Maintenance**: once the 2026 Notice publishes, edit `lib/tax/constants-2026.ts`:
-  ```ts
-  export const MILEAGE_RATE_2026_PER_MILE_CENTS = <new-cents-value>;
-  ```
-  Then in `lib/tax/constants.ts`, flip `isMileageRateProvisional` for the 2026 bundle to `false`. Both changes are one-line.
+### Standard mileage rate: RESOLVED, and 2026 is a SPLIT-RATE year
+
+**Status**: no longer provisional. This section previously described a
+$0.70/mile placeholder carried forward from 2025 while the Notice was
+pending. The Notice has since published and the constants were updated,
+so that description is history, kept here only so the maintenance note
+below is not read as still-pending work.
+
+**Current**: `MILEAGE_RATE_2026_PER_MILE_CENTS` is 72.5 (IRS Notice
+2026-10) and `isMileageRateProvisional` is false. Pinned by
+`lib/tax/mileage-rate.test.ts`, which also fails if any bundled year
+still ships a placeholder.
+
+**The part that bites**: 2026 has TWO business rates. 72.5 cents applies
+Jan 1 to Jun 30, and 76 cents applies from Jul 1 (`MILEAGE_RATE_PERIODS_2026`).
+`MILEAGE_RATE_PER_MILE_CENTS` is only the FIRST period, not the year.
+
+Anything pricing a drive must use `mileageRateCentsForDate(year, iso)`
+from `lib/mileage/deduction.ts`, never the flat constant. The public
+mileage calculator read the flat constant and undervalued every
+second-half mile by 3.5 cents until 2026-08-10; see
+`lib/tax/split-rate-mileage.test.ts` for the arithmetic and the guard.
+
+**Maintenance for the next tax year**: set the new rate in
+`lib/tax/constants-2026.ts` (or the new year's file), keep
+`isMileageRateProvisional` accurate, and add a `MILEAGE_RATE_PERIODS`
+entry if the IRS splits the year again. Do not restate the rate in copy:
+`lib/tax/rate-copy.test.ts` forbids hardcoded per-mile figures precisely
+because four public strings went stale last time.
 
 ## Coverage audit — items #1-#15 from the gap report
 
