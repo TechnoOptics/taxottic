@@ -41,13 +41,30 @@ export const PARKED_RADIUS_M = 30;
 /**
  * A parked phone still reports this often, so it never looks dead.
  *
- * Bounded above by TRIP_END_DWELL_MS: a gap longer than the dwell that
- * closes a trip would make a parked phone indistinguishable from a
- * silent one, and finalize would hang trips open waiting for evidence
- * that never came. Ten minutes is exactly the dwell, so tail-close
- * behaviour is inherited unchanged rather than re-reasoned.
+ * MUST be strictly less than MAX_CAPTURE_GAP_MS (8 min), and the first
+ * version of this file got that wrong at real cost.
+ *
+ * It was 10 minutes, chosen to match TRIP_END_DWELL_MS so tail-close
+ * behaviour would be inherited rather than re-reasoned. That reasoning
+ * was about the wrong constant. Segmentation severs a trip when
+ * consecutive points are more than MAX_CAPTURE_GAP_MS apart, and
+ * suppressing every fix during a stop MANUFACTURES exactly such a gap.
+ * So a 9 minute stop mid-drive (fuel, school pickup, train crossing)
+ * became two trips, the connector leg was dropped, and any resulting
+ * fragment under MIN_TRIP_METERS vanished from the deduction outright.
+ *
+ * That silently undid the June 2026 change which raised
+ * TRIP_END_DWELL_MS from 5 to 10 minutes precisely so stops under ten
+ * minutes would not split a drive.
+ *
+ * Five minutes also restores the heartbeat cadence: the beat is armed
+ * from the same kept-fix path, so a 10 minute keepalive had halved it
+ * from HEARTBEAT_EVERY_MS. At five they agree again.
+ *
+ * The saving is barely affected: 12 points an hour instead of 50, a 76%
+ * cut rather than 88%, in exchange for not severing drives.
  */
-export const PARKED_KEEPALIVE_MS = 10 * 60_000;
+export const PARKED_KEEPALIVE_MS = 5 * 60_000;
 
 type Fix = { lat: number; lng: number; ts: number };
 

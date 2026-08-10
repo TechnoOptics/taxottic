@@ -461,7 +461,13 @@ function loadPersistedBuffer() {
     // when it was written (LS_COMPANY is persisted in the same breath).
     if (Array.isArray(parsed)) {
       const owner = window.localStorage.getItem(LS_COMPANY);
-      if (owner === companyId) buffer = parsed.slice(-MAX_BUFFER);
+      if (owner === companyId) {
+        buffer = parsed.slice(-MAX_BUFFER);
+      } else {
+        // Not ours. See the orphan branch below for why the in-memory
+        // buffer must be emptied rather than left alone.
+        buffer = [];
+      }
       return;
     }
     if (!parsed || !Array.isArray(parsed.points)) return;
@@ -470,6 +476,20 @@ function loadPersistedBuffer() {
       // Leave them stored; that company's next tracking session (or its
       // next flush) uploads them under the right books.
       orphanBuffer = { companyId: parsed.companyId, points: parsed.points };
+      // EMPTY THE IN-MEMORY BUFFER TOO. Parking the orphan is only half
+      // the job: `buffer` is module scope and survives a company switch,
+      // so leaving it populated meant the previous company's points were
+      // drained correctly under their own books by drainOrphanBuffer AND
+      // posted a second time under the NEW companyId by the next flush.
+      // The ingest upsert key is (driver, company, captured_at), so
+      // nothing deduped it: the same miles landed on two companies'
+      // books and the wrong one got a deduction it never earned.
+      buffer = [];
+      // The parked-filter and flush anchors describe the old company's
+      // last fix. Carrying them across would suppress the new company's
+      // first fixes if they happen to be near the old ones.
+      lastKeptFix = null;
+      lastFlushAt = 0;
       return;
     }
     buffer = parsed.points.slice(-MAX_BUFFER);

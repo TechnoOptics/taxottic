@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
   const { data: trips, error } = await admin
     .from("mileage_trips")
     .select(
-      "id, driver_user_id, company_id, started_at, ended_at, distance_miles, classification, tax_year",
+      "id, driver_user_id, company_id, started_at, ended_at, distance_miles, classification, classified_by, classified_at, notes, tax_year",
     )
     .gte("started_at", sinceIso)
     .order("started_at", { ascending: true });
@@ -140,9 +140,37 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      // CARRY A HUMAN CLASSIFICATION ACROSS THE SEAM.
+      //
+      // The merge deletes the absorbed fragments, so anything the driver
+      // decided about one of them dies with it unless it is carried
+      // here. Previously the keeper's classification was simply applied
+      // to the merged trip, so if you reclassified the SECOND half of a
+      // severed drive, that decision was silently discarded and the
+      // machine's guess won.
+      //
+      // finalize.ts does the same carry for its own overlap merges
+      // ("audit critical #2"); this path was missing it. A human
+      // decision outranks the machine, and where both halves were
+      // classified by a human the keeper wins as the survivor.
+      const absorbedAuthored = plan.absorbIds
+        .map((id) => meta.get(id))
+        .find((f) => f && f.classified_by);
+      const keeperAuthored = Boolean(keeper.classified_by);
+      const carry =
+        !keeperAuthored && absorbedAuthored
+          ? {
+              classification: absorbedAuthored.classification as string,
+              classified_by: absorbedAuthored.classified_by as string,
+              classified_at: absorbedAuthored.classified_at as string,
+            }
+          : null;
+      const finalClassification = (carry?.classification ??
+        keeper.classification) as "business" | "personal" | "unclassified";
+
       const deduction = tripDeductionCents(
         { distanceMiles: plan.distanceMiles },
-        keeper.classification as "business" | "personal" | "unclassified",
+        finalClassification,
         Number(keeper.tax_year),
         keeper.started_at as string,
       );
@@ -153,6 +181,7 @@ export async function GET(req: NextRequest) {
           ended_at: new Date(plan.endedAtMs).toISOString(),
           distance_miles: plan.distanceMiles,
           deduction_cents: deduction,
+          ...(carry ?? {}),
         })
         .eq("id", plan.keepId);
       if (upErr) {
