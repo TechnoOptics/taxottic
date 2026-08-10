@@ -56,6 +56,59 @@ describe("heartbeat is armed wherever points are ingested", () => {
     expect(files.length).toBeGreaterThan(5);
   });
 
+  it("arms the timer NEAR every individual POST, not just somewhere in the file", () => {
+    // THE HOLE THAT LET v175 THROUGH, and the third recurrence of this
+    // same class of bug.
+    //
+    // The check below is per FILE: it passes as long as the string
+    // "ensureHeartbeatTimer()" appears anywhere. native-tracker.ts armed
+    // the beat in its location callback and in startTracking, so the file
+    // contained the string twice and passed — while BOTH of its actual
+    // ingest POSTs, the flush loop and the orphan drain, armed nothing.
+    //
+    // Measured cost, 2026-08-09: a 40-point backlog landed at 23:54 after
+    // a 47-minute upload stall and produced no heartbeat, because a
+    // backlog drain goes through flush and never through the callback.
+    // That is precisely the moment health reporting is most valuable.
+    //
+    // So the assertion is now positional. Every POST must have the arm
+    // call within ARM_WITHIN_LINES after it.
+    const ARM_WITHIN_LINES = 40;
+    const POST_RE =
+      /(?:fetch|postJson)\(\s*["'`]\/api\/mileage\/ingest/;
+
+    const unarmed: string[] = [];
+    for (const file of files) {
+      const lines = readFileSync(file, "utf8").split("\n");
+      lines.forEach((line, i) => {
+        // A doc comment that NAMES the endpoint is not a call site. This
+        // very module lists all three ingest paths in its header.
+        const trimmed = line.trim();
+        if (trimmed.startsWith("*") || trimmed.startsWith("//") || trimmed.startsWith("/*")) {
+          return;
+        }
+        if (!POST_RE.test(line)) return;
+        // Symmetric window. Arming BEFORE the request is legitimate and
+        // arguably better (geofence.ts and device-status.ts do it that
+        // way), so look both directions.
+        const window = lines
+          .slice(Math.max(0, i - ARM_WITHIN_LINES), i + ARM_WITHIN_LINES)
+          .join("\n");
+        if (!window.includes(ARM_CALL)) {
+          unarmed.push(`${file}:${i + 1}`);
+        }
+      });
+    }
+
+    expect(
+      unarmed,
+      `These individual POSTs to ${INGEST_ENDPOINT} have no ${ARM_CALL} ` +
+        `within ${ARM_WITHIN_LINES} lines. A device whose points go out ` +
+        `through one of them uploads GPS and reports no health, which is ` +
+        `how a 47-minute stall passed unseen.`,
+    ).toEqual([]);
+  });
+
   it("every file that posts to the ingest endpoint also arms the timer", () => {
     const ingesters = files.filter((p) =>
       readFileSync(p, "utf8").includes(INGEST_ENDPOINT),
