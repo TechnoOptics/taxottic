@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
   // clean it up afterwards. See lib/mileage/plausible-jump.ts for why
   // this keys on implied SPEED and never on distance: a twenty minute
   // capture gap legitimately puts the next point nine miles away.
-  const { data: lastRow } = await admin
+  const { data: lastRow, error: lastRowErr } = await admin
     .from("mileage_points_raw")
     .select("lat, lng, captured_at")
     .eq("driver_user_id", user.id)
@@ -163,6 +163,15 @@ export async function POST(req: NextRequest) {
     .order("captured_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (lastRowErr) {
+    // Not fatal, but say so. A failed read silently nulls the anchor and
+    // the gate degrades to intra-batch checking only, which is a weaker
+    // guarantee than the caller is entitled to assume.
+    console.error(
+      "[ingest] gate anchor read failed, checking within batch only:",
+      lastRowErr.message,
+    );
+  }
   const lastAccepted =
     lastRow && Number.isFinite(lastRow.lat as number)
       ? {
@@ -171,10 +180,27 @@ export async function POST(req: NextRequest) {
           ts: Date.parse(lastRow.captured_at as string),
         }
       : null;
-  const gate = rejectImplausibleJumps(
-    points,
-    lastAccepted && Number.isFinite(lastAccepted.ts) ? lastAccepted : null,
-  );
+
+  // The anchor is only usable if it PRECEDES the batch.
+  //
+  // `points` is sorted ascending above. When the whole batch is older
+  // than the newest stored point (an offline backlog uploaded after the
+  // phone reconnects), every point compares negative against the anchor.
+  // Negative elapsed is kept without advancing the reference, by design,
+  // so the reference would never become a member of the batch and NO
+  // pair inside it would ever be checked. A teleport buried in a backlog
+  // would sail through the gate built to stop it.
+  //
+  // Passing null instead makes the batch self-anchor on its own first
+  // point, which is the strongest check available for history.
+  const anchor =
+    lastAccepted &&
+    Number.isFinite(lastAccepted.ts) &&
+    points.length > 0 &&
+    lastAccepted.ts <= points[0].ts
+      ? lastAccepted
+      : null;
+  const gate = rejectImplausibleJumps(points, anchor);
   if (gate.rejected.length > 0) {
     const worst = gate.rejected.reduce((a, b) =>
       a.impliedMps > b.impliedMps ? a : b,
@@ -231,7 +257,7 @@ export async function POST(req: NextRequest) {
   });
 
   console.log(
-    `[ingest] done user=${user.id} incoming=${points.length} pool=${result.poolSize} trips=${result.tripsCreated} biz_mi=${result.businessMiles.toFixed(2)} ded_$=${(result.deductionCents / 100).toFixed(2)} sessionEnded=${sessionEnded}`,
+    `[ingest] done user=${user.id} incoming=${accepted.length} pool=${result.poolSize} trips=${result.tripsCreated} biz_mi=${result.businessMiles.toFixed(2)} ded_$=${(result.deductionCents / 100).toFixed(2)} sessionEnded=${sessionEnded}`,
   );
 
   // Honest remaining-backlog figure for the on-device diagnostics: the

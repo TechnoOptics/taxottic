@@ -4,7 +4,8 @@ import {
   PARKED_RADIUS_M,
   shouldKeepFix,
 } from "./parked-filter";
-import { TRIP_END_DWELL_MS } from "./segmentation";
+import { MAX_CAPTURE_GAP_MS, TRIP_END_DWELL_MS } from "./segmentation";
+import { HEARTBEAT_EVERY_MS } from "./heartbeat-timer";
 
 /**
  * Stop uploading a parked phone's GPS scatter, without going silent.
@@ -84,7 +85,7 @@ describe("shouldKeepFix", () => {
     );
   });
 
-  it("cuts the measured parked volume by about ninety percent", () => {
+  it("cuts the measured parked volume by about three quarters", () => {
     // Replay the real cadence: a fix every 70 s for an hour, all inside
     // the scatter radius.
     let lastKept: { lat: number; lng: number; ts: number } | null = null;
@@ -99,9 +100,53 @@ describe("shouldKeepFix", () => {
       }
     }
     expect(emitted).toBeGreaterThan(45);
-    // One per keepalive window, not one per 70 seconds.
-    expect(kept).toBeLessThanOrEqual(7);
-    expect(kept).toBeGreaterThanOrEqual(5);
+    // One per keepalive window, not one per 70 seconds. At a 5 minute
+    // keepalive that is ~12 an hour against ~51 emitted, a 76% cut.
+    // It was 88% at a 10 minute keepalive, which severed drives across
+    // any stop longer than MAX_CAPTURE_GAP_MS. The extra six rows an
+    // hour are what a whole drive leg costs.
+    expect(kept).toBeLessThanOrEqual(13);
+    expect(kept).toBeGreaterThanOrEqual(11);
+  });
+
+  it("NEVER exceeds the capture gap that severs a trip", () => {
+    // THE BUG THIS FILE SHIPPED WITH, and the assertion that would have
+    // caught it before a driver lost a leg of a drive.
+    //
+    // Segmentation severs a trip when consecutive points are more than
+    // MAX_CAPTURE_GAP_MS apart. Suppressing every fix during a stop
+    // MANUFACTURES such a gap, so a keepalive at or above that bound
+    // turns an ordinary stop into two trips and drops the connector.
+    // The original 10 minute value sat 2 minutes ABOVE it.
+    expect(PARKED_KEEPALIVE_MS).toBeLessThan(MAX_CAPTURE_GAP_MS);
+  });
+
+  it("keeps a fix during a 9 minute stop, so a drive is not severed", () => {
+    // The concrete case: fuel stop, car stationary, every fix inside the
+    // scatter radius. Before the fix the next kept point was ~9 minutes
+    // later and segmentation split the drive there.
+    const stopStart = T0;
+    let lastKept: { lat: number; lng: number; ts: number } = { ...HOME, ts: stopStart };
+    let longestSilence = 0;
+    // Fixes arrive every 30s for 9 minutes, none of them moving.
+    for (let t = 30_000; t <= 9 * 60_000; t += 30_000) {
+      const fix = { ...north(HOME, 3), ts: stopStart + t };
+      if (shouldKeepFix({ fix, lastKept })) {
+        longestSilence = Math.max(longestSilence, fix.ts - lastKept.ts);
+        lastKept = fix;
+      }
+    }
+    longestSilence = Math.max(longestSilence, stopStart + 9 * 60_000 - lastKept.ts);
+    expect(
+      longestSilence,
+      "a gap this long is what segmentation reads as a severed drive",
+    ).toBeLessThan(MAX_CAPTURE_GAP_MS);
+  });
+
+  it("still reports at least as often as the heartbeat interval", () => {
+    // The beat is armed from the same kept-fix path, so a keepalive
+    // longer than HEARTBEAT_EVERY_MS silently halves heartbeat cadence.
+    expect(PARKED_KEEPALIVE_MS).toBeLessThanOrEqual(HEARTBEAT_EVERY_MS);
   });
 
   it("never lets a parked phone go quiet for longer than the tail-close dwell", () => {

@@ -121,6 +121,34 @@ describe("rejectImplausibleJumps", () => {
     expect(rejectImplausibleJumps([earlier], SHAKOPEE).kept).toHaveLength(1);
   });
 
+  it("checks WITHIN a backfill batch that is entirely older than the anchor", () => {
+    // THE HOLE THE REVIEW FOUND, and the one that mattered most.
+    //
+    // An out-of-order point is kept and does NOT advance the reference,
+    // which is right for one stray late fix. But when the WHOLE batch
+    // predates the stored anchor (an offline backlog uploaded after the
+    // phone reconnects), every point compares negative against that
+    // anchor, so the reference never becomes a member of the batch and
+    // no pair inside the batch is ever checked. A teleport buried in a
+    // backlog sailed straight through the gate that exists to stop it.
+    //
+    // Caller contract: pass `null` when the anchor does not precede the
+    // batch, so the batch self-anchors on its own first point.
+    const anchorIsNewer = null;
+    const older = T0 - 60 * 60 * SEC;
+    const batch: JumpPoint[] = [
+      { lat: SHAKOPEE.lat, lng: SHAKOPEE.lng, ts: older },
+      { ...BLOOMINGTON, ts: older + 1 * SEC },
+      { lat: SHAKOPEE.lat - 0.002, lng: SHAKOPEE.lng, ts: older + 10 * SEC },
+    ];
+    const out = rejectImplausibleJumps(batch, anchorIsNewer);
+    expect(
+      out.rejected,
+      "the teleport inside the backlog must still be caught",
+    ).toHaveLength(1);
+    expect(out.kept).toHaveLength(2);
+  });
+
   it("sets the bar above any car and below any teleport", () => {
     // 89 m/s is about 200 mph. Nothing a car does approaches it, and the
     // incident's implied speeds were three orders of magnitude past it.

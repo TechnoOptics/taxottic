@@ -379,11 +379,26 @@ async function renderTripFromRaw(
   // stranded trace inside their window must never overwrite them — that
   // was destroying IRS-defensible odometer entries with 8-mile fragments.
   {
-    const { data: t } = await admin
+    const { data: t, error: srcErr } = await admin
       .from("mileage_trips")
       .select("source")
       .eq("id", tripId)
       .maybeSingle();
+    // FAIL CLOSED. This guard is what stops a raw rebuild overwriting a
+    // user-authored odometer entry, and it used to ignore `error`. On a
+    // query error `t` is null, the condition below is false, and the
+    // rebuild proceeded, destroying exactly the IRS-defensible entries
+    // the guard exists to protect. PostgREST returns errors as values
+    // rather than throwing, so this is a realistic path, not a
+    // hypothetical.
+    if (srcErr) {
+      console.error(
+        "[finalize] provenance read failed, refusing to re-render",
+        tripId,
+        srcErr.message,
+      );
+      return null;
+    }
     if (t && (t as { source?: string }).source !== "tracked") return null;
   }
 
@@ -393,10 +408,23 @@ async function renderTripFromRaw(
   // skip the replace and keep the existing track. This makes the render
   // path safe-by-construction — it can heal a broken trip but can never
   // itself corrupt a healthy one.
-  const { count: existingCount } = await admin
+  const { count: existingCount, error: countErr } = await admin
     .from("mileage_points")
     .select("*", { count: "exact", head: true })
     .eq("trip_id", tripId);
+  // FAIL CLOSED, same reasoning as the provenance guard above. This read
+  // used to ignore `error`, and `existingCount ?? 0` then made
+  // shouldReplaceTrack always pass, so a query error turned the
+  // never-shrink invariant into a no-op and a truncated rebuild could
+  // overwrite a more detailed track. An unknown count is not zero.
+  if (countErr) {
+    console.error(
+      "[finalize] existing-track count failed, refusing to re-render",
+      tripId,
+      countErr.message,
+    );
+    return null;
+  }
   if (!shouldReplaceTrack(existingCount ?? 0, track.points.length)) {
     return null;
   }
