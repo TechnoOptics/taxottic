@@ -357,6 +357,7 @@ html, body {
   max-width: 100%;
   overscroll-behavior: none;
   overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
   /* Kill ALL horizontal scrolling at every width (narrowest foldable
      → widest tablet). This is now SAFE: the app header is
      position:fixed (not sticky), whose containing block is the
@@ -1526,4 +1527,39 @@ main, footer, nav {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ============================================================================
+   No elastic edges, anywhere.
+
+   html/body already set overscroll-behavior:none, but that property does
+   NOT inherit and does not reach nested scrollers. This app has 32 of
+   them (tab strips, dropdown lists, sticky sidebars, the classify deck),
+   and when a pull reaches the end of one, the scroll CHAINS to the
+   document and the rubber band exposes whatever sits behind the page.
+   On a dark authenticated screen that reads as a white flash.
+
+   `contain` rather than `none` on purpose: `none` would also kill the
+   container's own legitimate scrolling momentum on iOS. `contain` keeps
+   the container scrolling normally and only stops the chain at its edge,
+   which is exactly the behaviour we want.
+
+   Targeted at the Tailwind utilities the markup actually uses, because
+   CSS cannot select an element by its computed overflow.
+============================================================================ */
+.overflow-auto,
+.overflow-scroll,
+.overflow-x-auto,
+.overflow-x-scroll,
+.overflow-y-auto,
+.overflow-y-scroll {
+  overscroll-behavior: contain;
+}
+
+/* The backdrop the bounce would reveal, on the one surface where a gap
+   is still possible: a page shorter than the viewport. Painting the
+   root the theme colour means even a mis-measured layout exposes the
+   app's own navy rather than the browser's white. */
+html[data-theme="dark"] {
+  background-color: #121a2a;
 }
