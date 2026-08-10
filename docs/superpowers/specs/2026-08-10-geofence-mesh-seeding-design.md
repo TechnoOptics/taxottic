@@ -94,8 +94,12 @@ stop cannot outvote a month of commuting.
 
 ### Ranking
 
-By distinct days, then by hits. Home stays rank 0. When the cap binds, the
-least habitual place is dropped.
+By label first: home ranks 0, work ranks 1, every other stop follows.
+Home is whichever cluster has the most overnight (small-hours) dwell time;
+work is the strongest weekday-daytime cluster that is not home. Within the
+"stop" group, clusters are ordered by summed dwell time, not by distinct
+days or hit count. When the cap binds, the lowest-ranked stop is dropped,
+never home or work.
 
 ### Recompute cadence
 

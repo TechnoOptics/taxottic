@@ -5,10 +5,12 @@ import {
   MAX_LEARNED_PLACES,
   type LearnedPlace,
   type RawPoint,
+  type TripSpan,
 } from "@/lib/mileage/places";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 /**
  * The learned-place list the device registers as geofences.
@@ -23,11 +25,17 @@ export const dynamic = "force-dynamic";
  */
 
 /**
- * Recompute at most weekly. Habitual places move when someone moves
- * house or changes job, neither of which is a same-day event, and the
- * clustering reads every raw point the driver has.
+ * Recompute daily.
+ *
+ * This was weekly, and the reason was cost: clustering read up to
+ * MAX_POINTS (60,000) raw rows. Trip endpoints read on the order of a
+ * hundred rows, so the price no longer justifies a week of staleness,
+ * and a new habitual place now arms within a day instead of seven.
+ *
+ * If a future change makes this path read raw points again in bulk,
+ * put the week back.
  */
-const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How far back the clustering reads. Long enough that a fortnight of
@@ -42,6 +50,15 @@ const HISTORY_WINDOW_DAYS = 90;
  * either side of a gap, so a cap costs recall at the oldest end only.
  */
 const MAX_POINTS = 60_000;
+
+/**
+ * Same reasoning as MAX_POINTS, for the trips query below: the primary
+ * driver has around 165 trips in a 90-day window, so 2000 leaves wide
+ * headroom while still bounding the work. Order is already started_at
+ * ascending, so a cap drops the oldest trips, which is the right end to
+ * lose.
+ */
+const MAX_TRIPS = 2_000;
 
 type Admin = ReturnType<typeof createServiceClient>;
 
@@ -103,17 +120,115 @@ async function recompute(
     lng: row.lng as number,
     ts: Date.parse(row.captured_at as string),
   }));
-  const places = learnPlaces(points);
+
+  // Trip endpoints, the second candidate source.
+  //
+  // tracked ONLY. mileage_trips.source is constrained to
+  // ('tracked', 'manual', 'route'); `route` endpoints are geocoded from
+  // place names typed into the reconstruct tool and `manual` are typed
+  // outright, so neither is a coordinate the phone ever reported.
+  // Seeding a geofence from one would arm a region around a geocoder's
+  // idea of an address. lib/mileage/finalize.ts already excludes
+  // non-tracked trips for the same reason.
+  const { data: tripRows, error: tripError } = await admin
+    .from("mileage_trips")
+    .select("id, started_at, ended_at")
+    .eq("driver_user_id", userId)
+    .eq("company_id", companyId)
+    .eq("source", "tracked")
+    .gte("started_at", sinceIso)
+    .order("started_at", { ascending: true })
+    .limit(MAX_TRIPS);
+  if (tripError) throw new Error(tripError.message);
+
+  // Endpoints come from the trip's own materialised points. start_place_id
+  // and end_place_id are NULL on every row in production, so they cannot
+  // be used for this.
+  const trips: TripSpan[] = [];
+  for (const row of tripRows ?? []) {
+    const tripId = row.id as string;
+    const [firstRes, lastRes] = await Promise.all([
+      admin
+        .from("mileage_points")
+        .select("lat, lng")
+        .eq("trip_id", tripId)
+        .order("captured_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from("mileage_points")
+        .select("lat, lng")
+        .eq("trip_id", tripId)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (firstRes.error) throw new Error(firstRes.error.message);
+    if (lastRes.error) throw new Error(lastRes.error.message);
+    const first = firstRes.data;
+    const last = lastRes.data;
+    if (!first || !last) continue;
+    trips.push({
+      startLat: first.lat as number,
+      startLng: first.lng as number,
+      startMs: Date.parse(row.started_at as string),
+      endLat: last.lat as number,
+      endLng: last.lng as number,
+      endMs: Date.parse(row.ended_at as string),
+    });
+  }
+
+  const places = learnPlaces(points, trips);
   const computedAt = new Date().toISOString();
+
+  if (places.length === 0) {
+    // Geofences are the only mechanism that can restart mileage capture
+    // after Android kills the app, so an empty result here must never be
+    // allowed to wipe a driver's mesh. An empty learnPlaces() output is far
+    // more likely to mean "no usable data this run" (a GPS outage, an
+    // upload stall, a quiet week with no qualifying trips) than "this
+    // driver genuinely has no habitual places". Before touching the table,
+    // check whether a mesh already exists and, if so, leave it alone
+    // instead of deleting it and inserting nothing in its place.
+    const { data: existing, error: existingError } = await admin
+      .from("mileage_learned_places")
+      .select("learned_key, label, lat, lng, radius_m, visits, dwell_hours, rank")
+      .eq("driver_user_id", userId)
+      .eq("company_id", companyId)
+      .order("rank", { ascending: true });
+    if (existingError) {
+      // Can't tell whether there is a mesh to protect. Fail safe: do not
+      // delete. This throws, same as every other query failure in this
+      // function, so the caller's own fallback (GET serves the last-known
+      // cached list; POST reports the failure) takes over from here.
+      throw new Error(existingError.message);
+    }
+    if ((existing ?? []).length > 0) {
+      return existing!.map((row) => ({
+        key: row.learned_key as string,
+        label: row.label as LearnedPlace["label"],
+        lat: row.lat as number,
+        lng: row.lng as number,
+        radiusM: row.radius_m as number,
+        visits: row.visits as number,
+        dwellHours: Number(row.dwell_hours),
+        rank: row.rank as number,
+      }));
+    }
+    // Nothing existed before either, so there is nothing to protect; fall
+    // through to the normal replace path, where the delete is a no-op and
+    // the insert is skipped because places.length is 0.
+  }
 
   // Replace the whole set. Partial reconciliation would leave a stale
   // place registered on the device forever after a house move, and the
   // set is at most MAX_LEARNED_PLACES rows.
-  await admin
+  const { error: deleteError } = await admin
     .from("mileage_learned_places")
     .delete()
     .eq("driver_user_id", userId)
     .eq("company_id", companyId);
+  if (deleteError) throw new Error(deleteError.message);
 
   if (places.length > 0) {
     const { error: insertError } = await admin.from("mileage_learned_places").insert(

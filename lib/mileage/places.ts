@@ -301,6 +301,114 @@ export function extractPlaceCandidates(points: RawPoint[]): PlaceCandidate[] {
   return out;
 }
 
+/**
+ * One trip reduced to its two endpoints.
+ *
+ * Deliberately not the trip row: this module is pure and must not learn
+ * the database's column names. The route maps rows to this shape.
+ */
+export type TripSpan = {
+  startLat: number;
+  startLng: number;
+  /** Epoch milliseconds. */
+  startMs: number;
+  endLat: number;
+  endLng: number;
+  /** Epoch milliseconds. */
+  endMs: number;
+};
+
+/**
+ * Dwell candidates derived from the gaps BETWEEN trips.
+ *
+ * A trip ending at a place, followed by a trip starting at the same
+ * place, is a stop, and it is the same evidence that a gap between two
+ * consecutive raw points gives. So the rules here mirror
+ * extractPlaceCandidates exactly: at least MIN_GAP_MS, and confirmed only
+ * when nothing moved (within DWELL_SAME_SPOT_M).
+ *
+ * Why this source exists at all: the raw-point path starves. Consumed
+ * rows are deleted at 30 days against a 90 day clustering window, and raw
+ * points are exactly what a failing tracker does not produce. Trips are
+ * permanent. On the owner's 90 days, raw dwells produced ONE place while
+ * endpoints produce three, covering 20 drive starts that had no geofence.
+ *
+ * Filtering to tracked-only trips is the CALLER's job, because this
+ * module never sees a trip row. See the route.
+ */
+export function extractEndpointCandidates(trips: TripSpan[]): PlaceCandidate[] {
+  const finite = (n: number) => Number.isFinite(n);
+  const sorted = [...trips]
+    .filter(
+      (t) =>
+        finite(t.startLat) &&
+        finite(t.startLng) &&
+        finite(t.endLat) &&
+        finite(t.endLng) &&
+        finite(t.startMs) &&
+        finite(t.endMs) &&
+        Math.abs(t.startLat) <= 90 &&
+        Math.abs(t.endLat) <= 90 &&
+        Math.abs(t.startLng) <= 180 &&
+        Math.abs(t.endLng) <= 180,
+    )
+    .sort((a, b) => a.startMs - b.startMs);
+
+  const out: PlaceCandidate[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1];
+    const next = sorted[i];
+    const gapMs = next.startMs - prev.endMs;
+    if (gapMs < MIN_GAP_MS) continue;
+    const sameSpot =
+      haversineMeters(
+        { lat: prev.endLat, lng: prev.endLng },
+        { lat: next.startLat, lng: next.startLng },
+      ) <= DWELL_SAME_SPOT_M;
+
+    // Where the vehicle was when the drive ended: evidence either way.
+    out.push({
+      lat: prev.endLat,
+      lng: prev.endLng,
+      ts: prev.endMs,
+      dwellMs: gapMs,
+      startMs: prev.endMs,
+      endMs: next.startMs,
+      confirmedDwell: sameSpot,
+    });
+    // Where the next drive began is evidence only if nothing moved.
+    if (sameSpot) {
+      out.push({
+        lat: next.startLat,
+        lng: next.startLng,
+        ts: next.startMs,
+        dwellMs: gapMs,
+        startMs: prev.endMs,
+        endMs: next.startMs,
+        confirmedDwell: true,
+      });
+    }
+  }
+
+  // The last trip's end bounds an open stop with no "after" yet. That is
+  // where the vehicle is now, which for a driver whose tracking just died
+  // is the most valuable place there is. Minimum credit so it cannot
+  // dominate on its own.
+  const last = sorted[sorted.length - 1];
+  if (last) {
+    out.push({
+      lat: last.endLat,
+      lng: last.endLng,
+      ts: last.endMs,
+      dwellMs: MIN_GAP_MS,
+      startMs: last.endMs,
+      endMs: last.endMs + MIN_GAP_MS,
+      confirmedDwell: false,
+    });
+  }
+  return out;
+}
+
 type Cluster = {
   members: PlaceCandidate[];
   lat: number;
@@ -444,11 +552,27 @@ export function placeKey(lat: number, lng: number): string {
 /**
  * The whole pipeline: raw points in, ranked geofence list out.
  */
-export function learnPlaces(points: RawPoint[]): LearnedPlace[] {
+export function learnPlaces(
+  points: RawPoint[],
+  trips: TripSpan[] = [],
+): LearnedPlace[] {
+  // Two independent sources of the same evidence, deliberately merged
+  // BEFORE clustering so a place attested by both gets one cluster with
+  // the combined weight rather than two competing ones.
+  //
+  // Raw dwells are higher resolution and vanish at 30 days. Trip
+  // endpoints are coarser and permanent. Neither is sufficient alone:
+  // the owner's 90 days yield ONE place from raw dwells and three from
+  // endpoints.
+  const candidates = [
+    ...extractPlaceCandidates(points),
+    ...extractEndpointCandidates(trips),
+  ];
+
   // Habitual only. A place seen on fewer than MIN_VISIT_DAYS separate
   // days does not earn one of a strictly limited number of platform
   // region registrations.
-  const clusters = clusterCandidates(extractPlaceCandidates(points)).filter(
+  const clusters = clusterCandidates(candidates).filter(
     (c) => c.visits >= MIN_VISIT_DAYS,
   );
   if (clusters.length === 0) return [];

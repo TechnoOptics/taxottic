@@ -12,6 +12,7 @@ import {
   learnPlaces,
   placeKey,
   type RawPoint,
+  type TripSpan,
 } from "./places";
 
 const HOUR = 3600_000;
@@ -253,5 +254,155 @@ describe("learnPlaces", () => {
     // Three decimal places is about 110 m: a few metres of drift
     // between recomputes must not churn the device's geofence ids.
     expect(placeKey(51.500_01, -0.120_02)).toBe(placeKey(51.500_04, -0.120_01));
+  });
+});
+
+describe("learnPlaces with trip endpoints", () => {
+  const T0 = 1_760_000_000_000;
+  const DAY = 86_400_000;
+  const MIN = 60_000;
+  const HOME = { lat: 44.7619, lng: -93.4731 };
+  const SITE = { lat: 44.868, lng: -93.415 };
+
+  /** Three days of commuting, expressed only as trips. */
+  function commuteTrips(days: number): TripSpan[] {
+    const out: TripSpan[] = [];
+    for (let d = 0; d < days; d++) {
+      const dayStart = T0 + d * DAY;
+      // Leave home 09:00, arrive site 09:30.
+      out.push({
+        startLat: HOME.lat,
+        startLng: HOME.lng,
+        startMs: dayStart + 9 * 60 * MIN,
+        endLat: SITE.lat,
+        endLng: SITE.lng,
+        endMs: dayStart + 9.5 * 60 * MIN,
+      });
+      // Leave site 17:00, home 17:30.
+      out.push({
+        startLat: SITE.lat,
+        startLng: SITE.lng,
+        startMs: dayStart + 17 * 60 * MIN,
+        endLat: HOME.lat,
+        endLng: HOME.lng,
+        endMs: dayStart + 17.5 * 60 * MIN,
+      });
+    }
+    return out;
+  }
+
+  it("pins the visit-day boundary on the same fixture: two days learns nothing, three days learns something", () => {
+    // Same fixture at two different day counts, so the pair is honest
+    // about what breaks the boundary. Two days must not clear
+    // MIN_VISIT_DAYS (3), but three days, differing only in the day
+    // count, must. A version of learnPlaces that ignores its trips
+    // argument entirely would return [] for BOTH calls, so this fails
+    // without the merge rather than passing vacuously.
+    expect(learnPlaces([], commuteTrips(2))).toEqual([]);
+    expect(learnPlaces([], commuteTrips(3)).length).toBeGreaterThan(0);
+  });
+
+  it("learns home and the work site from trips with no raw points at all", () => {
+    // THE POINT OF THE CHANGE. The old engine returns [] here, because
+    // there are no raw points to derive a dwell from.
+    expect(learnPlaces([], [])).toEqual([]);
+
+    const places = learnPlaces([], commuteTrips(5));
+    expect(places.length).toBeGreaterThanOrEqual(2);
+    const labels = places.map((p) => p.label);
+    expect(labels).toContain("home");
+    // Home is the overnight place, so it must outrank the work site.
+    expect(places[0].label).toBe("home");
+    const home = places.find((p) => p.label === "home")!;
+    expect(Math.abs(home.lat - HOME.lat)).toBeLessThan(0.005);
+  });
+
+  it("respects the cap when trips add many habitual places", () => {
+    const trips = commuteTrips(5);
+    let ms = T0 + 40 * DAY;
+    // Ten extra habitual places, each visited on 4 separate days.
+    for (let place = 0; place < 10; place++) {
+      for (let d = 0; d < 4; d++) {
+        const lat = 45.2 + place * 0.05;
+        trips.push({
+          startLat: HOME.lat,
+          startLng: HOME.lng,
+          startMs: ms,
+          endLat: lat,
+          endLng: -93.4,
+          endMs: ms + 30 * MIN,
+        });
+        trips.push({
+          startLat: lat,
+          startLng: -93.4,
+          startMs: ms + 200 * MIN,
+          endLat: HOME.lat,
+          endLng: HOME.lng,
+          endMs: ms + 230 * MIN,
+        });
+        ms += DAY;
+      }
+    }
+    const places = learnPlaces([], trips);
+    expect(places.length).toBeLessThanOrEqual(MAX_LEARNED_PLACES);
+    expect(places[0].label).toBe("home");
+  });
+
+  it("merges points and trip endpoints attesting the same stop into one cluster, counting visits by distinct day", () => {
+    const days = 3;
+    const points: RawPoint[] = [];
+    const trips: TripSpan[] = [];
+    for (let d = 0; d < days; d++) {
+      const dayStart = T0 + d * DAY;
+      // Raw fixes: a mid-morning and an early-evening fix, both at
+      // home, same local calendar day. Confirmed same-spot dwell.
+      points.push({ lat: HOME.lat, lng: HOME.lng, ts: dayStart + 9 * 60 * MIN });
+      points.push({ lat: HOME.lat, lng: HOME.lng, ts: dayStart + 20 * 60 * MIN });
+      // Trips: arrive home from an errand, then leave again later the
+      // same day. The gap between them attests the SAME address, a
+      // second and independent way, on the SAME calendar day.
+      trips.push({
+        startLat: SITE.lat,
+        startLng: SITE.lng,
+        startMs: dayStart + 7 * 60 * MIN,
+        endLat: HOME.lat,
+        endLng: HOME.lng,
+        endMs: dayStart + 8 * 60 * MIN,
+      });
+      trips.push({
+        startLat: HOME.lat,
+        startLng: HOME.lng,
+        startMs: dayStart + 12 * 60 * MIN,
+        endLat: SITE.lat,
+        endLng: SITE.lng,
+        endMs: dayStart + 12.5 * 60 * MIN,
+      });
+    }
+
+    // Both sources independently clear the visit-day bar on their own,
+    // so this is genuinely double attestation of one place, not one
+    // source propping up the other.
+    expect(learnPlaces(points, []).some((p) => p.label === "home")).toBe(true);
+    expect(learnPlaces([], trips).some((p) => p.label === "home")).toBe(true);
+
+    const merged = learnPlaces(points, trips);
+
+    // (a) One cluster for the place, not two competing ones.
+    const homes = merged.filter(
+      (p) =>
+        Math.abs(p.lat - HOME.lat) < 0.01 && Math.abs(p.lng - HOME.lng) < 0.01,
+    );
+    expect(homes).toHaveLength(1);
+
+    // (b) visits counts DISTINCT DAYS (a Set of local day index), so it
+    // stays immune to the same place being attested twice a day by two
+    // independent sources, rather than counting candidates.
+    //
+    // dwellHours, by contrast, is a plain sum of both sources' credit
+    // with no dedup, so a doubly-attested stop can carry roughly double
+    // the dwell weight of a singly-attested one. That is intentional
+    // (a place attested by both sources gets the combined weight, per
+    // the comment on learnPlaces) and is not asserted here.
+    expect(homes[0].visits).toBe(days);
   });
 });
