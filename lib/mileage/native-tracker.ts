@@ -561,6 +561,10 @@ async function drainOrphanBuffer(): Promise<void> {
     if (res.status >= 200 && res.status < 300) {
       orphanBuffer = null;
       trackerDiag.lastError = "";
+      // Points landed, so health must land alongside them. See
+      // ensureHeartbeatTimer: the invariant is stated in terms of the
+      // ingest endpoint, not of whichever function did the sending.
+      ensureHeartbeatTimer();
     }
     // Non-2xx: keep the orphan in memory; the next start retries. The
     // points also remain in localStorage until persistBuffer overwrites,
@@ -722,6 +726,13 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
     const bodyJson: unknown = res.json;
     if (res.status >= 200 && res.status < 300) {
       sent = true;
+      // THE PATH THAT MATTERS MOST. A backlog drain after an upload
+      // stall arrives here, not through the location callback, and it is
+      // exactly the moment health reporting is most valuable. Measured
+      // 2026-08-09: a 40-point backlog landed at 23:54 after a 47-minute
+      // stall and produced no heartbeat, because only the callback armed
+      // the beat and this path did not.
+      ensureHeartbeatTimer();
       // Server staged everything; drop locally so we don't re-send
       // the same points. The server's staging table is authoritative
       // for "did this point land", we trust the 2xx.
