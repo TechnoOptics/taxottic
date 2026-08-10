@@ -12,6 +12,7 @@ import {
   learnPlaces,
   placeKey,
   type RawPoint,
+  type TripSpan,
 } from "./places";
 
 const HOUR = 3600_000;
@@ -253,5 +254,91 @@ describe("learnPlaces", () => {
     // Three decimal places is about 110 m: a few metres of drift
     // between recomputes must not churn the device's geofence ids.
     expect(placeKey(51.500_01, -0.120_02)).toBe(placeKey(51.500_04, -0.120_01));
+  });
+});
+
+describe("learnPlaces with trip endpoints", () => {
+  const T0 = 1_760_000_000_000;
+  const DAY = 86_400_000;
+  const MIN = 60_000;
+  const HOME = { lat: 44.7619, lng: -93.4731 };
+  const SITE = { lat: 44.868, lng: -93.415 };
+
+  /** Three days of commuting, expressed only as trips. */
+  function commuteTrips(days: number): TripSpan[] {
+    const out: TripSpan[] = [];
+    for (let d = 0; d < days; d++) {
+      const dayStart = T0 + d * DAY;
+      // Leave home 09:00, arrive site 09:30.
+      out.push({
+        startLat: HOME.lat,
+        startLng: HOME.lng,
+        startMs: dayStart + 9 * 60 * MIN,
+        endLat: SITE.lat,
+        endLng: SITE.lng,
+        endMs: dayStart + 9.5 * 60 * MIN,
+      });
+      // Leave site 17:00, home 17:30.
+      out.push({
+        startLat: SITE.lat,
+        startLng: SITE.lng,
+        startMs: dayStart + 17 * 60 * MIN,
+        endLat: HOME.lat,
+        endLng: HOME.lng,
+        endMs: dayStart + 17.5 * 60 * MIN,
+      });
+    }
+    return out;
+  }
+
+  it("finds nothing from trips alone below the visit-day bar", () => {
+    // Two days only. MIN_VISIT_DAYS is 3.
+    expect(learnPlaces([], commuteTrips(2))).toEqual([]);
+  });
+
+  it("learns home and the work site from trips with no raw points at all", () => {
+    // THE POINT OF THE CHANGE. The old engine returns [] here, because
+    // there are no raw points to derive a dwell from.
+    expect(learnPlaces([], [])).toEqual([]);
+
+    const places = learnPlaces([], commuteTrips(5));
+    expect(places.length).toBeGreaterThanOrEqual(2);
+    const labels = places.map((p) => p.label);
+    expect(labels).toContain("home");
+    // Home is the overnight place, so it must outrank the work site.
+    expect(places[0].label).toBe("home");
+    const home = places.find((p) => p.label === "home")!;
+    expect(Math.abs(home.lat - HOME.lat)).toBeLessThan(0.005);
+  });
+
+  it("respects the cap when trips add many habitual places", () => {
+    const trips = commuteTrips(5);
+    let ms = T0 + 40 * DAY;
+    // Ten extra habitual places, each visited on 4 separate days.
+    for (let place = 0; place < 10; place++) {
+      for (let d = 0; d < 4; d++) {
+        const lat = 45.2 + place * 0.05;
+        trips.push({
+          startLat: HOME.lat,
+          startLng: HOME.lng,
+          startMs: ms,
+          endLat: lat,
+          endLng: -93.4,
+          endMs: ms + 30 * MIN,
+        });
+        trips.push({
+          startLat: lat,
+          startLng: -93.4,
+          startMs: ms + 200 * MIN,
+          endLat: HOME.lat,
+          endLng: HOME.lng,
+          endMs: ms + 230 * MIN,
+        });
+        ms += DAY;
+      }
+    }
+    const places = learnPlaces([], trips);
+    expect(places.length).toBeLessThanOrEqual(MAX_LEARNED_PLACES);
+    expect(places[0].label).toBe("home");
   });
 });

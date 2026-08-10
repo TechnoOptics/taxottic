@@ -552,11 +552,27 @@ export function placeKey(lat: number, lng: number): string {
 /**
  * The whole pipeline: raw points in, ranked geofence list out.
  */
-export function learnPlaces(points: RawPoint[]): LearnedPlace[] {
+export function learnPlaces(
+  points: RawPoint[],
+  trips: TripSpan[] = [],
+): LearnedPlace[] {
+  // Two independent sources of the same evidence, deliberately merged
+  // BEFORE clustering so a place attested by both gets one cluster with
+  // the combined weight rather than two competing ones.
+  //
+  // Raw dwells are higher resolution and vanish at 30 days. Trip
+  // endpoints are coarser and permanent. Neither is sufficient alone:
+  // the owner's 90 days yield ONE place from raw dwells and three from
+  // endpoints.
+  const candidates = [
+    ...extractPlaceCandidates(points),
+    ...extractEndpointCandidates(trips),
+  ];
+
   // Habitual only. A place seen on fewer than MIN_VISIT_DAYS separate
   // days does not earn one of a strictly limited number of platform
   // region registrations.
-  const clusters = clusterCandidates(extractPlaceCandidates(points)).filter(
+  const clusters = clusterCandidates(candidates).filter(
     (c) => c.visits >= MIN_VISIT_DAYS,
   );
   if (clusters.length === 0) return [];
