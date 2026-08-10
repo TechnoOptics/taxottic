@@ -51,6 +51,28 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
+/**
+ * Decode the escape forms of the characters this file matches on, so a
+ * literal cannot hide behind one.
+ *
+ * This is not hypothetical. While adding the reimbursement calculator on
+ * 2026-08-10 a hardcoded "76¢ per mile" was written into the
+ * calculators hub and sailed straight past these checks, because the
+ * regex looks for the cent SIGN and the source contained the six
+ * characters of its escape sequence instead. The guard was evadable by
+ * accident, which is the only way anyone would ever evade it.
+ */
+function decodeEscapes(src: string): string {
+  return src
+    .replace(/\\u00a2/gi, "¢")
+    .replace(/\\u0024/gi, "$")
+    .replace(/&cent;/gi, "¢");
+}
+
+function scannable(src: string): string {
+  return decodeEscapes(stripComments(src));
+}
+
 describe("no mileage rate is hardcoded into copy", () => {
   it("finds the sources at all", () => {
     // An empty list would make every assertion below vacuously pass.
@@ -78,7 +100,7 @@ describe("no mileage rate is hardcoded into copy", () => {
 
     const offenders: string[] = [];
     for (const f of FILES) {
-      const src = stripComments(readFileSync(f, "utf8"));
+      const src = scannable(readFileSync(f, "utf8"));
       src.split("\n").forEach((line, i) => {
         for (const m of line.matchAll(RATE_IN_COPY)) {
           if (Number(m[1]) === STATUTORY_CHARITABLE_CENTS) continue;
@@ -101,7 +123,7 @@ describe("no mileage rate is hardcoded into copy", () => {
     const DOLLARS = /\$0?\.\d{2}\s*(?:\/|per\s+)\s*mile/gi;
     const offenders: string[] = [];
     for (const f of FILES) {
-      const src = stripComments(readFileSync(f, "utf8"));
+      const src = scannable(readFileSync(f, "utf8"));
       src.split("\n").forEach((line, i) => {
         for (const m of line.matchAll(DOLLARS)) {
           offenders.push(`${f}:${i + 1}  "${m[0].trim()}"`);

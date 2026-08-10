@@ -4,11 +4,17 @@ import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getTaxYearConstants } from "@/lib/tax/constants";
+import { ratePeriodsForYear } from "@/lib/calculators/mileage-reimbursement";
 
 const SITE = "https://taxottic.com";
 const MILEAGE_TAX_YEAR = 2026;
 const MILEAGE_RATE_CENTS = getTaxYearConstants(MILEAGE_TAX_YEAR)
   .MILEAGE_RATE_PER_MILE_CENTS;
+// Both rates, derived. 2026 is a split-rate year, so naming only the
+// first would repeat the mistake the mileage calculator already made.
+const MILEAGE_RATE_LABEL = ratePeriodsForYear(MILEAGE_TAX_YEAR)
+  .map((p) => `${p.centsPerMile}\u00a2`)
+  .join(" then ") + " per mile";
 const TITLE = "Free Tax Calculators for the Self-Employed | Taxottic";
 const DESCRIPTION =
   "Free, instant tax calculators for freelancers, 1099 contractors, and small businesses, estimate self-employment tax, income tax, and quarterly payments. No sign-up. Same IRS-aligned math as Taxottic.";
@@ -65,6 +71,13 @@ const CALCULATORS = [
       // Rate read from the tax engine, not typed. The hub carried a stale
       // 70¢ while the engine (and the calculator itself) was on 72.5¢.
       `Turn business miles into a deduction at the ${MILEAGE_TAX_YEAR} IRS rate (${MILEAGE_RATE_CENTS}¢/mile) and see roughly what it saves you, for anyone who drives for work.`,
+    live: true,
+  },
+  {
+    slug: "mileage-reimbursement",
+    title: "Employee Mileage Reimbursement Calculator",
+    blurb:
+      `What reimbursing your team's business driving costs for the year at the IRS standard rate (${MILEAGE_RATE_LABEL}), and the net cost after the deduction.`,
     live: true,
   },
   {
