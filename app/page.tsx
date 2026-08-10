@@ -764,6 +764,24 @@ const FIRM: Capability[] = [
     body: "Your logo. Your colours. Your firm's voice on every reminder. Branded subscriptions billed under your name. Clients only ever see you.",
     pull: "It feels like your firm, because it is.",
   },
+  // Mileage was absent from the firm audience for the same reason it was
+  // absent from personal: the three capability lists are maintained by
+  // hand and nothing checked that the product's differentiator appeared
+  // in all of them.
+  //
+  // It arguably matters MOST here. Practice-management tools (TaxDome,
+  // Karbon, Canopy) have no mileage capability at all, so this is the
+  // one thing on the firm list a competitor cannot answer. And the
+  // preparer's problem is not tracking, it is substantiation: a client's
+  // reconstructed estimate is a classic audit-risk area, and a
+  // contemporaneous GPS log is the thing that survives a question.
+  // Written to that, not to "track your drives".
+  {
+    kicker: "Substantiated Mileage",
+    title: "Client mileage that arrives already defensible.",
+    body: "Your clients' business drives are captured by GPS as they happen, sorted business or personal, and priced at the IRS standard rate for the period driven. You receive a contemporaneous log with a map instead of a number a client reconstructed in April, and it exports with the rest of the year-end pack.",
+    pull: "No more shoebox estimates to defend.",
+  },
   {
     kicker: "Bulk Operations",
     title: "Move quickly when you want to.",
