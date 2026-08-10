@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
+import { MarketingNav } from "@/components/MarketingNav";
+import { SignInIconLink } from "@/components/SignInIconLink";
 
 /**
  * Shared chrome for /guides/* articles. Server component (no client
@@ -51,9 +53,16 @@ export function GuideShell({
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
-          <Link href="/login" className="text-sm text-cream/80 hover:text-cream">
-            Sign in
-          </Link>
+          <MarketingNav current="guides" />
+          {/*
+            Was a plain "Sign in" text link, which is the exact thing
+            SignInIconLink was written to replace: next to the full
+            wordmark on a narrow phone it had no room and wrapped to
+            "Sign\nin". Every other marketing header already uses the
+            icon button, so the guides were the last place the old
+            wrapping version survived.
+          */}
+          <SignInIconLink />
         </div>
       </header>
 

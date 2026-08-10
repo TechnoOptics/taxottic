@@ -1,3 +1,4 @@
+import { MarketingNav } from "@/components/MarketingNav";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Wordmark } from "@/components/Wordmark";
@@ -74,6 +75,7 @@ export default async function GetPage() {
       >
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Wordmark />
+          <MarketingNav />
           <SignInIconLink />
         </div>
       </header>

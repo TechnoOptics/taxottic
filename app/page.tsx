@@ -1,3 +1,4 @@
+import { MarketingNav } from "@/components/MarketingNav";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
@@ -349,6 +350,7 @@ export default async function Home({
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[4.25rem] flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
+          <MarketingNav />
           <SignInIconLink />
         </div>
         {/* Thin gold sweep - same signature line as the AppHeader. */}

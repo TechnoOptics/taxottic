@@ -1,3 +1,4 @@
+import { MarketingNav } from "@/components/MarketingNav";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -160,6 +161,7 @@ export default async function StateSelfEmploymentTaxPage({
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
+          <MarketingNav current="calculators" />
           <SignInIconLink />
         </div>
       </header>
