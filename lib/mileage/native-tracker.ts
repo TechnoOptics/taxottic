@@ -36,6 +36,7 @@ import {
 } from "./drive-end";
 import { removeUploadedPoints, capBuffer } from "./buffer";
 import { FLUSH_EVERY_MS, shouldFlush } from "./flush-policy";
+import { toPoint } from "./to-point";
 import { isArmInterrupted, parseArmLatch } from "./arm-latch";
 import { WEB_BUILD_ID } from "@/lib/build-id";
 import { getCarSignalsProbed } from "./car-signals";
@@ -304,6 +305,10 @@ export const trackerDiag = {
   failStreak: 0 as number,
   /** Points evicted at MAX_BUFFER (oldest dropped) — data loss signal. */
   evictedPoints: 0 as number,
+  /** Fixes dropped for having no usable capture time. Non-zero means the
+   *  platform handed us positions we cannot date, and dating them
+   *  ourselves would fabricate history. See ./to-point. */
+  undatedPoints: 0 as number,
   /** Batches quarantined after a permanent 4xx rejection. */
   deadlettered: 0 as number,
   /** Watchdog re-arms of a zombie watcher. */
@@ -1292,29 +1297,7 @@ function bearingDeltaDegrees(a: number, b: number): number {
   return d > 180 ? 360 - d : d;
 }
 
-/** Map a plugin Location → the server's GpsPoint contract. */
-function toPoint(p: {
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  speed: number | null;
-  time: number | null;
-}): GpsPoint | null {
-  if (!Number.isFinite(p.latitude) || !Number.isFinite(p.longitude)) {
-    return null;
-  }
-  return {
-    lat: p.latitude,
-    lng: p.longitude,
-    ts: typeof p.time === "number" && p.time > 0 ? p.time : Date.now(),
-    speedMps:
-      typeof p.speed === "number" && p.speed >= 0 ? p.speed : undefined,
-    accuracyM:
-      typeof p.accuracy === "number" && p.accuracy >= 0
-        ? p.accuracy
-        : undefined,
-  };
-}
+
 
 /**
  * Start streaming drives for `forCompanyId`. Idempotent (a second
@@ -1506,7 +1489,15 @@ export async function startMileageTracking(
           /* private mode */
         }
         const pt = toPoint(location);
-        if (!pt) return;
+        if (!pt) {
+          // Unusable fix: non-finite coordinates, or no capture time. The
+          // second used to be defaulted to Date.now(), which stored the
+          // PROCESSING moment as the CAPTURE moment and put drives at the
+          // wrong time. Dropping is the honest answer; counting it here is
+          // what keeps the drop from being silent. See ./to-point.
+          trackerDiag.undatedPoints++;
+          return;
+        }
         // Drive-end tracking: a fix above driving speed means we're
         // moving; remember when. Below it, the vehicle is stationary and
         // deLastMovingTs stops advancing, so its age = time parked.
