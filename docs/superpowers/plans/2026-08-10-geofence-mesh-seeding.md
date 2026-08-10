@@ -304,7 +304,12 @@ Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Mutation-verify the two load-bearing rules**
 
-Run each mutation, confirm the named test fails, then restore the file with `git checkout lib/mileage/places.ts` before the next one.
+COMMIT FIRST (Step 6), then mutate. Restoring with `git checkout` only
+works once the work is committed; run before the commit it discards the
+whole implementation. Either commit first and restore with `git checkout`,
+or revert each mutation with an explicit Edit that puts the original line
+back. Confirm the NAMED test fails for each mutation and that no mutation
+survives into the final file.
 
 Mutation A, drop the same-spot requirement. Change `confirmedDwell: sameSpot,` to `confirmedDwell: true,` in the first `out.push`.
 Expected failure: `does not confirm a dwell when the next trip starts somewhere else`.
@@ -486,9 +491,12 @@ Expected: PASS. Every pre-existing `places.test.ts` case still passes because th
 
 - [ ] **Step 5: Mutation-verify the merge**
 
+COMMIT FIRST (Step 6), then mutate, for the reason given in Task 1 Step 5.
+
 Change the candidates array to `[...extractPlaceCandidates(points)]` only.
 Expected failure: `learns home and the work site from trips with no raw points at all`.
-Restore with `git checkout lib/mileage/places.ts`.
+Restore with `git checkout lib/mileage/places.ts` (safe once committed) or
+by re-adding the spread with an Edit.
 
 - [ ] **Step 6: Typecheck, lint and commit**
 
