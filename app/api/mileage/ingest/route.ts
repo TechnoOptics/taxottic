@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { type GpsPoint } from "@/lib/mileage/segmentation";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
+import { rejectImplausibleJumps } from "@/lib/mileage/plausible-jump";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -137,11 +138,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  // 0. Refuse teleports.
+  //
+  // On 2026-08-09 this driver's pool held two interleaved copies of one
+  // drive home, the second shifted about sixteen minutes later than
+  // reality, so consecutive rows alternated between two places nine
+  // miles apart. 30 of 81 transitions implied over 89 m/s and the worst
+  // implied 53,544 m/s, about 119,000 mph. Segmentation could make
+  // nothing of it, the downstream gate refused to write, and 391 points
+  // sat unconsumed for six hours while the drive never reached the map.
+  //
+  // The phantom's origin is below this codebase (its timestamps all
+  // share a .699 sub-second at a uniform cadence, the signature of a
+  // boot-anchor reconstruction inside the geolocation plugin's buffer),
+  // so the defence is to refuse it at the door rather than to try to
+  // clean it up afterwards. See lib/mileage/plausible-jump.ts for why
+  // this keys on implied SPEED and never on distance: a twenty minute
+  // capture gap legitimately puts the next point nine miles away.
+  const { data: lastRow } = await admin
+    .from("mileage_points_raw")
+    .select("lat, lng, captured_at")
+    .eq("driver_user_id", user.id)
+    .eq("company_id", companyId)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const lastAccepted =
+    lastRow && Number.isFinite(lastRow.lat as number)
+      ? {
+          lat: lastRow.lat as number,
+          lng: lastRow.lng as number,
+          ts: Date.parse(lastRow.captured_at as string),
+        }
+      : null;
+  const gate = rejectImplausibleJumps(
+    points,
+    lastAccepted && Number.isFinite(lastAccepted.ts) ? lastAccepted : null,
+  );
+  if (gate.rejected.length > 0) {
+    const worst = gate.rejected.reduce((a, b) =>
+      a.impliedMps > b.impliedMps ? a : b,
+    );
+    console.error(
+      `[ingest] REJECTED ${gate.rejected.length}/${points.length} implausible points ` +
+        `user=${user.id} worst=${Math.round(worst.impliedMps)}m/s ` +
+        `(${Math.round(worst.meters)}m in ${worst.seconds}s). ` +
+        `A non-zero count here means a second point source is writing into ` +
+        `this driver's stream; see lib/mileage/plausible-jump.ts.`,
+    );
+  }
+  const accepted = gate.kept;
+
   // 1. Stage the incoming points. Even a 1-point batch lands so we
   // never silently drop. An empty array is allowed, the device can
   // call us purely to let the segmenter catch up to already-staged data.
-  if (points.length > 0) {
-    const stagingRows = points.map((p) => ({
+  if (accepted.length > 0) {
+    const stagingRows = accepted.map((p) => ({
       driver_user_id: user.id,
       company_id: companyId,
       captured_at: new Date(p.ts).toISOString(),
