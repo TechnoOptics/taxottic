@@ -49,8 +49,15 @@ const hanken = Hanken_Grotesk({
 //   - Description ≤ 158 chars (Google truncates at ~158-160)
 // --------------------------------------------------------------------
 const SITE_TITLE = "Taxottic, Tax forecasting for freelancers & small business";
+// Mileage is named here deliberately. It is the most differentiated
+// thing the product does, and it was absent from the site description,
+// the homepage description, and the SoftwareApplication featureList,
+// which is the machine-readable list an answer engine reads to decide
+// what Taxottic can do. "multi-state" was dropped to make room: it is a
+// real capability but a weak differentiator, and it survives in
+// featureList and llms.txt. 151 chars, inside the ~158 budget above.
 const SITE_DESCRIPTION =
-  "Bank-synced quarterly tax forecasts, 1,025 IRS-cited deductions, Schedule C export, multi-state. Calm, accurate, and built for self-employed filers.";
+  "Bank-synced quarterly tax forecasts, automatic GPS mileage tracking, 1,025 IRS-cited deductions, and Schedule C export. Built for self-employed filers.";
 
 // --------------------------------------------------------------------
 // PERFORMANCE + WHERE THE ADMIN noindex WENT

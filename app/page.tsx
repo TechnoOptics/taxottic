@@ -179,7 +179,7 @@ const WEBSITE_LD = {
   url: SITE_ORIGIN,
   name: "Taxottic",
   description:
-    "A calmer way to handle your taxes. Bank-synced quarterly forecasts, 1,025 IRS-cited deductions, Schedule C export, multi-state.",
+    "A calmer way to handle your taxes. Automatic GPS mileage tracking, bank-synced quarterly forecasts, 1,025 IRS-cited deductions, and Schedule C export.",
   publisher: { "@id": `${SITE_ORIGIN}/#organization` },
   inLanguage: "en-US",
   // Sitelinks searchbox: when this site has an internal search at
@@ -234,6 +234,12 @@ const SOFTWARE_APP_LD = {
   // pace." which matches Google's expectation for "free to try."
   featureList: [
     "Bank-synced quarterly tax forecasts",
+    // The three mileage entries are the differentiator and were missing
+    // from all eleven. An answer engine reading this list to decide
+    // whether Taxottic tracks drives would have concluded it does not.
+    "Automatic GPS mileage tracking",
+    "Business vs personal drive classification",
+    "IRS standard-rate mileage deduction with map and log",
     "1,025 IRS-cited deductions",
     "Schedule C auto-assembly + PDF export",
     "Multi-state forecasting",
@@ -672,6 +678,26 @@ const PERSONAL: Capability[] = [
     body: "Every income line, every expense, every quarterly safe harbor folds into a federal + state forecast that updates in step with your bank. Helpful, never alarming.",
     pull: "A friendly number you can trust.",
   },
+  // Mileage belongs in the PERSONAL list, not only in BUSINESS.
+  //
+  // The homepage defaults to this audience, so until now a first-time
+  // visitor, and every arrival from search or an AI answer, saw four
+  // cards with no mention of drive tracking. The product's most
+  // differentiated capability sat one unlabelled tab click away, under
+  // "For my business", which is the wrong place for the freelancers and
+  // side-hustlers this very hero addresses by name.
+  //
+  // The W-2 caveat is stated on purpose rather than glossed. Commuting
+  // and unreimbursed employee mileage are not deductible, and this
+  // audience explicitly includes W-2 earners. Saying so is not a
+  // weakness in the pitch; being the product that gets that right is
+  // the pitch.
+  {
+    kicker: "Automatic Mileage",
+    title: "Your side-gig miles, logged while you drive.",
+    body: "If any of your income is freelance, 1099, or a side business, those drives are deductible and most people never claim them. Taxottic logs them by GPS in the background, tells business from personal, and prices each at the IRS standard rate with a map and a log that holds up. Commuting to a W-2 job is not deductible, so it is left out.",
+    pull: "The deduction most people forget.",
+  },
   {
     kicker: "1,025 IRS-Cited Deductions",
     title: "Every deduction you've earned, neatly organised.",
@@ -961,6 +987,13 @@ const TOUR: Record<
         title: "Every deduction, cited to the source.",
         body: "The full 1,025-item catalog from IRS Pub 502, 526, 970, and more, filtered to what actually applies to you. Each one links to the IRC section and the publication that explains it, so nothing you claim is a guess.",
         tags: ["1,025 deductions", "IRC + Pub cited", "Filtered to you"],
+      },
+      {
+        mockup: <MileageMockup solo />,
+        kicker: "While you drive - Mileage",
+        title: "Miles you would otherwise lose.",
+        body: "Drive for freelance or side-business work and the app records it on its own, by GPS, with the phone in your pocket. Each trip is sorted business or personal and priced at the IRS standard rate, with a map and a log built to survive a question. Commutes to a W-2 job are not deductible and are left out.",
+        tags: ["Automatic, by GPS", "Business vs personal", "IRS standard rate"],
       },
       {
         mockup: <ForecastMockup />,
@@ -1499,12 +1532,24 @@ function DeductionCatalogMockup() {
   );
 }
 
-function MileageMockup() {
-  const trips = [
-    { route: "Office → client site", mi: "18.4", driver: "You", color: "#F2D896" },
-    { route: "Supplier pickup", mi: "9.1", driver: "Grace", color: "#7DD3FC" },
-    { route: "Site visit → home", mi: "22.7", driver: "Marco", color: "#86EFAC" },
-  ];
+/**
+ * `solo` renders the freelancer view: one driver, so the per-row driver
+ * column would be noise, and the routes read like a one-person week
+ * rather than a dispatch board. The team version stays the default
+ * because that is what the business and firm audiences are buying.
+ */
+function MileageMockup({ solo = false }: { solo?: boolean } = {}) {
+  const trips = solo
+    ? [
+        { route: "Home → client meeting", mi: "18.4", driver: "", color: "#F2D896" },
+        { route: "Supply run", mi: "9.1", driver: "", color: "#7DD3FC" },
+        { route: "Client site → home", mi: "22.7", driver: "", color: "#86EFAC" },
+      ]
+    : [
+        { route: "Office → client site", mi: "18.4", driver: "You", color: "#F2D896" },
+        { route: "Supplier pickup", mi: "9.1", driver: "Grace", color: "#7DD3FC" },
+        { route: "Site visit → home", mi: "22.7", driver: "Marco", color: "#86EFAC" },
+      ];
   return (
     <MockupFrame label="Mileage · auto-tracked">
       {/* Stylised route map: navy dial with a few coloured driver trails. */}
@@ -1532,7 +1577,9 @@ function MileageMockup() {
               <span className="text-sm text-forest-900 truncate">{t.route}</span>
             </span>
             <span className="flex items-center gap-3 shrink-0 text-[12px]">
-              <span className="text-ink-muted">{t.driver}</span>
+              {t.driver ? (
+                <span className="text-ink-muted">{t.driver}</span>
+              ) : null}
               <span className="tabular-nums text-forest-900">{t.mi} mi</span>
             </span>
           </li>
