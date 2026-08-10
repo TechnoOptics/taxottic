@@ -52,6 +52,66 @@ import CoreLocation
     private let kCompanyId = "taxottic.bg.companyId"
     private let kBufferFile = "taxottic-bg-locations.json"
 
+    // ── Geofence mesh state ────────────────────────────────────────
+    //
+    // Region monitoring lives HERE, not in the Capacitor plugin, and
+    // that placement is the whole point of the feature.
+    //
+    // A CAPPlugin instance only exists once the web layer has loaded.
+    // The case this mesh exists to recover from is the opposite one: the
+    // OS terminated the app overnight, the driver gets in the car, and
+    // there is no WebView, no bridge and no plugin object for iOS to
+    // deliver `didExitRegion` to. AppDelegate constructs this singleton
+    // on EVERY launch (`restoreOnLaunch`), including a launch iOS starts
+    // purely to hand over a region event, so this is the only object in
+    // the app that can reliably be the CLLocationManagerDelegate at that
+    // moment. Moving any of this into the plugin reintroduces exactly
+    // the bug it closes: a cold relaunch that silently captures nothing.
+    //
+    // Keys are namespaced separately from the bg.* keys above so the
+    // mesh can be reasoned about, and cleared, on its own.
+    private let kPlaces = "taxottic.geofence.places"
+    private let kArmState = "taxottic.geofence.armState"
+    private let kRegisteredCount = "taxottic.geofence.registeredCount"
+    private let kRegisteredAt = "taxottic.geofence.registeredAtMs"
+    private let kRegistrationError = "taxottic.geofence.registrationError"
+    private let kLastEvent = "taxottic.geofence.lastEvent"
+    private let kLastCapture = "taxottic.geofence.lastCapture"
+    private let kCaptureRunning = "taxottic.geofence.captureRunning"
+    private let kBufferOverflow = "taxottic.geofence.bufferOverflow"
+
+    /// How many places are ever monitored. Identical to
+    /// TaxotticGeofenceStore.MAX_PLACES on Android, deliberately: the
+    /// same server-computed list feeds both platforms, so the platforms
+    /// must agree on how much of it they honour. iOS allows 20 regions
+    /// per app; the 12 spare stay unused.
+    @objc public static let maxPlaces = 8
+
+    /// Arm states. Byte-identical to Android's TaxotticGeofenceStore, so
+    /// `geofence_arm_state` in the heartbeat means one thing across the
+    /// fleet and lib/mileage/geofence.ts needs no platform branch.
+    private let armArmed = "armed"
+    private let armNoPlaces = "disarmed_no_places"
+    private let armNoBackgroundPermission = "disarmed_no_background_permission"
+    private let armRegistrationFailed = "disarmed_registration_failed"
+
+    /// Outcomes of a single region transition.
+    private let outcomeStarted = "started"
+    private let outcomeEnterIgnored = "enter_ignored"
+    private let outcomeNoBackgroundPermission = "blocked_no_background_permission"
+    private let outcomeStartDenied = "blocked_service_start_denied"
+
+    /// Outcomes of a capture session.
+    private let captureCapturing = "capturing"
+    private let captureBlind = "blind_no_fix"
+    private let captureEnded = "ended"
+    private let captureServicesOff = "location_services_off"
+
+    /// Regions below this are unreliable on iOS, and there is no point
+    /// monitoring a whole town. Same clamp as Android.
+    private let minRegionRadius: CLLocationDistance = 100
+    private let maxRegionRadius: CLLocationDistance = 500
+
     /// Stop fine-grained capture after this long with no driving-speed
     /// movement, so a parked car doesn't hold the GPS open all night.
     private let idleStopInterval: TimeInterval = 15 * 60
@@ -66,6 +126,19 @@ import CoreLocation
     private let queue = DispatchQueue(label: "com.taxottic.bglocation", qos: .utility)
     private var fineUpdatesActive = false
     private var lastDrivingFixAt: Date?
+    /// Last fix the parked filter KEPT. Read and written only on
+    /// `queue`, alongside the buffer it guards.
+    private var lastKeptFix: (lat: CLLocationDegrees, lng: CLLocationDegrees, ts: Int)?
+    /// Fixes buffered since the current capture session began, and when
+    /// that session began. Both are informational, surfaced through
+    /// `lastCapture` so a session that ran and saw nothing is visible
+    /// rather than indistinguishable from a quiet day.
+    private var captureFixCount = 0
+    private var captureStartedAtMs = 0
+    private var lastCaptureWriteAt = Date.distantPast
+    /// CoreLocation callbacks land on the main thread while the buffer
+    /// writes run on `queue`, and both touch the counters above.
+    private let captureLock = NSLock()
     /// Previous accepted fix, used to DERIVE speed when CoreLocation
     /// does not report one. See `effectiveSpeed(of:)`.
     private var lastFix: CLLocation?
@@ -89,6 +162,14 @@ import CoreLocation
     /// pending event. Safe to call repeatedly.
     @objc public func restoreOnLaunch() {
         guard UserDefaults.standard.bool(forKey: kEnabled) else { return }
+        // Re-arm the learned-place mesh BEFORE the authorization guard
+        // below. A launch that finds "Always" revoked is precisely the
+        // launch worth recording: rearmRegions writes
+        // disarmed_no_background_permission, the heartbeat carries it,
+        // and a driver on "While Using" stops being invisible. Returning
+        // early instead would leave geofence_arm_state null, which is
+        // the state the whole feature exists to end.
+        rearmRegions()
         guard hasAlwaysAuthorization() else { return }
         manager.startMonitoringSignificantLocationChanges()
         // Visits is a SECOND force-quit-survivable relaunch trigger and
@@ -106,6 +187,7 @@ import CoreLocation
     @objc public func enable(companyId: String) {
         UserDefaults.standard.set(true, forKey: kEnabled)
         UserDefaults.standard.set(companyId, forKey: kCompanyId)
+        rearmRegions()
         guard hasAlwaysAuthorization() else { return }
         manager.startMonitoringSignificantLocationChanges()
         manager.startMonitoringVisits()
@@ -152,6 +234,15 @@ import CoreLocation
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()
+        // A session opens BLIND and has to earn "capturing" by producing
+        // a fix. Starting it as healthy is how a capture that received
+        // no location at all once looked identical to a quiet day.
+        captureLock.lock()
+        captureFixCount = 0
+        captureStartedAtMs = nowMs()
+        captureLock.unlock()
+        recordCapture(state: captureBlind, detail: "fine updates started",
+                      running: true, force: true)
         // Confirmation signals ride along with fine capture and only
         // with fine capture: this is the window where we already hold
         // the GPS open and already believe a drive is happening, so
@@ -165,6 +256,12 @@ import CoreLocation
         fineUpdatesActive = false
         manager.stopUpdatingLocation()
         TaxotticVehicleSignals.shared.stopLiveUpdates()
+        // A session that ends having seen nothing stays BLIND in the
+        // record. "Ended" would claim it worked.
+        recordCapture(
+            state: captureFixCount > 0 ? captureEnded : captureBlind,
+            detail: captureFixCount > 0 ? "fine updates stopped" : "no fix in session",
+            running: false, force: true)
     }
 
     /// Speed in m/s, DERIVED from the previous fix when CoreLocation does
@@ -242,9 +339,17 @@ import CoreLocation
         if hasAlwaysAuthorization() {
             if UserDefaults.standard.bool(forKey: kEnabled) {
                 manager.startMonitoringSignificantLocationChanges()
+                // Region monitoring needs "Always" too, so the mesh went
+                // down with SLC and comes back with it.
+                rearmRegions()
             }
         } else {
             stopFineUpdates()
+            // Record the loss rather than only reacting to it: an arm
+            // state that still says "armed" while the OS has revoked
+            // the permission is the lie that hid this class of failure.
+            recordRegistration(armNoBackgroundPermission, count: 0,
+                               error: "authorization is not authorizedAlways")
         }
     }
 
@@ -288,9 +393,15 @@ import CoreLocation
     private func append(_ loc: CLLocation) {
         queue.async { [weak self] in
             guard let self = self, let url = self.bufferURL() else { return }
+            let ts = Int(loc.timestamp.timeIntervalSince1970 * 1000)
+            guard self.shouldKeepFix(
+                lat: loc.coordinate.latitude,
+                lng: loc.coordinate.longitude,
+                ts: ts) else { return }
+            self.lastKeptFix = (loc.coordinate.latitude, loc.coordinate.longitude, ts)
             var points = self.readBuffer(url)
             points.append([
-                "ts": Int(loc.timestamp.timeIntervalSince1970 * 1000),
+                "ts": ts,
                 "lat": loc.coordinate.latitude,
                 "lng": loc.coordinate.longitude,
                 "speedMps": loc.speed >= 0 ? loc.speed : NSNull(),
@@ -298,9 +409,58 @@ import CoreLocation
             ])
             if points.count > self.maxBufferedPoints {
                 points.removeFirst(points.count - self.maxBufferedPoints)
+                // Dropping the oldest points is data loss, so say so
+                // instead of trimming quietly. describeGeofenceHealth
+                // turns this into a "waiting to upload" warning the
+                // driver can act on.
+                UserDefaults.standard.set(true, forKey: self.kBufferOverflow)
             }
             self.writeBuffer(points, to: url)
+            self.noteCapturedFix()
         }
+    }
+
+    // ── Parked filter ──────────────────────────────────────────────
+    //
+    // A Swift port of lib/mileage/parked-filter.ts, applied at the point
+    // fixes enter the buffer.
+    //
+    // It has to live here as well as in JavaScript because native
+    // capture does not pass through the web tracker at all: without this
+    // the native path would upload a parked phone's GPS scatter, one
+    // point per second, and silently undo the 76% stationary-volume
+    // reduction shipped in #556. Measured on the owner's phone: 2.6
+    // hours parked produced 140 points whose MAXIMUM movement was 7.7 m.
+    //
+    // The two constants are shared policy, not per-platform tuning. See
+    // the source file for why PARKED_KEEPALIVE_MS must stay strictly
+    // under MAX_CAPTURE_GAP_MS (8 min): at 10 minutes, suppressing
+    // fixes during a 9 minute stop MANUFACTURED a capture gap and
+    // severed one drive into two, dropping the connector leg.
+
+    /// Movement below this is scatter, not travel. PARKED_RADIUS_M.
+    private let parkedRadiusM: CLLocationDistance = 30
+    /// A parked phone still reports this often, so it never looks dead,
+    /// and so the heartbeat that rides ingest keeps beating.
+    /// PARKED_KEEPALIVE_MS.
+    private let parkedKeepaliveMs = 5 * 60_000
+
+    /// Keep the fix if it moved, or if the device is due to prove it is
+    /// alive. An out-of-order fix (negative elapsed) is KEPT rather than
+    /// judged: CLVisit departures are dated in the past, a late arrival
+    /// costs one row, and dropping a real point costs mileage.
+    ///
+    /// Called only on `queue`, which owns `lastKeptFix`.
+    private func shouldKeepFix(
+        lat: CLLocationDegrees, lng: CLLocationDegrees, ts: Int
+    ) -> Bool {
+        guard let last = lastKeptFix else { return true }
+        let elapsed = ts - last.ts
+        if elapsed < 0 { return true }
+        if elapsed >= parkedKeepaliveMs { return true }
+        let a = CLLocation(latitude: last.lat, longitude: last.lng)
+        let b = CLLocation(latitude: lat, longitude: lng)
+        return b.distance(from: a) > parkedRadiusM
     }
 
     private func readBuffer(_ url: URL) -> [[String: Any]] {
@@ -332,6 +492,9 @@ import CoreLocation
             guard let url = bufferURL() else { return }
             let remaining = readBuffer(url).filter { ($0["ts"] as? Int ?? 0) > ts }
             writeBuffer(remaining, to: url)
+            if remaining.isEmpty {
+                UserDefaults.standard.set(false, forKey: kBufferOverflow)
+            }
         }
     }
 
@@ -340,5 +503,394 @@ import CoreLocation
             guard let url = bufferURL() else { return 0 }
             return readBuffer(url).count
         }
+    }
+
+    /// Drop the FIRST `count` buffered points, after JS confirmed the
+    /// server accepted exactly those. Returns how many remain.
+    ///
+    /// Count-based rather than timestamp-based on purpose, even though
+    /// `clearBuffered(upTo:)` sits right above. A CLVisit departure is
+    /// dated at the moment the user actually left, which can be well in
+    /// the past, so a timestamp cutoff can delete a later-appended fix
+    /// that was never uploaded. Consuming a prefix cannot: it removes
+    /// precisely what the caller read. Same semantics as Android's
+    /// TaxotticGeofenceStore.consumeBuffer.
+    @objc public func consumeBuffered(count: Int) -> Int {
+        queue.sync {
+            guard let url = bufferURL() else { return 0 }
+            let points = readBuffer(url)
+            guard count > 0 else { return points.count }
+            let remaining: [[String: Any]] =
+                count >= points.count ? [] : Array(points.dropFirst(count))
+            writeBuffer(remaining, to: url)
+            if remaining.isEmpty {
+                UserDefaults.standard.set(false, forKey: kBufferOverflow)
+            }
+            return remaining.count
+        }
+    }
+
+    // ── Learned-place region mesh ──────────────────────────────────
+    //
+    // Registration, the exit trigger, and the durable health state.
+    // TaxotticGeofencePlugin is a thin bridge onto these; see the note
+    // beside the key declarations at the top of this file for why none
+    // of it may move into the plugin.
+
+    private struct Place {
+        let id: String
+        let lat: CLLocationDegrees
+        let lng: CLLocationDegrees
+        let radius: CLLocationDistance
+        let label: String
+    }
+
+    private func nowMs() -> Int { Int(Date().timeIntervalSince1970 * 1000) }
+
+    private func writeJSON(_ object: [String: Any], forKey key: String) {
+        guard let data = try? JSONSerialization.data(withJSONObject: object),
+              let raw = String(data: data, encoding: .utf8) else { return }
+        UserDefaults.standard.set(raw, forKey: key)
+    }
+
+    private func readJSON(forKey key: String) -> [String: Any]? {
+        guard let raw = UserDefaults.standard.string(forKey: key),
+              let data = raw.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return obj
+    }
+
+    // ── Places ─────────────────────────────────────────────────────
+
+    /// Replace the monitored place list. The server's ranked list is
+    /// trusted for ORDER; everything else is validated here, because a
+    /// garbage region is worse than no region. Returns how many were
+    /// kept. Mirrors TaxotticGeofenceStore.savePlaces.
+    private func savePlaces(_ incoming: [[String: Any]]) -> Int {
+        var kept: [[String: Any]] = []
+        for raw in incoming {
+            if kept.count >= Self.maxPlaces { break }
+            let id = (raw["id"] as? String) ?? ""
+            guard !id.isEmpty else { continue }
+            guard let lat = numeric(raw["latitude"]), let lng = numeric(raw["longitude"])
+            else { continue }
+            guard lat >= -90, lat <= 90, lng >= -180, lng <= 180 else { continue }
+            var radius = numeric(raw["radius"]) ?? minRegionRadius
+            radius = min(max(radius, minRegionRadius), maxRegionRadius)
+            // iOS refuses a region larger than the hardware ceiling and
+            // simply never fires it, which would read as "armed" while
+            // monitoring nothing.
+            let ceiling = manager.maximumRegionMonitoringDistance
+            if ceiling > 0 { radius = min(radius, ceiling) }
+            kept.append([
+                "id": id,
+                "latitude": lat,
+                "longitude": lng,
+                "radius": radius,
+                "label": (raw["label"] as? String) ?? "stop",
+            ])
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: kept),
+           let raw = String(data: data, encoding: .utf8) {
+            UserDefaults.standard.set(raw, forKey: kPlaces)
+        }
+        return kept.count
+    }
+
+    private func numeric(_ value: Any?) -> Double? {
+        if let d = value as? Double { return d.isFinite ? d : nil }
+        if let n = value as? NSNumber { return n.doubleValue.isFinite ? n.doubleValue : nil }
+        return nil
+    }
+
+    private func storedPlaces() -> [Place] {
+        guard let raw = UserDefaults.standard.string(forKey: kPlaces),
+              let data = raw.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return [] }
+        return arr.compactMap { item in
+            guard let id = item["id"] as? String, !id.isEmpty,
+                  let lat = numeric(item["latitude"]),
+                  let lng = numeric(item["longitude"]),
+                  let radius = numeric(item["radius"])
+            else { return nil }
+            return Place(id: id, lat: lat, lng: lng, radius: radius,
+                         label: (item["label"] as? String) ?? "stop")
+        }
+    }
+
+    // ── Registration ───────────────────────────────────────────────
+
+    /// (Re)register the mesh, and record WHY when we refuse to.
+    ///
+    /// Resolution order is TaxotticGeofenceRegistrar.reregister's,
+    /// deliberately, so the two platforms cannot drift into reporting
+    /// different reasons for the same situation.
+    @objc public func rearmRegions() {
+        // 1. Region monitoring requires Always. Registering without it
+        //    produces a mesh that fires only while the app is already
+        //    open, which is exactly the case that never needed
+        //    resurrecting. Refuse and say so.
+        guard hasAlwaysAuthorization() else {
+            recordRegistration(armNoBackgroundPermission, count: 0,
+                               error: "authorization is not authorizedAlways")
+            return
+        }
+        guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else {
+            recordRegistration(armRegistrationFailed, count: 0,
+                               error: "region monitoring unavailable on this device")
+            return
+        }
+
+        let places = storedPlaces()
+        var wanted: [String: Place] = [:]
+        for place in places { wanted[place.id] = place }
+
+        // Reconcile rather than tear down and rebuild. On a launch that
+        // iOS started purely to deliver an exit, stopping every region
+        // first can cancel the very delivery we woke for, so a region
+        // that already matches is left strictly alone.
+        var alreadyMonitored = Set<String>()
+        for region in manager.monitoredRegions {
+            guard let circle = region as? CLCircularRegion,
+                  let want = wanted[circle.identifier],
+                  matches(circle, want) else {
+                manager.stopMonitoring(for: region)
+                continue
+            }
+            alreadyMonitored.insert(circle.identifier)
+        }
+
+        // 2. Nothing to monitor is a state, not a failure: the server is
+        //    still learning where this driver parks.
+        if places.isEmpty {
+            recordRegistration(armNoPlaces, count: 0, error: nil)
+            return
+        }
+
+        for place in places where !alreadyMonitored.contains(place.id) {
+            let region = CLCircularRegion(
+                center: CLLocationCoordinate2D(latitude: place.lat, longitude: place.lng),
+                radius: place.radius,
+                identifier: place.id)
+            // EXIT is the whole feature: the phone has been parked for
+            // hours and the drive begins by leaving. Entry is monitored
+            // by nobody, so it costs nothing to suppress and it avoids
+            // waking the app every time the driver comes home.
+            region.notifyOnExit = true
+            region.notifyOnEntry = false
+            manager.startMonitoring(for: region)
+        }
+
+        // 3. Optimistic, corrected by monitoringDidFailFor below.
+        //    startMonitoring reports failure asynchronously, so this is
+        //    the same shape as Android's in-flight record.
+        recordRegistration(armArmed, count: places.count, error: nil)
+    }
+
+    private func matches(_ region: CLCircularRegion, _ place: Place) -> Bool {
+        let centre = CLLocation(latitude: region.center.latitude,
+                                longitude: region.center.longitude)
+        let wanted = CLLocation(latitude: place.lat, longitude: place.lng)
+        return centre.distance(from: wanted) < 1 && abs(region.radius - place.radius) < 1
+    }
+
+    /// Forget every place and unregister the mesh.
+    @objc public func clearPlaces() {
+        UserDefaults.standard.removeObject(forKey: kPlaces)
+        for region in manager.monitoredRegions { manager.stopMonitoring(for: region) }
+        rearmRegions()
+    }
+
+    /// Replace the place list and re-register. Returns the accepted count.
+    @objc public func syncPlaces(_ places: [[String: Any]]) -> Int {
+        let accepted = savePlaces(places)
+        rearmRegions()
+        return accepted
+    }
+
+    // ── Region delegate callbacks ──────────────────────────────────
+    //
+    // These are the callbacks that must survive a cold relaunch, and
+    // they are the reason this code is in the singleton. iOS delivers
+    // them to whatever object is the manager's delegate at the moment
+    // the app is running, which on a region-triggered launch is this
+    // object and cannot be a Capacitor plugin.
+
+    public func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        let placeId = region.identifier
+        guard UserDefaults.standard.bool(forKey: kEnabled) else {
+            recordTransition(placeId: placeId, enter: false,
+                             outcome: outcomeStartDenied, detail: "tracking_disabled")
+            return
+        }
+        guard CLLocationManager.locationServicesEnabled() else {
+            recordCapture(state: captureServicesOff, detail: "location services off",
+                          running: false, force: true)
+            recordTransition(placeId: placeId, enter: false,
+                             outcome: outcomeStartDenied, detail: "location_services_off")
+            return
+        }
+        guard hasAlwaysAuthorization() else {
+            recordTransition(placeId: placeId, enter: false,
+                             outcome: outcomeNoBackgroundPermission,
+                             detail: "authorization is not authorizedAlways")
+            return
+        }
+        // The existing fine-updates path, unchanged: it already owns
+        // escalation, the idle stand-down, the disk buffer and the
+        // vehicle signals. The region is only the trigger.
+        startFineUpdates()
+        recordTransition(placeId: placeId, enter: false,
+                         outcome: outcomeStarted, detail: "exit")
+    }
+
+    public func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        // Arriving somewhere is not a drive. Recorded, never acted on.
+        // Regions are registered with notifyOnEntry = false, so this
+        // should not fire at all; it exists so a region left over from
+        // an older build cannot start a capture by surprise.
+        recordTransition(placeId: region.identifier, enter: true,
+                         outcome: outcomeEnterIgnored, detail: "")
+    }
+
+    public func locationManager(
+        _ manager: CLLocationManager,
+        monitoringDidFailFor region: CLRegion?,
+        withError error: Error
+    ) {
+        // One region failing means the mesh is not what the state claims
+        // it is, so the whole thing reports failed. Overstating health
+        // is the failure mode this feature exists to remove.
+        recordRegistration(
+            armRegistrationFailed, count: 0,
+            error: "\(region?.identifier ?? "unknown"): \(error.localizedDescription)")
+    }
+
+    // ── Durable health state ───────────────────────────────────────
+
+    private func recordRegistration(_ armState: String, count: Int, error: String?) {
+        let defaults = UserDefaults.standard
+        defaults.set(armState, forKey: kArmState)
+        defaults.set(count, forKey: kRegisteredCount)
+        defaults.set(nowMs(), forKey: kRegisteredAt)
+        defaults.set(error ?? "", forKey: kRegistrationError)
+    }
+
+    private func recordTransition(
+        placeId: String, enter: Bool, outcome: String, detail: String
+    ) {
+        writeJSON([
+            "placeId": placeId,
+            "transition": enter ? "enter" : "exit",
+            "outcome": outcome,
+            "detail": detail,
+            "atMs": nowMs(),
+        ], forKey: kLastEvent)
+    }
+
+    /// Persist capture health. Throttled unless `force`, because this is
+    /// written from the fix path and a UserDefaults write per GPS fix
+    /// would be a needless disk write every second of every drive.
+    private func recordCapture(
+        state: String, detail: String, running: Bool, force: Bool
+    ) {
+        captureLock.lock()
+        if !force, Date().timeIntervalSince(lastCaptureWriteAt) < 30 {
+            captureLock.unlock()
+            return
+        }
+        lastCaptureWriteAt = Date()
+        let fixCount = captureFixCount
+        let startedAtMs = captureStartedAtMs
+        captureLock.unlock()
+
+        writeJSON([
+            "state": state,
+            "detail": detail,
+            "fixCount": fixCount,
+            "startedAtMs": startedAtMs,
+            "updatedAtMs": nowMs(),
+        ], forKey: kLastCapture)
+        UserDefaults.standard.set(running, forKey: kCaptureRunning)
+    }
+
+    /// A fix reached the buffer, so the session is no longer blind.
+    private func noteCapturedFix() {
+        captureLock.lock()
+        let live = captureStartedAtMs > 0
+        if live { captureFixCount += 1 }
+        captureLock.unlock()
+        guard live, UserDefaults.standard.bool(forKey: kCaptureRunning) else { return }
+        recordCapture(state: captureCapturing, detail: "buffered", running: true, force: false)
+    }
+
+    /// The full health picture, shaped as `GeofenceState` in
+    /// lib/mileage/geofence.ts. Every failure field is present on
+    /// purpose: a status object that can only say "fine" is how the
+    /// original blackout stayed invisible for a week.
+    @objc public func geofenceState() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let registrationError = defaults.string(forKey: kRegistrationError) ?? ""
+        var out: [String: Any] = [
+            "armState": defaults.string(forKey: kArmState) ?? armNoPlaces,
+            "registeredCount": defaults.integer(forKey: kRegisteredCount),
+            "registeredAtMs": defaults.integer(forKey: kRegisteredAt),
+            "registrationError": registrationError.isEmpty ? NSNull() : registrationError,
+            "placeCount": storedPlaces().count,
+            "maxPlaces": Self.maxPlaces,
+            "backgroundLocation": hasAlwaysAuthorization(),
+            "captureRunning": defaults.bool(forKey: kCaptureRunning),
+            "bufferOverflow": defaults.bool(forKey: kBufferOverflow),
+            "bufferedFixes": bufferedCount(),
+        ]
+        out["lastEvent"] = readJSON(forKey: kLastEvent) ?? NSNull()
+        out["lastCapture"] = readJSON(forKey: kLastCapture) ?? NSNull()
+        return out
+    }
+
+    @objc public func currentArmState() -> String {
+        UserDefaults.standard.string(forKey: kArmState) ?? armNoPlaces
+    }
+
+    @objc public func hasBackgroundLocation() -> Bool { hasAlwaysAuthorization() }
+
+    // ── Capture control for the web layer ──────────────────────────
+
+    /// Start capturing because the WebView believes a drive is running.
+    ///
+    /// Additive, never a handoff. On iOS the web layer is the least
+    /// reliable component in the system (timers do not fire when
+    /// backgrounded, and the page is a REMOTE url), so native capture
+    /// keeps running regardless of what JavaScript is doing. Both
+    /// observing the same CLLocation is free: ingest is idempotent on
+    /// (driver, company, captured_at), so the second write is a no-op.
+    ///
+    /// Returns (started, reason) with the reason recorded rather than
+    /// swallowed, so a refusal is visible in the heartbeat.
+    @objc public func startCaptureRequested() -> [String: Any] {
+        guard UserDefaults.standard.bool(forKey: kEnabled) else {
+            return ["started": false, "reason": "tracking_disabled"]
+        }
+        guard CLLocationManager.locationServicesEnabled() else {
+            recordCapture(state: captureServicesOff, detail: "location services off",
+                          running: false, force: true)
+            return ["started": false, "reason": "location_services_off"]
+        }
+        guard hasAlwaysAuthorization() else {
+            return ["started": false, "reason": "no_background_permission"]
+        }
+        startFineUpdates()
+        return ["started": true, "reason": "started"]
+    }
+
+    /// Stand capture down because THE DRIVE IS OVER.
+    ///
+    /// Deliberately not called merely because the WebView woke up. See
+    /// the capture-lifecycle section of the design note: handing capture
+    /// back to the page means capture dies when the page does.
+    @objc public func stopCaptureRequested() {
+        stopFineUpdates()
     }
 }
