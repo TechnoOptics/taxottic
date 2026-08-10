@@ -37,6 +37,7 @@ import {
 import { removeUploadedPoints, capBuffer } from "./buffer";
 import { FLUSH_EVERY_MS, shouldFlush } from "./flush-policy";
 import { toPoint } from "./to-point";
+import { shouldKeepFix } from "./parked-filter";
 import { isArmInterrupted, parseArmLatch } from "./arm-latch";
 import { WEB_BUILD_ID } from "@/lib/build-id";
 import { getCarSignalsProbed } from "./car-signals";
@@ -262,6 +263,10 @@ let flushing = false;
 /** Wall clock of the last flush attempt. Drives the elapsed half of
  *  shouldFlush, which the frozen interval could not. */
 let lastFlushAt = 0;
+/** Last fix actually buffered. The parked filter measures against what
+ *  we KEPT, never against what the plugin emitted, or scatter would
+ *  creep the reference and slowly readmit itself. */
+let lastKeptFix: { lat: number; lng: number; ts: number } | null = null;
 // The in-flight flush's promise, so a sessionEnded flush can WAIT for
 // it instead of being silently dropped by the `flushing` guard (audit:
 // the walk-away fast-close was dead code because maybeCloseDrive always
@@ -305,6 +310,9 @@ export const trackerDiag = {
   failStreak: 0 as number,
   /** Points evicted at MAX_BUFFER (oldest dropped) — data loss signal. */
   evictedPoints: 0 as number,
+  /** Parked fixes suppressed as scatter. Pure savings, not data loss:
+   *  each carried no movement and the keepalive still reports. */
+  parkedSuppressed: 0 as number,
   /** Fixes dropped for having no usable capture time. Non-zero means the
    *  platform handed us positions we cannot date, and dating them
    *  ourselves would fabricate history. See ./to-point. */
@@ -1498,6 +1506,19 @@ export async function startMileageTracking(
           trackerDiag.undatedPoints++;
           return;
         }
+        // Parked scatter: no movement, and not yet due to prove liveness.
+        //
+        // Measured 2026-08-10: a stationary phone emitted a point every
+        // ~68s having moved at most 7.7m, because the 25m distanceFilter
+        // is not enforced by the plugin. Dropping these cannot delay a
+        // drive (a drive moves further than the filter by definition) and
+        // the keepalive floor keeps the heartbeat and tail-close evidence
+        // flowing. See ./parked-filter.
+        if (!shouldKeepFix({ fix: pt, lastKept: lastKeptFix })) {
+          trackerDiag.parkedSuppressed++;
+          return;
+        }
+        lastKeptFix = pt;
         // Drive-end tracking: a fix above driving speed means we're
         // moving; remember when. Below it, the vehicle is stationary and
         // deLastMovingTs stops advancing, so its age = time parked.
