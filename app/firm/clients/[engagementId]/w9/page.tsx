@@ -5,6 +5,7 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
 import { decryptField } from "@/lib/crypto/field-encryption";
 import { requestW9, markW9Verified, markW9Invalid } from "./actions";
+import { getTaxYearConstants } from "@/lib/tax/constants";
 
 type Params = Promise<{ engagementId: string }>;
 
@@ -79,8 +80,25 @@ export default async function W9Page({ params }: { params: Params }) {
           W-9 forms.
         </h1>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-2xl">
-          IRS rules require a W-9 on file before issuing a 1099 to
-          any contractor paid $600+ in a calendar year. Request the
+          {/*
+            Threshold comes from the engagement's tax year, not a
+            literal. It said "$600+", which was the section 6041
+            threshold until OBBBA section 70433 raised it to $2,000 for
+            payments after 2025-12-31, and it inflation-adjusts from
+            2027. Telling a CPA the wrong reporting threshold is the
+            kind of error this product exists to prevent.
+          */}
+          IRS rules require a W-9 on file before issuing a 1099 to any
+          contractor paid{" "}
+          {new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          }).format(
+            getTaxYearConstants(eng.tax_year).INFO_REPORTING_THRESHOLD_CENTS /
+              100,
+          )}
+          + in {eng.tax_year}. Request the
           form here; the recipient fills + signs it via a one-time
           link. Once received, verify the data before running the
           1099 generator.
