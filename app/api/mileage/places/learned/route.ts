@@ -54,9 +54,18 @@ const MAX_POINTS = 60_000;
 /**
  * Same reasoning as MAX_POINTS, for the trips query below: the primary
  * driver has around 165 trips in a 90-day window, so 2000 leaves wide
- * headroom while still bounding the work. Order is already started_at
- * ascending, so a cap drops the oldest trips, which is the right end to
- * lose.
+ * headroom while still bounding the work.
+ *
+ * The query orders DESCENDING so that a cap drops the OLDEST trips.
+ * PostgREST applies limit after ordering, so an ascending order would
+ * truncate the tail and throw away the most RECENT trips, which is
+ * exactly backwards: a mesh exists to cover where the driver goes now,
+ * and a place they stopped visiting two months ago is the one worth
+ * losing. The original comment here claimed ascending dropped the
+ * oldest, which was wrong in both directions.
+ *
+ * Order does not otherwise matter: extractEndpointCandidates sorts by
+ * startMs itself before pairing.
  */
 const MAX_TRIPS = 2_000;
 
@@ -137,7 +146,7 @@ async function recompute(
     .eq("company_id", companyId)
     .eq("source", "tracked")
     .gte("started_at", sinceIso)
-    .order("started_at", { ascending: true })
+    .order("started_at", { ascending: false })
     .limit(MAX_TRIPS);
   if (tripError) throw new Error(tripError.message);
 
