@@ -76,6 +76,39 @@ function buildSoftwareApplicationOffers() {
   });
 }
 
+/**
+ * AggregateOffer summarising the individual Offers above.
+ *
+ * The individual Offers are valid on their own, but the price-range
+ * snippet Google can render ("From $4.99") comes specifically from
+ * AggregateOffer's `lowPrice`. Both forms coexist deliberately: the
+ * aggregate is a summary, not a replacement, and removing the itemised
+ * Offers to "simplify" would lose the per-tier detail.
+ *
+ * Derived from the offer array rather than written out, because a
+ * hand-typed lowPrice is a number that silently stops being true the
+ * first time a tier is repriced. The one thing this schema must never do
+ * is advertise a price the checkout will not honour.
+ *
+ * CAVEAT worth knowing before reading the output: the offer set mixes
+ * monthly and yearly SKUs, so the honest range spans a $4.99 monthly
+ * floor to a $2,990 annual ceiling. That is a real range over real
+ * offers, not an error, but it means `highPrice` is an annual figure
+ * sitting next to a monthly one. `lowPrice` is the field that carries
+ * the SEO value here, and it is unambiguous.
+ */
+function buildAggregateOffer(offers: ReturnType<typeof buildSoftwareApplicationOffers>) {
+  const prices = offers.map((o) => Number(o.price));
+  return {
+    "@type": "AggregateOffer",
+    lowPrice: Math.min(...prices).toFixed(2),
+    highPrice: Math.max(...prices).toFixed(2),
+    priceCurrency: "USD",
+    offerCount: offers.length,
+    url: `${SITE_ORIGIN}/pricing`,
+  };
+}
+
 const ORGANIZATION_LD = {
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -164,6 +197,12 @@ const WEBSITE_LD = {
   // },
 };
 
+// Built once and shared by `offers` and `aggregateOffer` below. Calling
+// the builder twice would work, but sharing the array is what makes the
+// aggregate provably a summary OF those offers rather than a parallel
+// claim that happens to agree today.
+const SUBSCRIPTION_OFFERS = buildSoftwareApplicationOffers();
+
 const SOFTWARE_APP_LD = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
@@ -185,7 +224,10 @@ const SOFTWARE_APP_LD = {
   publisher: { "@id": `${SITE_ORIGIN}/#organization` },
   // `offers` (plural) when there's more than one, Google handles
   // either form.
-  offers: buildSoftwareApplicationOffers(),
+  offers: SUBSCRIPTION_OFFERS,
+  // The summary form, derived from the exact array above so the two can
+  // never disagree about what Taxottic costs.
+  aggregateOffer: buildAggregateOffer(SUBSCRIPTION_OFFERS),
   // A 14-day free trial on every paid tier; the consumer voice line
   // is "No credit card. No commitment. Visit and leave at your own
   // pace." which matches Google's expectation for "free to try."
