@@ -56,6 +56,14 @@ describe("heartbeat is armed wherever points are ingested", () => {
     expect(files.length).toBeGreaterThan(5);
   });
 
+  // SCOPE NOTE. This static check now backstops ONE path: native-tracker's
+  // flush(), which is not exported and so cannot be called from a test.
+  // The other two ingest paths (drainGeofenceBuffer, drainNativeLocationBuffer)
+  // are exported and are covered behaviourally in ingest-arms-heartbeat.test.ts,
+  // which catches what a regex cannot: arming that is present in the source
+  // but never actually reached. Mutation-verified, put the call behind a
+  // false condition and the regex below still passes while the behavioural
+  // test fails. Keep both; they cover different failures.
   it("arms the timer NEAR every individual POST, not just somewhere in the file", () => {
     // THE HOLE THAT LET v175 THROUGH, and the third recurrence of this
     // same class of bug.
