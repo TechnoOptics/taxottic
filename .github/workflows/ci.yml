@@ -114,6 +114,71 @@ jobs:
         # separately. The job's job is to stop the number growing.
         run: node scripts/check-definer-grants.mjs
 
+  ios-compile:
+    name: ios compiles
+    runs-on: macos-15
+    timeout-minutes: 30
+    # The iOS half of this app was compiled for the FIRST time by the
+    # release workflow, on the way to the App Store. Android got its own
+    # compile gate; iOS did not, and the asymmetry has cost real money.
+    #
+    # A .swift file that is not registered in project.pbxproj compiles to
+    # NOTHING and fails silently at runtime. That has shipped here twice:
+    # TaxotticDeviceStatusPlugin was dead for weeks, and the geofence
+    # bridge that iOS needs to arm its region mesh was never written at
+    # all, which nobody noticed until a driver's device reported
+    # geofence_count = null with four places waiting server-side.
+    #
+    # Compile only: no signing, no keystore, no App Store credentials,
+    # nothing that could publish. It answers the one question that was
+    # going unasked, does this Swift build, in about a minute.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Apple's toolchain moves fast and the runner carries several. Pick
+      # the newest 26.x, matching ios-release.yml, so a file that builds
+      # here builds there.
+      - name: Select Xcode 26
+        run: |
+          for v in 26.1 26.0 26; do
+            if [ -d "/Applications/Xcode_${v}.app" ]; then
+              sudo xcode-select -s "/Applications/Xcode_${v}.app"
+              xcodebuild -version
+              exit 0
+            fi
+          done
+          echo "Xcode 26 not found; available:"
+          ls /Applications | grep Xcode
+          exit 1
+
+      - run: npm ci
+
+      # Same reason as the Android job: the native project references
+      # generated Capacitor scaffolding that is gitignored, so a fresh
+      # checkout cannot build without this. `sync` (copy + update), not
+      # `update`, for the reason recorded in that job.
+      - name: Generate Capacitor native scaffolding
+        run: npx cap sync ios
+
+      # Simulator destination and signing disabled: this gate must run on
+      # every PR from any fork, so it can never need a certificate.
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
   android-compile:
     name: android compiles
     runs-on: ubuntu-latest
