@@ -444,7 +444,7 @@ export default async function ManageCompanyPage({
                         {[
                           i.title,
                           prettyRole(i.role),
-                          `expires ${new Date(i.expires_at).toLocaleDateString()}`,
+                          `expires ${new Date(i.expires_at).toLocaleDateString("en-US")}`,
                         ]
                           .filter(Boolean)
                           .join(" · ")}

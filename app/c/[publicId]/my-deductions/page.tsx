@@ -205,8 +205,8 @@ export default async function MyDeductionsPage({
                   </h3>
                   {homeOfficeApplied && homeSqft && homeTotal ? (
                     <p className="mt-1 text-xs text-ink-soft">
-                      {homeSqft.toLocaleString()} sq ft of{" "}
-                      {homeTotal.toLocaleString()} sq ft (
+                      {homeSqft.toLocaleString("en-US")} sq ft of{" "}
+                      {homeTotal.toLocaleString("en-US")} sq ft (
                       {Math.round((homeSqft / homeTotal) * 1000) / 10}% business
                       use)
                     </p>

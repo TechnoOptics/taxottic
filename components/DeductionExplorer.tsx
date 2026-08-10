@@ -58,7 +58,7 @@ export function DeductionExplorer({ deductions, totalCount }: Props) {
           ) : null}
         </div>
         <div className="text-xs text-ink-muted shrink-0">
-          {filtered.length.toLocaleString()} of {totalCount.toLocaleString()}{" "}
+          {filtered.length.toLocaleString("en-US")} of {totalCount.toLocaleString("en-US")}{" "}
           deductions {isSearching ? "match" : "shown"}
         </div>
       </div>

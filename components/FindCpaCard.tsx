@@ -170,7 +170,7 @@ export function FindCpaCard({ zip, stateCode, city }: Props) {
                     </div>
                     {r.user_ratings_total != null ? (
                       <div className="text-[10px] text-ink-muted">
-                        {r.user_ratings_total.toLocaleString()} reviews
+                        {r.user_ratings_total.toLocaleString("en-US")} reviews
                       </div>
                     ) : null}
                   </div>

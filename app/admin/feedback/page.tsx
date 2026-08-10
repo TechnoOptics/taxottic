@@ -65,7 +65,7 @@ export default async function AdminFeedbackPage() {
                         <div className="text-xs text-ink-muted mt-0.5">
                           {KIND_LABEL[f.kind] ?? f.kind} -{" "}
                           {f.email ?? "anonymous"} -{" "}
-                          {new Date(f.created_at).toLocaleString()}
+                          {new Date(f.created_at).toLocaleString("en-US")}
                         </div>
                       </div>
                       <span

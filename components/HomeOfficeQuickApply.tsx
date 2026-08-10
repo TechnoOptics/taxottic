@@ -136,9 +136,9 @@ export function HomeOfficeQuickApply({
 
       {applied && initialSqft && initialTotalSqft ? (
         <div className="mt-4 rounded-xl border border-forest-100 bg-cream/40 px-4 py-3 text-sm text-forest-800">
-          <span className="font-medium">{initialSqft.toLocaleString()}</span>{" "}
+          <span className="font-medium">{initialSqft.toLocaleString("en-US")}</span>{" "}
           sq ft office of{" "}
-          <span className="font-medium">{initialTotalSqft.toLocaleString()}</span>{" "}
+          <span className="font-medium">{initialTotalSqft.toLocaleString("en-US")}</span>{" "}
           sq ft home
           {", "}
           <span className="text-ink-soft">
@@ -260,7 +260,7 @@ export function HomeOfficeQuickApply({
                 <div className="mt-2 text-xs text-ink-soft">
                   Simplified method estimate:{" "}
                   <span className="font-medium text-forest-900">
-                    ${simplifiedAnnualDollars.toLocaleString()}/yr
+                    ${simplifiedAnnualDollars.toLocaleString("en-US")}/yr
                   </span>{" "}
                   <span className="text-ink-muted">
                     (the actual-expenses method usually beats this once

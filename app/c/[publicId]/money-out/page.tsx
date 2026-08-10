@@ -100,7 +100,7 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
       stat:
         mileageCount === 0
           ? "No drives logged this year."
-          : `${milesTotal.toLocaleString()} mi across ${mileageCount} drives.`,
+          : `${milesTotal.toLocaleString("en-US")} mi across ${mileageCount} drives.`,
       primary: { label: "+ Log a drive", href: `/mileage` },
       secondaryHref: `/mileage`,
     },
@@ -168,7 +168,7 @@ export default async function MoneyOutHub({ params }: { params: Params }) {
             <Metric label="Expenses" value={formatCents(expenseTotal)} />
             <Metric
               label="Miles driven"
-              value={milesTotal.toLocaleString()}
+              value={milesTotal.toLocaleString("en-US")}
               suffix="mi"
             />
             <Metric label="Sales tax owed" value={formatCents(salesTaxOwed)} />

@@ -175,7 +175,7 @@ export default async function DocumentCommentsPage({
                       {c.profiles.full_name ?? c.profiles.email}
                     </span>
                     <span className="text-[11px] text-ink-muted">
-                      {new Date(c.created_at).toLocaleString()}
+                      {new Date(c.created_at).toLocaleString("en-US")}
                       {c.edited_at ? " · edited" : ""}
                     </span>
                     {c.page_number ? (

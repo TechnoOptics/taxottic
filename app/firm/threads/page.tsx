@@ -88,7 +88,7 @@ export default async function FirmThreadsPage() {
                       Last activity{" "}
                       {new Date(
                         t.last_message_at ?? t.created_at,
-                      ).toLocaleString()}
+                      ).toLocaleString("en-US")}
                     </div>
                   </div>
                   <span className="text-xs text-ink-muted">→</span>

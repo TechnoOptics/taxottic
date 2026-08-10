@@ -130,7 +130,7 @@ export function MileageDeductionCalculator({
               {formatCents(deductionCents)}
             </div>
             <p className="mt-2 text-sm text-ink-soft">
-              {milesNum.toLocaleString()} business miles ×{" "}
+              {milesNum.toLocaleString("en-US")} business miles ×{" "}
               {RATE_CENTS}¢/mile
             </p>
 

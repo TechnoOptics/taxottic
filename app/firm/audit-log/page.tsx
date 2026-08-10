@@ -167,7 +167,7 @@ export default async function FirmAuditLogPage() {
                     className="border-t border-forest-100 align-top"
                   >
                     <td className="py-2 pr-3 text-ink-soft tabular-nums whitespace-nowrap">
-                      {new Date(r.accessed_at).toLocaleString()}
+                      {new Date(r.accessed_at).toLocaleString("en-US")}
                     </td>
                     <td className="py-2 pr-3">
                       <KindPill kind={r.kind} />

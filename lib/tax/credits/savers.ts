@@ -144,7 +144,7 @@ export function computeSaversCreditCents(args: {
     return {
       creditCents: 0,
       rate: 0,
-      reasonZero: `Saver's Credit phases out at AGI above $${(b.ten / 100).toLocaleString()} for your filing status; you're at $${(args.agiCents / 100).toLocaleString()}.`,
+      reasonZero: `Saver's Credit phases out at AGI above $${(b.ten / 100).toLocaleString("en-US")} for your filing status; you're at $${(args.agiCents / 100).toLocaleString("en-US")}.`,
     };
   }
 

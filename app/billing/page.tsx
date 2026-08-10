@@ -97,11 +97,11 @@ export default async function BillingPage({
                   Credits
                 </div>
                 <div className="display text-3xl text-forest-900 mt-1 tabular-nums">
-                  {balance.toLocaleString()}
+                  {balance.toLocaleString("en-US")}
                 </div>
                 <div className="text-xs text-ink-muted mt-1">
                   {planLabel(plan)} grants {limits.monthlyCreditGrant} credits per
-                  billing period · rollover capped at {grantCap.toLocaleString()}
+                  billing period · rollover capped at {grantCap.toLocaleString("en-US")}
                 </div>
               </div>
               <ManageBillingButton />
@@ -159,7 +159,7 @@ export default async function BillingPage({
               <div className="text-[11px] text-ink-muted">
                 Cap this period:{" "}
                 {Number.isFinite(remainingTopup)
-                  ? `${remainingTopup.toLocaleString()} credits left to buy (3× monthly grant)`
+                  ? `${remainingTopup.toLocaleString("en-US")} credits left to buy (3× monthly grant)`
                   : "no cap"}
               </div>
             </div>
@@ -183,7 +183,7 @@ export default async function BillingPage({
                       {pack.label}
                     </div>
                     <div className="display text-2xl text-forest-900 mt-1">
-                      {pack.credits.toLocaleString()}
+                      {pack.credits.toLocaleString("en-US")}
                     </div>
                     <div className="text-xs text-ink-muted mt-1">
                       ${(pack.amountCents / 100).toFixed(2)} · ${perCredit.toFixed(3)}/credit
@@ -260,7 +260,7 @@ export default async function BillingPage({
               <>
                 {" "}
                 · renews{" "}
-                {new Date(sub.data.current_period_end).toLocaleDateString()}
+                {new Date(sub.data.current_period_end).toLocaleDateString("en-US")}
               </>
             ) : null}
             {sub.data?.cancel_at_period_end

@@ -88,12 +88,12 @@ export default async function AdminUserPage({ params }: { params: Params }) {
         </div>
 
         <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <KV label="Joined" value={new Date(profile.created_at).toLocaleString()} />
+          <KV label="Joined" value={new Date(profile.created_at).toLocaleString("en-US")} />
           <KV
             label="GDPR consent"
             value={
               profile.gdpr_consented_at
-                ? new Date(profile.gdpr_consented_at).toLocaleString()
+                ? new Date(profile.gdpr_consented_at).toLocaleString("en-US")
                 : "Not yet"
             }
           />
@@ -105,7 +105,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
             label="Current period ends"
             value={
               sub?.current_period_end
-                ? new Date(sub.current_period_end).toLocaleDateString()
+                ? new Date(sub.current_period_end).toLocaleDateString("en-US")
                 : "-"
             }
           />
@@ -115,7 +115,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
                 label="Blocked at"
                 value={
                   profile.blocked_at
-                    ? new Date(profile.blocked_at).toLocaleString()
+                    ? new Date(profile.blocked_at).toLocaleString("en-US")
                     : "-"
                 }
               />
@@ -155,7 +155,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
                     </div>
                   </div>
                   <span className="text-[10px] text-ink-muted uppercase tracking-wide">
-                    joined {new Date(m.joined_at).toLocaleDateString()}
+                    joined {new Date(m.joined_at).toLocaleDateString("en-US")}
                   </span>
                 </li>
               );
@@ -238,7 +238,7 @@ export default async function AdminUserPage({ params }: { params: Params }) {
                   className="flex items-start gap-3 border-b border-forest-50 last:border-0 py-2"
                 >
                   <span className="text-[10px] uppercase tracking-wide text-gold-700 min-w-28">
-                    {new Date(e.created_at).toLocaleString()}
+                    {new Date(e.created_at).toLocaleString("en-US")}
                   </span>
                   <div>
                     <div className="font-medium text-forest-900">

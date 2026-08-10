@@ -95,7 +95,7 @@ export default async function ThreadDetailPage({
                       {m.profiles.full_name ?? m.profiles.email}
                     </span>
                     <span className="text-[11px] text-ink-muted">
-                      {new Date(m.created_at).toLocaleString()}
+                      {new Date(m.created_at).toLocaleString("en-US")}
                       {m.edited_at ? " · edited" : ""}
                     </span>
                   </div>

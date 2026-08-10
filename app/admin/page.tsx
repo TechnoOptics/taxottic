@@ -284,7 +284,7 @@ function FilingGroup({
               </div>
               <div className="text-[11px] text-ink-muted">
                 {u.public_id} - joined{" "}
-                {new Date(u.created_at).toLocaleDateString()}
+                {new Date(u.created_at).toLocaleDateString("en-US")}
               </div>
             </Link>
           );

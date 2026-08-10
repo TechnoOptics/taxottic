@@ -172,7 +172,7 @@ export default async function AdminFirmsPage() {
                       ) : null}
                     </div>
                     <div className="text-[11px] text-ink-muted">
-                      {new Date(p.created_at).toLocaleString()}
+                      {new Date(p.created_at).toLocaleString("en-US")}
                     </div>
                   </div>
                   <div className="mt-4">
@@ -247,7 +247,7 @@ export default async function AdminFirmsPage() {
                     </div>
                   </div>
                   <div className="text-[11px] text-ink-muted">
-                    Created {new Date(f.created_at).toLocaleDateString()}
+                    Created {new Date(f.created_at).toLocaleDateString("en-US")}
                   </div>
                 </li>
               ))}
@@ -277,7 +277,7 @@ export default async function AdminFirmsPage() {
                   </span>
                   <span className="text-ink-muted">
                     {p.reviewed_at
-                      ? new Date(p.reviewed_at).toLocaleDateString()
+                      ? new Date(p.reviewed_at).toLocaleDateString("en-US")
                       : ""}
                   </span>
                 </li>

@@ -412,7 +412,7 @@ export default async function BusinessTripsPage({
                   These are the Schedule C numbers. */}
               <Stat
                 label="Business trips"
-                value={totalCount.toLocaleString()}
+                value={totalCount.toLocaleString("en-US")}
               />
               <Stat
                 label="Business miles"
@@ -439,10 +439,10 @@ export default async function BusinessTripsPage({
                 <p className="mt-2 text-xs text-ink-muted leading-relaxed">
                   {isPaged ? (
                     <>
-                      The map draws the {trips.length.toLocaleString()} drives
-                      on this page, out of {totalCount.toLocaleString()} in{" "}
+                      The map draws the {trips.length.toLocaleString("en-US")} drives
+                      on this page, out of {totalCount.toLocaleString("en-US")} in{" "}
                       {rangeCfg.label.toLowerCase()}. The totals above cover
-                      all {totalCount.toLocaleString()}.{" "}
+                      all {totalCount.toLocaleString("en-US")}.{" "}
                     </>
                   ) : null}
                   Each trail is drawn from an evenly spaced sample of the
@@ -458,7 +458,7 @@ export default async function BusinessTripsPage({
               Trips
               <span className="ml-2 text-sm text-ink-muted">
                 {isPaged
-                  ? `Showing ${firstOnPage.toLocaleString()}-${lastOnPage.toLocaleString()} of ${totalCount.toLocaleString()} drives`
+                  ? `Showing ${firstOnPage.toLocaleString("en-US")}-${lastOnPage.toLocaleString("en-US")} of ${totalCount.toLocaleString("en-US")} drives`
                   : `${trips.length} ${trips.length === 1 ? "drive" : "drives"}`}
               </span>
             </h2>
@@ -592,8 +592,8 @@ export default async function BusinessTripsPage({
                   <span />
                 )}
                 <span className="text-xs text-ink-muted tabular-nums">
-                  Page {pageNum.toLocaleString()} of{" "}
-                  {pageCount.toLocaleString()}
+                  Page {pageNum.toLocaleString("en-US")} of{" "}
+                  {pageCount.toLocaleString("en-US")}
                 </span>
                 {pageNum < pageCount ? (
                   <Link

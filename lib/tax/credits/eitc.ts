@@ -215,7 +215,7 @@ export function computeEitcCents(args: {
   if (args.investmentIncomeCents > tables.investmentIncomeDisqualifier) {
     return {
       creditCents: 0,
-      reasonZero: `Your investment income ($${(args.investmentIncomeCents / 100).toLocaleString()}) exceeds the EITC disqualifier of $${(tables.investmentIncomeDisqualifier / 100).toLocaleString()} for ${args.taxYear}. EITC is unavailable under § 32(i).`,
+      reasonZero: `Your investment income ($${(args.investmentIncomeCents / 100).toLocaleString("en-US")}) exceeds the EITC disqualifier of $${(tables.investmentIncomeDisqualifier / 100).toLocaleString("en-US")} for ${args.taxYear}. EITC is unavailable under § 32(i).`,
     };
   }
 

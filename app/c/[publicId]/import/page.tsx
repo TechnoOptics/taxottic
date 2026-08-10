@@ -227,7 +227,7 @@ function ImportListRow({
           {prettyAccountType(imp.account_type)} · {summary.total} rows -{" "}
           {summary.applied} applied -{" "}
           <span className="uppercase tracking-wide">{state}</span> -{" "}
-          {new Date(imp.created_at).toLocaleDateString()}
+          {new Date(imp.created_at).toLocaleDateString("en-US")}
         </div>
       </div>
       <Link

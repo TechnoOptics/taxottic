@@ -113,7 +113,7 @@ function computeAotc(args: {
     return {
       refundableCents: 0,
       nonRefundableCents: 0,
-      reasonZero: `AOTC phases out completely at MAGI of $${((start + range) / 100).toLocaleString()} for your filing status; you're at $${(args.modifiedAgiCents / 100).toLocaleString()}.`,
+      reasonZero: `AOTC phases out completely at MAGI of $${((start + range) / 100).toLocaleString("en-US")} for your filing status; you're at $${(args.modifiedAgiCents / 100).toLocaleString("en-US")}.`,
     };
   }
   if (args.modifiedAgiCents > start) {
@@ -164,7 +164,7 @@ function computeLlc(args: {
   if (args.modifiedAgiCents >= start + range) {
     return {
       nonRefundableCents: 0,
-      reasonZero: `Lifetime Learning Credit phases out completely at MAGI of $${((start + range) / 100).toLocaleString()} for your filing status; you're at $${(args.modifiedAgiCents / 100).toLocaleString()}.`,
+      reasonZero: `Lifetime Learning Credit phases out completely at MAGI of $${((start + range) / 100).toLocaleString("en-US")} for your filing status; you're at $${(args.modifiedAgiCents / 100).toLocaleString("en-US")}.`,
     };
   }
   if (args.modifiedAgiCents > start) {

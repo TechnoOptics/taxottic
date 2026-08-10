@@ -129,7 +129,7 @@ function buildCard(sp: URLSearchParams): Card {
       return {
         ...base,
         result: {
-          context: `${miles.toLocaleString()} business miles × ${ratePerMile}¢/mile`,
+          context: `${miles.toLocaleString("en-US")} business miles × ${ratePerMile}¢/mile`,
           big: formatCents(deduction),
           sub: `Mileage deduction · ≈ ${formatCents(Math.round(deduction * savingsRate))} in tax savings`,
         },

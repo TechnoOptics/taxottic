@@ -98,11 +98,11 @@ function CompanyList({ rows }: { rows: CompanyRow[] }) {
             </div>
             <div className="text-xs text-ink-muted mt-0.5">
               {c.entity_type ?? "-"} · created{" "}
-              {new Date(c.created_at).toLocaleDateString()}
+              {new Date(c.created_at).toLocaleDateString("en-US")}
               {c.deleted_at
                 ? ` · soft-deleted ${new Date(
                     c.deleted_at,
-                  ).toLocaleDateString()}`
+                  ).toLocaleDateString("en-US")}`
                 : null}
               {" · "}
               <Link

@@ -504,7 +504,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     requestedSection179 > section179Applied
   ) {
     hints.push(
-      `Your § 179 election exceeds the ${k.year} cap of $${(SECTION_179_2026_CAP_CENTS / 100).toLocaleString()}. The excess will need to depreciate normally over the asset's class life, confirm with a CPA.`,
+      `Your § 179 election exceeds the ${k.year} cap of $${(SECTION_179_2026_CAP_CENTS / 100).toLocaleString("en-US")}. The excess will need to depreciate normally over the asset's class life, confirm with a CPA.`,
     );
   }
   const ytdMealsDeductible = Math.round(input.ytdMealsCents * 0.5);
@@ -517,7 +517,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   const ytdNetBiz = Math.max(0, input.ytdIncomeCents - ytdDeductibleExpenses);
   if (section179Applied > 0) {
     assumptions.push(
-      `§ 179 election: expensing $${(section179Applied / 100).toLocaleString()} of equipment in ${k.year} instead of depreciating over the asset's class life (OBBBA § 70306 raised the cap to $2.56M).`,
+      `§ 179 election: expensing $${(section179Applied / 100).toLocaleString("en-US")} of equipment in ${k.year} instead of depreciating over the asset's class life (OBBBA § 70306 raised the cap to $2.56M).`,
     );
   }
 
@@ -793,7 +793,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     assumptions.push(
       `Self-employment tax: 12.4% Social Security up to the $${(
         k.SE_TAX.socialSecurityWageBase / 100
-      ).toLocaleString()} wage base + 2.9% Medicare uncapped, on ${(
+      ).toLocaleString("en-US")} wage base + 2.9% Medicare uncapped, on ${(
         k.SE_TAX.netEarningsFactor * 100
       ).toFixed(2)}% of net earnings (IRC §1401).`,
     );
@@ -817,7 +817,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       assumptions.push(
         `S-Corp: this forecast assumes you take $${(
           input.ownerW2WagesCents / 100
-        ).toLocaleString()} in owner W-2 wages (already runs through payroll-tax withholding) and the remainder as distribution. Increase or decrease that figure on your tax profile if reality differs.`,
+        ).toLocaleString("en-US")} in owner W-2 wages (already runs through payroll-tax withholding) and the remainder as distribution. Increase or decrease that figure on your tax profile if reality differs.`,
       );
     } else {
       hints.push(
@@ -889,7 +889,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   );
   if (foreignEarnedIncomeExcludedCents > 0) {
     assumptions.push(
-      `Foreign earned income exclusion (§ 911) applied: $${(foreignEarnedIncomeExcludedCents / 100).toLocaleString()} excluded from gross income.`,
+      `Foreign earned income exclusion (§ 911) applied: $${(foreignEarnedIncomeExcludedCents / 100).toLocaleString("en-US")} excluded from gross income.`,
     );
   }
 
@@ -961,7 +961,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     }
     if (studentLoanInterestDeductionCents > 0) {
       assumptions.push(
-        `Student loan interest deduction (§ 221) applied: $${(studentLoanInterestDeductionCents / 100).toLocaleString()} (capped at $2,500 with AGI phase-out).`,
+        `Student loan interest deduction (§ 221) applied: $${(studentLoanInterestDeductionCents / 100).toLocaleString("en-US")} (capped at $2,500 with AGI phase-out).`,
       );
     }
   }
@@ -975,12 +975,12 @@ export function forecast(input: ForecastInput): ForecastResult {
   }
   if (structuredRetirementCents > 0) {
     assumptions.push(
-      `Retirement contributions applied above-the-line: $${(structuredRetirementCents / 100).toLocaleString()} (Solo 401(k) + SEP-IRA + Traditional IRA + HSA).`,
+      `Retirement contributions applied above-the-line: $${(structuredRetirementCents / 100).toLocaleString("en-US")} (Solo 401(k) + SEP-IRA + Traditional IRA + HSA).`,
     );
   }
   if (seHealthDeductibleCents > 0) {
     assumptions.push(
-      `Self-employed health insurance deduction applied: $${(seHealthDeductibleCents / 100).toLocaleString()} (above-the-line; capped at net business income per IRC §162(l)).`,
+      `Self-employed health insurance deduction applied: $${(seHealthDeductibleCents / 100).toLocaleString("en-US")} (above-the-line; capped at net business income per IRC §162(l)).`,
     );
   }
   if (input.ownerW2WagesCents > 0 || effectiveSpouseIncome > 0) {
@@ -1001,7 +1001,7 @@ export function forecast(input: ForecastInput): ForecastResult {
         : 10_000 * 100;
     if (saltReported > saltCap) {
       hints.push(
-        `Your reported state + local taxes ($${(saltReported / 100).toLocaleString()}) exceed the SALT cap of $${(saltCap / 100).toLocaleString()}. The excess isn't deductible. Consider bunching charitable contributions or other itemized buckets where the cap doesn't apply.`,
+        `Your reported state + local taxes ($${(saltReported / 100).toLocaleString("en-US")}) exceed the SALT cap of $${(saltCap / 100).toLocaleString("en-US")}. The excess isn't deductible. Consider bunching charitable contributions or other itemized buckets where the cap doesn't apply.`,
       );
     }
   }
@@ -1058,7 +1058,7 @@ export function forecast(input: ForecastInput): ForecastResult {
           // OBBBA gates the deduction entirely below the QBI floor.
           if (qbi > 0) {
             assumptions.push(
-              `QBI under $${(minQbiToQualify / 100).toLocaleString()} - OBBBA § 70105 disqualifies the §199A deduction for ${k.year}.`,
+              `QBI under $${(minQbiToQualify / 100).toLocaleString("en-US")} - OBBBA § 70105 disqualifies the §199A deduction for ${k.year}.`,
             );
           }
           qbi = 0;
@@ -1073,7 +1073,7 @@ export function forecast(input: ForecastInput): ForecastResult {
           );
           if (floored > qbi) {
             assumptions.push(
-              `§199A minimum deduction applied: $${(floored / 100).toLocaleString()} (OBBBA § 70105 boost - your formula yielded less).`,
+              `§199A minimum deduction applied: $${(floored / 100).toLocaleString("en-US")} (OBBBA § 70105 boost - your formula yielded less).`,
             );
             qbi = floored;
           }
@@ -1120,7 +1120,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     k.INFO_REPORTING_THRESHOLD_CENTS > 60_000 // distinguishes new $2,000 from legacy $600
   ) {
     hints.push(
-      `Heads-up: for ${k.year}, you only need to send 1099-NEC/1099-MISC to vendors you've paid more than $${(k.INFO_REPORTING_THRESHOLD_CENTS / 100).toLocaleString()} (up from $600 - OBBBA § 70433). Anything below that no longer requires a 1099.`,
+      `Heads-up: for ${k.year}, you only need to send 1099-NEC/1099-MISC to vendors you've paid more than $${(k.INFO_REPORTING_THRESHOLD_CENTS / 100).toLocaleString("en-US")} (up from $600 - OBBBA § 70433). Anything below that no longer requires a 1099.`,
     );
   }
 
@@ -1196,7 +1196,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       Math.round(taxedAtTwenty * 0.2);
     if (capitalGainsTax >= 0) {
       assumptions.push(
-        `Qualified gains + dividends taxed at preferred LTCG brackets (0/15/20%): $${(taxedAtZero / 100).toLocaleString()} at 0%, $${(taxedAtFifteen / 100).toLocaleString()} at 15%, $${(taxedAtTwenty / 100).toLocaleString()} at 20%.`,
+        `Qualified gains + dividends taxed at preferred LTCG brackets (0/15/20%): $${(taxedAtZero / 100).toLocaleString("en-US")} at 0%, $${(taxedAtFifteen / 100).toLocaleString("en-US")} at 15%, $${(taxedAtTwenty / 100).toLocaleString("en-US")} at 20%.`,
       );
     }
   }
@@ -1288,7 +1288,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       });
   if (credits > 0) {
     assumptions.push(
-      `Family credits: $${(k.CHILD_TAX_CREDIT.ctcPerChildCents / 100).toLocaleString()} per qualifying child under 17 (CTC) + $${(k.CHILD_TAX_CREDIT.odcPerOtherCents / 100).toLocaleString()} per other dependent (ODC), phased out above the AGI threshold.`,
+      `Family credits: $${(k.CHILD_TAX_CREDIT.ctcPerChildCents / 100).toLocaleString("en-US")} per qualifying child under 17 (CTC) + $${(k.CHILD_TAX_CREDIT.odcPerOtherCents / 100).toLocaleString("en-US")} per other dependent (ODC), phased out above the AGI threshold.`,
     );
   }
 
@@ -1315,7 +1315,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     : (saversResult.reasonZero ?? "");
   if (saversCreditCents > 0) {
     assumptions.push(
-      `Saver's Credit (§ 25B) applied at ${Math.round(saversResult.rate * 100)}% of qualifying retirement contributions: $${(saversCreditCents / 100).toLocaleString()}. Non-refundable - reduces tax to zero but no refund of the unused portion.`,
+      `Saver's Credit (§ 25B) applied at ${Math.round(saversResult.rate * 100)}% of qualifying retirement contributions: $${(saversCreditCents / 100).toLocaleString("en-US")}. Non-refundable - reduces tax to zero but no refund of the unused portion.`,
     );
   }
 
@@ -1346,11 +1346,11 @@ export function forecast(input: ForecastInput): ForecastResult {
   if (educationCreditRefundableCents + educationCreditNonRefundableCents > 0) {
     if (educationCreditKind === "aotc") {
       assumptions.push(
-        `American Opportunity Credit (§ 25A(b)) applied: $${((educationCreditRefundableCents + educationCreditNonRefundableCents) / 100).toLocaleString()} (40% refundable, 60% non-refundable). Eligibility self-attested via the AOTC checkbox.`,
+        `American Opportunity Credit (§ 25A(b)) applied: $${((educationCreditRefundableCents + educationCreditNonRefundableCents) / 100).toLocaleString("en-US")} (40% refundable, 60% non-refundable). Eligibility self-attested via the AOTC checkbox.`,
       );
     } else if (educationCreditKind === "llc") {
       assumptions.push(
-        `Lifetime Learning Credit (§ 25A(c)) applied: $${(educationCreditNonRefundableCents / 100).toLocaleString()}. Non-refundable - reduces tax dollar-for-dollar.`,
+        `Lifetime Learning Credit (§ 25A(c)) applied: $${(educationCreditNonRefundableCents / 100).toLocaleString("en-US")}. Non-refundable - reduces tax dollar-for-dollar.`,
       );
     }
   }
@@ -1365,12 +1365,12 @@ export function forecast(input: ForecastInput): ForecastResult {
   const evCreditCents = Math.max(0, input.evCreditCents ?? 0);
   if (residentialEnergyCreditCents > 0) {
     assumptions.push(
-      `Residential energy credit applied: $${(residentialEnergyCreditCents / 100).toLocaleString()} (§ 25D - solar/geothermal/wind).`,
+      `Residential energy credit applied: $${(residentialEnergyCreditCents / 100).toLocaleString("en-US")} (§ 25D - solar/geothermal/wind).`,
     );
   }
   if (evCreditCents > 0) {
     assumptions.push(
-      `Clean vehicle credit applied: $${(evCreditCents / 100).toLocaleString()} (§ 30D / § 25E).`,
+      `Clean vehicle credit applied: $${(evCreditCents / 100).toLocaleString("en-US")} (§ 30D / § 25E).`,
     );
   }
 
@@ -1401,7 +1401,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     // the full credit amount for anyone AMT touched (audit #36).
     fedTax = Math.max(0, amtTotal - totalNonRefundableCredits);
     assumptions.push(
-      `AMT (§ 55) applied: alternative minimum tax exceeds regular tax by $${(amtAddOnCents / 100).toLocaleString()}. Common triggers: large LTCG stacked on high ordinary income, or high state-tax / misc itemized deductions hitting the SALT cap.`,
+      `AMT (§ 55) applied: alternative minimum tax exceeds regular tax by $${(amtAddOnCents / 100).toLocaleString("en-US")}. Common triggers: large LTCG stacked on high ordinary income, or high state-tax / misc itemized deductions hitting the SALT cap.`,
     );
   } else {
     fedTax = fedTaxAfterCredits;
@@ -1643,7 +1643,7 @@ export function forecast(input: ForecastInput): ForecastResult {
     : (eitcResult.reasonZero ?? "");
   if (eitcCents > 0) {
     assumptions.push(
-      `Earned Income Tax Credit (§ 32) applied: $${(eitcCents / 100).toLocaleString()} (refundable - if you owe less than that in tax, the IRS sends the rest back as a refund).`,
+      `Earned Income Tax Credit (§ 32) applied: $${(eitcCents / 100).toLocaleString("en-US")} (refundable - if you owe less than that in tax, the IRS sends the rest back as a refund).`,
     );
   }
 
@@ -1763,7 +1763,7 @@ export function forecast(input: ForecastInput): ForecastResult {
   // is genuinely useful.
   if (Math.max(0, input.ptcAdvancePaymentsCents ?? 0) > 0) {
     hints.push(
-      `You received $${((input.ptcAdvancePaymentsCents ?? 0) / 100).toLocaleString()} in marketplace advance Premium Tax Credit payments. These reconcile on Form 8962 at filing time - if your actual AGI is higher than projected when you enrolled, you may owe some back; if lower, you may get more. We don't compute the reconciliation here; the marketplace's calculator is the source of truth.`,
+      `You received $${((input.ptcAdvancePaymentsCents ?? 0) / 100).toLocaleString("en-US")} in marketplace advance Premium Tax Credit payments. These reconcile on Form 8962 at filing time - if your actual AGI is higher than projected when you enrolled, you may owe some back; if lower, you may get more. We don't compute the reconciliation here; the marketplace's calculator is the source of truth.`,
     );
   }
 
@@ -1894,7 +1894,7 @@ export function forecast(input: ForecastInput): ForecastResult {
           : top.bucket === "sep_ira"
             ? "SEP-IRA"
             : "Traditional IRA";
-      retirementSummary = `Contribute another $${(usable / 100).toLocaleString()} to your ${bucketLabel} and save about $${(retirementSavingsRecCents / 100).toLocaleString()} in federal tax this year (your ${Math.round(marginal * 100)}% marginal rate × the deduction).`;
+      retirementSummary = `Contribute another $${(usable / 100).toLocaleString("en-US")} to your ${bucketLabel} and save about $${(retirementSavingsRecCents / 100).toLocaleString("en-US")} in federal tax this year (your ${Math.round(marginal * 100)}% marginal rate × the deduction).`;
     }
   } else if (!isSeEntity && traditionalIraRemaining > 0 && marginal > 0) {
     // W-2-only filers: surface the Traditional IRA option even though
@@ -1904,7 +1904,7 @@ export function forecast(input: ForecastInput): ForecastResult {
       retirementBucket = "traditional_ira";
       retirementAddCents = usable;
       retirementSavingsRecCents = Math.round(usable * marginal);
-      retirementSummary = `Contribute another $${(usable / 100).toLocaleString()} to a Traditional IRA and save about $${(retirementSavingsRecCents / 100).toLocaleString()} in federal tax this year (your ${Math.round(marginal * 100)}% marginal rate × the deduction). Deductibility may phase out if you or your spouse is covered by an employer retirement plan and your AGI is high - confirm before contributing the full amount.`;
+      retirementSummary = `Contribute another $${(usable / 100).toLocaleString("en-US")} to a Traditional IRA and save about $${(retirementSavingsRecCents / 100).toLocaleString("en-US")} in federal tax this year (your ${Math.round(marginal * 100)}% marginal rate × the deduction). Deductibility may phase out if you or your spouse is covered by an employer retirement plan and your AGI is high - confirm before contributing the full amount.`;
     }
   }
 
@@ -1929,12 +1929,12 @@ export function forecast(input: ForecastInput): ForecastResult {
       if (balanceForW4 > 0) {
         w4Direction = "increase";
         hints.push(
-          `W-4 nudge: you're projecting to owe $${(balanceForW4 / 100).toLocaleString()} at filing. Add $${(w4PerPaycheckDeltaCents / 100).toLocaleString()} to "Extra withholding" on Form W-4 step 4(c) for each remaining paycheck this year and you'll land near zero.`,
+          `W-4 nudge: you're projecting to owe $${(balanceForW4 / 100).toLocaleString("en-US")} at filing. Add $${(w4PerPaycheckDeltaCents / 100).toLocaleString("en-US")} to "Extra withholding" on Form W-4 step 4(c) for each remaining paycheck this year and you'll land near zero.`,
         );
       } else {
         w4Direction = "decrease";
         hints.push(
-          `W-4 nudge: you're projecting a $${(Math.abs(balanceForW4) / 100).toLocaleString()} refund - that's your money the IRS is holding without interest. Reduce withholding by ~$${(w4PerPaycheckDeltaCents / 100).toLocaleString()} per paycheck (or adjust dependents on W-4 step 3) to get that cash flowing through the year instead.`,
+          `W-4 nudge: you're projecting a $${(Math.abs(balanceForW4) / 100).toLocaleString("en-US")} refund - that's your money the IRS is holding without interest. Reduce withholding by ~$${(w4PerPaycheckDeltaCents / 100).toLocaleString("en-US")} per paycheck (or adjust dependents on W-4 step 3) to get that cash flowing through the year instead.`,
         );
       }
     }

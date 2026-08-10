@@ -103,7 +103,7 @@ export default async function DeductionsPage({ params }: { params: Params }) {
             What you can deduct
           </div>
           <h2 className="display mt-2 text-2xl sm:text-3xl text-forest-900 max-w-3xl">
-            {filtered.length.toLocaleString()} deductions filtered for your
+            {filtered.length.toLocaleString("en-US")} deductions filtered for your
             entity type
             {entityType ? null : (
               <span className="text-ink-muted text-base block mt-1">
