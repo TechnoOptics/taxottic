@@ -593,6 +593,21 @@ function HeroFigure({ audience }: { audience: Audience }) {
               width={1600}
               height={900}
               priority
+              // `priority` alone emits a preload but NOT the priority
+              // hint: measured on the live site 2026-08-10, the only
+              // fetchpriority in the whole document was ="low" on a
+              // script chunk, and Lighthouse's LCP-discovery check
+              // failed on exactly this ("fetchpriority=high should be
+              // applied to the image preload request") while passing
+              // discoverability and eager-loading.
+              //
+              // It matters because three images preload here and this
+              // one is the LCP and the largest: the cream icon mark,
+              // the wordmark (Wordmark.tsx also sets priority), and
+              // this hero. Without an explicit hint they compete at
+              // equal priority, and the measured cost was a 1157ms
+              // resource load duration against 225ms on /pricing.
+              fetchPriority="high"
               sizes="(min-width: 1152px) 1088px, 100vw"
               className="block w-full aspect-[16/9] lg:aspect-[2.4/1] object-cover"
             />
