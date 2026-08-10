@@ -5,6 +5,7 @@ import {
   MAX_LEARNED_PLACES,
   type LearnedPlace,
   type RawPoint,
+  type TripSpan,
 } from "@/lib/mileage/places";
 
 export const runtime = "nodejs";
@@ -23,11 +24,17 @@ export const dynamic = "force-dynamic";
  */
 
 /**
- * Recompute at most weekly. Habitual places move when someone moves
- * house or changes job, neither of which is a same-day event, and the
- * clustering reads every raw point the driver has.
+ * Recompute daily.
+ *
+ * This was weekly, and the reason was cost: clustering read up to
+ * MAX_POINTS (60,000) raw rows. Trip endpoints read on the order of a
+ * hundred rows, so the price no longer justifies a week of staleness,
+ * and a new habitual place now arms within a day instead of seven.
+ *
+ * If a future change makes this path read raw points again in bulk,
+ * put the week back.
  */
-const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How far back the clustering reads. Long enough that a fortnight of
@@ -103,7 +110,64 @@ async function recompute(
     lng: row.lng as number,
     ts: Date.parse(row.captured_at as string),
   }));
-  const places = learnPlaces(points);
+
+  // Trip endpoints, the second candidate source.
+  //
+  // tracked ONLY. mileage_trips.source is constrained to
+  // ('tracked', 'manual', 'route'); `route` endpoints are geocoded from
+  // place names typed into the reconstruct tool and `manual` are typed
+  // outright, so neither is a coordinate the phone ever reported.
+  // Seeding a geofence from one would arm a region around a geocoder's
+  // idea of an address. lib/mileage/finalize.ts already excludes
+  // non-tracked trips for the same reason.
+  const { data: tripRows, error: tripError } = await admin
+    .from("mileage_trips")
+    .select("id, started_at, ended_at")
+    .eq("driver_user_id", userId)
+    .eq("company_id", companyId)
+    .eq("source", "tracked")
+    .gte("started_at", sinceIso)
+    .order("started_at", { ascending: true });
+  if (tripError) throw new Error(tripError.message);
+
+  // Endpoints come from the trip's own materialised points. start_place_id
+  // and end_place_id are NULL on every row in production, so they cannot
+  // be used for this.
+  const trips: TripSpan[] = [];
+  for (const row of tripRows ?? []) {
+    const tripId = row.id as string;
+    const [firstRes, lastRes] = await Promise.all([
+      admin
+        .from("mileage_points")
+        .select("lat, lng")
+        .eq("trip_id", tripId)
+        .order("captured_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from("mileage_points")
+        .select("lat, lng")
+        .eq("trip_id", tripId)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (firstRes.error) throw new Error(firstRes.error.message);
+    if (lastRes.error) throw new Error(lastRes.error.message);
+    const first = firstRes.data;
+    const last = lastRes.data;
+    if (!first || !last) continue;
+    trips.push({
+      startLat: first.lat as number,
+      startLng: first.lng as number,
+      startMs: Date.parse(row.started_at as string),
+      endLat: last.lat as number,
+      endLng: last.lng as number,
+      endMs: Date.parse(row.ended_at as string),
+    });
+  }
+
+  const places = learnPlaces(points, trips);
   const computedAt = new Date().toISOString();
 
   // Replace the whole set. Partial reconciliation would leave a stale
