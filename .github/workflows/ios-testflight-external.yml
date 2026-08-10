@@ -158,22 +158,40 @@ jobs:
             }
           }
 
-          // 4. Invite each tester into the group (invite email sends now).
+          // 4. Submit for Beta App Review FIRST. See the ordering note
+          //    below for why this moved ahead of tester assignment. A
+          //    duplicate error means it is already in, or through, review.
+          const sub = await api("POST", `/v1/betaAppReviewSubmissions`, {
+            data: { type: "betaAppReviewSubmissions",
+              relationships: { build: { data: { type: "builds", id: build.id } } } },
+          }, ["ALREADY_EXISTS", "STATE_ERROR", "DUPLICATE", "INVALID_QC_STATE"]);
+          // INVALID_QC_STATE on re-submit = the build is already in (or
+          // through) beta review, exactly the resumable case.
+          console.log(`Beta review: ${sub.status === 201 ? "submitted" : "already submitted/reviewed"}`);
+
+          // 5. Invite each tester into the group, AFTER submitting.
           //
-          // ORDER IS LOAD-BEARING: testers MUST go in BEFORE the Beta App
-          // Review submission below. Once a group's build is submitted,
-          // Apple refuses every tester assignment to that group with
-          //   409 STATE_ERROR "Tester(s) cannot be assigned"
-          //   "The request cannot be fulfilled because of the state of
-          //    another resource."
-          // and the "other resource" is the build now sitting in review.
+          // THE ORDERING NOTE HERE USED TO SAY THE OPPOSITE, and it was
+          // wrong. It claimed testers must go in BEFORE submission because
+          // a build sitting in review blocks assignment, citing run
+          // 31262637802 (2026-08-08, build 36) where submission succeeded
+          // and both tester calls then 409'd.
           //
-          // Observed for real on 2026-08-08 (run 31262637802, build 36):
-          // the submission succeeded, then BOTH tester calls 409'd, so the
-          // review clock started with nobody able to receive the build. The
-          // driver this whole release was for could not be added at all,
-          // and the only remedy was to wait out the review and re-run.
-          // Submitting is the irreversible step, so it goes last.
+          // Disproved on 2026-08-10 (run 31410208116, build 37): with
+          // NOTHING submitted for that build, assignment 409'd identically
+          // with STATE_ERROR "Tester(s) cannot be assigned". Same failure,
+          // no pending review, so the pending review was never the cause.
+          //
+          // The actual constraint is the reverse: Apple will not assign
+          // testers to an EXTERNAL group that has no APPROVED build. So
+          // submission has to come first, and assignment is retried after
+          // approval. Under the old order the workflow could never reach
+          // the submit step at all, which is how a driver spent two days
+          // unable to receive the build that existed for her.
+          //
+          // Assignment failures are therefore NON-FATAL: the submission is
+          // the thing that has to land, and testers attach on a re-run once
+          // review clears.
           for (let i = 0; i < emails.length; i++) {
             const email = emails[i];
             const firstName = names[i] || email.split("@")[0];
@@ -196,25 +214,26 @@ jobs:
             );
             const existing = (found.body.data ?? [])[0];
             if (!existing) {
-              console.error(`::error::${email}: cannot create AND no existing tester found`);
-              process.exit(1);
+              console.log(
+                `${email}: cannot create and no existing tester found. ` +
+                `Continuing so the review submission is not lost.`,
+              );
+              continue;
             }
-            await api("POST", `/v1/betaGroups/${group.id}/relationships/betaTesters`, {
+            const att = await api("POST", `/v1/betaGroups/${group.id}/relationships/betaTesters`, {
               data: [{ type: "betaTesters", id: existing.id }],
-            }, ["ALREADY_EXISTS"]);
-            console.log(`${email}: existing tester attached to group (invite sent)`);
+            }, ["ALREADY_EXISTS", "STATE_ERROR"]);
+            if (att.status >= 400) {
+              console.log(
+                `${email}: NOT YET ASSIGNABLE. Apple refuses tester assignment ` +
+                `to an external group with no approved build. The submission ` +
+                `above starts that clock; re-run this workflow once Beta App ` +
+                `Review clears and the tester attaches then.`,
+              );
+            } else {
+              console.log(`${email}: existing tester attached to group (invite sent)`);
+            }
           }
-
-          // 5. Submit for Beta App Review, LAST (see the ordering note in
-          //    step 4). A duplicate submission error means it is already
-          //    in, or through, review.
-          const sub = await api("POST", `/v1/betaAppReviewSubmissions`, {
-            data: { type: "betaAppReviewSubmissions",
-              relationships: { build: { data: { type: "builds", id: build.id } } } },
-          }, ["ALREADY_EXISTS", "STATE_ERROR", "DUPLICATE", "INVALID_QC_STATE"]);
-          // INVALID_QC_STATE on re-submit = the build is already in (or
-          // through) beta review — exactly the resumable case.
-          console.log(`Beta review: ${sub.status === 201 ? "submitted" : "already submitted/reviewed"}`);
 
           console.log("");
           console.log("Done. Testers get the invite email now; the build installs once Beta App Review clears.");
