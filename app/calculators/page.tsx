@@ -74,6 +74,13 @@ const CALCULATORS = [
     live: true,
   },
   {
+    slug: "mileage-log",
+    title: "IRS Mileage Log",
+    blurb:
+      "Enter your business trips and get a log with the date, purpose and miles Publication 463 expects, priced per trip date. Download as CSV, nothing uploaded.",
+    live: true,
+  },
+  {
     slug: "mileage-reimbursement",
     title: "Employee Mileage Reimbursement Calculator",
     blurb:

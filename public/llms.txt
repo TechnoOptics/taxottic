@@ -51,6 +51,7 @@ product itself.
 - [How much to set aside for taxes](https://taxottic.com/calculators/how-much-to-set-aside): The exact percentage of every payment to hold back, covering self-employment tax plus federal and state income tax.
 - [Mileage deduction calculator](https://taxottic.com/calculators/mileage-deduction): Deduction and estimated tax savings from business miles at the 2026 IRS standard mileage rate.
 - [Employee mileage reimbursement calculator](https://taxottic.com/calculators/mileage-reimbursement): What reimbursing a team's business driving costs for the year at the IRS standard rate, per driver, and the net cost after the deduction. For employers rather than filers.
+- [IRS mileage log](https://taxottic.com/calculators/mileage-log): Enter business trips and get an IRS Publication 463 shaped log (date, business purpose, miles), priced at the rate in force on each trip's own date, downloadable as CSV. Runs entirely in the browser; nothing is uploaded.
 - [Effective tax rate calculator](https://taxottic.com/calculators/effective-tax-rate): Effective rate, marginal bracket, total tax, and after-tax take-home, for W-2 or self-employment income.
 - [All calculators](https://taxottic.com/calculators): The full index, including per-state and per-income-amount versions of the self-employment tax calculator.
 
