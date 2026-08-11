@@ -11,7 +11,18 @@
         <!--Bridge View Controller-->
         <scene sceneID="tne-QT-ifu">
             <objects>
-                <viewController id="BYZ-38-t0r" customClass="CAPBridgeViewController" customModule="Capacitor" sceneMemberID="viewController"/>
+                <!--
+                    TaxotticViewController, not the stock
+                    CAPBridgeViewController. It exists solely to override
+                    capacitorDidLoad() and register this app's own
+                    plugins, which Capacitor 8 will otherwise never load:
+                    it registers only packageClassList, and the CLI
+                    writes that from npm packages, so app-target plugins
+                    are invisible to it. Point this back at Capacitor's
+                    class and every Taxottic plugin silently stops
+                    answering. See AppDelegate.swift.
+                -->
+                <viewController id="BYZ-38-t0r" customClass="TaxotticViewController" customModule="App" customModuleProvider="target" sceneMemberID="viewController"/>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
             </objects>
         </scene>
