@@ -417,12 +417,26 @@ const HERO: Record<
         <span className="gold-shine">your personal taxes.</span>
       </>
     ),
+    // Mileage is named here on purpose, and this is the DEFAULT hero, so
+    // it is the only place the wedge reaches a first-time visitor before
+    // they scroll or touch the audience toggle.
+    //
+    // It was absent: the personal subhead listed deductions, forecast and
+    // set-aside, while the business subhead already said "business miles
+    // tracked automatically". So the view most people land on was silent
+    // on the one capability competitors are weakest at, and led instead
+    // with a calm-taxes promise any tax product could make.
+    //
+    // Phrasing is deliberately the Capabilities card's ("Every business
+    // mile, captured on its own") rather than a new claim. The site
+    // should make one mileage promise, not three slightly different ones.
     sub: (
       <>
         Taxottic tracks the personal deductions you&apos;ve already earned,
-        keeps a live federal + state forecast in step with your accounts, and
-        nudges you to set money aside before you need it. For W-2 earners,
-        freelancers, and side-hustlers.
+        logs every business mile you drive on its own, keeps a live federal +
+        state forecast in step with your accounts, and nudges you to set money
+        aside before you need it. For W-2 earners, freelancers, and
+        side-hustlers.
       </>
     ),
     ctaHref: "/example",
