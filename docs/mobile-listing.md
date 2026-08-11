@@ -1,7 +1,7 @@
 # App Store + Play Store listing copy
 
 Copy these fields into App Store Connect and Google Play Console.
-Both stores limit the lengths shown in the table — use the trimmed
+Both stores limit the lengths shown in the table, so use the trimmed
 version for the constrained field, the long version for full
 description.
 
@@ -9,7 +9,7 @@ description.
 
 ## App name
 
-**Taxottic** (12 chars — fits both stores)
+**Taxottic** (12 chars, fits both stores)
 
 ## Subtitle (App Store, ≤30 chars)
 
@@ -40,18 +40,18 @@ Stop wondering what you'll owe. Start the year with a plan.
 
 WHAT YOU GET
 
-• Live tax forecast — federal, state, and self-employment tax
+• Live tax forecast: federal, state, and self-employment tax
   projected to year-end based on your real income and expenses
-• Quarterly estimate calendar — exactly what to send the IRS on
+• Quarterly estimate calendar: exactly what to send the IRS on
   Apr 15, Jun 15, Sep 15, and Jan 15
-• 50+ deduction categories — vehicle, home office, software,
-  travel, meals, retirement, HSA, and more
-• Receipt scanning — snap a photo, our AI reads the vendor, total,
+• 1,025 IRS-cited deductions across 28 categories, vehicle, home
+  office, software, travel, meals, retirement, HSA, and more
+• Receipt scanning: snap a photo, our AI reads the vendor, total,
   date, and category for you
-• Bank connections — link any major US bank, every transaction
+• Bank connections: link any major US bank, every transaction
   auto-categorized
-• W-2 + 1099 import — drop your forms, we extract the numbers
-• Bella, your tax assistant — ask anything in plain English
+• W-2 + 1099 import: drop your forms, we extract the numbers
+• Bella, your tax assistant: ask anything in plain English
 
 TAX-SAVINGS PLAYBOOK
 
@@ -78,11 +78,11 @@ WHO USES TAXOTTIC
 
 PLANS
 
-• Filer ($4.99/mo) — Personal forecast, no business
-• Solo ($19.99/mo) — Single business + bank sync
-• Studio ($49/mo) — Multi-company + team
-• Scale ($129/mo) — Mid-market + audit support
-• Practice (from $299/mo) — CPA / preparer firms
+• Filer ($4.99/mo): Personal forecast, no business
+• Solo ($19.99/mo): Single business + bank sync
+• Studio ($49/mo): Multi-company + team
+• Scale ($129/mo): Mid-market + audit support
+• Practice (from $299/mo): CPA / preparer firms
 
 7-day free trial of Solo on every new account, no credit card
 required.
@@ -139,7 +139,7 @@ Finance, Tax, Bookkeeping, Personal Finance, Business
 | Gambling | No |
 | User-generated content | No (no public posting) |
 | Shares user's location | No |
-| Allows users to interact | Yes — team chat between same-company members |
+| Allows users to interact | Yes, team chat between same-company members |
 
 → Play rating: **Everyone** (target audience: 18+ for finance app)
 
@@ -176,11 +176,11 @@ Apple needs ALL of these device sizes. Generate by opening Safari at
 | 7" tablet | 1024 × 600 | Optional |
 | 10" tablet | 1280 × 800 | Optional |
 
-Same content as iPhone shots — 1-3 most compelling are enough.
+Same content as iPhone shots. 1-3 most compelling are enough.
 
 ### Feature graphic (Play, **required**)
 
-1024 × 500 — promotional banner shown at the top of the Play
+1024 x 500, promotional banner shown at the top of the Play
 listing. Use the existing Taxottic forest-green background with the
 wordmark + tagline "Forecast taxes, capture deductions."
 
@@ -196,6 +196,6 @@ generated from `public/brand/icon-mark-1024.png`).
 
 ## Localizations
 
-English (US) only at launch. Spanish + French queued for v1.1 —
+English (US) only at launch. Spanish + French queued for v1.1,
 the web app strings already extract via Next.js i18n; only the
 store-listing copy and screenshots need localized variants.
