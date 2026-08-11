@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildMileageLog,
   mileageLogToCsv,
+  parseMiles,
+  sanitizeMilesInput,
   type LogTrip,
 } from "./mileage-log";
 
@@ -29,6 +31,72 @@ const trip = (over: Partial<LogTrip> = {}): LogTrip => ({
   to: "Acme Corp, Bloomington",
   miles: 18.4,
   ...over,
+});
+
+describe("typing fractional miles", () => {
+  /**
+   * REGRESSION. Miles were held as a number in component state and
+   * re-parsed on every keystroke, so a controlled input erased the
+   * decimal point the instant it was typed and 18.4 became 184: a
+   * deduction ten times too large on a page that exports an IRS record.
+   *
+   * These drive the REAL function the component calls, keystroke by
+   * keystroke, rather than a copy of its logic. An earlier guard in this
+   * repo re-implemented the code it was meant to protect and therefore
+   * protected nothing; that mistake is not repeated here.
+   */
+  function typeKeys(keys: string): string {
+    // Exactly what a controlled input does: previous state, plus the new
+    // character, back through the sanitiser, and that becomes the value.
+    let state = "";
+    for (const k of keys) state = sanitizeMilesInput(state + k);
+    return state;
+  }
+
+  it("survives the field's own placeholder, 18.4", () => {
+    expect(typeKeys("18.4")).toBe("18.4");
+    expect(parseMiles(typeKeys("18.4"))).toBe(18.4);
+  });
+
+  it("does not turn 18.4 into 184", () => {
+    // The exact defect, stated as its own assertion so a regression is
+    // unmistakable in the failure output.
+    expect(parseMiles(typeKeys("18.4"))).not.toBe(184);
+  });
+
+  it("keeps the trailing dot while the tenths digit is still coming", () => {
+    expect(typeKeys("18.")).toBe("18.");
+    // ...and prices it as 18 until the digit lands, never as NaN.
+    expect(parseMiles("18.")).toBe(18);
+  });
+
+  it("handles a leading decimal", () => {
+    expect(typeKeys("0.5")).toBe("0.5");
+    expect(parseMiles(typeKeys("0.5"))).toBe(0.5);
+    expect(typeKeys(".5")).toBe(".5");
+    expect(parseMiles(".5")).toBe(0.5);
+  });
+
+  it("handles the reviewer's other traced cases", () => {
+    expect(parseMiles(typeKeys("4.25"))).toBe(4.25);
+    expect(parseMiles(typeKeys("4.25"))).not.toBe(425);
+  });
+
+  it("refuses a second decimal point instead of mangling the number", () => {
+    expect(typeKeys("1.2.3")).toBe("1.23");
+  });
+
+  it("strips letters and separators a phone keypad can emit", () => {
+    expect(sanitizeMilesInput("1,234.5")).toBe("1234.5");
+    expect(sanitizeMilesInput("12abc.5")).toBe("12.5");
+  });
+
+  it("treats blank and junk as zero rather than NaN", () => {
+    expect(parseMiles("")).toBe(0);
+    expect(parseMiles(".")).toBe(0);
+    expect(parseMiles("abc")).toBe(0);
+    expect(parseMiles("-5")).toBe(0);
+  });
 });
 
 describe("pricing follows the trip date", () => {

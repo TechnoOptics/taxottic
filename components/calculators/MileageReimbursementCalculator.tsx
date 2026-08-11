@@ -6,6 +6,7 @@ import { CarIcon } from "@/components/ui/Icons";
 import { formatCents } from "@/lib/tax/forecast";
 import { calculateReimbursement } from "@/lib/calculators/mileage-reimbursement";
 import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
+import { parseRateParam } from "@/lib/calculators/rate-param";
 
 /**
  * Team mileage reimbursement, for an employer rather than a filer.
@@ -42,7 +43,7 @@ export function MileageReimbursementCalculator({
   const [drivers, setDrivers] = useState(initial?.drivers ?? "");
   const [miles, setMiles] = useState(initial?.miles ?? "");
   const [rate, setRate] = useState(
-    initial?.rate ? parseFloat(initial.rate) : 0.21,
+    parseRateParam(initial?.rate, 0.21),
   );
 
   const driversNum = parseFloat(drivers.replace(/,/g, "")) || 0;

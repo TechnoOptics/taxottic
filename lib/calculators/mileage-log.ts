@@ -18,6 +18,47 @@ import { mileageRateCentsForDate } from "@/lib/mileage/deduction";
  * supplied.
  */
 
+/**
+ * Sanitise a keystroke in a miles field, returning a STRING.
+ *
+ * Returning a string is the entire point, and it is load-bearing.
+ *
+ * MileageLogBuilder originally kept miles as a `number` in state and ran
+ * `parseFloat` on every keystroke. In a controlled React input that
+ * silently makes fractional miles impossible to type. Keying 1, 8, ., 4:
+ *
+ *   "1"    parseFloat -> 1     renders "1"
+ *   "18"   parseFloat -> 18    renders "18"
+ *   "18."  parseFloat -> 18    renders "18"   <-- the "." is erased
+ *   "184"  parseFloat -> 184   renders "184"
+ *
+ * So 18.4 became 184, a deduction ten times too large, on a page whose
+ * whole purpose is producing an IRS-shaped record. The unit tests missed
+ * it because they call buildMileageLog({miles: 18.4}) directly and never
+ * pass through the input.
+ *
+ * Keeping the raw string in state until compute time is what the sibling
+ * calculators already do, which is why they never had this bug.
+ */
+export function sanitizeMilesInput(raw: string): string {
+  // Strip anything that is not a digit or a dot.
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  // Keep only the FIRST dot, so "1.2.3" cannot exist, but a trailing
+  // "18." survives long enough for the user to type the tenths digit.
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) return cleaned;
+  return (
+    cleaned.slice(0, firstDot + 1) +
+    cleaned.slice(firstDot + 1).replace(/\./g, "")
+  );
+}
+
+/** Parse a sanitised miles string for computation. Blank and "18." are 0 and 18. */
+export function parseMiles(value: string): number {
+  const n = parseFloat(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export type LogTrip = {
   /** ISO yyyy-mm-dd. */
   date: string;

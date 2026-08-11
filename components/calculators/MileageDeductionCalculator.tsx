@@ -6,6 +6,7 @@ import { useState } from "react";
 import { formatCents } from "@/lib/tax/forecast";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
+import { parseRateParam } from "@/lib/calculators/rate-param";
 
 /**
  * Public, no-login business-mileage deduction calculator.
@@ -106,7 +107,7 @@ export function MileageDeductionCalculator({
     ),
   );
   const [rate, setRate] = useState(
-    initial?.rate ? parseFloat(initial.rate) : 0.3,
+    parseRateParam(initial?.rate, 0.3),
   );
 
   const setPeriodMiles = (i: number, v: string) =>

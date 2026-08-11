@@ -6,6 +6,8 @@ import { formatCents } from "@/lib/tax/forecast";
 import {
   buildMileageLog,
   mileageLogToCsv,
+  parseMiles,
+  sanitizeMilesInput,
   type LogTrip,
 } from "@/lib/calculators/mileage-log";
 
@@ -24,20 +26,45 @@ import {
 
 const TAX_YEAR = 2026;
 
-const BLANK: LogTrip = { date: "", purpose: "", from: "", to: "", miles: 0 };
+/**
+ * Form state keeps miles as the RAW STRING the user is typing, and only
+ * converts at compute time. Holding it as a number and re-parsing each
+ * keystroke is what made "18.4" collapse to 184, because the controlled
+ * input rewrote the value from state and deleted the decimal point the
+ * moment it was typed. See sanitizeMilesInput for the full trace.
+ */
+type FormRow = Omit<LogTrip, "miles"> & { miles: string };
+
+const BLANK: FormRow = { date: "", purpose: "", from: "", to: "", miles: "" };
 
 export function MileageLogBuilder() {
-  const [trips, setTrips] = useState<LogTrip[]>([{ ...BLANK }, { ...BLANK }, { ...BLANK }]);
+  const [trips, setTrips] = useState<FormRow[]>([
+    { ...BLANK },
+    { ...BLANK },
+    { ...BLANK },
+  ]);
 
   // Only rows with something in them count. Three empty starter rows
   // should not report themselves as three problems.
   const entered = trips.filter(
-    (t) => t.date || t.purpose.trim() || t.from.trim() || t.to.trim() || t.miles > 0,
+    (t) =>
+      t.date || t.purpose.trim() || t.from.trim() || t.to.trim() || t.miles.trim(),
   );
-  const summary = buildMileageLog(entered, TAX_YEAR);
+  const summary = buildMileageLog(
+    entered.map((t) => ({ ...t, miles: parseMiles(t.miles) })),
+    TAX_YEAR,
+  );
   const hasRows = entered.length > 0;
 
-  function update(i: number, patch: Partial<LogTrip>) {
+  /**
+   * Index of an input row within `entered`, or -1. Used so the issue list
+   * can cite the number the user actually sees on screen: `summary.rows`
+   * is indexed over the FILTERED set, so numbering issues by that index
+   * told people to fix "Trip 1" while the row was labelled "Trip 2".
+   */
+  const enteredIndexOf = (i: number) => entered.indexOf(trips[i]);
+
+  function update(i: number, patch: Partial<FormRow>) {
     setTrips((prev) => prev.map((t, j) => (i === j ? { ...t, ...patch } : t)));
   }
 
@@ -59,8 +86,18 @@ export function MileageLogBuilder() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `mileage-log-${TAX_YEAR}.csv`;
+    // Append before clicking: a detached anchor is ignored by Firefox and
+    // by some mobile WebViews, which is the shell this product also runs
+    // inside. Revoke on the next tick rather than the next line, because
+    // revoking synchronously can cancel a download that has not started
+    // reading the blob yet.
+    a.style.display = "none";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
   }
 
   return (
@@ -95,7 +132,7 @@ export function MileageLogBuilder() {
           <tbody>
             {trips.map((t, i) => {
               // Match this input row to its computed row, if it has one.
-              const idx = entered.indexOf(t);
+              const idx = enteredIndexOf(i);
               const row = idx === -1 ? null : summary.rows[idx];
               return (
                 <tr key={i} className="align-top">
@@ -138,13 +175,9 @@ export function MileageLogBuilder() {
                   <td className="px-1">
                     <input
                       inputMode="decimal"
-                      value={t.miles || ""}
+                      value={t.miles}
                       onChange={(e) =>
-                        update(i, {
-                          miles: parseFloat(
-                            e.target.value.replace(/[^0-9.]/g, ""),
-                          ) || 0,
-                        })
+                        update(i, { miles: sanitizeMilesInput(e.target.value) })
                       }
                       placeholder="18.4"
                       aria-label={`Trip ${i + 1} miles`}
@@ -208,13 +241,23 @@ export function MileageLogBuilder() {
                 more detail
               </p>
               <ul className="mt-2 grid gap-1 text-xs text-ink-soft">
-                {summary.rows.flatMap((r, i) =>
-                  r.issues.map((issue) => (
-                    <li key={`${i}-${issue}`}>
-                      Trip {i + 1}: {issue}
+                {/*
+                  Numbered by the row's position in the VISIBLE table, not
+                  its position in the filtered summary. Those diverge the
+                  moment a blank starter row sits above a filled one, and
+                  the mismatch pointed people at the wrong row: the list
+                  said "Trip 1" while the offending input was labelled
+                  "Trip 2".
+                */}
+                {trips.flatMap((t, rowIndex) => {
+                  const idx = enteredIndexOf(rowIndex);
+                  if (idx === -1) return [];
+                  return summary.rows[idx].issues.map((issue) => (
+                    <li key={`${rowIndex}-${issue}`}>
+                      Trip {rowIndex + 1}: {issue}
                     </li>
-                  )),
-                )}
+                  ));
+                })}
               </ul>
               <p className="mt-2 text-xs text-ink-muted">
                 Nothing has been filled in for you. A log that invents the
