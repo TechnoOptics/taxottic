@@ -14,6 +14,7 @@ import { shouldCloseOpenTail } from "./tail-close";
 import { tripDeductionCents } from "./deduction";
 import { buildTrackFromRaw, type RawPoint } from "./track";
 import { notify } from "@/lib/push";
+import { placesForTrip } from "./place-match";
 
 /**
  * Shared "segment the staging pool → materialise closed trips" core.
@@ -847,6 +848,34 @@ export async function finalizeUserTrips(
         notes: carried?.notes ?? null,
         tax_year: taxYear,
         deduction_cents: dCents,
+        // Anchor the drive to the company's places.
+        //
+        // These two columns have existed since the first mileage
+        // migration and were NEVER WRITTEN: 185 trips recorded between
+        // 2026-06-01 and 2026-08-15 all carried null on both, while
+        // app/mileage/business/page.tsx rendered them through
+        // placeLabel() and therefore showed every drive with no "from"
+        // and no "to". That is what a driver means when a trip "does
+        // not show the complete start and finish".
+        //
+        // It also silently disabled the operator question that matters:
+        // "they arrived at a client, so where is the drive that left
+        // home?" cannot be asked while no trip knows where it began.
+        //
+        // placesForTrip returns null for a point that is inside no
+        // place, which is a legitimate answer and much better than
+        // labelling a motorway services as "home". See
+        // lib/mileage/place-match.ts.
+        ...placesForTrip(
+          { lat: trip.startPoint.lat, lng: trip.startPoint.lng },
+          { lat: trip.endPoint.lat, lng: trip.endPoint.lng },
+          places.map((pl) => ({
+            id: pl.id,
+            lat: pl.lat,
+            lng: pl.lng,
+            radius_m: pl.radiusM,
+          })),
+        ),
       })
       .select("id")
       .single();
