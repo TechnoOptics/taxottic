@@ -305,10 +305,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        # Both functional projects use Chromium; --with-deps pulls the Linux
-        # system libraries the headless browser links against.
-        run: npx playwright install --with-deps chromium
+      - name: Set up Playwright Chromium
+        # Both functional projects use Chromium. Cached browser build + apt
+        # deps; see .github/actions/setup-playwright for why the deps are
+        # installed on a cache hit too.
+        uses: ./.github/actions/setup-playwright
 
       - name: Run functional e2e
         # `npm run e2e` scopes to the chromium + mobile-chrome projects; the
@@ -356,8 +357,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Set up Playwright Chromium
+        uses: ./.github/actions/setup-playwright
 
       - name: Compare against Linux baselines
         # Compares the public pages against the committed *-linux.png
@@ -396,8 +397,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Set up Playwright Chromium
+        uses: ./.github/actions/setup-playwright
 
       - name: Compare components against Linux baselines
         # Renders the isolated component harness (its own Vite server — no
@@ -440,8 +441,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Set up Playwright Chromium
+        uses: ./.github/actions/setup-playwright
 
       - name: Regenerate page-VR baselines
         run: npm run e2e:visual:update

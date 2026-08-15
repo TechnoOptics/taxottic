@@ -1,0 +1,89 @@
+name: Set up Playwright Chromium
+description: >-
+  Restore the Chromium build from cache (or download it), and always install
+  the apt-level dependencies. Shared by every job in ci.yml that runs
+  Playwright, so the four of them cannot drift apart.
+
+# WHY THIS EXISTS
+#
+# On 2026-08-15 `npx playwright install --with-deps chromium` stalled twice
+# within half an hour on different jobs (run 31908026625 job 95068762282,
+# run 31909367157 job 95072027793). Each stall ate the job's full
+# `timeout-minutes: 15` and was cancelled mid-download, so the actual test
+# step never ran. Both passed on re-run in under five minutes.
+#
+# That failure mode is worse than a slow build: a cancelled job renders as a
+# red check indistinguishable from a real regression, which teaches people to
+# re-run red checks without reading them. On a repo where CI is the gate on
+# IRS-deductible tax math, that habit is the actual damage.
+#
+# It was NOT concurrency between the parallel Playwright jobs. In both
+# incidents the two sibling jobs downloaded Chromium successfully during the
+# very window the third was stalled — a single hung connection to
+# cdn.playwright.dev, not contention. Caching removes that CDN from the hot
+# path on every run after the first.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Playwright version
+      # Key the cache on the version in package-lock.json, NOT on a hash of
+      # the lockfile — an unrelated dependency bump would otherwise evict a
+      # perfectly good browser build.
+      #
+      # playwright-core is the package that pins the browser revision.
+      # @playwright/test and @playwright/experimental-ct-react both resolve
+      # to a single playwright-core here, so one key covers every job. If a
+      # future change ever splits them onto two versions, this resolves to
+      # the wrong one — the `node -p` below fails loudly rather than
+      # silently caching a mismatched build.
+      id: version
+      shell: bash
+      run: |
+        version="$(node -p "require('$GITHUB_WORKSPACE/package-lock.json').packages['node_modules/playwright-core'].version")"
+        echo "Playwright (playwright-core): $version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright browsers
+      # ~/.cache/ms-playwright holds chromium-<rev>, chromium_headless_shell-<rev>
+      # and ffmpeg-<rev>. All four jobs share one key, so they share one entry.
+      # On a cold cache all of them miss and all of them try to save it; the
+      # losers get a benign "cache entry already exists" warning, not a failure.
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.version.outputs.version }}
+
+    - name: Install Chromium and system dependencies
+      # Cache miss: fetch the browser build and the apt packages together.
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      # Fail fast and self-describingly. The job ceiling is 15 min; a stall
+      # here now burns 5 and names the install step as the culprit, instead
+      # of consuming the whole budget and presenting as a test failure.
+      timeout-minutes: 5
+      run: npx playwright install --with-deps chromium
+
+    - name: Install system dependencies
+      # Cache hit: the browser build is restored, but apt packages are NOT in
+      # the cache — they live in /usr, which we do not and should not cache.
+      #
+      # This step is deliberately NOT skipped on a hit. On ubuntu-24.04 every
+      # shared library Chromium links against (libasound2t64, libatk1.0-0t64,
+      # libcairo2, libcups2t64, libdrm2, ...) is already present, and what
+      # `--with-deps` actually installs is nine FONT packages:
+      # fonts-freefont-ttf, fonts-unifont, fonts-ipafont-gothic,
+      # fonts-wqy-zenhei, fonts-tlwg-loma-otf, xfonts-{encodings,utils,
+      # cyrillic,scalable}.
+      #
+      # The committed *-linux.png baselines were rendered by the
+      # visual-baselines job WITH those fonts installed. Dropping them here
+      # would change glyph fallback underneath a pixel-exact diff and turn
+      # the visual and ct jobs red for a reason unrelated to any UI change —
+      # trading one class of false red check for another. ~13s to keep the
+      # font environment identical to the baselines is the right price.
+      if: steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      timeout-minutes: 5
+      run: npx playwright install-deps chromium
