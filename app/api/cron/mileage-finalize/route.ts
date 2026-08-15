@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { emailUndeliveredAlerts } from "@/lib/mileage/email-undelivered";
+import { emailUnconfirmedDrives } from "@/lib/mileage/email-unconfirmed";
 import { finalizeUserTrips, reconcileBrokenTrips } from "@/lib/mileage/finalize";
 import {
   evaluateTrackerStall,
@@ -866,8 +867,21 @@ export async function GET(req: NextRequest) {
     console.error(`[mileage-finalize] email sweep threw: ${String(e)}`);
   }
 
+  // Drives waiting on a business/personal call. Email, not push:
+  // there are zero iOS push tokens, so a push-only reminder notifies
+  // one driver and silently skips the other while recording a send.
+  let driveReminders = {
+    driversWithPending: 0, emailed: 0, skippedThrottled: 0, failed: 0,
+  };
+  try {
+    driveReminders = await emailUnconfirmedDrives(admin, Date.now());
+  } catch (e) {
+    console.error(`[mileage-finalize] drive reminder sweep threw: ${String(e)}`);
+  }
+
   return NextResponse.json({
     ok: true,
+    driveReminders,
     // Non-zero `emailed` is the signal that a human was actually told
     // about a driver the app could not reach.
     trackerEmail: emailSweep,
