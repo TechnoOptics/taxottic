@@ -296,4 +296,48 @@ describe("the tracker feeds the self-check honestly", () => {
     expect(block).toContain('dsProbe.outcome === "ok"');
     expect(block).not.toContain('dsProbe.stage === "done"');
   });
+
+  /**
+   * These three were hardcoded null under a comment asserting car signals
+   * are "NOT fetched on this path". carProbe is awaited earlier in the
+   * same function and feeds six columns of the same heartbeat, so the
+   * assertion was false and two checks reported "unknown" forever.
+   *
+   * A capability check wired to a literal cannot fail, which makes it
+   * indistinguishable from a passing one. Guarding at the call site is
+   * the only place that catches it: evaluate() was always correct.
+   */
+  it("feeds bluetooth permission from the car probe, not from a literal", () => {
+    const src = readFileSync(TRACKER, "utf8");
+    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
+    const block = call.slice(0, call.indexOf("}),"));
+    expect(block).toContain("carProbe.value?.bluetoothPermission");
+    expect(block).toContain("carProbe.value?.bluetoothPermissionAsked");
+    expect(block).not.toMatch(/bluetoothPermission:\s*null/);
+    expect(block).not.toMatch(/bluetoothPermissionAsked:\s*null/);
+  });
+
+  it("judges the car-signals plugin on outcome, never on presence", () => {
+    const src = readFileSync(TRACKER, "utf8");
+    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
+    const block = call.slice(0, call.indexOf("}),"));
+    expect(block).toContain('carProbe.outcome === "ok"');
+    expect(block).not.toMatch(/carSignalsOk:\s*null/);
+    // `carProbe.value != null` would call a probe that returned an empty
+    // payload "live", the same mistake deviceStatusOk already made once.
+    expect(block).not.toMatch(/carSignalsOk:\s*carProbe\.value\s*!=\s*null/);
+  });
+
+  it("leaves no self-check input pinned to a bare literal", () => {
+    // Catch-all. Any future input silently wired to null or a constant
+    // produces a check that can never reach a verdict, which is the
+    // failure mode this whole block exists to prevent.
+    const src = readFileSync(TRACKER, "utf8");
+    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
+    const block = call.slice(0, call.indexOf("}),"));
+    const pinned = [...block.matchAll(/^\s*(\w+):\s*(null|true|false),/gm)].map(
+      (m) => m[1],
+    );
+    expect(pinned).toEqual([]);
+  });
 });

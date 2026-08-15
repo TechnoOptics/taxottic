@@ -1213,14 +1213,31 @@ export async function sendHeartbeat(): Promise<void> {
             // claim we looked when the read actually returned.
             probed: geofence != null || dsProbe.outcome !== "timeout",
             locationAuthorization: truth?.locationAuthorization ?? null,
-            // Car signals are NOT fetched on this path, so they are
-            // reported as unknown rather than guessed. An invented
-            // "live" here would be worse than a gap: it would assert a
-            // capability is working on no evidence, which is the exact
-            // failure this module exists to end.
-            bluetoothPermission: null,
-            bluetoothPermissionAsked: null,
-            carSignalsOk: null,
+            // These were hardcoded null under a comment claiming car
+            // signals are "NOT fetched on this path". They are: carProbe
+            // is awaited earlier in this same function and its value is
+            // written to six columns of this very heartbeat, a few lines
+            // below. The comment was wrong, so two checks reported
+            // "unknown" forever and never ran in production.
+            //
+            // That is the same defect the platform bug was, in the same
+            // call site: the module is correct and the caller does not
+            // feed it. A check that cannot reach a verdict is worse than
+            // no check, because it occupies the slot where a real one
+            // would go.
+            //
+            // Worth wiring rather than deleting: bluetooth_permission is
+            // the check that distinguishes "the driver declined" from
+            // "we never showed the prompt", and the second is our bug.
+            // It sat broken with six paired cars precisely because those
+            // two look identical in the permission value alone.
+            bluetoothPermission: carProbe.value?.bluetoothPermission ?? null,
+            bluetoothPermissionAsked:
+              carProbe.value?.bluetoothPermissionAsked ?? null,
+            // outcome, not presence, for the same reason deviceStatusOk
+            // uses outcome above: a probe that returns nothing must not
+            // read as a plugin that answered.
+            carSignalsOk: carProbe.outcome === "ok",
           }),
         ),
         exitProbeMs: exitProbe.ms,
