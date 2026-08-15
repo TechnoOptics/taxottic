@@ -127,3 +127,28 @@ export function calculateReimbursement({
     isSplitYear: periods.length > 1,
   };
 }
+
+/**
+ * Price miles entered per rate period, at each period's own rate.
+ *
+ * Extracted so it can be TESTED, which was the whole problem.
+ * lib/tax/split-rate-mileage.test.ts originally defined its own copy of
+ * this loop and asserted against that, so reverting the calculator to a
+ * single flat rate, the exact bug the file exists to prevent, left all
+ * of its tests green. A guard that re-implements the code it guards
+ * protects nothing.
+ *
+ * Rounds ONCE on the total. Callers that display per-period lines round
+ * those separately for display only; the deduction figure is this one.
+ */
+export function priceMilesByPeriod(
+  milesPerPeriod: number[],
+  periods: { centsPerMile: number }[],
+): number {
+  return Math.round(
+    periods.reduce(
+      (sum, p, i) => sum + Math.max(0, milesPerPeriod[i] ?? 0) * p.centsPerMile,
+      0,
+    ),
+  );
+}

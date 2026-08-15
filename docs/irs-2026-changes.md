@@ -59,7 +59,7 @@ Additional sanity in the engine:
 ### Standard mileage rate: RESOLVED, and 2026 is a SPLIT-RATE year
 
 **Status**: no longer provisional. This section previously described a
-$0.70/mile placeholder carried forward from 2025 while the Notice was
+placeholder carried forward from the 2025 rate while the Notice was
 pending. The Notice has since published and the constants were updated,
 so that description is history, kept here only so the maintenance note
 below is not read as still-pending work.
@@ -144,7 +144,7 @@ $5,250 exclusion for employer-paid student loan principal/interest, indexed from
 ## Things outside this PR that need manual refresh
 
 ### Standard mileage rate (TY 2026)
-The IRS publishes the 2026 mileage rate in a separate **Notice** (typically late December 2025). At the time of this writing it has not been released; `MILEAGE_RATE_2026_PER_MILE_CENTS` defaults to the 2025 rate of $0.70. **Action**: once the IRS Notice drops, update the constant to the 2026 cents-per-mile figure and the forecast assumption text will pick it up automatically.
+RESOLVED. The IRS publishes the mileage rate in a separate **Notice**. When this table was written the 2026 Notice had not landed and the constant carried the prior year's value forward. It has since been published and applied: see the "Standard mileage rate" section above, which also records that 2026 is a split-rate year. No action remains.
 
 ### Social Security wage base verification
 The SSA Cost-of-Living-Adjustment release (mid-October each year) sets the next year's wage base. The 2026 value of **$184,500** in `constants-2026.ts` is the figure announced in October 2025; verify against <https://www.ssa.gov/oact/cola/cbb.html> before production deploy.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTaxYearConstants } from "./constants";
+import { priceMilesByPeriod } from "@/lib/calculators/mileage-reimbursement";
 import { mileageRateCentsForDate } from "@/lib/mileage/deduction";
 
 /**
@@ -26,16 +27,21 @@ import { mileageRateCentsForDate } from "@/lib/mileage/deduction";
 const TAX_YEAR = 2026;
 const C = getTaxYearConstants(TAX_YEAR);
 
-/** What the calculator now does: price each period at its own rate. */
+/**
+ * THE FUNCTION THE CALCULATOR ACTUALLY CALLS.
+ *
+ * This file used to define its own copy of the period loop here. A
+ * review pointed out the consequence: reverting the calculator to
+ * `Math.round(miles * RATE_CENTS)`, the exact bug this file exists to
+ * prevent, left every test below green, because they were exercising
+ * the copy. Now they drive the shipped code.
+ */
 function deductionCents(milesByPeriod: number[]): number {
-  const periods = C.MILEAGE_RATE_PERIODS ?? [
-    { fromIso: `${TAX_YEAR}-01-01`, centsPerMile: C.MILEAGE_RATE_PER_MILE_CENTS },
-  ];
-  return Math.round(
-    periods.reduce(
-      (sum, p, i) => sum + (milesByPeriod[i] ?? 0) * p.centsPerMile,
-      0,
-    ),
+  return priceMilesByPeriod(
+    milesByPeriod,
+    C.MILEAGE_RATE_PERIODS ?? [
+      { centsPerMile: C.MILEAGE_RATE_PER_MILE_CENTS },
+    ],
   );
 }
 

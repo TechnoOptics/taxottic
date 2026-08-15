@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { getTaxYearConstants } from "@/lib/tax/constants";
+import { loadNECRecipients } from "./generate-1099";
 
 /**
  * The section 6041 information-reporting threshold is not a constant,
@@ -92,5 +93,68 @@ describe("1099 reporting threshold follows the tax year", () => {
         "instead. The threshold inflation-adjusts from 2027, so any " +
         "literal is wrong again every year.",
     ).toEqual([]);
+  });
+});
+
+/**
+ * BEHAVIOURAL cover, added after a review showed the checks above are
+ * defeatable in one line.
+ *
+ * The tests above grep the source. That catches a numeric literal
+ * reappearing in the filter, and it does NOT catch the obvious
+ * workaround: leave the call to reportingThresholdCents(taxYear) exactly
+ * where it is and make that function `return 60_000`. Every string
+ * assertion still passes and the $600 bug is fully restored.
+ *
+ * So these call the real exported loader with a stubbed client and
+ * assert on which recipients survive. That is the behaviour the firm
+ * actually gets, and no amount of source rearrangement can fake it.
+ */
+describe("the threshold is enforced, not merely referenced", () => {
+  /** Minimal stand-in for the PostgREST chain the loader uses. */
+  function stubAdmin(rows: { amount_cents: number; notes: string }[]) {
+    const chain: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "in"]) {
+      chain[m] = () => chain;
+    }
+    // Awaiting the chain resolves to the PostgREST envelope.
+    (chain as { then: unknown }).then = (
+      resolve: (v: { data: unknown }) => unknown,
+    ) => resolve({ data: rows });
+    return { from: () => chain } as unknown as Parameters<
+      typeof loadNECRecipients
+    >[0];
+  }
+
+  const ROWS = [
+    { amount_cents: 199_900, notes: "Just under 2026 threshold" },
+    { amount_cents: 200_000, notes: "Exactly at 2026 threshold" },
+    { amount_cents: 500_000, notes: "Well over" },
+    { amount_cents: 60_000, notes: "Old $600 threshold" },
+  ];
+
+  it("2026 excludes everyone under $2,000", async () => {
+    const out = await loadNECRecipients(stubAdmin(ROWS), "co", 2026);
+    const names = out.map((r) => r.name).sort();
+    expect(names).toEqual(["Exactly at 2026 threshold", "Well over"]);
+    // The specific regression: a $600 contractor must NOT get a form.
+    expect(names).not.toContain("Old $600 threshold");
+  });
+
+  it("2025 still uses the pre-OBBBA $600 threshold", async () => {
+    // Correctness in both directions. A firm filing a late 2025 return
+    // must still get forms for $600 payments, so the fix must not have
+    // simply raised the number everywhere.
+    const out = await loadNECRecipients(stubAdmin(ROWS), 2025 as never, 2025);
+    expect(out).toHaveLength(4);
+  });
+
+  it("is boundary-exact: one cent under is excluded", async () => {
+    const edge = [
+      { amount_cents: 199_999, notes: "one cent under" },
+      { amount_cents: 200_000, notes: "exactly at" },
+    ];
+    const out = await loadNECRecipients(stubAdmin(edge), "co", 2026);
+    expect(out.map((r) => r.name)).toEqual(["exactly at"]);
   });
 });

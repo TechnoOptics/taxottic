@@ -15,6 +15,19 @@ import {
   STANDARD_DEDUCTION_2025,
   type FilingStatus,
 } from "./constants-2025";
+import { fullYearAverageMileageRateCents } from "@/lib/mileage/deduction";
+
+/**
+ * Worked example for the "log your miles" nudge, derived from the tax
+ * engine rather than typed. 5,000 miles is the illustrative figure; the
+ * rate and the resulting deduction must follow whatever year the engine
+ * is on, including split-rate years.
+ */
+const EXAMPLE_MILES = 5_000;
+const EXAMPLE_RATE_CENTS = fullYearAverageMileageRateCents(
+  new Date().getUTCFullYear(),
+);
+const EXAMPLE_DEDUCTION_CENTS = Math.round(EXAMPLE_MILES * EXAMPLE_RATE_CENTS);
 
 export type SuggestionTone = "high" | "medium" | "low";
 
@@ -220,7 +233,17 @@ export function buildYearEndSuggestions(
     out.push({
       id: "log_mileage",
       title: "Log your business miles before December 31",
-      body: `Standard mileage is $0.70 per business mile this year. Even 5,000 miles is a $3,500 deduction, at your marginal rate that's roughly ${formatCents(Math.round(350_000 * (result.marginalRate || 0.22)))} in saved tax. Update your business profile with year-end miles.`,
+      // Rate and the worked example are DERIVED. This used to state the
+      // prior year's rate as current, with a worked example computed
+      // from it, so both numbers were wrong by the same margin once the
+      // new IRS Notice landed. The narrow version of
+      // lib/tax/rate-copy.test.ts never saw it, because that guard only
+      // scanned app/ and components/.
+      //
+      // fullYearAverageMileageRateCents is the right helper for an
+      // annual projection in a split-rate year: it month-weights the
+      // periods rather than picking one of them.
+      body: `Standard mileage is ${(EXAMPLE_RATE_CENTS / 100).toFixed(3).replace(/0+$/, "").replace(/\.$/, "")} dollars per business mile this year. Even 5,000 miles is a ${formatCents(EXAMPLE_DEDUCTION_CENTS)} deduction, at your marginal rate that's roughly ${formatCents(Math.round(EXAMPLE_DEDUCTION_CENTS * (result.marginalRate || 0.22)))} in saved tax. Update your business profile with year-end miles.`,
       tone: "medium",
       cta: {
         label: "Update business profile",
@@ -236,7 +259,11 @@ export function buildYearEndSuggestions(
     out.push({
       id: "vehicle_method_set",
       title: "Pick a vehicle deduction method",
-      body: "If you drive for the business, you can deduct either standard mileage ($0.70/mile) or actual expenses (gas, insurance, depreciation). Standard is simpler; actual sometimes wins. Set this once and we'll do the rest.",
+      // Second hardcoded rate in this file, same stale value. Derived
+      // now, and phrased "about" because in a split-rate year there is
+      // no single figure: EXAMPLE_RATE_CENTS is the month-weighted
+      // average across the year's periods.
+      body: `If you drive for the business, you can deduct either standard mileage (about ${EXAMPLE_RATE_CENTS.toFixed(1)} cents a mile) or actual expenses (gas, insurance, depreciation). Standard is simpler; actual sometimes wins. Set this once and we'll do the rest.`,
       tone: "low",
       cta: {
         label: "Update business profile",
