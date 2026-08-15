@@ -219,6 +219,20 @@ export async function POST(req: NextRequest) {
     //                             is not the variable.
     device_probe_ms: num("deviceProbeMs"),
     device_probe_stage: oneOf("deviceProbeStage", STAGE_VALUES),
+    // THE VERDICT COLUMN. Everything around it is a measurement; this
+    // says whether the capabilities we ship are actually alive.
+    //
+    // Free text on purpose, and generously sized. It carries names, not
+    // a count ("dead=geofence_plugin,device_status_plugin"), because a
+    // count tells you something is wrong and a name tells you what to
+    // fix. Truncating it to a stage-style enum would defeat the point,
+    // and the capability list is expected to grow.
+    //
+    // 200 chars holds every id we have several times over. If it ever
+    // truncates, the LEADING ids survive, and summarizeForHeartbeat puts
+    // dead ones first, so the most serious finding is the last thing
+    // lost rather than the first.
+    self_check: str("selfCheck", 200),
     exit_probe_ms: num("exitProbeMs"),
     exit_probe_stage: oneOf("exitProbeStage", STAGE_VALUES),
     // OS app-state truth (@capacitor/app appStateChange), not
