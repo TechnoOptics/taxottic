@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { resolveOverlapAction } from "./finalize";
 
 describe("resolveOverlapAction (finalize dedupe decision)", () => {
@@ -287,5 +288,64 @@ describe("describeRenderRefusal (a refusal nobody can see is how this survives)"
     expect(msg).toContain("implausible_average_speed");
     expect(msg).toContain("1343.10");
     expect(msg).not.toContain("0.00 mi");
+  });
+});
+
+/**
+ * The gate above is thoroughly tested AS A FUNCTION, and that is not the
+ * same as being applied.
+ *
+ * Deleting the `assessRenderedTrack` call from `renderTripFromRaw`
+ * entirely left all 32 tests in this file passing, because every test
+ * calls the gate directly and none of them proves the render path
+ * consults it. A refactor that dropped the call would restore the
+ * $1,875 fabrication with a green suite.
+ *
+ * This is the fourth instance of one defect shape found on 2026-08-15:
+ * the module is correct and the CALL SITE is unguarded. Here it guards a
+ * tax record, so it gets a positional assertion rather than a
+ * presence-only one: the safety argument depends on the gate running
+ * BEFORE the destructive delete, not merely somewhere in the function.
+ */
+describe("the render path actually consults the gate", () => {
+  const SRC = readFileSync("lib/mileage/finalize.ts", "utf8");
+  const body = (() => {
+    const i = SRC.indexOf("async function renderTripFromRaw");
+    const rest = SRC.slice(i + 10);
+    const m = rest.match(/\n(?:export )?(?:async )?function /);
+    return SRC.slice(i, m ? i + 10 + m.index! : SRC.length);
+  })();
+
+  it("calls assessRenderedTrack on the rebuilt track", () => {
+    expect(body).toContain(
+      "assessRenderedTrack(track.points, track.distanceMiles)",
+    );
+  });
+
+  it("gates BEFORE deleting the existing points, not after", () => {
+    // A refusal must leave the trip exactly as it was. Gating after the
+    // delete would destroy the human-blessed track and then decline to
+    // replace it, which is worse than the bug being prevented.
+    const gate = body.indexOf("assessRenderedTrack(");
+    const del = body.indexOf(".delete()");
+    expect(gate).toBeGreaterThan(-1);
+    expect(del).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(del);
+  });
+
+  it("gates AFTER the never-shrink check, so a refusal cannot widen it", () => {
+    const shrink = body.indexOf("shouldReplaceTrack(");
+    const gate = body.indexOf("assessRenderedTrack(");
+    expect(shrink).toBeGreaterThan(-1);
+    expect(shrink).toBeLessThan(gate);
+  });
+
+  it("records the refusal and returns without writing", () => {
+    const gate = body.indexOf("assessRenderedTrack(");
+    const del = body.indexOf(".delete()");
+    const between = body.slice(gate, del);
+    // Observable: a frozen trip must be findable, not silent.
+    expect(between).toContain("recordRenderRefusal(");
+    expect(between).toMatch(/return null;/);
   });
 });
