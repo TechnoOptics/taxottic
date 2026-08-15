@@ -43,12 +43,34 @@ import UserNotifications
 /// fall into the trap it is fixing.
 class TaxotticViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
-        // Must match Android's MainActivity list. If you add a plugin
-        // there and not here, iOS goes quiet again in exactly the way
-        // described above, and nothing will throw to tell you.
-        bridge?.registerPluginType(TaxotticDeviceStatusPlugin.self)
-        bridge?.registerPluginType(TaxotticGeofencePlugin.self)
-        bridge?.registerPluginType(TaxotticWidgetBridgePlugin.self)
+        // registerPluginInstance, NOT registerPluginType. This is not a
+        // style choice and getting it wrong is silent.
+        //
+        // CapacitorBridge.registerPluginType() opens with:
+        //
+        //     if autoRegisterPlugins { return }
+        //
+        // and autoRegisterPlugins defaults to TRUE. CAPBridgeViewController's
+        // loadView() constructs the bridge without passing that argument, so
+        // it is always true for a storyboard-instantiated controller, so
+        // registerPluginType is ALWAYS a no-op here. It logs nothing and
+        // throws nothing.
+        //
+        // This was shipped once, in 1.3.10, as a "fix" that changed
+        // absolutely nothing: the symptom afterwards was byte-for-byte the
+        // symptom before, device_probe "error" at stage "call" in ~2ms with
+        // every device-truth column NULL. A review caught it by reading the
+        // Capacitor source rather than trusting that a compiling call does
+        // something.
+        //
+        // registerPluginInstance() has no such guard. It goes straight to
+        // plugins[jsName] = instance and exports the JS shim.
+        //
+        // Must match Android's MainActivity list. If you add a plugin there
+        // and not here, iOS goes quiet again and nothing will tell you.
+        bridge?.registerPluginInstance(TaxotticDeviceStatusPlugin())
+        bridge?.registerPluginInstance(TaxotticGeofencePlugin())
+        bridge?.registerPluginInstance(TaxotticWidgetBridgePlugin())
     }
 }
 

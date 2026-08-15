@@ -58,9 +58,12 @@ function androidPlugins(): string[] {
 }
 
 function iosPlugins(): string[] {
+  // registerPluginInstance(Foo()), not registerPluginType(Foo.self).
+  // See the "no-op API" test below for why the distinction is the whole
+  // ballgame.
   return [
     ...read(IOS_APP_DELEGATE).matchAll(
-      /registerPluginType\((Taxottic\w+)\.self\)/g,
+      /registerPluginInstance\((Taxottic\w+)\(\)\)/g,
     ),
   ].map((m) => m[1]);
 }
@@ -91,6 +94,35 @@ describe("iOS registers its plugins at all", () => {
 
   it("registers at least one plugin", () => {
     expect(iosPlugins().length).toBeGreaterThan(0);
+  });
+
+  it("does NOT use registerPluginType, which is a no-op here", () => {
+    // THE TRAP THIS FILE FAILED TO CATCH THE FIRST TIME.
+    //
+    // CapacitorBridge.registerPluginType() begins `if autoRegisterPlugins
+    // { return }`, and autoRegisterPlugins defaults to true because
+    // CAPBridgeViewController.loadView() constructs the bridge without
+    // passing it. So on a storyboard-instantiated controller the call
+    // compiles, runs, logs nothing, throws nothing, and registers
+    // nothing.
+    //
+    // Version 1.3.10 shipped exactly that and changed nothing at all.
+    // This file passed 6 of 6 against it, because it only ever checked
+    // that some registration-shaped TEXT existed. Text is not behaviour.
+    //
+    // No source-text assertion can prove registration WORKED. What it
+    // can do is refuse the API that provably does not, which is the
+    // difference between this test being theatre and being a guard.
+    const src = read(IOS_APP_DELEGATE);
+    const uncommented = src
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("//"))
+      .join("\n");
+    expect(
+      uncommented,
+      "registerPluginType returns immediately when autoRegisterPlugins " +
+        "is true, which it always is here. Use registerPluginInstance.",
+    ).not.toMatch(/registerPluginType\s*\(/);
   });
 });
 
