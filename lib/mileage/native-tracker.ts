@@ -40,6 +40,10 @@ import { toPoint } from "./to-point";
 import { shouldKeepFix } from "./parked-filter";
 import { isArmInterrupted, parseArmLatch } from "./arm-latch";
 import { WEB_BUILD_ID } from "@/lib/build-id";
+import {
+  evaluate as evaluateSelfCheck,
+  summarizeForHeartbeat,
+} from "./self-check";
 import { getCarSignalsProbed } from "./car-signals";
 import {
   ensureHeartbeatTimer,
@@ -1157,6 +1161,46 @@ export async function sendHeartbeat(): Promise<void> {
         // on the native method".
         deviceProbeMs: dsProbe.ms,
         deviceProbeStage: dsProbe.stage,
+        // ONE FIELD THAT SAYS WHETHER WHAT WE SHIPPED IS ACTUALLY ALIVE.
+        //
+        // Every field around this one reports a measurement. This one
+        // reports a VERDICT, and the difference is the whole point: a
+        // dead capability has always shown up here as a null, and a null
+        // reads as "not measured yet" and gets skipped. Three separate
+        // features were dead in production for weeks behind exactly that
+        // silence. "dead=geofence_plugin" is an accusation, and someone
+        // chases an accusation.
+        //
+        // Named rather than counted: a count says something is wrong, a
+        // name says what to fix, and this string is what gets read in a
+        // database row by someone who was not here today.
+        selfCheck: summarizeForHeartbeat(
+          evaluateSelfCheck({
+            platform:
+              truth?.platform === "ios" || truth?.platform === "android"
+                ? truth.platform
+                : "web",
+            // The probes above have run by the time we build this
+            // payload, so silence here is a real refusal, not an
+            // unasked question.
+            probed: true,
+            deviceStatusOk: dsProbe.stage === "done" ? true : dsProbe.ms != null ? false : null,
+            deviceStatusMs: dsProbe.ms,
+            deviceStatusStage: dsProbe.stage,
+            geofenceArmState: geofence?.armState ?? null,
+            geofenceCount: geofence?.registeredCount ?? null,
+            locationAuthorization: truth?.locationAuthorization ?? null,
+            backgroundLocation: truth?.backgroundRefresh ?? null,
+            // Car signals are NOT fetched on this path, so they are
+            // reported as unknown rather than guessed. An invented
+            // "live" here would be worse than a gap: it would assert a
+            // capability is working on no evidence, which is the exact
+            // failure this module exists to end.
+            bluetoothPermission: null,
+            bluetoothPermissionAsked: null,
+            carSignalsOk: null,
+          }),
+        ),
         exitProbeMs: exitProbe.ms,
         exitProbeStage: exitProbe.stage,
         // Was the app actually in the foreground when the probes ran?
