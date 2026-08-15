@@ -1,8 +1,7 @@
 name: Set up Playwright Chromium
 description: >-
-  Restore the Chromium build from cache (or download it), and always install
-  the apt-level dependencies. Shared by every job in ci.yml that runs
-  Playwright, so the four of them cannot drift apart.
+  Restore Chromium from cache and install the apt-level dependencies. Shared
+  by every job in ci.yml that runs Playwright, so the four cannot drift apart.
 
 # WHY THIS EXISTS
 #
@@ -20,8 +19,8 @@ description: >-
 # It was NOT concurrency between the parallel Playwright jobs. In both
 # incidents the two sibling jobs downloaded Chromium successfully during the
 # very window the third was stalled — a single hung connection to
-# cdn.playwright.dev, not contention. Caching removes that CDN from the hot
-# path on every run after the first.
+# cdn.playwright.dev, not contention. So the jobs keep their own installs;
+# caching is what takes that CDN off the hot path after the first run.
 
 runs:
   using: composite
@@ -34,9 +33,9 @@ runs:
       # playwright-core is the package that pins the browser revision.
       # @playwright/test and @playwright/experimental-ct-react both resolve
       # to a single playwright-core here, so one key covers every job. If a
-      # future change ever splits them onto two versions, this resolves to
-      # the wrong one — the `node -p` below fails loudly rather than
-      # silently caching a mismatched build.
+      # future change ever splits them across two versions this reads the
+      # wrong one, so it fails loudly (exit 1) rather than silently caching
+      # a mismatched build.
       id: version
       shell: bash
       run: |
@@ -46,44 +45,50 @@ runs:
 
     - name: Cache Playwright browsers
       # ~/.cache/ms-playwright holds chromium-<rev>, chromium_headless_shell-<rev>
-      # and ffmpeg-<rev>. All four jobs share one key, so they share one entry.
-      # On a cold cache all of them miss and all of them try to save it; the
-      # losers get a benign "cache entry already exists" warning, not a failure.
-      id: cache
+      # and ffmpeg-<rev> — the ~170MB of CDN download that hung. All jobs share
+      # one key, so they share one entry. On a cold cache they all miss and all
+      # try to save it; the losers log a benign "cache entry already exists".
+      #
+      # Cache scope note: an entry written on a branch is visible to that
+      # branch only. PRs can read the base branch's entry, so the first run
+      # on main after this merges is what populates the shared one.
       uses: actions/cache@v4
       with:
         path: ~/.cache/ms-playwright
         key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.version.outputs.version }}
 
     - name: Install Chromium and system dependencies
-      # Cache miss: fetch the browser build and the apt packages together.
-      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
-      # Fail fast and self-describingly. The job ceiling is 15 min; a stall
-      # here now burns 5 and names the install step as the culprit, instead
-      # of consuming the whole budget and presenting as a test failure.
-      timeout-minutes: 5
-      run: npx playwright install --with-deps chromium
-
-    - name: Install system dependencies
-      # Cache hit: the browser build is restored, but apt packages are NOT in
-      # the cache — they live in /usr, which we do not and should not cache.
+      # Deliberately unconditional rather than branched on a cache hit, for
+      # two reasons.
       #
-      # This step is deliberately NOT skipped on a hit. On ubuntu-24.04 every
-      # shared library Chromium links against (libasound2t64, libatk1.0-0t64,
-      # libcairo2, libcups2t64, libdrm2, ...) is already present, and what
-      # `--with-deps` actually installs is nine FONT packages:
-      # fonts-freefont-ttf, fonts-unifont, fonts-ipafont-gothic,
-      # fonts-wqy-zenhei, fonts-tlwg-loma-otf, xfonts-{encodings,utils,
-      # cyrillic,scalable}.
+      # 1. `playwright install` is already cache-aware: it skips any browser
+      #    revision already present in ~/.cache/ms-playwright. Skipping the
+      #    command on a hit would buy nothing except a failure mode — a
+      #    partially-saved cache would then never be repaired, and every run
+      #    would fail identically until the key changed. Running it always
+      #    means a bad cache self-heals on the next run.
       #
-      # The committed *-linux.png baselines were rendered by the
-      # visual-baselines job WITH those fonts installed. Dropping them here
-      # would change glyph fallback underneath a pixel-exact diff and turn
-      # the visual and ct jobs red for a reason unrelated to any UI change —
-      # trading one class of false red check for another. ~13s to keep the
-      # font environment identical to the baselines is the right price.
-      if: steps.cache.outputs.cache-hit == 'true'
-      shell: bash
-      timeout-minutes: 5
-      run: npx playwright install-deps chromium
+      # 2. The apt half is NOT cacheable and must run every time. On
+      #    ubuntu-24.04 every shared library Chromium links against
+      #    (libasound2t64, libatk1.0-0t64, libcairo2, libcups2t64, libdrm2,
+      #    ...) is already on the image; what `--with-deps` actually installs
+      #    is nine FONT packages — fonts-freefont-ttf, fonts-unifont,
+      #    fonts-ipafont-gothic, fonts-wqy-zenhei, fonts-tlwg-loma-otf,
+      #    xfonts-{encodings,utils,cyrillic,scalable}. Those live in /usr,
+      #    never in the cache, and the committed *-linux.png baselines were
+      #    rendered with them present. Dropping them would shift glyph
+      #    fallback underneath a pixel-exact diff and turn the visual and ct
+      #    jobs red for reasons unrelated to any UI change — trading one
+      #    class of false red check for another.
+      #
+      # Net effect: ~13s of apt every run, and the ~12s browser download
+      # (the part that actually hung) only when the version changes.
+      #
+      # `timeout` rather than the step's `timeout-minutes:` because composite
+      # action steps do not support that key. It is not ignored — the runner
+      # rejects the manifest outright ("Unexpected value 'timeout-minutes'")
+      # and every job fails before it starts; verified in run 31910629275.
+      # A stall now fails at 5 min naming this step (exit 124), instead of
+      # consuming the job's whole 15 and presenting as a test failure.
+      run: timeout 300 npx playwright install --with-deps chromium
