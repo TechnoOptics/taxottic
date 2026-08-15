@@ -78,8 +78,14 @@ describe("structured pricing tracks the billing engine", () => {
     const schemaRegion = src.slice(start, end);
     const allowed = enginePrices();
     const stray: string[] = [];
-    for (const m of schemaRegion.matchAll(/\$(\d[\d,]*(?:\.\d{2})?)/g)) {
-      const n = m[1].replace(/,/g, "");
+    // Both forms. The original only matched a "$" prefix, so a bare
+    // "599.00" string, exactly the /pricing/firms drift this file's own
+    // header warns about, sailed through. JSON-LD prices are written
+    // WITHOUT a currency symbol, so the unprefixed form is the likelier
+    // one to appear here.
+    const PRICE_RE = /\$(\d[\d,]*(?:\.\d{2})?)|["'](\d{2,}\.\d{2})["']/g;
+    for (const m of schemaRegion.matchAll(PRICE_RE)) {
+      const n = (m[1] ?? m[2]).replace(/,/g, "");
       const norm = Number(n).toFixed(2);
       if (!allowed.has(norm)) stray.push(m[0]);
     }

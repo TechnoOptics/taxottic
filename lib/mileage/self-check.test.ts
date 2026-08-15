@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   UNREGISTERED_MS_CEILING,
   deadCapabilities,
@@ -28,7 +29,7 @@ const web: ProbeInput = {
   probed: true,
   deviceStatusOk: null, deviceStatusMs: null, deviceStatusStage: null,
   geofenceArmState: null, geofenceCount: null,
-  locationAuthorization: null, backgroundLocation: null,
+  locationAuthorization: null,
   bluetoothPermission: null, bluetoothPermissionAsked: null, carSignalsOk: null,
 };
 
@@ -45,7 +46,7 @@ const abelAndroid: ProbeInput = {
   platform: "android",
   deviceStatusOk: true, deviceStatusMs: 12, deviceStatusStage: "done",
   geofenceArmState: "armed", geofenceCount: 4,
-  locationAuthorization: "always", backgroundLocation: true,
+  locationAuthorization: "always",
   bluetoothPermission: "not_requested", bluetoothPermissionAsked: false,
   carSignalsOk: true,
 };
@@ -177,6 +178,49 @@ describe("telling slow apart from unregistered", () => {
   });
 });
 
+describe("the platform must come from the OS, not from the dead plugin", () => {
+  it("still reports dead when the plugin returns nothing at all", () => {
+    // THE BUG THAT MADE THIS WHOLE MODULE INERT.
+    //
+    // native-tracker derived platform from `truth`, which IS the device
+    // status the plugin returns. A dead plugin returns nothing, so truth
+    // was null, platform fell back to "web", every capability reported
+    // `unsupported`, and the summary came out "ok".
+    //
+    // The module was blind on exactly the devices it was written for,
+    // and the graceIos fixture hid it by hardcoding platform "ios", a
+    // state production could not reach. Platform now comes from
+    // Capacitor.getPlatform(), which answers whether or not any plugin
+    // is alive.
+    const everythingNull = {
+      ...graceIos,
+      deviceStatusOk: false, deviceStatusMs: 1, deviceStatusStage: "call",
+      locationAuthorization: null, geofenceArmState: null,
+    };
+    expect(summarizeForHeartbeat(evaluate(everythingNull))).toMatch(/^dead=/);
+  });
+
+  it("a web platform with the same nulls is genuinely fine", () => {
+    // The distinction the fallback destroyed: web has no plugins, so
+    // nulls there mean nothing is wrong.
+    const asWeb = { ...graceIos, platform: "web" as const };
+    expect(summarizeForHeartbeat(evaluate(asWeb))).toBe("ok");
+  });
+});
+
+describe("a plugin that answers with nothing is not healthy", () => {
+  it("does not report live merely because the probe reached done", () => {
+    // getDeviceStatusProbed calls onStage("done") BEFORE checking that a
+    // value came back, so stage alone cannot tell a real answer from an
+    // empty one. The tracker now passes outcome === "ok" instead.
+    const answeredNothing = {
+      ...graceIos,
+      deviceStatusOk: false, deviceStatusStage: "done", deviceStatusMs: 40,
+    };
+    expect(verdictOf(answeredNothing, "device_status_plugin")).toBe("dead");
+  });
+});
+
 describe("web and unprobed states stay quiet", () => {
   it("never reports web as broken", () => {
     expect(deadCapabilities(evaluate(web))).toEqual([]);
@@ -207,5 +251,49 @@ describe("the human-facing line", () => {
   it("says so plainly when all is well", () => {
     const fixed = { ...abelAndroid, bluetoothPermission: "granted", bluetoothPermissionAsked: true };
     expect(describeChecks(evaluate(fixed))).toMatch(/every shipped capability is answering/i);
+  });
+});
+
+/**
+ * THE WIRING, not the module.
+ *
+ * Every test above drives evaluate() directly with a hand-built input.
+ * That is necessary and it is NOT sufficient, and the gap is exactly how
+ * this module shipped inert: the tracker fed it a platform derived from
+ * the dead plugin's own payload, so a broken iPhone summarised as "ok"
+ * while all 21 unit tests stayed green.
+ *
+ * Mutation-verified: reverting the tracker to the old derivation leaves
+ * every behavioural test above passing. Only reading the call site
+ * catches it. This is the third time in one day that a guard tested its
+ * own copy of the logic instead of the shipped path.
+ */
+const TRACKER = "lib/mileage/native-tracker.ts";
+
+describe("the tracker feeds the self-check honestly", () => {
+  it("takes platform from Capacitor, never from the device-status payload", () => {
+    const src = readFileSync(TRACKER, "utf8");
+    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
+    const block = call.slice(0, call.indexOf("}),"));
+    expect(
+      block,
+      "platform must come from cap.getPlatform(). Deriving it from " +
+        "`truth` means a dead plugin yields null, platform falls back to " +
+        "web, every capability reports unsupported, and the summary says " +
+        "ok on precisely the devices this module exists to catch.",
+    ).toContain("cap?.getPlatform?.()");
+    expect(block, "truth is the dead plugin's own payload").not.toMatch(
+      /platform:\s*\n?\s*truth\?\./,
+    );
+  });
+
+  it("judges the device-status plugin on outcome, not on stage", () => {
+    const src = readFileSync(TRACKER, "utf8");
+    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
+    const block = call.slice(0, call.indexOf("}),"));
+    // onStage("done") fires before the value is checked, so a plugin
+    // that answers with nothing reaches "done" and would read as live.
+    expect(block).toContain('dsProbe.outcome === "ok"');
+    expect(block).not.toContain('dsProbe.stage === "done"');
   });
 });

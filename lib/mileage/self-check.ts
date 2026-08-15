@@ -43,7 +43,6 @@ export type CapabilityId =
   | "geofence_plugin"
   | "geofence_armed"
   | "location_always"
-  | "background_location"
   | "bluetooth_permission"
   | "car_signals_plugin";
 
@@ -93,7 +92,6 @@ export type ProbeInput = {
   geofenceArmState: string | null;
   geofenceCount: number | null;
   locationAuthorization: string | null;
-  backgroundLocation: boolean | null;
   bluetoothPermission: string | null;
   bluetoothPermissionAsked: boolean | null;
   carSignalsOk: boolean | null;
@@ -228,18 +226,26 @@ export function evaluate(p: ProbeInput): CapabilityCheck[] {
     );
   }
 
-  // ---- background location --------------------------------------
-  if (!native) {
-    out.push(check("background_location", "unsupported", "Not applicable on web."));
-  } else if (p.backgroundLocation == null) {
-    out.push(check("background_location", "unknown", "Not reported."));
-  } else {
-    out.push(
-      p.backgroundLocation
-        ? check("background_location", "live", "Granted.")
-        : check("background_location", "denied", "Not granted. Only foreground drives record."),
-    );
-  }
+  // ---- background location: DELIBERATELY NOT A CAPABILITY --------
+  //
+  // There used to be a `background_location` check here and it was wrong
+  // in both directions.
+  //
+  // On iOS it was fed from UIApplication.backgroundRefreshStatus, which
+  // is BACKGROUND APP REFRESH, a different setting from background
+  // location authorisation (CLLocationManager .authorizedAlways). A
+  // phone with App Refresh on and Location set to While Using reported
+  // "Granted", which is false.
+  //
+  // On Android the Java plugin never emits the field at all, so it was
+  // permanently null, permanently `unknown`, and a completely healthy
+  // Android device could never reach "ok". A check that no device can
+  // ever satisfy is a check people learn to ignore, which costs more
+  // than the check was ever worth.
+  //
+  // location_always already reports the real signal correctly on both
+  // platforms, so this was a duplicate that disagreed with its twin.
+  // One accurate check beats two that argue.
 
   // ---- bluetooth, where "never asked" is its own answer ----------
   //

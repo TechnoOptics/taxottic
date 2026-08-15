@@ -394,54 +394,37 @@ final class TaxotticGeofenceStore {
     }
 
     /**
-     * Re-derive a fix's wall-clock time from the monotonic clock.
+     * WITHDRAWN. Do not reinstate without reading this.
      *
-     * The stored `time` is whatever the platform believed when the fix
-     * was recorded, and a boot-anchor shift moves a whole batch of them
-     * by a constant offset without making any single one look wrong. The
-     * monotonic clock cannot move that way, so:
+     * A previous version of this file re-derived each fix's wall clock on
+     * READ, as `now - (elapsedNow - elapsedAtFix)`, to explain a duplicate
+     * drive whose two copies sat a constant 19.3 minutes apart. That
+     * diagnosis was wrong and the code was a regression:
      *
-     *     trueTime = now - (elapsedNow - elapsedAtFix)
+     *  - It made a fix's timestamp depend on the wall clock AT READ TIME.
+     *    drainGeofenceBuffer deliberately tolerates a failed consumeBuffer
+     *    because "ingest is idempotent on captured_at". That stops being
+     *    true the moment two reads of the same line can produce different
+     *    timestamps, so the correction could MANUFACTURE the duplicate it
+     *    was written to prevent.
+     *  - Its reboot guard only caught elapsed-stored > elapsed-now. After a
+     *    reboot to a HIGHER uptime the arithmetic is silently wrong instead.
      *
-     * "how long ago was this, really" answered against the clock that
-     * only ever counts forward. A batch buffered across a clock
-     * correction now lands where it actually happened.
+     * The real mechanism, confirmed in the source rather than inferred:
+     * every drive is captured TWICE on Android, once by the WebView tracker
+     * and once by this service's 1 Hz buffer (native-tracker.ts starts the
+     * service on driving fixes). The two streams upload as separate
+     * batches, and app/api/mileage/ingest shifts any batch whose newest
+     * point is 2 to 30 minutes behind receipt forward to "now". One batch
+     * gets shifted, the other does not, and the same journey lands twice a
+     * constant offset apart. That also explains the roughly 9 m spatial
+     * spread between the copies, which a buffer replay could not produce.
      *
-     * Falls back to the stored time when elapsedNanos is absent, which
-     * is every fix written by a build older than this one. Those keep
-     * exactly the behaviour they had rather than being silently shifted
-     * by a value that was never recorded for them.
-     *
-     * Deliberately applied on READ, not on write: at write time the
-     * anchor may already be wrong, and there is nothing to compare
-     * against. At read time we hold both clocks at once.
+     * elapsedNanos is still RECORDED below. It costs nothing, it is the
+     * right raw material for diagnosing genuine clock movement, and it is
+     * evidence rather than a rewrite. It just must not be used to
+     * retroactively change a timestamp.
      */
-    private static JSONObject correctTime(JSONObject fix) {
-        long elapsedAtFix = fix.optLong("elapsedNanos", 0L);
-        if (elapsedAtFix <= 0L) return fix;
-        try {
-            long agoMs = (SystemClock.elapsedRealtimeNanos() - elapsedAtFix) / 1_000_000L;
-            // A negative age means the fix claims to be from the future,
-            // which happens only if the device rebooted between write and
-            // read: elapsedRealtime restarts at zero, so the stored value
-            // belongs to a different epoch and is meaningless. Keep the
-            // wall clock in that case, it is the better of two bad
-            // options.
-            if (agoMs < 0L) return fix;
-            long derived = System.currentTimeMillis() - agoMs;
-            long stored = fix.optLong("time", 0L);
-            if (stored > 0L) {
-                // Record the disagreement so the field can tell us how
-                // often this fires and by how much, instead of the fix
-                // being invisible once it works.
-                fix.put("timeDriftMs", derived - stored);
-            }
-            fix.put("time", derived);
-        } catch (JSONException ignored) {
-            // Leave the fix exactly as stored.
-        }
-        return fix;
-    }
 
     /** Read every buffered fix without removing it. */
     static JSONArray readBuffer(Context context) {
@@ -454,7 +437,7 @@ final class TaxotticGeofenceStore {
                 while ((line = reader.readLine()) != null) {
                     if (line.isEmpty()) continue;
                     try {
-                        out.put(correctTime(new JSONObject(line)));
+                        out.put(new JSONObject(line));
                     } catch (JSONException ignored) {
                         // One corrupt line must not lose the rest.
                     }

@@ -114,6 +114,24 @@ describe("throttling", () => {
     expect(buildReminders([d], NOW)).toHaveLength(1);
   });
 
+  it("throttles on the NEWEST reminder, proven with two real timestamps", () => {
+    // The original version of this test used null for one drive. Nulls
+    // are filtered before the reduce, so only one timestamp survived and
+    // min equalled max: swapping the comparator still passed. Two real
+    // timestamps are required to tell the two apart.
+    //
+    // If it throttled on the OLDEST, a driver with a 10-day-old reminder
+    // and a 1-hour-old one would be mailed again immediately.
+    const out = buildReminders(
+      [
+        drive({ tripId: "old", lastRemindedAt: new Date(NOW - 10 * DAY).toISOString() }),
+        drive({ tripId: "recent", lastRemindedAt: new Date(NOW - 3_600_000).toISOString() }),
+      ],
+      NOW,
+    );
+    expect(out, "the 1-hour-old reminder must suppress this driver").toEqual([]);
+  });
+
   it("throttles on the most recent reminder across the driver's drives", () => {
     // A driver accumulating new drives daily must not get a fresh email
     // every day just because the newest drive has never been mentioned.

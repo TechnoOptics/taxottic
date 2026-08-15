@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { type GpsPoint } from "@/lib/mileage/segmentation";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
 import { rejectImplausibleJumps } from "@/lib/mileage/plausible-jump";
+import { correctBatchClockSkew } from "@/lib/mileage/clock-skew";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,44 +79,24 @@ export async function POST(req: NextRequest) {
     console.log("[ingest] 400, missing_company user=" + user.id);
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
-  // Device-clock correction. Two failure modes, both fixed by SHIFTING
-  // the batch rather than pinning individual points:
-  //
-  //  - Clock AHEAD: a future captured_at makes the finalizer's parked
-  //    test (server now - device ts) read negative, so the drive never
-  //    tail-closes. Pinning every skewed point to the identical receipt
-  //    instant (the old behaviour) collapsed the batch to one timestamp,
-  //    and renderTripFromRaw's by-time dedupe then kept ONE point per
-  //    batch — silently deleting the drive's shape (audit #14).
-  //  - Clock BEHIND: every point looks minutes old on arrival, so the
-  //    parked test fires on a live drive and force-closes it every
-  //    ingest, shredding one drive into fragments (audit #13).
-  //
-  // Both are a constant offset across the batch, so compute the skew
-  // from the batch's newest point and subtract it from all of them.
-  // Relative spacing — the thing that makes a track a track — survives.
+  // Device-clock correction. See lib/mileage/clock-skew.ts for the two
+  // failure modes this fixes, and for why the offset is confined to the
+  // batch's contemporaneous cluster instead of reaching every point: a
+  // flush that carries one fresh fix alongside hours of offline backlog
+  // used to drag that backlog forward by up to 30 minutes, which wrote a
+  // second copy of an already-stored drive under a timestamp the
+  // idempotency key below could not recognise.
   const receiptMs = Date.now();
-  const SKEW_TOLERANCE_MS = 2 * 60_000;
-  // A true clock offset is seconds to minutes. A batch HOURS or days
-  // behind receipt is not a broken clock, it is an OFFLINE BACKLOG
-  // finally flushing — its timestamps are correct and must be kept.
-  // Shifting a backlog relabels old drives as "now" and interleaves
-  // them with tonight's points into fabricated mega-trips (observed
-  // live: two impossible trips, 808 mi and 314 mi, 21-mile hops at
-  // 1-minute spacing, after a 2-day-dark phone flushed its buffer).
-  const MAX_BEHIND_SHIFT_MS = 30 * 60_000;
   const finite = rawPoints.filter(isFinitePoint);
-  const newestTs = finite.reduce((a, pt) => Math.max(a, pt.ts), 0);
-  const skewMs = newestTs > 0 ? newestTs - receiptMs : 0;
-  const shiftable =
-    // Ahead of receipt is physically impossible: always a clock issue.
-    (skewMs > SKEW_TOLERANCE_MS ||
-      // Behind is ambiguous: only treat SMALL lags as clock skew.
-      (skewMs < -SKEW_TOLERANCE_MS && skewMs > -MAX_BEHIND_SHIFT_MS));
-  const correctedPoints = shiftable
-    ? finite.map((pt) => ({ ...pt, ts: pt.ts - skewMs }))
-    : finite;
-  const points = correctedPoints.sort((a, b) => a.ts - b.ts);
+  const skew = correctBatchClockSkew(finite, receiptMs);
+  const points = skew.points;
+  if (skew.shifted) {
+    console.log(
+      `[ingest] clock skew ${Math.round(skew.skewMs / 1000)}s corrected ` +
+        `user=${user.id} shifted=${points.length - skew.backlogHeld} ` +
+        `backlog_held=${skew.backlogHeld}`,
+    );
+  }
   if (points.length > 50_000) {
     console.log(
       "[ingest] 413, too_many_points user=" + user.id + " n=" + points.length,
