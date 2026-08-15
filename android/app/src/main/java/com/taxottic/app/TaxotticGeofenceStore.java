@@ -2,6 +2,7 @@ package com.taxottic.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.SystemClock;
 import android.location.Location;
 import android.util.Log;
 
@@ -331,7 +332,32 @@ final class TaxotticGeofenceStore {
                 fix.put("speed", location.hasSpeed() ? (double) location.getSpeed() : JSONObject.NULL);
                 fix.put("bearing", location.hasBearing() ? (double) location.getBearing() : JSONObject.NULL);
                 fix.put("simulated", location.isFromMockProvider());
+                // WALL CLOCK, and it cannot be trusted on its own.
+                //
+                // location.getTime() is a wall-clock value the platform
+                // reconstructs from a boot anchor. If that anchor moves
+                // (clock correction, NTP step, doze resume) every fix in
+                // a batch shifts by the SAME offset, and the batch stays
+                // perfectly self-consistent while pointing at the wrong
+                // time. Nothing downstream can detect it: the points are
+                // a faithful copy of a real drive, just relived.
+                //
+                // Measured 2026-08-12: one Home-to-Zinpro commute landed
+                // twice, the copies 100% identical in space (166 of 166
+                // points within 9 m of the other path) and offset by a
+                // constant 19.3 minutes in time. It double-counted 11.98
+                // miles of deduction, and the plausible-jump gate could
+                // not catch it because nothing inside either copy is
+                // implausible.
                 fix.put("time", location.getTime());
+                // MONOTONIC, and this is the one that survives.
+                //
+                // elapsedRealtimeNanos counts from boot and is immune to
+                // clock changes, which is exactly why Android documents
+                // it as the reliable timestamp for comparing fixes. Read
+                // back in readBuffer() against the CURRENT elapsed clock,
+                // it yields a wall time that cannot drift as a batch.
+                fix.put("elapsedNanos", location.getElapsedRealtimeNanos());
                 // Which wake source started the session that captured
                 // this fix. Defaulted rather than allowed to be null so
                 // fixes buffered by older builds and fixes buffered by
@@ -367,6 +393,56 @@ final class TaxotticGeofenceStore {
         }
     }
 
+    /**
+     * Re-derive a fix's wall-clock time from the monotonic clock.
+     *
+     * The stored `time` is whatever the platform believed when the fix
+     * was recorded, and a boot-anchor shift moves a whole batch of them
+     * by a constant offset without making any single one look wrong. The
+     * monotonic clock cannot move that way, so:
+     *
+     *     trueTime = now - (elapsedNow - elapsedAtFix)
+     *
+     * "how long ago was this, really" answered against the clock that
+     * only ever counts forward. A batch buffered across a clock
+     * correction now lands where it actually happened.
+     *
+     * Falls back to the stored time when elapsedNanos is absent, which
+     * is every fix written by a build older than this one. Those keep
+     * exactly the behaviour they had rather than being silently shifted
+     * by a value that was never recorded for them.
+     *
+     * Deliberately applied on READ, not on write: at write time the
+     * anchor may already be wrong, and there is nothing to compare
+     * against. At read time we hold both clocks at once.
+     */
+    private static JSONObject correctTime(JSONObject fix) {
+        long elapsedAtFix = fix.optLong("elapsedNanos", 0L);
+        if (elapsedAtFix <= 0L) return fix;
+        try {
+            long agoMs = (SystemClock.elapsedRealtimeNanos() - elapsedAtFix) / 1_000_000L;
+            // A negative age means the fix claims to be from the future,
+            // which happens only if the device rebooted between write and
+            // read: elapsedRealtime restarts at zero, so the stored value
+            // belongs to a different epoch and is meaningless. Keep the
+            // wall clock in that case, it is the better of two bad
+            // options.
+            if (agoMs < 0L) return fix;
+            long derived = System.currentTimeMillis() - agoMs;
+            long stored = fix.optLong("time", 0L);
+            if (stored > 0L) {
+                // Record the disagreement so the field can tell us how
+                // often this fires and by how much, instead of the fix
+                // being invisible once it works.
+                fix.put("timeDriftMs", derived - stored);
+            }
+            fix.put("time", derived);
+        } catch (JSONException ignored) {
+            // Leave the fix exactly as stored.
+        }
+        return fix;
+    }
+
     /** Read every buffered fix without removing it. */
     static JSONArray readBuffer(Context context) {
         JSONArray out = new JSONArray();
@@ -378,7 +454,7 @@ final class TaxotticGeofenceStore {
                 while ((line = reader.readLine()) != null) {
                     if (line.isEmpty()) continue;
                     try {
-                        out.put(new JSONObject(line));
+                        out.put(correctTime(new JSONObject(line)));
                     } catch (JSONException ignored) {
                         // One corrupt line must not lose the rest.
                     }
