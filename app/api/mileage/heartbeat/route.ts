@@ -146,6 +146,16 @@ export async function POST(req: NextRequest) {
     // without this a "the fix does not work" report is indistinguishable
     // from "that device never got the fix". Those want opposite responses.
     web_build: str("webBuild", 16),
+    // Which DEVICE wrote this. The status row stays one per (driver,
+    // company) because three readers use maybeSingle() or a
+    // driver-keyed Map and would break on more; this only names the
+    // writer. The append-only history below is where a per-device
+    // timeline actually lives: group it by (driver_user_id, device_id).
+    // Without this, two devices on one account are indistinguishable and
+    // read as one device changing app_version.
+    // Bounded like every other client string: an id we did not generate
+    // is untrusted input, not a promise.
+    device_id: str("deviceId", 64),
     // CAR CONNECTION (CarPlay / Android Auto / car Bluetooth / car audio).
     //
     // car_probe is stored FIRST-CLASS, not as an afterthought. The native

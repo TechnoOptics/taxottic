@@ -68,6 +68,7 @@ import {
 } from "./geofence";
 import type { GeofenceArmState } from "./geofence";
 import { haversineMeters } from "./segmentation";
+import { getDeviceId } from "./device-id";
 
 // Minimal contract for the slice of @capgo/background-geolocation we
 // use. Declared locally (rather than importing the package's types at
@@ -1116,6 +1117,12 @@ export async function sendHeartbeat(): Promise<void> {
         // device-truth failure cannot be told apart from a device that never
         // received the fix for it. See lib/build-id.ts.
         webBuild: WEB_BUILD_ID,
+        // WHICH DEVICE. The status row is one per (driver, company), so
+        // a driver with two phones has them overwrite each other, and
+        // the result reads as a single device changing version. That
+        // cost an evening on 2026-08-15. Opaque per-install id, never a
+        // hardware identifier; see lib/mileage/device-id.ts.
+        deviceId: getDeviceId(),
         trackingEnabled: tracking,
         bufferSize: buffer.length,
         lastCbAgeS: trackerDiag.lastCbAt

@@ -1041,7 +1041,20 @@
 // from "we never showed the prompt". The second is our bug, and the
 // feature sat broken with six paired cars because those two are
 // indistinguishable in the permission value alone.
-const CACHE_VERSION = "v184";
+// v185: one driver's DEVICES can finally be told apart.
+//
+// mileage_device_status keeps one row per (driver, company), so a driver
+// with two phones has them overwrite each other. On 2026-08-15 that
+// produced a status row alternating between app_version 1.3.9 and 1.3.1
+// thirty-one seconds apart. It reads exactly like a downgrade, and it was
+// diagnosed as one, twice. It was two devices.
+//
+// The heartbeat now carries an opaque per-install id (localStorage, never
+// a hardware identifier). The status row is still one per driver, because
+// three readers use maybeSingle() or a driver-keyed Map; it just names
+// the writer now. Per-device history lives in the append-only heartbeats
+// table: GROUP BY (driver_user_id, device_id).
+const CACHE_VERSION = "v185";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
