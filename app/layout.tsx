@@ -41,16 +41,30 @@ const hanken = Hanken_Grotesk({
 // Brand voice rules: keep "calmer way" as the lead because it's the
 // brand line we've consistently surfaced (audit explicitly praised
 // it). Don't keyword-stuff. Don't make claims we can't substantiate.
-// "1,025 IRS-cited deductions" is verifiable from
-// /data/master-deductions-catalog.
+// "1,025 IRS-cited deductions" is verifiable, and this is where from.
+// The old pointer here was /data/master-deductions-catalog, a path that
+// does not exist, which makes a checkable claim look unfalsifiable.
+// The real source is lib/deductions/master.ts (generated from
+// master_business_deduction_checklist_by_entity.xlsx): 1025 entries
+// across 28 categories, every one carrying an irs.gov source URL.
+// Confirm with:
+//   npx tsx -e "import {MASTER_DEDUCTIONS} from './lib/deductions/master';
+//     console.log(MASTER_DEDUCTIONS.length)"
 //
 // Length budget:
 //   - Page title ≤ 60 chars (Google truncates at ~580px wide ≈ 55-60)
 //   - Description ≤ 158 chars (Google truncates at ~158-160)
 // --------------------------------------------------------------------
 const SITE_TITLE = "Taxottic, Tax forecasting for freelancers & small business";
+// Mileage is named here deliberately. It is the most differentiated
+// thing the product does, and it was absent from the site description,
+// the homepage description, and the SoftwareApplication featureList,
+// which is the machine-readable list an answer engine reads to decide
+// what Taxottic can do. "multi-state" was dropped to make room: it is a
+// real capability but a weak differentiator, and it survives in
+// featureList and llms.txt. 151 chars, inside the ~158 budget above.
 const SITE_DESCRIPTION =
-  "Bank-synced quarterly tax forecasts, 1,025 IRS-cited deductions, Schedule C export, multi-state. Calm, accurate, and built for self-employed filers.";
+  "Bank-synced quarterly tax forecasts, automatic GPS mileage tracking, 1,025 IRS-cited deductions, and Schedule C export. Built for self-employed filers.";
 
 // --------------------------------------------------------------------
 // PERFORMANCE + WHERE THE ADMIN noindex WENT

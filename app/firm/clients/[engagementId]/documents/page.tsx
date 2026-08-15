@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTaxYearConstants } from "@/lib/tax/constants";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmContext } from "@/lib/firm/context";
@@ -392,7 +393,17 @@ export default async function DocumentsPage({
                 K-1 picks up the partners list from{" "}
                 <code className="font-mono">business_profiles.k1_partners</code>{" "}
                 (fallback: 100% to the company manager). 1099s
-                aggregate by recipient name and filter ≥ $600.
+                aggregate by recipient name and filter at the section
+                6041 threshold for the engagement&rsquo;s tax year (
+                {new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                  maximumFractionDigits: 0,
+                }).format(
+                  getTaxYearConstants(eng.tax_year)
+                    .INFO_REPORTING_THRESHOLD_CENTS / 100,
+                )}{" "}
+                for {eng.tax_year}).
               </p>
             </div>
 

@@ -1,3 +1,4 @@
+import { MarketingNav } from "@/components/MarketingNav";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
 import { SignInIconLink } from "@/components/SignInIconLink";
@@ -105,6 +106,7 @@ export default function KeeperAlternativePage() {
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
+          <MarketingNav />
           <SignInIconLink />
         </div>
       </header>

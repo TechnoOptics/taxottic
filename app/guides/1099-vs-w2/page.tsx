@@ -1,5 +1,6 @@
 import { JsonLd } from "@/components/seo/JsonLd";
 import { GuideShell, H2, P, UL, LI, Callout } from "@/components/guides/GuideShell";
+import { guideArticleLd } from "@/lib/seo/guide-article";
 
 const SITE = "https://taxottic.com";
 const SLUG = "1099-vs-w2";
@@ -16,16 +17,13 @@ export const metadata = {
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" } },
 };
 
-const ARTICLE_LD = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  headline: TITLE,
+const ARTICLE_LD = guideArticleLd({
+  slug: SLUG,
+  title: TITLE,
   description: DESCRIPTION,
-  mainEntityOfPage: `${SITE}/guides/${SLUG}`,
-  author: { "@type": "Organization", name: "Taxottic", url: SITE },
-  publisher: { "@id": `${SITE}/#organization` },
-  inLanguage: "en-US",
-};
+  published: "2026-06-08",
+  modified: "2026-07-04",
+});
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",

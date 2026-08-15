@@ -82,4 +82,32 @@ async function settleImages(page: import("@playwright/test").Page) {
     null,
     { timeout: 30_000 },
   );
+
+  // `complete` is not enough, and this cost a full CI cycle to find.
+  //
+  // complete === true means the bytes ARRIVED. It says nothing about the
+  // image being decoded and ready to paint, so a screenshot taken right
+  // after it can catch a large image mid-decode. The result is a diff
+  // with the SAME page height and a couple of percent of pixels changed,
+  // which reads like a real regression and is not one.
+  //
+  // Measured: regenerating baselines twice from identical code produced
+  // byte-identical home-mobile snapshots and two DIFFERENT home-desktop
+  // snapshots, every compare failing by exactly 201,324 pixels. Desktop
+  // is where the hero renders its widest variant (lg:aspect-[2.4/1]), so
+  // it is the biggest decode on the page and the only one that lost the
+  // race.
+  //
+  // decode() resolves only once the frame is ready to paint. Awaiting it
+  // is the documented way to make that deterministic.
+  await page.evaluate(async () => {
+    await Promise.all(
+      Array.from(document.querySelectorAll("img")).map((img) =>
+        // Already-decoded images resolve immediately. A decode can reject
+        // if the element is detached mid-flight, which must not fail the
+        // run: the waitForFunction above already proved the bytes landed.
+        img.decode().catch(() => undefined),
+      ),
+    );
+  });
 }

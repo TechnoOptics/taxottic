@@ -2,6 +2,56 @@ import UIKit
 import Capacitor
 import UserNotifications
 
+/// The bridge view controller, subclassed for ONE reason: to register
+/// this app's own plugins.
+///
+/// THE BUG THIS FIXES, and it had been live since the first custom
+/// plugin shipped.
+///
+/// Capacitor 8 does NOT scan the Objective-C runtime for plugins.
+/// `CapacitorBridge.registerPlugins()` builds its list from exactly two
+/// sources: five framework built-ins, and the `packageClassList` array
+/// in the generated capacitor.config.json. That array is written by
+/// `@capacitor/cli` from INSTALLED NPM PACKAGES, so a plugin that lives
+/// in the app target can never appear in it. Being `@objc`, conforming
+/// to `CAPBridgedPlugin`, declaring `jsName`, and being compiled into
+/// the target are all necessary and none of them are sufficient: with
+/// no registration the class is simply never handed to the bridge.
+///
+/// The failure is silent and reads like a working system.
+/// `registerPlugin("TaxotticDeviceStatus")` on the JS side always
+/// returns a proxy, so nothing throws at import. The first actual method
+/// call rejects immediately, which in production looked like
+/// `device_probe = "error"` at stage "call" in 2ms, and left
+/// location_authorization, precise_location, background_refresh,
+/// low_power_mode, geofence_arm_state and geofence_count NULL on every
+/// iOS heartbeat ever recorded.
+///
+/// Android was never affected, which is what made this so confusing to
+/// chase: MainActivity.java calls registerPlugin() explicitly for all
+/// five plugins, so the same code reported perfectly there. One platform
+/// registering and the other not is the entire difference.
+///
+/// Measured cost before the fix: a driver's tracker degraded to
+/// foreground-only capture and six days of driving went unrecorded,
+/// while every field that would have explained why read NULL.
+///
+/// This class deliberately lives in AppDelegate.swift rather than its
+/// own file. A new .swift that is not added to project.pbxproj compiles
+/// to nothing and fails silently, which this repo has shipped twice.
+/// AppDelegate.swift is already in the target, so the fix cannot itself
+/// fall into the trap it is fixing.
+class TaxotticViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        // Must match Android's MainActivity list. If you add a plugin
+        // there and not here, iOS goes quiet again in exactly the way
+        // described above, and nothing will throw to tell you.
+        bridge?.registerPluginType(TaxotticDeviceStatusPlugin.self)
+        bridge?.registerPluginType(TaxotticGeofencePlugin.self)
+        bridge?.registerPluginType(TaxotticWidgetBridgePlugin.self)
+    }
+}
+
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 

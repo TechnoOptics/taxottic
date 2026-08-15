@@ -83,7 +83,7 @@ android/app/release/
 *.apk
 .claude-pr-body.md
 
-# Push-notification credentials — these grant send access to your
+# Push-notification credentials, these grant send access to your
 # users' devices, so they MUST NEVER be committed. The runbook
 # (docs/PUSH_NOTIFICATIONS_SETUP.md) walks through dropping them
 # into the build at sideload time and into Vercel as runtime secrets.
@@ -104,3 +104,13 @@ supabase/.temp/
 # closed is fine and normal; a document describing one that is still open
 # is not.
 docs/security-audit-*.md
+
+# Go-to-market working files. THIS REPO IS PUBLIC.
+#
+# Same reasoning as above, pointed at a different kind of exposure. These
+# hold competitor teardowns, pricing strategy, unlaunched positioning, and
+# operator diagnostics (conversion, trial and signup counts) that are for
+# deciding what to do, not for publishing. Land the RESULT of this work,
+# the shipped copy, the shipped schema, the shipped page, and keep the
+# reasoning that produced it out of the public tree.
+.superpowers/gtm/

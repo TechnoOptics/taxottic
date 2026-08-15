@@ -1,3 +1,4 @@
+import { guideArticleLd } from "@/lib/seo/guide-article";
 import { JsonLd } from "@/components/seo/JsonLd";
 import {
   GuideShell,
@@ -27,16 +28,13 @@ export const metadata = {
   },
 };
 
-const ARTICLE_LD = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  headline: TITLE,
+const ARTICLE_LD = guideArticleLd({
+  slug: SLUG,
+  title: TITLE,
   description: DESCRIPTION,
-  mainEntityOfPage: `${SITE}/guides/${SLUG}`,
-  author: { "@type": "Organization", name: "Taxottic", url: SITE },
-  publisher: { "@id": `${SITE}/#organization` },
-  inLanguage: "en-US",
-};
+  published: "2026-06-08",
+  modified: "2026-07-04",
+});
 
 const BREADCRUMB_LD = {
   "@context": "https://schema.org",

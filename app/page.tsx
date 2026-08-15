@@ -1,3 +1,4 @@
+import { MarketingNav } from "@/components/MarketingNav";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
@@ -76,6 +77,39 @@ function buildSoftwareApplicationOffers() {
   });
 }
 
+/**
+ * AggregateOffer summarising the individual Offers above.
+ *
+ * The individual Offers are valid on their own, but the price-range
+ * snippet Google can render ("From $4.99") comes specifically from
+ * AggregateOffer's `lowPrice`. Both forms coexist deliberately: the
+ * aggregate is a summary, not a replacement, and removing the itemised
+ * Offers to "simplify" would lose the per-tier detail.
+ *
+ * Derived from the offer array rather than written out, because a
+ * hand-typed lowPrice is a number that silently stops being true the
+ * first time a tier is repriced. The one thing this schema must never do
+ * is advertise a price the checkout will not honour.
+ *
+ * CAVEAT worth knowing before reading the output: the offer set mixes
+ * monthly and yearly SKUs, so the honest range spans a $4.99 monthly
+ * floor to a $2,990 annual ceiling. That is a real range over real
+ * offers, not an error, but it means `highPrice` is an annual figure
+ * sitting next to a monthly one. `lowPrice` is the field that carries
+ * the SEO value here, and it is unambiguous.
+ */
+function buildAggregateOffer(offers: ReturnType<typeof buildSoftwareApplicationOffers>) {
+  const prices = offers.map((o) => Number(o.price));
+  return {
+    "@type": "AggregateOffer",
+    lowPrice: Math.min(...prices).toFixed(2),
+    highPrice: Math.max(...prices).toFixed(2),
+    priceCurrency: "USD",
+    offerCount: offers.length,
+    url: `${SITE_ORIGIN}/pricing`,
+  };
+}
+
 const ORGANIZATION_LD = {
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -115,9 +149,18 @@ const ORGANIZATION_LD = {
   // website P856), gives Google's Knowledge Graph a strong, mutually
   // confirmed identity for "Taxottic." Add Twitter / LinkedIn / GitHub
   // here as those profiles go live.
+  //
+  // The two store listings are the strongest additions available today:
+  // both are third-party-verified pages that Apple and Google publish
+  // under the Taxottic name, which is exactly the corroboration
+  // `sameAs` exists to supply. They come from lib/app-stores.ts rather
+  // than being retyped, so the store identity cannot drift between the
+  // download banner, the metadata, and this graph.
   sameAs: [
     "https://www.wikidata.org/wiki/Q140132105",
     "https://technooptics.com",
+    APP_STORE_URL,
+    PLAY_STORE_URL,
   ],
   // Honest, public contact channel. Real email > generic
   // "contact form" placeholder.
@@ -136,7 +179,7 @@ const WEBSITE_LD = {
   url: SITE_ORIGIN,
   name: "Taxottic",
   description:
-    "A calmer way to handle your taxes. Bank-synced quarterly forecasts, 1,025 IRS-cited deductions, Schedule C export, multi-state.",
+    "A calmer way to handle your taxes. Automatic GPS mileage tracking, bank-synced quarterly forecasts, 1,025 IRS-cited deductions, and Schedule C export.",
   publisher: { "@id": `${SITE_ORIGIN}/#organization` },
   inLanguage: "en-US",
   // Sitelinks searchbox: when this site has an internal search at
@@ -154,6 +197,12 @@ const WEBSITE_LD = {
   //   "query-input": "required name=search_term_string",
   // },
 };
+
+// Built once and shared by `offers` and `aggregateOffer` below. Calling
+// the builder twice would work, but sharing the array is what makes the
+// aggregate provably a summary OF those offers rather than a parallel
+// claim that happens to agree today.
+const SUBSCRIPTION_OFFERS = buildSoftwareApplicationOffers();
 
 const SOFTWARE_APP_LD = {
   "@context": "https://schema.org",
@@ -176,12 +225,21 @@ const SOFTWARE_APP_LD = {
   publisher: { "@id": `${SITE_ORIGIN}/#organization` },
   // `offers` (plural) when there's more than one, Google handles
   // either form.
-  offers: buildSoftwareApplicationOffers(),
+  offers: SUBSCRIPTION_OFFERS,
+  // The summary form, derived from the exact array above so the two can
+  // never disagree about what Taxottic costs.
+  aggregateOffer: buildAggregateOffer(SUBSCRIPTION_OFFERS),
   // A 14-day free trial on every paid tier; the consumer voice line
   // is "No credit card. No commitment. Visit and leave at your own
   // pace." which matches Google's expectation for "free to try."
   featureList: [
     "Bank-synced quarterly tax forecasts",
+    // The three mileage entries are the differentiator and were missing
+    // from all eleven. An answer engine reading this list to decide
+    // whether Taxottic tracks drives would have concluded it does not.
+    "Automatic GPS mileage tracking",
+    "Business vs personal drive classification",
+    "IRS standard-rate mileage deduction with map and log",
     "1,025 IRS-cited deductions",
     "Schedule C auto-assembly + PDF export",
     "Multi-state forecasting",
@@ -298,6 +356,7 @@ export default async function Home({
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[4.25rem] flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
+          <MarketingNav />
           <SignInIconLink />
         </div>
         {/* Thin gold sweep - same signature line as the AppHeader. */}
@@ -358,12 +417,26 @@ const HERO: Record<
         <span className="gold-shine">your personal taxes.</span>
       </>
     ),
+    // Mileage is named here on purpose, and this is the DEFAULT hero, so
+    // it is the only place the wedge reaches a first-time visitor before
+    // they scroll or touch the audience toggle.
+    //
+    // It was absent: the personal subhead listed deductions, forecast and
+    // set-aside, while the business subhead already said "business miles
+    // tracked automatically". So the view most people land on was silent
+    // on the one capability competitors are weakest at, and led instead
+    // with a calm-taxes promise any tax product could make.
+    //
+    // Phrasing is deliberately the Capabilities card's ("Every business
+    // mile, captured on its own") rather than a new claim. The site
+    // should make one mileage promise, not three slightly different ones.
     sub: (
       <>
         Taxottic tracks the personal deductions you&apos;ve already earned,
-        keeps a live federal + state forecast in step with your accounts, and
-        nudges you to set money aside before you need it. For W-2 earners,
-        freelancers, and side-hustlers.
+        logs every business mile you drive on its own, keeps a live federal +
+        state forecast in step with your accounts, and nudges you to set money
+        aside before you need it. For W-2 earners, freelancers, and
+        side-hustlers.
       </>
     ),
     ctaHref: "/example",
@@ -540,6 +613,21 @@ function HeroFigure({ audience }: { audience: Audience }) {
               width={1600}
               height={900}
               priority
+              // `priority` alone emits a preload but NOT the priority
+              // hint: measured on the live site 2026-08-10, the only
+              // fetchpriority in the whole document was ="low" on a
+              // script chunk, and Lighthouse's LCP-discovery check
+              // failed on exactly this ("fetchpriority=high should be
+              // applied to the image preload request") while passing
+              // discoverability and eager-loading.
+              //
+              // It matters because three images preload here and this
+              // one is the LCP and the largest: the cream icon mark,
+              // the wordmark (Wordmark.tsx also sets priority), and
+              // this hero. Without an explicit hint they compete at
+              // equal priority, and the measured cost was a 1157ms
+              // resource load duration against 225ms on /pricing.
+              fetchPriority="high"
               sizes="(min-width: 1152px) 1088px, 100vw"
               className="block w-full aspect-[16/9] lg:aspect-[2.4/1] object-cover"
             />
@@ -603,6 +691,26 @@ const PERSONAL: Capability[] = [
     title: "A running picture of what you owe.",
     body: "Every income line, every expense, every quarterly safe harbor folds into a federal + state forecast that updates in step with your bank. Helpful, never alarming.",
     pull: "A friendly number you can trust.",
+  },
+  // Mileage belongs in the PERSONAL list, not only in BUSINESS.
+  //
+  // The homepage defaults to this audience, so until now a first-time
+  // visitor, and every arrival from search or an AI answer, saw four
+  // cards with no mention of drive tracking. The product's most
+  // differentiated capability sat one unlabelled tab click away, under
+  // "For my business", which is the wrong place for the freelancers and
+  // side-hustlers this very hero addresses by name.
+  //
+  // The W-2 caveat is stated on purpose rather than glossed. Commuting
+  // and unreimbursed employee mileage are not deductible, and this
+  // audience explicitly includes W-2 earners. Saying so is not a
+  // weakness in the pitch; being the product that gets that right is
+  // the pitch.
+  {
+    kicker: "Automatic Mileage",
+    title: "Your side-gig miles, logged while you drive.",
+    body: "If any of your income is freelance, 1099, or a side business, those drives are deductible and most people never claim them. Taxottic logs them by GPS in the background, tells business from personal, and prices each at the IRS standard rate with a map and a log that holds up. Commuting to a W-2 job is not deductible, so it is left out.",
+    pull: "The deduction most people forget.",
   },
   {
     kicker: "1,025 IRS-Cited Deductions",
@@ -669,6 +777,24 @@ const FIRM: Capability[] = [
     title: "Your firm's voice, end to end.",
     body: "Your logo. Your colours. Your firm's voice on every reminder. Branded subscriptions billed under your name. Clients only ever see you.",
     pull: "It feels like your firm, because it is.",
+  },
+  // Mileage was absent from the firm audience for the same reason it was
+  // absent from personal: the three capability lists are maintained by
+  // hand and nothing checked that the product's differentiator appeared
+  // in all of them.
+  //
+  // It arguably matters MOST here. Practice-management tools (TaxDome,
+  // Karbon, Canopy) have no mileage capability at all, so this is the
+  // one thing on the firm list a competitor cannot answer. And the
+  // preparer's problem is not tracking, it is substantiation: a client's
+  // reconstructed estimate is a classic audit-risk area, and a
+  // contemporaneous GPS log is the thing that survives a question.
+  // Written to that, not to "track your drives".
+  {
+    kicker: "Substantiated Mileage",
+    title: "Client mileage that arrives already defensible.",
+    body: "Your clients' business drives are captured by GPS as they happen, sorted business or personal, and priced at the IRS standard rate for the period driven. You receive a contemporaneous log with a map instead of a number a client reconstructed in April, and it exports with the rest of the year-end pack.",
+    pull: "No more shoebox estimates to defend.",
   },
   {
     kicker: "Bulk Operations",
@@ -893,6 +1019,13 @@ const TOUR: Record<
         title: "Every deduction, cited to the source.",
         body: "The full 1,025-item catalog from IRS Pub 502, 526, 970, and more, filtered to what actually applies to you. Each one links to the IRC section and the publication that explains it, so nothing you claim is a guess.",
         tags: ["1,025 deductions", "IRC + Pub cited", "Filtered to you"],
+      },
+      {
+        mockup: <MileageMockup solo />,
+        kicker: "While you drive - Mileage",
+        title: "Miles you would otherwise lose.",
+        body: "Drive for freelance or side-business work and the app records it on its own, by GPS, with the phone in your pocket. Each trip is sorted business or personal and priced at the IRS standard rate, with a map and a log built to survive a question. Commutes to a W-2 job are not deductible and are left out.",
+        tags: ["Automatic, by GPS", "Business vs personal", "IRS standard rate"],
       },
       {
         mockup: <ForecastMockup />,
@@ -1431,12 +1564,24 @@ function DeductionCatalogMockup() {
   );
 }
 
-function MileageMockup() {
-  const trips = [
-    { route: "Office → client site", mi: "18.4", driver: "You", color: "#F2D896" },
-    { route: "Supplier pickup", mi: "9.1", driver: "Grace", color: "#7DD3FC" },
-    { route: "Site visit → home", mi: "22.7", driver: "Marco", color: "#86EFAC" },
-  ];
+/**
+ * `solo` renders the freelancer view: one driver, so the per-row driver
+ * column would be noise, and the routes read like a one-person week
+ * rather than a dispatch board. The team version stays the default
+ * because that is what the business and firm audiences are buying.
+ */
+function MileageMockup({ solo = false }: { solo?: boolean } = {}) {
+  const trips = solo
+    ? [
+        { route: "Home → client meeting", mi: "18.4", driver: "", color: "#F2D896" },
+        { route: "Supply run", mi: "9.1", driver: "", color: "#7DD3FC" },
+        { route: "Client site → home", mi: "22.7", driver: "", color: "#86EFAC" },
+      ]
+    : [
+        { route: "Office → client site", mi: "18.4", driver: "You", color: "#F2D896" },
+        { route: "Supplier pickup", mi: "9.1", driver: "Grace", color: "#7DD3FC" },
+        { route: "Site visit → home", mi: "22.7", driver: "Marco", color: "#86EFAC" },
+      ];
   return (
     <MockupFrame label="Mileage · auto-tracked">
       {/* Stylised route map: navy dial with a few coloured driver trails. */}
@@ -1464,7 +1609,9 @@ function MileageMockup() {
               <span className="text-sm text-forest-900 truncate">{t.route}</span>
             </span>
             <span className="flex items-center gap-3 shrink-0 text-[12px]">
-              <span className="text-ink-muted">{t.driver}</span>
+              {t.driver ? (
+                <span className="text-ink-muted">{t.driver}</span>
+              ) : null}
               <span className="tabular-nums text-forest-900">{t.mi} mi</span>
             </span>
           </li>

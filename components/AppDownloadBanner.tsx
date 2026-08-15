@@ -41,7 +41,35 @@ export function AppDownloadBanner() {
   }
 
   return (
-    <div className="border-b border-forest-100 bg-cream/80">
+    // FIXED, not in flow, and that is the whole point.
+    //
+    // This banner cannot know whether to render until after hydration:
+    // the dismissal lives in localStorage and the native check is an
+    // async import of @capacitor/core, so the server renders nothing
+    // and the client decides. In normal flow that means it appears
+    // ~118px tall AFTER first paint and shoves the entire page down.
+    //
+    // Measured 2026-08-10 against a local production build: that single
+    // insertion was the home page's ENTIRE Cumulative Layout Shift.
+    // Bisected by rebuilding with this component stubbed to null, which
+    // took CLS from 0.1304 (0.2608 on some runs) to 0.0000 across three
+    // runs with JavaScript otherwise fully enabled. No other page on the
+    // site scores above 0.000, and this is the only page that mounts it.
+    //
+    // Reserving space instead would punish everyone who already
+    // dismissed it with a permanent empty gap, and a pre-paint inline
+    // script to decide before render risks flashing the banner inside
+    // the native shell, which is the one place it must never appear.
+    // Taking it out of flow removes the shift by construction: it can
+    // now hydrate whenever it likes and move nothing.
+    <div
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-forest-100 bg-cream/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(18,26,42,0.35)]"
+      style={{
+        // Clear the iOS home indicator. Same expression the rest of the
+        // app uses, so this sits correctly in a PWA on a notched phone.
+        paddingBottom: "max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px))",
+      }}
+    >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-forest-900 font-medium">
           Taxottic is on your phone too.{" "}

@@ -1,7 +1,11 @@
 // 1099-NEC and 1099-MISC generators.
 //
 // 1099-NEC (Nonemployee Compensation) is the most common: reports
-// non-employee payments ≥ $600/year to any contractor. The payer
+// non-employee payments to a contractor at or above the section 6041
+// reporting threshold for that tax year. That threshold is NOT a
+// constant: OBBBA section 70433 raised it from $600 to $2,000 for
+// payments after 2025-12-31, and it inflation-adjusts from 2027, so
+// it is always read from getTaxYearConstants(taxYear). The payer
 // (the company) issues one 1099-NEC per recipient to the recipient,
 // the IRS, and the state.
 //
@@ -22,6 +26,7 @@
 //     this on the form before filing
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getTaxYearConstants } from "@/lib/tax/constants";
 
 export type Form1099Variant = "1099-NEC" | "1099-MISC";
 
@@ -75,7 +80,7 @@ export async function loadNECRecipients(
     .eq("tax_year", taxYear)
     .eq("category_code", "contract_labor");
 
-  return rollupByRecipient(data ?? [], "Contract labor");
+  return rollupByRecipient(data ?? [], "Contract labor", taxYear);
 }
 
 /**
@@ -101,14 +106,33 @@ export async function loadMISCRecipients(
       .eq("category_code", "royalties_paid"),
   ]);
   return {
-    rents: rollupByRecipient(rents ?? [], "Rent"),
-    royalties: rollupByRecipient(royalties ?? [], "Royalties"),
+    rents: rollupByRecipient(rents ?? [], "Rent", taxYear),
+    royalties: rollupByRecipient(royalties ?? [], "Royalties", taxYear),
   };
+}
+
+/**
+ * The reporting threshold is READ FROM THE TAX YEAR, never hardcoded.
+ *
+ * This filtered at a literal 60_000 cents ($600) while
+ * INFO_REPORTING_THRESHOLD_CENTS for 2026 is 200_000 ($2,000): OBBBA
+ * section 70433 raised the long-standing section 6041 threshold for
+ * payments made after 2025-12-31. So a firm generating 2026 forms got a
+ * 1099-NEC draft for every contractor paid $600 to $1,999, none of whom
+ * require one.
+ *
+ * Threading the year through matters beyond this one change: the
+ * threshold is inflation-adjusted from 2027, so a hardcoded number is
+ * wrong again every year from here.
+ */
+function reportingThresholdCents(taxYear: number): number {
+  return getTaxYearConstants(taxYear).INFO_REPORTING_THRESHOLD_CENTS;
 }
 
 function rollupByRecipient(
   rows: Array<{ amount_cents: number | null; notes: string | null }>,
   sourceCategory: string,
+  taxYear: number,
 ): Form1099Recipient[] {
   const byName = new Map<string, number>();
   for (const r of rows) {
@@ -122,7 +146,7 @@ function rollupByRecipient(
       total_cents,
       source_category: sourceCategory,
     }))
-    .filter((r) => r.total_cents >= 60_000) // $600+ threshold
+    .filter((r) => r.total_cents >= reportingThresholdCents(taxYear))
     .sort((a, b) => b.total_cents - a.total_cents);
 }
 
@@ -253,7 +277,7 @@ export function render1099HTML(
     <strong>Preparer checklist:</strong>
     <ul style="margin: 4pt 0 0 16pt; padding: 0;">
       <li>Verify recipient TIN via Form W-9 on file (mandatory before filing).</li>
-      <li>Confirm $600 threshold met, IRS won't accept under-threshold filings.</li>
+      <li>Confirm the ${formatWholeDollars(reportingThresholdCents(input.taxYear))} section 6041 reporting threshold is met for ${input.taxYear}.</li>
       <li>Check whether recipient is exempt (corporations are exempt from 1099-NEC).</li>
       <li>Issue Copy B to recipient by January 31; Copy A to IRS via FIRE or paper Form 1096 by the same date.</li>
       <li>If state copy required (most states piggyback the IRS combined-federal-state-filing program), confirm participation.</li>
@@ -279,6 +303,14 @@ function escapeHtml(s: string): string {
 }
 function escapeAttr(s: string): string {
   return s.replace(/"/g, "&quot;");
+}
+/** Thresholds are whole dollars, so "$2,000" reads better than "$2,000.00". */
+function formatWholeDollars(c: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(c / 100);
 }
 function formatCents(c: number): string {
   return new Intl.NumberFormat("en-US", {

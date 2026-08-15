@@ -1,3 +1,4 @@
+import { MarketingNav } from "@/components/MarketingNav";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Wordmark } from "@/components/Wordmark";
@@ -5,12 +6,56 @@ import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MileageDeductionCalculator } from "@/components/calculators/MileageDeductionCalculator";
 import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
+import { getTaxYearConstants } from "@/lib/tax/constants";
 
 const SITE = "https://taxottic.com";
 const SLUG = "mileage-deduction";
-const TITLE = "Mileage Deduction Calculator (2026), Free, IRS Rate";
+
+/**
+ * The rate is READ from the tax engine, never typed into copy.
+ *
+ * It was typed in, and it went stale: this page shipped "70¢/mile" in
+ * its meta description, its FAQ answer, and its body prose while
+ * MILEAGE_RATE_2026_PER_MILE_CENTS had already been corrected to 72.5
+ * (IRS Notice 2026-10). The interactive calculator read the constant and
+ * showed 72.5¢, so the widget and the paragraph directly beneath it
+ * disagreed by 2.5¢ on the same screen.
+ *
+ * The FAQ answer is the part that mattered most: it ships inside
+ * FAQPage JSON-LD, so a wrong IRS figure was eligible to be surfaced as
+ * a Google answer and repeated by assistants, attributed to Taxottic. On
+ * a YMYL tax site that is an accuracy problem, not a typo.
+ *
+ * lib/tax/mileage-rate.test.ts already pins the constant to the IRS
+ * Notice and fails if a year ships a provisional placeholder, so
+ * deriving from it here makes the copy correct by construction.
+ * calculators-rate-copy.test.ts keeps any future hardcoded rate out.
+ */
+const TAX_YEAR = 2026;
+const YEAR_CONSTANTS = getTaxYearConstants(TAX_YEAR);
+const RATE_CENTS = YEAR_CONSTANTS.MILEAGE_RATE_PER_MILE_CENTS;
+
+/**
+ * A split-rate year has no single "the rate", so the copy must not claim
+ * one. 2026 runs 72.5 cents to Jun 30 and 76 cents from Jul 1, and
+ * saying only the first is how the old page understated the second half
+ * of the year. Derived, so a future single-rate year reads naturally
+ * again with no edit.
+ */
+const RATE_PERIODS = YEAR_CONSTANTS.MILEAGE_RATE_PERIODS ?? null;
+/** Compact form for a meta description: "72.5¢ then 76¢ per mile". */
+const RATE_LABEL = RATE_PERIODS
+  ? `${RATE_PERIODS[0].centsPerMile}¢ then ${RATE_PERIODS[1].centsPerMile}¢ per mile`
+  : `${YEAR_CONSTANTS.MILEAGE_RATE_PER_MILE_CENTS}¢/mile`;
+const RATE_SENTENCE = RATE_PERIODS
+  ? `The ${TAX_YEAR} IRS standard mileage rate for business use changed mid-year: ` +
+    `${RATE_PERIODS[0].centsPerMile} cents per mile through June 30, then ` +
+    `${RATE_PERIODS[1].centsPerMile} cents per mile from July 1. You multiply the miles you drove in each period by that period's rate.`
+  : `The ${TAX_YEAR} IRS standard mileage rate for business use is ${RATE_CENTS} cents per mile. You multiply your business miles by that rate to get your deduction.`;
+
+const TITLE = `Mileage Deduction Calculator (${TAX_YEAR}), Free, IRS Rate`;
 const DESCRIPTION =
-  "Free business mileage deduction calculator using the 2026 IRS standard mileage rate (70¢/mile). See your deduction and estimated tax savings from business miles, no sign-up.";
+  `Free business mileage deduction calculator using the ${TAX_YEAR} IRS standard mileage rates (${RATE_LABEL}). See your deduction and estimated tax savings from business miles, no sign-up.`;
 const KEYWORDS = [
   "mileage deduction calculator",
   "IRS mileage calculator",
@@ -79,7 +124,7 @@ const FAQ_LD = {
       name: "What is the 2026 IRS mileage rate?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The 2026 IRS standard mileage rate for business use is 70 cents per mile. You multiply your business miles by that rate to get your deduction, it's meant to cover gas, maintenance, insurance, and depreciation, so you don't have to track every actual car expense.",
+        text: `${RATE_SENTENCE} The rate is meant to cover gas, maintenance, insurance, and depreciation, so you don't have to track every actual car expense.`,
       },
     },
     {
@@ -115,7 +160,9 @@ export default async function MileageDeductionCalculatorPage({
   searchParams: Search;
 }) {
   const s = readSearch(await searchParams);
-  const initial = { miles: s.miles, rate: s.rate };
+  // miles2 carries the second rate period in a split-rate year. Links
+  // shared before it existed still work: they set miles only.
+  const initial = { miles: s.miles, miles2: s.miles2, rate: s.rate };
   return (
     <main className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={BREADCRUMB_LD} />
@@ -135,6 +182,7 @@ export default async function MileageDeductionCalculatorPage({
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Wordmark size="md" tone="cream" />
+          <MarketingNav current="calculators" />
           <SignInIconLink />
         </div>
       </header>
@@ -161,7 +209,8 @@ export default async function MileageDeductionCalculatorPage({
           Mileage Deduction Calculator
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
-          Turn your business miles into a tax deduction at the 2026 IRS rate -
+          Turn your business miles into a tax deduction at the {TAX_YEAR} IRS
+          {RATE_PERIODS ? " rates" : " rate"} -
           and see roughly what it saves you. Instant, no sign-up.
         </p>
       </section>
@@ -176,10 +225,14 @@ export default async function MileageDeductionCalculatorPage({
             The mileage deduction, simply
           </h2>
           <p className="mt-3 text-sm sm:text-base text-ink-soft leading-relaxed">
-            If you drive for work, the IRS lets you deduct a flat rate for every
+            If you drive for work, the IRS lets you deduct a set rate for every
             business mile -{" "}
-            <strong className="text-forest-800">70¢ per mile in 2026</strong> -
-            instead of itemizing gas, repairs, insurance, and depreciation. It&rsquo;s
+            <strong className="text-forest-800">
+              {RATE_PERIODS
+                ? `${RATE_PERIODS[0].centsPerMile}¢ per mile through June 30 and ${RATE_PERIODS[1].centsPerMile}¢ from July 1 in ${TAX_YEAR}`
+                : `${RATE_CENTS}¢ per mile in ${TAX_YEAR}`}
+            </strong>{" "}
+            - instead of itemizing gas, repairs, insurance, and depreciation. It&rsquo;s
             one of the most valuable and most under-claimed deductions for
             freelancers, contractors, real-estate agents, delivery and rideshare
             drivers, and anyone who uses their own car for business. The only

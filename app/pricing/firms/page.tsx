@@ -24,14 +24,37 @@ export const metadata = {
     url: "/pricing/firms",
     type: "website",
   },
+  // NOINDEX, deliberately, pending a pricing decision. Do not flip this
+  // back without reading the next paragraph.
+  //
+  // Every price on this page (Starter $99, Growth $249, Firm $599) is
+  // absent from PLAN_PRICING in lib/plans/limits.ts, which is the billing
+  // engine and tops out at Practice $299/mo. There is no Stripe price
+  // behind any of these tiers, so the "Start free trial" buttons below
+  // lead to a checkout that cannot charge what the page advertises.
+  //
+  // The page is already orphaned (nothing links to it, and it is not in
+  // app/sitemap.ts) but it was `index: true` with its own canonical, so
+  // crawlers and AI answer engines could still reach it and quote the
+  // $599 figure back to a prospect. Noindex is containment, not a
+  // decision: it stops the wrong number propagating while the real firm
+  // pricing is settled.
+  //
+  // To resolve, pick one and delete this block:
+  //   - Practice $299 is the truth  -> rewrite around it, or redirect to
+  //     /pricing#practice in next.config.ts, and re-enable indexing
+  //   - this ladder is the truth    -> add the SKUs to PLAN_PRICING and
+  //     Stripe FIRST, then re-enable indexing
+  //
+  // lib/seo/pricing-schema.test.ts guards the home page's structured
+  // data against this same class of drift. It cannot see this page,
+  // because these prices live in JSX rather than in the schema.
   robots: {
-    index: true,
+    index: false,
     follow: true,
     googleBot: {
-      index: true,
+      index: false,
       follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
     },
   },
 };

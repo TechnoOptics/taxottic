@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { emailUndeliveredAlerts } from "@/lib/mileage/email-undelivered";
 import { finalizeUserTrips, reconcileBrokenTrips } from "@/lib/mileage/finalize";
 import {
   evaluateTrackerStall,
@@ -851,8 +852,25 @@ export async function GET(req: NextRequest) {
     `[mileage-finalize] pairs=${pairs.size} processed=${processed} tripsCreated=${totalTrips} healed=${healed} renderRefused=${renderRefused} stallsNotified=${stallsNotified} stallsUndeliverable=${stallsUndeliverable} parkedNotified=${parkedNotified} fgOnlyNotified=${foregroundOnlyNotified} fgOnlyUndeliverable=${foregroundOnlyUndeliverable} fleet=${fleetStatus}`,
   );
 
+  // Last-resort delivery. Every channel above this line depends on push
+  // reaching the driver's device, and a driver with no registered token
+  // silently absorbs all of them: that is exactly how a foreground_only
+  // episode opened on 2026-08-06 went unseen for five days while six
+  // days of driving went unrecorded. Email shares none of that
+  // machinery. Failures are counted, never thrown: a mail outage must
+  // not stop points becoming trips.
+  let emailSweep = { companies: 0, emailed: 0, skippedThrottled: 0, failed: 0 };
+  try {
+    emailSweep = await emailUndeliveredAlerts(admin, Date.now());
+  } catch (e) {
+    console.error(`[mileage-finalize] email sweep threw: ${String(e)}`);
+  }
+
   return NextResponse.json({
     ok: true,
+    // Non-zero `emailed` is the signal that a human was actually told
+    // about a driver the app could not reach.
+    trackerEmail: emailSweep,
     pairs: pairs.size,
     processed,
     tripsCreated: totalTrips,
