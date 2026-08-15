@@ -1015,7 +1015,21 @@
 // seconds while sending no heartbeat at all. v166 changed nothing on that
 // device because I fixed the path it was not using. The timer now lives in
 // its own module and every ingest caller arms it.
-const CACHE_VERSION = "v182";
+// v183: the self-check can finally see the device it is running on.
+//
+// native-tracker derived `platform` from the device-status plugin's own
+// payload, so on a phone where that plugin is DEAD there was no payload,
+// platform fell back to "web", every capability reported `unsupported`,
+// and the summary said "ok". The check written to find broken devices
+// reported healthy on exactly the broken devices. It now reads
+// Capacitor's getPlatform(), which answers whether or not any plugin is
+// alive.
+//
+// This bump is load-bearing rather than housekeeping. native-tracker.ts
+// and self-check.ts are WebView client JS: without a new CACHE_VERSION a
+// phone keeps running the old tracker from Cache Storage, and the fix
+// ships to the store while never reaching the device it was written for.
+const CACHE_VERSION = "v183";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
