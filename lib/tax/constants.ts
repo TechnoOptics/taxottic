@@ -185,7 +185,7 @@ const BUNDLE_2026: TaxYearConstants = {
  * Latest published year. Future-year requests fall back to this.
  * Bump this when a new constants-<year>.ts lands.
  */
-const LATEST_PUBLISHED_YEAR = 2026;
+export const LATEST_PUBLISHED_YEAR = 2026;
 
 /**
  * Pick the right per-year bundle for a forecast. Future years

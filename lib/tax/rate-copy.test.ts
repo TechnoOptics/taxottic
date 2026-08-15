@@ -25,7 +25,12 @@ import { getTaxYearConstants } from "./constants";
  * becomes correct by construction the moment the IRS Notice lands.
  */
 
-const SEARCH_DIRS = ["app", "components"];
+// Widened after a review: the guard covered app/ and components/ only,
+// so a stale rate in lib/, in public/llms.txt (which AI engines read
+// directly), or in docs/ passed unseen. llms.txt matters most: it is
+// written FOR machines to quote.
+const SEARCH_DIRS = ["app", "components", "lib", "docs", "public"];
+const SOURCE_EXT = [".ts", ".tsx", ".md", ".txt"];
 const CURRENT = getTaxYearConstants(2026).MILEAGE_RATE_PER_MILE_CENTS;
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
@@ -39,7 +44,8 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
     if (e === "node_modules" || e === ".next") continue;
     const full = join(dir, e);
     if (statSync(full).isDirectory()) sourceFiles(full, out);
-    else if (/\.tsx?$/.test(e) && !e.includes(".test.")) out.push(full);
+    else if (SOURCE_EXT.some((x) => e.endsWith(x)) && !e.includes(".test."))
+      out.push(full);
   }
   return out;
 }
@@ -89,7 +95,10 @@ describe("no mileage rate is hardcoded into copy", () => {
     // Matches "70¢ per mile", "70¢/mile", "70 cents per mile" and the
     // decimal forms, in prose or in a JSON-LD answer string.
     const RATE_IN_COPY =
-      /(\d{2}(?:\.\d)?)\s*(?:¢|cents?)\s*(?:\/|per\s+)\s*mile/gi;
+      // Was /(\d{2}(?:\.\d)?)/ with exactly ONE optional decimal and only
+      // "/" or "per", so "72.50 cents per mile" and "76 cents a mile" both
+      // slipped through. Now: any number of decimals, and "a" as well.
+      /(\d{1,3}(?:\.\d+)?)\s*(?:¢|cents?)\s*(?:\/|per\s+|a\s+|-per-)\s*mile/gi;
 
     // The CHARITABLE mileage rate is the one legitimate literal. It is
     // fixed at 14 cents by statute (IRC 170(i)), not set by the annual
@@ -120,7 +129,9 @@ describe("no mileage rate is hardcoded into copy", () => {
 
   it("no dollars-per-mile literal either", () => {
     // The same claim wearing a different unit: "$0.70/mile".
-    const DOLLARS = /\$0?\.\d{2}\s*(?:\/|per\s+)\s*mile/gi;
+    // Was \$0?\.\d{2} (exactly two decimals), so "$0.725/mile" was
+    // invisible. Any precision now, and the same connector set.
+    const DOLLARS = /\$\d*\.\d+\s*(?:\/|per\s+|a\s+|-per-)\s*mile/gi;
     const offenders: string[] = [];
     for (const f of FILES) {
       const src = scannable(readFileSync(f, "utf8"));

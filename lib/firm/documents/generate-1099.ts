@@ -26,7 +26,10 @@
 //     this on the form before filing
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getTaxYearConstants } from "@/lib/tax/constants";
+import {
+  getTaxYearConstants,
+  LATEST_PUBLISHED_YEAR as LATEST_PUBLISHED_TAX_YEAR,
+} from "@/lib/tax/constants";
 
 export type Form1099Variant = "1099-NEC" | "1099-MISC";
 
@@ -277,7 +280,11 @@ export function render1099HTML(
     <strong>Preparer checklist:</strong>
     <ul style="margin: 4pt 0 0 16pt; padding: 0;">
       <li>Verify recipient TIN via Form W-9 on file (mandatory before filing).</li>
-      <li>Confirm the ${formatWholeDollars(reportingThresholdCents(input.taxYear))} section 6041 reporting threshold is met for ${input.taxYear}.</li>
+      <li>Confirm the ${formatWholeDollars(reportingThresholdCents(input.taxYear))} section 6041 reporting threshold is met for ${input.taxYear}.${
+        getTaxYearConstants(input.taxYear).isFallback
+          ? ` <strong>This is the ${LATEST_PUBLISHED_TAX_YEAR} figure carried forward: Taxottic does not yet have published ${input.taxYear} numbers, and this threshold inflation-adjusts annually. Verify against the IRS before filing.</strong>`
+          : ""
+      }</li>
       <li>Check whether recipient is exempt (corporations are exempt from 1099-NEC).</li>
       <li>Issue Copy B to recipient by January 31; Copy A to IRS via FIRE or paper Form 1096 by the same date.</li>
       <li>If state copy required (most states piggyback the IRS combined-federal-state-filing program), confirm participation.</li>

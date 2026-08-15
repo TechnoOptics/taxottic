@@ -6,6 +6,7 @@ import { useState } from "react";
 import { formatCents } from "@/lib/tax/forecast";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 import { useCalcShare, ShareButton } from "@/components/calculators/CalcShare";
+import { priceMilesByPeriod } from "@/lib/calculators/mileage-reimbursement";
 import { parseRateParam } from "@/lib/calculators/rate-param";
 
 /**
@@ -126,9 +127,7 @@ export function MileageDeductionCalculator({
   // Deliberately not memoised: it is a couple of multiplications over a
   // two-element array, so useMemo would cost more than it saves, and
   // keying it on a derived array meant fabricating a dependency string.
-  const deductionCents = Math.round(
-    RATE_PERIODS.reduce((sum, p, i) => sum + perPeriod[i] * p.centsPerMile, 0),
-  );
+  const deductionCents = priceMilesByPeriod(perPeriod, RATE_PERIODS);
   const savingsCents = Math.round(deductionCents * rate);
 
   const { share, copied } = useCalcShare(
