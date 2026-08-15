@@ -82,8 +82,16 @@ runs:
       #    jobs red for reasons unrelated to any UI change — trading one
       #    class of false red check for another.
       #
-      # Net effect: ~13s of apt every run, and the ~12s browser download
-      # (the part that actually hung) only when the version changes.
+      # Measured on this repo (cold run 31910757628 vs warm 31910878965):
+      # the whole step goes 33s -> 22s. That is 3s of cache restore (259MB)
+      # plus ~18s of apt, with the browser download — the part that actually
+      # hung — dropping to zero. Verified by the absence of any "Downloading
+      # Chrome for Testing" line in all three warm jobs.
+      #
+      # So this is NOT primarily a speed win; ~21s of the step is irreducible
+      # while the fonts have to be installed every run. It is a reliability
+      # win: cdn.playwright.dev leaves the hot path entirely once the cache
+      # is warm, and that is what was costing 15-minute cancelled jobs.
       #
       # `timeout` rather than the step's `timeout-minutes:` because composite
       # action steps do not support that key. It is not ignored — the runner
