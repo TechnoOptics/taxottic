@@ -1176,21 +1176,43 @@ export async function sendHeartbeat(): Promise<void> {
         // database row by someone who was not here today.
         selfCheck: summarizeForHeartbeat(
           evaluateSelfCheck({
-            platform:
-              truth?.platform === "ios" || truth?.platform === "android"
-                ? truth.platform
-                : "web",
-            // The probes above have run by the time we build this
-            // payload, so silence here is a real refusal, not an
-            // unasked question.
-            probed: true,
-            deviceStatusOk: dsProbe.stage === "done" ? true : dsProbe.ms != null ? false : null,
+            // Platform from Capacitor, NOT from `truth`.
+            //
+            // truth is `ds ?? cached?.value ?? null`, i.e. the device
+            // status the plugin returns. When the plugin is DEAD there is
+            // no live read and no cache, so truth is null and this fell
+            // back to "web", every capability reported `unsupported`, and
+            // the summary came out "ok".
+            //
+            // The self-check was therefore inert on precisely the devices
+            // it exists to catch: Grace's iPhone, with two dead plugins,
+            // summarised as healthy. The flagship test passed only because
+            // its fixture hardcodes platform "ios", a state production
+            // could not reach.
+            platform: (() => {
+              const plat = cap?.getPlatform?.();
+              return plat === "ios" || plat === "android" ? plat : "web";
+            })(),
+            // outcome, not stage. getDeviceStatusProbed calls
+            // onStage("done") BEFORE checking whether a value came back,
+            // so a plugin that answers with nothing reaches "done" and
+            // would have been reported live while every device-truth
+            // field was missing. outcome distinguishes ok / null /
+            // unavailable / error / timeout, and it is already in this
+            // same payload.
+            deviceStatusOk: dsProbe.outcome === "ok",
             deviceStatusMs: dsProbe.ms,
             deviceStatusStage: dsProbe.stage,
             geofenceArmState: geofence?.armState ?? null,
             geofenceCount: geofence?.registeredCount ?? null,
+            // A 2 second time box around getGeofenceState collapses
+            // "no plugin", "threw" and "timed out" into one null. A
+            // backgrounded WebView times out routinely in this codebase,
+            // so treating that null as proof of a dead plugin would
+            // accuse the iOS registration bug on a healthy device. Only
+            // claim we looked when the read actually returned.
+            probed: geofence != null || dsProbe.outcome !== "timeout",
             locationAuthorization: truth?.locationAuthorization ?? null,
-            backgroundLocation: truth?.backgroundRefresh ?? null,
             // Car signals are NOT fetched on this path, so they are
             // reported as unknown rather than guessed. An invented
             // "live" here would be worse than a gap: it would assert a
