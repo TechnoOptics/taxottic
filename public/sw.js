@@ -1029,7 +1029,19 @@
 // and self-check.ts are WebView client JS: without a new CACHE_VERSION a
 // phone keeps running the old tracker from Cache Storage, and the fix
 // ships to the store while never reaching the device it was written for.
-const CACHE_VERSION = "v183";
+// v184: two capability checks that could never reach a verdict.
+//
+// bluetoothPermission, bluetoothPermissionAsked and carSignalsOk were
+// hardcoded null at the self-check call site, under a comment claiming
+// car signals are not fetched on that path. They are: carProbe is
+// awaited earlier in the same function and feeds six columns of the same
+// heartbeat. So both checks reported "unknown" forever.
+//
+// bluetooth_permission is the check that separates "the driver declined"
+// from "we never showed the prompt". The second is our bug, and the
+// feature sat broken with six paired cars because those two are
+// indistinguishable in the permission value alone.
+const CACHE_VERSION = "v184";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
