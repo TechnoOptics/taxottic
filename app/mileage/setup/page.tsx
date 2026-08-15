@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  getCarSignalsState,
+  requestCarBluetoothPermission,
+  type CarSignalsState,
+} from "@/lib/mileage/car-signals";
+import {
   getDeviceStatus,
   requestAlwaysUpgrade,
   requestBatteryExemption,
@@ -17,7 +22,7 @@ import {
 /**
  * "Make tracking reliable" wizard (reliability plan §C). The research
  * conclusion behind this page: the OS battery/permission machinery
- * cannot be beaten in code — every incumbent survives via GUIDED
+ * cannot be beaten in code. Every incumbent survives via GUIDED
  * WHITELISTING plus recurring re-checks (Samsung re-enables its
  * sleeping-apps setting after firmware updates). So this page is not
  * one-time onboarding: it re-verifies on every visit/focus, and the
@@ -26,6 +31,7 @@ import {
  */
 export default function MileageSetupPage() {
   const [status, setStatus] = useState<DeviceStatus | null>(null);
+  const [car, setCar] = useState<CarSignalsState | null>(null);
   const [tracking, setTracking] = useState(false);
   const [checked, setChecked] = useState(false);
 
@@ -34,6 +40,9 @@ export default function MileageSetupPage() {
       setStatus(s);
       setChecked(true);
     });
+    // Car signals are a SEPARATE plugin from device status, so a failure
+    // in one must not blank the other. Read independently.
+    void getCarSignalsState().then(setCar).catch(() => setCar(null));
     try {
       setTracking(getMileageTrackingUiState().enabled);
     } catch {
@@ -72,7 +81,7 @@ export default function MileageSetupPage() {
         status?.locationAuthorization === "always"
           ? "Drives record even with the app closed."
           : status?.platform === "ios"
-            ? "iOS quietly reverts this — it must say Always, not While Using."
+            ? "iOS quietly reverts this, and it must say Always, not While Using."
             : "Android needs “Allow all the time”.",
       action:
         status && status.locationAuthorization !== "always"
@@ -119,6 +128,46 @@ export default function MileageSetupPage() {
           },
         ]
       : []),
+    // Car Bluetooth: the wake trigger that fires ANYWHERE, not just at
+    // one of the handful of learned places.
+    //
+    // This row exists because the permission was never being asked for.
+    // TaxotticCarSignalsPlugin.requestBluetoothPermission and the JS
+    // wrapper requestCarBluetoothPermission both existed and NOTHING
+    // CALLED EITHER, so BLUETOOTH_CONNECT sat at granted=false with no
+    // USER_SET flag on a real device: not declined, never offered.
+    //
+    // The cost was total. Without the permission the receiver cannot
+    // read a device's Bluetooth class, so every connect is discarded
+    // before the vehicle test, and vehicleConnects can never leave 0
+    // however many cars the driver owns. One driver had six correctly
+    // classified cars paired and not one had ever woken the tracker.
+    ...(status?.platform === "android" && car
+      ? [
+          {
+            key: "car-bluetooth",
+            label: "Wake when your car connects",
+            ok: car.bluetoothPermission === "granted"
+              || car.bluetoothPermission === "not_required",
+            detail:
+              car.bluetoothPermission === "granted"
+                ? car.vehicleConnects > 0
+                  ? `Your car has started tracking ${car.vehicleConnects} time${car.vehicleConnects === 1 ? "" : "s"}.`
+                  : "Allowed. The next time your car connects, tracking starts on its own."
+                : car.bluetoothPermission === "not_required"
+                  ? "Not needed on this version of Android."
+                  : "Allow Bluetooth so a drive starts the moment your car connects, anywhere, not just near a saved place.",
+            action:
+              car.bluetoothPermission !== "granted"
+                && car.bluetoothPermission !== "not_required"
+                ? {
+                    label: "Allow",
+                    run: () => void requestCarBluetoothPermission().then(refresh),
+                  }
+                : undefined,
+          },
+        ]
+      : []),
     // Walk-away drive ending (both platforms): steps tell us the driver
     // left the car, closing the trip in ~30s instead of the 5-min timer.
     ...(status
@@ -149,7 +198,7 @@ export default function MileageSetupPage() {
             ok: status.backgroundRefresh !== false,
             detail:
               status.backgroundRefresh === false
-                ? "With this off, iOS will not wake Taxottic for ANY drive — this alone stops all automatic tracking."
+                ? "With this off, iOS will not wake Taxottic for ANY drive, and this alone stops all automatic tracking."
                 : "iOS is allowed to wake Taxottic when a drive starts.",
             action:
               status.backgroundRefresh === false
@@ -185,14 +234,14 @@ export default function MileageSetupPage() {
         </h1>
         <p className="mt-2 text-sm text-ink-soft leading-relaxed max-w-lg">
           Phones aggressively shut down background GPS. These checks are
-          re-verified every time you visit — OS updates love to quietly
+          re-verified every time you visit, because OS updates love to quietly
           undo them.
         </p>
 
         {!checked || status == null ? (
           <div className="card mt-6 p-6 text-sm text-ink-soft">
             {checked
-              ? "These checks run on your phone — open this page in the Taxottic app to see live results."
+              ? "These checks run on your phone. Open this page in the Taxottic app to see live results."
               : "Checking your device…"}
           </div>
         ) : (
@@ -245,7 +294,7 @@ export default function MileageSetupPage() {
                     and turn OFF &ldquo;Put unused apps to sleep&rdquo;.
                   </li>
                   <li>
-                    Re-check after every Samsung software update — it
+                    Re-check after every Samsung software update, because it
                     re-enables these on its own.
                   </li>
                 </ol>
@@ -260,7 +309,7 @@ export default function MileageSetupPage() {
             >
               <div className="text-sm font-medium text-forest-900">
                 {allOk
-                  ? "Everything is green — tracking is bulletproof on this phone."
+                  ? "Everything is green. Tracking is bulletproof on this phone."
                   : "Fix the red items above, then come back here to confirm."}
               </div>
               <p className="mt-1 text-xs text-ink-muted">
