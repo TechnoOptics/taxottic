@@ -1,5 +1,27 @@
 # Performance baseline
 
+> ## STATUS 2026-08-16: ALL FOUR RECOMMENDATIONS HAVE SHIPPED
+>
+> This document still reads as a to-do list, and it is not one. Verified
+> against `main` on 2026-08-16:
+>
+> | # | Recommendation | State |
+> | --- | --- | --- |
+> | 1 | Lazy-load the Supabase browser client | **Shipped.** `components/CapacitorAuth.tsx` does the dynamic `import()` inside the effect, behind the `isNativeApp()` guard, with the 261 KB -> 200 KB measurement recorded in its own comment. |
+> | 2 | Bound `/mileage/business` | **Shipped**, and deliberately as a VISIBLE bound rather than a silent truncation. It also fixed a pre-existing quiet truncation where `.limit(1000)` capped the totals sweep. |
+> | 3 | Move `headers()` out of the root layout | **Shipped.** `app/layout.tsx` carries an explicit "Do not reintroduce headers(), cookies() or any other dynamic API here" guard comment. |
+> | 4 | Blocking writes + N+1 off `/dashboard` | **Shipped.** The recycle-bin sweep moved to `app/api/cron/recycle-bin-purge`; the remaining `.update()` runs only on the stale-`active_platform` branch, not per render; and the loops that look like N+1 are a `Promise.all` and an `.in(companyIds)` batch, which is the opposite.
+>
+> Below, "Probe reverted. No source change is committed with this
+> document." was true when written and is no longer. The probe was
+> subsequently committed.
+>
+> **Any new performance work needs a fresh measurement.** These numbers
+> are from `b6faa71` (1.3.6) on 2026-08-01; main is now 1.3.11 with a
+> fortnight of changes on top. Acting on them as if they were current is
+> the same mistake this document was written to prevent.
+
+
 Measured 2026-08-01 against `origin/main` at `b6faa71` (release 1.3.6), in an
 isolated worktree. Nothing in this pass was optimised. The only code edits made
 were two temporary build probes, both reverted; they are labelled below.
