@@ -13,6 +13,7 @@ import {
   MOVEMENT_SPEED_MPS,
 } from "@/lib/mileage/device-health";
 import { notify } from "@/lib/push";
+import { evaluateDeviceStall } from "@/lib/mileage/device-stall";
 import {
   evaluateFleetCapture,
   MIN_BASELINE_DAYS,
@@ -274,21 +275,36 @@ export async function GET(req: NextRequest) {
         const { data: ds } = await admin
           .from("mileage_device_status")
           .select(
-            "tracking_enabled, last_cb_age_s, location_authorization, reported_at",
+            // self_check is the one that closes the nine-day gap: the
+            // device wrote "dead=device_status_plugin,geofence_plugin"
+            // into every heartbeat and nothing ever read it.
+            "tracking_enabled, last_cb_age_s, location_authorization, self_check, reported_at",
           )
           .eq("driver_user_id", driver)
           .eq("company_id", company)
           .maybeSingle();
-        if (
-          ds &&
-          ds.tracking_enabled === true &&
-          nowMs - Date.parse(ds.reported_at as string) < 15 * 60_000
-        ) {
-          const cbAge = (ds.last_cb_age_s as number | null) ?? null;
-          const auth = (ds.location_authorization as string | null) ?? null;
-          deviceStall =
-            (cbAge != null && cbAge > 1800) ||
-            (auth != null && auth !== "always");
+        // Rules extracted to lib/mileage/device-stall.ts. They used to be
+        // inline here, which is why they were never tested and why the
+        // self_check verdict was never consulted.
+        const verdict = evaluateDeviceStall(
+          {
+            trackingEnabled: (ds?.tracking_enabled as boolean | null) ?? null,
+            lastCbAgeS: (ds?.last_cb_age_s as number | null) ?? null,
+            locationAuthorization:
+              (ds?.location_authorization as string | null) ?? null,
+            selfCheck: (ds?.self_check as string | null) ?? null,
+            reportedAtMs: ds?.reported_at
+              ? Date.parse(ds.reported_at as string)
+              : null,
+          },
+          nowMs,
+        );
+        deviceStall = verdict.stalled;
+        if (verdict.stalled) {
+          console.log(
+            `[mileage-finalize] device stall driver=${driver} ` +
+              `reasons=${verdict.reasons.join(",")} ${verdict.detail}`,
+          );
         }
         if (deviceStall) {
           const lastNotified = lastNotifiedMs;
