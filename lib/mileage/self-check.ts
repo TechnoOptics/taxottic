@@ -44,7 +44,8 @@ export type CapabilityId =
   | "geofence_armed"
   | "location_always"
   | "bluetooth_permission"
-  | "car_signals_plugin";
+  | "car_signals_plugin"
+  | "low_power_mode";
 
 export type Verdict =
   /** Answered, and is doing its job. */
@@ -56,7 +57,22 @@ export type Verdict =
   /** Not available on this platform or OS version. Correct silence. */
   | "unsupported"
   /** Could not be determined. Honest, and NOT the same as dead. */
-  | "unknown";
+  | "unknown"
+  /**
+   * Working, but a DEVICE SETTING the driver controls is degrading it.
+   *
+   * Deliberately its own verdict rather than a shade of `dead` or
+   * `denied`. It is not our bug, so `dead` would be a false alarm and
+   * this module's whole value is that `dead` means something. It is also
+   * not a refused permission, so `denied` would misdescribe both the
+   * cause and the fix: nobody said no to anything, a battery setting is
+   * simply throttling us.
+   *
+   * The distinguishing property is that the DRIVER can fix it in
+   * Settings in ten seconds, and nobody can fix it for them. That makes
+   * it the only verdict worth showing the driver directly.
+   */
+  | "degraded";
 
 export type CapabilityCheck = {
   id: CapabilityId;
@@ -92,6 +108,13 @@ export type ProbeInput = {
   geofenceArmState: string | null;
   geofenceCount: number | null;
   locationAuthorization: string | null;
+  /**
+   * iOS Low Power Mode / Android battery saver, as the device reports it.
+   * Null means not reported, which is NOT the same as off: before the
+   * iOS plugin registration was fixed this field was null on every iPhone
+   * for weeks while Low Power Mode was actually ON.
+   */
+  lowPowerMode: boolean | null;
   bluetoothPermission: string | null;
   bluetoothPermissionAsked: boolean | null;
   carSignalsOk: boolean | null;
@@ -289,6 +312,41 @@ export function evaluate(p: ProbeInput): CapabilityCheck[] {
     );
   }
 
+  // ---- low power mode -------------------------------------------
+  //
+  // Not a capability we ship, which is exactly why it belongs here. On
+  // 2026-08-16, the first heartbeat where the iOS plugins finally
+  // answered reported low_power_mode = true on a phone whose drives had
+  // been going missing for weeks. iOS Low Power Mode suppresses
+  // background activity and can delay or drop location callbacks, so it
+  // produces the same symptom as a dead tracker while everything we ship
+  // reports healthy.
+  //
+  // It was invisible until now for the dullest possible reason: the
+  // field was NULL along with every other device-truth column, because
+  // the plugin that reports it was never registered.
+  //
+  // `degraded`, never `dead`: we are not broken, and calling this our
+  // bug would put a false accusation in the one field people trust to
+  // mean "we shipped something that does not work".
+  if (!native) {
+    out.push(check("low_power_mode", "unsupported", "Web has no battery mode."));
+  } else if (p.lowPowerMode === true) {
+    out.push(
+      check(
+        "low_power_mode",
+        "degraded",
+        p.platform === "ios"
+          ? "Low Power Mode is ON. iOS throttles background activity, so drives can be recorded late or missed. Turn it off in Settings > Battery."
+          : "Battery Saver is ON. Android throttles background work, so drives can be recorded late or missed. Turn it off in Settings > Battery.",
+      ),
+    );
+  } else if (p.lowPowerMode === false) {
+    out.push(check("low_power_mode", "live", "Not throttled."));
+  } else {
+    out.push(check("low_power_mode", "unknown", "Not reported."));
+  }
+
   return out;
 }
 
@@ -310,6 +368,14 @@ export function summarizeForHeartbeat(checks: CapabilityCheck[]): string {
   if (dead.length > 0) return `dead=${dead.join(",")}`;
   const denied = checks.filter((c) => c.verdict === "denied").map((c) => c.id);
   if (denied.length > 0) return `denied=${denied.join(",")}`;
+  // Ranked ABOVE unknown: degraded is a measured fact with a fix the
+  // driver can apply, while unknown is the absence of a measurement.
+  // Reporting "unknown=x" while a phone sits throttled would bury the
+  // actionable finding under the unmeasured one.
+  const degraded = checks
+    .filter((c) => c.verdict === "degraded")
+    .map((c) => c.id);
+  if (degraded.length > 0) return `degraded=${degraded.join(",")}`;
   const unknown = checks.filter((c) => c.verdict === "unknown").map((c) => c.id);
   if (unknown.length > 0) return `unknown=${unknown.join(",")}`;
   return "ok";
@@ -325,5 +391,28 @@ export function describe(checks: CapabilityCheck[]): string {
   if (denied.length > 0) {
     return `${denied.length} permission${denied.length === 1 ? "" : "s"} not granted: ${denied.map((c) => c.id).join(", ")}`;
   }
+  const degraded = checks.filter((c) => c.verdict === "degraded");
+  if (degraded.length > 0) {
+    // The detail carries the actual instruction ("Settings > Battery"),
+    // because this is the one verdict a DRIVER is meant to read and act
+    // on rather than an engineer.
+    return degraded.map((c) => c.detail).join(" ");
+  }
   return "Every shipped capability is answering.";
+}
+
+/**
+ * Checks a DRIVER should see, with an instruction they can follow.
+ *
+ * Separate from deadCapabilities() on purpose. That one answers "did we
+ * ship something broken", which is an engineering alarm. This answers
+ * "is there something only you can fix", which belongs on the phone.
+ * Mixing them would put our bugs in front of the driver and their
+ * battery settings in front of us, and both audiences would learn to
+ * ignore the result.
+ */
+export function driverActionable(
+  checks: CapabilityCheck[],
+): CapabilityCheck[] {
+  return checks.filter((c) => c.verdict === "degraded" || c.verdict === "denied");
 }
