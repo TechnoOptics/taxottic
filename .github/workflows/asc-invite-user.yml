@@ -1,0 +1,196 @@
+name: iOS — Invite an App Store Connect user
+
+# Sends an App Store Connect USER invitation (Users and Access), which is
+# a different and much bigger thing than a TestFlight tester invite.
+#
+# WHY THIS EXISTS
+#
+# Internal TestFlight testers must already be App Store Connect users;
+# external testers must not be, but are gated behind Beta App Review. On
+# 2026-08-15 a driver was stuck between exactly those two rules: her
+# working Apple ID (a gmail address) held an INSTALLED tester record in
+# the EXTERNAL group, so it was waiting on review, while the icloud
+# address that WAS an App Store Connect user held an invite she could not
+# accept, because her Apple ID already owned the other record.
+#
+#   muchoki74@gmail.com   INSTALLED   External Testers   (review-gated)
+#   muchoki74@icloud.com  INVITED     Techno Testers     (unacceptable)
+#
+# The only way to put the identity she actually uses into the internal
+# group is to make that identity an App Store Connect user first.
+#
+# ROLE DEFAULT IS DELIBERATE
+#
+# CUSTOMER_SUPPORT is the most restricted role Apple offers that still
+# permits internal TestFlight testing. It cannot see agreements, banking
+# or sales reports, cannot manage the app, and cannot invite others. A
+# person who only needs to install a beta should never be given Admin or
+# App Manager, and the default here should never quietly become one.
+#
+# allAppsVisible is false and the invitation is scoped to ONE app, so the
+# grant does not widen if more apps are added to the account later.
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Apple ID to invite (must be the one they sign in to TestFlight with)"
+        required: true
+      first_name:
+        description: "First name"
+        required: true
+      last_name:
+        description: "Last name"
+        required: true
+      role:
+        description: "App Store Connect role"
+        required: false
+        default: "CUSTOMER_SUPPORT"
+      bundle_id:
+        description: "App the invitation is scoped to"
+        required: false
+        default: "com.taxottic.app"
+
+jobs:
+  invite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Send the invitation
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          EMAIL: ${{ inputs.email }}
+          FIRST_NAME: ${{ inputs.first_name }}
+          LAST_NAME: ${{ inputs.last_name }}
+          ROLE: ${{ inputs.role }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+        run: |
+          cat > /tmp/invite.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+
+          const KEY_ID = process.env.ASC_KEY_ID;
+          const ISSUER = process.env.ASC_ISSUER_ID;
+          const PEM = process.env.ASC_PRIVATE_KEY;
+          const EMAIL = process.env.EMAIL.trim();
+          const FIRST = process.env.FIRST_NAME.trim();
+          const LAST = process.env.LAST_NAME.trim();
+          const ROLE = process.env.ROLE.trim().toUpperCase();
+          const BUNDLE_ID = process.env.BUNDLE_ID;
+
+          // Refuse to hand out broad access by accident. ADMIN and FINANCE
+          // can see banking and agreements; nobody needs either to install
+          // a TestFlight build, and a typo in a dispatch box should not be
+          // able to grant them.
+          const ALLOWED = new Set([
+            "CUSTOMER_SUPPORT", "DEVELOPER", "MARKETING", "APP_MANAGER",
+          ]);
+          if (!ALLOWED.has(ROLE)) {
+            console.log(
+              `Refusing role ${ROLE}. Allowed: ${[...ALLOWED].join(", ")}. ` +
+              `ADMIN and FINANCE are deliberately not available here.`,
+            );
+            process.exit(1);
+          }
+
+          function b64u(x) {
+            return Buffer.from(x).toString("base64")
+              .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+          }
+          const now = Math.floor(Date.now() / 1000);
+          const header = b64u(JSON.stringify({ alg: "ES256", kid: KEY_ID, typ: "JWT" }));
+          const payload = b64u(JSON.stringify({
+            iss: ISSUER, iat: now, exp: now + 600, aud: "appstoreconnect-v1",
+          }));
+          const signer = crypto.createSign("SHA256");
+          signer.update(`${header}.${payload}`);
+          const der = signer.sign(PEM);
+          let off = 2;
+          if (der[1] & 0x80) off = 2 + (der[1] & 0x7f);
+          const rLen = der[off + 1];
+          const r = der.subarray(off + 2, off + 2 + rLen);
+          const sOff = off + 2 + rLen;
+          const sLen = der[sOff + 1];
+          const s = der.subarray(sOff + 2, sOff + 2 + sLen);
+          const pad = (b) => {
+            b = b[0] === 0 ? b.subarray(1) : b;
+            return Buffer.concat([Buffer.alloc(32 - b.length, 0), b]);
+          };
+          const JWT = `${header}.${payload}.${b64u(Buffer.concat([pad(r), pad(s)]))}`;
+
+          async function api(method, path, body) {
+            const res = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              method,
+              headers: {
+                Authorization: `Bearer ${JWT}`,
+                "Content-Type": "application/json",
+              },
+              body: body ? JSON.stringify(body) : undefined,
+            });
+            const text = await res.text();
+            let json = {};
+            try { json = text ? JSON.parse(text) : {}; } catch { /* empty */ }
+            return { status: res.status, body: json, text };
+          }
+
+          const apps = await api("GET", `/v1/apps?filter[bundleId]=${BUNDLE_ID}&limit=1`);
+          const app = apps.body?.data?.[0];
+          if (!app) { console.log(`No app for bundle ${BUNDLE_ID}`); process.exit(1); }
+          console.log(`App: ${app.attributes.name} (${app.id})`);
+
+          // Already a user, or already invited? Say so and stop rather than
+          // sending a second invitation that will only confuse the person.
+          const existing = await api(
+            "GET", `/v1/users?filter[username]=${encodeURIComponent(EMAIL)}&limit=1`,
+          );
+          if (existing.body?.data?.length) {
+            const u = existing.body.data[0];
+            console.log(
+              `ALREADY A USER: ${u.attributes.username} ` +
+              `roles=${(u.attributes.roles || []).join(",")}. ` +
+              `No invitation sent. They can be added to an internal group now.`,
+            );
+            process.exit(0);
+          }
+          const pending = await api(
+            "GET", `/v1/userInvitations?filter[email]=${encodeURIComponent(EMAIL)}&limit=1`,
+          );
+          if (pending.body?.data?.length) {
+            console.log(
+              `INVITATION ALREADY PENDING for ${EMAIL}. ` +
+              `They need to accept the existing email; a new one was NOT sent.`,
+            );
+            process.exit(0);
+          }
+
+          const res = await api("POST", "/v1/userInvitations", {
+            data: {
+              type: "userInvitations",
+              attributes: {
+                email: EMAIL,
+                firstName: FIRST,
+                lastName: LAST,
+                roles: [ROLE],
+                allAppsVisible: false,
+                provisioningAllowed: false,
+              },
+              relationships: {
+                visibleApps: { data: [{ type: "apps", id: app.id }] },
+              },
+            },
+          });
+
+          if (res.status >= 200 && res.status < 300) {
+            console.log(
+              `\nINVITED ${EMAIL} as ${ROLE}, scoped to ${app.attributes.name} only.\n` +
+              `They must ACCEPT the email from Apple before they can be added ` +
+              `to an internal TestFlight group.`,
+            );
+          } else {
+            console.log(`\nFAILED ${res.status}`);
+            console.log(res.text.slice(0, 1500));
+            process.exit(1);
+          }
+          SCRIPT
+          node /tmp/invite.mjs
