@@ -15,15 +15,38 @@
          SPM-based with no GoogleService-Info.plist), so register() returns a
          raw APNs device token that CapacitorNativeInit POSTs to
          /api/push/register as platform:"ios".
-         `development` is the conventional checked-in value; a distribution
-         (TestFlight / App Store) build's provisioning profile promotes this
-         to `production` automatically at archive time.
+         MUST BE `production`. The previous value was `development`, on the
+         belief that "a distribution build's provisioning profile promotes
+         this to production automatically at archive time".
+
+         THAT BELIEF IS FALSE, and production data disproves it. Build 40
+         (1.3.11, a TestFlight distribution build) reported, 64 times:
+
+           status : registration_error
+           detail : no valid "aps-environment" entitlement string found
+                    for application
+
+         in push_registration_state, while Android and web both read
+         `registered`. The signed binary carried `development`, APNs
+         rejects that on a distribution build, and iOS therefore produced
+         ZERO device_tokens rows since the feature shipped in July.
+
+         Xcode does not rewrite this key. The archive is signed with
+         whatever the file says.
+
+         COST OF THE OTHER DIRECTION: a locally-built Debug app on a
+         tethered device now gets a production APNs entitlement, so a dev
+         push token will not work against the sandbox. That is the right
+         trade here: every device that matters (testers, the store) runs a
+         distribution build, and nobody on this project debugs push over a
+         cable. If that changes, split CODE_SIGN_ENTITLEMENTS per build
+         configuration rather than reverting this value.
          REQUIRES: the "Push Notifications" capability enabled on the
          com.taxottic.app App ID in the Apple Developer portal, otherwise
          signing fails with "provisioning profile doesn't include the
          aps-environment entitlement". Same portal-side step the
          application-groups entitlement above needed. -->
     <key>aps-environment</key>
-    <string>development</string>
+    <string>production</string>
 </dict>
 </plist>
