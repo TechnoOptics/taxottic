@@ -59,5 +59,14 @@ export const metadata: Metadata = {
 export default function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  // Opt out of the Instrument skin. The redesign was scoped to the
+  // marketing page and the employee portal; the admin portal keeps the
+  // previous look until that is a decision someone makes on purpose.
+  // .skin-scope is display:contents, so this adds no box and cannot
+  // shift the layout, while custom properties still inherit through it.
+  return (
+    <div data-skin="classic" className="skin-scope">
+      {children}
+    </div>
+  );
 }
