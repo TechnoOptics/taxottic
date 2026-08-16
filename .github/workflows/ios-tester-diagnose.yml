@@ -1,0 +1,176 @@
+name: iOS — Diagnose a tester's TestFlight access
+
+# READ-ONLY. Answers "why does this person not see that build?" from App
+# Store Connect's own state instead of from inference.
+#
+# Written on 2026-08-15 after three wrong guesses in one evening about
+# why a driver kept seeing an old build: a version that looked like a
+# downgrade (it was two devices sharing one status row), a reinstall that
+# never happened, and a tester email that turned out to be the app login
+# rather than the Apple ID. Each guess was plausible and each cost a
+# round trip through a real person.
+#
+# Everything here is a GET. It never invites, submits, links or deletes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Tester email (the APPLE ID, not their app login)"
+        required: true
+      build_number:
+        description: "CFBundleVersion to check access for (e.g. 40)"
+        required: true
+      bundle_id:
+        description: "App bundle identifier"
+        required: false
+        default: "com.taxottic.app"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Query App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          EMAIL: ${{ inputs.email }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+        run: |
+          cat > /tmp/diagnose.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+
+          const KEY_ID = process.env.ASC_KEY_ID;
+          const ISSUER = process.env.ASC_ISSUER_ID;
+          const PEM = process.env.ASC_PRIVATE_KEY;
+          const EMAIL = process.env.EMAIL.trim().toLowerCase();
+          const BUILD_NUMBER = String(process.env.BUILD_NUMBER).trim();
+          const BUNDLE_ID = process.env.BUNDLE_ID;
+
+          function b64u(x) {
+            return Buffer.from(x).toString("base64")
+              .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+          }
+          function token() {
+            const now = Math.floor(Date.now() / 1000);
+            const header = b64u(JSON.stringify({ alg: "ES256", kid: KEY_ID, typ: "JWT" }));
+            const payload = b64u(JSON.stringify({
+              iss: ISSUER, iat: now, exp: now + 600, aud: "appstoreconnect-v1",
+            }));
+            const signer = crypto.createSign("SHA256");
+            signer.update(`${header}.${payload}`);
+            const der = signer.sign(PEM);
+            // DER -> JOSE (r||s), which ASC requires.
+            let off = 2;
+            if (der[1] & 0x80) off = 2 + (der[1] & 0x7f);
+            const rLen = der[off + 1];
+            let r = der.subarray(off + 2, off + 2 + rLen);
+            const sOff = off + 2 + rLen;
+            const sLen = der[sOff + 1];
+            let s = der.subarray(sOff + 2, sOff + 2 + sLen);
+            const pad = (b) => {
+              b = b[0] === 0 ? b.subarray(1) : b;
+              return Buffer.concat([Buffer.alloc(32 - b.length, 0), b]);
+            };
+            const sig = b64u(Buffer.concat([pad(r), pad(s)]));
+            return `${header}.${payload}.${sig}`;
+          }
+
+          const JWT = token();
+          async function api(path) {
+            const res = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              headers: { Authorization: `Bearer ${JWT}` },
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              console.log(`  (GET ${path} -> ${res.status})`);
+              return null;
+            }
+            return body;
+          }
+
+          const apps = await api(`/v1/apps?filter[bundleId]=${BUNDLE_ID}&limit=1`);
+          const app = apps?.data?.[0];
+          if (!app) { console.log("App not found"); process.exit(0); }
+          console.log(`App: ${app.attributes.name} (${app.id})\n`);
+
+          // 1. Every build, so "37" / "38" / "40" can be placed in context.
+          console.log("=== RECENT BUILDS (newest first) ===");
+          const builds = await api(
+            `/v1/builds?filter[app]=${app.id}&sort=-version&limit=10` +
+            `&include=preReleaseVersion`,
+          );
+          const verOf = new Map(
+            (builds?.included ?? [])
+              .filter((i) => i.type === "preReleaseVersions")
+              .map((i) => [i.id, i.attributes.version]),
+          );
+          for (const b of builds?.data ?? []) {
+            const pv = b.relationships?.preReleaseVersion?.data?.id;
+            const marketing = pv ? verOf.get(pv) : "?";
+            console.log(
+              `  build ${String(b.attributes.version).padEnd(4)} ` +
+              `v${String(marketing).padEnd(9)} ${b.attributes.processingState}` +
+              `${b.attributes.expired ? "  EXPIRED" : ""}`,
+            );
+          }
+
+          const target = (builds?.data ?? []).find(
+            (b) => String(b.attributes.version) === BUILD_NUMBER,
+          );
+          if (!target) {
+            console.log(`\nBuild ${BUILD_NUMBER} not in the latest 10. Stopping.`);
+            process.exit(0);
+          }
+
+          // 2. Which groups can actually see the target build.
+          console.log(`\n=== GROUPS BUILD ${BUILD_NUMBER} IS LINKED TO ===`);
+          const linked = await api(`/v1/builds/${target.id}/betaGroups?limit=50`);
+          const linkedIds = new Set();
+          for (const g of linked?.data ?? []) {
+            linkedIds.add(g.id);
+            console.log(
+              `  ${g.attributes.name}  internal=${g.attributes.isInternalGroup}`,
+            );
+          }
+          if (!linkedIds.size) console.log("  (none — nobody can see this build)");
+
+          // 3. The tester record. The question that matters is whether the
+          //    groups they are in intersect the groups above.
+          console.log(`\n=== TESTER ${EMAIL} ===`);
+          const testers = await api(
+            `/v1/betaTesters?filter[email]=${encodeURIComponent(EMAIL)}` +
+            `&filter[apps]=${app.id}&include=betaGroups&limit=5`,
+          );
+          if (!testers?.data?.length) {
+            console.log("  NOT FOUND on this app. That alone explains it.");
+            process.exit(0);
+          }
+          for (const t of testers.data) {
+            console.log(
+              `  ${t.attributes.email}  state=${t.attributes.state ?? "?"}` +
+              `  invite=${t.attributes.inviteType ?? "?"}`,
+            );
+            const groups = (t.relationships?.betaGroups?.data ?? []).map((g) => g.id);
+            const names = (testers.included ?? [])
+              .filter((i) => i.type === "betaGroups" && groups.includes(i.id));
+            if (!names.length) console.log("    in NO groups");
+            for (const g of names) {
+              const sees = linkedIds.has(g.id) ? "SEES the build" : "does NOT see it";
+              console.log(
+                `    group "${g.attributes.name}" ` +
+                `internal=${g.attributes.isInternalGroup} -> ${sees}`,
+              );
+            }
+          }
+
+          console.log(
+            "\nVERDICT: the tester sees the build only if one of their groups " +
+            "is listed above as linked to it. An external group additionally " +
+            "needs Beta App Review APPROVED.",
+          );
+          SCRIPT
+          node /tmp/diagnose.mjs
