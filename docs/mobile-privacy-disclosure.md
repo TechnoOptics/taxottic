@@ -287,7 +287,21 @@ visibility. Confirm the wording matches this document before submitting.
 
 ## CCPA / GDPR posture
 
-- Taxottic LLC is the data controller.
+- **Techno Optics LLC**, a Massachusetts limited liability company, is
+  the data controller. Taxottic is the product; the LLC is the entity.
+
+  This line read "Taxottic LLC" until 2026-08-16, which named an entity
+  that does not appear anywhere in the user-facing legal pages. Both
+  app/legal/privacy/page.tsx and app/legal/terms/page.tsx say "Techno
+  Optics LLC, a Massachusetts limited liability company". Store privacy
+  declarations are filled in FROM this document, so the discrepancy would
+  have told Apple and Google one controller while telling users another.
+
+- **STREET ADDRESS: still missing, and it is required.** GDPR Art. 13(1)(a)
+  wants the controller's identity AND contact details, and both store
+  privacy forms have an address field. No postal address exists anywhere
+  in this repository. It cannot be invented here; it has to come from the
+  LLC's registration. Fill it in before the next submission.
 - "Delete my account" cascades all user-linked rows via the `auth.users`
   cascade FK.
 - Data export at `/api/account/export`.
