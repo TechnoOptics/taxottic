@@ -1054,7 +1054,21 @@
 // three readers use maybeSingle() or a driver-keyed Map; it just names
 // the writer now. Per-device history lives in the append-only heartbeats
 // table: GROUP BY (driver_user_id, device_id).
-const CACHE_VERSION = "v185";
+// v186: a verdict between "working" and "broken".
+//
+// The first healthy iPhone heartbeat (build 40) reported
+// low_power_mode = true on the phone whose drives had been going missing
+// for weeks. iOS throttles background activity in Low Power Mode, so it
+// produces the same symptom as a dead tracker while everything we ship
+// reports healthy. It was invisible until now for the dullest reason:
+// the field was NULL along with every other device-truth column, because
+// the plugin that reports it was never registered.
+//
+// Reported as `degraded`, never `dead`. It is not our bug, and `dead` is
+// the one word people trust to mean "they shipped something broken". It
+// is also not `denied`: nobody refused a permission. The distinguishing
+// property is that the DRIVER can fix it in Settings in ten seconds.
+const CACHE_VERSION = "v186";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

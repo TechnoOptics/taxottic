@@ -1220,6 +1220,11 @@ export async function sendHeartbeat(): Promise<void> {
             // claim we looked when the read actually returned.
             probed: geofence != null || dsProbe.outcome !== "timeout",
             locationAuthorization: truth?.locationAuthorization ?? null,
+            // Same source as the heartbeat column four lines up, so the
+            // verdict and the raw value can never disagree. Null when the
+            // plugin has not answered, which the check reports as unknown
+            // rather than as "not throttled".
+            lowPowerMode: truth?.lowPowerMode ?? null,
             // These were hardcoded null under a comment claiming car
             // signals are "NOT fetched on this path". They are: carProbe
             // is awaited earlier in this same function and its value is

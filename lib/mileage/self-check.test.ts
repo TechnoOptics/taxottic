@@ -30,6 +30,7 @@ const web: ProbeInput = {
   deviceStatusOk: null, deviceStatusMs: null, deviceStatusStage: null,
   geofenceArmState: null, geofenceCount: null,
   locationAuthorization: null,
+  lowPowerMode: null,
   bluetoothPermission: null, bluetoothPermissionAsked: null, carSignalsOk: null,
 };
 
@@ -47,6 +48,11 @@ const abelAndroid: ProbeInput = {
   deviceStatusOk: true, deviceStatusMs: 12, deviceStatusStage: "done",
   geofenceArmState: "armed", geofenceCount: 4,
   locationAuthorization: "always",
+  // A device whose plugin ANSWERS reports this. Leaving it null here
+  // would model a state this device cannot be in, and the fixture that
+  // modelled an impossible state is exactly what let the platform bug
+  // survive 21 passing tests.
+  lowPowerMode: false,
   bluetoothPermission: "not_requested", bluetoothPermissionAsked: false,
   carSignalsOk: true,
 };
@@ -339,5 +345,72 @@ describe("the tracker feeds the self-check honestly", () => {
       (m) => m[1],
     );
     expect(pinned).toEqual([]);
+  });
+});
+
+/**
+ * Low Power Mode: the finding that only became visible once the iOS
+ * plugins started answering.
+ *
+ * The first healthy iPhone heartbeat (2026-08-16, build 40) reported
+ * low_power_mode = true on the phone whose drives had been going missing
+ * for weeks. iOS throttles background activity in that mode, so it
+ * produces the same symptom as a dead tracker while everything we ship
+ * reports healthy. It had been null all along, for the dullest reason:
+ * the plugin that reports it was never registered.
+ */
+describe("a device setting the driver controls", () => {
+  const throttled: ProbeInput = { ...abelAndroid, lowPowerMode: true };
+
+  it("is DEGRADED, never dead: this is not our bug", () => {
+    // Calling it dead would put a false accusation in the one field
+    // people trust to mean "we shipped something that does not work".
+    expect(verdictOf(throttled, "low_power_mode")).toBe("degraded");
+    expect(deadCapabilities(evaluate(throttled)).map((c) => c.id)).not.toContain(
+      "low_power_mode",
+    );
+  });
+
+  it("is not DENIED either: nobody refused a permission", () => {
+    // denied would misdescribe both the cause and the fix.
+    expect(verdictOf(throttled, "low_power_mode")).not.toBe("denied");
+  });
+
+  it("tells the driver where the switch is", () => {
+    const c = evaluate({ ...throttled, platform: "ios" }).find(
+      (x) => x.id === "low_power_mode",
+    )!;
+    expect(c.detail).toMatch(/Low Power Mode/i);
+    expect(c.detail).toMatch(/Settings/i);
+  });
+
+  it("names the right setting per platform", () => {
+    const android = evaluate(throttled).find((x) => x.id === "low_power_mode")!;
+    expect(android.detail).toMatch(/Battery Saver/i);
+  });
+
+  it("reports unknown when the plugin never answered, not 'not throttled'", () => {
+    // graceIos has dead plugins, so the value is null. Claiming "off"
+    // from a null would assert a measurement we never took.
+    expect(verdictOf(graceIos, "low_power_mode")).toBe("unknown");
+  });
+
+  it("ranks a measured degradation ABOVE an unmeasured unknown", () => {
+    const both: ProbeInput = {
+      ...abelAndroid,
+      bluetoothPermission: "granted",
+      bluetoothPermissionAsked: true,
+      lowPowerMode: true,
+      carSignalsOk: null, // unknown
+    };
+    // An actionable fact must not be buried under a missing measurement.
+    expect(summarizeForHeartbeat(evaluate(both))).toMatch(/^degraded=/);
+    expect(summarizeForHeartbeat(evaluate(both))).toContain("low_power_mode");
+  });
+
+  it("a dead capability still outranks it", () => {
+    // Our bug is more urgent than their battery setting.
+    const p: ProbeInput = { ...graceIos, lowPowerMode: true };
+    expect(summarizeForHeartbeat(evaluate(p))).toMatch(/^dead=/);
   });
 });
