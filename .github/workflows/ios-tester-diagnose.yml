@@ -87,7 +87,11 @@ jobs:
             const body = await res.json().catch(() => ({}));
             if (!res.ok) {
               console.log(`  (GET ${path} -> ${res.status})`);
-              return null;
+              // Signal DENIED rather than empty. A failed read is not the
+              // same as a read that found nothing, and collapsing the two
+              // is how this script once printed "nobody can see this
+              // build" from a 403 while the build was in fact linked.
+              return { __denied: res.status };
             }
             return body;
           }
@@ -130,13 +134,23 @@ jobs:
           console.log(`\n=== GROUPS BUILD ${BUILD_NUMBER} IS LINKED TO ===`);
           const linked = await api(`/v1/builds/${target.id}/betaGroups?limit=50`);
           const linkedIds = new Set();
+          const linkageUnknown = Boolean(linked?.__denied);
           for (const g of linked?.data ?? []) {
             linkedIds.add(g.id);
             console.log(
               `  ${g.attributes.name}  internal=${g.attributes.isInternalGroup}`,
             );
           }
-          if (!linkedIds.size) console.log("  (none — nobody can see this build)");
+          if (linkageUnknown) {
+            console.log(
+              `  UNKNOWN. The API key was denied this read (${linked.__denied}), ` +
+              `so linkage could NOT be determined. This is not evidence of ` +
+              `anything: check the group in App Store Connect, or trust the ` +
+              `"Linked build" line from the distribute workflow.`,
+            );
+          } else if (!linkedIds.size) {
+            console.log("  (none — nobody can see this build)");
+          }
 
           // 3. The tester record. The question that matters is whether the
           //    groups they are in intersect the groups above.
@@ -159,7 +173,11 @@ jobs:
               .filter((i) => i.type === "betaGroups" && groups.includes(i.id));
             if (!names.length) console.log("    in NO groups");
             for (const g of names) {
-              const sees = linkedIds.has(g.id) ? "SEES the build" : "does NOT see it";
+              const sees = linkageUnknown
+                ? "linkage UNKNOWN (read denied)"
+                : linkedIds.has(g.id)
+                  ? "SEES the build"
+                  : "does NOT see it";
               console.log(
                 `    group "${g.attributes.name}" ` +
                 `internal=${g.attributes.isInternalGroup} -> ${sees}`,
