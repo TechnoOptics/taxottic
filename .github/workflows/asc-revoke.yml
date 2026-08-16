@@ -1,0 +1,175 @@
+name: iOS — Revoke a tester record or a pending user invitation
+
+# DESTRUCTIVE. Everything else in this repo's iOS tooling only adds; this
+# one takes away, so it is deliberately awkward to run: nothing happens
+# unless `confirm` is typed exactly, and each target is opt-in by email.
+#
+# WHY THIS EXISTS
+#
+# An Apple ID can hold only ONE TestFlight tester record per app, and
+# invites can be sent to any email associated with that Apple ID. On
+# 2026-08-15 a driver whose Apple ID is muchoki74@icloud.com had an old
+# tester record under muchoki74@gmail.com, an ADDITIONAL email on the
+# same account:
+#
+#   muchoki74@gmail.com   INSTALLED   External Testers   (review-gated)
+#   muchoki74@icloud.com  INVITED     Techno Testers     (cannot accept)
+#
+# The icloud invite was unacceptable purely because the gmail record
+# already occupied her Apple ID's slot for this app. Removing the stale
+# record is what frees it. This is the ONLY reason to reach for this
+# workflow: it is not a cleanup tool.
+#
+# ORDER MATTERS AND IS NOT ENFORCED HERE. Removing a tester record takes
+# away a working build from a real person. Only do it when the
+# replacement path is already in place, i.e. the target group exists, the
+# build is linked to it, and (for an internal group) the person is
+# already an App Store Connect user. Confirm all three first; this
+# workflow cannot check them for you.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tester_email:
+        description: "TestFlight tester record to DELETE (blank = skip)"
+        required: false
+        default: ""
+      invitation_email:
+        description: "Pending App Store Connect user INVITATION to cancel (blank = skip)"
+        required: false
+        default: ""
+      confirm:
+        description: "Type REVOKE to proceed. Anything else is a dry run."
+        required: true
+        default: ""
+      bundle_id:
+        description: "App bundle identifier"
+        required: false
+        default: "com.taxottic.app"
+
+jobs:
+  revoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Revoke
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          TESTER_EMAIL: ${{ inputs.tester_email }}
+          INVITATION_EMAIL: ${{ inputs.invitation_email }}
+          CONFIRM: ${{ inputs.confirm }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+        run: |
+          cat > /tmp/revoke.mjs <<'SCRIPT'
+          import crypto from "node:crypto";
+
+          const KEY_ID = process.env.ASC_KEY_ID;
+          const ISSUER = process.env.ASC_ISSUER_ID;
+          const PEM = process.env.ASC_PRIVATE_KEY;
+          const TESTER = (process.env.TESTER_EMAIL || "").trim();
+          const INVITE = (process.env.INVITATION_EMAIL || "").trim();
+          const ARMED = (process.env.CONFIRM || "").trim() === "REVOKE";
+          const BUNDLE_ID = process.env.BUNDLE_ID;
+
+          if (!ARMED) {
+            console.log("DRY RUN. `confirm` was not REVOKE, so nothing will be deleted.\n");
+          }
+
+          function b64u(x) {
+            return Buffer.from(x).toString("base64")
+              .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+          }
+          const now = Math.floor(Date.now() / 1000);
+          const header = b64u(JSON.stringify({ alg: "ES256", kid: KEY_ID, typ: "JWT" }));
+          const payload = b64u(JSON.stringify({
+            iss: ISSUER, iat: now, exp: now + 600, aud: "appstoreconnect-v1",
+          }));
+          const signer = crypto.createSign("SHA256");
+          signer.update(`${header}.${payload}`);
+          const der = signer.sign(PEM);
+          let off = 2;
+          if (der[1] & 0x80) off = 2 + (der[1] & 0x7f);
+          const rLen = der[off + 1];
+          const r = der.subarray(off + 2, off + 2 + rLen);
+          const sOff = off + 2 + rLen;
+          const sLen = der[sOff + 1];
+          const s = der.subarray(sOff + 2, sOff + 2 + sLen);
+          const pad = (b) => {
+            b = b[0] === 0 ? b.subarray(1) : b;
+            return Buffer.concat([Buffer.alloc(32 - b.length, 0), b]);
+          };
+          const JWT = `${header}.${payload}.${b64u(Buffer.concat([pad(r), pad(s)]))}`;
+
+          async function api(method, path) {
+            const res = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              method,
+              headers: { Authorization: `Bearer ${JWT}` },
+            });
+            const text = await res.text();
+            let body = {};
+            try { body = text ? JSON.parse(text) : {}; } catch { /* empty */ }
+            return { status: res.status, body, text };
+          }
+
+          const apps = await api("GET", `/v1/apps?filter[bundleId]=${BUNDLE_ID}&limit=1`);
+          const app = apps.body?.data?.[0];
+          if (!app) { console.log(`No app for ${BUNDLE_ID}`); process.exit(1); }
+          console.log(`App: ${app.attributes.name} (${app.id})\n`);
+
+          if (TESTER) {
+            console.log(`=== TESTER RECORD: ${TESTER} ===`);
+            const found = await api(
+              "GET",
+              `/v1/betaTesters?filter[email]=${encodeURIComponent(TESTER)}` +
+              `&filter[apps]=${app.id}&include=betaGroups&limit=5`,
+            );
+            const rows = found.body?.data ?? [];
+            if (!rows.length) {
+              console.log("  Not found. Nothing to remove.");
+            }
+            for (const t of rows) {
+              const groups = (found.body.included ?? [])
+                .filter((i) => i.type === "betaGroups")
+                .map((g) => `${g.attributes.name}(internal=${g.attributes.isInternalGroup})`);
+              console.log(
+                `  ${t.attributes.email} state=${t.attributes.state} ` +
+                `groups=[${groups.join(", ")}]`,
+              );
+              if (!ARMED) { console.log("  would DELETE"); continue; }
+              const del = await api("DELETE", `/v1/betaTesters/${t.id}`);
+              console.log(
+                del.status === 204
+                  ? "  DELETED. Their Apple ID slot for this app is now free."
+                  : `  FAILED ${del.status} ${del.text.slice(0, 300)}`,
+              );
+            }
+            console.log("");
+          }
+
+          if (INVITE) {
+            console.log(`=== PENDING USER INVITATION: ${INVITE} ===`);
+            const found = await api(
+              "GET",
+              `/v1/userInvitations?filter[email]=${encodeURIComponent(INVITE)}&limit=5`,
+            );
+            const rows = found.body?.data ?? [];
+            if (!rows.length) {
+              console.log("  No pending invitation. Nothing to cancel.");
+            }
+            for (const inv of rows) {
+              console.log(
+                `  ${inv.attributes.email} roles=${(inv.attributes.roles || []).join(",")}`,
+              );
+              if (!ARMED) { console.log("  would CANCEL"); continue; }
+              const del = await api("DELETE", `/v1/userInvitations/${inv.id}`);
+              console.log(
+                del.status === 204
+                  ? "  CANCELLED."
+                  : `  FAILED ${del.status} ${del.text.slice(0, 300)}`,
+              );
+            }
+          }
+          SCRIPT
+          node /tmp/revoke.mjs
