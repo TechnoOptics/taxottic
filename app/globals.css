@@ -136,9 +136,32 @@ html[data-theme="light"] {
   --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --font-data: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* The cream token is what ~400 utility usages resolve through, so
-     retuning it here moves them all without editing a single component. */
   --color-cream: #f2f5f8;
+
+  /* MUST be declared, not inherited from the token.
+     ------------------------------------------------------------------
+     app/globals.css uses Tailwind's `@theme inline`, and `inline` means
+     exactly what it says: token values are INLINED into generated
+     declarations at build time instead of being emitted as var().
+     Tailwind's base rule therefore ships as a literal
+     `body { color: #18181b }`, and redefining --foreground at runtime
+     cannot move it.
+
+     Measured, not assumed: with only the tokens overridden, the computed
+     body background stayed rgb(251,247,233) (the old cream) while the h1
+     correctly reported Archivo. The font moved because `.display` is
+     hand-written CSS using var(); the background did not because it was
+     baked.
+
+     So the surfaces the skin owns declare their own paint here, at
+     attribute specificity (0,1,0), which outranks the element-level base
+     rule (0,0,1).
+
+     KNOWN LIMIT: `bg-cream` and friends are also inlined utilities and
+     will NOT follow this. Only `bg-[var(--color-cream)]` arbitrary values
+     do. Moving those onto tokens is a separate, mechanical pass. */
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 html[data-theme="dark"] [data-skin="instrument"],
