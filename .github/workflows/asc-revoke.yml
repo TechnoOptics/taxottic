@@ -139,9 +139,14 @@ jobs:
               );
               if (!ARMED) { console.log("  would DELETE"); continue; }
               const del = await api("DELETE", `/v1/betaTesters/${t.id}`);
+              // Any 2xx is success. Apple answers this DELETE with 202
+              // Accepted (async), and an earlier version of this script
+              // demanded exactly 204 and printed "FAILED 202" on a delete
+              // that had in fact worked. A tool that reports failure on
+              // success invites someone to retry a destructive action.
               console.log(
-                del.status === 204
-                  ? "  DELETED. Their Apple ID slot for this app is now free."
+                del.status >= 200 && del.status < 300
+                  ? `  DELETED (${del.status}). Their Apple ID slot for this app is now free.`
                   : `  FAILED ${del.status} ${del.text.slice(0, 300)}`,
               );
             }
@@ -165,8 +170,8 @@ jobs:
               if (!ARMED) { console.log("  would CANCEL"); continue; }
               const del = await api("DELETE", `/v1/userInvitations/${inv.id}`);
               console.log(
-                del.status === 204
-                  ? "  CANCELLED."
+                del.status >= 200 && del.status < 300
+                  ? `  CANCELLED (${del.status}).`
                   : `  FAILED ${del.status} ${del.text.slice(0, 300)}`,
               );
             }
