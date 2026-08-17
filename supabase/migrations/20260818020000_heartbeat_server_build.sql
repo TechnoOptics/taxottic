@@ -1,0 +1,121 @@
+-- Make bundle rollout READABLE, because right now it is only inferable.
+--
+-- mileage_device_heartbeats.web_build already records which JS bundle a
+-- device is executing. Nothing in the database records which bundle is
+-- CURRENT, so "what fraction of devices are on the latest build" cannot be
+-- answered by a query. It has to be answered by going to git or Vercel,
+-- reading the production sha by hand, and pasting it into a literal. Nobody
+-- does that, so in practice the question is answered by eyeballing a
+-- distinct-count of web_build, and that reading is wrong in a specific and
+-- dangerous way. See the measurement below.
+--
+-- server_build closes it: the heartbeat route stamps its OWN bundle id
+-- (lib/build-id.ts WEB_BUILD_ID, the same constant the client reports as
+-- web_build, inlined from VERCEL_GIT_COMMIT_SHA at build time). One row
+-- then carries both halves of the comparison, and staleness is a column
+-- test rather than an inference:
+--
+--   web_build = server_build      device is on the deployed bundle
+--   web_build <> server_build     device is behind, by a known amount
+--   web_build is null             client predates the field entirely
+--
+-- WHY SERVER-STAMPED AND NOT CLIENT-REPORTED. The problem being measured
+-- is that client changes do not reach devices. A diagnostic that itself
+-- has to reach the device to work would inherit the very failure it exists
+-- to detect, and would report NULL on exactly the stalest phones, which
+-- reads as "no data yet" rather than "badly behind". Stamping it on the
+-- server means this works on every device from the moment it deploys,
+-- including one that has been running a bundle from last week. That is
+-- also why this change ships no client code and no CACHE_VERSION bump: it
+-- needs no rollout.
+--
+-- The two fields must NOT both come from the same side. If a later edit
+-- ever sets web_build from the server too, every row would compare equal
+-- and the metric would silently read 100% healthy forever. Guarded by
+-- lib/mileage/rollout-observability.test.ts.
+--
+-- WHAT WAS ACTUALLY MEASURED, 2026-08-17, and why no propagation fix ships
+-- with this.
+--
+-- The alarming reading was: 257 heartbeats over two days, ten distinct
+-- web_build values, two drivers, and exactly ONE heartbeat carrying the
+-- feature shipped that morning. That looks like ten bundles fighting each
+-- other and a rollout that has stalled. It is neither.
+--
+--   1. The ten builds are SEQUENTIAL, not concurrent. Pairing every
+--      (device, web_build) window against every other on the same device
+--      and asking for any overlap returns zero rows. No device has ever
+--      run two bundles at once. Ten distinct values is what six deploys in
+--      one day looks like when counted over a two-day window.
+--
+--   2. The "1 of 257" is beat VOLUME, not device coverage. A hidden phone
+--      emits 12 heartbeats an hour; a phone being actively used emits a
+--      handful per bundle. One device contributed 223 of the 257 rows. The
+--      feature had in fact reached 1 of the 2 devices, roughly 45 minutes
+--      after merge, deploy time included.
+--
+--   3. The device that is behind is behind for one reason: it has been
+--      HIDDEN continuously. 205 of its last 206 heartbeats report
+--      probe_visibility = 'hidden' and probe_foreground = false, across 18
+--      hours spanning five deploys. It has had no foreground moment in
+--      which to update.
+--
+-- A page picks up a new bundle by RELOADING. Reloading a hidden page is
+-- the outage that lib/pwa/adopt-policy.ts exists to prevent: the reloaded
+-- page re-arms the tracker with stop-then-start, iOS suspends the WebView
+-- at that await, bg.start() never runs, and background location stays down
+-- until the app is opened by hand. That is Grace's iPhone, 1.3.7, four
+-- days silent. So there is no lever here that is both safe and useful: the
+-- visible path already delivers in minutes, and the hidden path must not
+-- be shortened. The lag is correct. What was missing was the ability to
+-- SEE it, which is what this column is.
+--
+-- THE QUERY A REVIEWER RUNS. Fleet snapshot, one row per device:
+--
+--   select coalesce(device_id, 'legacy_' || left(driver_user_id::text, 8))
+--            as device,
+--          web_build, server_build,
+--          web_build is not distinct from server_build as on_current,
+--          now() - reported_at as since_last_beat
+--   from (
+--     select distinct on (device_id, driver_user_id) *
+--     from public.mileage_device_heartbeats
+--     where reported_at > now() - interval '7 days'
+--       and server_build is not null
+--     order by device_id, driver_user_id, reported_at desc
+--   ) latest
+--   order by on_current, since_last_beat;
+--
+-- And the single number:
+--
+--   select count(*) filter (where on_current) as devices_current,
+--          count(*) as devices_total,
+--          round(100.0 * count(*) filter (where on_current)
+--                / nullif(count(*), 0), 1) as pct_current
+--   from ( ...the same subquery, projecting on_current... ) f;
+--
+-- The `server_build is not null` filter is load-bearing in the opposite
+-- direction to the usual one: it excludes rows written BEFORE this
+-- migration, which have no current-bundle reference to compare against.
+--
+-- BOTH TABLES, ALWAYS. app/api/mileage/heartbeat/route.ts builds ONE
+-- payload and upserts it into mileage_device_status first, returning 500
+-- before the history append. A column present on only one table does not
+-- degrade the heartbeat, it deletes it, for every device on both
+-- platforms, silently. That has already happened here with
+-- arm_interrupted_at, web_build and eight car_* columns. Guarded by
+-- lib/db/schema-contract.test.ts.
+--
+-- Purely additive and nullable.
+
+alter table public.mileage_device_status
+  add column if not exists server_build text;
+
+alter table public.mileage_device_heartbeats
+  add column if not exists server_build text;
+
+comment on column public.mileage_device_heartbeats.server_build is
+  'The bundle the API was running when it accepted this heartbeat, stamped server-side from lib/build-id.ts. Compare against web_build (which the DEVICE reports) to get rollout state without consulting git: equal means the device is on the deployed bundle, different means it is behind. Never set both from the same side, or every row compares equal and the metric reads healthy forever.';
+
+comment on column public.mileage_device_status.server_build is
+  'The bundle the API was running when it accepted this heartbeat, stamped server-side from lib/build-id.ts. See the mileage_device_heartbeats comment. Note this table holds one row per (driver, company), so two devices on one account collapse here: use mileage_device_heartbeats grouped by device_id for a per-device rollout reading.';
