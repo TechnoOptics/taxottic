@@ -16,11 +16,12 @@ import { useState, useTransition } from "react";
  * reads: destructive actions should never be one click on a touch
  * device.
  *
- * The action is AWAITED. deleteMileagePlace returns early without
- * deleting when the place is gone or the caller is not in its company,
- * and it skips its revalidatePath calls on those paths, so a refused
- * removal repainted nothing and read exactly like a tap that missed.
- * The row is verified as gone before the confirm state resets.
+ * The action is AWAITED and its refusal is rendered. deleteMileagePlace
+ * used to return early without deleting when the place was gone or the
+ * caller was not in its company, skipping its revalidatePath calls, so a
+ * refused removal repainted nothing and read exactly like a tap that
+ * missed. It now throws on each of those, and on the delete's own error;
+ * the catch below shows the sentence it threw.
  */
 export function DeletePlaceButton({
   placeId,
@@ -67,9 +68,13 @@ export function DeletePlaceButton({
             try {
               await action(fd);
               setConfirming(false);
-            } catch {
+            } catch (err) {
               setConfirming(false);
-              setError("Could not remove this place. Try again.");
+              setError(
+                err instanceof Error && err.message
+                  ? err.message
+                  : "Could not remove this place. Try again.",
+              );
             }
           });
         }}
