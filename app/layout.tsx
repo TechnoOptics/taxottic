@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Hanken_Grotesk } from "next/font/google";
+import { Fraunces, Hanken_Grotesk, Archivo, IBM_Plex_Mono } from "next/font/google";
 import { PWASetup } from "@/components/PWASetup";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
 import { CapacitorNativeInit } from "@/components/CapacitorNativeInit";
@@ -24,6 +24,36 @@ const fraunces = Fraunces({
 const hanken = Hanken_Grotesk({
   variable: "--font-hanken",
   subsets: ["latin"],
+  display: "swap",
+});
+
+// ---- The "Instrument" skin (marketing + employee portal) -------------
+//
+// Archivo replaces Fraunces as the DISPLAY face on those two surfaces
+// only. Fraunces is a high-contrast humanist serif, and cream ground +
+// high-contrast serif + warm accent is currently the most common
+// machine-generated look in circulation. It also reads artisanal, which
+// works against a product whose whole claim is precision about money.
+// Archivo is a grotesque with tight apertures and real weight at large
+// sizes: engineered rather than literary.
+//
+// Fraunces is NOT removed. The firm and admin portals still use it, and
+// the wordmark is Conquera regardless.
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  display: "swap",
+});
+
+// Figures only. Money that does not line up in a column cannot be
+// compared down the column, and comparison is the entire job of a
+// forecast and of a portal ledger. Plex Mono has true tabular numerals
+// and a neutral, instrument-panel voice.
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
   display: "swap",
 });
 
@@ -230,9 +260,23 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${hanken.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${hanken.variable} ${archivo.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col safe-pad-bottom">
+      {/*
+        data-skin applies the Instrument palette and display face to the
+        marketing pages and the employee portal, which is every surface
+        EXCEPT /firm and /admin. Those two opt back out with
+        data-skin="classic" in their own layouts.
+
+        Applied here rather than on each page because 86 portal pages
+        render AppHeader and there is no shared portal layout to hang it
+        on. Two opt-outs beat eighty-six opt-ins, and it gives the two
+        portals an explicit, greppable statement of which look they use.
+      */}
+      <body
+        data-skin="instrument"
+        className="min-h-full flex flex-col safe-pad-bottom"
+      >
         {children}
         <PWASetup />
         <CapacitorAuth />

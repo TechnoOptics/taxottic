@@ -92,6 +92,181 @@ html[data-theme="light"] {
   --kicker: #8a661f; /* gold-700 */
 }
 
+/* ====================================================================
+   THE "INSTRUMENT" SKIN
+   --------------------------------------------------------------------
+   Scoped to [data-skin="instrument"], which the marketing pages and the
+   employee portal set on their own wrappers. It is DELIBERATELY NOT a
+   global retune: the firm and admin portals keep the existing look until
+   someone asks for them, and a scoped attribute makes that reversible by
+   deleting one line rather than by reverting a palette across 250 files.
+
+   WHY THE PALETTE MOVES AT ALL. The previous ground was cream #fbf7e9
+   with a high-contrast serif display and a warm gold accent. That exact
+   combination is the most common machine-generated design in circulation
+   right now, so it reads as templated regardless of how well it is
+   executed. It also fights the subject: cream and a literary serif read
+   artisanal, and this product's entire claim is precision about money.
+
+   The moves, each with a reason:
+     - Ground goes from warm cream to a COOL, blue-biased paper. Not a
+       pure grey: it carries a slight bias toward the navy that is
+       already the brand's structural colour, so the neutral reads as
+       chosen rather than defaulted to.
+     - Gold desaturates to brass and is spent in ONE place, the live
+       figure and today's marker, instead of appearing on every eyebrow,
+       ring and divider. Boldness in one place; everything else quiet.
+     - Figures move to a mono with tabular numerals so a column of money
+       actually lines up and can be compared down the column.
+   ==================================================================== */
+[data-skin="instrument"] {
+  --background: #f2f5f8;   /* cool paper, blue-biased. NOT warm cream. */
+  --surface: #ffffff;
+  --surface-2: #e9eef4;    /* recessed, same cool family */
+  --border: rgba(12, 16, 23, 0.10);
+  --border-bright: rgba(12, 16, 23, 0.18);
+  --foreground: #0c1017;   /* near-black with a blue bias */
+  --muted: #4c5766;        /* chosen neutral, biased toward the accent */
+  --accent: #131b2b;
+  --accent-2: #c0973f;     /* brass: the only decorative accent */
+  --accent-fg: #f2f5f8;
+  --kicker: #8a6a1c;       /* brass that actually passes on cool paper */
+
+  /* Display face swaps to a grotesque. See app/layout.tsx for why. */
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-data: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-cream: #f2f5f8;
+
+  /* MUST be declared, not inherited from the token.
+     ------------------------------------------------------------------
+     app/globals.css uses Tailwind's `@theme inline`, and `inline` means
+     exactly what it says: token values are INLINED into generated
+     declarations at build time instead of being emitted as var().
+     Tailwind's base rule therefore ships as a literal
+     `body { color: #18181b }`, and redefining --foreground at runtime
+     cannot move it.
+
+     Measured, not assumed: with only the tokens overridden, the computed
+     body background stayed rgb(251,247,233) (the old cream) while the h1
+     correctly reported Archivo. The font moved because `.display` is
+     hand-written CSS using var(); the background did not because it was
+     baked.
+
+     So the surfaces the skin owns declare their own paint here, at
+     attribute specificity (0,1,0), which outranks the element-level base
+     rule (0,0,1).
+
+     KNOWN LIMIT: `bg-cream` and friends are also inlined utilities and
+     will NOT follow this. Only `bg-[var(--color-cream)]` arbitrary values
+     do. Moving those onto tokens is a separate, mechanical pass. */
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+html[data-theme="dark"] [data-skin="instrument"],
+[data-skin="instrument"][data-theme="dark"] {
+  --background: #0c1017;
+  --surface: #131a24;
+  --surface-2: rgba(8, 11, 16, 0.85);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-bright: rgba(192, 151, 63, 0.38);
+  --foreground: #eef2f7;
+  --muted: rgba(238, 242, 247, 0.60);
+  --accent: #c0973f;
+  --accent-2: #d4ae5c;
+  --accent-fg: #0c1017;
+  --kicker: #d4ae5c;
+  --color-cream: #0c1017;
+}
+
+/* ---- OPT-OUT: the firm and admin portals keep the previous look -----
+   The skin is applied at <body>, so these two restate the original token
+   values rather than trying to un-inherit. The wrappers that carry this
+   use display:contents, so they add no box and cannot shift a layout;
+   custom properties still inherit through them.
+
+   This exists because the redesign was scoped to the marketing page and
+   the employee portal. Deleting these blocks is how the firm and admin
+   portals would later adopt the same skin, which is a decision rather
+   than an accident. ------------------------------------------------ */
+[data-skin="classic"] {
+  --background: #fbf7e9;
+  --surface: #ffffff;
+  --surface-2: #f6f2e4;
+  --border: rgba(18, 26, 42, 0.1);
+  --border-bright: rgba(18, 26, 42, 0.2);
+  --foreground: #18181b;
+  --muted: #52525b;
+  --accent: #1d2843;
+  --accent-2: #c4a25d;
+  --accent-fg: #fbf7e9;
+  --kicker: #8a661f;
+  --color-cream: #fbf7e9;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+}
+
+html[data-theme="dark"] [data-skin="classic"] {
+  --background: #121a2a;
+  --surface: #202d4d;
+  --surface-2: rgba(18, 26, 42, 0.85);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-bright: rgba(213, 187, 126, 0.42);
+  --foreground: #fbf7e9;
+  --muted: rgba(251, 247, 233, 0.58);
+  --accent: #d5bb7e;
+  --accent-2: #e0c590;
+  --accent-fg: #121a2a;
+  --kicker: #e0c590;
+  --color-cream: #121a2a;
+}
+
+/* Carries the attribute without generating a box. */
+.skin-scope { display: contents; }
+
+/* Money, and anything else read as a column. Tabular numerals are the
+   whole point: proportional digits make 1,111 narrower than 8,888, so a
+   column of figures cannot be scanned or compared. */
+[data-skin="instrument"] .figure,
+[data-skin="instrument"] .tabular {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---- SIGNATURE: the tax-year runway --------------------------------
+   A hairline ticked at the four federal estimated-tax due dates, filled
+   to today. It is not ornament: it encodes where the reader sits in the
+   tax year, which is the one fact this product exists to keep in front
+   of them. Remove it and the hero loses information rather than losing
+   decoration. ------------------------------------------------------ */
+[data-skin="instrument"] .runway { position: relative; }
+[data-skin="instrument"] .runway-rail {
+  height: 1px;
+  background: var(--border-bright);
+  position: relative;
+}
+[data-skin="instrument"] .runway-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 1px;
+  background: var(--accent-2);
+}
+[data-skin="instrument"] .runway-tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 6px;
+  background: var(--border-bright);
+}
+[data-skin="instrument"] .runway-today {
+  position: absolute;
+  top: -5px;
+  width: 1px;
+  height: 11px;
+  background: var(--accent-2);
+}
+
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
   --surface: #202d4d;

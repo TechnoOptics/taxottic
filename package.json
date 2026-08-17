@@ -18,9 +18,9 @@
     "e2e:headed": "playwright test --project=chromium --project=mobile-chrome --headed",
     "e2e:ui": "playwright test --ui",
     "e2e:visual": "playwright test --project=visual-desktop --project=visual-mobile",
-    "e2e:visual:update": "playwright test --project=visual-desktop --project=visual-mobile --update-snapshots",
+    "e2e:visual:update": "playwright test --project=visual-desktop --project=visual-mobile --update-snapshots=all",
     "test:ct": "playwright test -c playwright-ct.config.ts",
-    "test:ct:update": "playwright test -c playwright-ct.config.ts --update-snapshots",
+    "test:ct:update": "playwright test -c playwright-ct.config.ts --update-snapshots=all",
     "audits:monthly": "node scripts/audits/run-monthly.mjs",
     "postinstall": "patch-package --error-on-fail"
   },
