@@ -64,7 +64,7 @@ export default function DmcaPage() {
               Taxottic&apos;s designated agent under 17 U.S.C. § 512(c)(2)
               is:
             </p>
-            <p className="bg-cream/70 border border-forest-100 rounded-lg p-4 grid gap-1">
+            <p className="bg-[var(--color-cream)]/70 border border-forest-100 rounded-lg p-4 grid gap-1">
               <span>
                 <strong>Designated DMCA Agent</strong>
               </span>

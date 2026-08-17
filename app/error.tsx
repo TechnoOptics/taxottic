@@ -36,7 +36,10 @@ export default function GlobalError({
   return (
     <main
       id="main"
-      className="min-h-screen grid place-items-center px-4 py-10 bg-cream/40"
+      // Page ground, so it has to track the skin: `bg-cream/40` is baked to a
+      // literal #fbf7e9 by `@theme inline` and cast the whole error screen warm
+      // over the cool paper ground.
+      className="min-h-screen grid place-items-center px-4 py-10 bg-[var(--color-cream)]/40"
     >
       <div className="card p-6 sm:p-8 max-w-lg w-full">
         <div className="text-xs uppercase tracking-[0.22em] text-gold-700">

@@ -375,7 +375,12 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-forest-100 bg-cream">
+      {/* bg-[var(--color-cream)], not bg-cream. `@theme inline` bakes token
+          values into generated utilities, so `bg-cream` ships as a literal
+          #fbf7e9 that the instrument skin cannot move - it painted a warm
+          band across a cool-paper page. The arbitrary value emits var() and
+          tracks the skin. Same reason everywhere else this pattern appears. */}
+      <footer className="border-t border-forest-100 bg-[var(--color-cream)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 grid gap-4 sm:grid-cols-2 text-xs text-ink-muted">
           <div>
             <Wordmark size="sm" tone="forest" />

@@ -1906,7 +1906,11 @@ function Footer() {
             attorney.
           </p>
           <p className="mt-4 text-xs text-ink-muted">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-forest-100 bg-cream px-2.5 py-1">
+            {/* Ground-coloured chip: it reads as an outlined pill because its
+                fill matches the page. `bg-cream` was baked to #fbf7e9 by
+                `@theme inline` and stopped matching once the skin moved the
+                ground, so it became a warm blob. The var() form tracks it. */}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-forest-100 bg-[var(--color-cream)] px-2.5 py-1">
               <span
                 aria-hidden="true"
                 className="size-1.5 rounded-full bg-gold-500"

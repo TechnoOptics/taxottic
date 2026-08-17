@@ -691,7 +691,7 @@ export default function PrivacyPage() {
             <p>
               When you sign in with Google, we receive your name, email
               address, and profile picture via the OpenID Connect{" "}
-              <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+              <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                 openid email profile
               </code>{" "}
               scopes. Taxottic&apos;s use and transfer of information

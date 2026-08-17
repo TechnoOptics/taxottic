@@ -91,7 +91,7 @@ export default function SecurityPage() {
               Bank credentials are entered into Plaid&apos;s secure UI
               and never reach Taxottic servers. We receive an access
               token plus the transaction stream. Tokens are stored in a
-              separate <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+              separate <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                 bank_connection_secrets
               </code>{" "}
               table with restricted RLS. We do not store bank passwords,
@@ -215,7 +215,7 @@ export default function SecurityPage() {
                 operations for Techno Optics. User and company
                 inventory, plan roll-ups, daily probes. Reserved to
                 the addresses on the immutable{" "}
-                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                   public.super_admins
                 </code>{" "}
                 allowlist (today: <em>contact@taxottic.com</em> and{" "}
@@ -236,7 +236,7 @@ export default function SecurityPage() {
           <Section title="Super-admin role and cross-tenant access">
             <p>
               Members of the immutable{" "}
-              <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+              <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                 public.super_admins
               </code>{" "}
               allowlist (today:{" "}
@@ -250,7 +250,7 @@ export default function SecurityPage() {
               <li>
                 <strong>Visible disclosure.</strong> When a super-admin
                 opens a company they do not own, every page on{" "}
-                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                   /c/&#123;publicId&#125;/*
                 </code>{" "}
                 renders an amber banner at the top reading{" "}
@@ -261,7 +261,7 @@ export default function SecurityPage() {
               <li>
                 <strong>Append-only audit log.</strong> Every
                 cross-tenant page load is recorded in{" "}
-                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                   admin_cross_tenant_access_log
                 </code>{" "}
                 with the admin&apos;s identity, the company that was
@@ -270,11 +270,11 @@ export default function SecurityPage() {
                 to keep the log readable without losing forensic
                 detail. The table is write-protected: only the
                 SECURITY DEFINER function{" "}
-                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                   log_cross_tenant_access()
                 </code>{" "}
                 can append, and it re-checks{" "}
-                <code className="text-[12px] bg-cream/70 border border-forest-100 rounded px-1">
+                <code className="text-[12px] bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1">
                   is_super_admin()
                 </code>{" "}
                 before writing.

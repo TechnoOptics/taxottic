@@ -1083,7 +1083,23 @@
 // without the new bundle nothing receives that, and the drive keeps
 // appearing only after the user taps something. That IS the bug being
 // fixed here, so shipping it to a cached WebView would fix nothing.
-const CACHE_VERSION = "v187";
+// v188: the last warm-cream surfaces stop fighting the cool paper ground.
+//
+// The instrument skin moves the ground from cream #fbf7e9 to paper #f2f5f8
+// by redefining tokens, but `@theme inline` bakes token values into the
+// utilities it generates, so `bg-cream` shipped as a literal #fbf7e9 that no
+// runtime override can move. The surfaces that used it as the page GROUND -
+// the pricing footer, the fixed app-download banner, the legal/help panels
+// and code chips, the error screen, the human-check box - therefore kept
+// painting the old cream on a page that had moved underneath them. Measured:
+// the pricing footer was a 1280x175 band of rgb(251,247,233) on a
+// rgb(242,245,248) page.
+//
+// The fix is per-call-site (`bg-[var(--color-cream)]`), which is markup, so a
+// phone on the stale bundle keeps the warm bands. It also changes the class
+// names themselves, so the cached CSS no longer matches the cached HTML -
+// exactly the mismatch this version counter exists to prevent.
+const CACHE_VERSION = "v188";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

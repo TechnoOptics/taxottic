@@ -316,7 +316,7 @@ export default function HelpPage() {
             No. Pick &ldquo;Personal forecast&rdquo; on the
             filer-type screen and we&apos;ll skip the company-setup flow
             entirely. You&apos;ll land on the personal forecast at{" "}
-            <code className="bg-cream/70 border border-forest-100 rounded px-1 text-[12px]">
+            <code className="bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1 text-[12px]">
               /personal/forecast
             </code>
             .
@@ -360,7 +360,7 @@ export default function HelpPage() {
             states, and property-based invariants (refund/owed
             reconciliation, CTC caps, QBI &le; 20% of taxable income,
             etc.). Read the full layer breakdown in{" "}
-            <code className="bg-cream/70 border border-forest-100 rounded px-1 text-[12px]">
+            <code className="bg-[var(--color-cream)]/70 border border-forest-100 rounded px-1 text-[12px]">
               docs/forecast-accuracy.md
             </code>
             . That said, Taxottic is not a substitute for advice from a

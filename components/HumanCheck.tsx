@@ -134,7 +134,10 @@ export function HumanCheck({
             "grid size-5 shrink-0 place-items-center rounded-md border " +
             (verified
               ? "border-emerald-500 bg-emerald-500 text-white"
-              : "border-forest-300 bg-cream")
+              : // Ground colour, so it must track the skin. `bg-cream` is
+                // baked to a literal #fbf7e9 by `@theme inline` and left a
+                // warm box on a cool-paper page.
+                "border-forest-300 bg-[var(--color-cream)]")
           }
         >
           {verified ? (
