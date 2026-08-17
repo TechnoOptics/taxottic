@@ -51,6 +51,27 @@
  * Correcting a backlog point that was never skewed fabricates mileage,
  * and fabricated mileage is a false record of a tax position. When the
  * evidence is ambiguous, leave the record alone.
+ *
+ * WHEN THE CALLER ALREADY KNOWS IT IS BACKLOG
+ *
+ * Everything above infers backlog from the size of the lag, because that
+ * is all a live flush gives us to go on. A drain of the native on-disk
+ * buffer is different: it is backlog BY CONSTRUCTION, whatever the lag
+ * happens to be. Read a couple of minutes after a drive ends and its
+ * newest fix sits in the 2 to 30 minute band, which is indistinguishable
+ * from clock drift by lag alone and is not clock drift.
+ *
+ * Shifting it there is not merely inaccurate, it breaks idempotency. The
+ * offset is measured against RECEIPT, so a re-delivery (the drain's
+ * upload succeeded and the native consume did not, a case both drain
+ * paths explicitly tolerate) writes every point further forward and the
+ * (driver, company, captured_at) upsert key stops matching. That is the
+ * duplicate-drive incident this module was written to stop, arriving
+ * through a different door.
+ *
+ * So those callers pass `backlog: true` and the BEHIND branch is skipped.
+ * The AHEAD branch is not: a capture from the future is impossible in
+ * every batch, backlog or not.
  */
 
 /** Beyond this, a lag is a real offset and not network jitter. */
@@ -96,19 +117,25 @@ export type SkewResult<T extends SkewInput> = {
  *
  * `receiptMs` is passed in rather than read from Date.now() so the rule
  * is testable and so a single request cannot disagree with itself.
+ *
+ * `opts.backlog` marks a batch the CLIENT already knows is stored-and-
+ * forwarded rather than live. See the header.
  */
 export function correctBatchClockSkew<T extends SkewInput>(
   finite: T[],
   receiptMs: number,
+  opts?: { backlog?: boolean },
 ): SkewResult<T> {
+  const backlog = opts?.backlog === true;
   const newestTs = finite.reduce((a, pt) => Math.max(a, pt.ts), 0);
   const skewMs = newestTs > 0 ? newestTs - receiptMs : 0;
 
   const shifted =
     // Ahead of receipt is physically impossible: always a clock issue.
     skewMs > SKEW_TOLERANCE_MS ||
-    // Behind is ambiguous: only treat SMALL lags as clock skew.
-    (skewMs < -SKEW_TOLERANCE_MS && skewMs > -MAX_BEHIND_SHIFT_MS);
+    // Behind is ambiguous: only treat SMALL lags as clock skew, and only
+    // when the caller has not already told us this batch is backlog.
+    (!backlog && skewMs < -SKEW_TOLERANCE_MS && skewMs > -MAX_BEHIND_SHIFT_MS);
 
   let backlogHeld = 0;
   const points = (

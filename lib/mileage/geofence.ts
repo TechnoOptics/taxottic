@@ -21,6 +21,8 @@
 
 import { registerPlugin } from "@capacitor/core";
 import { ensureHeartbeatTimer } from "./heartbeat-timer";
+import { UPLOAD_BATCH_MAX } from "./flush-policy";
+import { postAccepted, postJson } from "./post-json";
 export type GeofenceArmState =
   | "armed"
   | "disarmed_no_places"
@@ -209,6 +211,20 @@ export async function syncLearnedPlaces(companyId: string): Promise<{
  * drain call: an upload that fails must leave the drive on disk. Late
  * points are fine, the finalizer reconciles over a 45-day window, so a
  * morning commute uploaded at lunchtime still becomes a correct trip.
+ *
+ * Called from lib/mileage/native-drain.ts, which is what stopped this
+ * being a once-per-app-launch event. Two consequences follow from that
+ * and both are handled below rather than assumed away:
+ *
+ *  - The batch is CAPPED at UPLOAD_BATCH_MAX, and only what was posted
+ *    is consumed. Uncapped, this path produced single inserts of 3764
+ *    points, and a 179 KB body is already known to break uploads on a
+ *    real handset.
+ *  - The POST declares `backlog: true`. A drain taken minutes after a
+ *    drive ends lands in the clock-skew shift's 2 to 30 minute band,
+ *    which no production batch had ever hit before, and being shifted
+ *    there would make a retry write a second copy of the drive under a
+ *    different captured_at. See ./clock-skew.
  */
 export async function drainGeofenceBuffer(companyId: string): Promise<number> {
   const plugin = (await guard())?.p ?? null;
@@ -221,6 +237,9 @@ export async function drainGeofenceBuffer(companyId: string): Promise<number> {
     return 0;
   }
   if (fixes.length === 0) return 0;
+  // Head of the queue only. The tail keeps its place on disk and the
+  // next drain takes it, exactly as the JS flush loop treats its buffer.
+  fixes = fixes.slice(0, UPLOAD_BATCH_MAX);
 
   const points = fixes
     .filter(
@@ -244,20 +263,21 @@ export async function drainGeofenceBuffer(companyId: string): Promise<number> {
     // tracker's own loop alone left a device sending GPS for 27 hours with
     // zero heartbeats, because this is the path it was actually using.
     ensureHeartbeatTimer();
-    const res = await fetch("/api/mileage/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ companyId, points, sessionEnded: true }),
+    const res = await postJson("/api/mileage/ingest", {
+      companyId,
+      points,
+      sessionEnded: true,
+      backlog: true,
     });
-    if (!res.ok) return 0;
+    if (!postAccepted(res)) return 0;
   } catch {
     return 0;
   }
 
   try {
-    // Consume exactly what we read. Anything the service appended while
-    // the upload was in flight keeps its place at the tail.
+    // Consume exactly what we POSTED. Anything the service appended while
+    // the upload was in flight, and anything the cap declined to take,
+    // keeps its place at the tail.
     await plugin.consumeBuffer({ count: fixes.length });
   } catch {
     // The points are already on the server and ingest is idempotent on

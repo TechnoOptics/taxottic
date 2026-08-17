@@ -62,7 +62,10 @@ describe("the drive foreground service is released on drive end, not app start",
     // Guard the extractor itself: if it silently returned nothing, every
     // assertion below would pass while checking air.
     expect(body.length).toBeGreaterThan(500);
-    expect(body).toContain("drainGeofenceBuffer");
+    // Sanity anchor for the extractor, not the subject of this test. The
+    // drains moved behind drainNativeBuffers (lib/mileage/native-drain.ts)
+    // so they share one re-entrancy guard; the launch drain still happens.
+    expect(body).toContain("drainNativeBuffers");
 
     expect(
       body.includes("stopGeofenceCapture"),

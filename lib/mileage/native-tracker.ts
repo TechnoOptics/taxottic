@@ -35,7 +35,8 @@ import {
   WALK_ARM_STOP_MS as DE_WALK_ARM_STOP_MS,
 } from "./drive-end";
 import { removeUploadedPoints, capBuffer } from "./buffer";
-import { FLUSH_EVERY_MS, shouldFlush } from "./flush-policy";
+import { FLUSH_EVERY_MS, UPLOAD_BATCH_MAX, shouldFlush } from "./flush-policy";
+import { postJson } from "./post-json";
 import { toPoint } from "./to-point";
 import { shouldKeepFix } from "./parked-filter";
 import { isArmInterrupted, parseArmLatch } from "./arm-latch";
@@ -51,7 +52,6 @@ import {
 } from "./heartbeat-timer";
 import {
   setBackgroundRevival,
-  drainNativeLocationBuffer,
   setExitBreadcrumb,
   getDeviceStatusProbed,
   getOsExitInfoProbed,
@@ -60,13 +60,13 @@ import {
 } from "./device-status";
 import type { DeviceProbeOutcome, DeviceProbeStage } from "./device-status";
 import {
-  drainGeofenceBuffer,
   stopGeofenceCapture,
   startGeofenceCapture,
   syncLearnedPlaces,
   getGeofenceState,
 } from "./geofence";
 import type { GeofenceArmState } from "./geofence";
+import { drainNativeBuffers, nativeDrainDiag } from "./native-drain";
 import { haversineMeters } from "./segmentation";
 import { getDeviceId } from "./device-id";
 
@@ -182,19 +182,10 @@ const DISTANCE_FILTER_M_ECO = 100;
 // which documents why the elapsed half of "flush when either threshold
 // trips" was dead for months: it was enforced by a setInterval, and a
 // backgrounded WebView does not run timers.
-/** Max points sent per flush. CRITICAL (2026-06-01 on-device forensics):
- *  the flush fetch used `keepalive: true`, which the browser caps at a
- *  64 KB total request body. Once the buffer grew past ~700 points
- *  (~64 KB of JSON) EVERY flush threw `TypeError: Failed to fetch`, the
- *  batch was kept, and the buffer pegged at MAX_BUFFER (5000) on the
- *  user's phone with ZERO points ever reaching the server, proven on
- *  a Galaxy Z Fold5: a small POST returned 200, the same 179 KB body
- *  with keepalive threw, without keepalive returned normally. Fix is
- *  two-fold: drop keepalive (durability is already covered by the
- *  localStorage-persisted buffer + retry), and cap each POST to a sane
- *  size so a large backlog drains in steady chunks instead of one
- *  oversized request. 800 points ≈ 70 KB, comfortably small. */
-const FLUSH_BATCH_MAX = 800;
+/** Max points per ingest POST is UPLOAD_BATCH_MAX in ./flush-policy,
+ *  shared with the native buffer drains. It is there rather than here
+ *  because the limit belongs to the request, not to this caller; the
+ *  2026-06-01 on-device forensics behind it are recorded alongside it. */
 /** Guard() timeout. The very first guard() call has to dynamic-import
  *  @capgo/background-geolocation, which has been observed to hang on
  *  Samsung WebViews after a fresh install. Capping the await keeps
@@ -264,6 +255,12 @@ const WATCHDOG_TICK_MS = 60_000;
 const WATCHDOG_THROTTLE_TICK_MS = 3 * WATCHDOG_TICK_MS;
 /** When the previous watchdog tick ran. 0 = not armed yet. */
 let watchdogLastTickAt = 0;
+/** Has resumeMileageTrackingIfEnabled already run in this page life?
+ *  It serves both cold start and every resume (CapacitorNativeInit calls
+ *  it on appStateChange isActive), and the native drain's trigger label
+ *  is the only production evidence that draining happens outside a cold
+ *  start, so the two have to be told apart. */
+let resumedBefore = false;
 let flushing = false;
 /** Wall clock of the last flush attempt. Drives the elapsed half of
  *  shouldFlush, which the frozen interval could not. */
@@ -309,7 +306,6 @@ export const trackerDiag = {
   cbHits: 0 as number,
   driveEndReason: "" as string,
   hbLastResult: "" as string,
-  nativeDrained: 0 as number,
   cbLastError: "" as string,
   /** Consecutive failed flushes; drives the backoff (skip ticks). */
   failStreak: 0 as number,
@@ -351,9 +347,6 @@ export const trackerDiag = {
   flushLastResult: "" as string,
   flushLastTripsCreated: 0 as number,
   flushLastStagingLeft: 0 as number,
-  /** Points recovered from the Android geofence resurrection buffer,
-   *  i.e. a drive that happened while this page did not exist. */
-  geofenceDrained: 0 as number,
   /** Learned places actually registered as geofences on this device. */
   geofenceSynced: 0 as number,
   /** Why the mesh is or is not armed. Null means never answered. */
@@ -510,74 +503,17 @@ let orphanBuffer: { companyId: string; points: GpsPoint[] } | null = null;
 
 /**
  * POST JSON to our API, using the NATIVE HTTP stack when running in the
- * app and plain fetch on the web.
+ * app and plain fetch on the web. Lives in ./post-json so the native
+ * buffer drains can use the same path; see that file for the Android
+ * background-throttling reason it exists and for the on-device auth
+ * verification.
  *
- * Why this exists: Android throttles HTTP requests issued from the
- * WebView after roughly 5 minutes in the background. The
- * capacitor-community background-geolocation README documents exactly
- * this ("after 5 minutes in the background Android will throttle HTTP
- * requests initiated from the WebView. The solution is to use a native
- * HTTP plugin"), and Transistor Software's SDK docs say native upload
- * "is more reliable for background delivery than ad-hoc HTTP requests
- * from your own code". We had already adopted the OTHER half of that
- * same workaround (android.useLegacyBridge, which keeps the location
- * CALLBACKS firing) without ever moving the uploads.
- *
- * Symptom this fixes: on a long backgrounded drive the fixes keep being
- * captured but the flush stops landing, so the buffer grows toward
- * MAX_BUFFER and starts evicting oldest-first — real, silent data loss.
- *
- * Auth: verified on-device (emulator, CDP) that CapacitorHttp carries
- * our Supabase session cookie — a native POST and a WebView fetch to the
- * same authenticated endpoint returned the IDENTICAL status (403
- * not_a_member, which only fires AFTER the auth check passes). Falls
- * back to fetch if the plugin is missing or throws, so a bad native
- * path can never take uploads down.
+ * Why it matters here: Android throttles HTTP requests issued from the
+ * WebView after roughly 5 minutes in the background, so on a long
+ * backgrounded drive the fixes keep being captured while the flush stops
+ * landing, and the buffer grows toward MAX_BUFFER and starts evicting
+ * oldest-first, which is real, silent data loss.
  */
-async function postJson(
-  path: string,
-  body: unknown,
-): Promise<{ status: number; json: unknown }> {
-  const webFetch = async () => {
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(body),
-    });
-    let json: unknown = null;
-    try {
-      json = await res.clone().json();
-    } catch {
-      /* not JSON */
-    }
-    return { status: res.status, json };
-  };
-
-  let native = false;
-  try {
-    const w = window as unknown as {
-      Capacitor?: { isNativePlatform?: () => boolean };
-    };
-    native = w.Capacitor?.isNativePlatform?.() === true;
-  } catch {
-    native = false;
-  }
-  if (!native) return webFetch();
-
-  try {
-    const { CapacitorHttp } = await import("@capacitor/core");
-    const r = await CapacitorHttp.post({
-      url: new URL(path, window.location.origin).toString(),
-      headers: { "Content-Type": "application/json" },
-      data: body,
-    });
-    return { status: r.status, json: r.data ?? null };
-  } catch {
-    // Native path unavailable/failed — never lose the upload over it.
-    return webFetch();
-  }
-}
 
 async function drainOrphanBuffer(): Promise<void> {
   if (!orphanBuffer || orphanBuffer.points.length === 0) {
@@ -731,10 +667,10 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
     resolveRun = r;
   });
   let sent = false;
-  // Cap the batch (see FLUSH_BATCH_MAX). NEVER use keepalive here: its
+  // Cap the batch (see UPLOAD_BATCH_MAX). NEVER use keepalive here: its
   // 64 KB body limit silently breaks every flush once the buffer is
   // non-trivial. A large backlog drains over successive ticks.
-  const batch = buffer.slice(0, FLUSH_BATCH_MAX);
+  const batch = buffer.slice(0, UPLOAD_BATCH_MAX);
   try {
     const post = () =>
       postJson("/api/mileage/ingest", {
@@ -1324,6 +1260,12 @@ export async function sendHeartbeat(): Promise<void> {
         geofenceCount: geofence?.registeredCount ?? null,
         geofenceCapture: geofence?.lastCapture?.state ?? null,
         geofenceBufferedFixes: geofence?.bufferedFixes ?? null,
+        // Did the native buffer get drained by anything other than a
+        // cold start? geofenceBufferedFixes above says how much backlog
+        // there is; these say whether anything is emptying it, which the
+        // counter alone cannot distinguish from having no backlog.
+        nativeDrainTrigger: nativeDrainDiag.lastTrigger,
+        nativeDrainPoints: nativeDrainDiag.lastPoints,
       }),
     });
     trackerDiag.hbLastResult = `${res.status} @ ${new Date()
@@ -1741,6 +1683,20 @@ export async function startMileageTracking(
         ) {
           void flush();
         }
+        // THE TRIGGER THAT WORKS IN THE BACKGROUND.
+        //
+        // The native resurrection service keeps appending to its own
+        // on-disk buffer while this callback runs, and that buffer used
+        // to be emptied only when the app was next launched. Measured:
+        // geofence_buffered_fixes climbing 832 to 1512 over 37 minutes
+        // with this very callback firing every second.
+        //
+        // It rides the callback rather than the interval below for the
+        // same reason shouldFlush does: a backgrounded WebView freezes
+        // timers, and drivers are backgrounded for the whole drive.
+        // drainNativeBuffers is wall-clock gated and re-entrancy
+        // guarded, so calling it on every fix is cheap and safe.
+        void drainNativeBuffers(companyId, "callback");
         // A point arrived, so this page life is genuinely capturing.
         // Guarantee it is also reporting: see ensureHeartbeatTimer.
         ensureHeartbeatTimer();
@@ -1802,6 +1758,12 @@ export async function startMileageTracking(
   if (!flushTimer) {
     flushTimer = setInterval(() => {
       void flush();
+      // Empty the NATIVE on-disk buffer too, not just the JS one. The
+      // second trigger rather than the first: this interval does not run
+      // while backgrounded, so the location callback above carries the
+      // drive and this covers a parked, foregrounded app that is getting
+      // no callbacks. Same guarded chokepoint either way.
+      void drainNativeBuffers(companyId, "flush");
       // Close a finished drive promptly (walked-away / parked) instead of
       // waiting out the server's 5-min timer.
       void maybeCloseDrive();
@@ -2015,12 +1977,19 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   void flush(); // drain a killed-mid-drive leftover
   // Upload whatever the NATIVE layer captured while this page was not
   // alive — on iOS that is the entire morning commute after an
-  // overnight termination. Late points are fine: the finalizer runs a
-  // 45-day window and reconciles, so the trip still materialises
-  // correctly. Buffer is cleared only after the server accepts.
-  void drainNativeLocationBuffer().then((n) => {
-    if (n > 0) trackerDiag.nativeDrained = n;
-  });
+  // overnight termination, and on Android whatever the geofence
+  // resurrection service recorded while the WebView was dead. Late
+  // points are fine: the finalizer runs a 45-day window and reconciles,
+  // so the trip still materialises correctly. Buffers are cleared only
+  // after the server accepts.
+  //
+  // This function is also the RESUME path (CapacitorNativeInit calls it
+  // on appStateChange isActive), so the trigger is labelled by whether
+  // this page life has been through here before. That label is the only
+  // way to tell in production whether draining now happens outside a
+  // cold start, which is the entire point of the change.
+  void drainNativeBuffers(savedCompany, resumedBefore ? "resume" : "start");
+  resumedBefore = true;
   // Re-arm native revival too: a reinstall or a permission change can
   // leave the flag set with SLC not actually registered.
   void setBackgroundRevival(true, savedCompany);
@@ -2053,9 +2022,11 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   // The service now ends the way it always should have: on its own
   // stationary rule, which already matches drive-end.ts, or on the
   // explicit drive-end handoff below.
-  void drainGeofenceBuffer(savedCompany).then((n) => {
-    if (n > 0) trackerDiag.geofenceDrained = n;
-  });
+  //
+  // The geofence buffer is drained by the drainNativeBuffers() call
+  // above, alongside the iOS one, so both go through the single guarded
+  // chokepoint. See lib/mileage/native-drain.ts.
+  //
   // Re-sync the mesh on every resume, not once. A permission change, a
   // reinstall, or Play services clearing its geofence table all leave
   // us believing we are armed with nothing registered, and none of
