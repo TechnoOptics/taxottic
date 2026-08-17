@@ -14,6 +14,7 @@ import { type TripRow } from "@/components/mileage/TripList";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
+import { RecoverLostDrives } from "@/components/mileage/RecoverLostDrives";
 import { DriverPicker } from "@/components/mileage/DriverPicker";
 import {
   ALL_DRIVERS,
@@ -738,6 +739,12 @@ export default async function MileagePage({
             {viewingSelf ? (
               <CompleteDriveFromStops action={addRouteTrip} />
             ) : null}
+            {/* "My app closed on the drive back and the drive never
+                showed." Sweeps 45 days of staged points, closes drives
+                the phone left open, and reports what it could NOT turn
+                into a drive rather than reporting silence. Self-only:
+                the sweep runs against the caller's own staging pool. */}
+            {viewingSelf ? <RecoverLostDrives /> : null}
 
             <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
               Deduction uses the IRS standard mileage rate for the

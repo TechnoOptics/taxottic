@@ -1117,7 +1117,11 @@
 // keeps the one-drain-per-launch behaviour, so for that device nothing
 // here ships at all, and its heartbeats will keep reporting
 // native_drain_trigger = NULL while everyone else reports a live one.
-const CACHE_VERSION = "v189";
+// v190: /mileage gains the "Recover lost drives" control
+// (components/mileage/RecoverLostDrives.tsx), which is new client JS
+// calling a new route. A phone on the stale bundle simply would not have
+// the control, which is the whole point of the sweep being reachable.
+const CACHE_VERSION = "v190";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
