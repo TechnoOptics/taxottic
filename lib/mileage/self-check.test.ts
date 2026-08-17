@@ -276,11 +276,34 @@ describe("the human-facing line", () => {
  */
 const TRACKER = "lib/mileage/native-tracker.ts";
 
+/**
+ * The evaluateSelfCheck({ ... }) argument, and NOTHING after it.
+ *
+ * Was `slice(0, indexOf("}),"))`, which depended on the call being the
+ * last expression inside the heartbeat payload. It is not any more: the
+ * call was hoisted so ./self-repair.ts can act on the same verdicts, and
+ * that one-character change ("}),"  ->  "});") silently extended every
+ * block below to the whole heartbeat body. The negative assertions kept
+ * passing while scanning code they were never meant to see, which would
+ * have turned the catch-all into a random tripwire on unrelated fields.
+ *
+ * Brace matching instead, so the guards read the argument itself
+ * wherever it lives.
+ */
+function selfCheckCallBlock(): string {
+  const src = readFileSync(TRACKER, "utf8");
+  const open = src.indexOf("{", src.indexOf("evaluateSelfCheck("));
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) return src.slice(open, i + 1);
+  }
+  throw new Error("evaluateSelfCheck argument not found - test is stale");
+}
+
 describe("the tracker feeds the self-check honestly", () => {
   it("takes platform from Capacitor, never from the device-status payload", () => {
-    const src = readFileSync(TRACKER, "utf8");
-    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
-    const block = call.slice(0, call.indexOf("}),"));
+    const block = selfCheckCallBlock();
     expect(
       block,
       "platform must come from cap.getPlatform(). Deriving it from " +
@@ -294,9 +317,7 @@ describe("the tracker feeds the self-check honestly", () => {
   });
 
   it("judges the device-status plugin on outcome, not on stage", () => {
-    const src = readFileSync(TRACKER, "utf8");
-    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
-    const block = call.slice(0, call.indexOf("}),"));
+    const block = selfCheckCallBlock();
     // onStage("done") fires before the value is checked, so a plugin
     // that answers with nothing reaches "done" and would read as live.
     expect(block).toContain('dsProbe.outcome === "ok"');
@@ -314,9 +335,7 @@ describe("the tracker feeds the self-check honestly", () => {
    * the only place that catches it: evaluate() was always correct.
    */
   it("feeds bluetooth permission from the car probe, not from a literal", () => {
-    const src = readFileSync(TRACKER, "utf8");
-    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
-    const block = call.slice(0, call.indexOf("}),"));
+    const block = selfCheckCallBlock();
     expect(block).toContain("carProbe.value?.bluetoothPermission");
     expect(block).toContain("carProbe.value?.bluetoothPermissionAsked");
     expect(block).not.toMatch(/bluetoothPermission:\s*null/);
@@ -324,9 +343,7 @@ describe("the tracker feeds the self-check honestly", () => {
   });
 
   it("judges the car-signals plugin on outcome, never on presence", () => {
-    const src = readFileSync(TRACKER, "utf8");
-    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
-    const block = call.slice(0, call.indexOf("}),"));
+    const block = selfCheckCallBlock();
     expect(block).toContain('carProbe.outcome === "ok"');
     expect(block).not.toMatch(/carSignalsOk:\s*null/);
     // `carProbe.value != null` would call a probe that returned an empty
@@ -338,9 +355,7 @@ describe("the tracker feeds the self-check honestly", () => {
     // Catch-all. Any future input silently wired to null or a constant
     // produces a check that can never reach a verdict, which is the
     // failure mode this whole block exists to prevent.
-    const src = readFileSync(TRACKER, "utf8");
-    const call = src.slice(src.indexOf("evaluateSelfCheck({"));
-    const block = call.slice(0, call.indexOf("}),"));
+    const block = selfCheckCallBlock();
     const pinned = [...block.matchAll(/^\s*(\w+):\s*(null|true|false),/gm)].map(
       (m) => m[1],
     );

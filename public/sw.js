@@ -1161,7 +1161,21 @@
 // JS, so a phone on the stale bundle keeps the silent version: it goes
 // on reporting success over refused writes, which is worse than an
 // error, because the driver has no reason to look again.
-const CACHE_VERSION = "v192";
+// v193: the self-check stops reporting and starts repairing.
+//
+// Two verdicts a device can genuinely fix by itself now get a bounded
+// repair attempt from the heartbeat: a learned-place geofence mesh whose
+// registration failed is re-armed, and Always location is re-requested
+// when the OS can still raise a dialog. Capped at three consecutive
+// attempts with backoff, once a week for a permission, and it stands
+// down entirely while a drive is in flight.
+//
+// The bump is load-bearing, not housekeeping. native-tracker.ts and the
+// new self-repair.ts are WebView client JS, so a phone on the stale
+// bundle keeps a tracker that can only report a fault it is now able to
+// repair, and the new self_repair column stays null on exactly the
+// devices the repairer was written for.
+const CACHE_VERSION = "v193";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

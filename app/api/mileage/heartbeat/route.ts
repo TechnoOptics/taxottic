@@ -261,6 +261,20 @@ export async function POST(req: NextRequest) {
     // dead ones first, so the most serious finding is the last thing
     // lost rather than the first.
     self_check: str("selfCheck", 200),
+    // THE TREATMENT COLUMNS, next to the diagnosis they answer.
+    //
+    // self_check says what is broken. These say what the device did
+    // about it, on the same row, so nobody has to join a beat against
+    // its neighbour to find out whether the repairer ran.
+    //
+    // Free text, same reasoning as self_check: it carries ids and
+    // states ("geofence_armed:capped"), not a code. 80 chars holds both
+    // repairable ids with their longest state and room to spare.
+    self_repair: str("selfRepair", 80),
+    // Monotonic per install, never reset by a successful repair. It is
+    // the difference between "this device has never needed a repair"
+    // and "this device repaired itself and you cannot tell".
+    self_repair_attempts: num("selfRepairAttempts"),
     exit_probe_ms: num("exitProbeMs"),
     exit_probe_stage: oneOf("exitProbeStage", STAGE_VALUES),
     // OS app-state truth (@capacitor/app appStateChange), not
