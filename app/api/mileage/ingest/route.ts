@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { type GpsPoint } from "@/lib/mileage/segmentation";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
-import { rejectImplausibleJumps } from "@/lib/mileage/plausible-jump";
+import {
+  NEIGHBOUR_ROW_CAP,
+  NEIGHBOUR_WINDOW_MS,
+  rejectImplausibleJumps,
+  type JumpPoint,
+} from "@/lib/mileage/plausible-jump";
 import { correctBatchClockSkew } from "@/lib/mileage/clock-skew";
 
 export const runtime = "nodejs";
@@ -191,15 +196,95 @@ export async function POST(req: NextRequest) {
     lastAccepted.ts <= points[0].ts
       ? lastAccepted
       : null;
-  const gate = rejectImplausibleJumps(points, anchor);
+
+  // The points this batch lands AMONG, which is the blind spot the
+  // anchor above cannot cover.
+  //
+  // Measured 2026-08-17 on driver 89871e98. A drive uploaded live on
+  // whole-second timestamps; 26 minutes later the native buffer replayed
+  // the same drive twice more, on .297 and .928 sub-second offsets, with
+  // every timestamp pushed about three minutes later than reality. The
+  // 631 ms between the replays defeats the upsert key below outright, so
+  // both copies were stored. The batch was wholly older than the newest
+  // stored point, so `anchor` was correctly dropped, and the replay is
+  // internally flawless, so the gate refused nothing. Merged, the pool
+  // alternated between the live position and a copy 4.6 km behind it:
+  // 1,263 of 3,351 transitions over 60 m/s, one 1,527 mi trip, refused
+  // downstream, pool frozen permanently.
+  //
+  // NOT fixed by widening the upsert key's time resolution: a
+  // whole-second key collapses the two replays into each other and
+  // leaves the survivor still three minutes out of step with the live
+  // copy. NOT fixed by keying on the sub-second offset either; that
+  // describes this delivery rather than any rule, since live fixes are
+  // not obliged to land on whole seconds. It is logged below as the
+  // diagnostic it is.
+  const storedNeighbours: JumpPoint[] = [];
+  if (points.length > 0) {
+    const { data: neighbourRows, error: neighbourErr } = await admin
+      .from("mileage_points_raw")
+      .select("lat, lng, captured_at")
+      .eq("driver_user_id", user.id)
+      .eq("company_id", companyId)
+      .gte(
+        "captured_at",
+        new Date(points[0].ts - NEIGHBOUR_WINDOW_MS).toISOString(),
+      )
+      .lte(
+        "captured_at",
+        new Date(
+          points[points.length - 1].ts + NEIGHBOUR_WINDOW_MS,
+        ).toISOString(),
+      )
+      .order("captured_at", { ascending: true })
+      .limit(NEIGHBOUR_ROW_CAP);
+    if (neighbourErr) {
+      // Say it. A swallowed error leaves the gate with no witnesses and
+      // degrades it to exactly the behaviour that lost the drive.
+      console.error(
+        "[ingest] neighbour window read failed, gate has no stored witnesses:",
+        neighbourErr.message,
+      );
+    }
+    for (const row of neighbourRows ?? []) {
+      const ts = Date.parse(row.captured_at as string);
+      if (Number.isFinite(row.lat as number) && Number.isFinite(ts)) {
+        storedNeighbours.push({
+          lat: row.lat as number,
+          lng: row.lng as number,
+          ts,
+        });
+      }
+    }
+    if ((neighbourRows?.length ?? 0) >= NEIGHBOUR_ROW_CAP) {
+      console.error(
+        `[ingest] neighbour window hit the ${NEIGHBOUR_ROW_CAP} row cap ` +
+          `user=${user.id}; the late part of this batch is checked against ` +
+          `its predecessor only.`,
+      );
+    }
+  }
+
+  const gate = rejectImplausibleJumps(points, anchor, storedNeighbours);
   if (gate.rejected.length > 0) {
     const worst = gate.rejected.reduce((a, b) =>
       a.impliedMps > b.impliedMps ? a : b,
     );
+    // The sub-second offset of what was refused. Not a rule and never a
+    // gate, but on every incident so far the replay path has carried one
+    // stable offset (.699 in August, .297 and .928 here), so a single
+    // dominant value is strong evidence that a whole delivery was turned
+    // away rather than a few stray fixes.
+    const offsets = new Set(gate.rejected.map((r) => r.point.ts % 1000));
+    const byReason = gate.rejected.reduce<Record<string, number>>((acc, r) => {
+      acc[r.reason] = (acc[r.reason] ?? 0) + 1;
+      return acc;
+    }, {});
     console.error(
       `[ingest] REJECTED ${gate.rejected.length}/${points.length} implausible points ` +
         `user=${user.id} worst=${Math.round(worst.impliedMps)}m/s ` +
-        `(${Math.round(worst.meters)}m in ${worst.seconds}s). ` +
+        `(${Math.round(worst.meters)}m in ${worst.seconds}s) ` +
+        `by=${JSON.stringify(byReason)} subsecond_offsets=${offsets.size}. ` +
         `A non-zero count here means a second point source is writing into ` +
         `this driver's stream; see lib/mileage/plausible-jump.ts.`,
     );
@@ -220,7 +305,7 @@ export async function POST(req: NextRequest) {
       accuracy_m: p.accuracyM ?? null,
     }));
     // Idempotent: a retried flush (POST succeeded but the response was
-    // lost — routine in a tunnel) must not store the same fix twice, and
+    // lost, routine in a tunnel) must not store the same fix twice, and
     // a second capture path must be able to overlap safely. Identity is
     // (driver, company, captured_at); see migration 20260728000000.
     const { error: stageErr } = await admin
