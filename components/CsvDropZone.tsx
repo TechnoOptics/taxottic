@@ -46,6 +46,8 @@ export function CsvDropZone({ companyId, action }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [statuses, setStatuses] = useState<FileStatus[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
+  /** Queue outcome we could not hand to a page that would render it. */
+  const [queueError, setQueueError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +81,7 @@ export function CsvDropZone({ companyId, action }: Props) {
 
   async function uploadAll() {
     if (files.length === 0) return;
+    setQueueError(null);
     startTransition(async () => {
       let lastImportId: string | null = null;
       let lastPublicId = "";
@@ -157,12 +160,21 @@ export function CsvDropZone({ companyId, action }: Props) {
         // publicId comes back empty when the company lookup itself
         // failed. Pushing /c//import would 404 and take the reason with
         // it, so fall back to whichever id the queue has proven good.
+        //
+        // With neither, do NOT navigate. /c/{id}/import reads ?error=
+        // and renders it; nothing else does, so routing anywhere else
+        // to carry the message just loses it somewhere quieter, which
+        // is the failure this whole change exists to remove. The
+        // dropzone is still mounted and already shows per-file status,
+        // so the message stays right here instead.
         const target = stopOnError.publicId || lastPublicId;
-        router.push(
-          target
-            ? `/c/${target}/import?error=${encodeURIComponent(parts.join(" "))}`
-            : `/dashboard?error=${encodeURIComponent(parts.join(" "))}`,
-        );
+        if (target) {
+          router.push(
+            `/c/${target}/import?error=${encodeURIComponent(parts.join(" "))}`,
+          );
+        } else {
+          setQueueError(parts.join(" "));
+        }
       } else if (lastImportId && lastPublicId) {
         router.push(`/c/${lastPublicId}/import/${lastImportId}`);
       }
@@ -281,6 +293,15 @@ export function CsvDropZone({ companyId, action }: Props) {
           You can pick multiple files. Each one becomes its own import.
         </p>
       </div>
+
+      {queueError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 leading-relaxed"
+        >
+          {queueError}
+        </div>
+      ) : null}
 
       {rejected.length > 0 ? (
         <div
