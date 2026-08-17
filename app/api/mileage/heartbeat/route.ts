@@ -278,6 +278,15 @@ export async function POST(req: NextRequest) {
     geofence_count: num("geofenceCount"),
     geofence_capture: str("geofenceCapture", 40),
     geofence_buffered_fixes: num("geofenceBufferedFixes"),
+    // Native-buffer drain provenance. See
+    // supabase/migrations/20260817020000_heartbeat_native_drain.sql.
+    // Anything other than 'start' is a drain that happened while the app
+    // was already running, which is the only production evidence that
+    // the buffer is no longer hostage to a cold start. Read the trigger
+    // BEFORE the count: 0 points under a live trigger is a healthy
+    // steady state, 0 points under no trigger at all is a dead drain.
+    native_drain_trigger: str("nativeDrainTrigger", 16),
+    native_drain_points: num("nativeDrainPoints"),
     reported_at: reportedAt,
   };
 

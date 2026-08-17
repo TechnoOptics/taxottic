@@ -34,6 +34,8 @@
 // import time, so it is safe under SSR and on plain web.
 import { registerPlugin } from "@capacitor/core";
 import { ensureHeartbeatTimer } from "./heartbeat-timer";
+import { UPLOAD_BATCH_MAX } from "./flush-policy";
+import { postAccepted, postJson } from "./post-json";
 
 export type DeviceStatus = {
   platform: string;
@@ -636,6 +638,10 @@ export async function setBackgroundRevival(
  *
  * Returns the number of points handed to the server (0 when there was
  * nothing, or on any failure — the buffer is left intact to retry).
+ *
+ * Called from lib/mileage/native-drain.ts rather than only at app
+ * launch. See the matching notes on drainGeofenceBuffer for why the
+ * batch is capped and why the POST declares itself backlog.
  */
 export async function drainNativeLocationBuffer(): Promise<number> {
   const plugin = (await guard())?.p ?? null;
@@ -656,21 +662,26 @@ export async function drainNativeLocationBuffer(): Promise<number> {
     return 0;
   }
   if (points.length === 0 || !companyId) return 0;
+  // Oldest first, then capped. clearBufferedLocations is by TIMESTAMP,
+  // so the order matters twice over: it decides which points go, and it
+  // decides what is safe to clear afterwards.
+  points.sort((a, b) => a.ts - b.ts);
+  points = points.slice(0, UPLOAD_BATCH_MAX);
   const maxTs = points.reduce((a, p) => Math.max(a, p.ts), 0);
   try {
     // Same reason as geofence.ts: this drain is a real ingest path, so it
     // must arm the heartbeat too. A device draining the native buffer was
     // uploading points every few seconds and reporting no health at all.
     ensureHeartbeatTimer();
-    const res = await fetch("/api/mileage/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ companyId, points }),
+    const res = await postJson("/api/mileage/ingest", {
+      companyId,
+      points,
+      backlog: true,
     });
-    if (!res.ok) return 0;
+    if (!postAccepted(res)) return 0;
     // Clear ONLY after the server confirmed, so a failed upload can
-    // never lose a drive.
+    // never lose a drive, and only up to the newest point we actually
+    // POSTED, so the cap does not silently delete the tail it declined.
     await plugin.clearBufferedLocations({ upToTs: maxTs });
     return points.length;
   } catch {

@@ -39,6 +39,11 @@ type Body = {
   // of being stranded open until the next heartbeat (which won't come,
   // because the flush timer was just cleared).
   sessionEnded?: boolean;
+  // Set by the two native-buffer drains (lib/mileage/geofence.ts,
+  // lib/mileage/device-status.ts). Those batches are stored-and-forwarded
+  // by construction, so their lag is not evidence of a device clock
+  // error and must not be corrected as one. See lib/mileage/clock-skew.
+  backlog?: boolean;
 };
 
 function isFinitePoint(p: unknown): p is GpsPoint {
@@ -86,9 +91,14 @@ export async function POST(req: NextRequest) {
   // used to drag that backlog forward by up to 30 minutes, which wrote a
   // second copy of an already-stored drive under a timestamp the
   // idempotency key below could not recognise.
+  //
+  // A native-buffer drain says so outright rather than leaving the rule
+  // to infer it: those batches land in the 2 to 30 minute band, which is
+  // the one band the lag test cannot tell apart from clock drift.
+  const backlog = body.backlog === true;
   const receiptMs = Date.now();
   const finite = rawPoints.filter(isFinitePoint);
-  const skew = correctBatchClockSkew(finite, receiptMs);
+  const skew = correctBatchClockSkew(finite, receiptMs, { backlog });
   const points = skew.points;
   if (skew.shifted) {
     console.log(

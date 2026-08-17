@@ -1099,7 +1099,25 @@
 // phone on the stale bundle keeps the warm bands. It also changes the class
 // names themselves, so the cached CSS no longer matches the cached HTML -
 // exactly the mismatch this version counter exists to prevent.
-const CACHE_VERSION = "v188";
+// v189: the native buffer is emptied while the app is running, not only
+// when it is launched.
+//
+// drainGeofenceBuffer() and drainNativeLocationBuffer() had exactly one
+// caller each, both in the tracker start path, so the native on-disk
+// buffer emptied on cold start and at no other time and upload latency
+// was bounded by when the driver next opened the app. Measured over the
+// ten days to 2026-08-17: 48.8 % of points arrived more than 30 minutes
+// after capture, p90 24 hours, with geofence_buffered_fixes seen
+// climbing to 1512 while the JS layer was provably healthy.
+//
+// This is the reason the bump matters more than usual. The fix IS client
+// JS: new call sites in the tracker's location callback and flush loop,
+// a new drain coordinator, and a `backlog` flag on the ingest POST that
+// keeps a re-delivered drain idempotent. A phone left on the old bundle
+// keeps the one-drain-per-launch behaviour, so for that device nothing
+// here ships at all, and its heartbeats will keep reporting
+// native_drain_trigger = NULL while everyone else reports a live one.
+const CACHE_VERSION = "v189";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

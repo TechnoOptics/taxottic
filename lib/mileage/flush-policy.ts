@@ -53,6 +53,28 @@ export const FLUSH_AT_POINTS = 40;
 export const FLUSH_EVERY_MS = 30_000;
 
 /**
+ * Largest number of points in a single POST to /api/mileage/ingest.
+ *
+ * Lives here, and is shared by the JS flush loop and by both native
+ * buffer drains, because they all post to the same endpoint and the
+ * limit is a property of the request rather than of any one caller.
+ *
+ * Why there is a limit at all: a 179 KB body silently broke every flush
+ * on a real handset. Proven on a Galaxy Z Fold5: a small POST returned
+ * 200, the same 179 KB body with keepalive threw, and without keepalive
+ * returned normally. The fix was two-fold: drop keepalive (durability is
+ * already covered by the persisted buffer plus retry) and cap each POST
+ * so a large backlog drains in steady chunks instead of one oversized
+ * request. 800 points is roughly 70 KB, comfortably small.
+ *
+ * It binds harder on a drain than on a flush. The JS buffer has never
+ * been observed above 266 points, while single inserts from the native
+ * drain path of 3764, 2289, 2264 and 1630 points exist in production.
+ * Those were the uncapped path.
+ */
+export const UPLOAD_BATCH_MAX = 800;
+
+/**
  * Are there points worth sending right now?
  *
  * Pure, so the policy can be reasoned about without a WebView, a timer,
