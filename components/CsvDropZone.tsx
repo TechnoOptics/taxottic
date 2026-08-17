@@ -45,14 +45,27 @@ export function CsvDropZone({ companyId, action }: Props) {
   const [accountType, setAccountType] = useState("business_checking");
   const [files, setFiles] = useState<File[]>([]);
   const [statuses, setStatuses] = useState<FileStatus[]>([]);
+  const [rejected, setRejected] = useState<string[]>([]);
+  /** Queue outcome we could not hand to a page that would render it. */
+  const [queueError, setQueueError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Everything that was dropped and could not be queued, by name.
+  //
+  // Non-CSV files used to be filtered out and forgotten: drop a .xlsx or
+  // a .pdf (or the .qfx/.ofx a lot of banks offer first) and the zone did
+  // nothing at all. Not an error, not a flicker, no file in the list. The
+  // only reading available to the user was that the drop had not
+  // registered, so the usual next move is to drop the same file again.
   function addFiles(incoming: FileList | File[]) {
-    const list = Array.from(incoming).filter((f) =>
-      f.name.toLowerCase().endsWith(".csv") || f.type === "text/csv",
+    const all = Array.from(incoming);
+    const list = all.filter(
+      (f) => f.name.toLowerCase().endsWith(".csv") || f.type === "text/csv",
     );
+    const refused = all.filter((f) => !list.includes(f)).map((f) => f.name);
+    setRejected(refused);
     if (list.length === 0) return;
     setFiles((prev) => [...prev, ...list]);
     setStatuses((prev) => [
@@ -68,6 +81,7 @@ export function CsvDropZone({ companyId, action }: Props) {
 
   async function uploadAll() {
     if (files.length === 0) return;
+    setQueueError(null);
     startTransition(async () => {
       let lastImportId: string | null = null;
       let lastPublicId = "";
@@ -118,11 +132,49 @@ export function CsvDropZone({ companyId, action }: Props) {
       // review page (a common pattern: upload 3 months of statements,
       // jump straight into the most-recent one for review).
       if (stopOnError) {
-        router.push(
-          `/c/${stopOnError.publicId}/import?error=${encodeURIComponent(
-            stopOnError.msg,
-          )}`,
-        );
+        // Say what landed, not just what broke. The queue stops on the
+        // first failure, so a five-file drop that dies on file four has
+        // already created three imports and skipped one, and the banner
+        // used to carry only the failure message. A user reading it had
+        // no way to tell whether to re-drop all five (double-importing
+        // three months of statements) or only the last two.
+        const done = stopOnError.i;
+        const notAttempted = files.length - stopOnError.i - 1;
+        const parts = [
+          `${files[stopOnError.i].name} failed: ${stopOnError.msg}`,
+        ];
+        if (done > 0) {
+          parts.unshift(
+            `${done} file${done === 1 ? "" : "s"} imported before this.`,
+          );
+        }
+        if (notAttempted > 0) {
+          parts.push(
+            `The remaining ${notAttempted} file${
+              notAttempted === 1 ? " was" : "s were"
+            } not uploaded, so you can drop ${
+              notAttempted === 1 ? "it" : "them"
+            } again.`,
+          );
+        }
+        // publicId comes back empty when the company lookup itself
+        // failed. Pushing /c//import would 404 and take the reason with
+        // it, so fall back to whichever id the queue has proven good.
+        //
+        // With neither, do NOT navigate. /c/{id}/import reads ?error=
+        // and renders it; nothing else does, so routing anywhere else
+        // to carry the message just loses it somewhere quieter, which
+        // is the failure this whole change exists to remove. The
+        // dropzone is still mounted and already shows per-file status,
+        // so the message stays right here instead.
+        const target = stopOnError.publicId || lastPublicId;
+        if (target) {
+          router.push(
+            `/c/${target}/import?error=${encodeURIComponent(parts.join(" "))}`,
+          );
+        } else {
+          setQueueError(parts.join(" "));
+        }
       } else if (lastImportId && lastPublicId) {
         router.push(`/c/${lastPublicId}/import/${lastImportId}`);
       }
@@ -241,6 +293,41 @@ export function CsvDropZone({ companyId, action }: Props) {
           You can pick multiple files. Each one becomes its own import.
         </p>
       </div>
+
+      {queueError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 leading-relaxed"
+        >
+          {queueError}
+        </div>
+      ) : null}
+
+      {rejected.length > 0 ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <div className="font-medium">
+            {rejected.length === 1
+              ? "This file is not a CSV, so it was not added:"
+              : `${rejected.length} files are not CSVs, so they were not added:`}
+          </div>
+          <ul className="mt-1 grid gap-0.5 text-xs">
+            {rejected.map((name) => (
+              <li key={name} className="break-all">
+                {name}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs leading-relaxed">
+            Most banks offer CSV alongside PDF and Excel on the same
+            download screen, usually as &quot;spreadsheet&quot; or
+            &quot;comma delimited&quot;. Download that version and drop it
+            here.
+          </p>
+        </div>
+      ) : null}
 
       {files.length > 0 ? (
         <ul className="grid gap-1.5">

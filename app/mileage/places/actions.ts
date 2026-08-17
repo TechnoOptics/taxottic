@@ -118,27 +118,41 @@ export async function addMileagePlace(
  * Delete a saved place. Re-checks the place belongs to a company the
  * user is a member of before touching it (RLS is permissive on
  * mileage_places, same pattern as the ingest endpoint).
+ *
+ * Every refusal THROWS. It used to end each one with a bare `return;`
+ * and drop the delete's own error, and the function returns void, so a
+ * declined removal reached nobody: the page came back with the place
+ * still on it and nothing said, which on a phone reads as a tap that
+ * missed. A saved place is what makes drives to an address classify
+ * themselves as business, so "removed" and "refused" looked identical
+ * on the control that silently decides whether future drives are
+ * deductible. components/mileage/DeletePlaceButton.tsx renders what
+ * this throws; lib/mileage/place-delete-refusal.test.ts pins it.
  */
 export async function deleteMileagePlace(formData: FormData): Promise<void> {
   const { admin, user } = await requireUserWithAdmin();
   const placeId = String(formData.get("place_id") ?? "").trim();
-  if (!placeId) return;
+  if (!placeId) throw new Error("No place to remove.");
 
   const { data: row } = await admin
     .from("mileage_places")
     .select("id, company_id")
     .eq("id", placeId)
     .maybeSingle();
-  if (!row) return;
+  if (!row) throw new Error("That place is already gone. Reload the page.");
   const { data: member } = await admin
     .from("company_members")
     .select("user_id")
     .eq("company_id", (row as { company_id: string }).company_id)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!member) return;
+  if (!member) throw new Error("You can't remove this place.");
 
-  await admin.from("mileage_places").delete().eq("id", placeId);
+  const { error } = await admin
+    .from("mileage_places")
+    .delete()
+    .eq("id", placeId);
+  if (error) throw new Error("Couldn't remove this place. Please try again.");
   revalidatePath("/mileage");
   revalidatePath("/mileage/business");
   revalidatePath("/mileage/places");

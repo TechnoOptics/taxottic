@@ -33,6 +33,7 @@ export function ClassifyDeck({ pending, action }: Props) {
   const [idx, setIdx] = useState(0);
   const [dx, setDx] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
   const buzzedRef = useRef(false);
@@ -90,10 +91,27 @@ export function ClassifyDeck({ pending, action }: Props) {
   const commit = async (classification: "business" | "personal") => {
     if (busy) return;
     setBusy(true);
+    setError(null);
     const fd = new FormData();
     fd.set("id", trip.id);
     fd.set("classification", classification);
-    await action(fd);
+    try {
+      await action(fd);
+    } catch (err) {
+      // The deck must NOT advance on a refusal. It used to have no catch
+      // at all, so a throw skipped setBusy(false) and left both buttons
+      // permanently disabled with nothing on screen: a dead deck, no
+      // message, no way out but a reload. Now the card snaps back, says
+      // what happened, and stays swipeable.
+      setDx(0);
+      setBusy(false);
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "That did not save. Try again.",
+      );
+      return;
+    }
     // Move to next card visually; the server revalidates the page,
     // so on a real reload pending would be one shorter.
     setIdx((i) => i + 1);
@@ -210,6 +228,14 @@ export function ClassifyDeck({ pending, action }: Props) {
             }
           >
             {draggingBusiness ? "← Business" : "Personal →"}
+          </div>
+        ) : null}
+        {error ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900 leading-relaxed"
+          >
+            This drive is still unclassified. {error}
           </div>
         ) : null}
         <div className="mt-6 grid grid-cols-2 gap-3">

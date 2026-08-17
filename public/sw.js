@@ -1145,7 +1145,23 @@
 // native-tracker's heartbeat payload. A phone on the old bundle reports
 // NULL for both, which is why the reviewer query filters them out rather
 // than reading a NULL as healthy.
-const CACHE_VERSION = "v191";
+// v192: controls that reported a success they had not achieved.
+//
+// Six client components stop floating their server-action promise and
+// start awaiting it: the import row, the classify deck, the trip list,
+// the CSV dropzone, the add-expense form and the new place delete.
+// `startTransition(() => void action(fd))` returns before the promise
+// settles, so React never saw a rejection, and a write the database
+// refused was pixel-identical to one that worked. On the trip list that
+// is the control deciding whether a drive is a deduction; on the
+// classify deck a driver could swipe the whole deck, save nothing, and
+// be told "caught up".
+//
+// The bump is load-bearing, not housekeeping. All six are WebView client
+// JS, so a phone on the stale bundle keeps the silent version: it goes
+// on reporting success over refused writes, which is worse than an
+// error, because the driver has no reason to look again.
+const CACHE_VERSION = "v192";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

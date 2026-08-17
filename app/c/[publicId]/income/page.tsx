@@ -39,7 +39,11 @@ export default async function IncomePage({ params }: { params: Params }) {
   const { data: rows } = await supabase
     .from("monthly_income")
     .select(
-      "id, month, amount_cents, source, recurrence, notes, created_at",
+      // user_id so the list can tell which rows this viewer can
+      // actually edit. Without it every row got Edit and Remove, and
+      // both actions scope their write by user_id, so on a teammate's
+      // row they matched nothing and changed nothing.
+      "id, month, amount_cents, source, recurrence, notes, created_at, user_id",
     )
     .eq("company_id", company.id)
     .eq("tax_year", taxYear)
@@ -234,8 +238,12 @@ export default async function IncomePage({ params }: { params: Params }) {
                                 companyId={company.id}
                                 taxYear={taxYear}
                                 currentMonth={currentMonth}
-                                updateAction={updateIncome}
-                                deleteAction={deleteIncome}
+                                updateAction={
+                                  r.user_id === user.id ? updateIncome : undefined
+                                }
+                                deleteAction={
+                                  r.user_id === user.id ? deleteIncome : undefined
+                                }
                               />
                             ))}
                           </ul>

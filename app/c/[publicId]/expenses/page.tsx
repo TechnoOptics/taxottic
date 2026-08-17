@@ -525,9 +525,22 @@ export default async function ExpensesPage({
                                     ? memberMap.get(r.user_id) ?? null
                                     : null
                                 }
-                                updateAction={updateExpense}
-                                deleteAction={deleteExpense}
-                                isManager={canReviewRow}
+                                // Owner only. Both actions scope their
+                                // write by user_id, so on a teammate's
+                                // row they matched nothing and reported
+                                // nothing: a manager could confirm
+                                // "this cannot be undone" and have the
+                                // row still there afterwards. A
+                                // reviewer's real remedies are the
+                                // controls below, mark personal and
+                                // leave a note, which do not destroy
+                                // the teammate's record.
+                                updateAction={
+                                  r.user_id === user.id ? updateExpense : undefined
+                                }
+                                deleteAction={
+                                  r.user_id === user.id ? deleteExpense : undefined
+                                }
                                 reclassifyAction={
                                   canReviewRow ? setExpenseClassification : undefined
                                 }

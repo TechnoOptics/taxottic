@@ -128,6 +128,22 @@ export async function updateIncome(formData: FormData) {
   // Scope the update by id + user_id so a user can only edit their
   // own rows. RLS would also enforce this, but matching the delete
   // path's pattern keeps the surface auditable.
+  //
+  // Read the owner first. `admin` is the service-role client, so a
+  // user_id-scoped update on someone else's row matches nothing and
+  // returns no error: the income page is manager-gated and lists the
+  // whole company's rows, so this was a Save changes that closed the
+  // editor and changed nothing, with no way to tell.
+  const { data: owner } = await admin
+    .from("monthly_income")
+    .select("user_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!owner) throw new Error("That entry is no longer here. Reload the page.");
+  if (owner.user_id !== user.id) {
+    throw new Error("Only the person who logged this entry can edit it.");
+  }
+
   const { error } = await admin
     .from("monthly_income")
     .update({
@@ -167,13 +183,20 @@ export async function deleteIncome(formData: FormData) {
   if (!id) return;
 
   // Capture the amount before deleting so the activity log can say what
-  // was removed (the audit's "who deleted a transaction" concern).
-  const { data: existing } = await admin
+  // was removed (the audit's "who deleted a transaction" concern), and
+  // prove the row is this user's to delete. Unscoped read on purpose:
+  // the scoped one cannot tell "already deleted" from "not yours", and
+  // both used to end as a confirm dialog followed by an unchanged page.
+  const { data: row } = await admin
     .from("monthly_income")
-    .select("amount_cents, month")
+    .select("user_id, amount_cents, month")
     .eq("id", id)
-    .eq("user_id", user.id)
     .maybeSingle();
+  if (!row) throw new Error("That entry is already gone. Reload the page.");
+  if (row.user_id !== user.id) {
+    throw new Error("Only the person who logged this entry can remove it.");
+  }
+  const existing = row;
 
   // Scope delete by user_id so a user can only delete their own entries.
   // Managers can delete via the admin/management UI separately.

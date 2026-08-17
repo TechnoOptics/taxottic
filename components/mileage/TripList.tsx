@@ -222,6 +222,7 @@ function TripCard({
 }) {
   const [pending, startTransition] = useTransition();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const moveFormRef = useRef<HTMLFormElement | null>(null);
 
   // First + last GPS fix = the drive's start / end, for reverse-geocoded
@@ -254,13 +255,42 @@ function TripCard({
   const dateLabel = DATE_FMT.format(start);
   const timeLabel = `${TIME_FMT.format(start)} → ${TIME_FMT.format(end)}`;
 
+  // Both actions are AWAITED inside an async transition.
+  //
+  // They used to be `startTransition(() => void action(fd))`. That has two
+  // faults and they hide each other. The promise is floated, so
+  // reclassifyTrip's "You can't re-classify this trip." and deleteTrip's
+  // "You can't delete this trip." never reached anyone: a refused
+  // classification looked exactly like an accepted one, on the control
+  // that decides whether a drive is a deduction. And because the
+  // transition callback returned immediately, `pending` flipped back on
+  // the next render, so the opacity, the aria-busy and every
+  // `disabled={pending}` below were decorative. Awaiting inside an async
+  // transition fixes both: React 19 holds isPending for the whole
+  // round-trip, and a rejection lands somewhere the driver can read it.
+  const runTripAction = (
+    action: (fd: FormData) => Promise<void>,
+    fd: FormData,
+  ) => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await action(fd);
+      } catch (err) {
+        setError(
+          err instanceof Error && err.message
+            ? err.message
+            : "That did not save. Try again.",
+        );
+      }
+    });
+  };
+
+  // "passenger" comes through here too: it is the same server action, so a
+  // refused exclusion surfaces the same way a refused classification does.
   const doReclassify = (
     c: "business" | "personal" | "unclassified" | "passenger",
   ) => {
-    // Optimistic-ish: no local optimistic state because the server
-    // action revalidates the page; useTransition keeps the UI from
-    // freezing while it round-trips.
-    //
     // Re-sending the CURRENT classification is normally a no-op, but on an
     // assumed drive it is the confirmation: the same server action clears
     // needs_confirmation and writes the real deduction, so "Confirm" needs
@@ -269,17 +299,13 @@ function TripCard({
     const fd = new FormData();
     fd.set("trip_id", trip.id);
     fd.set("classification", c);
-    startTransition(() => {
-      void reclassify(fd);
-    });
+    runTripAction(reclassify, fd);
   };
 
   const doDelete = () => {
     const fd = new FormData();
     fd.set("trip_id", trip.id);
-    startTransition(() => {
-      void deleteTrip(fd);
-    });
+    runTripAction(deleteTrip, fd);
   };
 
   return (
@@ -365,6 +391,15 @@ function TripCard({
           </button>
         )}
       </div>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-900 leading-snug"
+        >
+          This drive was not changed. {error}
+        </div>
+      ) : null}
 
       {/* Assumed-classification notice. The drive landed automatically
           with no place evidence behind the call, so it is stored at zero

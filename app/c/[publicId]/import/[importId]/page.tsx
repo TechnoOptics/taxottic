@@ -14,6 +14,7 @@ import {
   ignoreTx,
   moveBookedTransaction,
   reopenImport,
+  restoreTx,
   setSignConvention,
   setTxCategory,
   teachBella,
@@ -892,11 +893,89 @@ export default async function ImportReviewPage({
           </section>
         ) : null}
 
+        {/* The Ignored pile used to be a heading and a number: no rows,
+            no reasons, no way back. Five code paths put rows here and
+            only one of them is a deliberate press, the other four run
+            unattended (Bella calling a row a transfer, the card-payment
+            pre-tag, the refund-netting pass, and the batch Ignore). An
+            ignored row counts as resolved, so an import could report
+            "all rows sorted" over charges the user had never seen, with
+            deleting and re-uploading the whole import as the only way to
+            look at them. */}
         {ignoredRows.length > 0 ? (
-          <section className="mt-6 card p-6 opacity-60">
-            <h2 className="display text-xl text-forest-900">
-              Ignored ({ignoredRows.length})
-            </h2>
+          <section className="mt-6 card p-6">
+            <details>
+              <summary className="cursor-pointer select-none flex items-baseline justify-between gap-3 flex-wrap">
+                <h2 className="display text-xl text-forest-900">
+                  Ignored ({ignoredRows.length})
+                </h2>
+                <span className="text-xs text-ink-muted">
+                  Click to see them or put one back
+                </span>
+              </summary>
+              <p className="mt-2 text-xs text-ink-muted max-w-2xl leading-relaxed">
+                These rows count as settled and add nothing to your
+                deduction. They get here from a Skip or an Ignore, and from
+                Bella setting aside transfers, card payments and refunds
+                that cancel a charge. Put one back if it was a real business
+                expense.
+              </p>
+              <ul className="mt-4 grid gap-2">
+                {ignoredRows.map((t) => {
+                  const cat = t.applied_category_code
+                    ? catById.get(t.applied_category_code)
+                    : null;
+                  // Deliberately never says who set the row aside. Nothing
+                  // records that: a user Ignore and Bella calling a row a
+                  // transfer both land as ignored = true with a null
+                  // category, so "you skipped this" would be a guess, and
+                  // wrong on every row Bella handled.
+                  const why =
+                    t.applied_category_code === "refunded"
+                      ? "Netted against a matching refund"
+                      : t.applied_category_code === "credit_card_payment"
+                        ? "Card payment from another account"
+                        : (cat?.label ?? "Set aside as not deductible");
+                  return (
+                    <li
+                      key={t.id}
+                      className="rounded-lg border border-forest-100 bg-white/70 px-4 py-3 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-forest-900 break-words sm:truncate">
+                            {t.description}
+                          </div>
+                          <div className="text-xs text-ink-muted mt-0.5">
+                            {t.posted_at ?? "-"} · {why}
+                          </div>
+                        </div>
+                        <div className="text-ink-soft tabular-nums shrink-0">
+                          {formatCents(t.amount_cents)}
+                        </div>
+                      </div>
+                      {/* A booked row keeps its booking; restoring only
+                          makes it visible again, so offering the control
+                          on one would promise a reversal it does not do.
+                          Those rows are moved with MoveBookedRow. */}
+                      {t.applied_expense_id || t.applied_income_id ? null : (
+                        <form action={restoreTx} className="mt-2">
+                          <input type="hidden" name="id" value={t.id} />
+                          <input
+                            type="hidden"
+                            name="import_id"
+                            value={importId}
+                          />
+                          <button className="text-xs text-forest-700 hover:text-forest-900 underline underline-offset-2">
+                            Put back in the list
+                          </button>
+                        </form>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
           </section>
         ) : null}
       </section>

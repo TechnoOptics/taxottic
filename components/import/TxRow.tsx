@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CategoryCombobox,
   type CategoryOption,
@@ -45,6 +45,17 @@ import { MoveBookedRow } from "@/components/import/MoveBookedRow";
  */
 
 const LEAVE_MS = 350;
+
+/**
+ * True for the errors Next throws to steer navigation (redirect,
+ * notFound). They carry a `digest` of "NEXT_REDIRECT..." /
+ * "NEXT_HTTP_ERROR_FALLBACK..." and must be rethrown, not reported: a
+ * caught redirect is a navigation that silently does not happen.
+ */
+function isFrameworkControlFlow(err: unknown): boolean {
+  const digest = (err as { digest?: unknown } | null)?.digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_");
+}
 
 type Tx = {
   id: string;
@@ -105,7 +116,7 @@ export function TxRow({
   highlight,
 }: Props) {
   const [phase, setPhase] = useState<"idle" | "leaving">("idle");
-  const [_pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const [justArrived, setJustArrived] = useState(!!highlight);
   const rowRef = useRef<HTMLLIElement>(null);
 
@@ -156,17 +167,39 @@ export function TxRow({
     .join(" ")
     .slice(0, 80);
 
-  // Wrap a server action: animate first, then commit. The page
-  // re-renders without this row on revalidate, unmounting the
-  // component naturally, so we never need to "undo" the leaving
-  // state.
+  // Wrap a server action: animate first, then commit. On success the
+  // page re-renders without this row on revalidate, unmounting the
+  // component naturally, so the "leaving" state never needs undoing.
+  //
+  // The commit is AWAITED. It used to be `startTransition(() => void
+  // action(fd))`, which floats the promise: the row finished its
+  // slide-off and the component returned, so React never saw the
+  // rejection and neither did the user. A categorize that the database
+  // refused looked exactly like one that worked, right up until the row
+  // reappeared uncategorized on some later render. That is the single
+  // worst thing this screen can do, because the screen's whole job is to
+  // tell you which rows are still unclaimed.
+  //
+  // On failure the row slides back in and says why, so the work is still
+  // in front of the user instead of gone.
   const leaveAndCommit =
     (action: (fd: FormData) => Promise<void>) => async (fd: FormData) => {
+      setError(null);
       setPhase("leaving");
       await new Promise<void>((r) => setTimeout(r, LEAVE_MS));
-      startTransition(() => {
-        void action(fd);
-      });
+      try {
+        await action(fd);
+      } catch (err) {
+        // redirect() and notFound() throw control-flow errors that React
+        // has to receive. Never swallow one into an error message.
+        if (isFrameworkControlFlow(err)) throw err;
+        setPhase("idle");
+        setError(
+          err instanceof Error && err.message
+            ? err.message
+            : "That did not save. Try again.",
+        );
+      }
     };
 
   return (
@@ -238,6 +271,15 @@ export function TxRow({
       {refundNote ? (
         <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-emerald-800">
           {refundNote}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div
+          role="alert"
+          className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900 leading-relaxed"
+        >
+          This row was not saved. {error}
         </div>
       ) : null}
 

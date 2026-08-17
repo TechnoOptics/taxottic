@@ -208,6 +208,22 @@ export async function updateExpense(formData: FormData) {
     throw new Error("Not a member of this company");
   }
 
+  // Same shape, same reason as deleteExpense: this update is scoped by
+  // user_id on the service-role client, so on a teammate's row it wrote
+  // nothing and reported nothing. The inline editor closes on submit, so
+  // the row simply reappeared with the old numbers.
+  const { data: owner } = await admin
+    .from("monthly_expenses")
+    .select("user_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!owner) throw new Error("That entry is no longer here. Reload the page.");
+  if (owner.user_id !== user.id) {
+    throw new Error(
+      "Only the person who logged this entry can edit it. To take it out of the deduction, mark it personal instead, which keeps their record intact.",
+    );
+  }
+
   const { error } = await admin
     .from("monthly_expenses")
     .update({
@@ -407,13 +423,29 @@ export async function deleteExpense(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  // Capture what's being removed for the audit trail.
-  const { data: existing } = await admin
+  // Capture what's being removed for the audit trail, and prove there
+  // is something to remove.
+  //
+  // The delete below is scoped `id + user_id` against the SERVICE-ROLE
+  // client, so on someone else's row it matches zero rows and PostgREST
+  // reports no error at all. The action then revalidated and returned,
+  // and the page came back with the row exactly where it was. The
+  // expenses list hands Remove to every row a viewer can see, and a
+  // manager sees the whole company's, so "delete a teammate's expense"
+  // was a confirm dialog followed by nothing. Read the row first and say
+  // which of the two things happened.
+  const { data: row } = await admin
     .from("monthly_expenses")
-    .select("amount_cents, month, category_code")
+    .select("user_id, amount_cents, month, category_code")
     .eq("id", id)
-    .eq("user_id", user.id)
     .maybeSingle();
+  if (!row) throw new Error("That entry is already gone. Reload the page.");
+  if (row.user_id !== user.id) {
+    throw new Error(
+      "Only the person who logged this entry can remove it. To take it out of the deduction, mark it personal instead, which keeps their record intact.",
+    );
+  }
+  const existing = row;
 
   const { error } = await admin
     .from("monthly_expenses")

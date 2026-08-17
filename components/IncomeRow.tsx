@@ -70,8 +70,13 @@ export type IncomeRowProps = {
   companyId: string;
   taxYear: number;
   currentMonth: number;
-  updateAction: (formData: FormData) => Promise<void>;
-  deleteAction: (formData: FormData) => Promise<void>;
+  // Owner only, same reason as ExpenseRow: both server actions scope
+  // their write by user_id, so on a row logged by someone else they
+  // matched nothing and said nothing. This page is manager-gated and
+  // lists the whole company's income, so that was the common case, not
+  // the edge one.
+  updateAction?: (formData: FormData) => Promise<void>;
+  deleteAction?: (formData: FormData) => Promise<void>;
 };
 
 export function IncomeRow({
@@ -84,7 +89,7 @@ export function IncomeRow({
 }: IncomeRowProps) {
   const [editing, setEditing] = useState(false);
 
-  if (editing) {
+  if (editing && updateAction) {
     return (
       <li className="min-w-0 rounded-lg border border-gold-300 bg-cream/50 px-4 py-3">
         <form
@@ -205,40 +210,46 @@ export function IncomeRow({
           </span>
         ) : null}
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          aria-label="Edit income entry"
-          className="text-xs text-ink-muted hover:text-forest-900 px-2 py-1"
-        >
-          Edit
-        </button>
-        <form
-          action={deleteAction}
-          onSubmit={(e) => {
-            // Round-5 audit Low: single-click destructive action is a
-            // foot-gun for tax-relevant data. Confirm before the
-            // server action runs.
-            if (
-              !window.confirm(
-                "Remove this income entry? This cannot be undone.",
-              )
-            ) {
-              e.preventDefault();
-            }
-          }}
-        >
-          <input type="hidden" name="company_id" value={companyId} />
-          <input type="hidden" name="id" value={row.id} />
-          <button
-            type="submit"
-            className="text-xs text-ink-muted hover:text-red-700 px-2 py-1"
-          >
-            Remove
-          </button>
-        </form>
-      </div>
+      {updateAction || deleteAction ? (
+        <div className="flex items-center gap-1 shrink-0">
+          {updateAction ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              aria-label="Edit income entry"
+              className="text-xs text-ink-muted hover:text-forest-900 px-2 py-1"
+            >
+              Edit
+            </button>
+          ) : null}
+          {deleteAction ? (
+            <form
+              action={deleteAction}
+              onSubmit={(e) => {
+                // Round-5 audit Low: single-click destructive action is a
+                // foot-gun for tax-relevant data. Confirm before the
+                // server action runs.
+                if (
+                  !window.confirm(
+                    "Remove this income entry? This cannot be undone.",
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="company_id" value={companyId} />
+              <input type="hidden" name="id" value={row.id} />
+              <button
+                type="submit"
+                className="text-xs text-ink-muted hover:text-red-700 px-2 py-1"
+              >
+                Remove
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
     </li>
   );
 }

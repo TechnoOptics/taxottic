@@ -20,7 +20,26 @@ export async function classifyTrip(formData: FormData) {
 
   if (!id || !classification) return;
 
-  await reclassifyTripCore(admin, user.id, id, classification);
+  // reclassifyTripCore RETURNS its failure, it does not throw
+  // (lib/mileage/reclassify.ts), and this action used to discard the
+  // return value and revalidate regardless. The deck then advanced to
+  // the next card and, on the last one, pushed the driver to
+  // "caught up". So a forbidden trip, a deleted trip, or a rejected
+  // write produced a full swipe-through in which nothing was saved and
+  // nothing was said. Mirrors the mapping in app/mileage/actions.ts so
+  // the two entry points to the same core agree on what a refusal means.
+  const res = await reclassifyTripCore(admin, user.id, id, classification);
+  if (!res.ok) {
+    throw new Error(
+      res.reason === "forbidden"
+        ? "You can't classify this drive."
+        : res.reason === "not_found"
+          ? "That drive is no longer here. Reload the page."
+          : res.reason === "invalid"
+            ? "Invalid classification."
+            : "Couldn't save. Please try again.",
+    );
+  }
 
   // Every page that aggregates `mileage_trips`. Without these, the
   // /c/{id}/money-out "Miles driven" tile, the my-deductions YTD
