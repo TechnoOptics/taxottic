@@ -23,6 +23,7 @@ import { registerPlugin } from "@capacitor/core";
 import { ensureHeartbeatTimer } from "./heartbeat-timer";
 import { UPLOAD_BATCH_MAX } from "./flush-policy";
 import { postAccepted, postJson } from "./post-json";
+import type { PostedFix } from "./drain-coverage";
 export type GeofenceArmState =
   | "armed"
   | "disarmed_no_places"
@@ -226,7 +227,10 @@ export async function syncLearnedPlaces(companyId: string): Promise<{
  *    there would make a retry write a second copy of the drive under a
  *    different captured_at. See ./clock-skew.
  */
-export async function drainGeofenceBuffer(companyId: string): Promise<number> {
+export async function drainGeofenceBuffer(
+  companyId: string,
+  onPosted?: (posted: PostedFix[]) => void,
+): Promise<number> {
   const plugin = (await guard())?.p ?? null;
   if (!plugin || !companyId) return 0;
   let fixes: NativeFix[] = [];
@@ -273,6 +277,15 @@ export async function drainGeofenceBuffer(companyId: string): Promise<number> {
   } catch {
     return 0;
   }
+
+  // Hand the CONFIRMED batch to the caller, which is what lets the
+  // sibling native-buffer drain recognise its own copy of these fixes
+  // instead of storing them a second time under a different captured_at.
+  // Deliberately after the post rather than inside its try: a batch that
+  // was refused covers nothing. Deliberately before the consume too, so
+  // a consume that throws cannot turn into a second upload of a stream
+  // that is already on the server. See ./drain-coverage.
+  onPosted?.(points);
 
   try {
     // Consume exactly what we POSTED. Anything the service appended while

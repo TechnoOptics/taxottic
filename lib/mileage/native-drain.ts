@@ -36,6 +36,7 @@
 
 import { drainGeofenceBuffer } from "./geofence";
 import { drainNativeLocationBuffer } from "./device-status";
+import { coverageOf, type PostedFix } from "./drain-coverage";
 
 /**
  * Minimum wall clock between drain attempts.
@@ -95,6 +96,22 @@ let lastAttemptMs = 0;
  *
  * `companyId` may be empty: the iOS drain carries its own from the
  * native side, only the Android geofence drain needs one from here.
+ *
+ * BOTH BUFFERS HOLD THE SAME FIX STREAM
+ *
+ * Which made draining them sequentially a double post rather than two
+ * halves of a backlog. Production: two ingest POSTs 0.618 s apart, each
+ * carrying exactly 1630 points, all 1630 pairs coordinate-identical and
+ * offset by exactly 0.6310 s with standard deviation 0.0000. Ingest is
+ * idempotent on (driver_user_id, company_id, captured_at) and a 631 ms
+ * difference is not a conflict, so both copies stored; merged with the
+ * live stream the pool held 1263 of 3351 transitions above 60 m/s, and
+ * the drive was correctly refused as implausible and never appeared.
+ *
+ * So the second drain is told what the first one CONFIRMED, and skips
+ * its own copy of those fixes. Anything the first batch did not cover is
+ * still uploaded, which is the whole reason this is a per-fix check and
+ * not "skip the second buffer when the first one had something".
  */
 export async function drainNativeBuffers(
   companyId: string,
@@ -114,11 +131,22 @@ export async function drainNativeBuffers(
   try {
     // Sequential, not Promise.all. Two concurrent uploads of up to a
     // batch each is the flood this is supposed to avoid, and there is
-    // nothing to be gained by finishing a background drain sooner.
+    // nothing to be gained by finishing a background drain sooner. The
+    // order is now load-bearing for a second reason: the geofence batch
+    // has to be CONFIRMED on the server before the other drain can treat
+    // it as covering anything.
+    let geofencePosted: PostedFix[] = [];
     if (companyId) {
-      points += await drainGeofenceBuffer(companyId);
+      points += await drainGeofenceBuffer(companyId, (posted) => {
+        geofencePosted = posted;
+      });
     }
-    points += await drainNativeLocationBuffer();
+    // Stays empty unless the geofence POST was accepted, so a refused or
+    // skipped geofence drain covers nothing and the buffer below posts
+    // in full, exactly as it did before this change.
+    points += await drainNativeLocationBuffer(
+      coverageOf(companyId, geofencePosted),
+    );
   } catch {
     // Both drains already swallow their own failures and leave the fixes
     // on disk; this is the belt for a bridge that rejects in a new way.
