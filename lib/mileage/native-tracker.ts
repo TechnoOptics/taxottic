@@ -1266,6 +1266,16 @@ export async function sendHeartbeat(): Promise<void> {
         // counter alone cannot distinguish from having no backlog.
         nativeDrainTrigger: nativeDrainDiag.lastTrigger,
         nativeDrainPoints: nativeDrainDiag.lastPoints,
+        // And is the duplicate suppression still alive? The two native
+        // buffers hold the same fix stream and posting both stored one
+        // drive twice, which made the merged pool unsegmentable. That
+        // check keys on the EXACT coordinate, so a native build storing
+        // coordinates at a different precision would silently match
+        // nothing while every field above stayed healthy. checked > 0
+        // with suppressed = 0 is that inert state; checked = 0 means the
+        // mechanism simply had no opportunity this pass.
+        nativeDrainChecked: nativeDrainDiag.lastChecked,
+        nativeDrainSuppressed: nativeDrainDiag.lastSuppressed,
       }),
     });
     trackerDiag.hbLastResult = `${res.status} @ ${new Date()

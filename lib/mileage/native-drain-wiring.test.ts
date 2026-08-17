@@ -130,6 +130,24 @@ describe("a drain outside cold start is visible in production", () => {
     expect(route).toContain("native_drain_points");
   });
 
+  it("reports whether the duplicate-suppression mechanism actually ran", () => {
+    // native_drain_checked is the difference between "the dedupe found
+    // nothing to suppress" and "the dedupe is INERT". Coordinate identity
+    // is exact, so a native build storing coordinates at a different
+    // precision matches nothing while every other signal in this
+    // subsystem stays healthy: live trigger, points moving, no errors.
+    // Without this counter the only evidence would be native_drain_points
+    // roughly halving, which is inference and is indistinguishable from
+    // the driver driving less.
+    expect(tracker).toContain("nativeDrainDiag.lastChecked");
+    expect(route).toContain("native_drain_checked");
+  });
+
+  it("reports how many duplicates it suppressed", () => {
+    expect(tracker).toContain("nativeDrainDiag.lastSuppressed");
+    expect(route).toContain("native_drain_suppressed");
+  });
+
   it("has somewhere to store both, on both heartbeat tables", () => {
     // A payload key with no column is silently dropped by PostgREST, which
     // is how three layers of correct-looking implementation have delivered
@@ -144,6 +162,32 @@ describe("a drain outside cold start is visible in production", () => {
         migrations.slice(at, at + 300),
         `${table} has no native_drain_points column`,
       ).toContain("native_drain_points");
+    }
+  });
+
+  it("has somewhere to store the suppression counters, on both tables too", () => {
+    // Separate migration, same trap. The heartbeat route upserts ONE
+    // payload into mileage_device_status first and returns 500 on error,
+    // so a column present on only the history table does not degrade the
+    // heartbeat, it deletes it for every device on both platforms. That
+    // has already happened here once, with arm_interrupted_at, web_build
+    // and eight car_* columns. lib/db/schema-contract.test.ts guards the
+    // general case; this names the two columns of this change.
+    for (const table of [
+      "mileage_device_status",
+      "mileage_device_heartbeats",
+    ]) {
+      const at = migrations.indexOf(
+        `alter table public.${table}\n  add column if not exists native_drain_checked`,
+      );
+      expect(
+        at,
+        `${table} has no native_drain_checked column`,
+      ).toBeGreaterThan(-1);
+      expect(
+        migrations.slice(at, at + 300),
+        `${table} has no native_drain_suppressed column`,
+      ).toContain("native_drain_suppressed");
     }
   });
 });

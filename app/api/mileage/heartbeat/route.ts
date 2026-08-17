@@ -287,6 +287,15 @@ export async function POST(req: NextRequest) {
     // steady state, 0 points under no trigger at all is a dead drain.
     native_drain_trigger: str("nativeDrainTrigger", 16),
     native_drain_points: num("nativeDrainPoints"),
+    // Whether the duplicate suppression is alive. See
+    // supabase/migrations/20260818010000_heartbeat_drain_dedupe.sql.
+    // Read these two TOGETHER and in this order: checked = 0 means the
+    // mechanism had no opportunity and proves nothing, while checked > 0
+    // with suppressed = 0 means both native buffers held fixes and the
+    // check matched none of them, which is what an inert dedupe looks
+    // like from the outside.
+    native_drain_checked: num("nativeDrainChecked"),
+    native_drain_suppressed: num("nativeDrainSuppressed"),
     reported_at: reportedAt,
   };
 

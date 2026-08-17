@@ -64,22 +64,53 @@ export type CoverageCheck = (companyId: string, fix: PostedFix) => boolean;
 export const COVERAGE_WINDOW_MS = 2_000;
 
 /**
- * Build the check from the batch a drain CONFIRMED on the server.
+ * What the check actually did, so production can say whether it works.
+ *
+ * This exists because the failure mode of everything above is SILENCE.
+ * Identity is the exact coordinate, so a native build that stored its
+ * coordinates at a different precision would match nothing, suppress
+ * nothing, and leave every other signal in this subsystem looking
+ * healthy: a live drain trigger, points moving, no errors anywhere. The
+ * dedupe would simply have stopped working and no row would say so.
+ *
+ * `checked` is what makes `suppressed` legible. Alone, suppressed = 0
+ * has two opposite meanings and no way to pick between them:
+ *
+ *   checked > 0, suppressed > 0   working
+ *   checked > 0, suppressed = 0   both buffers held fixes and NOTHING
+ *                                 matched. This is the inert signature.
+ *   checked = 0                   the mechanism had no opportunity: no
+ *                                 confirmed sibling batch, or nothing in
+ *                                 the second buffer. Evidence of nothing.
+ *
+ * A fix counts as checked only when the coverage set could actually have
+ * matched it: non-empty, and the same company. Counting a fix that was
+ * weighed against an empty set would manufacture the inert signature out
+ * of an ordinary upload failure, which is worse than no counter at all.
+ */
+export type CoverageTally = { checked: number; suppressed: number };
+
+/**
+ * Build the check from the batch a drain CONFIRMED on the server, plus
+ * the tally the caller reports on the heartbeat.
  *
  * `posted` must be what ingest accepted, never what was read off disk.
  * A refused batch leaves its fixes on disk and puts nothing on the
  * server, so treating a read batch as coverage would delete the only
  * other copy of a drive. Callers pass an empty array in that case and
- * this returns a check that covers nothing.
+ * this returns a check that covers nothing and tallies nothing.
  *
  * `companyId` is compared because the two buffers carry their own. The
  * same coordinates under a different company are different rows, so a
  * sibling batch cannot stand in for them.
+ *
+ * The tally is filled in as the check RUNS, so it is only complete once
+ * the consumer has finished with it.
  */
 export function coverageOf(
   companyId: string,
   posted: PostedFix[],
-): CoverageCheck {
+): { check: CoverageCheck; tally: CoverageTally } {
   const timesAt = new Map<string, number[]>();
   for (const p of posted) {
     const key = `${p.lat},${p.lng}`;
@@ -87,10 +118,19 @@ export function coverageOf(
     if (at) at.push(p.ts);
     else timesAt.set(key, [p.ts]);
   }
-  return (otherCompanyId, fix) => {
-    if (otherCompanyId !== companyId) return false;
+  const tally: CoverageTally = { checked: 0, suppressed: 0 };
+  const check: CoverageCheck = (otherCompanyId, fix) => {
+    // Both halves of this gate are the tally's honesty as much as the
+    // check's: past here the coverage set could genuinely have matched,
+    // so a miss means something.
+    if (timesAt.size === 0 || otherCompanyId !== companyId) return false;
+    tally.checked += 1;
     const at = timesAt.get(`${fix.lat},${fix.lng}`);
-    if (!at) return false;
-    return at.some((ts) => Math.abs(ts - fix.ts) <= COVERAGE_WINDOW_MS);
+    const hit =
+      at !== undefined &&
+      at.some((ts) => Math.abs(ts - fix.ts) <= COVERAGE_WINDOW_MS);
+    if (hit) tally.suppressed += 1;
+    return hit;
   };
+  return { check, tally };
 }

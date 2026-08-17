@@ -75,6 +75,28 @@ export const nativeDrainDiag = {
   lastTrigger: null as NativeDrainTrigger | null,
   lastAtMs: 0,
   lastPoints: 0,
+  /**
+   * Fixes the second buffer offered to the duplicate check while a
+   * confirmed sibling batch existed to check them against, and how many
+   * of those the sibling batch already held.
+   *
+   * Together these are the only evidence that the duplicate suppression
+   * is alive. Identity is the EXACT coordinate, so a native build that
+   * stored coordinates at a different precision would match nothing
+   * while lastTrigger, lastPoints and every other field stayed healthy.
+   * `lastPoints` roughly halving is inference, not evidence, and it is
+   * indistinguishable from the driver driving less.
+   *
+   *   lastChecked > 0, lastSuppressed > 0   working
+   *   lastChecked > 0, lastSuppressed = 0   INERT: both buffers held
+   *                                         fixes and nothing matched
+   *   lastChecked = 0                       no opportunity, says nothing
+   *   lastTrigger = null                    the drain never ran at all
+   *
+   * See ./drain-coverage.
+   */
+  lastChecked: 0,
+  lastSuppressed: 0,
 };
 
 let draining = false;
@@ -128,6 +150,11 @@ export async function drainNativeBuffers(
   draining = true;
   lastAttemptMs = now;
   let points = 0;
+  // Reported even when the try below throws part way, so a pass that
+  // half ran is described by what it actually did rather than by the
+  // previous pass's numbers.
+  let checked = 0;
+  let suppressed = 0;
   try {
     // Sequential, not Promise.all. Two concurrent uploads of up to a
     // batch each is the flood this is supposed to avoid, and there is
@@ -141,12 +168,13 @@ export async function drainNativeBuffers(
         geofencePosted = posted;
       });
     }
-    // Stays empty unless the geofence POST was accepted, so a refused or
-    // skipped geofence drain covers nothing and the buffer below posts
-    // in full, exactly as it did before this change.
-    points += await drainNativeLocationBuffer(
-      coverageOf(companyId, geofencePosted),
-    );
+    // geofencePosted stays empty unless the geofence POST was accepted,
+    // so a refused or skipped geofence drain covers nothing and the
+    // buffer below posts in full, exactly as it did before this change.
+    const coverage = coverageOf(companyId, geofencePosted);
+    points += await drainNativeLocationBuffer(coverage.check);
+    checked = coverage.tally.checked;
+    suppressed = coverage.tally.suppressed;
   } catch {
     // Both drains already swallow their own failures and leave the fixes
     // on disk; this is the belt for a bridge that rejects in a new way.
@@ -156,6 +184,11 @@ export async function drainNativeBuffers(
   nativeDrainDiag.lastTrigger = trigger;
   nativeDrainDiag.lastAtMs = now;
   nativeDrainDiag.lastPoints = points;
+  // Overwritten every pass, never accumulated. A stale count from a pass
+  // three hours ago, read as current, is how this repo has convinced
+  // itself a dead thing was alive before.
+  nativeDrainDiag.lastChecked = checked;
+  nativeDrainDiag.lastSuppressed = suppressed;
   return points;
 }
 
@@ -166,4 +199,6 @@ export function __resetNativeDrainForTest(): void {
   nativeDrainDiag.lastTrigger = null;
   nativeDrainDiag.lastAtMs = 0;
   nativeDrainDiag.lastPoints = 0;
+  nativeDrainDiag.lastChecked = 0;
+  nativeDrainDiag.lastSuppressed = 0;
 }

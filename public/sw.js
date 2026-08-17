@@ -1139,6 +1139,12 @@
 // and the coordinator), so a phone on the stale bundle keeps posting
 // both copies. And that phone goes on CONTAMINATING the shared pool for
 // its own driver, so leaving it behind is not a private cost to it.
+//
+// The same bundle carries the two counters that prove the suppression is
+// not inert, native_drain_checked and native_drain_suppressed, sent from
+// native-tracker's heartbeat payload. A phone on the old bundle reports
+// NULL for both, which is why the reviewer query filters them out rather
+// than reading a NULL as healthy.
 const CACHE_VERSION = "v191";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;

@@ -136,6 +136,10 @@ async function drain(companyId = "company-1") {
   return mod.drainNativeBuffers(companyId, "flush");
 }
 
+async function diag() {
+  return (await import("./native-drain")).nativeDrainDiag;
+}
+
 describe("two native buffers holding one fix stream", () => {
   beforeEach(() => {
     posted.length = 0;
@@ -357,6 +361,149 @@ describe("two native buffers holding one fix stream", () => {
     expect(ingestBodies()).toHaveLength(2);
     expect(cleared).toEqual([]);
     vi.restoreAllMocks();
+  });
+
+  describe("proving on the heartbeat that the dedupe is not inert", () => {
+    /**
+     * The three states a reader has to be able to tell apart, and the
+     * reason this counter exists at all.
+     *
+     *   trigger IS NULL              (c) the drain path never ran
+     *   checked > 0, suppressed > 0  (a) the dedupe is WORKING
+     *   checked > 0, suppressed = 0  (b) both buffers were populated and
+     *                                    NOTHING matched, which is what
+     *                                    an inert dedupe looks like
+     *   checked = 0                      the mechanism had no chance:
+     *                                    no sibling batch, or nothing in
+     *                                    the second buffer. Says nothing.
+     *
+     * (b) is the state that matters, because coordinate identity is exact
+     * and a native build that stored its coordinates at a different
+     * precision would match nothing while every other signal in this
+     * subsystem stayed healthy. `native_drain_points` roughly halving is
+     * inference, and it is indistinguishable from the driver driving less.
+     */
+
+    it("counts what it suppressed, on the observed duplicate stream", async () => {
+      const stream = drive(1630, BASE_TS);
+      geofenceFixes = asGeofenceFixes(stream);
+      nativePoints = asNativePoints(
+        stream.map((p) => ({ ...p, ts: p.ts + PHASE_MS })),
+      );
+
+      await drain();
+
+      const d = await diag();
+      expect(d.lastChecked).toBe(UPLOAD_BATCH_MAX);
+      expect(d.lastSuppressed).toBe(UPLOAD_BATCH_MAX);
+    });
+
+    it("counts every fix it weighed, not only the ones it dropped", async () => {
+      // checked > suppressed is the healthy partial-overlap reading, and
+      // it is what makes suppressed = 0 meaningful rather than ambiguous.
+      const shared = drive(40, BASE_TS);
+      const onlyNative = drive(15, BASE_TS + 40_000, 40);
+      geofenceFixes = asGeofenceFixes(shared);
+      nativePoints = asNativePoints([
+        ...shared.map((p) => ({ ...p, ts: p.ts + PHASE_MS })),
+        ...onlyNative,
+      ]);
+
+      await drain();
+
+      const d = await diag();
+      expect(d.lastChecked).toBe(55);
+      expect(d.lastSuppressed).toBe(40);
+    });
+
+    it("reports the INERT signature: both buffers full, nothing matched", async () => {
+      // Exactly what a precision mismatch between the two native plugins
+      // would produce. Every other signal stays healthy: a live trigger,
+      // points moving, no errors. Only checked > 0 with suppressed = 0
+      // says the mechanism ran and did nothing.
+      geofenceFixes = asGeofenceFixes(drive(30, BASE_TS));
+      nativePoints = asNativePoints(drive(30, BASE_TS, 500));
+
+      await drain();
+
+      const d = await diag();
+      expect(d.lastTrigger, "the drain plainly ran").toBe("flush");
+      expect(d.lastPoints, "and moved points").toBe(60);
+      expect(d.lastChecked, "and weighed every one of them").toBe(30);
+      expect(d.lastSuppressed, "and matched nothing").toBe(0);
+    });
+
+    it("counts nothing checked when the second buffer was empty", async () => {
+      // Must NOT read as the inert signature. Nothing was weighed, so the
+      // pass says nothing at all about whether the dedupe works.
+      geofenceFixes = asGeofenceFixes(drive(30, BASE_TS));
+
+      await drain();
+
+      const d = await diag();
+      expect(d.lastChecked).toBe(0);
+      expect(d.lastSuppressed).toBe(0);
+    });
+
+    it("counts nothing checked when there was no sibling batch to match", async () => {
+      // A refused geofence POST covers nothing, so the fixes below were
+      // never weighed against anything. Counting them as checked would
+      // manufacture the inert signature out of an ordinary upload failure.
+      const stream = drive(20, BASE_TS);
+      geofenceFixes = asGeofenceFixes(stream);
+      nativePoints = asNativePoints(
+        stream.map((p) => ({ ...p, ts: p.ts + PHASE_MS })),
+      );
+      ingestStatus = 500;
+
+      await drain();
+
+      const d = await diag();
+      expect(d.lastChecked).toBe(0);
+      expect(d.lastSuppressed).toBe(0);
+    });
+
+    it("counts nothing checked across companies", async () => {
+      // Same reason. The coverage set cannot apply, so nothing was
+      // weighed and the pass is not evidence either way.
+      const stream = drive(20, BASE_TS);
+      geofenceFixes = asGeofenceFixes(stream);
+      nativePoints = asNativePoints(
+        stream.map((p) => ({ ...p, ts: p.ts + PHASE_MS })),
+      );
+      nativeCompanyId = "company-2";
+
+      await drain();
+
+      const d = await diag();
+      expect(d.lastChecked).toBe(0);
+      expect(d.lastSuppressed).toBe(0);
+    });
+
+    it("clears the counters when a later pass weighs nothing", async () => {
+      // A stale count from a pass three hours ago read as current is how
+      // this repo has convinced itself a dead thing was alive before.
+      const stream = drive(20, BASE_TS);
+      geofenceFixes = asGeofenceFixes(stream);
+      nativePoints = asNativePoints(
+        stream.map((p) => ({ ...p, ts: p.ts + PHASE_MS })),
+      );
+      vi.useFakeTimers();
+      vi.setSystemTime(BASE_TS);
+      const mod = await import("./native-drain");
+      mod.__resetNativeDrainForTest();
+      await mod.drainNativeBuffers("company-1", "flush");
+      expect(mod.nativeDrainDiag.lastSuppressed).toBe(20);
+
+      geofenceFixes = [];
+      nativePoints = [];
+      vi.setSystemTime(BASE_TS + mod.NATIVE_DRAIN_EVERY_MS);
+      await mod.drainNativeBuffers("company-1", "callback");
+
+      expect(mod.nativeDrainDiag.lastChecked).toBe(0);
+      expect(mod.nativeDrainDiag.lastSuppressed).toBe(0);
+      vi.useRealTimers();
+    });
   });
 
   it("declares backlog on both drains", async () => {
