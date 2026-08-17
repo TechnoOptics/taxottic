@@ -1190,7 +1190,25 @@
 // drain simply does not exist, so the phone keeps reporting nothing and
 // the new columns fill with nulls that read as "no data yet", which is
 // the exact silence this change was written to break.
-const CACHE_VERSION = "v194";
+// v195: trim the two heaviest fetches on the cold-start critical path.
+//
+// app/loading.tsx pointed at /brand/icon-mark-cream.svg, which is not a
+// vector: it is a 512x512 PNG base64-embedded in an SVG wrapper, 39,754
+// bytes on disk and 29,699 on the wire, painted at 96 CSS pixels.
+// Because loading.tsx is the root Suspense fallback, React emits it as
+// <link rel="preload" as="image"> at the top of every route's <head>,
+// making it the highest-priority fetch of every cold start. It now
+// points at a pre-sized 288px PNG, 16,313 bytes. Fraunces is likewise
+// no longer preloaded: it is the display face for [data-skin="classic"]
+// only, which is /firm and /admin, and no screen the mobile app shows
+// ever renders it. Measured on the built shell, /example went from
+// 126,276 bytes of woff2 across five files to 89,716 across four.
+//
+// The bump is load-bearing, not housekeeping. The old bundle's markup
+// still names the fat SVG, and the runtime cache is cache-first for
+// images, so without a new version a phone keeps fetching the 29,699
+// byte mark on every launch and none of this reaches the device.
+const CACHE_VERSION = "v195";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
