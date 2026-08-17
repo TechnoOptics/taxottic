@@ -7,6 +7,10 @@ import {
   type MapPlace,
 } from "@/components/mileage/MileageMap";
 import { TripList, type TripRow } from "@/components/mileage/TripList";
+import {
+  ExcludedTrips,
+  type ExcludedTripRow,
+} from "@/components/mileage/ExcludedTrips";
 
 /**
  * Owns the shared "which trip is being reviewed" state so the trip list
@@ -30,6 +34,7 @@ export function MileageReview({
   mapTrips,
   places,
   tripRows,
+  excludedRows,
   reclassify,
   deleteTrip,
   companies,
@@ -38,6 +43,9 @@ export function MileageReview({
   mapTrips: MapTrip[];
   places: MapPlace[];
   tripRows: TripRow[];
+  /** Drives the driver marked "passenger". Out of the list and the map
+   *  above, kept here so the tap is reversible. */
+  excludedRows: ExcludedTripRow[];
   reclassify: (formData: FormData) => Promise<void>;
   deleteTrip: (formData: FormData) => Promise<void>;
   companies: { id: string; name: string }[];
@@ -118,6 +126,7 @@ export function MileageReview({
         companies={companies}
         moveTripCompany={moveTripCompany}
       />
+      <ExcludedTrips trips={excludedRows} reclassify={reclassify} />
     </>
   );
 }

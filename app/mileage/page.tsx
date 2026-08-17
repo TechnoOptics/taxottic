@@ -28,6 +28,9 @@ import {
   assessMileageTrackingHealth,
 } from "@/lib/mileage/health";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
+import { settleWithinBudget } from "@/lib/mileage/finalize-freshness";
+import { FinalizeSettleRefresh } from "@/components/mileage/FinalizeSettleRefresh";
+import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
 import { recoverApproximateTrips } from "./actions";
 import {
@@ -88,24 +91,32 @@ export default async function MileagePage({
   // Freshness: materialize the viewer's own staged points RIGHT NOW,
   // instead of making them wait out the 10-minute finalize cron (the
   // "keep reloading until the newest drive appears" complaint). Time-
-  // boxed and best-effort: if the pool is huge or slow we render with
-  // whatever exists and the cron remains the backstop. finalize is
-  // idempotent + overlap-guarded, so racing the cron is safe.
+  // boxed: if the pool is huge or slow we render with whatever exists,
+  // and the cron remains the backstop. finalize is idempotent +
+  // overlap-guarded, so racing the cron is safe.
+  //
+  // Time-boxing used to LOSE the slow runs. Promise.race does not cancel
+  // the loser: the budget expired, the page rendered without the drive,
+  // finalize landed a second later, and the drive appeared only on the
+  // NEXT render. That is why tapping any control seemed to fix it, the tap
+  // was rendering the previous load's finalize result. So we now record
+  // whether the run was still outstanding and hand that one fact to the
+  // client, which waits for that single run and refreshes ONCE. A run that
+  // finished inside the budget leaves this false and costs no second
+  // render at all.
+  let finalizeOutstanding = false;
   if (company) {
-    try {
-      await Promise.race([
-        finalizeUserTrips(admin, user.id, company.id, {
-          sinceIso: new Date(Date.now() - 7 * 86_400_000).toISOString(),
-          // Never sever a drive that is still in progress; and the user
-          // is looking at the page, so no push ping for what they see.
-          forceClose: false,
-          push: false,
-        }),
-        new Promise((resolve) => setTimeout(resolve, 2_500)),
-      ]);
-    } catch {
-      /* best-effort, page renders from whatever is already materialized */
-    }
+    const { finished } = await settleWithinBudget(
+      finalizeUserTrips(admin, user.id, company.id, {
+        sinceIso: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+        // Never sever a drive that is still in progress; and the user
+        // is looking at the page, so no push ping for what they see.
+        forceClose: false,
+        push: false,
+      }),
+      2_500,
+    );
+    finalizeOutstanding = !finished;
   }
 
   // Driver switcher (managers only). A manager can review any teammate's
@@ -184,7 +195,7 @@ export default async function MileagePage({
     started_at: string;
     ended_at: string;
     distance_miles: number;
-    classification: "business" | "personal" | "unclassified";
+    classification: "business" | "personal" | "unclassified" | "passenger";
     tax_year: number;
     deduction_cents: number;
     needs_confirmation: boolean | null;
@@ -192,6 +203,10 @@ export default async function MileagePage({
   type Pt = { lat: number; lng: number; captured_at: string };
 
   let trips: ServerTripRow[] = [];
+  // Drives the driver marked "I was a passenger". Held back from the log,
+  // the map and every total, but NOT dropped: keeping them is what makes
+  // the tap reversible (see lib/mileage/passenger.ts).
+  let excludedTrips: ServerTripRow[] = [];
   let places: MapPlace[] = [];
   let lastPointISO: string | null = null;
   let lastTripISO: string | null = null;
@@ -209,14 +224,21 @@ export default async function MileagePage({
     // hidden. See lib/mileage/team-scope.ts + team-scope.test.ts; RLS
     // does NOT enforce this, a manager may read every trip in the
     // company, so these filters are the only barrier.
-    trips = stripForeignPrivateTrips(
-      await loadScopedTrips<ServerTripRow>(admin, {
-        companyId: company.id,
-        scope,
-        sinceIso,
-      }),
-      user.id,
-    );
+    // The privacy strip feeds the passenger partition DIRECTLY, so no name
+    // in scope ever holds the unpartitioned rows for a later edit to
+    // render by accident. A teammate's row can never be a passenger one
+    // anyway (loadScopedTrips restricts foreign drives to business), so
+    // everything held back here is the viewer's own.
+    ({ logged: trips, excluded: excludedTrips } = partitionLoggedTrips(
+      stripForeignPrivateTrips(
+        await loadScopedTrips<ServerTripRow>(admin, {
+          companyId: company.id,
+          scope,
+          sinceIso,
+        }),
+        user.id,
+      ),
+    ));
 
     if (trips.length > 0) {
       // PostgREST truncates ANY response at max-rows (1000). 500 trips x
@@ -294,7 +316,16 @@ export default async function MileagePage({
     (t) => t.classification === "unclassified",
   ).length;
 
-  const mapTrips: MapTrip[] = trips.map((t) => ({
+  // Belt-and-braces, in the same spirit as stripForeignPrivateTrips: the
+  // partition above already removed every passenger drive, and the map has
+  // no colour for one because it must never draw one. Re-stating it here
+  // as a real runtime check means a future edit that renders the
+  // unpartitioned rows still cannot put an excluded route on the map.
+  const drawable = trips.filter(
+    (t): t is ServerTripRow & { classification: MapTrip["classification"] } =>
+      t.classification !== "passenger",
+  );
+  const mapTrips: MapTrip[] = drawable.map((t) => ({
     id: t.id,
     classification: t.classification,
     approximate: ((t as { notes?: string | null }).notes ?? "").startsWith(
@@ -380,6 +411,12 @@ export default async function MileagePage({
           </p>
         ) : (
           <>
+            {/* The freshness pass was still running when this render had
+                to go out, so the list below may be missing a drive that is
+                about to land. Waits for that one run and refreshes once.
+                Renders nothing, and is not rendered at all when finalize
+                finished inside its budget. */}
+            {finalizeOutstanding ? <FinalizeSettleRefresh /> : null}
             <div className="mt-2 text-sm text-ink-soft">
               {company.name} · {rangeCfg.label.toLowerCase()}
             </div>
@@ -619,6 +656,12 @@ export default async function MileagePage({
                   needsConfirmation: t.needs_confirmation === true,
                   points: pointsByTrip.get(t.id) ?? [],
                   companyId: company.id,
+                }))}
+                excludedRows={excludedTrips.map((t) => ({
+                  id: t.id,
+                  startedAtISO: t.started_at,
+                  endedAtISO: t.ended_at,
+                  distanceMiles: Number(t.distance_miles),
                 }))}
                 reclassify={reclassifyTrip}
                 deleteTrip={deleteTrip}
