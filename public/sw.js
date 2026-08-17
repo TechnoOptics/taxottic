@@ -1068,7 +1068,22 @@
 // the one word people trust to mean "they shipped something broken". It
 // is also not `denied`: nobody refused a permission. The distinguishing
 // property is that the DRIVER can fix it in Settings in ten seconds.
-const CACHE_VERSION = "v186";
+// v187: the drive list can now hide a drive, and can finally refresh.
+//
+// Two /mileage client changes, both of which a stale bundle would sink.
+//
+// "Passenger" is a new per-drive control (TripList) plus the section that
+// restores one (ExcludedTrips). A phone on the old bundle would show
+// neither, so a driver who excluded a drive on the web would have no way
+// to take it back on their phone, which breaks the reversibility the whole
+// exclusion-instead-of-delete design rests on.
+//
+// FinalizeSettleRefresh is the client half of the stale-list fix. The
+// server tells it finalize was still running when the page had to render;
+// without the new bundle nothing receives that, and the drive keeps
+// appearing only after the user taps something. That IS the bug being
+// fixed here, so shipping it to a cached WebView would fix nothing.
+const CACHE_VERSION = "v187";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

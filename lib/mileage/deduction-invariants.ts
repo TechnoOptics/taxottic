@@ -45,6 +45,8 @@ export type ViolationKind =
   | "unconfirmed_with_deduction"
   /** Unclassified means undecided, which cannot carry a claim. */
   | "unclassified_with_deduction"
+  /** The user was riding, not driving. Never deductible. */
+  | "passenger_with_deduction"
   /** A negative deduction is not a conservative error, it is nonsense. */
   | "negative_deduction";
 
@@ -91,6 +93,17 @@ export function checkTrip(t: TripRow): Violation[] {
           `Personal trip claims ${cents} cents. Personal miles are not ` +
           `deductible; the likely cause is a business deduction left in ` +
           `place when a human reclassified the drive.`,
+      });
+    }
+    if (cls === "passenger") {
+      out.push({
+        tripId: t.id,
+        kind: "passenger_with_deduction",
+        cents,
+        detail:
+          `Passenger trip claims ${cents} cents. The user was riding, not ` +
+          `driving, so no mileage is theirs to deduct. The likely cause is ` +
+          `a deduction left in place when the drive was reclassified.`,
       });
     }
     if (cls === "unclassified") {

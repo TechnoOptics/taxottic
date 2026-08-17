@@ -39,7 +39,10 @@ export type TripRow = {
   startedAtISO: string;
   endedAtISO: string;
   distanceMiles: number;
-  classification: "business" | "personal" | "unclassified";
+  /** "passenger" rows do not reach this list (the page holds them back,
+   *  see lib/mileage/passenger.ts). The type carries it so the compiler
+   *  keeps the reclassify call below honest. */
+  classification: "business" | "personal" | "unclassified" | "passenger";
   deductionCents: number;
   /** The classification was ASSUMED, not decided: no saved place backed
    *  it, so the drive is stored at zero cents and stays out of the
@@ -251,7 +254,9 @@ function TripCard({
   const dateLabel = DATE_FMT.format(start);
   const timeLabel = `${TIME_FMT.format(start)} → ${TIME_FMT.format(end)}`;
 
-  const doReclassify = (c: "business" | "personal" | "unclassified") => {
+  const doReclassify = (
+    c: "business" | "personal" | "unclassified" | "passenger",
+  ) => {
     // Optimistic-ish: no local optimistic state because the server
     // action revalidates the page; useTransition keeps the UI from
     // freezing while it round-trips.
@@ -459,6 +464,46 @@ function TripCard({
           </svg>
           {reviewing ? "Reviewing" : "Review"}
         </button>
+      </div>
+
+      {/* "I was a passenger".
+          Deliberately NOT a fourth segment in the control above. That row
+          is a mutex over the ways a drive can be FILED; this is the way a
+          drive leaves the log entirely, which is a different kind of act,
+          and a fourth segment would also crush all four touch targets on a
+          phone. So: quiet, separate, and stating its own consequence,
+          including that it can be undone. Restoring happens in the
+          "Excluded as passenger" section under the list. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 -mt-1">
+        <button
+          type="button"
+          onClick={() => doReclassify("passenger")}
+          disabled={pending}
+          aria-label="Mark this trip as one you rode in, not drove"
+          className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-forest-200 text-[11px] font-medium text-forest-800 hover:border-gold-300 hover:bg-cream disabled:opacity-60"
+        >
+          {/* Steering wheel, crossed out: you were not the one driving. */}
+          <svg
+            viewBox="0 0 20 20"
+            className="size-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="10" cy="10" r="7" />
+            <circle cx="10" cy="10" r="1.7" />
+            <path d="M3.2 9.2h5.1M11.7 9.2h5.1" />
+            <path d="M4.6 15.4 15.4 4.6" />
+          </svg>
+          Passenger
+        </button>
+        <span className="min-w-0 text-[11px] text-ink-muted leading-snug">
+          You were riding, not driving. Takes this drive out of your log and
+          your deduction. You can put it back.
+        </span>
       </div>
 
       {/* Business picker, only when the user belongs to more than one

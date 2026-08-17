@@ -967,7 +967,15 @@ export async function finalizeUserTrips(
             minute: "2-digit",
           }).format(new Date(trip.startTs)),
         });
-      } else if (classification !== "unclassified") {
+      } else if (
+        classification !== "unclassified" &&
+        // finalize never PRODUCES a passenger trip: autoClassify only
+        // returns business / personal / unclassified, and "passenger" can
+        // arrive solely as an explicit correction through reclassify. The
+        // narrowing is therefore a statement of that fact, not a
+        // defensive cast, and it keeps notify's payload honest.
+        classification !== "passenger"
+      ) {
         await notify(userId, {
           kind: "trip_logged",
           tripId: inserted.id,
