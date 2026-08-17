@@ -28,6 +28,7 @@
 
 import type { GpsPoint } from "./segmentation";
 import {
+  STATIONARY_CLOSE_MS as DE_STATIONARY_CLOSE_MS,
   STATIONARY_SPEED_MPS as DE_STATIONARY_SPEED_MPS,
   WALK_SPEED_MIN_MPS as DE_WALK_MIN_MPS,
   WALK_SPEED_MAX_MPS as DE_WALK_MAX_MPS,
@@ -67,6 +68,12 @@ import {
 } from "./geofence";
 import type { GeofenceArmState } from "./geofence";
 import { drainNativeBuffers, nativeDrainDiag } from "./native-drain";
+import {
+  nativeRepairs,
+  readRepairLedger,
+  runSelfRepairs,
+  writeRepairLedger,
+} from "./self-repair";
 import { haversineMeters } from "./segmentation";
 import { getDeviceId } from "./device-id";
 
@@ -1038,6 +1045,115 @@ export async function sendHeartbeat(): Promise<void> {
     } catch {
       /* web / plugin missing */
     }
+    // ONE evaluation, both reported and acted on.
+    //
+    // Hoisted out of the payload because ./self-repair.ts now reads
+    // these same verdicts to decide what to fix. Evaluating twice
+    // would be two sources of truth, and the one that disagreed would
+    // be the one nobody read.
+    const selfCheckChecks = evaluateSelfCheck({
+          // Platform from Capacitor, NOT from `truth`.
+          //
+          // truth is `ds ?? cached?.value ?? null`, i.e. the device
+          // status the plugin returns. When the plugin is DEAD there is
+          // no live read and no cache, so truth is null and this fell
+          // back to "web", every capability reported `unsupported`, and
+          // the summary came out "ok".
+          //
+          // The self-check was therefore inert on precisely the devices
+          // it exists to catch: Grace's iPhone, with two dead plugins,
+          // summarised as healthy. The flagship test passed only because
+          // its fixture hardcodes platform "ios", a state production
+          // could not reach.
+          platform: (() => {
+            const plat = cap?.getPlatform?.();
+            return plat === "ios" || plat === "android" ? plat : "web";
+          })(),
+          // outcome, not stage. getDeviceStatusProbed calls
+          // onStage("done") BEFORE checking whether a value came back,
+          // so a plugin that answers with nothing reaches "done" and
+          // would have been reported live while every device-truth
+          // field was missing. outcome distinguishes ok / null /
+          // unavailable / error / timeout, and it is already in this
+          // same payload.
+          deviceStatusOk: dsProbe.outcome === "ok",
+          deviceStatusMs: dsProbe.ms,
+          deviceStatusStage: dsProbe.stage,
+          geofenceArmState: geofence?.armState ?? null,
+          geofenceCount: geofence?.registeredCount ?? null,
+          // A 2 second time box around getGeofenceState collapses
+          // "no plugin", "threw" and "timed out" into one null. A
+          // backgrounded WebView times out routinely in this codebase,
+          // so treating that null as proof of a dead plugin would
+          // accuse the iOS registration bug on a healthy device. Only
+          // claim we looked when the read actually returned.
+          probed: geofence != null || dsProbe.outcome !== "timeout",
+          locationAuthorization: truth?.locationAuthorization ?? null,
+          // Same source as the heartbeat column four lines up, so the
+          // verdict and the raw value can never disagree. Null when the
+          // plugin has not answered, which the check reports as unknown
+          // rather than as "not throttled".
+          lowPowerMode: truth?.lowPowerMode ?? null,
+          // These were hardcoded null under a comment claiming car
+          // signals are "NOT fetched on this path". They are: carProbe
+          // is awaited earlier in this same function and its value is
+          // written to six columns of this very heartbeat, a few lines
+          // below. The comment was wrong, so two checks reported
+          // "unknown" forever and never ran in production.
+          //
+          // That is the same defect the platform bug was, in the same
+          // call site: the module is correct and the caller does not
+          // feed it. A check that cannot reach a verdict is worse than
+          // no check, because it occupies the slot where a real one
+          // would go.
+          //
+          // Worth wiring rather than deleting: bluetooth_permission is
+          // the check that distinguishes "the driver declined" from
+          // "we never showed the prompt", and the second is our bug.
+          // It sat broken with six paired cars precisely because those
+          // two look identical in the permission value alone.
+          bluetoothPermission: carProbe.value?.bluetoothPermission ?? null,
+          bluetoothPermissionAsked:
+            carProbe.value?.bluetoothPermissionAsked ?? null,
+          // outcome, not presence, for the same reason deviceStatusOk
+          // uses outcome above: a probe that returns nothing must not
+          // read as a plugin that answered.
+          carSignalsOk: carProbe.outcome === "ok",
+    });
+    // STEP B OF docs/design/self-healing-capture.md: act on the two
+    // verdicts a device can repair by itself, then report what was
+    // attempted on this same beat. Deliberately before the POST rather
+    // than after it, so the verdict and the repair that answered it
+    // can never come from different heartbeats.
+    //
+    // No timer anywhere: this rides the heartbeat, which is driven by
+    // ingest and therefore by the location callbacks that keep firing
+    // while a backgrounded WebView's setInterval is frozen. Every gate
+    // inside runSelfRepairs compares wall clock. See ./native-drain.ts.
+    // One reading of the clock for the whole pass. The backoff stamp and
+    // the drive gate are both wall-clock comparisons, and a pass that
+    // took them from two different Date.now() calls could stamp a repair
+    // at a moment it did not decide anything at.
+    const repairNowMs = Date.now();
+    const repair = await runSelfRepairs(selfCheckChecks, {
+      nowMs: repairNowMs,
+      // A drive in flight outranks every repair, and drive-end.ts
+      // already owns the definition of when a drive is over. Reusing
+      // its constant keeps the repairer from inventing a second one
+      // that disagrees.
+      driving:
+        deHasDriven &&
+        deLastMovingTs > 0 &&
+        repairNowMs - deLastMovingTs < DE_STATIONARY_CLOSE_MS,
+      // Same source as the heartbeat column and as the self-check
+      // input above. It answers the one question the verdict cannot:
+      // `denied` covers both "chose While Using" (still promptable)
+      // and "refused outright" (the OS will show nothing).
+      locationAuthorization: truth?.locationAuthorization ?? null,
+      ledger: readRepairLedger(),
+      exec: nativeRepairs(companyId),
+      save: writeRepairLedger,
+    });
     const res = await fetch("/api/mileage/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1117,77 +1233,24 @@ export async function sendHeartbeat(): Promise<void> {
         // Named rather than counted: a count says something is wrong, a
         // name says what to fix, and this string is what gets read in a
         // database row by someone who was not here today.
-        selfCheck: summarizeForHeartbeat(
-          evaluateSelfCheck({
-            // Platform from Capacitor, NOT from `truth`.
-            //
-            // truth is `ds ?? cached?.value ?? null`, i.e. the device
-            // status the plugin returns. When the plugin is DEAD there is
-            // no live read and no cache, so truth is null and this fell
-            // back to "web", every capability reported `unsupported`, and
-            // the summary came out "ok".
-            //
-            // The self-check was therefore inert on precisely the devices
-            // it exists to catch: Grace's iPhone, with two dead plugins,
-            // summarised as healthy. The flagship test passed only because
-            // its fixture hardcodes platform "ios", a state production
-            // could not reach.
-            platform: (() => {
-              const plat = cap?.getPlatform?.();
-              return plat === "ios" || plat === "android" ? plat : "web";
-            })(),
-            // outcome, not stage. getDeviceStatusProbed calls
-            // onStage("done") BEFORE checking whether a value came back,
-            // so a plugin that answers with nothing reaches "done" and
-            // would have been reported live while every device-truth
-            // field was missing. outcome distinguishes ok / null /
-            // unavailable / error / timeout, and it is already in this
-            // same payload.
-            deviceStatusOk: dsProbe.outcome === "ok",
-            deviceStatusMs: dsProbe.ms,
-            deviceStatusStage: dsProbe.stage,
-            geofenceArmState: geofence?.armState ?? null,
-            geofenceCount: geofence?.registeredCount ?? null,
-            // A 2 second time box around getGeofenceState collapses
-            // "no plugin", "threw" and "timed out" into one null. A
-            // backgrounded WebView times out routinely in this codebase,
-            // so treating that null as proof of a dead plugin would
-            // accuse the iOS registration bug on a healthy device. Only
-            // claim we looked when the read actually returned.
-            probed: geofence != null || dsProbe.outcome !== "timeout",
-            locationAuthorization: truth?.locationAuthorization ?? null,
-            // Same source as the heartbeat column four lines up, so the
-            // verdict and the raw value can never disagree. Null when the
-            // plugin has not answered, which the check reports as unknown
-            // rather than as "not throttled".
-            lowPowerMode: truth?.lowPowerMode ?? null,
-            // These were hardcoded null under a comment claiming car
-            // signals are "NOT fetched on this path". They are: carProbe
-            // is awaited earlier in this same function and its value is
-            // written to six columns of this very heartbeat, a few lines
-            // below. The comment was wrong, so two checks reported
-            // "unknown" forever and never ran in production.
-            //
-            // That is the same defect the platform bug was, in the same
-            // call site: the module is correct and the caller does not
-            // feed it. A check that cannot reach a verdict is worse than
-            // no check, because it occupies the slot where a real one
-            // would go.
-            //
-            // Worth wiring rather than deleting: bluetooth_permission is
-            // the check that distinguishes "the driver declined" from
-            // "we never showed the prompt", and the second is our bug.
-            // It sat broken with six paired cars precisely because those
-            // two look identical in the permission value alone.
-            bluetoothPermission: carProbe.value?.bluetoothPermission ?? null,
-            bluetoothPermissionAsked:
-              carProbe.value?.bluetoothPermissionAsked ?? null,
-            // outcome, not presence, for the same reason deviceStatusOk
-            // uses outcome above: a probe that returns nothing must not
-            // read as a plugin that answered.
-            carSignalsOk: carProbe.outcome === "ok",
-          }),
-        ),
+        selfCheck: summarizeForHeartbeat(selfCheckChecks),
+        // AND WHAT WE DID ABOUT IT. selfCheck above is the diagnosis;
+        // these two are the treatment, on the same row, so the pair can
+        // be read without a join.
+        //
+        // "none" is a healthy device. "<id>:ok" and "<id>:prompted" are
+        // an attempt made this beat. "<id>:healed" is the only proof a
+        // repair actually worked. "<id>:capped" is the repairer saying
+        // it has given up, which is the state that must never be
+        // silent: a supervisor that quits without saying so looks
+        // exactly like a device that was never broken.
+        selfRepair: repair.summary,
+        // Attempts this install has EVER made, across every fault,
+        // surviving both a heal and a reload. Without it a device that
+        // repaired itself and a device that never tried report the same
+        // thing, and "is the repairer running in production at all"
+        // cannot be answered from one row.
+        selfRepairAttempts: repair.attempts,
         exitProbeMs: exitProbe.ms,
         exitProbeStage: exitProbe.stage,
         // Was the app actually in the foreground when the probes ran?
