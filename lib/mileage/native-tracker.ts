@@ -58,6 +58,8 @@ import {
   getOsExitInfoProbed,
   readDeviceStatusCache,
   refreshDeviceStatusCache,
+  collectVehicleSignals,
+  clearVehicleSignals,
 } from "./device-status";
 import type { DeviceProbeOutcome, DeviceProbeStage } from "./device-status";
 import {
@@ -1019,6 +1021,39 @@ export async function sendHeartbeat(): Promise<void> {
       () => getCarSignalsProbed(),
       2_000,
     );
+    // THE VEHICLE-SIGNAL DRAIN.
+    //
+    // drainVehicleSignals, clearVehicleSignals and auditCaptureGap have
+    // existed in device-status.ts and in the iOS binary with ZERO
+    // callers. Nothing invoked them, so the native buffer filled and
+    // aged out and no row anywhere recorded a single vehicle signal.
+    // This is the missing consumer, and it goes HERE rather than in a
+    // new timer or a page effect for one reason: sendHeartbeat is the
+    // only path measured executing on both platforms in the field (497
+    // iOS beats and 41 Android beats over the last 7 days), and the
+    // failure this repo keeps repeating is wiring a consumer to a path
+    // that never runs.
+    //
+    // Time-boxed at 3s rather than 2s: unlike the other probes this one
+    // may also ask CoreMotion for a gap audit, which is a real query
+    // against seven days of history. Still boxed, because a heartbeat
+    // that never sends is worse than one missing a field.
+    //
+    // The platform comes from Capacitor, not from device truth. Reading
+    // it from `truth` is how the self-check ended up inert on exactly
+    // the devices it existed to catch.
+    const beatPlatform = (() => {
+      const p = cap?.getPlatform?.();
+      return p === "ios" || p === "android" ? p : "web";
+    })();
+    const vehicleProbe = await probeWithin(
+      async () => {
+        const value = await collectVehicleSignals(beatPlatform, Date.now());
+        return { value, outcome: value.outcome };
+      },
+      3_000,
+    );
+    const vehicle = vehicleProbe.value;
     const timerLagMs = Math.round(await timerLag);
     // Device truth, live if the probe answered and cached otherwise.
     // The cache is only ever written by a SUCCESSFUL read (see
@@ -1309,6 +1344,35 @@ export async function sendHeartbeat(): Promise<void> {
         carDisconnects: carProbe.value?.vehicleDisconnects ?? null,
         carBluetoothAdapter: carProbe.value?.bluetoothAdapter ?? null,
         carPendingSignals: carProbe.value?.pendingSignals ?? null,
+        // VEHICLE SIGNALS, drained from the iOS native buffer and folded
+        // into intervals by lib/mileage/signal-adapter.ts.
+        //
+        // Read vehicleProbe FIRST, exactly like carProbe: "error" or
+        // "timeout" is a finding about the bridge, "null" means the
+        // bridge answered and the buffer was empty, and only "ok" means
+        // signals actually arrived. Zero car connections have ever been
+        // recorded on either platform, so "null" forever is a live
+        // possibility and is itself the answer we are missing today.
+        vehicleProbe: vehicleProbe.outcome,
+        vehicleProbeMs: vehicleProbe.ms,
+        // The folded observations, validated server-side before they are
+        // stored. Never a distance: motion history holds no location.
+        vehicleSignals: vehicle
+          ? { observations: vehicle.observations, rejected: vehicle.rejected }
+          : null,
+        // Why a silent device is silent. CoreMotion denied is the single
+        // most likely explanation for an empty buffer, and without this
+        // it is indistinguishable from "the user did not drive".
+        motionAvailable: vehicle?.motionAvailable ?? null,
+        motionAuthorization: vehicle?.motionAuthorization ?? null,
+        // The capture-gap audit: what the OS says we were doing during a
+        // window we recorded nothing for. DURATION ONLY. Motion history
+        // contains no location, so this can establish that a drive
+        // happened and never where it went or how far, and a gap must be
+        // surfaced rather than filled.
+        motionAuditStatus: vehicle?.auditStatus ?? null,
+        motionAuditWindowS: vehicle?.auditWindowS ?? null,
+        motionGapAutomotiveMs: vehicle?.gapAutomotiveMs ?? null,
         // Learned-place geofence mesh. Without these, a device whose
         // mesh silently failed to register looks identical to one that
         // simply had no drives, which is the ambiguity that let a
@@ -1345,6 +1409,14 @@ export async function sendHeartbeat(): Promise<void> {
       .toISOString()
       .slice(11, 19)}`;
     writeHeartbeatDiag(res.ok ? "ok" : "http", String(res.status));
+    // Acknowledge the native buffer ONLY after the server took the data,
+    // the same discipline as drainNativeLocationBuffer. Clearing before
+    // this point would mean a failed upload silently destroys the only
+    // record that a drive was missed, which is worse than having no
+    // record at all. A duplicate read next beat costs nothing.
+    if (res.ok && vehicle && vehicle.upToTs > 0) {
+      await clearVehicleSignals(vehicle.upToTs);
+    }
   } catch (e) {
     trackerDiag.hbLastResult =
       "err:" + String((e as Error)?.message ?? e).slice(0, 60);
