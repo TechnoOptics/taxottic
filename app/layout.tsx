@@ -9,11 +9,27 @@ import { EdgeSwipeBack } from "@/components/EdgeSwipeBack";
 import { IOS_APP_ID } from "@/lib/app-stores";
 import "./globals.css";
 
+// NOT preloaded, deliberately. Fraunces is the display face for
+// `[data-skin="classic"]`, and that is only /firm and /admin (see
+// app/globals.css). Every screen the mobile app shows runs
+// `[data-skin="instrument"]`, which uses Archivo.
+//
+// Measured on the built app shell (/example, mobile viewport): five
+// woff2 files totalling 126,276 bytes are fetched, and only Hanken
+// Grotesk and Archivo ever resolve against an element. Preloading
+// Fraunces spent 36,860 bytes of highest-priority bandwidth on a
+// typeface that route never draws, on a native shell where every cold
+// start is a full network load.
+//
+// This does not remove the font. The @font-face stays, so /firm and
+// /admin still get Fraunces, fetched when the CSS actually matches,
+// under the `display: "swap"` below.
 const fraunces = Fraunces({
   variable: "--font-fraunces",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
+  preload: false,
 });
 
 // Body / UI typeface. Hanken Grotesk, a humanist grotesque with warmth
