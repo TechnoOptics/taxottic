@@ -1121,7 +1121,31 @@
 // (components/mileage/RecoverLostDrives.tsx), which is new client JS
 // calling a new route. A phone on the stale bundle simply would not have
 // the control, which is the whole point of the sweep being reachable.
-const CACHE_VERSION = "v190";
+// v191: the two native buffers stop posting the same drive twice.
+//
+// Both buffers hold the SAME fix stream, and the v189 coordinator
+// drained them one after the other. Production: two ingest POSTs
+// 0.618 s apart, each carrying exactly 1630 points, all 1630 pairs
+// coordinate-identical and offset by exactly 0.6310 s with standard
+// deviation 0.0000. Ingest is idempotent on
+// (driver_user_id, company_id, captured_at) and 631 ms is not a
+// conflict, so both copies stored; merged with the live stream the pool
+// held 1263 of 3351 transitions above 60 m/s, worst about 88783 m/s, and
+// segmented to one 1527 mile / 25 minute trip that isPlausibleTrip
+// correctly refused. The drive simply never appeared.
+//
+// The bump is load-bearing for the usual reason and one extra. The fix
+// is entirely client JS (lib/mileage/drain-coverage.ts plus both drains
+// and the coordinator), so a phone on the stale bundle keeps posting
+// both copies. And that phone goes on CONTAMINATING the shared pool for
+// its own driver, so leaving it behind is not a private cost to it.
+//
+// The same bundle carries the two counters that prove the suppression is
+// not inert, native_drain_checked and native_drain_suppressed, sent from
+// native-tracker's heartbeat payload. A phone on the old bundle reports
+// NULL for both, which is why the reviewer query filters them out rather
+// than reading a NULL as healthy.
+const CACHE_VERSION = "v191";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

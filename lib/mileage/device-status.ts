@@ -35,6 +35,7 @@
 import { registerPlugin } from "@capacitor/core";
 import { ensureHeartbeatTimer } from "./heartbeat-timer";
 import { UPLOAD_BATCH_MAX } from "./flush-policy";
+import type { CoverageCheck } from "./drain-coverage";
 import { postAccepted, postJson } from "./post-json";
 
 export type DeviceStatus = {
@@ -642,8 +643,19 @@ export async function setBackgroundRevival(
  * Called from lib/mileage/native-drain.ts rather than only at app
  * launch. See the matching notes on drainGeofenceBuffer for why the
  * batch is capped and why the POST declares itself backlog.
+ *
+ * `covered` reports which of these fixes the SIBLING native buffer just
+ * put on the server in this same pass. Both buffers hold the same fix
+ * stream on a real device, and posting both stored one drive twice under
+ * two sub-second timestamp phases, which is what made the merged pool
+ * unsegmentable. Covered fixes are skipped rather than posted, and the
+ * batch high water mark is still cleared because those fixes are already
+ * on the server. See ./drain-coverage for why the coordinate rather than
+ * the timestamp is the identity.
  */
-export async function drainNativeLocationBuffer(): Promise<number> {
+export async function drainNativeLocationBuffer(
+  covered?: CoverageCheck,
+): Promise<number> {
   const plugin = (await guard())?.p ?? null;
   if (!plugin) return 0;
   let points: Array<{
@@ -668,6 +680,28 @@ export async function drainNativeLocationBuffer(): Promise<number> {
   points.sort((a, b) => a.ts - b.ts);
   points = points.slice(0, UPLOAD_BATCH_MAX);
   const maxTs = points.reduce((a, p) => Math.max(a, p.ts), 0);
+  // Whatever the sibling drain already confirmed on the server does not
+  // need posting again. Everything else in the window does, including
+  // any fix the sibling buffer never held: the two buffers held
+  // identical sets in the case that was measured, and nothing guarantees
+  // that always holds.
+  const fresh = covered
+    ? points.filter((p) => !covered(companyId, p))
+    : points;
+  if (fresh.length === 0) {
+    // Every fix in this window is on the server already, via the batch
+    // the sibling drain confirmed. Clearing without a POST of our own is
+    // the point of the whole change; leaving them on disk would just
+    // repeat the double post in two minutes. No ensureHeartbeatTimer
+    // here: nothing reached the server through THIS path, and the drain
+    // that did post armed it.
+    try {
+      await plugin.clearBufferedLocations({ upToTs: maxTs });
+    } catch {
+      // Still on disk, still covered, next drain skips them again.
+    }
+    return 0;
+  }
   try {
     // Same reason as geofence.ts: this drain is a real ingest path, so it
     // must arm the heartbeat too. A device draining the native buffer was
@@ -675,15 +709,19 @@ export async function drainNativeLocationBuffer(): Promise<number> {
     ensureHeartbeatTimer();
     const res = await postJson("/api/mileage/ingest", {
       companyId,
-      points,
+      points: fresh,
       backlog: true,
     });
     if (!postAccepted(res)) return 0;
     // Clear ONLY after the server confirmed, so a failed upload can
     // never lose a drive, and only up to the newest point we actually
     // POSTED, so the cap does not silently delete the tail it declined.
+    // Clearing to maxTs rather than to the newest FRESH point is correct
+    // and load-bearing: every fix at or below it was either just posted
+    // here or confirmed by the sibling batch, and the two interleave, so
+    // a lower water mark would strand covered fixes to be posted forever.
     await plugin.clearBufferedLocations({ upToTs: maxTs });
-    return points.length;
+    return fresh.length;
   } catch {
     return 0;
   }
