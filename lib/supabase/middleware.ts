@@ -34,6 +34,15 @@ const PUBLIC_PATHS = [
   // definition: anyone hitting /get has no account yet, so bouncing it
   // through /login would defeat the entire point of the link.
   "/get",
+  // Contractor W-9 collection. The recipient is an outside contractor
+  // who by definition has no Taxottic account, so a bounce through
+  // /login makes the whole flow unusable and the emailed link dead.
+  // The signed token in the URL IS the authentication: the page calls
+  // `lookup_w9_request` with a service client and notFound()s when the
+  // token does not resolve, so an unknown token gets a 404 rather than
+  // any firm data. The `startsWith` check covers both /w9/<token> and
+  // /w9/<token>/thank-you.
+  "/w9",
   "/example",
   "/manifest.webmanifest",
   "/icon.svg",
