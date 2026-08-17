@@ -11,6 +11,10 @@ export const RECLASSIFY_ALLOWED: Classification[] = [
   "business",
   "personal",
   "unclassified",
+  // Excluded from the log and every total, deduction forced to 0 by
+  // tripDeductionCents (which returns 0 for anything non-business).
+  // Reversible on purpose: it is a one-tap control on a phone.
+  "passenger",
 ];
 
 export type ReclassifyResult =

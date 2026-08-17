@@ -50,7 +50,18 @@ export type Place = {
   label?: string;
 };
 
-export type Classification = "business" | "personal" | "unclassified";
+/**
+ * "passenger" means the user was RIDING, not driving. The phone cannot
+ * tell the two apart, so this is the driver's correction. It is excluded
+ * from the log and from every total, its deduction is always 0, and the
+ * row is deliberately kept: deleting it would leave an unexplained gap
+ * in the day's GPS trail and a mis-tap would be unrecoverable.
+ */
+export type Classification =
+  | "business"
+  | "personal"
+  | "unclassified"
+  | "passenger";
 
 // --- Tunables (documented; safe to adjust with a test update) ---
 
