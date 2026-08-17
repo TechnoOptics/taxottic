@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { PUBLIC_PAGES } from "./public-pages";
 
 /**
  * Visual-regression snapshots.
@@ -22,18 +23,7 @@ import { test, expect } from "@playwright/test";
  * empty) + masking of live values before their screenshots are stable.
  */
 
-const PAGES: { name: string; path: string }[] = [
-  { name: "home", path: "/" },
-  { name: "pricing", path: "/pricing" },
-  { name: "calculators-hub", path: "/calculators" },
-  { name: "calc-self-employment-tax", path: "/calculators/self-employment-tax" },
-  { name: "calc-effective-tax-rate", path: "/calculators/effective-tax-rate" },
-  { name: "calc-mileage-deduction", path: "/calculators/mileage-deduction" },
-  { name: "guide-quarterly", path: "/guides/quarterly-estimated-taxes-explained" },
-  { name: "compare-hub", path: "/compare" },
-];
-
-for (const p of PAGES) {
+for (const p of PUBLIC_PAGES) {
   test(`visual: ${p.name}`, async ({ page }) => {
     await page.goto(p.path, { waitUntil: "networkidle" });
     // Web fonts must be ready or text metrics differ between runs.

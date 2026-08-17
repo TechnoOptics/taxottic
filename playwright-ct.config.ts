@@ -27,7 +27,19 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
   expect: {
-    toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: "disabled" },
+    // Same per-pixel cutoff as the page suite, for the same reason and
+    // with a wider margin: see the long note in playwright.config.ts.
+    // Playwright's default threshold of 0.2 cannot see a ground-colour
+    // change, which is exactly the kind of regression a component
+    // baseline exists to catch. These 14 snapshots came out byte-identical
+    // across five consecutive runs on the CI image AND on macOS, and
+    // byte-identical to the committed baselines, so the sharper cutoff
+    // costs nothing here at all.
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.02,
+      animations: "disabled",
+    },
   },
   use: {
     ctPort: 3200,
