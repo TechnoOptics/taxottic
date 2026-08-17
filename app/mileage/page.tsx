@@ -29,7 +29,10 @@ import {
   assessMileageTrackingHealth,
 } from "@/lib/mileage/health";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
-import { settleWithinBudget } from "@/lib/mileage/finalize-freshness";
+import {
+  RENDER_FRESHNESS_WINDOW_MS,
+  settleWithinBudget,
+} from "@/lib/mileage/finalize-freshness";
 import { FinalizeSettleRefresh } from "@/components/mileage/FinalizeSettleRefresh";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
@@ -105,11 +108,21 @@ export default async function MileagePage({
   // client, which waits for that single run and refreshes ONCE. A run that
   // finished inside the budget leaves this false and costs no second
   // render at all.
+  //
+  // The WINDOW is what makes that budget affordable. It used to be 7
+  // days, which made finalize page ~6,700 rows of permanently-unconsumed
+  // staging residue out of PostgREST on every single load (7 sequential
+  // HTTP round trips, 1.1-1.5s measured) and create nothing, because the
+  // cron and the ingest path had already processed all of it. See
+  // RENDER_FRESHNESS_WINDOW_MS for why hours is the right order of
+  // magnitude here and which paths cover the rest.
   let finalizeOutstanding = false;
   if (company) {
     const { finished } = await settleWithinBudget(
       finalizeUserTrips(admin, user.id, company.id, {
-        sinceIso: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+        sinceIso: new Date(
+          Date.now() - RENDER_FRESHNESS_WINDOW_MS,
+        ).toISOString(),
         // Never sever a drive that is still in progress; and the user
         // is looking at the page, so no push ping for what they see.
         forceClose: false,
@@ -176,14 +189,6 @@ export default async function MileagePage({
     drivers.find((d) => d.userId === viewingDriverId)?.label ?? null;
   const showDriverPicker = isManager && drivers.length >= 2;
 
-  // Team drive-tracking health (manager-only), computed from raw uploads
-  // so it is accurate even for a teammate on an old build. Surfaces a
-  // driver whose phone went silent or has been parked, the failure that
-  // used to go unnoticed until a week of drives had already gone missing.
-  const teamHealth =
-    isManager && drivers.length >= 1
-      ? await loadTeamTrackingHealth(admin, company!.id, drivers, Date.now())
-      : [];
   // Driver display names for the map legend + rollup (strip the "· you"
   // / "· Dept" suffixes the picker label carries).
   const driverNameById = new Map(
@@ -218,28 +223,96 @@ export default async function MileagePage({
   // RPC returns a bounded, evenly-strided sample that still reaches each
   // route's true start + end.
   const pointsByTrip = new Map<string, Pt[]>();
+
+  // Tracker-status diagnostics are only meaningful for the self view:
+  // "is YOUR tracker running" says nothing useful when a manager is
+  // reviewing a teammate's log, and TrackerStatus is hidden there.
+  const wantsSelfDiagnostics = Boolean(company) && viewingSelf;
+  const wantsTeamHealth = Boolean(company) && isManager && drivers.length >= 1;
+
+  // These six reads are mutually independent: they hit different tables
+  // and not one of them consumes another's result. They used to be
+  // awaited one after another, so the page paid the SUM of six round
+  // trips (measured against the live account: 762 ms) to learn six
+  // unrelated facts. Issued together it pays the slowest single one
+  // (measured 247 ms). The two reads that genuinely do have a dependency
+  // stay sequential below: the polylines need the trip ids, and the
+  // recovery count needs the health verdict.
+  const [scopedTrips, placeRes, lastPointRes, lastTripRes, selfHealth, teamHealth] =
+    await Promise.all([
+      company
+        ? // PRIVACY. Every restriction is applied in the query, server
+          // side: your own drives come back whole, anyone else's are
+          // narrowed to confirmed business trips. Nothing personal is
+          // fetched and then hidden. See lib/mileage/team-scope.ts +
+          // team-scope.test.ts; RLS does NOT enforce this, a manager may
+          // read every trip in the company, so these filters are the only
+          // barrier.
+          loadScopedTrips<ServerTripRow>(admin, {
+            companyId: company.id,
+            scope,
+            sinceIso,
+          })
+        : Promise.resolve([] as ServerTripRow[]),
+      company
+        ? admin
+            .from("mileage_places")
+            .select("id, kind, label, lat, lng")
+            .eq("company_id", company.id)
+        : Promise.resolve({ data: null }),
+      // Most recent GPS point ingested by THIS user, across any company
+      // they belong to. mileage_points has no driver_user_id; join
+      // through the trip. A single 1-row fetch, so the page render cost
+      // is constant regardless of how many points exist.
+      wantsSelfDiagnostics
+        ? admin
+            .from("mileage_points")
+            .select("captured_at, trip:mileage_trips!inner(driver_user_id)")
+            .eq("trip.driver_user_id", user.id)
+            .order("captured_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      wantsSelfDiagnostics
+        ? admin
+            .from("mileage_trips")
+            .select("started_at")
+            .eq("driver_user_id", user.id)
+            .order("started_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      // Tracking-health check (self only, you can't fix another driver's
+      // phone). When drives aren't being captured, warn + offer recovery.
+      wantsSelfDiagnostics
+        ? assessMileageTrackingHealth(admin, user.id, company!.id)
+        : Promise.resolve(null),
+      // Team drive-tracking health (manager-only), computed from raw
+      // uploads so it is accurate even for a teammate on an old build.
+      // Surfaces a driver whose phone went silent or has been parked, the
+      // failure that used to go unnoticed until a week of drives had
+      // already gone missing.
+      wantsTeamHealth
+        ? loadTeamTrackingHealth(admin, company!.id, drivers, Date.now())
+        : Promise.resolve([]),
+    ]);
+
   if (company) {
-    // PRIVACY. Every restriction is applied in the query, server side:
-    // your own drives come back whole, anyone else's are narrowed to
-    // confirmed business trips. Nothing personal is fetched and then
-    // hidden. See lib/mileage/team-scope.ts + team-scope.test.ts; RLS
-    // does NOT enforce this, a manager may read every trip in the
-    // company, so these filters are the only barrier.
     // The privacy strip feeds the passenger partition DIRECTLY, so no name
     // in scope ever holds the unpartitioned rows for a later edit to
     // render by accident. A teammate's row can never be a passenger one
     // anyway (loadScopedTrips restricts foreign drives to business), so
     // everything held back here is the viewer's own.
     ({ logged: trips, excluded: excludedTrips } = partitionLoggedTrips(
-      stripForeignPrivateTrips(
-        await loadScopedTrips<ServerTripRow>(admin, {
-          companyId: company.id,
-          scope,
-          sinceIso,
-        }),
-        user.id,
-      ),
+      stripForeignPrivateTrips(scopedTrips, user.id),
     ));
+
+    places = (placeRes.data ?? []) as unknown as MapPlace[];
+    lastPointISO =
+      (lastPointRes.data as { captured_at?: string } | null)?.captured_at ??
+      null;
+    lastTripISO =
+      (lastTripRes.data as { started_at?: string } | null)?.started_at ?? null;
 
     if (trips.length > 0) {
       // PostgREST truncates ANY response at max-rows (1000). 500 trips x
@@ -268,42 +341,6 @@ export default async function MileagePage({
             { lat: r.lat, lng: r.lng, captured_at: r.captured_at },
           ]);
       }
-    }
-
-    const { data: placeData } = await admin
-      .from("mileage_places")
-      .select("id, kind, label, lat, lng")
-      .eq("company_id", company.id);
-    places = (placeData ?? []) as unknown as MapPlace[];
-
-    // Tracker-status diagnostic, most recent GPS point ingested by
-    // THIS user, across any company they belong to. mileage_points
-    // doesn't have driver_user_id; join through the trip. Using a
-    // single 1-row fetch so the page render cost is constant
-    // regardless of how many points exist. Only computed for the
-    // self view, "is YOUR tracker running" is meaningless when a
-    // manager is reviewing another driver's log (TrackerStatus is
-    // hidden in that case).
-    if (viewingSelf) {
-      const { data: lastPoint } = await admin
-        .from("mileage_points")
-        .select("captured_at, trip:mileage_trips!inner(driver_user_id)")
-        .eq("trip.driver_user_id", user.id)
-        .order("captured_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      lastPointISO =
-        (lastPoint as { captured_at?: string } | null)?.captured_at ?? null;
-
-      const { data: lastTrip } = await admin
-        .from("mileage_trips")
-        .select("started_at")
-        .eq("driver_user_id", user.id)
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      lastTripISO =
-        (lastTrip as { started_at?: string } | null)?.started_at ?? null;
     }
   }
 
@@ -372,21 +409,19 @@ export default async function MileagePage({
       })()
     : [];
 
-  // Tracking-health check (self only, you can't fix another driver's
-  // phone). When drives aren't being captured, warn + offer recovery.
-  let health: Awaited<ReturnType<typeof assessMileageTrackingHealth>> | null =
-    null;
+  // The health verdict itself was fetched in the parallel group above.
+  // Only the recovery count is left here, because it is the one read that
+  // genuinely depends on that verdict: it is asked for solely to size the
+  // "recover lost drives" offer, and a healthy tracker never shows one.
+  const health = selfHealth;
   let recoverable = 0;
-  if (company && viewingSelf) {
-    health = await assessMileageTrackingHealth(admin, user.id, company.id);
-    if (health.status === "degraded") {
-      recoverable = await countRecoverableApproxTrips(
-        admin,
-        user.id,
-        company.id,
-        new Date(Date.now() - 90 * 86_400_000).toISOString(),
-      );
-    }
+  if (company && viewingSelf && health?.status === "degraded") {
+    recoverable = await countRecoverableApproxTrips(
+      admin,
+      user.id,
+      company.id,
+      new Date(Date.now() - 90 * 86_400_000).toISOString(),
+    );
   }
 
   return (

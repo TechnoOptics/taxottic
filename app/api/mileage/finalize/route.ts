@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getMyCompanies } from "@/lib/auth";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
+import { RENDER_FRESHNESS_WINDOW_MS } from "@/lib/mileage/finalize-freshness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,8 +50,12 @@ export async function POST() {
     const result = await finalizeUserTrips(admin, user.id, companyId, {
       // Identical window and flags to the page render: never sever a drive
       // that is still in progress, and no push for a drive the user is
-      // already looking at.
-      sinceIso: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+      // already looking at. This route exists to finish the SAME run the
+      // render started, so the window is shared rather than restated, and
+      // finalize-freshness.test.ts pins the two together.
+      sinceIso: new Date(
+        Date.now() - RENDER_FRESHNESS_WINDOW_MS,
+      ).toISOString(),
       forceClose: false,
       push: false,
     });
