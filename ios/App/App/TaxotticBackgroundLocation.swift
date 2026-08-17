@@ -153,6 +153,7 @@ import CoreLocation
         manager.distanceFilter = kCLDistanceFilterNone
         manager.pausesLocationUpdatesAutomatically = false
         manager.activityType = .automotiveNavigation
+        refreshServicesEnabled()
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────
@@ -210,9 +211,74 @@ import CoreLocation
         UserDefaults.standard.string(forKey: kCompanyId) ?? ""
     }
 
+    // ── Device-wide Location Services switch ───────────────────────
+    //
+    // `CLLocationManager.locationServicesEnabled()` is a SYNCHRONOUS
+    // XPC round trip, and iOS raises a runtime issue when it is called
+    // on the main thread ("This method can cause UI unresponsiveness if
+    // invoked on the main thread"). Every caller in this class is on the
+    // main thread: CoreLocation delivers its callbacks there, and the
+    // Capacitor bridge calls in from there too. The worst case is the
+    // one this whole file exists for: a background relaunch gets about
+    // 10 seconds of runtime, and blocking on IPC spends it in exactly
+    // the window that matters most.
+    //
+    // So the switch is never read synchronously, and no check is
+    // weakened by that. Two facts make it work:
+    //
+    //  1. `authorizationStatus` already answers the question in every
+    //     case but one. CLLocationManager.h documents
+    //     kCLAuthorizationStatusDenied as "User has explicitly denied
+    //     authorization for this application, or location services are
+    //     disabled in Settings", so a status that is NOT .denied can
+    //     only exist while the device-wide switch is on. That is why
+    //     hasAlwaysAuthorization() below needs no services test at all:
+    //     .authorizedAlways already implies one.
+    //
+    //  2. The one ambiguous case (.denied, but which of the two?) only
+    //     ever changes the REASON recorded for a refusal, never
+    //     whether capture starts. So it is answered from a snapshot
+    //     taken off the main thread, refreshed on construction and
+    //     whenever authorization changes, which is precisely when
+    //     flipping the device-wide switch reaches us.
+
+    /// Deliberately NOT `queue`: that one is drained with `queue.sync`
+    /// from the main thread (drainBuffered, bufferedCount), so parking
+    /// a blocking XPC call on it would reintroduce the main-thread
+    /// stall through the back door.
+    private let servicesQueue = DispatchQueue(
+        label: "com.taxottic.bglocation.services", qos: .utility)
+    private let servicesLock = NSLock()
+    /// Optimistic until the first off-main-thread read lands. Being
+    /// wrong here costs one mislabelled refusal reason, never a
+    /// capture.
+    private var servicesEnabled = true
+
+    /// Re-read the switch off the main thread. Fire and forget.
+    private func refreshServicesEnabled() {
+        servicesQueue.async { [weak self] in
+            let enabled = CLLocationManager.locationServicesEnabled()
+            guard let self = self else { return }
+            self.servicesLock.lock()
+            self.servicesEnabled = enabled
+            self.servicesLock.unlock()
+        }
+    }
+
+    /// Whether the device-wide switch is on, answered without blocking
+    /// the caller. See the note above.
+    private func locationServicesAreOn() -> Bool {
+        guard manager.authorizationStatus == .denied else { return true }
+        // Ambiguous status. Answer from the last off-main-thread read
+        // and refresh so the next caller has the truth.
+        refreshServicesEnabled()
+        servicesLock.lock()
+        defer { servicesLock.unlock() }
+        return servicesEnabled
+    }
+
     private func hasAlwaysAuthorization() -> Bool {
-        CLLocationManager.locationServicesEnabled()
-            && manager.authorizationStatus == .authorizedAlways
+        manager.authorizationStatus == .authorizedAlways
     }
 
     // ── Capture ────────────────────────────────────────────────────
@@ -334,6 +400,11 @@ import CoreLocation
     }
 
     public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        // Turning the device-wide switch off forces this app's status to
+        // .denied, so this callback is also how a services-off flip
+        // reaches us. Re-read the snapshot off the main thread here and
+        // nowhere else on the hot path.
+        refreshServicesEnabled()
         // Losing "Always" (the recurring iOS failure) silently disarms
         // revival; regaining it re-arms without user action.
         if hasAlwaysAuthorization() {
@@ -725,7 +796,7 @@ import CoreLocation
                              outcome: outcomeStartDenied, detail: "tracking_disabled")
             return
         }
-        guard CLLocationManager.locationServicesEnabled() else {
+        guard locationServicesAreOn() else {
             recordCapture(state: captureServicesOff, detail: "location services off",
                           running: false, force: true)
             recordTransition(placeId: placeId, enter: false,
@@ -873,7 +944,7 @@ import CoreLocation
         guard UserDefaults.standard.bool(forKey: kEnabled) else {
             return ["started": false, "reason": "tracking_disabled"]
         }
-        guard CLLocationManager.locationServicesEnabled() else {
+        guard locationServicesAreOn() else {
             recordCapture(state: captureServicesOff, detail: "location services off",
                           running: false, force: true)
             return ["started": false, "reason": "location_services_off"]
