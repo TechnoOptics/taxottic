@@ -1175,7 +1175,22 @@
 // bundle keeps a tracker that can only report a fault it is now able to
 // repair, and the new self_repair column stays null on exactly the
 // devices the repairer was written for.
-const CACHE_VERSION = "v193";
+// v194: four built, bridged, registered iOS functions gain a caller.
+//
+// drainVehicleSignals, clearVehicleSignals and auditCaptureGap have
+// shipped in the iOS binary on a bridge that demonstrably works, and
+// NOTHING in the app has ever invoked one of them. The native buffer
+// filled, aged out, and no row anywhere recorded a vehicle signal.
+// sendHeartbeat now drains it, folds the instants into intervals, and
+// posts the result, acknowledging the buffer only after the server
+// accepts it.
+//
+// The bump is load-bearing rather than housekeeping. native-tracker.ts
+// and device-status.ts are WebView client JS: on the stale bundle the
+// drain simply does not exist, so the phone keeps reporting nothing and
+// the new columns fill with nulls that read as "no data yet", which is
+// the exact silence this change was written to break.
+const CACHE_VERSION = "v194";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

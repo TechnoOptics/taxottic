@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { parseSignalReport } from "@/lib/mileage/signals";
 import { WEB_BUILD_ID } from "@/lib/build-id";
 
 export const runtime = "nodejs";
@@ -194,6 +195,45 @@ export async function POST(req: NextRequest) {
     car_disconnects: num("carDisconnects"),
     car_bluetooth_adapter: str("carBluetoothAdapter", 16),
     car_pending_signals: num("carPendingSignals"),
+    // VEHICLE SIGNALS drained from the iOS native buffer.
+    //
+    // The four functions that produce this (drainVehicleSignals,
+    // clearVehicleSignals, queryMotionHistory, auditCaptureGap) shipped
+    // in the iOS binary with ZERO callers: built, bridged, registered,
+    // and never once invoked. lib/mileage/vehicle-signal-wiring.test.ts
+    // holds the call site in place; these columns are where the answer
+    // lands.
+    //
+    // Read vehicle_probe FIRST, like car_probe. "null" means the bridge
+    // answered and the buffer was empty, which given that zero car
+    // connections have ever been recorded on either platform is a real
+    // and expected outcome, and is itself the finding.
+    vehicle_probe: oneOf("vehicleProbe", PROBE_VALUES),
+    vehicle_probe_ms: num("vehicleProbeMs"),
+    // Client-controlled input, so it is PARSED rather than stored.
+    // parseSignalReport is the only thing between an arbitrary JSON blob
+    // and this column: it drops unknown kinds, signals the claimed
+    // platform cannot produce, future timestamps and backwards
+    // intervals, and records each refusal with a reason so a producer
+    // emitting garbage is visible instead of looking like a quiet
+    // device. Null when the client sent nothing at all, which is what an
+    // app build older than this looks like.
+    vehicle_signals: body.vehicleSignals
+      ? parseSignalReport(body.vehicleSignals, Date.now())
+      : null,
+    // Why a silent device is silent. CoreMotion denied is the most
+    // likely explanation for an empty buffer, and without it that is
+    // indistinguishable from "the driver did not drive".
+    motion_available:
+      typeof body.motionAvailable === "boolean" ? body.motionAvailable : null,
+    motion_authorization: str("motionAuthorization", 20),
+    // The capture-gap audit. DURATION ONLY: motion history contains no
+    // location, so this says a drive happened and never where it went.
+    // Nothing downstream may turn it into a distance, because a
+    // fabricated mile is worse than a missed one.
+    motion_audit_status: str("motionAuditStatus", 20),
+    motion_audit_window_s: num("motionAuditWindowS"),
+    motion_gap_automotive_ms: num("motionGapAutomotiveMs"),
     tracking_enabled: body.trackingEnabled === true,
     buffer_size: num("bufferSize") ?? 0,
     last_cb_age_s: num("lastCbAgeS"),
