@@ -444,6 +444,17 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Regenerate page-VR baselines
+        # The npm script passes `--update-snapshots=all` for a reason worth
+        # not rediscovering: bare `--update-snapshots` means Playwright's
+        # `changed` preset, which rewrites a baseline ONLY when the fresh
+        # render fails the comparison. Anything the comparator considers a
+        # match keeps its OLD file, so one regeneration run can emit a set
+        # that is half new design and half previous design, and report
+        # success. That happened on the Instrument skin: the ground moved
+        # from cream to cool paper, a change smaller than pixelmatch's
+        # default per-pixel threshold, so pricing and calculators-hub kept
+        # cream baselines while home was rewritten. Guarded by
+        # lib/visual/baseline-regeneration.test.ts.
         run: npm run e2e:visual:update
         env:
           NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
