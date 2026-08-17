@@ -63,7 +63,10 @@ export function AppDownloadBanner() {
     // Taking it out of flow removes the shift by construction: it can
     // now hydrate whenever it likes and move nothing.
     <div
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-forest-100 bg-cream/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(18,26,42,0.35)]"
+      // bg-[var(--color-cream)]/95, not bg-cream/95: the latter is baked to a
+      // literal #fbf7e9 by `@theme inline` and cannot follow the skin, so it
+      // laid a warm band across the full width of a cool-paper page.
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-forest-100 bg-[var(--color-cream)]/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(18,26,42,0.35)]"
       style={{
         // Clear the iOS home indicator. Same expression the rest of the
         // app uses, so this sits correctly in a PWA on a notched phone.

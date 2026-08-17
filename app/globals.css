@@ -157,9 +157,40 @@ html[data-theme="light"] {
      attribute specificity (0,1,0), which outranks the element-level base
      rule (0,0,1).
 
-     KNOWN LIMIT: `bg-cream` and friends are also inlined utilities and
-     will NOT follow this. Only `bg-[var(--color-cream)]` arbitrary values
-     do. Moving those onto tokens is a separate, mechanical pass. */
+     THE SAME LIMIT APPLIES TO `bg-cream` AND FRIENDS. They are inlined
+     utilities too, so they ship as a literal #fbf7e9 and will NOT follow
+     this token. Only `bg-[var(--color-cream)]` arbitrary values do.
+
+     `--color-cream` is the ONLY literal token the skin redefines, so it is
+     the only place inlining bites. --background / --surface / --foreground
+     and the rest reach Tailwind as `--color-*: var(--…)`, and `inline`
+     copies the var() REFERENCE into the utility, which stays live. The
+     forest-* and gold-* ramps are never redefined by any skin, so they are
+     identical inlined or not.
+
+     Converted where the cream was acting as the page GROUND, since that is
+     where a stale #fbf7e9 lays a visible warm band on cool paper. Measured
+     on the skinned surface, warmth = R-B, cool paper is -6 and cream +18:
+       app/pricing/page.tsx     footer, 1280x175 on the ground, +18
+       components/AppDownloadBanner.tsx  fixed bottom band, 1280x65, +18
+       app/page.tsx             ground-coloured chip, 197x26, +18
+       app/error.tsx            min-h-screen ground tint
+       components/HumanCheck.tsx  unchecked box, ground colour on a card
+
+     DELIBERATELY NOT converted, and this is not an oversight:
+       - `text-cream` / `border-cream/*` are light ink on navy, not ground.
+         --color-cream is #0c1017 in this skin's dark theme, so converting
+         them would put near-black text on a navy header.
+       - `bg-cream` chips that sit ON navy (the hero segmented control, the
+         /firms CTA, ThemeToggle's selected segment, which even pins
+         `dark:bg-cream` to stay light) are light-on-dark for the same
+         reason and must not invert.
+       - `bg-cream/30..70` inside white cards composite to at most a 5/255
+         channel delta from the correct value. Measured below the visible
+         threshold, and they sit on white rather than beside the ground, so
+         there is no seam. Converting them would also drop them out of the
+         `html[data-theme="dark"] .bg-cream\/NN` overrides further down this
+         file for no visible gain. */
   background-color: var(--background);
   color: var(--foreground);
 }
