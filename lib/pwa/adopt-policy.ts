@@ -22,6 +22,29 @@
  *
  * Kept as a pure function, separate from the component, so the invariant is
  * covered by a node test rather than resting on a one-line guard nobody checks.
+ *
+ * RE-EXAMINED 2026-08-17, AND DELIBERATELY LEFT ALONE. The prompt was a
+ * reading that looked like a stalled rollout: ten distinct web_build values
+ * live across two drivers, and one heartbeat in 257 carrying that morning's
+ * fix. Measured against the heartbeat history, neither held up. Pairing every
+ * (device, web_build) window against every other on the same device returns
+ * zero overlaps, so the ten builds are sequential and no device has ever run
+ * two at once. The 1-in-257 is beat volume, not coverage: a hidden phone emits
+ * 12 beats an hour and one device contributed 223 of the 257 rows, while the
+ * fix had in fact reached 1 of the 2 devices about 45 minutes after merge.
+ *
+ * The one device that was behind had 205 of its last 206 beats at
+ * probe_visibility 'hidden', across 18 hours spanning five deploys. It had no
+ * foreground moment in which to update. So the lag was this policy working,
+ * not failing, and the visible path already delivers in minutes.
+ *
+ * If you are here to shorten rollout: there is no lever. A page takes a new
+ * bundle by reloading, and reloading a hidden page is the outage described
+ * above. What was actually missing was the ability to SEE the lag, which is
+ * now mileage_device_heartbeats.server_build (see
+ * supabase/migrations/20260818020000_heartbeat_server_build.sql). Read that
+ * before concluding an empty diagnostic counter means the fix works. It much
+ * more often means the fix is not on the phone yet.
  */
 export function shouldAdoptWaitingWorker(opts: {
   /** document.visibilityState at the moment adoption is considered. */

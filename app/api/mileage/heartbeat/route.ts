@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { WEB_BUILD_ID } from "@/lib/build-id";
 
 export const runtime = "nodejs";
 
@@ -146,6 +147,23 @@ export async function POST(req: NextRequest) {
     // without this a "the fix does not work" report is indistinguishable
     // from "that device never got the fix". Those want opposite responses.
     web_build: str("webBuild", 16),
+    // The bundle the SERVER is running, so the row carries both halves of
+    // the rollout comparison and staleness is a column test rather than an
+    // inference against git. See
+    // supabase/migrations/20260818020000_heartbeat_server_build.sql.
+    //
+    // Stamped here, deliberately, and NOT read off the request. The thing
+    // being measured is that client changes do not reach devices, so a
+    // reference value that had to travel in the payload would be missing on
+    // precisely the stalest phones and would read as "no data" rather than
+    // "badly behind". This works on every device the moment it deploys.
+    //
+    // The pair only means anything while the two fields come from opposite
+    // sides. Set web_build from here too and every row compares equal, the
+    // fleet reads 100% current forever, and the next unrolled fix looks
+    // like a working one. lib/mileage/rollout-observability.test.ts holds
+    // both halves of that in place.
+    server_build: WEB_BUILD_ID,
     // Which DEVICE wrote this. The status row stays one per (driver,
     // company) because three readers use maybeSingle() or a
     // driver-keyed Map and would break on more; this only names the
