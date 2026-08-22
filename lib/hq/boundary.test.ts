@@ -19,6 +19,8 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   TENANT_TABLES,
   TENANT_REACHABLE_TABLES,
@@ -28,6 +30,8 @@ import {
   migrationSql,
   stripSqlComments,
 } from "./catalog";
+
+const REPO_ROOT = join(__dirname, "..", "..");
 
 /** All migrations concatenated, comments already stripped. */
 const ALL_SQL = migrationSql()
@@ -187,4 +191,74 @@ describe("no tenant table escapes the barrier", () => {
       expect(barrieredTables(), `${t} lost its direct barrier`).toContain(t);
     }
   });
+});
+
+/**
+ * The word `sandbox` means three different things in this product.
+ *
+ * Section 6.3, revision C: "The column name in that line is illustrative, not
+ * literal. ... If the word `sandbox` already means something else in your
+ * product, an environment for instance, then reusing it for a per-row flag is
+ * a bug waiting for a tired afternoon: name the column something else, say so
+ * in one comment on the column, and you are compliant. ... A product that has
+ * already added a column named exactly `sandbox` is correct as built and has
+ * nothing to change."
+ *
+ * This product is in exactly the position that clause describes, and the
+ * column is already named `sandbox` in production. So: no rename, and nothing
+ * to change. What is left is the collision itself, which is real:
+ *
+ *   companies.sandbox           a per-tenant fleet flag: is this tenant a
+ *                               Techno Optics trial container
+ *   PLAID_ENV=sandbox           Plaid's own environment, a deployment-wide
+ *                               setting with its own credentials
+ *   api.sandbox.push.apple.com  APNs' own environment, selected by
+ *                               APNS_PRODUCTION
+ *
+ * The tired-afternoon bug is specific and worth naming, because it looks like
+ * a good idea: routing a sandbox TENANT to a third party's sandbox
+ * ENVIRONMENT. That is not what 6.5 asks for. 6.5 says "no sandbox tenant may
+ * hold live credentials for any third party" and "the delivery layer refuses
+ * to dispatch for a sandbox tenant" - refuses, not redirects. Pointing a
+ * prospect's tenant at Plaid sandbox would create real objects in a real Plaid
+ * account, and it would make the tenant behave differently from a paying one,
+ * which is a section 6.6 tell as well.
+ *
+ * So the guard is that the two environment selectors stay derived from the
+ * process environment and never from a tenant row.
+ */
+describe("the tenant flag is never conflated with a third party's environment", () => {
+  const ENV_SELECTORS = [
+    {
+      file: "lib/plaid/client.ts",
+      env: /process\.env\.PLAID_ENV/,
+      what: "Plaid's environment",
+    },
+    {
+      file: "lib/push/providers.ts",
+      env: /process\.env\.APNS_PRODUCTION/,
+      what: "the APNs environment",
+    },
+  ];
+
+  for (const s of ENV_SELECTORS) {
+    it(`${s.file} selects ${s.what} from the process environment`, () => {
+      const src = readFileSync(join(REPO_ROOT, s.file), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(?<!:)\/\/[^\n]*/g, "");
+      // Guards the guard: the selector must still be here to be checked.
+      expect(s.env.test(src), `${s.file}: the env selector moved`).toBe(true);
+      expect(
+        /companies?\.sandbox|\bsandbox\b\s*[?:]|tenant\.sandbox|company\.sandbox/.test(
+          src,
+        ),
+        `${s.file} now reads the tenant flag. Section 6.5 requires the ` +
+          `delivery layer to REFUSE to dispatch for a sandbox tenant, not to ` +
+          `redirect it to the third party's own sandbox: a redirected tenant ` +
+          `still creates real objects in a real account, and it behaves ` +
+          `differently from a paying tenant, which section 6.6 calls a tell. ` +
+          `The two meanings of the word are unrelated and must stay that way.`,
+      ).toBe(false);
+    });
+  }
 });
