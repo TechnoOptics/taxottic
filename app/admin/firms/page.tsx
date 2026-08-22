@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { AppHeader } from "@/components/AppHeader";
 import { deriveSlugCandidate } from "@/lib/firm/slug";
 import {
@@ -25,7 +25,7 @@ function suggestSlug(firmName: string): string {
  */
 export default async function AdminFirmsPage() {
   await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
 
   const [{ data: pending }, { data: existingFirms }] = await Promise.all([
     admin

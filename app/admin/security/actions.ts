@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { runSecurityPulse } from "@/lib/security/pulse";
 
 /**
@@ -14,7 +14,7 @@ import { runSecurityPulse } from "@/lib/security/pulse";
 export async function runPulseNowAction(): Promise<void> {
   const { user } = await requireSuperAdmin();
   const result = await runSecurityPulse();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
 
   const { error } = await admin.from("security_pulse_runs").insert({
     score: result.score,

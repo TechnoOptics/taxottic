@@ -99,17 +99,18 @@ attribute by default." Confirmed on production rather than assumed:
 Measured on this tree, from the codebase and counting inline constructions as
 6.3 demands:
 
-| Class | Count |
-|---|---|
-| `createServiceClient()` invocations | **91** |
-| Files holding them | **79** |
-| Of those, under `app/admin/` | **10** |
-| Privileged clients constructed **inline**, outside the helper | **2** (`lib/supabase/server.ts`, the helper itself; `scripts/backfill-sign-convention.ts`, a hand-run maintenance script) |
-| `security definer` functions in `public` | **42**, of which **33** are anon-executable |
+| Class | Count before | Count now |
+|---|---|---|
+| `createServiceClient()` invocations | **91** | **75** |
+| Files holding them | **79** | **70** |
+| Of those, under `app/admin/` | **10** | **0** |
+| Privileged clients constructed **inline**, outside the helper | **2** | **2** (`lib/supabase/server.ts`, the helper itself; `scripts/backfill-sign-convention.ts`, a hand-run maintenance script) |
+| `security definer` functions in `public` | **42**, of which **33** are anon-executable | unchanged |
 
-6.3 asks us to bind each one or state plainly that it is not bound. **None of
-the 91 is bound to a tenant.** They are an open boundary, not a closed one with
-a caveat, and this document does not report the one-predicate rule as met.
+6.3 asks us to bind each one or state plainly that it is not bound. **The
+operator console is now bound. The other 75 are not**, and the classification
+below says which of them could ever read a sandbox tenant's row and which
+could not. This document still does not report the one-predicate rule as met.
 
 6.3 also says "where your database can force the policy on the table owner,
 turn it on". Assessed and **deliberately not done**, with a reason: `force row
@@ -119,14 +120,122 @@ about the 91 call sites and would risk breaking every path that legitimately
 runs as the owner. It is reported rather than performed, which is also this
 repository's rule about schema changes.
 
-What 6.3 offers a codebase in this shape is three ways out, and this product
-takes the third: "report the gap to the Hub operator as an open boundary and
-sequence it before the first sandbox tenant exists." The sequencing is now
-enforced rather than intended. `lib/hq/elevated-call-sites.test.ts` asserts
-that **nothing in this repository writes a true value into the tenant flag**.
-While that holds, the 91 unbound sites read real tenants only, which is what
-they were written for. The day provisioning is built, that test fails and the
-call-site work has to be finished first.
+What 6.3 offers a codebase in this shape is three ways out. This product now
+takes the **second** for the operator console, "route those paths through a
+single accessor that cannot be called without a tenant", and the **third** for
+everything else, "report the gap to the Hub operator as an open boundary and
+sequence it before the first sandbox tenant exists".
+
+The sequencing is enforced rather than intended.
+`lib/hq/elevated-call-sites.test.ts` asserts that **nothing in this repository
+writes a true value into the tenant flag**. While that holds, the 75 remaining
+unbound sites read real tenants only, which is what they were written for. The
+day provisioning is built, that test fails and the call-site work has to be
+finished first.
+
+#### The chokepoint, and why it is a `fetch` and not a filter
+
+`lib/hq/sandbox-exclusion.ts` plus `lib/hq/elevated-client.ts`.
+
+6.5 states the shape the check has to take: "The check belongs at the
+chokepoint, not at each call site. A check at each call site is the rejected
+mechanism in 6.2 wearing different clothes." A Supabase client is constructed
+with a `fetch`, and **every** PostgREST request that client will ever issue
+passes through that one function. So the boundary lives there: the wrapper
+parses the table out of the request path and appends a filter that excludes
+sandbox tenants before the request leaves the process. The ten console files
+name the factory; not one of them contains a sandbox check, and a console page
+written next quarter will be bound without its author knowing this section
+exists.
+
+Three assessed alternatives, and why not:
+
+| Alternative | Why not |
+|---|---|
+| Wrap the query builder, intercepting `.from()` | The sandbox tenant ids are not known synchronously and `.from()` is synchronous, so the filter would have to be applied by monkey-patching `PostgrestFilterBuilder`'s private `url`. The `fetch` option is the library's own documented extension point and reaches the same requests. |
+| Switch the console to the ordinary session client, so the existing RLS barrier applies | This would be the real one-predicate answer, and it is not available: `lib/auth.ts` records that session cookies do not reliably reach PostgREST from this application's server actions, so `auth.uid()` is NULL there. It also depends on a super-admin read policy existing on all thirteen console tables, and a missing one shows an operator a silently empty page rather than an error. |
+| Apply the wrapper to **every** `createServiceClient()` | Wrong, not merely large. The provisioning, seeding and `purge_tenant` paths must see sandbox rows, and a sandbox prospect's own pages must see their own rows. A universal exclusion would break the sandbox product it exists to contain. |
+
+Four properties of the wrapper worth stating, because each is a decision:
+
+- **It fails closed on an unclassified table, today, with no sandbox tenant in
+  existence.** The classification check runs before the "no sandbox tenants,
+  nothing to do" shortcut, so a console read of a table the boundary has no
+  entry for throws now rather than first being exercised on the day it
+  matters. `lib/hq/elevated-call-sites.test.ts` turns that runtime refusal
+  into a build failure.
+- **It fails closed when it cannot tell which tenants are sandboxes.**
+  Returning an empty realm on a failed lookup would read as "no sandbox tenant
+  exists" and let every console read run unbound.
+- **It refuses an rpc, ahead of the method check rather than behind it.** A
+  function body runs as the service role and there is no filter to add to it.
+  The first version of this put the refusal inside the read branch, which was
+  a control that reads as present and does nothing: `postgrest-js` sends
+  `rpc(fn, args)` as a **POST** unless the caller asks for GET or HEAD, so the
+  ordinary call would have sailed past. Caught in review, fixed, and pinned by
+  a test that sends the rpc as a POST. The console issues no rpc today.
+- **It binds reads, not writes.** A write is not 6.7 failure mode 2, and a
+  filter appended to a `PATCH` means something different from a filter
+  appended to a `GET`. Console writes are keyed by an id the operator got from
+  a read that is now bound, so the UI cannot reach a sandbox row through them.
+
+Two things it deliberately does not assume. PostgREST is believed to AND
+repeated query parameters; that is not measured on this deployment, so the
+wrapper **refuses** rather than emitting a second `or=` parameter on the two
+tables whose tenant key is nullable. And an id list has to fit in a URL, so
+the wrapper refuses above a 2000-character list rather than failing at an
+unpredictable point: past roughly fifty sandbox tenants the exclusion has to
+move into the database.
+
+The realm lookup itself runs on a plain, unbound client. It is the one read
+that must see sandbox rows in order to exclude them everywhere else, it is one
+extra query per console render, and it is memoised for the life of the client.
+It reads `companies` filtered on the flag; it does not write, so it does not
+create a sandbox tenant. It takes the column name from the boundary's own
+constant rather than writing the literal, so the flag has one spelling in the
+codebase and not two.
+
+#### The other 75, classified
+
+6.3: "Bind each one to a tenant, or state plainly that it is not yet bound. An
+unbound call site is an open boundary, not a closed one with a caveat." All 75
+below are **unbound**. The classification is what a sandbox tenant would
+actually do to each, which is the question that decides the order of the
+remaining work.
+
+| Group | Files | Invocations | Could a sandbox row leak here, and to whom |
+|---|---|---|---|
+| Per-tenant user pages and actions, `app/c/[publicId]/**` | 10 | 11 | **No, and binding them would be wrong.** The company is resolved from the URL through the caller's own membership, and a sandbox prospect reading their own sandbox rows is the product working. A real user cannot reach a sandbox `publicId` without a membership in it, and provisioning must never create a user holding both. |
+| Cron jobs, `app/api/cron/**` | 11 | 11 | **They read every tenant, by design, and must keep doing so.** A sandbox tenant's trips still have to finalise or the prospect sees a broken product. The exposure is not the read, it is what the job then *sends*: 6.7 failure mode 1. The required control is the email and push allowlist at the 6.5 chokepoint, which is separate work and is not built. |
+| Payment, bank and third-party webhooks and OAuth returns | 11 | 11 | **No cross-tenant read.** Each is keyed by an identifier the third party supplies. The sandbox concern here is 6.5's payments and webhooks rows, "no sandbox tenant may hold live credentials", which is an egress control at the dispatch chokepoint and is likewise not built. |
+| Device, passkey, push and watch token auth | 13 | 14 | **No cross-tenant read.** Session-less by construction: each resolves exactly one device, passkey or pairing code from a token it was handed. |
+| Mileage device ingest, `app/api/mileage/**` | 5 | 5 | **No cross-tenant read.** Each is scoped to the authenticated user's own membership before writing. |
+| Token-link and public intake routes: `/w9/[token]`, `/book`, `/firms/request-account`, firm banks | 5 | 5 | **No cross-tenant read.** Each resolves a single row from a magic token or writes a new intake row. |
+| Other authenticated API routes, including the user's own data export | 6 | 6 | **No.** `app/api/export/data` is the prospect's own GDPR export, scoped to their user id and their own companies. 6.5 is explicit that "the risk here is the **internal admin export**, not the prospect's own", and the internal one is the console, now bound. |
+| Other authenticated actions, `app/onboarding/new-company` | 1 | 1 | **No cross-tenant read.** Creates one company for the caller. |
+| `lib/` session and context helpers: `auth`, `tax/company-context`, `firm/context`, `plans/usage`, `push`, `email/transport`, `watch/device-auth` | 7 | 10 | **No cross-tenant read.** Each is scoped to the caller's own user id. `lib/auth.ts` `getMyCompanies` carries an explicit `.eq("user_id", user.id)` because of the 2026-05-13 production leak, and that filter is untouched. |
+| The boundary's own realm lookup, `lib/hq/elevated-client.ts` | 1 | 1 | **Deliberately unbound**, and it is the read that does the binding. It is the only elevated read in the console's request path that sees sandbox rows. |
+
+**One consequence of binding the console, recorded rather than fixed.**
+`blockUser` in `app/admin/actions.ts` reads the target's `profiles` row to
+check the forever-admin shield, and skips the check when that read returns
+nothing. Narrowing the console's reads gives that null a second cause: a user
+who is on `super_admins` **and** holds a membership in a sandbox tenant would
+read as absent and lose the shield. That user is exactly the straddling
+membership the boundary already forbids, provisioning must never create one,
+and `supabase/tests/rls-hq-sandbox-isolation.sql` asserts the case. The
+adjacent `deleteUserHard` already fails closed on the same null. It is left as
+found rather than changed under a boundary PR, and it is the first thing to
+settle if provisioning is ever allowed to touch an operator's account.
+
+**What that classification does not do is close them.** A path that cannot leak
+today because nothing writes the tenant flag is not the same as a path bound to
+a tenant, and 6.3 does not accept the first as the second. The honest statement
+to the Hub operator is unchanged in kind and smaller in size: seventy-five call
+sites still carry `BYPASSRLS`, the one that produces a report a real person
+reads no longer does, and the two classes that would break a sandbox prospect
+in the outside world, the scheduled sends and the third-party dispatches, are
+egress controls that this repository has inventoried and has not built.
 
 ### 3. The 6.6 word ban, re-derived
 
@@ -691,7 +800,9 @@ three and a half: 1, 12 and 13 are untouched, and 10 has lost the half that
 
 **Supabase's `service_role` carries `BYPASSRLS`.** Measured on the tree at
 `7f6834e0`: **92 `createServiceClient()` invocations across 80 files.** Every
-one of them skips the predicate this migration installs.
+one of them skips the predicate this migration installs. On the current tree
+the figure is **75 across 70 files**, and the ten under `app/admin/` are gone:
+see "The chokepoint" above. What follows is the state of the rest.
 
 That is the hardest part of section 6.3's one-predicate rule in this codebase
 and it is not solved here. What is true:
@@ -704,8 +815,10 @@ and it is not solved here. What is true:
 - Roughly 34 of them are inside `app/c/[publicId]/*`, per-tenant user-facing
   pages where isolation currently depends on a hand-written
   `.eq("company_id", ...)` rather than on the database.
-- 10 files under `app/admin/` use it, which is precisely failure mode 2 in
-  section 6.7: the internal report that counts all rows.
+- 10 files under `app/admin/` used it, which is precisely failure mode 2 in
+  section 6.7: the internal report that counts all rows. **Those ten are now
+  bound**, through the chokepoint described above. The count of admin files
+  holding an unbound client is asserted at zero, not as a ceiling.
 
 Closing this properly is a repo-wide refactor and is out of scope for a
 foundation PR. What the contract permits in the meantime is its third
@@ -716,17 +829,26 @@ be deleted within a month.
 
 The honest recommendation, in order:
 
-1. Before the first sandbox tenant is created, add a `sandbox` exclusion to
-   the `app/admin/**` read paths specifically. Ten files, and it is the
-   surface where "nothing sandboxed gets out" actually breaks.
-2. Then scope a guard to `app/admin/**` only, where the file set is small and
-   changes rarely.
-3. Treat the wider refactor as its own piece of work with its own decision.
+1. ~~Before the first sandbox tenant is created, add a `sandbox` exclusion to
+   the `app/admin/**` read paths specifically.~~ **Done.** Not as an exclusion
+   in ten read paths, which 6.5 rejects, but as one `fetch` wrapper the ten
+   files construct their client from.
+2. ~~Then scope a guard to `app/admin/**` only.~~ **Done**, and it is three
+   assertions rather than one: no console file holds an unbound client, the
+   fetch-taking factory has exactly one caller, and every table the console
+   reads is classified for the boundary.
+3. **Still open.** The wider refactor is its own piece of work with its own
+   decision, and the classification above is the input to it. The two groups
+   that matter next are the scheduled jobs and the third-party dispatchers,
+   and for both of those the required control is the 6.5 egress chokepoint,
+   not a read exclusion.
 
-**No sandbox tenant should be provisioned until step 1 is done.** The barrier
-holds for every user session, including super-admins. It does not hold for
-server-side code running as `service_role`, and that is where the internal
-reports live.
+**Step 1 was the stated blocker on provisioning and it is now done.** What
+that unblocks is narrow, and the remaining blockers are unchanged: the
+endpoints do not exist, the bearer secret has not been exchanged, and the
+egress chokepoints in 6.5 are inventoried but not wired. The barrier holds for
+every user session, including super-admins; it does not hold for server-side
+code running as `service_role`, and seventy-five such call sites remain.
 
 ---
 
@@ -736,7 +858,7 @@ reports live.
 
 | Item | State |
 |---|---|
-| One tenant predicate no data access can skip (6.3) | **Built for every user session**, restrictive RLS on 39 tables. **Not held on 91 service-role call sites across 79 files.** Revision C makes accounting for them a stated requirement; `lib/hq/elevated-call-sites.test.ts` holds the count and blocks a sandbox tenant from existing while they are unbound. |
+| One tenant predicate no data access can skip (6.3) | **Built for every user session**, restrictive RLS on 39 tables. **Bound at a chokepoint for the operator console**, which was 6.7 failure mode 2 and the stated blocker on provisioning. **Still not held on 75 service-role call sites across 70 files**, each classified above. `lib/hq/elevated-call-sites.test.ts` holds the count, holds the console at zero, and blocks a sandbox tenant from existing while the rest are unbound. |
 | `sandbox boolean not null default false` (6.5) | Built and **applied**. Revision C confirms the name is correct as built; the collision with Plaid's and APNs' `sandbox` is guarded rather than renamed. |
 | Isolation test watched failing before the boundary (6.8) | Static half observed red then green. psql half not run; SELECT-only access. |
 | Synthetic checked-in seed (6.4) | Built, guarded, no caller yet. |
@@ -771,7 +893,7 @@ Every line: **not started.** Q1, Q10, Q12 and the unapplied migration.
 |---|---|
 | Provisioned user cannot read a real tenant's row, real mechanism | **Written** (`supabase/tests/rls-hq-sandbox-isolation.sql`). **Not executed**, needs the migration applied and write access. |
 | Every scheduled job sends nothing to a non-allowlisted recipient | Not started. Needs the email allowlist. 11 crons enumerated from `vercel.json`. |
-| `report_counts` byte-identical before and after a sandbox | The count invariant is asserted inside the psql script. The endpoint does not exist. |
+| `report_counts` byte-identical before and after a sandbox | The count invariant is asserted inside the psql script. The endpoint does not exist. The internal counts that already exist, `totalUsers` and `totalCompanies` on the console dashboard, are the section 7 definitions' nearest live equivalent and **did** count every row; they now run through the chokepoint, including the `head: true` count requests, which issue `HEAD` and would have escaped a wrapper that only handled `GET`. |
 | No third-party client constructed for a sandbox tenant, failing on the network call | Construction sites enumerated and guarded. The per-tenant assertion needs the flag. |
 | A real user's search returns no sandbox document | Not applicable today, and guarded so it stays that way. |
 | Every export path routes through the tenant predicate | Export entry points enumerated from the codebase, not from memory. Assertion not written. |
@@ -793,7 +915,10 @@ Every line: **not started.** Q1, Q10, Q12 and the unapplied migration.
 | `lib/hq/egress-chokepoints.test.ts` | The 6.5 inventory, and the two vector-store invariants. |
 | `lib/hq/invisibility.test.ts` | Section 6.6, both the row 1 sweep and the **new revision C row 2 sweep**. |
 | `lib/hq/syndication.test.ts` | **New for revision C.** The 6.5 syndication row, its 6.7 failure mode, and its section 11 checklist line. |
-| `lib/hq/elevated-call-sites.test.ts` | **New for revision C.** Section 6.3's account of the call sites that bypass the predicate, and the sequencing that stops a sandbox tenant existing while they do. |
+| `lib/hq/elevated-call-sites.test.ts` | **New for revision C.** Section 6.3's account of the call sites that bypass the predicate, and the sequencing that stops a sandbox tenant existing while they do. Now also holds the console at zero unbound clients, holds the fetch-taking factory to one caller, and fails when the console reads a table the boundary has not classified. |
+| `lib/hq/sandbox-exclusion.ts` | The chokepoint. The table partition, the URL rewrite, the realm lookup, and the four ways it fails closed. |
+| `lib/hq/sandbox-exclusion.test.ts` | The rewrite, tested as pure behaviour. |
+| `lib/hq/elevated-client.ts` | Twelve lines wiring the chokepoint to a service-role client. The console's only door. |
 | `lib/hq/purge-catalog.test.ts` | **New for revision C.** Section 8.1's expanded recipe, all six steps. |
 | `lib/hq/role-vocabulary.test.ts` | **New for revision C.** Section 4.1a step 5. |
 | `docs/design/fleet-role-vocabulary.md` | **New for revision C.** The 4.1a written exchange, ready to hand to the Hub operator. |

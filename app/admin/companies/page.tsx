@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { deleteCompanyHard } from "../actions";
 import { TypedConfirmDelete } from "@/components/admin/TypedConfirmDelete";
 
@@ -25,7 +25,7 @@ type CompanyRow = {
 
 export default async function AdminCompaniesPage() {
   await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   const { data } = await admin
     .from("companies")
     .select("id, public_id, name, entity_type, created_at, deleted_at")
