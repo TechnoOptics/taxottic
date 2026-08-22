@@ -59,6 +59,48 @@ export async function sendFirmInviteMagicLink(
   const inviteUrl = `${cleanOrigin}${invitePath}`;
   const callbackUrl = `${cleanOrigin}/auth/callback?next=${encodeURIComponent(invitePath)}`;
 
+  // Fleet contract 6.5: every path out needs one chokepoint that knows about
+  // the tenant flag. This path cannot BE that chokepoint. Its subject and
+  // body live in the Supabase dashboard rather than in this repository, so
+  // the recipient screen 6.5 asks for and the word sweep 6.6 asks for both
+  // run somewhere this message never passes through.
+  //
+  // 6.3 gives the option that applies to a path which cannot be bound:
+  // "report the gap to the Hub operator as an open boundary and sequence it
+  // before the first sandbox tenant exists". So this asks the database
+  // whether one exists, and refuses if the answer is yes or unreadable.
+  //
+  // hq_sandbox_company_ids() is the security-definer set function created by
+  // 20260819010000_hq_sandbox_boundary.sql. It returns the sandbox tenants
+  // and nothing else, and it is executable by every role, so this adds no
+  // new privileged call site: it runs on the client the caller already
+  // passed in. Today it returns the empty set and this costs one round trip.
+  const { data: sandboxTenants, error: sandboxError } = await admin.rpc(
+    "hq_sandbox_company_ids",
+  );
+  if (sandboxError || !Array.isArray(sandboxTenants)) {
+    return {
+      ok: false,
+      reason:
+        "Could not confirm whether a sandbox tenant exists, so this invite " +
+        "was not sent. This path bypasses the sendEmail() chokepoint and has " +
+        "no recipient allowlist, so it fails closed. Send the invite URL by " +
+        "hand.",
+      inviteUrl,
+    };
+  }
+  if (sandboxTenants.length > 0) {
+    return {
+      ok: false,
+      reason:
+        "A sandbox tenant exists and this invite path bypasses the " +
+        "sendEmail() chokepoint, so it carries no recipient allowlist. " +
+        "Route firm invites through the chokepoint before provisioning, or " +
+        "send the invite URL by hand.",
+      inviteUrl,
+    };
+  }
+
   // signInWithOtp via the admin client. This is a normal client call
   // under the service-role hood; supabase-js handles the email send.
   // shouldCreateUser=true so users without prior Taxottic accounts

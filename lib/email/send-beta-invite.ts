@@ -22,7 +22,7 @@ export type SendBetaInviteArgs = BetaInviteArgs & {
 export type SendBetaInviteResult = {
   /** True only when a real provider (not the "noop" fallback) accepted it. */
   sent: boolean;
-  provider: "resend" | "supabase-otp" | "noop";
+  provider: "resend" | "noop";
   reason?: string;
 };
 

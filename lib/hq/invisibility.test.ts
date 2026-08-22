@@ -49,6 +49,23 @@
  * "Trial ended" on every dashboard load, which is within a word of the example
  * revision C gives. The second describe block is the row 2 sweep, and its
  * inventory records the verdict for each hit rather than deleting any of them.
+ *
+ * THE PART OF THIS SWEEP THAT IS STILL NARROW, STATED RATHER THAN FIXED
+ *
+ * VISITOR_SURFACES reads lib/email/templates, and that is where this
+ * product's email copy lives for every message except the ones Supabase's
+ * own auth mailer sends. Those are templated in the Supabase dashboard, so
+ * their subject and body are not in this repository and no grep here can see
+ * them. One of them is the sign-in code from app/login/page.tsx, which is
+ * the first email a fleet prospect would ever receive, and another is the
+ * firm invitation in lib/email/send-firm-invite.ts.
+ *
+ * That is a real 6.6 gap and it cannot be closed from here: the fix is to
+ * read those templates in the Supabase dashboard before the first sandbox
+ * tenant exists. What IS pinned is that the set cannot grow unnoticed. The
+ * "Transactional email via Supabase auth" entry in
+ * lib/hq/egress-chokepoints.test.ts fails the build when a new file sends
+ * mail outside this sweep.
  */
 
 import { describe, it, expect } from "vitest";
@@ -101,11 +118,20 @@ const EXCLUSIONS: { file: string; word: string; reason: string }[] = [
     file: "lib/email/templates/beta-invite.ts",
     word: "test",
     reason:
-      "This is the TestFlight / Play beta invitation, sent only from the " +
-      "admin beta-invite console to a named tester. It is not on any path a " +
-      "fleet sandbox prospect can reach. If provisioning ever reuses this " +
-      "template, the subject line 'invited you to test Taxottic' becomes a " +
-      "section 6.6 violation on the first send.",
+      "Row 3, re-decided under revision C. Every occurrence of the word " +
+      "names Apple's TestFlight or the pre-release BUILD: 'invited you to " +
+      "test Taxottic', 'help test Taxottic before it ships', 'Beta builds " +
+      "expire after 90 days'. None of it names the recipient's account, " +
+      "tenant, plan or data, which is what row 2 bans, and revision C's one " +
+      "question answers yes: a real paying customer on the beta reads the " +
+      "same subject in the same inbox. The previous reason here was " +
+      "REACHABILITY, that no sandbox prospect can reach the admin " +
+      "beta-invite console, and it carried a warning that reuse by " +
+      "provisioning would make the subject a violation on the first send. " +
+      "Revision C makes reachability the wrong axis for a row 3 string: it " +
+      "is out of scope whoever receives it, so that warning is withdrawn. " +
+      "What would put this template in scope is a change to what the words " +
+      "describe, not a change to who reads them.",
   },
 ];
 
