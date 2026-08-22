@@ -25,6 +25,23 @@
 -- `column "sandbox" does not exist`, which is the correct failure: the
 -- boundary is what is being tested, and the test must not pass when the
 -- boundary is absent. That was verified before the migration was written.
+--
+-- RUN HISTORY
+--
+-- 2026-08-22, against production, both halves observed:
+--
+--   before the migration, the seed failed with
+--     42703: column "sandbox" of relation "companies" does not exist
+--   after the migration, every assertion passed and the transaction was
+--     rolled back with 6 companies unchanged and zero residue.
+--
+-- The first run also found a defect in THIS script rather than in the
+-- boundary: chat_conversations carries a check constraint requiring a
+-- name for any kind other than 'dm', so the two channel inserts below
+-- aborted the transaction before a single assertion was reached. The
+-- script had been written, reviewed and merged without ever being
+-- executed, which is the exact failure mode this repository keeps
+-- meeting: code that exists, type-checks, and is never run.
 
 begin;
 
@@ -111,10 +128,10 @@ begin
   -- company AND a sandbox one. Provisioning must never create that user; the
   -- barrier is what makes the database enforce it rather than the endpoint
   -- remembering to.
-  insert into public.chat_conversations (company_id, kind, created_by)
-  values (v_real_co, 'channel', v_real_user) returning id into v_real_conv;
-  insert into public.chat_conversations (company_id, kind, created_by)
-  values (v_sandbox_co, 'channel', v_sandbox_user) returning id into v_sandbox_conv;
+  insert into public.chat_conversations (company_id, kind, name, created_by)
+  values (v_real_co, 'channel', 'hq-real-scratch', v_real_user) returning id into v_real_conv;
+  insert into public.chat_conversations (company_id, kind, name, created_by)
+  values (v_sandbox_co, 'channel', 'hq-sandbox-scratch', v_sandbox_user) returning id into v_sandbox_conv;
 
   insert into public.chat_conversation_members (conversation_id, user_id)
   values (v_real_conv, v_real_user), (v_sandbox_conv, v_sandbox_user);
