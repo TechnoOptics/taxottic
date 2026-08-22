@@ -254,13 +254,19 @@ describe("nothing embeds tenant content into a shared collection", () => {
   });
 
   it("writes nothing to tax_kb_chunks", () => {
-    const writers = ALL_FILES.filter((f) => {
-      const src = code(f);
-      return (
-        /tax_kb_chunks/.test(src) &&
-        /\.(insert|upsert|update|delete)\s*\(/.test(src)
-      );
-    }).map((f) => f.slice(REPO_ROOT.length + 1));
+    /**
+     * The probe requires the write to be chained off `from("tax_kb_chunks")`
+     * rather than merely co-located with the table's name. The looser version
+     * matched any file that mentioned the table anywhere and also called any
+     * method named `delete`, which is true of `Map.delete` in
+     * lib/hq/catalog.ts. A guard that fires on a Map operation is a guard
+     * somebody switches off.
+     */
+    const writers = ALL_FILES.filter((f) =>
+      /from\s*\(\s*["'`]tax_kb_chunks["'`]\s*\)[\s\S]{0,400}?\.(insert|upsert|update|delete)\s*\(/.test(
+        code(f),
+      ),
+    ).map((f) => f.slice(REPO_ROOT.length + 1));
     expect(
       writers,
       "tax_kb_chunks is the corpus every tenant's assistant retrieves from. " +

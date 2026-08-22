@@ -1,14 +1,293 @@
 # Techno Optics fleet integration: the sandbox boundary
 
-Status: **foundation built and mutation-tested. None of the five endpoints
-exist, deliberately.** Four open questions block them and the boundary
-migration is not applied yet. A product with no `/hq/` routes answers `404`,
-which the contract names as the correct state while the work is incomplete.
+Status: **foundation built and mutation-tested, and re-assessed against
+revision C. None of the five endpoints exist, deliberately.** Four open
+questions block them. The boundary migration **is applied**, confirmed against
+production on 2026-08-22. A product with no `/hq/` routes answers `404`, which
+the contract names as the correct state while the work is incomplete.
 
-Contract: `INTEGRATION.md` revision B, 17 August 2026, derived from Fleet
-Adapter Contract v1 revision 2. Handoff at
+Contract: `INTEGRATION.md` **revision C**, 17 August 2026, derived from Fleet
+Adapter Contract v1 revision 2, which revision C does not edit. Handoff at
 `~/Desktop/Techno Optics Integration Handoff/Taxottic/`. That file is byte
 identical across all nine products and is not edited by anything here.
+
+The revision C delta is the next section. Everything after it was written
+against revision B and still stands, because revision C changes no endpoint,
+path, field name, header, status code or required behavior, and states that a
+product that has already added a tenant column named `sandbox` is correct as
+built. Where a paragraph below has been overtaken, the delta section says so.
+
+---
+
+## The revision C delta
+
+Revision C was published after the work below was built. Its own opening
+section says nothing built against revision B becomes wrong, and that is what
+was found: no endpoint, path, field, header, status code or required behavior
+changed, and the tenant column named exactly `sandbox` is correct as built.
+
+Seven changes were assessed against the section text rather than against the
+change table alone. Five were genuinely new obligations and were implemented.
+Two were already satisfied and are recorded as such.
+
+| # | Revision C change | Verdict here | What was done |
+|---|---|---|---|
+| 1 | New syndication row in 6.5, its failure mode in 6.7, its checklist line in section 11 | **New obligation** | `lib/hq/syndication.test.ts`. Paths inventoried, control placed at the payload builder, absence of the rest pinned. |
+| 2 | 6.3 now requires accounting for elevated call sites that bypass the predicate | **New obligation.** Was a paragraph in this document; is now a stated requirement with a required test | `lib/hq/elevated-call-sites.test.ts`. 91 invocations across 79 files, 10 under `app/admin/`, 2 inline constructions, all held in place. |
+| 3 | 6.6 forbidden-word scope defined, with a one-question test | **New obligation.** The existing sweep was **too narrow** | `lib/hq/invisibility.test.ts` gained the row 2 sweep, which found `components/TrialBanner.tsx`. |
+| 4 | 8.1 purge catalog recipe expanded to four more classes | **New obligation** | `lib/hq/catalog.ts` gained four classes; `lib/hq/purge-catalog.test.ts` asserts all six steps. |
+| 5 | 6.3's tenant flag name is illustrative, not literal | **Already satisfied.** No rename. A collision guard was added | `lib/hq/boundary.test.ts` gained the environment-collision block. |
+| 6 | Open questions 20 to 25; 3 and 10 narrowed | **Assessment only** | Recorded under "Blockers" below. |
+| 7 | New 4.1a, publishing the role vocabulary | **New obligation.** A written exchange, not code | `docs/design/fleet-role-vocabulary.md`, plus step 5 in `lib/hq/role-vocabulary.test.ts`. |
+
+Two more revision C changes need no work here and are recorded so nobody looks
+for them later. The residue limit is settled at 35 days with the apparent
+second number explained, which turns question 3 into a policy question (below).
+The `tenant_count` / `user_count` definition for a physically separated product
+does not apply: this is one deployment holding many company rows, and section
+7's unit, the customer organization, is already what a count of `companies`
+returns.
+
+### 1. Syndication, the row whose damage is not reversible
+
+6.5's new row covers any path that copies tenant content somewhere a later
+delete does not retract it. 6.7 states why it is different in kind: "Unlike
+every other failure in this table, fixing the bug does not undo it." So the
+ordering rule is stronger, and the control comes before the first sandbox
+tenant exists rather than before go-live.
+
+Enumerated from the codebase and from the deploy pipeline, not from memory:
+
+| Version 6.5 names | Present here | Evidence |
+|---|---|---|
+| Product, listing, merchant or affiliate feed | **No** | No feed client, no aggregation endpoint. Pinned. |
+| Public unauthenticated endpoint serving catalog, listings, profiles or documents | **No tenant content.** The public surface is marketing, guides, calculators, comparisons, legal and `/example`, all static. `/example` is a hard-coded fictional workspace and reads the database only for `auth.getUser()`. | Read route by route against `PUBLIC_PATHS` in `lib/supabase/middleware.ts`. |
+| Sitemap | **Yes**, `app/sitemap.ts` | Every URL is a literal or comes from `@/lib/calculators/{states,incomes}`. No database read. This is the chokepoint. |
+| Indexing or URL-submission call, on deploy, on a schedule, or on publish | **No submitter.** `public/3469b3d10dc2eca4e1d9cbc4936e46b2.txt` is an IndexNow *ownership key*; a key proves who owns the host and submits nothing. No submission step in `package.json`, `vercel.json` or any of the 15 CI workflows. | Pinned in both directions. |
+| RSS, JSON or CSV feed at a fixed URL | **No** | Pinned. |
+| Public directory, profile or status page reachable with no session | **No.** Firm portals live on `{slug}.taxottic.com` and rewrite `/` to `/firm`, which is not in `PUBLIC_PATHS`, so an anonymous visitor is redirected to `/login`. | Read from the middleware. |
+| Content served to third-party AI clients with no session | **Yes**, `public/llms.txt`, and `app/robots.ts` explicitly welcomes GPTBot, ClaudeBot, PerplexityBot and six others onto the public surface | `llms.txt` is a checked-in product summary. Nothing generates it, which is asserted. |
+
+The finding, recorded as 6.5's last paragraph requires: **this product has no
+syndication path that carries tenant content, and the two payload builders it
+does have are static.** `lib/hq/syndication.test.ts` pins that per version, so
+the row cannot be acquired quietly.
+
+The control, since 6.5 says the check belongs "where the payload is built, not
+where it is sent":
+
+- `app/sitemap.ts` is asserted to reach no database, by four separate probes,
+  and its import set is fixed at four modules so a helper refactor cannot smuggle
+  a read in through a dependency.
+- `app/robots.ts` is asserted to disallow all eleven tenant route trees, so a
+  crawler that finds a tenant URL by a link does not fetch it.
+- No submitter, in code or in the pipeline. If one appears, the test fails, and
+  whoever adds it has to build the fail-closed tenancy check 6.5 requires
+  before the suite goes green.
+
+Open question 24 is what to report if content ever does reach an index. It
+cannot today, and the answer is not ours to invent.
+
+### 2. The elevated call sites, which 6.3 now requires accounting for
+
+Revision C promotes what this document already called "the gap this does not
+close" into a stated requirement, and names the platform: "On at least one
+widely used platform the application's own service role carries a bypass
+attribute by default." Confirmed on production rather than assumed:
+`service_role` has `rolbypassrls = true`, `authenticated` and `anon` do not.
+
+Measured on this tree, from the codebase and counting inline constructions as
+6.3 demands:
+
+| Class | Count |
+|---|---|
+| `createServiceClient()` invocations | **91** |
+| Files holding them | **79** |
+| Of those, under `app/admin/` | **10** |
+| Privileged clients constructed **inline**, outside the helper | **2** (`lib/supabase/server.ts`, the helper itself; `scripts/backfill-sign-convention.ts`, a hand-run maintenance script) |
+| `security definer` functions in `public` | **42**, of which **33** are anon-executable |
+
+6.3 asks us to bind each one or state plainly that it is not bound. **None of
+the 91 is bound to a tenant.** They are an open boundary, not a closed one with
+a caveat, and this document does not report the one-predicate rule as met.
+
+6.3 also says "where your database can force the policy on the table owner,
+turn it on". Assessed and **deliberately not done**, with a reason: `force row
+level security` binds the table *owner*, while `rolbypassrls` is a *role
+attribute* that outranks it. Forcing RLS on all 91 tables would change nothing
+about the 91 call sites and would risk breaking every path that legitimately
+runs as the owner. It is reported rather than performed, which is also this
+repository's rule about schema changes.
+
+What 6.3 offers a codebase in this shape is three ways out, and this product
+takes the third: "report the gap to the Hub operator as an open boundary and
+sequence it before the first sandbox tenant exists." The sequencing is now
+enforced rather than intended. `lib/hq/elevated-call-sites.test.ts` asserts
+that **nothing in this repository writes a true value into the tenant flag**.
+While that holds, the 91 unbound sites read real tenants only, which is what
+they were written for. The day provisioning is built, that test fails and the
+call-site work has to be finished first.
+
+### 3. The 6.6 word ban, re-derived
+
+Revision C defines the scope revision B left open, with one question: "would a
+real paying customer see this same string, in this same place, on this same
+screen?", and four verdicts.
+
+**The existing sweep was too narrow, not too broad.** It scanned email
+templates, six generated documents, two export filenames and the seed fixture.
+Every one of those is per-tenant generated output, which is revision C's row 1,
+so the scope it had was right as far as it went. What it had no way to see was
+row 2, which is the row revision C newly defines: "The string names the
+visitor's own account, tenant, session, environment, plan or data as a demo,
+sandbox, trial, test, sample or evaluation. **Banned**, however ordinary the
+word is elsewhere in your product."
+
+Row 2 exists in this product, and the contract's own example is nearly the
+literal string:
+
+> `components/TrialBanner.tsx` renders "3 days left on your free trial.",
+> "1 day left on your free trial.", "Your free trial has ended.", "Trial
+> active" and "Trial ended", on the dashboard, on the personal forecast, and
+> in the native fallback.
+
+Revision C's example of a banned string is "Your trial expires in 3 days", and
+it says so is a tell "even on a product that sells trials". This product sells
+trials. A provisioned prospect lands on a fresh account, and this product
+auto-trials a fresh account, so the banner would greet them on their first
+dashboard load and name their tenant as a trial.
+
+**It is not fixed here and cannot be.** The gate reads `companies.sandbox` and
+nothing reads that column yet. It is sequenced instead: the same assertion that
+holds the elevated call sites also stops a sandbox tenant existing, so
+provisioning cannot ship while this banner is ungated.
+
+The other five hits in the row 2 sweep are classified and left alone, which is
+the point revision C spends a page on. Two are ordinary tax vocabulary
+("physical-presence test"), two are a real diagnostic every customer can run
+("Tracker self-test"), one is a super-admin plan preview a prospect never
+reaches. And the storefront is untouched: the pricing page, the guides, the
+comparisons and the FAQ all say "trial" to every visitor identically, which is
+row 3, and revision C is explicit that changing them "conceals nothing from
+anybody and changes a public product for no safety benefit".
+
+### 4. The purge catalog, to the expanded recipe
+
+Revision B's recipe was one step. Revision C adds four, on the evidence of a
+team that found all four in one schema. All four were looked for here, against
+the live catalog of `enisnjjbxqaliydepacc` on 2026-08-22:
+
+| Step | Found |
+|---|---|
+| 2. Tenant-bearing columns with **no** foreign key | **Zero.** Every `company_id` and every `firm_id` carries a constraint. The named trap is absent here. |
+| 3. Referential actions on the keys that do exist | **Eleven non-cascading keys.** The finding of the four. |
+| 4. Tables referencing a **user** rather than a tenant | **Sixteen**, including `passkeys`, which 8.1 names by hand. |
+| 5. An exclusion list that is itself asserted | **Twenty**, each with a stated reason. |
+| 6. Covered + excluded = catalog | 36 + 18 + 16 + 20 + `companies` = **91**, which is what the catalog reports. |
+
+**Step 3 is where this schema actually breaks a purge.** Seven tables carry
+`company_id ... on delete set null`:
+
+    bella_conversations   firm_activity_log   firm_documents   firm_efilings
+    firm_invoice_templates   firm_invoices   firm_meetings
+
+Deleting the sandbox tenant row **orphans** those rows rather than removing
+them, and a `remaining` recounted by `company_id` reports zero over rows that
+are still sitting there. `bella_conversations` is the sharpest case twice over:
+it holds the prospect's own assistant transcripts, and the barrier policy
+passes any row whose `company_id` is null, so an orphaned row leaves the
+sandbox side of the boundary as well as the purge. 8.1 predicts this exactly,
+which is why 8.6 insists `remaining` is a fresh query rather than a
+subtraction.
+
+Three more keys **block** the delete outright rather than under-reporting it:
+`bank_imports.user_id` (`restrict`) and `bank_imports.completed_by`
+(`no action`) mean a sandbox user who imported a bank file cannot be deleted
+until those rows go first; `admin_actions.admin_user_id` (`restrict`) cannot
+bite a prospect, and is recorded because 8.1 asks for the action on each key
+rather than on the ones that look relevant.
+
+None of this is fixed here. Changing a referential action is a schema change
+and this repository's migrations are purely additive. It is a finding for
+whoever builds `purge_tenant`, and it is now in `NON_CASCADING_TENANT_FKS`
+with its consequence stated per key.
+
+**Step 4 is the largest omission the old catalog had.** Sixteen tables hang off
+`auth.users` or `profiles` and sit outside the tenant's foreign key closure
+entirely: `badges`, `capture_attempts`, `charitable_donations`,
+`credits_ledger`, `device_fingerprints`, `device_tokens`, `feedback`,
+`notification_log`, `passkeys`, `personal_expenses`, `profiles`,
+`push_registration_state`, `subscriptions`, `tax_profiles`, `watch_devices`,
+`watch_pair_codes`. A purge that walks `company_id` and follows keys from
+`companies` reaches none of them, and every one holds something the prospect
+created or something that identifies them.
+
+**Step 5's exclusion list is twenty tables in three groups**: reference data
+that every tenant shares (`deduction_categories`, `sales_tax_state_rates`, the
+two `tax_kb_*` tables), the vendor control plane (`super_admins`,
+`security_pulse_runs`, `admin_actions`, and three lead-capture tables), and the
+firm axis (`firms` and nine `firm_*` tables keyed only by `firm_id`). The firm
+group is the one to watch: it is excluded because a sandbox prospect is
+provisioned into a *company* and no sandbox path creates a *firm*. If that ever
+stops being true, the whole group becomes wrong, and the partition assertion is
+what says so.
+
+### 5. The word `sandbox` means three things here
+
+Revision C: "The column name in that line is illustrative, not literal ... A
+product that has already added a column named exactly `sandbox` is correct as
+built and has nothing to change." That is this product, and **the column is not
+being renamed.**
+
+The collision is real, though:
+
+| Meaning | Where |
+|---|---|
+| A per-tenant fleet flag | `companies.sandbox` |
+| Plaid's own environment | `PLAID_ENV=sandbox`, `lib/plaid/client.ts` |
+| APNs' own environment | `api.sandbox.push.apple.com`, `lib/push/providers.ts` |
+
+The tired-afternoon bug revision C warns about is specific here, and it looks
+like a good idea: routing a sandbox **tenant** to a third party's sandbox
+**environment**. That is not what 6.5 asks for. 6.5 says the delivery layer
+"refuses to dispatch for a sandbox tenant" - refuses, not redirects. A
+redirected tenant still creates real objects in a real Plaid or APNs account,
+and it behaves differently from a paying tenant, which is a 6.6 tell as well as
+an egress failure.
+
+So the assessment is: no rename, no column comment needed, **one guard**.
+`lib/hq/boundary.test.ts` asserts that both environment selectors stay derived
+from `process.env` and never from a tenant row. Mutation-tested by adding
+exactly the tempting function and watching the named test fail.
+
+### 7. The role vocabulary, published
+
+4.1a is new and is a written exchange, not code. Its first three steps need
+nothing from the Hub operator, so they are done:
+`docs/design/fleet-role-vocabulary.md` carries the four literal
+`public.company_role` values read from the schema, the recommendation with one
+line on what it can do, and the confirmation that an unrecognized value is a
+`422` with no mapping onto a default.
+
+Step 5 is `lib/hq/role-vocabulary.test.ts`. The half that needs no answer is
+live: all four strings are asserted against the migration that declares the
+enum and against the union in `lib/auth.ts`, so a rename fails CI today rather
+than failing the Hub's next call. The half that waits is a single named
+constant, `HUB_CONFIGURED_ROLE`, which is `null` and stays `null` until the
+operator confirms a value in writing. It is deliberately not filled in from our
+own recommendation.
+
+### One more thing revision C changed that needed no code
+
+2.4 makes write-in-place **the** fleet method rather than the first of two
+preferences, and adds: "This method works when your application repository is
+public ... If your repository is public, say so when you send the identifiers,
+and confirm before go-live that no placeholder resembling a secret exists in
+it." **This repository is public.** The confirmation was performed on
+2026-08-22: nothing in the tree names `HQ_BEARER_SECRET`, a Hub secret, or any
+placeholder for one, and nothing here generates, holds, prints or placeholders
+a bearer value. Where the entry identifiers get sent is open question 20, and
+it is new.
 
 ---
 
@@ -16,24 +295,29 @@ identical across all nine products and is not edited by anything here.
 
 Three independent reasons, any one of which is sufficient.
 
-**1. Four open questions block them.** Section 13 lists nineteen `[VERIFY]`
-items. The Hub operator holds the answers and sends the same answers to all
+**1. Four open questions block them.** Section 13 lists **twenty-five**
+`[VERIFY]` items under revision C, six of them new. The Hub operator holds the answers and sends the same answers to all
 nine products, so filling one in locally is how two products end up behaving
 differently. The four that block rather than slow are listed below with the
 seam left for each.
 
-**2. The migration is not applied.** `provision_user`, `report_counts` and
-`purge_tenant` all read `companies.sandbox`. This repo's rule is that an
-additive column reaches production **before** the code that reads it merges.
-That rule is not bureaucratic: PostgREST answers a select naming an unknown
-column with `{data: null, error: {code: "42703"}}` rather than throwing, and
-the paths here destructure `data` and ignore `error`, so the reading code
-returns nothing and reports success. `lib/db/schema-contract.test.ts` exists
-because that silently mis-projected a year of deductions, and the same class
-took every device's mileage heartbeat off the air for a day. Merging an
-endpoint that reads `sandbox` before the column exists would reproduce it on
-the one surface where the failure mode is "a real tenant's rows were counted
-into a demo".
+**2. The elevated call sites are unbound, and revision C makes that a stated
+requirement rather than a caveat.** 91 `createServiceClient()` invocations
+across 79 files bypass the predicate, 10 of them under `app/admin/`. Section
+6.3 says an unbound call site is an open boundary, and offers three ways out;
+this product takes the third, "sequence it before the first sandbox tenant
+exists". An endpoint that provisions into a tenant those 91 sites can read
+through is precisely the half-built endpoint section 0 says is worse than none.
+
+*The reason recorded here under revision B, that the migration was not applied,
+is closed.* It was applied and confirmed on production on 2026-08-22: 39
+`hq_sandbox_barrier` policies, `companies.sandbox` present. The rule it stood
+on is unchanged and still governs anything that reads a new column: PostgREST
+answers a select naming an unknown column with
+`{data: null, error: {code: "42703"}}` rather than throwing, and the paths here
+destructure `data` and ignore `error`, so the reading code returns nothing and
+reports success. `lib/db/schema-contract.test.ts` exists because that silently
+mis-projected a year of deductions.
 
 **3. There is no bearer secret, and there must not be one in this
 repository.** The repo is public. The secret arrives by the write-in-place
@@ -309,14 +593,25 @@ that mapping depends on the answer: if `provision_user` creates the tenant,
 call does, it belongs in a join table. Guessing wrong means a second migration
 against a table that already holds sandbox rows.
 
-**Q10. Which `role` value will the Hub send?** An unrecognised `role` is a
-`422`. This product's vocabulary is the `company_role` enum: `manager`,
-`lead`, `member`, `expenser`. The contract's example sends `admin`, which
-this product does not have. Nothing maps it.
+**Q10. Which `role` value will the Hub send?** **Narrowed in revision C, and
+half of it is now closed.** An unrecognised `role` is a `422`. This product's
+vocabulary is the `company_role` enum: `manager`, `member`, `lead`,
+`expenser`. The contract's example sends `admin`, which this product does not
+have, and nothing maps it, by design: 4.1a step 3 forbids mapping an unknown
+value onto a default.
 
-*Seam:* the vocabulary is a database enum and is already the single source of
-truth. What is needed is the operator's configured value for this product and
-the mapping, both of which are one line each once the answer arrives.
+The half that was open under revision B, how our vocabulary reaches the
+operator, is answered by the new section 4.1a and is done:
+`docs/design/fleet-role-vocabulary.md` is the exchange, and steps 1 to 3
+needed nothing from anybody else. What remains is the value itself, confirmed
+back in writing as the literal string the Hub will send. Only the operator can
+give it, and it is not being guessed here.
+
+*Seam:* `HUB_CONFIGURED_ROLE` in `lib/hq/role-vocabulary.test.ts`, currently
+`null`. It becomes the confirmed literal string, and the test tightens from
+"the vocabulary is intact" to "the exact value the Hub sends is still in it".
+The vocabulary half of that assertion is already live, so a migration that
+renames a role fails CI today.
 
 **Q12. What is the confirmed base URL?** The README names
 `https://taxottic.com` and the contract says to treat that as a proposal until
@@ -337,12 +632,12 @@ the PR that adds the routes, not before.
 it?** Unanswerable locally. This document plus a CI run is the guess, and it
 is not being treated as the answer.
 
-### The remaining fifteen, and what each would change
+### The remaining twenty-one, and what each would change
 
 | # | Question | What it blocks here |
 |---|---|---|
 | 2 | Mapping the thirteen 8.1 data classes onto the ten 8.3 counter keys | The purge response body. Building to the ten shown as the required set is the contract's own instruction, so this slows rather than blocks. |
-| 3 | Residue limit: 35 days or 30 | A retention policy. Build to 35, the stated rule. |
+| 3 | **Narrowed in revision C.** The 35-vs-30 conflict is resolved in 8.4 against the wire contract: 35 days is the limit, thirty describes the backup window it is sized against. What is still open is the policy, and **this product is on the wrong side of it.** `docs/DATA_RETENTION_AND_DISPOSAL_POLICY.md` states deletion propagates to backups within **90 days**, which exceeds 35, and 8.4 requires the operator's explicit agreement in that case. No product has one. Report it; do not set a local retention figure. Separately, `docs/INFORMATION_SECURITY_POLICY.md` states a 7 day point-in-time recovery window, so those two documents disagree with each other and the discrepancy needs settling before either number is quoted to the operator. |
 | 4 | Hub polling interval and the maximum `in_progress` window | Whether an asynchronous multi-hour purge is acceptable, which decides whether the purge can be a cron drain or must be inline. |
 | 5 | Hub request timeouts and call rate | The `429` threshold. Cannot be set without it. |
 | 6 | Source-address allowlisting, mutual TLS | Whether anything beyond bearer-over-TLS is wanted. |
@@ -356,6 +651,20 @@ is not being treated as the answer.
 | 17 | SLA, uptime, latency | Interacts with 5. |
 | 18 | Whether this product implements section 14's second path | Nothing today. Section 14 is designed, not built, and must not be anticipated. |
 | 19 | Whether this product federates | Nothing today. Section 15 is explicit that the Hub cannot federate this product and that no product has been asked. |
+| 20 | **New in revision C.** Where to send the secret-store entry identifiers under the write-in-place method in 2.4 | **Blocks the secret exchange, and is a new blocker.** Revision B offered two delivery methods; revision C makes write-in-place the fleet's method, and that method depends on us sending the operator two identifiers and a grant. No document names an address, a channel or a person. There is no value in an identifier, so this is a missing address rather than a secret-handling question, and it is cheap to answer and free to ask. |
+| 21 | **New in revision C.** `tenant_count` and `user_count` for a product that separates customers physically | **Does not apply.** This is one deployment, one database, many `companies` rows. Section 7's unit is the customer organization, which is what a count of `companies` returns. Nothing here is per-deployment. |
+| 22 | **New in revision C.** Whether schema-per-tenant or database-per-tenant satisfies 6.2 | **Does not apply, and worth saying why.** This product is already in the shape 6.2 requires: a sandbox tenant inside the ordinary database, distinguished by a flag, with one enforced predicate. The tension 6.2 and 6.3 create for a physically separated product is not a tension here. |
+| 23 | **New in revision C.** Whether a 6.5 egress row may be recorded as not applicable, and what evidence the operator wants | **Applies directly. Blocks the report, not the work.** Five rows are vacuously satisfied here: outbound webhooks, search indexing, vector stores, analytics, syndication. Each is recorded as a finding and pinned with a test that fails when the path appears, which is the strongest of the three kinds of evidence the question lists. If a bare statement is what the operator wants instead, the tests stay anyway. |
+| 24 | **New in revision C.** What to report when tenant content has already reached an external index | **Applies conditionally, and cannot today.** No syndication path here carries tenant content, and `lib/hq/syndication.test.ts` fails when one appears. The question matters only if that changes, and its answer is an attestation format, which is the operator's to define. Note it interacts with question 2: nothing in 8.4's `reason` list describes the state, and `remaining` counts what is in our system rather than what is in someone else's. |
+| 25 | **New in revision C.** How the syndication row interacts with 6.6 for a product whose users expect content published outside it | **Does not apply.** No Taxottic user expects their content published outside the product. A taxpayer's Schedule C, mileage log or bank feed is not meant to be crawlable, so withholding it from a public index is not a tell and there is nothing to trade off. Recorded because the question could be misread as applying to any product with a public surface: this one has a public *marketing* surface, not a public *tenant-content* surface. |
+
+**Which of the six change the blocker list.** One does: **question 20 is a new
+blocker**, because the fleet's secret exchange now has a required step with no
+address. Question 23 blocks the shape of the report rather than the work.
+Questions 21, 22 and 25 do not apply to this product, and 24 cannot apply while
+the syndication tests hold. The four originally listed as blocking are now
+three and a half: 1, 12 and 13 are untouched, and 10 has lost the half that
+4.1a answers.
 
 ---
 
@@ -369,8 +678,8 @@ is not being treated as the answer.
   here. Real client accounts get a separate `/hq/v2/` prefix in a design that
   is not approved and not built; an un-implemented product answering `404`
   there is the correct behaviour.
-- **The runtime egress checks.** They read `companies.sandbox`. Next PR,
-  after the migration is applied.
+- **The runtime egress checks.** They read `companies.sandbox`. Now unblocked
+  (the migration is applied) and still not written. Next piece of work.
 - **A bearer-auth module.** It would have no caller until the endpoints exist,
   and this codebase's characteristic failure is code that is present, correct
   and never invoked.
@@ -427,8 +736,8 @@ reports live.
 
 | Item | State |
 |---|---|
-| One tenant predicate no data access can skip (6.3) | **Built for every user session**, restrictive RLS on 39 tables. **Not held on 92 service-role call sites.** See the gap above. |
-| `sandbox boolean not null default false` (6.5) | Built. **Migration not applied.** |
+| One tenant predicate no data access can skip (6.3) | **Built for every user session**, restrictive RLS on 39 tables. **Not held on 91 service-role call sites across 79 files.** Revision C makes accounting for them a stated requirement; `lib/hq/elevated-call-sites.test.ts` holds the count and blocks a sandbox tenant from existing while they are unbound. |
+| `sandbox boolean not null default false` (6.5) | Built and **applied**. Revision C confirms the name is correct as built; the collision with Plaid's and APNs' `sandbox` is guarded rather than renamed. |
 | Isolation test watched failing before the boundary (6.8) | Static half observed red then green. psql half not run; SELECT-only access. |
 | Synthetic checked-in seed (6.4) | Built, guarded, no caller yet. |
 | Secret received per 2.4, two values accepted | **Not started.** No secret exists. Nothing here handles one. |
@@ -438,7 +747,7 @@ reports live.
 
 | Item | State |
 |---|---|
-| Sandbox check at every 6.5 chokepoint | **Inventory fixed and guarded. Checks not wired**, blocked on the migration. |
+| Sandbox check at every 6.5 chokepoint | **Inventory fixed and guarded. Checks still not wired**, but no longer blocked: the migration is applied, so code may read `companies.sandbox`. Wiring them is the next piece of work. |
 | No sandbox tenant holds live third-party credentials | Not enforced yet. Plaid and Stripe chokepoints identified. |
 | Sandbox search documents in a separate index or namespace | **Not applicable and guarded.** No search index; no embedding producer; two tests fail if either appears. |
 
@@ -466,7 +775,8 @@ Every line: **not started.** Q1, Q10, Q12 and the unapplied migration.
 | No third-party client constructed for a sandbox tenant, failing on the network call | Construction sites enumerated and guarded. The per-tenant assertion needs the flag. |
 | A real user's search returns no sandbox document | Not applicable today, and guarded so it stays that way. |
 | Every export path routes through the tenant predicate | Export entry points enumerated from the codebase, not from memory. Assertion not written. |
-| The purge test in 8.7 including step 5 | Not started. The catalog half exists (`lib/hq/catalog.ts`) and is already load-bearing for the boundary. |
+| **No feed, public unauthenticated content endpoint, sitemap or deploy-time submission carries anything belonging to a sandbox tenant** | **Built** (`lib/hq/syndication.test.ts`). Paths enumerated from the codebase and from the deploy pipeline. The product has no tenant-content syndication path, and the absence is pinned per version so it fails when one appears. New in revision C. |
+| The purge test in 8.7 including step 5 | Endpoint not started. **The catalog is now complete to the revision C recipe**: `lib/hq/catalog.ts` plus `lib/hq/purge-catalog.test.ts` cover all six steps, and the partition assertion fails the build on a table in no class. |
 
 ---
 
@@ -474,29 +784,35 @@ Every line: **not started.** Q1, Q10, Q12 and the unapplied migration.
 
 | Path | What it is |
 |---|---|
-| `supabase/migrations/20260819010000_hq_sandbox_boundary.sql` | The flag, the two predicate functions, the restrictive barrier on 39 tables. **Unapplied.** |
+| `supabase/migrations/20260819010000_hq_sandbox_boundary.sql` | The flag, the two predicate functions, the restrictive barrier on 39 tables. **Applied**, confirmed on production 2026-08-22: 39 `hq_sandbox_barrier` policies, `companies.sandbox` present. |
 | `supabase/tests/rls-hq-sandbox-isolation.sql` | Section 6.8, real mechanism, psql. |
-| `lib/hq/catalog.ts` | The schema catalog, read from the migrations. Will carry the purge too. |
-| `lib/hq/boundary.test.ts` | The boundary is declared and covers every tenant table. |
+| `lib/hq/catalog.ts` | The schema catalog. Carries all six classes of section 8.1's expanded recipe. |
+| `lib/hq/boundary.test.ts` | The boundary is declared and covers every tenant table, **and the tenant flag is never conflated with Plaid's or APNs' environment**. |
 | `lib/hq/sandbox-seed.ts` | The synthetic fixture. |
 | `lib/hq/sandbox-seed.test.ts` | It is synthetic, fixed, and matches the schema. |
 | `lib/hq/egress-chokepoints.test.ts` | The 6.5 inventory, and the two vector-store invariants. |
-| `lib/hq/invisibility.test.ts` | Section 6.6. |
+| `lib/hq/invisibility.test.ts` | Section 6.6, both the row 1 sweep and the **new revision C row 2 sweep**. |
+| `lib/hq/syndication.test.ts` | **New for revision C.** The 6.5 syndication row, its 6.7 failure mode, and its section 11 checklist line. |
+| `lib/hq/elevated-call-sites.test.ts` | **New for revision C.** Section 6.3's account of the call sites that bypass the predicate, and the sequencing that stops a sandbox tenant existing while they do. |
+| `lib/hq/purge-catalog.test.ts` | **New for revision C.** Section 8.1's expanded recipe, all six steps. |
+| `lib/hq/role-vocabulary.test.ts` | **New for revision C.** Section 4.1a step 5. |
+| `docs/design/fleet-role-vocabulary.md` | **New for revision C.** The 4.1a written exchange, ready to hand to the Hub operator. |
 | `docs/SUPABASE_MIGRATIONS_RUNBOOK.md` | Gained the section 8.5 restore requirement. |
 
-## Applying the migration
+## The migration, applied
 
-Not done here: DB access for this work was SELECT-only, and a boundary
-migration touching 39 tables is not something to apply without a person
-watching. Before applying:
+**Done.** Applied and verified against production `enisnjjbxqaliydepacc` on
+2026-08-22: `companies.sandbox` exists, 39 `hq_sandbox_barrier` policies are in
+`pg_policy`, and `supabase/tests/rls-hq-sandbox-isolation.sql` was run with all
+assertions passing in both directions.
 
-1. Run `supabase/tests/rls-hq-sandbox-isolation.sql` and confirm it fails with
-   `column "sandbox" does not exist`. That is the red the contract asks to be
-   watched.
-2. Apply the migration.
-3. Run the script again and confirm the `[hq-sandbox] OK` notice.
-4. `EXPLAIN ANALYZE` one ordinary `/mileage` read against `mileage_points_raw`
-   before and after. The barrier is written as an uncorrelated subquery
+Two items from the pre-apply list remain open and are worth doing:
+1. `EXPLAIN ANALYZE` one ordinary `/mileage` read against `mileage_points_raw`,
+   now that the barrier is live. It is written as an uncorrelated subquery
    specifically to avoid a per-row cost, but that is a claim about the planner
-   and it has not been measured on this data.
-5. Re-run `npx vitest run lib/hq`.
+   and it has still not been measured on this data.
+2. `alter table ... force row level security` was assessed under revision C's
+   "where your database can force the policy on the table owner, turn it on"
+   and **deliberately not done**: `rolbypassrls` is a role attribute that
+   outranks table ownership, so forcing would change nothing about the 91
+   unbound call sites. Reported rather than performed.
