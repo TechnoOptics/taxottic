@@ -43,6 +43,7 @@
 
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { SANDBOX_KEYED_TABLES, TENANT_FREE_TABLES } from "./sandbox-exclusion";
 import { join } from "node:path";
 
 const REPO_ROOT = join(__dirname, "..", "..");
@@ -112,10 +113,8 @@ function inlineConstructions(): string[] {
  * Regenerate by running this file and reading the failure message.
  */
 const MEASURED = {
-  invocations: 91,
-  files: 79,
-  /** app/admin/** specifically: 6.7 failure mode 2, the report that counts all rows. */
-  adminFiles: 10,
+  invocations: 75,
+  files: 70,
 };
 
 describe("the elevated call-site scan is not vacuous", () => {
@@ -161,18 +160,69 @@ describe("no new call site bypasses the predicate", () => {
     expect(files.length, FAILURE).toBeLessThanOrEqual(MEASURED.files);
   });
 
-  it("does not add an admin file that holds it", () => {
+  it("holds no unbound elevated client in the operator console", () => {
     // The design doc's own sequencing recommendation, and 6.7 failure mode 2:
     // the internal dashboard that counts all rows is the surface where
     // "nothing sandboxed gets out" actually breaks, and it is the smallest
-    // file set, so it is the one worth holding exactly.
+    // file set, so it is the one held exactly rather than as a ceiling.
+    //
+    // Zero, not a ceiling. Every read under app/admin/ now goes through
+    // createSandboxExcludingClient, whose fetch applies the boundary. A file
+    // here that reaches for the plain helper has stepped back outside it.
     const { files } = helperCallSites();
     const admin = files.filter((f) => f.startsWith("app/admin/"));
     expect(
-      admin.length,
+      admin,
       `${FAILURE} This one is under app/admin/, which is where a sandbox row ` +
-        `becomes a line in a report a real person reads.`,
-    ).toBeLessThanOrEqual(MEASURED.adminFiles);
+        `becomes a line in a report a real person reads. Use ` +
+        `createSandboxExcludingClient() from lib/hq/elevated-client instead.`,
+    ).toEqual([]);
+  });
+
+  it("keeps the fetch-taking service client to its one sanctioned caller", () => {
+    // createServiceClientWithFetch() is how the chokepoint gets a privileged
+    // client whose every read is rewritten. It is invisible to the invocation
+    // count above, which matches `createServiceClient()` exactly, so a second
+    // caller would be a bypass that no number in this file moves. One caller,
+    // named here.
+    const callers = ALL_FILES.filter((f) =>
+      /createServiceClientWithFetch\s*\(/.test(code(f)),
+    )
+      .map(rel)
+      .sort();
+    expect(
+      callers,
+      "createServiceClientWithFetch() has a new caller. It builds a " +
+        "service-role client and is not counted by the invocation ceiling " +
+        "above, so a second caller is an unbound call site that moves no " +
+        "number. Route the new code through createSandboxExcludingClient(), " +
+        "or argue for it here.",
+    ).toEqual(["lib/hq/elevated-client.ts", "lib/supabase/server.ts"]);
+  });
+
+  it("classifies every table the operator console reads", () => {
+    // 6.3 asks that each elevated site be bound to a tenant or stated plainly
+    // as unbound. The console's client refuses a table it cannot place, so
+    // this assertion is what turns that runtime refusal into a build failure
+    // rather than a broken internal page discovered by an operator.
+    const read = new Set<string>();
+    for (const f of ALL_FILES) {
+      if (!rel(f).startsWith("app/admin/")) continue;
+      for (const m of code(f).matchAll(/\.from\(\s*"([a-z_]+)"/g)) {
+        read.add(m[1]);
+      }
+    }
+    const unclassified = [...read]
+      .filter((t) => !(t in SANDBOX_KEYED_TABLES) && !(t in TENANT_FREE_TABLES))
+      .sort();
+    expect(
+      unclassified,
+      "the operator console reads a table the sandbox boundary has no entry " +
+        "for. Add it to SANDBOX_KEYED_TABLES in lib/hq/sandbox-exclusion.ts " +
+        "with the column that ties a row to a tenant, or to " +
+        "TENANT_FREE_TABLES with the reason it holds no tenant row. Until " +
+        "then the page throws at runtime, by design.",
+    ).toEqual([]);
   });
 
   it("constructs a privileged client inline in exactly the two known places", () => {
@@ -195,7 +245,10 @@ describe("no new call site bypasses the predicate", () => {
         "6.3 says an import-path audit misses exactly this, which is why it is " +
         "probed separately. Route it through createServiceClient(), or add it " +
         "here with the reason it cannot be.",
-    ).toEqual(["lib/supabase/server.ts", "scripts/backfill-sign-convention.ts"]);
+    ).toEqual([
+      "lib/supabase/server.ts",
+      "scripts/backfill-sign-convention.ts",
+    ]);
   });
 });
 
@@ -241,7 +294,10 @@ describe("no sandbox tenant can exist while those call sites are unbound", () =>
     // in docs/design/fleet-integration.md. This repository already owns that
     // class through a CI guard, so the assertion here is that the guard is
     // still wired, not a second copy of it.
-    const ci = readFileSync(join(REPO_ROOT, ".github", "workflows", "ci.yml"), "utf8");
+    const ci = readFileSync(
+      join(REPO_ROOT, ".github", "workflows", "ci.yml"),
+      "utf8",
+    );
     expect(
       ci.includes("node scripts/check-definer-grants.mjs"),
       "ci.yml no longer runs scripts/check-definer-grants.mjs. That guard is " +

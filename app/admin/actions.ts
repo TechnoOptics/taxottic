@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSuperAdmin } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 
 async function logAction(args: {
   adminUserId: string;
@@ -12,7 +12,7 @@ async function logAction(args: {
   reason?: string | null;
   metadata?: Record<string, unknown>;
 }) {
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   await admin.from("admin_actions").insert({
     admin_user_id: args.adminUserId,
     target_user_id: args.targetUserId,
@@ -29,7 +29,7 @@ export async function blockUser(formData: FormData) {
   if (!targetId) throw new Error("Missing user_id");
 
   // Forever-admin emails cannot be blocked even by another forever admin.
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   const { data: target } = await admin
     .from("profiles")
     .select("email")
@@ -71,7 +71,7 @@ export async function unblockUser(formData: FormData) {
   const targetId = String(formData.get("user_id") ?? "");
   if (!targetId) throw new Error("Missing user_id");
 
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   await admin
     .from("profiles")
     .update({
@@ -121,7 +121,7 @@ export async function deleteUserHard(formData: FormData) {
     throw new Error("You cannot delete the account you're signed in as.");
   }
 
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
 
   // Fetch target email for the confirmation match + the shield check.
   const { data: target } = await admin
@@ -191,7 +191,7 @@ export async function deleteCompanyHard(formData: FormData) {
   const confirmName = String(formData.get("confirm_name") ?? "").trim();
   if (!companyId) throw new Error("Missing company_id");
 
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   const { data: company } = await admin
     .from("companies")
     .select("id, name")
@@ -233,7 +233,7 @@ export async function updateFeedbackStatus(formData: FormData) {
   const note = String(formData.get("admin_note") ?? "").trim() || null;
   if (!id || !status) return;
 
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   await admin
     .from("feedback")
     .update({ status, admin_note: note })

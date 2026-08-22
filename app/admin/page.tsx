@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 
 const FILING_LABEL: Record<string, string> = {
   single: "Single",
@@ -23,7 +23,7 @@ const ENTITY_LABEL: Record<string, string> = {
 
 export default async function AdminPage() {
   const { user } = await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   const taxYear = new Date().getUTCFullYear();
 
   const [

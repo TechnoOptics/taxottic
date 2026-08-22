@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { runSecurityPulse, type Monitor, type PulseResult } from "@/lib/security/pulse";
 import { runPulseNowAction } from "./actions";
 
@@ -41,7 +41,7 @@ const CATEGORY_LABEL: Record<Monitor["category"], string> = {
 
 export default async function SecurityDashboardPage() {
   const { user } = await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
 
   // Pull the most recent run; if there isn't one yet, compute live so the
   // first visit has something to look at.

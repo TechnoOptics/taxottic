@@ -1,7 +1,7 @@
 "use server";
 
 import { requireSuperAdmin } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { sendBetaInvite } from "@/lib/email/send-beta-invite";
 
 export type BetaInviteState = { ok: boolean; message: string } | null;
@@ -63,7 +63,7 @@ export async function sendBetaInviteAction(
   });
 
   // Audit trail (mirrors app/admin/actions.ts). No secrets in metadata.
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   await admin.from("admin_actions").insert({
     admin_user_id: adminUser.id,
     target_user_id: null,
