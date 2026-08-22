@@ -18,9 +18,14 @@
  * The substantive claims (no advertising cookies, no third-party
  * tracking pixels, no analytics SDK) were verified and are accurate:
  * there is no Sentry, PostHog, GA, Plausible, Mixpanel or Segment in
- * the tree, and @vercel/analytics is not installed. Note that
- * next.config.ts still allow-lists *.vercel-insights.com in the CSP;
- * that is a stale allowance, not evidence of collection.
+ * the tree, and @vercel/analytics is not installed.
+ *
+ * next.config.ts used to allow-list *.vercel-insights.com in
+ * script-src and connect-src. Nothing referenced it, so it collected
+ * nothing, but a CSP allow-list is a promise about where bytes may go
+ * and that promise was looser than this page. It was removed on
+ * 2026-08-17, and lib/security/csp.test.ts now fails if any analytics
+ * host is added back without this page changing first.
  *
  * If any non-essential cookie is ever added, the GdprBanner is
  * notice-only today (components/GdprBanner.tsx) and would need to
