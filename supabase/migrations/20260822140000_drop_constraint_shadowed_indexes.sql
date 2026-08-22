@@ -1,0 +1,48 @@
+-- Two plain indexes that duplicate a unique CONSTRAINT.
+--
+-- Postgres backs a `unique` column modifier with a real index named
+-- <table>_<column>_key. Both of these tables declared the column
+-- unique in `create table`, and a later migration then added a plain
+-- index on the same single column:
+--
+--   account_transactions.external_transaction_id text unique
+--     shadowed by account_tx_external_idx
+--   firm_w9_forms.request_token text not null unique
+--     shadowed by firm_w9_forms_token_idx
+--
+-- One column, one direction. For a single-column btree the sort
+-- direction cannot matter, because the index is scannable both ways,
+-- so the unique index answers every question the plain one can.
+--
+-- The constraint-backed index is the one that has to stay: it cannot
+-- be dropped without dropping the constraint, and the constraint is
+-- what makes the column unique. So the plain index is the one to go.
+--
+-- WHY THESE SURVIVED THE GUARD ADDED THIS MORNING
+--
+-- lib/db/index-redundancy.test.ts compared only `create index`
+-- statements. Neither of these unique indexes appears in one, because
+-- neither was created by a statement. The guard was green while
+-- production held both pairs, which is the exact failure the guard
+-- exists to prevent, committed by the guard itself. It now parses
+-- column-level `unique`, table-level `unique (...)`, `primary key` in
+-- both forms, and `alter table ... add constraint`.
+--
+-- WHAT WAS DELIBERATELY NOT DROPPED
+--
+-- Two other pairs look identical in pg_index and are not:
+--
+--   mileage_trips_driver_idx        (driver_user_id, started_at DESC)
+--   mileage_trips_driver_started_uniq (driver_user_id, started_at)
+--
+--   firm_document_versions_doc_idx  (document_id, version DESC)
+--   firm_document_versions_..._key  (document_id, version)
+--
+-- pg_index.indkey does not record sort direction, so a catalog query
+-- grouping on it reports these as duplicates. They are not. A btree on
+-- (a, b DESC) scans forward as `a ASC, b DESC` and backward as
+-- `a DESC, b ASC`; it cannot produce `a ASC, b ASC`. Dropping either
+-- would turn an index-ordered read into a sort. Both stay.
+
+drop index if exists public.account_tx_external_idx;
+drop index if exists public.firm_w9_forms_token_idx;
