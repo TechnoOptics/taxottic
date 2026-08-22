@@ -150,9 +150,13 @@ const CHOKEPOINTS: Chokepoint[] = [
           "sendFirmInviteMagicLink() mails a firm owner through Supabase's " +
           "mailer with shouldCreateUser: true, so it both sends and mints an " +
           "account. It cannot carry the 6.5 allowlist while its copy lives " +
-          "in the Supabase dashboard, so per 6.3 it fails closed instead: it " +
-          "refuses to dispatch once any sandbox tenant exists. See the " +
-          "wiring assertion below and lib/email/send-firm-invite.test.ts.",
+          "in the Supabase dashboard, so per 6.3 it fails closed instead, " +
+          "per invitation: it resolves the token to a firm and refuses only " +
+          "when that firm holds an engagement with a sandbox company, or " +
+          "when it cannot read the answer. A deployment-wide refusal was " +
+          "tried first and rejected, because it would have stopped every " +
+          "real firm's invitation on provisioning day. See the wiring " +
+          "assertions below and lib/email/send-firm-invite.test.ts.",
       },
     ],
   },
@@ -345,6 +349,30 @@ describe("the exit that cannot be gated is sequenced instead", () => {
         "recipient allowlist, and the only thing keeping it inside the 6.1 " +
         "guarantee is that it stops before a sandbox tenant can use it.",
     ).toMatch(/hq_sandbox_company_ids/);
+  });
+
+  it("asks about this invitation's firm, not about the deployment", () => {
+    // The difference between a control and an outage. `firms` carries no
+    // company_id and no sandbox column, so firm_engagements is the only join
+    // from an invitation to a sandbox company. Without it the only question
+    // this file can ask is "does any sandbox tenant exist anywhere", and the
+    // answer stops every real firm's invitation on provisioning day.
+    expect(
+      invite,
+      "the firm-invite refusal is no longer scoped to the invitation being " +
+        "sent. A refusal keyed on the existence of any sandbox tenant blocks " +
+        "every real firm, and blocks it quietly: the caller reports ok:false " +
+        "to the server console and the admin sees an invite that never " +
+        "arrived.",
+    ).toMatch(/firm_engagements/);
+  });
+
+  it("resolves the firm from the invitation token", () => {
+    expect(
+      invite,
+      "the firm-invite refusal no longer reads firm_invitations, so it has " +
+        "no way to know whose invitation it is holding.",
+    ).toMatch(/firm_invitations/);
   });
 
   it("asks before it dispatches, not after", () => {
