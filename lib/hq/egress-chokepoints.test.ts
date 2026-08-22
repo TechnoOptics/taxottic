@@ -26,6 +26,21 @@
  * Two of these lists record a chokepoint that is already broken. That is
  * deliberate: an accurate list of three Stripe constructors is worth more
  * than an aspirational list of one, and the entry says so.
+ *
+ * TRANSACTIONAL EMAIL HAS TWO EXITS, NOT ONE
+ *
+ * Added after a sweep of the email row specifically. sendEmail() is the
+ * Resend exit and 13 call sites route through it, but Supabase's own auth
+ * mailer is a second exit that sendEmail() never sees: signInWithOtp and
+ * generateLink both hand a message to a provider this repository does not
+ * configure, with a subject and body templated in the Supabase dashboard.
+ *
+ * That matters twice over. A recipient allowlist placed on sendEmail() does
+ * not cover it, which is the 6.5 problem. And lib/hq/invisibility.test.ts
+ * sweeps lib/email/templates, which is where this product's email copy lives
+ * for every message except these, so the 6.6 word sweep cannot see them
+ * either. A path outside both controls is worth naming even where it turns
+ * out to carry no message.
  */
 
 import { describe, it, expect } from "vitest";
@@ -88,6 +103,60 @@ const CHOKEPOINTS: Chokepoint[] = [
           "where the sandbox allowlist goes: the prospect's own address plus " +
           "anyone they invited into their own sandbox tenant, everything " +
           "else dropped and counted.",
+      },
+    ],
+  },
+  {
+    path: "Transactional email via Supabase auth",
+    probe: /auth\.(?:admin\.)?(?:signInWithOtp|generateLink)\s*\(/,
+    sites: [
+      {
+        file: "app/api/auth/demo-login/route.ts",
+        note:
+          "NOT AN EGRESS PATH, and listed so that is on the record rather " +
+          "than rediscovered. generateLink() returns properties.hashed_token " +
+          "to the caller, which this route immediately spends on verifyOtp() " +
+          "server-side; nothing is handed to a mailer. It is also inert " +
+          "unless REVIEW_DEMO_EMAIL and REVIEW_DEMO_CODE are both set, and " +
+          "it only ever names REVIEW_DEMO_EMAIL, never an address from the " +
+          "request body.",
+      },
+      {
+        file: "app/api/passkeys/auth/verify/route.ts",
+        note:
+          "NOT AN EGRESS PATH. generateLink() returns " +
+          "properties.action_link in the JSON response to the browser that " +
+          "just proved possession of a registered passkey, and the address " +
+          "comes from the stored passkey row rather than from the request. " +
+          "Nothing is handed to a mailer.",
+      },
+      {
+        file: "app/login/page.tsx",
+        note:
+          "A REAL SECOND EXIT THAT CANNOT BE CLOSED. The sign-in screen " +
+          "calls signInWithOtp in the browser, so no server chokepoint is " +
+          "in the path at all and Supabase mails the code directly. It needs " +
+          "no allowlist: the only possible recipient is the address typed by " +
+          "the person at the keyboard, which is that person's own. What it " +
+          "does mean is that the one email a sandbox prospect is certain to " +
+          "receive is templated in the Supabase dashboard, outside every 6.6 " +
+          "sweep in this repository. Check that template by hand before the " +
+          "first sandbox tenant exists.",
+      },
+      {
+        file: "lib/email/send-firm-invite.ts",
+        note:
+          "A REAL SECOND EXIT, sequenced rather than gated. " +
+          "sendFirmInviteMagicLink() mails a firm owner through Supabase's " +
+          "mailer with shouldCreateUser: true, so it both sends and mints an " +
+          "account. It cannot carry the 6.5 allowlist while its copy lives " +
+          "in the Supabase dashboard, so per 6.3 it fails closed instead, " +
+          "per invitation: it resolves the token to a firm and refuses only " +
+          "when that firm holds an engagement with a sandbox company, or " +
+          "when it cannot read the answer. A deployment-wide refusal was " +
+          "tried first and rejected, because it would have stopped every " +
+          "real firm's invitation on provisioning day. See the wiring " +
+          "assertions below and lib/email/send-firm-invite.test.ts.",
       },
     ],
   },
@@ -217,6 +286,106 @@ describe("every egress path leaves the process where the inventory says", () => 
         expect(s.note.length, `${c.path}: ${s.file} has no note`).toBeGreaterThan(20);
       }
     }
+  });
+});
+
+describe("the transactional-email chokepoint has no second backend inside it", () => {
+  /**
+   * lib/email/transport.ts used to export sendMagicLinkEmail(), a Supabase
+   * OTP send sitting in the same module as the Resend chokepoint and
+   * described in its header as the transport's second backend. It had zero
+   * call sites in the whole repository, which is the only reason the inventory
+   * above reads as it does.
+   *
+   * Dead is not harmless here. A function named for the thing the chokepoint
+   * does, exported from the chokepoint's own file, with a doc comment
+   * inviting callers, is what the next person reaches for when provisioning
+   * needs to mail a prospect. It is deleted, and this keeps it deleted.
+   */
+  const transport = code(join(REPO_ROOT, "lib/email/transport.ts"));
+
+  it("still contains the Resend exit, so the probe is reading the right file", () => {
+    expect(transport).toMatch(/api\.resend\.com/);
+  });
+
+  it("hands nothing to Supabase's mailer", () => {
+    expect(
+      /auth\.(?:admin\.)?(?:signInWithOtp|generateLink)\s*\(/.test(transport),
+      "lib/email/transport.ts is the one place 6.5's email allowlist can go. " +
+        "A Supabase auth send in the same module is a second exit that the " +
+        "allowlist would not cover, reachable by anyone who reads the file " +
+        "looking for the way to send mail.",
+    ).toBe(false);
+  });
+
+  it("exports no magic-link sender", () => {
+    expect(
+      /export\s+(?:async\s+)?function\s+sendMagicLinkEmail/.test(transport),
+      "sendMagicLinkEmail is back. It had zero callers when it was removed; " +
+        "if it has one now, that caller is sending mail around the recipient " +
+        "screen in 6.5 and around the word sweep in 6.6.",
+    ).toBe(false);
+  });
+});
+
+describe("the exit that cannot be gated is sequenced instead", () => {
+  /**
+   * 6.3's third option for a path that cannot be bound to a tenant: "report
+   * the gap to the Hub operator as an open boundary and sequence it before
+   * the first sandbox tenant exists." lib/email/send-firm-invite.ts takes it.
+   *
+   * This is the source-level half. The behavioural half, that the refusal
+   * actually stops the message rather than being written and never reached,
+   * is lib/email/send-firm-invite.test.ts, which calls the real exported
+   * function and asserts the mailer is never touched.
+   */
+  const invite = code(join(REPO_ROOT, "lib/email/send-firm-invite.ts"));
+
+  it("asks whether a sandbox tenant exists", () => {
+    expect(
+      invite,
+      "the firm-invite magic link no longer consults " +
+        "hq_sandbox_company_ids(). It bypasses sendEmail(), so it carries no " +
+        "recipient allowlist, and the only thing keeping it inside the 6.1 " +
+        "guarantee is that it stops before a sandbox tenant can use it.",
+    ).toMatch(/hq_sandbox_company_ids/);
+  });
+
+  it("asks about this invitation's firm, not about the deployment", () => {
+    // The difference between a control and an outage. `firms` carries no
+    // company_id and no sandbox column, so firm_engagements is the only join
+    // from an invitation to a sandbox company. Without it the only question
+    // this file can ask is "does any sandbox tenant exist anywhere", and the
+    // answer stops every real firm's invitation on provisioning day.
+    expect(
+      invite,
+      "the firm-invite refusal is no longer scoped to the invitation being " +
+        "sent. A refusal keyed on the existence of any sandbox tenant blocks " +
+        "every real firm, and blocks it quietly: the caller reports ok:false " +
+        "to the server console and the admin sees an invite that never " +
+        "arrived.",
+    ).toMatch(/firm_engagements/);
+  });
+
+  it("resolves the firm from the invitation token", () => {
+    expect(
+      invite,
+      "the firm-invite refusal no longer reads firm_invitations, so it has " +
+        "no way to know whose invitation it is holding.",
+    ).toMatch(/firm_invitations/);
+  });
+
+  it("asks before it dispatches, not after", () => {
+    // Order is the whole control. A check that runs after signInWithOtp has
+    // returned reports on a message that has already left.
+    const askedAt = invite.indexOf("hq_sandbox_company_ids");
+    const dispatchedAt = invite.search(/auth\.signInWithOtp\s*\(/);
+    expect(askedAt).toBeGreaterThan(-1);
+    expect(dispatchedAt).toBeGreaterThan(-1);
+    expect(
+      askedAt,
+      "the sandbox check now runs after the send rather than before it.",
+    ).toBeLessThan(dispatchedAt);
   });
 });
 

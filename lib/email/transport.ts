@@ -1,15 +1,21 @@
 /**
  * Universal outbound email transport.
  *
- * One function, two backends. The first one configured wins:
- *   1. Resend (REST API, no SDK dependency). Used in production.
- *      Provides per-firm from-addresses, HTML + plain-text, and
- *      reply-to.
- *   2. Supabase auth-OTP magic-link. Used in dev / when
- *      RESEND_API_KEY is unset. We construct a sign-in link and
- *      let Supabase's email provider deliver it. Limitation: only
- *      magic-link emails; the subject + template are controlled
- *      in the Supabase dashboard, not per-message.
+ * One function, one backend: Resend, over its REST API with no SDK
+ * dependency.
+ *
+ * This module used to describe itself as one function with two
+ * backends, the second being a Supabase auth-OTP magic link. That
+ * second backend, sendMagicLinkEmail(), had zero call sites in the
+ * repository and has been removed. It is worth saying why rather
+ * than just deleting it: a Supabase auth send is templated in the
+ * Supabase dashboard, so its subject and body are invisible to the
+ * recipient screen the fleet contract puts on this function (6.5)
+ * and to the word sweep in lib/hq/invisibility.test.ts (6.6). An
+ * exported function that does that, living in the same file as the
+ * chokepoint, is what the next person reaches for. The remaining
+ * Supabase-mailer path is lib/email/send-firm-invite.ts, which is
+ * inventoried in lib/hq/egress-chokepoints.test.ts.
  *
  * Why not the official `resend` npm package: a single REST POST is
  * faster than carrying another dependency, and pinning to a wire
@@ -21,8 +27,6 @@
  * so an SMTP outage doesn't take down the request that triggered
  * the send.
  */
-
-import { createServiceClient } from "@/lib/supabase/server";
 
 export type SendEmailArgs = {
   /** Recipient address. Required. */
@@ -54,8 +58,8 @@ export type SendEmailResult = {
   reason?: string;
   /** Underlying provider's message ID when known. */
   messageId?: string;
-  /** "resend" | "supabase-otp" | "noop" */
-  provider: "resend" | "supabase-otp" | "noop";
+  /** "resend" | "noop" */
+  provider: "resend" | "noop";
 };
 
 const DEFAULT_FROM_EMAIL =
@@ -122,11 +126,13 @@ async function sendViaResend(
 }
 
 /**
- * Send a transactional email via the first configured provider.
- * Returns ok=true on first success; on failure it doesn't fall
- * through to the OTP path automatically because the OTP path
- * sends magic-links (different content). Use sendMagicLinkEmail
- * below explicitly when you want OTP semantics.
+ * Send a transactional email through Resend.
+ *
+ * This is the transactional-email chokepoint from section 6.5 of the
+ * fleet contract: the one place a message leaves this process for a
+ * mail provider, and therefore the one place the sandbox recipient
+ * allowlist goes. Send mail from here, not from a provider of your
+ * own.
  */
 export async function sendEmail(
   args: SendEmailArgs,
@@ -143,40 +149,4 @@ export async function sendEmail(
     `[email] no provider configured (RESEND_API_KEY unset). Would have sent to ${args.to}: "${args.subject}"`,
   );
   return { ok: true, provider: "noop" };
-}
-
-/**
- * Send a sign-in magic link via Supabase OTP. Kept for the existing
- * firm-invitation flow that wants the link to verify the email +
- * create the user in one click. New callers should prefer sendEmail
- * with an explicit body.
- */
-export async function sendMagicLinkEmail(args: {
-  email: string;
-  redirectTo: string;
-}): Promise<SendEmailResult> {
-  try {
-    const admin = createServiceClient();
-    const { error } = await admin.auth.signInWithOtp({
-      email: args.email,
-      options: {
-        emailRedirectTo: args.redirectTo,
-        shouldCreateUser: true,
-      },
-    });
-    if (error) {
-      return {
-        ok: false,
-        reason: error.message,
-        provider: "supabase-otp",
-      };
-    }
-    return { ok: true, provider: "supabase-otp" };
-  } catch (err) {
-    return {
-      ok: false,
-      reason: err instanceof Error ? err.message : "unknown",
-      provider: "supabase-otp",
-    };
-  }
 }
