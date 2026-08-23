@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { emailUndeliveredAlerts } from "@/lib/mileage/email-undelivered";
 import { emailUnconfirmedDrives } from "@/lib/mileage/email-unconfirmed";
+import { auditDeductions } from "@/lib/mileage/deduction-audit";
 import { finalizeUserTrips, reconcileBrokenTrips } from "@/lib/mileage/finalize";
 import {
   evaluateTrackerStall,
@@ -895,8 +896,41 @@ export async function GET(req: NextRequest) {
     console.error(`[mileage-finalize] drive reminder sweep threw: ${String(e)}`);
   }
 
+  // Rows that should be impossible, checked rather than assumed.
+  //
+  // lib/mileage/deduction-invariants.ts was written on 2026-08-15 and
+  // had ZERO callers for a week. Run by hand on 2026-08-22 it found
+  // two more violating rows worth 33.89 USD, created on 18 and 20
+  // August, so the class recurred while the detector built to catch it
+  // sat uninvoked. This call is the whole difference between a rule
+  // and a comment.
+  //
+  // Same never-throw contract as the sweeps above: a failed audit must
+  // not stop points becoming trips.
+  let deductionAudit = {
+    scanned: 0,
+    violationCount: 0,
+    summary: "not run",
+    complete: false,
+  };
+  try {
+    const audit = await auditDeductions(admin);
+    deductionAudit = {
+      scanned: audit.scanned,
+      violationCount: audit.violations.length,
+      summary: audit.summary,
+      complete: audit.complete,
+    };
+  } catch (e) {
+    console.error(`[mileage-finalize] deduction audit threw: ${String(e)}`);
+  }
+
   return NextResponse.json({
     ok: true,
+    // `summary` is "ok" when clean. `complete: false` means the scan
+    // stopped early, so a clean result there is not evidence of a
+    // clean table.
+    deductionAudit,
     driveReminders,
     // Non-zero `emailed` is the signal that a human was actually told
     // about a driver the app could not reach.
