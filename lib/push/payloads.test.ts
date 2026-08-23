@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPayload, type PushEvent } from "./payloads";
+import { buildPayload, eventParties, type PushEvent } from "./payloads";
 
 describe("buildPayload", () => {
   it("trip_classify is actionable + stable dedupe key", () => {
@@ -158,7 +158,7 @@ describe("driver_tracker_unreachable", () => {
     });
     // Keyed on the driver, not just the day. Keyed on the day alone, the
     // first unreachable driver would claim the dedupe and silence every
-    // other one for the rest of the day — the exact failure this
+    // other one for the rest of the day. The exact failure this
     // escalation exists to prevent.
     expect(a.dedupeKey).not.toBe(b.dedupeKey);
     expect(a.dedupeKey).toBe("driver_tracker_unreachable:driver-a:2026-08-06");
@@ -188,3 +188,75 @@ describe("driver_tracker_unreachable", () => {
     expect(p.data.driverId).toBe("c6218e2c-c971-4321-a768-744f047c708c");
   });
 });
+
+describe("eventParties", () => {
+  /**
+   * Fleet contract 6.5: the push chokepoint carries the same recipient
+   * allowlist as the email one. notify() is handed one user id, so a screen
+   * that looked only at that id could never refuse anything: one recipient is
+   * always all on one side of the boundary.
+   *
+   * The two manager alerts are the only pushes in this product addressed to
+   * someone other than the person they are about, and both name that person
+   * in the event. eventParties() is how the chokepoint sees the second party
+   * without any producer passing it one.
+   */
+  it("names the driver a manager alert is about", () => {
+    expect(
+      eventParties({
+        kind: "driver_tracker_unreachable",
+        driverLabel: "Grace",
+        driverId: "c6218e2c-c971-4321-a768-744f047c708c",
+        dayKey: "2026-08-06",
+      }),
+    ).toEqual(["c6218e2c-c971-4321-a768-744f047c708c"]);
+  });
+
+  it("names the driver a foreground-only alert is about", () => {
+    expect(
+      eventParties({
+        kind: "driver_tracker_foreground_only",
+        driverLabel: "Grace",
+        driverId: "c6218e2c-c971-4321-a768-744f047c708c",
+        dayKey: "2026-08-06",
+      }),
+    ).toEqual(["c6218e2c-c971-4321-a768-744f047c708c"]);
+  });
+
+  it("names nobody for an event that concerns only its recipient", () => {
+    expect(eventParties({ kind: "tracker_stalled", dayKey: "2026-08-06" })).toEqual([]);
+    expect(eventParties({ kind: "trip_classify", tripId: "t1" })).toEqual([]);
+    expect(
+      eventParties({ kind: "message", fromName: "Ann", threadId: "t", messageId: "m" }),
+    ).toEqual([]);
+  });
+
+  it("covers every event kind buildPayload knows about", () => {
+    // The compile-time half of this is the `never` assignment in
+    // eventParties. This is the runtime half: a kind added to PushEvent and
+    // wired into buildPayload but forgotten here would be screened as though
+    // it named nobody, which is the permissive answer.
+    const kinds = new Set(EVERY_KIND.map((e) => e.kind));
+    expect(kinds.size).toBe(EVERY_KIND.length);
+    for (const event of EVERY_KIND) {
+      expect(() => eventParties(event), event.kind).not.toThrow();
+    }
+  });
+});
+
+/** One of every PushEvent kind, so the coverage assertion is not a guess. */
+const EVERY_KIND: PushEvent[] = [
+  { kind: "trip_classify", tripId: "t" },
+  { kind: "trip_logged", tripId: "t", classification: "business" },
+  { kind: "clarify", subject: "meal", refId: "r" },
+  { kind: "expense_applied", refId: "r" },
+  { kind: "goal_met", goalLabel: "g", goalId: "g" },
+  { kind: "badge_awarded", badgeLabel: "b", badgeCode: "b" },
+  { kind: "message", fromName: "n", threadId: "t", messageId: "m" },
+  { kind: "outstanding_reminder", count: 1, dayKey: "d" },
+  { kind: "tracker_stalled", dayKey: "d" },
+  { kind: "tracker_parked", dayKey: "d" },
+  { kind: "tracker_foreground_only", dayKey: "d" },
+  { kind: "driver_tracker_unreachable", driverLabel: "l", driverId: "u", dayKey: "d" },
+  { kind: "driver_tracker_foreground_only", driverLabel: "l", driverId: "u", dayKey: "d" },
+];

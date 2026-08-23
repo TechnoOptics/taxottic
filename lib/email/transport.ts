@@ -28,6 +28,14 @@
  * the send.
  */
 
+import { createBoundaryReadClient } from "@/lib/hq/elevated-client";
+import {
+  emailRecipients,
+  logSafe,
+  screenOutbound,
+  type OutboundRealmSource,
+} from "@/lib/hq/outbound-allowlist";
+
 export type SendEmailArgs = {
   /** Recipient address. Required. */
   to: string;
@@ -58,8 +66,8 @@ export type SendEmailResult = {
   reason?: string;
   /** Underlying provider's message ID when known. */
   messageId?: string;
-  /** "resend" | "noop" */
-  provider: "resend" | "noop";
+  /** "resend" | "noop" | "blocked" (refused by the 6.5 sandbox allowlist) */
+  provider: "resend" | "noop" | "blocked";
 };
 
 const DEFAULT_FROM_EMAIL =
@@ -137,6 +145,32 @@ async function sendViaResend(
 export async function sendEmail(
   args: SendEmailArgs,
 ): Promise<SendEmailResult> {
+  // Fleet contract 6.5: "One send function, which drops any message whose
+  // recipients are not all on the sandbox allowlist." The screen covers the
+  // To and every Cc, because 6.5 says ALL of a message's recipients, and it
+  // runs before the provider branch so the no-provider path cannot be used to
+  // reason about what a configured deployment would have done.
+  //
+  // A refusal is returned, not thrown: this function is documented as
+  // never surfacing an exception and 13 call sites are written against that.
+  // The [hq-egress] line is the count 6.5 asks for; it is greppable in the
+  // platform's log store, which is the only counter that survives a
+  // serverless invocation.
+  const screen = await screenOutbound(
+    emailRecipients(args),
+    () => createBoundaryReadClient() as unknown as OutboundRealmSource,
+  );
+  if (!screen.allowed) {
+    console.warn(
+      `[hq-egress] email dropped subject="${logSafe(args.subject)}" reason=${screen.reason}`,
+    );
+    return {
+      ok: false,
+      reason: `sandbox egress: ${screen.reason}`,
+      provider: "blocked",
+    };
+  }
+
   if (process.env.RESEND_API_KEY) {
     return await sendViaResend(args);
   }

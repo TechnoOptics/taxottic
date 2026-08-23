@@ -1,8 +1,9 @@
 # Techno Optics fleet integration: the sandbox boundary
 
-Status: **foundation built and mutation-tested, and re-assessed against
-revision C. None of the five endpoints exist, deliberately.** Four open
-questions block them. The boundary migration **is applied**, confirmed against
+Status: **foundation built and mutation-tested, re-assessed against revision
+C, and the 6.5 outbound recipient allowlist is now wired at both chokepoints
+that address a person. None of the five endpoints exist, deliberately.** Four
+open questions block them. The boundary migration **is applied**, confirmed against
 production on 2026-08-22. A product with no `/hq/` routes answers `404`, which
 the contract names as the correct state while the work is incomplete.
 
@@ -104,6 +105,7 @@ Measured on this tree, from the codebase and counting inline constructions as
 | `createServiceClient()` invocations | **91** | **75** |
 | Files holding them | **79** | **70** |
 | Of those, under `app/admin/` | **10** | **0** |
+| Call paths reaching `createBoundaryReadClient()` | **1** | **2** (the console's realm lookup; the 6.5 outbound allowlist in `lib/email/transport.ts`) |
 | Privileged clients constructed **inline**, outside the helper | **2** | **2** (`lib/supabase/server.ts`, the helper itself; `scripts/backfill-sign-convention.ts`, a hand-run maintenance script) |
 | `security definer` functions in `public` | **42**, of which **33** are anon-executable | unchanged |
 
@@ -111,6 +113,39 @@ Measured on this tree, from the codebase and counting inline constructions as
 operator console is now bound. The other 75 are not**, and the classification
 below says which of them could ever read a sandbox tenant's row and which
 could not. This document still does not report the one-predicate rule as met.
+
+**One row of that table needs its own paragraph, because the count did not
+move and a reader is entitled to know why.** The outbound allowlist described
+under "The outbound recipient allowlist" below needs a privileged read at the
+email chokepoint, and the first two rows above are unchanged at 75 and 70.
+That is not because nothing was added. `lib/hq/elevated-client.ts` was already
+one of the 70 files and already held one `createServiceClient()` invocation;
+the client construction was extracted into a named factory,
+`createBoundaryReadClient()`, and `lib/email/transport.ts` calls that factory
+rather than the helper. So a second code path now obtains a service-role
+client at runtime while the source count stays where it was.
+
+Three things make that a deliberate act rather than a number quietly kept
+true. First, the read is the one read that cannot be bound by the boundary,
+because it is the read that *defines* the boundary: which tenants are
+sandboxes and who is inside them. It is the same read
+`lib/hq/elevated-client.ts` already made for the console, for the same reason,
+and it is the read that makes 74 other unbound call sites irrelevant to
+outbound messages. Second, one factory serving both chokepoints is strictly
+fewer privileged clients than the alternative of giving email a call site of
+its own. Third, the thing the extraction made invisible to the count is now
+visible to a named assertion: `lib/hq/elevated-call-sites.test.ts` pins the
+set of files that call `createBoundaryReadClient()` to exactly two, the same
+shape it already uses for `createServiceClientWithFetch()`. A third caller
+fails the build with a message that says to call `createServiceClient()` and
+raise the ceiling instead.
+
+The alternative that would move no number at all is a security-definer
+function, in the shape of `hq_sandbox_company_ids()`, that answers "is this
+address inside a sandbox tenant" without any privileged client. It is not
+built here: it needs a migration, and this work has SELECT-only access. It is
+recorded under "Blockers" as the follow-up that would take the boundary-read
+factory back to one caller.
 
 6.3 also says "where your database can force the policy on the table owner,
 turn it on". Assessed and **deliberately not done**, with a reason: `force row
@@ -622,15 +657,19 @@ characteristic failure is a feature that is present and never invoked.
 
 ### Egress inventory
 
-`lib/hq/egress-chokepoints.test.ts` does not implement the section 6.5 checks
-(they read `companies.sandbox`; see reason 2 above). It fixes the inventory in
-place so it cannot rot between this PR and the next one. Each assertion says:
-this egress path leaves the process in these files and no others.
+`lib/hq/egress-chokepoints.test.ts` fixes the inventory in place so it cannot
+rot. Each assertion says: this egress path leaves the process in these files
+and no others.
+
+**Two of these rows now carry the check itself, not only the inventory.**
+Transactional email and push are the two paths that address a person, and 6.5
+gives them one rule and one allowlist between them. Both are wired. See "The
+outbound recipient allowlist" below. The other rows are inventory only.
 
 | 6.5 path | Chokepoint | State |
 |---|---|---|
-| Transactional email | `sendEmail()`, `lib/email/transport.ts` | Single Resend exit, 13 call sites. **Five Supabase-auth mail sites bypass it** (`signInWithOtp`, `generateLink`); those are magic-link and invite mail and need their own gate. |
-| SMS, push, voice | `resolveProvider()`, `lib/push/providers.ts`, behind `notify()` | Single exit for APNs, FCM and web push. No SMS or voice exists. The cleanest path here. |
+| Transactional email | `sendEmail()`, `lib/email/transport.ts` | Single Resend exit, 13 call sites. **The recipient allowlist is wired here.** Two Supabase-auth mail sites still bypass it: `app/login/page.tsx` (browser-side OTP, addresses only the person typing) and `lib/email/send-firm-invite.ts` (sequenced with a per-invite refusal). The two `generateLink` routes were assessed and hand nothing to a mailer. |
+| SMS, push, voice | `notify()`, `lib/push/index.ts`, in front of `resolveProvider()` | Single exit for APNs, FCM and web push, 16 producers. **The same allowlist is wired here**, screening the addressee plus anyone the event is about. No SMS or voice exists. |
 | Outbound webhooks | none exist | All four `/api/webhooks/*` routes are inbound receivers. Nothing to gate. |
 | Payments and billing | `getStripe()`, `lib/stripe/server.ts` | **Already violated twice**: a second module-private client in `lib/firm/payments/stripe-connect.ts` and one constructed inline in `app/api/firm/billing/portal/route.ts`. All three are in the inventory so the count is honest; a sandbox gate has to go in all three until they are folded back together. |
 | Banking | `getPlaidClient()`, `lib/plaid/client.ts` | One construction, five consumers. |
@@ -640,6 +679,130 @@ this egress path leaves the process in these files and no others.
 | Data exports | `app/api/export/data/route.ts` (JSON), `renderHtmlToPdf()` (PDF), `mileageLogToCsv()` (CSV, browser-only) | No internal admin bulk export exists, which is the one 6.5 calls the real risk. |
 | Support and CRM auto-creation | not built | Blocked on question 11 regardless: "the operator's trial queue" is undefined. |
 | Internal alerting | `console.log` to Vercel logs | No customer-visible status page. |
+
+### The outbound recipient allowlist
+
+6.5's first two rows ask for one send function that "drops any message whose
+recipients are not all on the sandbox allowlist", where the allowlist "for a
+sandbox tenant is exactly the prospect's own address, plus any address they
+invited into their own sandbox tenant", and then say push takes the "same
+rule, same chokepoint shape, same allowlist". 6.7's first failure mode is the
+scheduled job that sends to someone outside the sandbox. This is that control.
+
+**Where it lives.** `lib/hq/outbound-allowlist.ts` holds the rule and the
+realm read. Two chokepoints call it and nothing else does:
+
+| Chokepoint | File | Behind it |
+|---|---|---|
+| `sendEmail()` | `lib/email/transport.ts` | 13 call sites, one exit to Resend |
+| `notify()` | `lib/push/index.ts` | 16 producers, one exit to APNs, FCM and web push |
+
+Not at the 29 call sites. 6.5: "The check belongs at the chokepoint, not at
+each call site."
+
+**One module for both, and why that is not over-coupling.** 6.5 says "same
+allowlist" in as many words, and two copies of one rule is the mechanism 6.2
+rejects at a coarser grain: the day the rule changes, one copy changes. What
+is shared is the rule and the realm read. What is not shared is the recipient
+handle (a user id for push, an address for email) and the return shape, which
+each chokepoint keeps, because forcing one to speak the other's vocabulary
+would put a translation layer between a control and the thing it controls.
+
+**Why the push screen is not a decoration.** `notify()` is handed a single
+user id, and a screen over one recipient can never refuse anything: one person
+is always wholly on one side of the boundary. What makes it real is that the
+two manager alerts, `driver_tracker_unreachable` and
+`driver_tracker_foreground_only`, are the only pushes in this product
+addressed to someone other than the person they are about, and both already
+carry that person's id in the event. `eventParties()` in `lib/push/payloads.ts`
+extracts it, so the chokepoint sees both parties without any of the 16
+producers passing one. Its switch is exhaustive against `never`, so a new
+event kind carrying a second party fails the build rather than being screened
+as though it named nobody.
+
+**What is on the allowlist.** For each sandbox tenant: every user holding a
+membership in it, every one of those users' `profiles.email`, and every
+address in `invitations` for that tenant. The invitations half is not
+optional. An invitation is sent before the invitee has a profile, so an
+allowlist built from memberships alone would drop the one message that proves
+the invite worked, which is 6.6's "silently sending nothing is itself a tell".
+
+**The decision, stated once.** With no sandbox tenant, everything passes.
+Otherwise: a message reaching nobody inside a sandbox passes; a message all of
+whose recipients are inside one sandbox tenant passes; a message mixing a
+sandbox recipient with anyone outside is refused; a message spanning two
+sandbox tenants is refused; a recipient somehow holding membership in two
+sandbox tenants is refused rather than attributed to one.
+
+**Dropped, logged, never thrown.** 6.5 asks for "dropped and counted, not
+queued", and this takes it literally. A refusal is a returned value:
+`{ ok: false, provider: "blocked", reason }` from `sendEmail()`, and
+`{ sent: false, delivered: 0 }` from `notify()`. Neither throws.
+
+That was a decision, not an omission. A cron that throws is an outage, and
+both of these functions are documented as best-effort and non-throwing with 29
+call sites written against that, so raising here would change how a real
+customer's request behaves today, which is the one thing this work must not
+do. The other half of the argument is that a silent drop is this repository's
+worst failure shape, so the drop is not silent: every refusal writes an
+`[hq-egress]` line naming the message and the reason, and the caller receives
+a false with the reason attached. Grepping `[hq-egress]` in the platform's log
+store is the count 6.5 asks for, and it is the only counter that survives a
+serverless invocation.
+
+Because it is the count, the line has to be one line. The push line carries a
+kind and a user id, both ours. The email line carries the subject, which is
+user-controlled (`firm-digest` builds one from `firms.name`), so it goes
+through `logSafe()`, which strips control characters and bounds the length. It
+deliberately does not carry the recipient address: the count does not need it
+and a log store is not where addresses belong.
+
+**Fail closed, and what that costs.** If the realm cannot be read, or the
+privileged client cannot even be constructed, the message is refused rather
+than sent unscreened. Sending unscreened on a read error is an open boundary
+that looks like a working product. The cost is bounded and was checked rather
+than assumed: every send in this codebase is preceded by PostgREST reads that
+produced the message in the first place, so the failure in which this read
+fails is one where there was nothing to send. The construction case is in the
+same branch on purpose, because supabase-js raises synchronously when the
+service-role key is absent, and that throw would otherwise escape a function
+documented as never throwing. `lib/hq/outbound-allowlist-wiring.test.ts` has
+that test, and it was watched failing first.
+
+**It is a no-op in production, and that is shown rather than asserted.**
+`select count(*) from companies where sandbox` returns 0 on
+`enisnjjbxqaliydepacc`, measured 2026-08-22. Nothing in this repository writes
+a true value into that column, which `lib/hq/elevated-call-sites.test.ts` holds
+in place. With no sandbox tenant the realm read short-circuits after one query
+and the decision is unconditional pass, and two of the wiring tests assert on
+the network call: the Resend POST still goes out and the `notification_log`
+claim is still made. The one genuine behavioural delta on a live deployment is
+one extra PostgREST GET per outbound message, and the refusal branch that
+fires only when that GET fails.
+
+**What this control cannot do, stated plainly.** It sees a message's
+recipients and nothing else. So it cannot tell that a digest addressed only to
+real people was aggregated across a sandbox tenant's rows. That is the
+content-side half of 6.7's first failure mode, and closing it needs the 6.3
+read predicate to bind the job that built the body, which for a service-role
+caller it does not. In this codebase the one shape it could take is a real
+firm holding a `firm_engagements` row pointing at a sandbox company, which
+`app/api/cron/firm-digest/route.ts` would then summarise to that firm's
+members. Nothing here can create that state, because nothing here creates a
+sandbox company at all, and the tripwire that keeps it so is the same one
+holding the unbound call sites shut. It is recorded under "The gap this does
+not close" rather than left to be rediscovered.
+
+Two smaller limits belong with it. An address invited into a sandbox tenant is
+treated as inside that tenant even if it also belongs to a real user, so a
+prospect who invites a real customer's address would cause that customer's
+co-addressed mail to be refused. That is a refusal rather than a leak, it
+cannot happen before provisioning exists, and the provisioning path is where
+the invariant belongs. And the login OTP and the firm invite are templated in
+the Supabase dashboard, outside this repository, so no allowlist and no word
+sweep here can see them; `lib/email/send-firm-invite.ts` carries its own
+per-invite refusal and the login OTP can only ever reach the person typing
+into it.
 
 ### The vector store, which the product note singles out
 
@@ -740,6 +903,16 @@ the PR that adds the routes, not before.
 **Q13. What evidence of completion does the operator want, and who receives
 it?** Unanswerable locally. This document plus a CI run is the guess, and it
 is not being treated as the answer.
+
+**One schema change is wanted and is not applied here, because this work has
+SELECT-only access.** A security-definer function in the shape of
+`hq_sandbox_company_ids()`, answering "is this address inside a sandbox
+tenant, and which one", would let `lib/email/transport.ts` screen a recipient
+with no privileged client at all and take `createBoundaryReadClient()` back to
+its single console caller. It is reported rather than written. Until then the
+allowlist reads `companies`, `company_members`, `profiles` and `invitations`
+through the boundary-read factory, which is recorded in the elevated call-site
+table above.
 
 ### The remaining twenty-one, and what each would change
 
@@ -869,7 +1042,7 @@ code running as `service_role`, and seventy-five such call sites remain.
 
 | Item | State |
 |---|---|
-| Sandbox check at every 6.5 chokepoint | **Inventory fixed and guarded. Checks still not wired**, but no longer blocked: the migration is applied, so code may read `companies.sandbox`. Wiring them is the next piece of work. |
+| Sandbox check at every 6.5 chokepoint | **The two paths that address a person are wired**: `sendEmail()` and `notify()` both carry the recipient allowlist, at the chokepoint and not at the 29 call sites. The remaining rows (payments, banking, AI, exports) are **inventory and guard only**; each names the file its check goes in. |
 | No sandbox tenant holds live third-party credentials | Not enforced yet. Plaid and Stripe chokepoints identified. |
 | Sandbox search documents in a separate index or namespace | **Not applicable and guarded.** No search index; no embedding producer; two tests fail if either appears. |
 
@@ -884,7 +1057,7 @@ Every line: **not started.** Q1, Q10, Q12 and the unapplied migration.
 | Grep templates, locales, subjects, PDF footers, export filenames | Built as a test, with one reasoned exclusion. |
 | Ordinary hostname, no subdomain or port tell | Not enforceable yet; nothing produces a `login_url`. Q12. |
 | No slower tier for a sandbox | No tiering exists. Nothing to do. |
-| Prospect-triggered emails still arrive | Not wired. The allowlist is the mechanism and it needs the flag. |
+| Prospect-triggered emails still arrive | **Wired.** The allowlist admits the prospect's own address and every address invited into their own tenant, including invitations sent before the invitee has a profile, which is the message whose absence would read as a broken product. |
 | A blocked integration fails the ordinary way | Not wired. |
 
 ### Tests (phase 5, the actual deliverable)
@@ -892,7 +1065,7 @@ Every line: **not started.** Q1, Q10, Q12 and the unapplied migration.
 | Item | State |
 |---|---|
 | Provisioned user cannot read a real tenant's row, real mechanism | **Written** (`supabase/tests/rls-hq-sandbox-isolation.sql`). **Not executed**, needs the migration applied and write access. |
-| Every scheduled job sends nothing to a non-allowlisted recipient | Not started. Needs the email allowlist. 11 crons enumerated from `vercel.json`. |
+| Every scheduled job sends nothing to a non-allowlisted recipient | **The control is built; the whole-job run is not.** 11 crons enumerated from `vercel.json`; three egress (`firm-digest` by email, `mileage-finalize` by push and email, `outstanding-reminders` by push) and eight are database-only. Every send any of them makes passes through the two chokepoints, and `lib/hq/outbound-allowlist-wiring.test.ts` asserts on the network call rather than on a mock. Running each job end to end against a populated sandbox tenant needs a sandbox tenant, which cannot exist yet. |
 | `report_counts` byte-identical before and after a sandbox | The count invariant is asserted inside the psql script. The endpoint does not exist. The internal counts that already exist, `totalUsers` and `totalCompanies` on the console dashboard, are the section 7 definitions' nearest live equivalent and **did** count every row; they now run through the chokepoint, including the `head: true` count requests, which issue `HEAD` and would have escaped a wrapper that only handled `GET`. |
 | No third-party client constructed for a sandbox tenant, failing on the network call | Construction sites enumerated and guarded. The per-tenant assertion needs the flag. |
 | A real user's search returns no sandbox document | Not applicable today, and guarded so it stays that way. |
@@ -918,7 +1091,10 @@ Every line: **not started.** Q1, Q10, Q12 and the unapplied migration.
 | `lib/hq/elevated-call-sites.test.ts` | **New for revision C.** Section 6.3's account of the call sites that bypass the predicate, and the sequencing that stops a sandbox tenant existing while they do. Now also holds the console at zero unbound clients, holds the fetch-taking factory to one caller, and fails when the console reads a table the boundary has not classified. |
 | `lib/hq/sandbox-exclusion.ts` | The chokepoint. The table partition, the URL rewrite, the realm lookup, and the four ways it fails closed. |
 | `lib/hq/sandbox-exclusion.test.ts` | The rewrite, tested as pure behaviour. |
-| `lib/hq/elevated-client.ts` | Twelve lines wiring the chokepoint to a service-role client. The console's only door. |
+| `lib/hq/elevated-client.ts` | Wires the read chokepoint to a service-role client, and vends the boundary-read client the outbound allowlist needs. Two callers, both pinned by name. |
+| `lib/hq/outbound-allowlist.ts` | **New.** Section 6.5's recipient allowlist: the realm read, the rule, and the fail-closed screen the two chokepoints call. |
+| `lib/hq/outbound-allowlist.test.ts` | The rule, as pure behaviour, against a fake realm. |
+| `lib/hq/outbound-allowlist-wiring.test.ts` | The rule, reached. Calls the real `sendEmail()` and `notify()` and asserts on the request that did or did not leave. |
 | `lib/hq/purge-catalog.test.ts` | **New for revision C.** Section 8.1's expanded recipe, all six steps. |
 | `lib/hq/role-vocabulary.test.ts` | **New for revision C.** Section 4.1a step 5. |
 | `docs/design/fleet-role-vocabulary.md` | **New for revision C.** The 4.1a written exchange, ready to hand to the Hub operator. |
