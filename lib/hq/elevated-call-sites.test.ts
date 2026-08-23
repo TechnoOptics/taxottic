@@ -200,6 +200,39 @@ describe("no new call site bypasses the predicate", () => {
     ).toEqual(["lib/hq/elevated-client.ts", "lib/supabase/server.ts"]);
   });
 
+  it("keeps the boundary-read client to its sanctioned callers", () => {
+    /**
+     * createBoundaryReadClient() is a factory in lib/hq/elevated-client.ts
+     * holding ONE `createServiceClient()` occurrence, so a second call path to
+     * it adds a privileged runtime client while moving no number in the
+     * invocation ceiling above. That is precisely the shape 6.3 warns about,
+     * so the callers are named rather than counted.
+     *
+     * Both existing callers make the same read and no other: which tenants are
+     * sandboxes and who is inside them. That read cannot be bound by the
+     * boundary, because it is the read that defines the boundary. Anything
+     * else reaching for this factory is an ordinary unbound elevated call
+     * site wearing the boundary's name.
+     */
+    const callers = ALL_FILES.filter((f) =>
+      /createBoundaryReadClient\s*\(/.test(code(f)),
+    )
+      .map(rel)
+      .sort();
+    expect(
+      callers,
+      "createBoundaryReadClient() has a new caller. It vends a service-role " +
+        "client from a single invocation, so a new caller is an unbound call " +
+        "site that the ceiling above cannot see. It exists only for the read " +
+        "that defines the sandbox boundary. If the new caller needs a " +
+        "privileged client for anything else, call createServiceClient() and " +
+        "raise the ceiling, so the number the Hub operator is given stays true.",
+    ).toEqual([
+      "lib/email/transport.ts",
+      "lib/hq/elevated-client.ts",
+    ]);
+  });
+
   it("classifies every table the operator console reads", () => {
     // 6.3 asks that each elevated site be bound to a tenant or stated plainly
     // as unbound. The console's client refuses a table it cannot place, so

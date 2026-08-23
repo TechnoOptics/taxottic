@@ -33,8 +33,31 @@ import {
   type SandboxRealmSource,
 } from "@/lib/hq/sandbox-exclusion";
 
+/**
+ * The one privileged client this file hands out, and the only kind of read it
+ * is for: asking which tenants are sandboxes and who is inside them.
+ *
+ * It is deliberately NOT bound by the boundary, because it is the read that
+ * DEFINES the boundary. A client narrowed to exclude sandbox rows cannot tell
+ * you which rows those are.
+ *
+ * There are two call paths to it, and both are named in
+ * lib/hq/elevated-call-sites.test.ts rather than left to a count:
+ *
+ *   createSandboxExcludingClient()   the operator console's realm lookup
+ *   lib/email/transport.ts           the 6.5 outbound recipient allowlist
+ *
+ * Read that test before adding a third. Because this factory holds a single
+ * `createServiceClient()` occurrence, a new caller moves no number in the
+ * invocation ceiling, which is exactly the shape 6.3 warns about. The caller
+ * list is pinned instead.
+ */
+export function createBoundaryReadClient() {
+  return createServiceClient();
+}
+
 export function createSandboxExcludingClient() {
-  const raw = createServiceClient();
+  const raw = createBoundaryReadClient();
   return createServiceClientWithFetch(
     sandboxExcludingFetch(() =>
       loadSandboxRealm(raw as unknown as SandboxRealmSource),

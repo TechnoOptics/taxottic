@@ -389,6 +389,138 @@ describe("the exit that cannot be gated is sequenced instead", () => {
   });
 });
 
+describe("the two chokepoints that address a person carry the allowlist", () => {
+  /**
+   * 6.5's first two rows, transactional email and push, both require "one
+   * send function, which drops any message whose recipients are not all on
+   * the sandbox allowlist", and the push row says "same rule, same chokepoint
+   * shape, same allowlist".
+   *
+   * This is the source-level half: the screen is in the file, and it runs
+   * before the dispatch rather than after it. The behavioural half, that the
+   * screen actually stops the network call, is
+   * lib/hq/outbound-allowlist-wiring.test.ts, which calls the real sendEmail()
+   * and notify() and asserts on the request that did or did not go out.
+   *
+   * Order is the whole control. A screen that runs after the POST has
+   * returned reports on a message that has already left, which is a control
+   * that reads as present and does nothing.
+   */
+  const transport = code(join(REPO_ROOT, "lib/email/transport.ts"));
+  const push = code(join(REPO_ROOT, "lib/push/index.ts"));
+
+  it("the email chokepoint screens its recipients", () => {
+    expect(
+      transport,
+      "sendEmail() no longer screens its recipients. It is the one place a " +
+        "message reaches Resend and therefore the one place 6.5's allowlist " +
+        "can go for 13 call sites.",
+    ).toMatch(/screenOutbound\s*\(/);
+  });
+
+  it("the email chokepoint screens the Cc as well as the To", () => {
+    // 6.5 says a message is dropped when its recipients are not ALL on the
+    // allowlist. A screen over args.to alone leaves every Cc unscreened, and
+    // a Cc is how a sandbox address ends up on a real firm's thread.
+    expect(
+      transport,
+      "sendEmail() screens something other than emailRecipients(), which is " +
+        "the helper that flattens the To and every Cc.",
+    ).toMatch(/screenOutbound\s*\(\s*emailRecipients\s*\(/);
+  });
+
+  it("the email chokepoint screens before it hands the message to the provider", () => {
+    /**
+     * Compared inside sendEmail()'s own body, not across the file. The
+     * literal `api.resend.com` sits in sendViaResend(), which is DEFINED
+     * above sendEmail() and CALLED from inside it, so a whole-file position
+     * comparison reads the dispatch as earlier than the screen and fails a
+     * correct implementation. Textual order is not call order; the thing to
+     * order is the call.
+     */
+    const body = transport.slice(
+      transport.indexOf("export async function sendEmail"),
+    );
+    expect(body.length, "sendEmail() was renamed or removed").toBeGreaterThan(0);
+    const screenedAt = body.search(/screenOutbound\s*\(/);
+    const dispatchedAt = body.search(/sendViaResend\s*\(/);
+    expect(screenedAt).toBeGreaterThan(-1);
+    expect(dispatchedAt).toBeGreaterThan(-1);
+    expect(
+      screenedAt,
+      "the recipient screen now runs after the message is handed to Resend, " +
+        "which reports on a message that has already left.",
+    ).toBeLessThan(dispatchedAt);
+  });
+
+  it("the email chokepoint has exactly one dispatch, and it is the one that was ordered", () => {
+    // The assertion above orders ONE call. If a second dispatch appears
+    // earlier in the file, ordering the later one proves nothing.
+    const mentions = transport.match(/sendViaResend\s*\(/g) ?? [];
+    expect(
+      mentions.length,
+      "sendViaResend() is referenced somewhere other than its definition and " +
+        "its single call inside sendEmail(). A second dispatch is a second " +
+        "exit, and the screen orders only the first one it finds.",
+    ).toBe(2);
+  });
+
+  it("the push chokepoint screens its recipients", () => {
+    expect(
+      push,
+      "notify() no longer screens its recipients. It is the one exit for " +
+        "APNs, FCM and web push, with 16 producers behind it.",
+    ).toMatch(/screenOutbound\s*\(/);
+  });
+
+  it("the push chokepoint screens the people the event is about, not only the addressee", () => {
+    /**
+     * notify() is handed ONE user id. A screen over that id alone can never
+     * refuse anything, because one recipient is always wholly on one side of
+     * the boundary, and the control would be a decoration. The two manager
+     * alerts carry the driver they concern in the event, and eventParties()
+     * is what puts that second person in front of the screen.
+     */
+    expect(
+      push,
+      "notify() screens only its addressee. That screen cannot refuse a " +
+        "single-recipient message, so the manager alert about a sandbox " +
+        "driver would pass it. Include eventParties(event).",
+    ).toMatch(/eventParties\s*\(\s*event\s*\)/);
+  });
+
+  it("the push chokepoint screens before it claims the dedupe key or fans out", () => {
+    const screenedAt = push.search(/screenOutbound\s*\(/);
+    const sentAt = push.search(/sendToUser\s*\(/);
+    expect(screenedAt).toBeGreaterThan(-1);
+    expect(sentAt).toBeGreaterThan(-1);
+    expect(
+      screenedAt,
+      "the recipient screen now runs after sendToUser(), which claims the " +
+        "dedupe key and fans out to every device before anything is decided.",
+    ).toBeLessThan(sentAt);
+  });
+
+  it("neither chokepoint turns a refusal into an exception", () => {
+    // A cron that throws is an outage. Both of these are documented as
+    // best-effort and never-throwing, and 29 call sites are written against
+    // that, so the refusal is a returned value.
+    for (const [name, src] of [
+      ["lib/email/transport.ts", transport],
+      ["lib/push/index.ts", push],
+    ] as const) {
+      const refusal = src.slice(src.search(/screenOutbound\s*\(/));
+      const decision = refusal.slice(0, refusal.indexOf("}\n\n"));
+      expect(
+        /\bthrow\b/.test(decision),
+        `${name} now throws when the allowlist refuses a message. 6.5 asks ` +
+          `for dropped and counted, not raised, and the callers here treat ` +
+          `sending as best-effort.`,
+      ).toBe(false);
+    }
+  });
+});
+
 describe("nothing embeds tenant content into a shared collection", () => {
   /**
    * The README's product note for Taxottic:

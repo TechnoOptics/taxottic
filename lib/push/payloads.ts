@@ -53,7 +53,7 @@ export type PushEvent =
   | { kind: "outstanding_reminder"; count: number; dayKey: string }
   /**
    * The mileage tracker went silent server-side (no raw points for
-   * hours from a driver who was uploading recently) — almost always
+   * hours from a driver who was uploading recently) , almost always
    * iOS reverting Location "Always" → "While Using", or the toggle /
    * app getting killed. The in-app banner can't reach a closed app;
    * this push can. `dayKey` folds into the dedupe key so however
@@ -204,7 +204,7 @@ export function buildPayload(e: PushEvent): PushPayload {
       return {
         // The device is reporting fine but hasn't moved in days: tracking
         // is "working" and still missing every real drive, so the ask is
-        // different from tracker_stalled — confirm it's the right phone.
+        // different from tracker_stalled, confirm it's the right phone.
         title: "Is this the phone you drive with?",
         body:
           "Taxottic is running here, but this phone hasn't been on a drive in days. If you drive with a different phone, set up tracking there.",
@@ -252,4 +252,44 @@ export function buildPayload(e: PushEvent): PushPayload {
         dedupeKey: `driver_tracker_foreground_only:${e.driverId}:${e.dayKey}`,
       };
   }
+}
+
+/**
+ * Every user a push event is ABOUT, other than the person it is sent to.
+ *
+ * Fleet contract 6.5 puts the same recipient allowlist on push as on email.
+ * notify() is handed a single user id, and a screen over a single recipient
+ * can never refuse anything: one person is always entirely on one side of the
+ * boundary. What makes the push screen real is that the two manager alerts,
+ * the only pushes in this product addressed to someone other than the person
+ * they concern, already carry that person's id in the event. So the
+ * chokepoint can see both parties without any of the 16 producers being asked
+ * to pass one, which is 6.5's "at the chokepoint, not at each call site".
+ *
+ * Pure, like the rest of this file. The `never` assignment below is the
+ * point of the exhaustive switch: a new PushEvent kind that carries a second
+ * party has to be classified here or the build fails, rather than being
+ * screened as though it named nobody.
+ */
+export function eventParties(e: PushEvent): string[] {
+  switch (e.kind) {
+    case "driver_tracker_unreachable":
+    case "driver_tracker_foreground_only":
+      return [e.driverId];
+    case "trip_classify":
+    case "trip_logged":
+    case "clarify":
+    case "expense_applied":
+    case "goal_met":
+    case "badge_awarded":
+    case "message":
+    case "outstanding_reminder":
+    case "tracker_stalled":
+    case "tracker_parked":
+    case "tracker_foreground_only":
+      return [];
+  }
+  const unclassified: never = e;
+  void unclassified;
+  return [];
 }
