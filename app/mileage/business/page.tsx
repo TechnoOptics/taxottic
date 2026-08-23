@@ -9,6 +9,10 @@ import {
 } from "@/components/mileage/MileageMap";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
+import {
+  splitScheduleC,
+  type ClassifiableTrip,
+} from "@/lib/mileage/schedule-c-totals";
 
 // Business-trips dashboard, the breadcrumb map of every drive
 // classified as "business". Same data model as the parent /mileage
@@ -148,6 +152,8 @@ export default async function BusinessTripsPage({
     distance_miles: number;
     classification: "business" | "personal" | "unclassified";
     deduction_cents: number;
+    /** NULL on rows written before the confirmation migration. */
+    needs_confirmation: boolean | null;
     start_place_id: string | null;
     end_place_id: string | null;
   };
@@ -162,6 +168,24 @@ export default async function BusinessTripsPage({
   let totalCount = 0;
   let totalMiles = 0;
   let totalDeduction = 0;
+  // Drives the app classified as business on its own and the driver has
+  // not confirmed. Held apart from the headline, never dropped.
+  //
+  // WHY. On 2026-08-22 two such drives were carrying 33.89 USD inside
+  // the "Mileage deduction" stat below, which is labelled in this very
+  // file as "the Schedule C numbers". A machine guess a human has not
+  // agreed with is not a number to put on a tax return.
+  //
+  // The alternative was zeroing deduction_cents on the row until the
+  // driver confirms. This codebase already settled that argument with
+  // itself in 20260817010000_mileage_passenger.sql, which refused to
+  // destroy captured mileage because a mis-tap would be unrecoverable
+  // and it leaves a silent hole in the record. Excluding at read time
+  // corrects the same overstatement, keeps the row intact, and reverses
+  // itself the moment the driver taps confirm.
+  let pendingCount = 0;
+  let pendingMiles = 0;
+  let pendingDeduction = 0;
   // Route polylines via the mileage_trip_polylines RPC, NOT an embedded
   // mileage_points(...) join, PostgREST caps embedded arrays at 1000
   // rows, which truncated long drives mid-route. The RPC returns a
@@ -176,7 +200,7 @@ export default async function BusinessTripsPage({
       const q = admin
         .from("mileage_trips")
         .select(
-          "id, started_at, ended_at, distance_miles, classification, deduction_cents, start_place_id, end_place_id, notes",
+          "id, started_at, ended_at, distance_miles, classification, deduction_cents, needs_confirmation, start_place_id, end_place_id, notes",
         )
         .eq("company_id", company.id)
         .eq("driver_user_id", user.id)
@@ -210,20 +234,26 @@ export default async function BusinessTripsPage({
       for (let from = 0; from < totalCount; from += DB_PAGE) {
         const { data: sumRows } = await admin
           .from("mileage_trips")
-          .select("distance_miles, deduction_cents")
+          .select("distance_miles, deduction_cents, needs_confirmation")
           .eq("company_id", company.id)
           .eq("driver_user_id", user.id)
           .eq("classification", "business")
           .gte("started_at", sinceIso)
           .order("started_at", { ascending: false })
           .range(from, from + DB_PAGE - 1);
-        for (const r of (sumRows ?? []) as {
-          distance_miles: number;
-          deduction_cents: number;
-        }[]) {
-          totalMiles += Number(r.distance_miles);
-          totalDeduction += Number(r.deduction_cents);
-        }
+        // A drive the app GUESSED was business, and the driver has not
+        // agreed with, is not a Schedule C number. The rule lives in
+        // lib/mileage/schedule-c-totals.ts so it is testable without a
+        // database, a session or a rendered page, and so the same rule
+        // serves the paged sweep and the single-drive view below.
+        const pageSplit = splitScheduleC(
+          (sumRows ?? []) as ClassifiableTrip[],
+        );
+        totalMiles += pageSplit.settledMiles;
+        totalDeduction += pageSplit.settledCents;
+        pendingCount += pageSplit.pendingCount;
+        pendingMiles += pageSplit.pendingMiles;
+        pendingDeduction += pageSplit.pendingCents;
       }
     }
 
@@ -237,11 +267,15 @@ export default async function BusinessTripsPage({
     if (singleTrip) {
       // One drive: its own numbers are the totals.
       totalCount = trips.length;
-      totalMiles = trips.reduce((a, t) => a + Number(t.distance_miles), 0);
-      totalDeduction = trips.reduce(
-        (a, t) => a + Number(t.deduction_cents),
-        0,
-      );
+      // Same rule as the sweep above, from the same function, or a
+      // single-drive view would show a pending guess as a settled
+      // Schedule C figure.
+      const split = splitScheduleC(trips);
+      totalMiles = split.settledMiles;
+      totalDeduction = split.settledCents;
+      pendingCount = split.pendingCount;
+      pendingMiles = split.pendingMiles;
+      pendingDeduction = split.pendingCents;
     }
 
     if (trips.length > 0) {
@@ -424,6 +458,19 @@ export default async function BusinessTripsPage({
                 tone="good"
               />
             </div>
+
+            {/* Held out of the figures above, and said out loud.
+                A number that silently excludes drives is the same
+                problem as one that silently includes them; the driver
+                has to be able to see both and act on the difference. */}
+            {pendingCount > 0 && (
+              <p className="mt-3 text-sm text-ink-soft">
+                {pendingCount === 1
+                  ? `1 drive is waiting for you to confirm it was business, worth ${fmtMiles(pendingMiles)} miles and ${fmtUsd(pendingDeduction)}.`
+                  : `${pendingCount.toLocaleString("en-US")} drives are waiting for you to confirm they were business, worth ${fmtMiles(pendingMiles)} miles and ${fmtUsd(pendingDeduction)} together.`}{" "}
+                They are not counted above until you confirm them.
+              </p>
+            )}
 
             <div className="mt-6">
               {/* MileageMap auto-fits bounds to whatever trips it
