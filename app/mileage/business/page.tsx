@@ -185,7 +185,6 @@ export default async function BusinessTripsPage({
   // itself the moment the driver taps confirm.
   let pendingCount = 0;
   let pendingMiles = 0;
-  let pendingDeduction = 0;
   // Route polylines via the mileage_trip_polylines RPC, NOT an embedded
   // mileage_points(...) join, PostgREST caps embedded arrays at 1000
   // rows, which truncated long drives mid-route. The RPC returns a
@@ -253,7 +252,6 @@ export default async function BusinessTripsPage({
         totalDeduction += pageSplit.settledCents;
         pendingCount += pageSplit.pendingCount;
         pendingMiles += pageSplit.pendingMiles;
-        pendingDeduction += pageSplit.pendingCents;
       }
     }
 
@@ -275,7 +273,6 @@ export default async function BusinessTripsPage({
       totalDeduction = split.settledCents;
       pendingCount = split.pendingCount;
       pendingMiles = split.pendingMiles;
-      pendingDeduction = split.pendingCents;
     }
 
     if (trips.length > 0) {
@@ -465,9 +462,19 @@ export default async function BusinessTripsPage({
                 has to be able to see both and act on the difference. */}
             {pendingCount > 0 && (
               <p className="mt-3 text-sm text-ink-soft">
+                {/* Count and miles only, deliberately no dollar figure.
+                    A pending drive may carry a computed deduction or a
+                    zero, because the amount is settled when the
+                    classification is. Measured on production on
+                    2026-08-22: 17 pending drives, 173.8 miles, and only
+                    2 of them carrying any money at all. Quoting the
+                    33.89 USD those two hold against all 173.8 miles
+                    would read as 19 cents a mile and understate what
+                    confirming them is actually worth, which is the one
+                    direction this sentence must not mislead in. */}
                 {pendingCount === 1
-                  ? `1 drive is waiting for you to confirm it was business, worth ${fmtMiles(pendingMiles)} miles and ${fmtUsd(pendingDeduction)}.`
-                  : `${pendingCount.toLocaleString("en-US")} drives are waiting for you to confirm they were business, worth ${fmtMiles(pendingMiles)} miles and ${fmtUsd(pendingDeduction)} together.`}{" "}
+                  ? `1 drive, ${fmtMiles(pendingMiles)} miles, is waiting for you to confirm it was business.`
+                  : `${pendingCount.toLocaleString("en-US")} drives, ${fmtMiles(pendingMiles)} miles, are waiting for you to confirm they were business.`}{" "}
                 They are not counted above until you confirm them.
               </p>
             )}
