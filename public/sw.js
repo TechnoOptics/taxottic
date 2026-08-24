@@ -1208,7 +1208,17 @@
 // still names the fat SVG, and the runtime cache is cache-first for
 // images, so without a new version a phone keeps fetching the 29,699
 // byte mark on every launch and none of this reaches the device.
-const CACHE_VERSION = "v195";
+// v196: App Store 3.1.1 coverage — the remaining purchase controls
+// (billing auto-top-up form, settings "Open billing", the Bella
+// paywall CTA, the personal upgrade CTA, the firm Stripe-portal
+// link) now sit behind <WebOnly>, so the native shell renders no
+// purchase mechanism. Client JS changed (BellaChat plus the WebOnly
+// import on four routes). Every page touched is authenticated, and
+// lib/supabase/middleware.ts marks those `private, no-store`, which
+// isStorable() below refuses to cache — so this bump is belt and
+// braces rather than load-bearing, kept for the invariant that any
+// client-JS change carries one.
+const CACHE_VERSION = "v196";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

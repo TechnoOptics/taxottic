@@ -199,7 +199,29 @@ export default async function BillingPage({
               })}
             </div>
 
-            {/* Auto top-up settings */}
+            {/* Auto top-up settings.
+
+                3.1.1 / 3.1.3(f): this is the one control on this page
+                that is not merely a LINK to a purchase, it authorises
+                recurring charges to the card on file from inside the
+                app. No storefront carve-out covers that: the United
+                States allowance in 3.1.1(a) is about buttons, external
+                links and calls to action, while 3.1.3(f) turns on
+                "no purchasing inside the app". So this is hidden on
+                native, not just its button. */}
+            <WebOnly
+              fallback={
+                <div className="card mt-6 p-6">
+                  <h2 className="display text-base text-forest-900">
+                    Auto top-up
+                  </h2>
+                  <p className="text-xs text-ink-muted mt-1">
+                    Auto top-up is set up at taxottic.com in your browser.
+                    Whatever you choose there applies here too.
+                  </p>
+                </div>
+              }
+            >
             <div className="card mt-6 p-6">
               <h2 className="display text-base text-forest-900">
                 Auto top-up
@@ -250,6 +272,7 @@ export default async function BillingPage({
                 </div>
               </form>
             </div>
+            </WebOnly>
           </section>
         ) : null}
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
+import { WebOnly } from "@/components/WebOnly";
 import { getPersonalAccess } from "@/lib/entitlements/personal-access.server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -75,10 +76,31 @@ export default async function PersonalUpgradePage() {
           ))}
         </ul>
 
+        {/* 3.1.1 / 3.1.3(f): this whole page is the upsell a locked
+            employee lands on when requirePersonalAccess() bounces them
+            off a personal route, so it is reachable inside the native
+            shell by design. The PAGE stays (it explains what the
+            personal side is, which is useful and is not a purchase),
+            but the route into checkout is web only. Native gets a
+            plain, non-tappable line: no in-app purchase mechanism,
+            which is what 3.1.3(f) actually turns on. */}
         <div className="mt-8 flex flex-col sm:flex-row gap-3">
-          <Link href="/billing?plan=solo&for=personal" className="btn-primary">
-            See personal plans
-          </Link>
+          <WebOnly
+            fallback={
+              <p className="text-sm text-ink-soft leading-relaxed">
+                Personal plans are set up at{" "}
+                <span className="font-medium text-forest-800">
+                  taxottic.com
+                </span>{" "}
+                in your browser. Once a plan is active it unlocks here
+                automatically, just sign in with the same account.
+              </p>
+            }
+          >
+            <Link href="/billing?plan=solo&for=personal" className="btn-primary">
+              See personal plans
+            </Link>
+          </WebOnly>
           <Link href="/mileage" className="btn-ghost text-center">
             Back to work tools
           </Link>

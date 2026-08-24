@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { WebOnly } from "@/components/WebOnly";
 
 type Citation = {
   document_id: string;
@@ -125,9 +126,22 @@ export function BellaChat({
           <p className="mt-1 text-sm text-ink-soft">
             Upgrade to Pro for unlimited questions plus everything else.
           </p>
-          <a href="/billing" className="btn-primary mt-3 inline-flex">
-            See Pro plans
-          </a>
+          {/* 3.1.1: the paywall CTA routes into checkout, so it is web
+              only. Native keeps the same information without a tappable
+              route to purchase. */}
+          <WebOnly
+            fallback={
+              <p className="mt-3 text-sm text-ink-soft">
+                Plans are handled at{" "}
+                <span className="font-medium text-forest-800">taxottic.com</span>{" "}
+                in your browser.
+              </p>
+            }
+          >
+            <a href="/billing" className="btn-primary mt-3 inline-flex">
+              See Pro plans
+            </a>
+          </WebOnly>
         </div>
       ) : error ? (
         <p className="mt-3 text-sm text-red-700">{error}</p>
