@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  QUIET_PERIOD_MS,
+  MAX_LISTED,
+  NEW_DRIVE_MIN_GAP_MS,
   REMIND_EVERY_MS,
+  SETTLE_PERIOD_MS,
   STALE_AFTER_DAYS,
   buildReminders,
   ripe,
@@ -31,6 +33,7 @@ function drive(over: Partial<PendingDrive> = {}): PendingDrive {
     driverName: "Abel Ark",
     driverEmail: "abel@example.com",
     startedAt: new Date(NOW - 3 * DAY).toISOString(),
+    endedAt: new Date(NOW - 3 * DAY + 20 * 60_000).toISOString(),
     distanceMiles: 12.4,
     startPlace: "home",
     endPlace: "office",
@@ -39,23 +42,59 @@ function drive(over: Partial<PendingDrive> = {}): PendingDrive {
   };
 }
 
-describe("waiting before nagging", () => {
-  it("ignores a drive from the last day", () => {
-    // Auto-apply and the driver's own evening app-open resolve most of
-    // these. Mail sent inside the quiet period is mail about problems
-    // that were about to solve themselves.
-    const fresh = drive({ startedAt: new Date(NOW - 2 * 3_600_000).toISOString() });
-    expect(ripe([fresh], NOW)).toEqual([]);
-    expect(buildReminders([fresh], NOW)).toEqual([]);
+describe("settling before sending", () => {
+  it("leaves a drive alone for the first half hour after it ENDS", () => {
+    // Not a quiet period any more, a settle window. Its only job is to
+    // let a multi-leg errand finish so the legs arrive in one email.
+    const justParked = drive({
+      startedAt: new Date(NOW - 40 * 60_000).toISOString(),
+      endedAt: new Date(NOW - 10 * 60_000).toISOString(),
+    });
+    expect(ripe([justParked], NOW)).toEqual([]);
+    expect(buildReminders([justParked], NOW)).toEqual([]);
   });
 
-  it("includes a drive once it is a day old", () => {
-    const d = drive({ startedAt: new Date(NOW - QUIET_PERIOD_MS).toISOString() });
+  it("includes a drive once the settle window has passed", () => {
+    const d = drive({
+      endedAt: new Date(NOW - SETTLE_PERIOD_MS).toISOString(),
+    });
     expect(ripe([d], NOW)).toHaveLength(1);
   });
 
+  it("measures from the END of the drive, not the start", () => {
+    // A drive that began three days ago and only parked five minutes
+    // ago has not settled. Reading started_at, which is what this code
+    // did until 2026-08-24, would call it ripe and mail mid-errand.
+    const longHaul = drive({
+      startedAt: new Date(NOW - 3 * DAY).toISOString(),
+      endedAt: new Date(NOW - 5 * 60_000).toISOString(),
+    });
+    expect(ripe([longHaul], NOW)).toEqual([]);
+  });
+
+  it("batches two drives that ended within the same errand run", () => {
+    // The coordinator's case: 17:02 and 17:40 are one email, not two.
+    const first = drive({
+      tripId: "leg1",
+      endedAt: new Date(NOW - 58 * 60_000).toISOString(),
+    });
+    const second = drive({
+      tripId: "leg2",
+      endedAt: new Date(NOW - 20 * 60_000).toISOString(),
+    });
+    // Only leg1 has settled, so leg2 is held back rather than splitting
+    // the run across two messages an hour apart.
+    expect(ripe([first, second], NOW).map((d) => d.tripId)).toEqual(["leg1"]);
+    const later = NOW + 20 * 60_000;
+    expect(ripe([first, second], later).map((d) => d.tripId).sort()).toEqual([
+      "leg1",
+      "leg2",
+    ]);
+    expect(buildReminders([first, second], later)).toHaveLength(1);
+  });
+
   it("drops a drive with an unreadable date rather than crashing", () => {
-    expect(ripe([drive({ startedAt: "not a date" })], NOW)).toEqual([]);
+    expect(ripe([drive({ endedAt: "not a date" })], NOW)).toEqual([]);
   });
 });
 
@@ -133,8 +172,8 @@ describe("throttling", () => {
   });
 
   it("throttles on the most recent reminder across the driver's drives", () => {
-    // A driver accumulating new drives daily must not get a fresh email
-    // every day just because the newest drive has never been mentioned.
+    // Six drives in a day must not be six emails. A driver mailed one
+    // second ago is silent even though the newest drive is unmentioned.
     const out = buildReminders(
       [
         drive({ tripId: "old", lastRemindedAt: new Date(NOW - 1_000).toISOString() }),
@@ -143,6 +182,64 @@ describe("throttling", () => {
       NOW,
     );
     expect(out).toEqual([]);
+  });
+
+  it("does not make a backlog delay the FIRST mention of a new drive", () => {
+    // THE BUG THIS FIXES, measured on production 2026-08-24.
+    //
+    // The stamp is rewritten on every pending drive at send time, and the
+    // throttle read max() across them. A driver who never clears their
+    // backlog therefore reset their own 3-day clock every 3 days, and a
+    // drive finishing the day after a send waited for the next
+    // anniversary. Trip 68e4fcb2 ended 2026-08-22 21:46 and was first
+    // mailed 2026-08-24 17:31: 43.7 hours, none of it its own fault.
+    const out = buildReminders(
+      [
+        drive({
+          tripId: "backlog",
+          lastRemindedAt: new Date(NOW - 7 * 3_600_000).toISOString(),
+        }),
+        drive({ tripId: "fresh", lastRemindedAt: null }),
+      ],
+      NOW,
+    );
+    expect(out, "a never-mentioned drive must not inherit the backlog cadence").toHaveLength(1);
+    expect(out[0].newDrives).toBe(1);
+  });
+
+  it("still holds a new drive back inside the six-hour floor", () => {
+    const out = buildReminders(
+      [
+        drive({
+          tripId: "backlog",
+          lastRemindedAt: new Date(NOW - (NEW_DRIVE_MIN_GAP_MS - 60_000)).toISOString(),
+        }),
+        drive({ tripId: "fresh", lastRemindedAt: null }),
+      ],
+      NOW,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("keeps the slow cadence when nothing is new", () => {
+    // Nothing has changed for this driver, so this would be a repeat of
+    // a message they already have. That is the case the 3 days is for.
+    const out = buildReminders(
+      [
+        drive({
+          tripId: "old",
+          lastRemindedAt: new Date(NOW - 7 * 3_600_000).toISOString(),
+        }),
+      ],
+      NOW,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("bounds a driver at four emails a day even at worst", () => {
+    expect(NEW_DRIVE_MIN_GAP_MS).toBe(6 * 3_600_000);
+    expect(24 * 3_600_000 / NEW_DRIVE_MIN_GAP_MS).toBeLessThanOrEqual(4);
+    expect(NEW_DRIVE_MIN_GAP_MS).toBeLessThan(REMIND_EVERY_MS);
   });
 
   it("is slower than the tracker alarm, on purpose", () => {
@@ -157,6 +254,70 @@ describe("what the driver reads", () => {
     const r = buildReminders([drive({ distanceMiles: 12.4 })], NOW)[0];
     expect(summarize(r)).toContain("1 drive");
     expect(summarize(r)).toContain("12.4 miles");
+  });
+
+  it("says the drive just finished when every drive is new AND recent", () => {
+    const r = buildReminders(
+      [
+        drive({
+          lastRemindedAt: null,
+          startedAt: new Date(NOW - 2 * 3_600_000).toISOString(),
+          endedAt: new Date(NOW - 90 * 60_000).toISOString(),
+        }),
+      ],
+      NOW,
+    )[0];
+    expect(r.newDrives).toBe(1);
+    expect(r.justFinished).toBe(true);
+    expect(summarize(r)).toContain("just finished");
+    expect(summarize(r)).toContain("business or personal");
+  });
+
+  it("does not say 'just finished' about a three-week-old drive nobody reached", () => {
+    // Never-mentioned is not the same as recent. A backlog drive from
+    // 2026-07-29 that this sweep has never reached is unmentioned and
+    // three weeks old; claiming it just finished would be a lie in the
+    // subject line of the email whose job is to stop the driver guessing.
+    const r = buildReminders(
+      [
+        drive({
+          lastRemindedAt: null,
+          startedAt: new Date(NOW - 21 * DAY).toISOString(),
+          endedAt: new Date(NOW - 21 * DAY + 20 * 60_000).toISOString(),
+        }),
+      ],
+      NOW,
+    )[0];
+    expect(r.newDrives).toBe(1);
+    expect(r.justFinished).toBe(false);
+    expect(summarize(r)).not.toContain("just finished");
+    expect(summarize(r)).toContain("21 days");
+  });
+
+  it("does not say 'just finished' when one leg is fresh and the rest are old", () => {
+    const r = buildReminders(
+      [
+        drive({ tripId: "old", startedAt: new Date(NOW - 9 * DAY).toISOString(),
+                endedAt: new Date(NOW - 9 * DAY + 20 * 60_000).toISOString() }),
+        drive({ tripId: "fresh", endedAt: new Date(NOW - 40 * 60_000).toISOString(),
+                startedAt: new Date(NOW - 70 * 60_000).toISOString() }),
+      ],
+      NOW,
+    )[0];
+    expect(r.justFinished).toBe(false);
+  });
+
+  it("does not claim a drive just finished when it is an old backlog", () => {
+    const r = buildReminders(
+      [
+        drive({
+          lastRemindedAt: new Date(NOW - REMIND_EVERY_MS).toISOString(),
+        }),
+      ],
+      NOW,
+    )[0];
+    expect(r.newDrives).toBe(0);
+    expect(summarize(r)).not.toContain("just finished");
   });
 
   it("changes tone once something is genuinely stale", () => {
@@ -176,6 +337,37 @@ describe("what the driver reads", () => {
   it("writes the honest partial when only one end is known", () => {
     expect(routeLabel(drive({ endPlace: null }))).toBe("from home");
     expect(routeLabel(drive({ startPlace: null }))).toBe("to office");
+  });
+
+  it("caps the listed drives so a 45-day sweep is not a wall of rows", () => {
+    // A reinstall triggers a 45-day recovery sweep. Aggregation already
+    // makes that ONE email; this keeps that one email readable, without
+    // lying about how many drives are actually waiting.
+    const many = Array.from({ length: 30 }, (_, i) =>
+      drive({
+        tripId: `t${i}`,
+        distanceMiles: 2,
+        startedAt: new Date(NOW - (i + 2) * DAY).toISOString(),
+        endedAt: new Date(NOW - (i + 2) * DAY + 20 * 60_000).toISOString(),
+      }),
+    );
+    const r = buildReminders(many, NOW)[0];
+    expect(r.drives).toHaveLength(30);
+    expect(r.listed).toHaveLength(MAX_LISTED);
+    expect(r.omitted).toBe(30 - MAX_LISTED);
+    // The count and the mileage still describe all 30, or the email
+    // would understate what is waiting.
+    expect(r.totalMiles).toBe(60);
+    expect(summarize(r)).toContain("30 drives");
+    // Oldest first, so the ones nearest to being forgotten are the ones
+    // shown, and oldestDays still refers to a listed row.
+    expect(r.listed[0].tripId).toBe("t29");
+  });
+
+  it("lists everything when the backlog is small", () => {
+    const r = buildReminders([drive({ tripId: "a" }), drive({ tripId: "b" })], NOW)[0];
+    expect(r.listed).toHaveLength(2);
+    expect(r.omitted).toBe(0);
   });
 
   it("says nothing rather than 'unknown to unknown'", () => {

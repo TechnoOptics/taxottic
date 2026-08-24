@@ -887,8 +887,19 @@ export async function GET(req: NextRequest) {
   // Drives waiting on a business/personal call. Email, not push:
   // there are zero iOS push tokens, so a push-only reminder notifies
   // one driver and silently skips the other while recording a send.
+  //
+  // This runs AFTER the finalize loop above on purpose. finalizeUserTrips
+  // is what turns a stranded drive into a trip row, and this sweep is the
+  // only thing that then tells the driver about it. Running it first
+  // would push every drive this tick materialised into the next tick, ten
+  // minutes later, for no reason.
+  //
+  // `noopSkipped` is the one to watch: non-zero means the transport
+  // acknowledged sends with no provider behind them (RESEND_API_KEY
+  // unset), so nobody was actually told and nothing was stamped.
   let driveReminders = {
     driversWithPending: 0, emailed: 0, skippedThrottled: 0, failed: 0,
+    noopSkipped: 0,
   };
   try {
     driveReminders = await emailUnconfirmedDrives(admin, Date.now());
