@@ -21,6 +21,7 @@ import { MileageReview } from "@/components/mileage/MileageReview";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
 import { RecoverLostDrives } from "@/components/mileage/RecoverLostDrives";
+import { splitScheduleC } from "@/lib/mileage/schedule-c-totals";
 import { DriverPicker } from "@/components/mileage/DriverPicker";
 import {
   ALL_DRIVERS,
@@ -371,12 +372,29 @@ export default async function MileagePage({
     }
   }
 
-  const businessMiles = trips
-    .filter((t) => t.classification === "business")
-    .reduce((a, t) => a + Number(t.distance_miles), 0);
-  const deductionCents = trips
-    .filter((t) => t.classification === "business")
-    .reduce((a, t) => a + Number(t.deduction_cents), 0);
+  // Confirmed business drives only, the same rule /mileage/business
+  // applies since #616, from the same function so the two pages cannot
+  // drift apart.
+  //
+  // WHY. These two stats disagreed with each other, which was visible on
+  // a real phone on 2026-08-24: the miles counted every business drive
+  // while the deduction counted only what was actually claimable,
+  // because an unconfirmed drive carries zero cents until the driver
+  // agrees with the machine's call. That driver's screen read 23.7
+  // business miles against 5.34 USD, an implied 22 cents a mile against
+  // a real rate of 76, of which 16.7 miles were three drives nobody had
+  // confirmed. A driver reading that concludes the app is underpaying
+  // them, and the honest answer is that most of those miles are not
+  // settled yet.
+  //
+  // The drives are not hidden by this. The "Needs your call" control
+  // above counts them and one tap settles either undecided state, at
+  // which point the miles and the money appear together.
+  const businessSplit = splitScheduleC(
+    trips.filter((t) => t.classification === "business"),
+  );
+  const businessMiles = businessSplit.settledMiles;
+  const deductionCents = businessSplit.settledCents;
   // How many drives are waiting on the viewer. NOT derived from `trips`:
   // that array is scoped to the selected range, and this page opens on
   // "Today". Production on 2026-08-24 had one driver holding ten drives
