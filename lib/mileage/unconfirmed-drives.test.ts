@@ -207,7 +207,7 @@ describe("throttling", () => {
     expect(out[0].newDrives).toBe(1);
   });
 
-  it("still holds a new drive back inside the six-hour floor", () => {
+  it("still holds a new drive back inside the new-drive floor", () => {
     const out = buildReminders(
       [
         drive({
@@ -236,10 +236,36 @@ describe("throttling", () => {
     expect(out).toEqual([]);
   });
 
-  it("bounds a driver at four emails a day even at worst", () => {
-    expect(NEW_DRIVE_MIN_GAP_MS).toBe(6 * 3_600_000);
-    expect(24 * 3_600_000 / NEW_DRIVE_MIN_GAP_MS).toBeLessThanOrEqual(4);
+  it("floors new-drive mail at one hour", () => {
+    // Was six hours for one day. Production settled it: a driver mailed
+    // at 17:31 on 2026-08-24 then took five drives ending 19:18 to
+    // 19:49, and the six-hour floor held every one until 23:31, about
+    // four hours after the first. The request was to be told when a
+    // drive completes.
+    //
+    // The floor is NOT what stops a burst becoming a burst of email.
+    // SETTLE_PERIOD_MS collapses drives that end close together into
+    // one message, and those five would have been a single email at
+    // either setting. The floor only governs how soon the NEXT message
+    // may follow, which is why pricing it for the pathological case
+    // cost timeliness and bought very little.
+    expect(NEW_DRIVE_MIN_GAP_MS).toBe(60 * 60_000);
     expect(NEW_DRIVE_MIN_GAP_MS).toBeLessThan(REMIND_EVERY_MS);
+  });
+
+  it("leaves the burst bound to the settle window, not the floor", () => {
+    // If the floor were ever the thing holding that line, lowering it
+    // would flood an inbox. It is not, and this says so out loud.
+    expect(SETTLE_PERIOD_MS).toBeLessThan(NEW_DRIVE_MIN_GAP_MS);
+    expect(SETTLE_PERIOD_MS).toBeGreaterThanOrEqual(15 * 60_000);
+  });
+
+  it("keeps the repeat cadence far slower than the new-drive floor", () => {
+    // The whole point of two speeds. If these converge, a driver either
+    // gets nagged about old drives or waits out a backlog's cadence to
+    // hear about a new one, which is the 43.7-hour bug this module was
+    // rewritten to end.
+    expect(REMIND_EVERY_MS).toBeGreaterThan(NEW_DRIVE_MIN_GAP_MS * 12);
   });
 
   it("is slower than the tracker alarm, on purpose", () => {
