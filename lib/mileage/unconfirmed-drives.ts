@@ -89,12 +89,33 @@ export const SETTLE_PERIOD_MS = 30 * 60_000;
  * Floor between two emails to the same driver when at least one drive
  * has never been mentioned.
  *
- * Six drives in a day must not be six emails. Six hours caps a driver
- * at four messages a day in the pathological case; the observed rate in
- * production is about 0.4 unconfirmed drives per day across the whole
- * fleet, so the floor is a guard rail rather than the expected path.
+ * Six drives in a day must not be six emails.
+ *
+ * WHY ONE HOUR AND NOT SIX. This shipped at six hours, and production
+ * showed within the day that six is the wrong number for the thing this
+ * feature was asked for. On 2026-08-24 a driver was emailed at 17:31,
+ * then took five drives ending 19:18, 19:27, 19:31, 19:40 and 19:49.
+ * The six-hour floor held every one of them until 23:31, about four
+ * hours after the first. The request was to be told when a drive
+ * completes, and four hours does not meet it.
+ *
+ * The floor is not what stops a burst becoming a burst of email:
+ * SETTLE_PERIOD_MS already collapses drives that end close together
+ * into one message, and those five would have gone out as a single
+ * email either way. The floor only governs how soon the NEXT message
+ * may follow, so pricing it for the pathological case bought little
+ * and cost the timeliness the feature exists for.
+ *
+ * One hour is 24 messages a day in theory. In practice the observed
+ * rate is about 0.4 unconfirmed drives per day across the whole fleet,
+ * and the settle window batches, so a heavy driving day is two or three
+ * emails and an ordinary day is one or none.
+ *
+ * The 45-day backfill case is still bounded, by three other things that
+ * do not depend on this number: per-driver aggregation, MAX_LISTED, and
+ * the settle window. This was never the control holding that line.
  */
-export const NEW_DRIVE_MIN_GAP_MS = 6 * 60 * 60_000;
+export const NEW_DRIVE_MIN_GAP_MS = 60 * 60_000;
 
 /**
  * Cadence for a repeat message about drives the driver has already been
