@@ -1243,7 +1243,32 @@
 // The bump is load-bearing. MileageAutoRefresh and NeedsDecisionPill are
 // new WebView client JS, and without a new version a phone keeps running
 // the bundle that has neither.
-const CACHE_VERSION = "v197";
+// v198: opening the app finishes the drive that was waiting on it.
+//
+// v197 made /mileage re-render when the driver came back. It re-rendered
+// the same answer, because the drive genuinely was not closeable yet. A
+// finished drive becomes a trip only when finalize can prove the phone was
+// alive AND quiet: mileage_device_status.reported_at at least one 10-minute
+// dwell newer than the last GPS point. Heartbeats are the only thing that
+// writes that column and they ride ingest, so parking the car (no
+// movement, no fixes, no ingest) stopped them, and nothing restarted them
+// on foregrounding. appStateChange isActive refreshed a LOCAL cache and
+// posted nothing.
+//
+// Measured on the reporting driver's handset: three drives on 2026-08-23
+// became trip rows 6h 33m, 8h 57m and 12h 35m after they ended, all three
+// within four minutes of the beats resuming when the app was next opened.
+//
+// So a genuine foregrounding now sends a heartbeat, gated on the same wall
+// clock and the same constant as the ingest-driven beat, and the drive log
+// waits for that beat to land before its second render rather than racing
+// it. This cannot shorten a live drive: shouldCloseOpenTail still refuses
+// before a full dwell of GPS silence however fresh the beat is, and
+// forceClose is untouched.
+//
+// The bump is load-bearing: heartbeat-timer, native-tracker,
+// return-refresh and MileageAutoRefresh are all WebView client JS.
+const CACHE_VERSION = "v198";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

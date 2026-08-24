@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { shouldRefreshOnReturn } from "@/lib/mileage/return-refresh";
+import {
+  runReturnRefresh,
+  shouldRefreshOnReturn,
+} from "@/lib/mileage/return-refresh";
+import { beatOnForeground } from "@/lib/mileage/heartbeat-timer";
 
 /**
  * Renders nothing. Re-renders the drive log when the driver comes back to it.
@@ -72,7 +76,17 @@ export function MileageAutoRefresh() {
       // that await and never reaches start(), leaving background location
       // down until somebody opens the app by hand. That is the outage
       // PWASetup's visibility gating exists for.
-      router.refresh();
+      //
+      // Renders now, and once more if this return produced the heartbeat
+      // the tail-close rule was waiting on. See runReturnRefresh: without
+      // that second render the drive is closed on the server seconds after
+      // the page reported it absent, and the driver is back to tapping
+      // things. The beat is wall-clock gated, so a return that produced no
+      // new evidence costs exactly the one render it always did.
+      void runReturnRefresh({
+        refresh: () => router.refresh(),
+        beat: beatOnForeground,
+      });
     };
 
     // visibilitychange is the event that survives the case this is for:

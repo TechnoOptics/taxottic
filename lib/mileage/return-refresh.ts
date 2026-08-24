@@ -93,3 +93,46 @@ export function shouldRefreshOnReturn(args: {
 
   return ageMs >= minStaleMs;
 }
+
+/**
+ * Render the drive log on return, then render it AGAIN if this return
+ * produced evidence the first render could not have had.
+ *
+ * ## The race this closes
+ *
+ * The first render re-runs finalize, and finalize will not close a parked
+ * drive without a heartbeat a full dwell newer than the last GPS point (see
+ * ./tail-close.ts). Foregrounding now sends that heartbeat, but sendHeartbeat
+ * spends up to a dozen seconds in time-boxed native probes before it posts,
+ * so the render reliably wins the race and reports, correctly, that there is
+ * still nothing to show. The driver is then back to tapping things until
+ * something re-renders, which is the complaint.
+ *
+ * So the second render waits on the beat rather than racing it. `beat`
+ * resolves true only when a heartbeat actually went out; its own wall-clock
+ * gate means an app-switch that beat a moment ago resolves false and costs no
+ * render at all.
+ *
+ * ## Why the first render still happens immediately
+ *
+ * It covers everything the server already knew: the ten-minute cron closed
+ * the drive, or a heartbeat landed during it. That is the common case, and
+ * making it wait on a heartbeat would trade a stale list for a slow one.
+ *
+ * ## Why this is not a poll
+ *
+ * Nothing here is scheduled. Two renders per return at most, and returns are
+ * already gated at RETURN_REFRESH_MIN_STALE_MS. A driver sitting on this page
+ * with the app open triggers neither.
+ */
+export async function runReturnRefresh(args: {
+  refresh: () => void;
+  /** Resolves true if a heartbeat was actually sent and has landed. */
+  beat: () => Promise<boolean>;
+}): Promise<void> {
+  args.refresh();
+  // A heartbeat that could not be sent must never cost the driver the
+  // refresh they would have got without it.
+  const sent = await args.beat().catch(() => false);
+  if (sent) args.refresh();
+}
