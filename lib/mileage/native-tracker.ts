@@ -48,6 +48,7 @@ import {
 } from "./self-check";
 import { getCarSignalsProbed } from "./car-signals";
 import {
+  beatOnForeground,
   ensureHeartbeatTimer,
   registerHeartbeatSender,
 } from "./heartbeat-timer";
@@ -852,7 +853,19 @@ function installAppStateWatch(): void {
         // A genuine foregrounding. This is the moment the bridge
         // demonstrably answers, so it is the moment to capture device
         // truth for every heartbeat that follows.
-        if (isActive) void refreshDeviceStatusCache().catch(() => {});
+        if (isActive) {
+          void refreshDeviceStatusCache().catch(() => {});
+          // ...and to TELL THE SERVER the phone is alive. The line above
+          // writes a local cache and posts nothing, which left
+          // mileage_device_status.reported_at frozen at the moment the
+          // driver parked. A finished drive cannot close without a
+          // heartbeat a full dwell newer than its last GPS point, so the
+          // drive stayed invisible until the next drive, the cron, or the
+          // six-hour ceiling. Wall-clock gated inside beatOnForeground, so
+          // app switching costs at most one beat per heartbeat interval,
+          // and it can never shorten a live drive: see ./tail-close.ts.
+          void beatOnForeground();
+        }
       });
     } catch {
       /* web / @capacitor/app absent: appActive stays null (unknown) */
@@ -1428,9 +1441,13 @@ export async function sendHeartbeat(): Promise<void> {
 // Hand the sender to the timer module. Module scope on purpose: any ingest
 // path can then arm the heartbeat without importing this file, which would
 // be a cycle (this file imports device-status, one of those paths).
-registerHeartbeatSender(() => {
-  void sendHeartbeat();
-});
+//
+// RETURNS the promise rather than voiding it. beatOnForeground awaits this
+// to know when the beat has actually landed, and the drive log re-renders
+// on that. A `void sendHeartbeat()` here resolves the await instantly, puts
+// the render back in front of the evidence, and leaves every test that
+// registers its own sender green while production is broken.
+registerHeartbeatSender(() => sendHeartbeat());
 
 /**
  * Persist the outcome of the last heartbeat attempt.
