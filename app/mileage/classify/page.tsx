@@ -4,6 +4,10 @@ import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { ClassifyDeck } from "@/components/mileage/ClassifyDeck";
 import { businessMileageDeductionCents } from "@/lib/mileage/deduction";
+import {
+  applyAwaitingDecisionFilter,
+  assumedCall,
+} from "@/lib/mileage/awaiting-decision";
 import { classifyTrip } from "./actions";
 
 export type PendingTrip = {
@@ -17,6 +21,9 @@ export type PendingTrip = {
    *  empty when the trip has no recorded points (e.g. a very old
    *  reconstructed/manual entry). */
   points: { lat: number; lng: number }[];
+  /** The call the app already made on its own, which this card is asking
+   *  the driver to confirm or correct. Null when nothing was decided. */
+  assumed: "business" | "personal" | null;
 };
 
 type Search = Promise<{ trip?: string }>;
@@ -29,14 +36,34 @@ export default async function ClassifyPage({
   const { admin, user } = await requireUserWithAdmin();
   const { trip: targetTripId } = await searchParams;
 
-  // Pull every unclassified trip the user owns across companies they
-  // belong to. The /api/watch/confirm flow uses driver_user_id as the
-  // primary auth gate; we mirror that here.
-  const { data } = await admin
-    .from("mileage_trips")
-    .select("id, started_at, ended_at, distance_miles, tax_year")
-    .eq("driver_user_id", user.id)
-    .eq("classification", "unclassified")
+  // Every drive the user owns that is waiting on a decision, across the
+  // companies they belong to. The /api/watch/confirm flow uses
+  // driver_user_id as the primary auth gate; we mirror that here.
+  //
+  // This used to select `classification = 'unclassified'` and nothing
+  // else, which made the deck unable to act on the commonest pending
+  // state. A drive the machine classified with `needs_confirmation` is
+  // held out of the Schedule C headline by #616 and never counted as a
+  // guess to settle, so a driver with five of them and no unclassified
+  // drive was redirected straight back to /mileage as "caught up".
+  //
+  // applyAwaitingDecisionFilter is the SAME filter the count on /mileage
+  // applies, deliberately shared: a badge promising drives the deck then
+  // has nothing to show is worse than no badge. See
+  // lib/mileage/awaiting-decision.ts and its wiring test.
+  //
+  // Confirming needs no separate control here. classifyTrip routes
+  // through reclassifyTripCore, which clears the flag and writes the real
+  // deduction, so tapping Business on an assumed-business drive IS the
+  // confirmation and tapping Personal is the correction.
+  const { data } = await applyAwaitingDecisionFilter(
+    admin
+      .from("mileage_trips")
+      .select(
+        "id, started_at, ended_at, distance_miles, tax_year, classification, needs_confirmation",
+      )
+      .eq("driver_user_id", user.id),
+  )
     .order("started_at", { ascending: false })
     .limit(20);
 
@@ -46,6 +73,8 @@ export default async function ClassifyPage({
     ended_at: string;
     distance_miles: number;
     tax_year: number;
+    classification: string | null;
+    needs_confirmation: boolean | null;
   }[];
 
   // Route polylines for every pending trip in one round-trip, via the
@@ -80,6 +109,7 @@ export default async function ClassifyPage({
       distanceMiles: miles,
       estDeductionCents: businessMileageDeductionCents(miles, r.tax_year),
       points: pointsByTrip.get(r.id) ?? [],
+      assumed: assumedCall(r),
     };
   });
 

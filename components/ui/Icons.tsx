@@ -173,6 +173,25 @@ export function RefreshIcon({ className }: IconProps) {
   );
 }
 
+/** Tick. Confirms a queue is empty or a step is done. */
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <path d="M5 12.5 9.5 17 19 7.5" />
+    </Frame>
+  );
+}
+
+/** Clock face. Anything scheduled by time of day. */
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 1.8" />
+    </Frame>
+  );
+}
+
 /** Handset. Marks a feature that only exists in the mobile app. */
 export function PhoneIcon({ className }: IconProps) {
   return (
