@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
-import { BoltIcon, EyeIcon, MapIcon, PinIcon } from "@/components/ui/Icons";
+import {
+  BoltIcon,
+  ClockIcon,
+  EyeIcon,
+  MapIcon,
+  PinIcon,
+} from "@/components/ui/Icons";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import {
   MileageMap,
@@ -34,6 +40,9 @@ import {
   settleWithinBudget,
 } from "@/lib/mileage/finalize-freshness";
 import { FinalizeSettleRefresh } from "@/components/mileage/FinalizeSettleRefresh";
+import { MileageAutoRefresh } from "@/components/mileage/MileageAutoRefresh";
+import { NeedsDecisionPill } from "@/components/mileage/NeedsDecisionPill";
+import { countDrivesAwaitingDecision } from "@/lib/mileage/awaiting-decision";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
 import { recoverApproximateTrips } from "./actions";
@@ -238,8 +247,15 @@ export default async function MileagePage({
   // (measured 247 ms). The two reads that genuinely do have a dependency
   // stay sequential below: the polylines need the trip ids, and the
   // recovery count needs the health verdict.
-  const [scopedTrips, placeRes, lastPointRes, lastTripRes, selfHealth, teamHealth] =
-    await Promise.all([
+  const [
+    scopedTrips,
+    placeRes,
+    lastPointRes,
+    lastTripRes,
+    selfHealth,
+    teamHealth,
+    awaitingDecision,
+  ] = await Promise.all([
       company
         ? // PRIVACY. Every restriction is applied in the query, server
           // side: your own drives come back whole, anyone else's are
@@ -295,6 +311,17 @@ export default async function MileagePage({
       wantsTeamHealth
         ? loadTeamTrackingHealth(admin, company!.id, drivers, Date.now())
         : Promise.resolve([]),
+      // How many of the VIEWER'S OWN drives are waiting on a decision,
+      // across every date. Range-independent on purpose: this page opens
+      // on "Today", and the driver holding ten pending drives had none
+      // from today, so a range-scoped count told them they were caught
+      // up. Joining the parallel group means the page pays the slowest
+      // member rather than the sum, and this is a single indexed head
+      // request (0.25 ms measured against the live account), so the
+      // group's cost does not move. See lib/mileage/awaiting-decision.ts.
+      company
+        ? countDrivesAwaitingDecision(admin, user.id)
+        : Promise.resolve(0),
     ]);
 
   if (company) {
@@ -350,9 +377,22 @@ export default async function MileagePage({
   const deductionCents = trips
     .filter((t) => t.classification === "business")
     .reduce((a, t) => a + Number(t.deduction_cents), 0);
-  const unclassifiedCount = trips.filter(
-    (t) => t.classification === "unclassified",
-  ).length;
+  // How many drives are waiting on the viewer. NOT derived from `trips`:
+  // that array is scoped to the selected range, and this page opens on
+  // "Today". Production on 2026-08-24 had one driver holding ten drives
+  // awaiting a decision, the newest from the day before, so a
+  // range-scoped number greeted them with "All caught up".
+  //
+  // It also used to count `classification === "unclassified"` alone,
+  // which by August was the rarer of the two undecided states. Sixteen
+  // production drives carried `needs_confirmation`: classified business
+  // by the machine with no place evidence behind the call, held out of
+  // the Schedule C headline by #616, and absent from every count here.
+  // The product withheld the deduction and never asked. Both states are
+  // the same request of the driver, and one tap in the review deck
+  // settles either. See lib/mileage/awaiting-decision.ts.
+  const awaitingCount = awaitingDecision;
+  const showsOwnQueue = viewingSelf || viewingAll;
 
   // Belt-and-braces, in the same spirit as stripForeignPrivateTrips: the
   // partition above already removed every passenger drive, and the map has
@@ -453,6 +493,15 @@ export default async function MileagePage({
                 Renders nothing, and is not rendered at all when finalize
                 finished inside its budget. */}
             {finalizeOutstanding ? <FinalizeSettleRefresh /> : null}
+            {/* Re-renders this page when the driver comes back to the app.
+                Different hole from the one above: that one covers a
+                freshness pass still running as the page shipped, this one
+                covers a page that was correct when it shipped and has
+                since gone stale in a WebView the OS kept alive across a
+                drive. Renders nothing, never polls, and refetches the
+                payload rather than reloading the document, which would
+                tear down the live tracker. */}
+            <MileageAutoRefresh />
             <div className="mt-2 text-sm text-ink-soft">
               {company.name} · {rangeCfg.label.toLowerCase()}
             </div>
@@ -546,7 +595,7 @@ export default async function MileagePage({
                 are never fetched, so this count is only ever the viewer's,
                 and making the team view the default must not silently cost
                 a manager their own triage queue. */}
-            {(viewingSelf || viewingAll) && unclassifiedCount > 0 ? (
+            {showsOwnQueue && awaitingCount > 0 ? (
               <Link
                 href="/mileage/classify"
                 className="mt-4 block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-400"
@@ -557,12 +606,17 @@ export default async function MileagePage({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="display text-sm text-amber-900">
-                      {unclassifiedCount === 1
+                      {awaitingCount === 1
                         ? "1 drive needs a quick call"
-                        : `${unclassifiedCount} drives need a quick call`}
+                        : `${awaitingCount} drives need a quick call`}
                     </div>
+                    {/* Covers both states in one line, because the deck
+                        does: an assumed drive is confirmed by tapping the
+                        call it already carries, and a drive with no call
+                        at all is settled by the same two buttons. No
+                        dollar figure, see #617. */}
                     <div className="text-xs text-amber-800 mt-0.5">
-                      Tap to swipe business / personal →
+                      Tap to confirm business or personal →
                     </div>
                   </div>
                   <span
@@ -576,6 +630,19 @@ export default async function MileagePage({
             ) : null}
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
+              {/* Standing answer to "is anything waiting on me?", present
+                  at zero as much as above it. First in the row and never
+                  moving, so it can be learned; the hairline after it says
+                  it is not one of the range filters beside it. */}
+              {showsOwnQueue ? (
+                <>
+                  <NeedsDecisionPill count={awaitingCount} />
+                  <span
+                    aria-hidden="true"
+                    className="hidden sm:block h-5 w-px bg-forest-200"
+                  />
+                </>
+              ) : null}
               {Object.entries(RANGES).map(([k, v]) => (
                 <Link
                   key={k}
@@ -633,7 +700,10 @@ export default async function MileagePage({
                 href="/mileage/schedule"
                 className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
               >
-                <span aria-hidden="true">⏰</span>
+                {/* Was a clock emoji. Emoji ignore currentColor, render
+                    as vendor bitmaps, and read as consumer-grade beside
+                    the rest of the row; Icons.tsx exists for this. */}
+                <ClockIcon className="size-3.5 shrink-0" />
                 Schedule →
               </Link>
             </div>
@@ -735,7 +805,7 @@ export default async function MileagePage({
                     it in a Link to the swipe deck so the stat itself is
                     the tap target (mirroring the amber banner above -
                     some users tap the stat instead of the banner). */}
-                {(viewingSelf || viewingAll) && unclassifiedCount > 0 ? (
+                {showsOwnQueue && awaitingCount > 0 ? (
                   <Link
                     href="/mileage/classify"
                     className="col-span-2 sm:col-span-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
@@ -743,7 +813,7 @@ export default async function MileagePage({
                     <Stat
                       compact
                       label="Need review"
-                      value={String(unclassifiedCount)}
+                      value={String(awaitingCount)}
                       tone="warn"
                       caption="Tap to classify →"
                     />
@@ -752,10 +822,10 @@ export default async function MileagePage({
                   <Stat
                     compact
                     label="Need review"
-                    value={String(unclassifiedCount)}
-                    tone={unclassifiedCount > 0 ? "warn" : "neutral"}
+                    value={String(awaitingCount)}
+                    tone={awaitingCount > 0 ? "warn" : "neutral"}
                     caption={
-                      unclassifiedCount > 0 ? "Unclassified" : "All caught up"
+                      awaitingCount > 0 ? "Awaiting a call" : "All caught up"
                     }
                   />
                 )}

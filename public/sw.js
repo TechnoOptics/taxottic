@@ -1218,7 +1218,32 @@
 // isStorable() below refuses to cache — so this bump is belt and
 // braces rather than load-bearing, kept for the invariant that any
 // client-JS change carries one.
-const CACHE_VERSION = "v196";
+// v197: the drive log refreshes itself, and undeclared drives are always
+// visible.
+//
+// Two reports, one page. First, /mileage never asked the server again
+// once it had rendered: the app is a WebView the OS keeps alive across a
+// drive, so a driver opened the app, drove, came back, and was shown the
+// render from before the drive. Their workaround was to "click around"
+// until something navigated. MileageAutoRefresh now refetches the RSC
+// payload when the app comes forward and the render has gone stale,
+// riding visibilitychange and gating on the wall clock, because a
+// backgrounded WebView freezes timers while still delivering that event.
+//
+// Second, the page counted `classification = 'unclassified'` only. The
+// commoner pending state is a drive the machine classified with
+// `needs_confirmation`, which #616 correctly holds out of the Schedule C
+// headline; sixteen such drives existed in production and appeared in no
+// count on the page. The count now covers both, ignores the range pills
+// (the page opens on Today, and one driver's ten pending drives were all
+// older than that), and a persistent pill carries it whether it is zero
+// or not. /mileage/classify was extended to match, or the pill would
+// have led to a deck that bounced straight back.
+//
+// The bump is load-bearing. MileageAutoRefresh and NeedsDecisionPill are
+// new WebView client JS, and without a new version a phone keeps running
+// the bundle that has neither.
+const CACHE_VERSION = "v197";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
