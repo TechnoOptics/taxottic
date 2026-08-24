@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WebOnly } from "@/components/WebOnly";
 import { AppHeader } from "@/components/AppHeader";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { requireFirmAdmin } from "@/lib/firm/context";
@@ -141,12 +142,28 @@ export default async function FirmBillingPage() {
 
           <div className="mt-6 flex flex-wrap gap-2">
             {sub?.stripe_customer_id ? (
-              <Link
-                href={`/api/firm/billing/portal`}
-                className="btn-primary text-sm"
+              /* 3.1.1: the Customer Portal is a live billing-management
+                 mechanism (upgrade, downgrade, change card, cancel), so
+                 it is web only. Native sees the plan status above and a
+                 plain pointer, with no route into the portal. */
+              <WebOnly
+                fallback={
+                  <p className="text-sm text-ink-soft">
+                    Billing for your firm is managed at{" "}
+                    <span className="font-medium text-forest-800">
+                      taxottic.com
+                    </span>{" "}
+                    in your browser.
+                  </p>
+                }
               >
-                Manage billing →
-              </Link>
+                <Link
+                  href={`/api/firm/billing/portal`}
+                  className="btn-primary text-sm"
+                >
+                  Manage billing →
+                </Link>
+              </WebOnly>
             ) : (
               <a
                 href="mailto:contact@taxottic.com?subject=Activate firm subscription"
