@@ -1,10 +1,17 @@
 import { describeDriveHealth, type DriveTrackingHealth } from "@/lib/mileage/device-health";
+import { describeDeviceCause, type DeviceCause } from "@/lib/mileage/device-cause";
 import { ChevronDownIcon, WarningIcon } from "@/components/ui/Icons";
 
 type Row = {
   userId: string;
   label: string;
   health: { status: DriveTrackingHealth; ageMs: number | null };
+  /** What that phone's own status row says is wrong, when it knows.
+   *  Rendered on the row so the manager can tell the driver what to
+   *  fix; the generic prose below is only the fallback for a row that
+   *  does not know. */
+  cause?: DeviceCause | null;
+  platform?: string | null;
 };
 
 /**
@@ -37,6 +44,20 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
   );
   if (attention.length === 0) return null;
 
+  // One fix sentence per distinct cause, not per driver: two phones on
+  // While Using need the same path once. The short cause sits on each
+  // driver's row (one line, measured at 344px in
+  // MileageFirstPaint.ct.spec.tsx); the path lives here below the list.
+  const fixes = Array.from(
+    new Set(
+      attention.flatMap((r) => {
+        if (!r.cause) return [];
+        const t = describeDeviceCause(r.cause, r.platform ?? null, "manager");
+        return [`${t.short}. ${t.fix} `];
+      }),
+    ),
+  );
+
   return (
     <details className="group mx-0 mt-4 rounded-2xl border border-amber-300 bg-amber-50">
       <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-4 py-2.5">
@@ -54,31 +75,37 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
           {attention.map((r) => {
             const name = r.label.split(" · ")[0];
             const silent = r.health.status === "silent";
+            const cause = r.cause
+              ? describeDeviceCause(r.cause, r.platform ?? null, "manager")
+              : null;
             return (
-              <li
-                key={r.userId}
-                className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"
-              >
-                <span className="min-w-0 truncate text-sm text-amber-950">{name}</span>
-                <span className="flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full ${
-                      silent || r.health.status === "blocked"
-                        ? "bg-red-500"
-                        : "bg-amber-500"
-                    }`}
-                    aria-hidden
-                  />
-                  <span className="text-xs font-medium text-amber-900">
-                    {describeDriveHealth(r.health)}
+              <li key={r.userId} className="rounded-lg bg-white/70 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-sm text-amber-950">{name}</span>
+                  <span className="flex items-center gap-2 whitespace-nowrap">
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${
+                        silent || r.health.status === "blocked"
+                          ? "bg-red-500"
+                          : "bg-amber-500"
+                      }`}
+                      aria-hidden
+                    />
+                    <span className="text-xs font-medium text-amber-900">
+                      {describeDriveHealth(r.health)}
+                    </span>
                   </span>
-                </span>
+                </div>
+                {cause ? (
+                  <p className="mt-0.5 truncate text-xs text-amber-800">{cause.short}</p>
+                ) : null}
               </li>
             );
           })}
         </ul>
         <p className="mt-3 text-xs leading-relaxed text-amber-800">
-          {attention.some((r) => r.health.status === "silent")
+          {fixes.join("")}
+          {attention.some((r) => r.health.status === "silent" && r.cause == null)
             ? "Silent means the phone stopped uploading, usually location permission dropped to “While Using” or the app was force-closed. "
             : ""}
           {attention.some((r) => r.health.status === "blocked")

@@ -31,6 +31,7 @@ import {
 import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
 import { TeamViewNote } from "@/components/mileage/TeamViewNote";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
+import { describeDeviceCause, evaluateDeviceCause } from "@/lib/mileage/device-cause";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
 import {
   assessMileageTrackingHealth,
@@ -256,6 +257,7 @@ export default async function MileagePage({
     selfHealth,
     teamHealth,
     awaitingDecision,
+    selfStatusRes,
   ] = await Promise.all([
       company
         ? // PRIVACY. Every restriction is applied in the query, server
@@ -323,6 +325,20 @@ export default async function MileagePage({
       company
         ? countDrivesAwaitingDecision(admin, user.id)
         : Promise.resolve(0),
+      // The viewer's own phone, in its own words (self only). The
+      // heartbeat row already names the setting that stops capture,
+      // Location at While Using above all, and a driver who opens this
+      // page with that row written should read it here, not find out
+      // from a manager nine days later. Columns pre-exist; no new query
+      // shape, one indexed row.
+      wantsSelfDiagnostics
+        ? admin
+            .from("mileage_device_status")
+            .select("platform, location_authorization, background_refresh, low_power_mode, battery_optimized, tracking_enabled")
+            .eq("driver_user_id", user.id)
+            .eq("company_id", company!.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
   if (company) {
@@ -472,6 +488,31 @@ export default async function MileagePage({
   // genuinely depends on that verdict: it is asked for solely to size the
   // "recover lost drives" offer, and a healthy tracker never shows one.
   const health = selfHealth;
+  // A driver who turned tracking off is not alarmed about their own
+  // choice (the same rule as evaluateDriveTrackingHealth's "off").
+  const selfStatus = (selfStatusRes?.data ?? null) as {
+    platform: string | null;
+    location_authorization: string | null;
+    background_refresh: boolean | null;
+    low_power_mode: boolean | null;
+    battery_optimized: boolean | null;
+    tracking_enabled: boolean | null;
+  } | null;
+  const selfCause =
+    selfStatus && selfStatus.tracking_enabled !== false
+      ? evaluateDeviceCause({
+          platform: selfStatus.platform,
+          locationAuthorization: selfStatus.location_authorization,
+          backgroundRefresh: selfStatus.background_refresh,
+          lowPowerMode: selfStatus.low_power_mode,
+          batteryOptimized: selfStatus.battery_optimized,
+          trackingEnabled: selfStatus.tracking_enabled,
+        })
+      : null;
+  const selfCauseText =
+    selfCause && selfStatus
+      ? describeDeviceCause(selfCause, selfStatus.platform, "driver")
+      : null;
   let recoverable = 0;
   if (company && viewingSelf && health?.status === "degraded") {
     recoverable = await countRecoverableApproxTrips(
@@ -580,10 +621,11 @@ export default async function MileagePage({
               />
             ) : null}
 
-            {viewingSelf && health?.status === "degraded" ? (
+            {viewingSelf && (health?.status === "degraded" || selfCauseText) ? (
               <div className="mt-4">
                 <TrackingHealthBanner
-                  reason={health.reason ?? ""}
+                  reason={health?.status === "degraded" ? health.reason ?? "" : ""}
+                  cause={selfCauseText ? `${selfCauseText.short}. ${selfCauseText.fix}` : null}
                   recoverable={recoverable}
                   recoverAction={recoverApproximateTrips}
                 />

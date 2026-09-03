@@ -6,6 +6,11 @@ import { WarningIcon } from "@/components/ui/Icons";
 
 type Props = {
   reason: string;
+  /** What this phone's own status row says is wrong, already worded for
+   *  the driver (device-cause.ts), e.g. "Your location permission is
+   *  While Using. Set it to Always: Settings > Taxottic > Location >
+   *  Always." Null when the row does not know. */
+  cause?: string | null;
   recoverable: number;
   /** Server action (bound) that reconstructs approximate trips. */
   recoverAction: (formData: FormData) => Promise<void>;
@@ -13,11 +18,18 @@ type Props = {
 
 /**
  * Amber warning shown on the Mileage screen when the tracking-health
- * detector sees the "stops logged, drives missing" signature. Gives the
- * fix (set Location to Always), a one-tap Open-Settings button, and an
- * opt-in "recover approximate drives" action for the miles already lost.
+ * detector sees the "stops logged, drives missing" signature, or when
+ * the phone's own heartbeat names a setting that stops capture. Gives
+ * the fix (set Location to Always), a one-tap Open-Settings button, and
+ * an opt-in "recover approximate drives" action for the miles already
+ * lost.
+ *
+ * The cause line is the part that was missing. A driver whose Location
+ * had reverted to While Using opened this page with the phone reporting
+ * exactly that, and was shown nothing, because the only trigger was the
+ * teleport signature and a phone that uploads nothing has no signature.
  */
-export function TrackingHealthBanner({ reason, recoverable, recoverAction }: Props) {
+export function TrackingHealthBanner({ reason, cause, recoverable, recoverAction }: Props) {
   const [opening, setOpening] = useState(false);
 
   return (
@@ -26,7 +38,8 @@ export function TrackingHealthBanner({ reason, recoverable, recoverAction }: Pro
         <WarningIcon className="size-4 mt-0.5 shrink-0" />
         <div className="min-w-0">
           <p className="font-semibold text-sm">Your drives aren&rsquo;t being recorded</p>
-          <p className="mt-1 text-xs leading-relaxed">{reason}</p>
+          {reason ? <p className="mt-1 text-xs leading-relaxed">{reason}</p> : null}
+          {cause ? <p className="mt-1 text-xs leading-relaxed">{cause}</p> : null}
           <p className="mt-2 text-xs leading-relaxed">
             <b>Fix it:</b> set Taxottic&rsquo;s Location permission to{" "}
             <b>Always</b> (not &ldquo;While Using&rdquo;) with <b>Precise</b> on, allow{" "}
