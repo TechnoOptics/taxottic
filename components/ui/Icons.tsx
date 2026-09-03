@@ -235,3 +235,13 @@ export function ArrowSwapIcon({ className }: IconProps) {
     </Frame>
   );
 }
+
+/** Chevron pointing down. Disclosure marker on a collapsed <summary>;
+ *  the caller rotates it with `group-open:rotate-180` when open. */
+export function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </Frame>
+  );
+}

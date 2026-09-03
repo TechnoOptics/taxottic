@@ -4,7 +4,6 @@ import {
   BoltIcon,
   ClockIcon,
   EyeIcon,
-  MapIcon,
   PinIcon,
 } from "@/components/ui/Icons";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
@@ -30,6 +29,7 @@ import {
   stripForeignPrivateTrips,
 } from "@/lib/mileage/team-scope";
 import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
+import { TeamViewNote } from "@/components/mileage/TeamViewNote";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
 import {
@@ -541,21 +541,7 @@ export default async function MileagePage({
             ) : null}
 
             {viewingAll ? (
-              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
-                <MapIcon className="size-4 shrink-0" />
-                <span>
-                  Team view: every driver&apos;s trails in their own colour,
-                  numbered to match the legend. Teammates show confirmed
-                  business drives only, never their personal miles. Your own
-                  drives show every classification.
-                </span>
-                <Link
-                  href={`/mileage?range=${range}&driver=${user.id}`}
-                  className="underline decoration-dotted whitespace-nowrap hover:text-forest-900"
-                >
-                  My drive log →
-                </Link>
-              </div>
+              <TeamViewNote range={range} selfUserId={user.id} />
             ) : !viewingSelf ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
                 <EyeIcon className="size-4 shrink-0" />
