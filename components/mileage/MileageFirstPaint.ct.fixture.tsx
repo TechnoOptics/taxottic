@@ -16,10 +16,18 @@ const DRIVERS = [
 
 // One teammate silent for 42h, the other two healthy: the exact state in
 // the report. The alert only renders when someone needs attention, so
-// this is the case that costs height.
+// this is the case that costs height. The silent phone carries the cause
+// its own status row held all along (location_authorization =
+// 'whenInUse' on iOS), so the row also renders the longest cause line.
 const HEALTH = [
   { userId: SELF, label: "Abel · you", health: { status: "healthy" as const, ageMs: 5 * 60_000 } },
-  { userId: "u-2", label: "Grace Hopper · Field", health: { status: "silent" as const, ageMs: 42 * 3_600_000 } },
+  {
+    userId: "u-2",
+    label: "Grace Hopper · Field",
+    health: { status: "silent" as const, ageMs: 42 * 3_600_000 },
+    cause: "authorization_downgraded" as const,
+    platform: "ios",
+  },
   { userId: "u-3", label: "Marcus Aurelius · Field", health: { status: "healthy" as const, ageMs: 20 * 60_000 } },
 ];
 

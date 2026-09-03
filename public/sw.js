@@ -1286,7 +1286,24 @@
 // change is the shared Icons.tsx chunk, which ChevronDownIcon joins and
 // which client components import; bumping keeps "any client JS or markup
 // change" a rule to follow rather than a case to argue.
-const CACHE_VERSION = "v199";
+// v200: the device alert names the cause the phone already reported.
+//
+// Driver c6218e2c's mileage_device_status row said location_authorization
+// = 'whenInUse' from 2026-08-25, and for nine days the manager's alert
+// showed "Silent 42h" beside prose that it is "usually" While Using,
+// while the driver's own page said nothing. The manager's row now reads
+// "Location is While Using. Ask them to set it to Always: Settings >
+// Taxottic > Location > Always." and the driver's banner reads the same
+// in the second person, both derived from the columns the row already
+// carries (lib/mileage/device-cause.ts). The generic wording stays only
+// for a row that does not know.
+//
+// The bump is precautionary, not load-bearing. TeamTrackingHealth and
+// the page are server-rendered under `private, no-store`, which this
+// worker never stores, and /_next/* chunks are not cached here either
+// (v8), so TrackingHealthBanner's new client chunk arrives by content
+// hash. Bumped to keep the "any client JS or markup change" rule a rule.
+const CACHE_VERSION = "v200";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
