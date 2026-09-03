@@ -124,6 +124,26 @@ const nextConfig: NextConfig = {
   // audit flagged this as a P2 fingerprint-reduction item; this knob is
   // the one-line fix.
   poweredByHeader: false,
+  // Turn off the dev-tools overlay (the dark circular "N", bottom-left).
+  //
+  // It is dev-only chrome that production never serves, and the
+  // visual-regression suite runs against `npm run dev` (see the webServer
+  // block in playwright.config.ts), so it was being baked into the
+  // committed baselines as though it were product. Measured on the
+  // baselines at 48dc742: the badge is a 38x38 disc at x19-56 sitting in
+  // 13 of 32 committed snapshots, and NOT in the other 19 — the same page
+  // has it on Linux and not on macOS (calc-mileage-deduction desktop),
+  // because the overlay mounts after hydration and races the capture.
+  // That makes it both wrong and unstable: it is the entire measured
+  // macOS noise floor quoted in playwright.config.ts (one of five runs
+  // moved compare-hub mobile by 3,710 pixels, 0.43% of the 1% budget,
+  // purely on the badge failing to paint).
+  //
+  // Killing it at the source rather than hiding it from the spec keeps
+  // the baselines a record of what the app renders, and leaves nothing
+  // for a future Next version to silently reintroduce under a changed
+  // selector. Guarded by lib/visual/dev-indicators.test.ts.
+  devIndicators: false,
   async headers() {
     return [
       {
