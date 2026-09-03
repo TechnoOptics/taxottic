@@ -84,6 +84,50 @@ describe("mergeScheduleC", () => {
   });
 });
 
+describe("every page showing a deduction applies the same split", () => {
+  // WHY BOTH PAGES ARE LISTED HERE. /mileage/business adopted the split
+  // in #616 and /mileage did not, so for two days the same concept had
+  // two answers. Seen on a real phone on 2026-08-24: /mileage read 23.7
+  // business miles against 5.34 USD, because the miles counted every
+  // business drive while the money counted only the confirmed ones. A
+  // driver reads that as the app underpaying them.
+  //
+  // A page that shows business miles or a mileage deduction and does
+  // not go through splitScheduleC is the bug, so the list is the
+  // assertion. Add a page here when it starts showing either number.
+  const DEDUCTION_PAGES = [
+    "app/mileage/business/page.tsx",
+    "app/mileage/page.tsx",
+  ] as const;
+
+  it("routes every deduction page through the shared rule", () => {
+    for (const page of DEDUCTION_PAGES) {
+      const src = readFileSync(resolve(process.cwd(), page), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/(?<!:)\/\/[^\n]*/g, " ");
+      expect(src, `${page} does not import the shared rule`).toContain(
+        "splitScheduleC",
+      );
+      // Deliberately NOT asserting the page is free of
+      // `needs_confirmation === true`. The first version of this guard
+      // did, and it failed on correct code: /mileage passes that flag
+      // through to TripList so a row can show its own pending state,
+      // which is a legitimate read of the field and not a second copy
+      // of the totals rule. Banning the string would have pushed a
+      // future author to work around the guard rather than with it.
+      //
+      // What actually matters is that the money is derived from the
+      // shared function, and the assertion above is what says so.
+      expect(
+        src,
+        `${page} sums a deduction without the shared rule`,
+      ).not.toMatch(
+        /reduce\(\s*\(a[^)]*\)\s*=>\s*a\s*\+\s*Number\(t\.deduction_cents\)/,
+      );
+    }
+  });
+});
+
 describe("the business page actually applies the split", () => {
   const PAGE = "app/mileage/business/page.tsx";
 
