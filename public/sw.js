@@ -1268,7 +1268,25 @@
 //
 // The bump is load-bearing: heartbeat-timer, native-tracker,
 // return-refresh and MileageAutoRefresh are all WebView client JS.
-const CACHE_VERSION = "v198";
+// v199: the drive log's controls and map are on screen at first paint.
+//
+// The drives were loading (v197, v198). The layout was hiding them. On a
+// Fold5 cover screen a manager's /mileage opened on a 212px card about a
+// TEAMMATE'S silent phone, then the driver picker, then a five-line card
+// of prose that reads the same on every visit. The range pills started
+// at 780 CSS px and the map at 948, on a panel that shows about 810.
+// Both cards are now a native <details>, closed by default, with every
+// word of the alert unchanged and one tap away. Measured in the
+// component harness at 344x882: control row 501 to 653, map from 669.
+//
+// The bump is precautionary, not load-bearing. TeamTrackingHealth and
+// TeamViewNote are server components and the page HTML is `private,
+// no-store`, which this worker never stores (see the navigate handler),
+// so a phone on v198 gets the new markup on its next request. What does
+// change is the shared Icons.tsx chunk, which ChevronDownIcon joins and
+// which client components import; bumping keeps "any client JS or markup
+// change" a rule to follow rather than a case to argue.
+const CACHE_VERSION = "v199";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
