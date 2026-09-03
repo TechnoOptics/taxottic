@@ -8,6 +8,8 @@ import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { AppStoreBadges } from "@/components/AppStoreBadges";
+import { AudienceToggle, type Audience } from "@/components/AudienceToggle";
+import { HeroInstrument } from "@/components/HeroInstrument";
 import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/app-stores";
 import {
   PLAN_PRICING,
@@ -291,8 +293,6 @@ const DEFINED_TERM_LD = {
   url: SITE_ORIGIN,
 };
 
-type Audience = "personal" | "business" | "firm";
-
 export default async function Home({
   searchParams,
 }: {
@@ -413,8 +413,7 @@ const HERO: Record<
   personal: {
     head: (
       <>
-        A calmer way to handle{" "}
-        <span className="gold-shine">your personal taxes.</span>
+        A calmer way to handle your personal taxes.
       </>
     ),
     // Mileage is named here on purpose, and this is the DEFAULT hero, so
@@ -448,8 +447,7 @@ const HERO: Record<
   business: {
     head: (
       <>
-        A calmer way to run{" "}
-        <span className="gold-shine">your business&apos;s taxes.</span>
+        A calmer way to run your business&apos;s taxes.
       </>
     ),
     sub: (
@@ -469,8 +467,7 @@ const HERO: Record<
   firm: {
     head: (
       <>
-        A calmer view of{" "}
-        <span className="gold-shine">every client&apos;s books.</span>
+        A calmer view of every client&apos;s books.
       </>
     ),
     sub: (
@@ -488,6 +485,13 @@ const HERO: Record<
       "White-glove migration. Branded portal. Per-seat or per-client.",
   },
 };
+
+// The instrument's sample. Fixed rather than read from the clock so the
+// visual baselines stay still (the real date moves the runway every day
+// and the tax year every January). Labelled "Sample" on the panel, the
+// same convention as the Company X product tour further down.
+const HERO_SAMPLE_TAX_YEAR = 2026;
+const HERO_SAMPLE_DATE = new Date("2026-08-20T00:00:00Z");
 
 function Hero({ audience }: { audience: Audience }) {
   const h = HERO[audience];
@@ -513,37 +517,52 @@ function Hero({ audience }: { audience: Audience }) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-20 sm:pb-28 text-cream">
         <AudienceToggle audience={audience} />
 
-        <h1 className="display mt-8 text-4xl sm:text-6xl lg:text-7xl text-cream max-w-4xl leading-[1.05]">
-          {h.head}
-        </h1>
+        {/* Promise on the left, instrument on the right. Before this the
+            right 45% of the first screen at 1280x800 was empty navy and
+            the photograph sat below the fold. The h1 is set in cream, not
+            gold-shine: the skin spends brass once, on the instrument. */}
+        <div className="mt-8 grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-center lg:gap-16">
+          <div>
+            <h1 className="display text-4xl sm:text-6xl text-cream max-w-4xl leading-[1.05]">
+              {h.head}
+            </h1>
 
-        <p className="mt-6 text-lg sm:text-xl text-cream/80 max-w-2xl leading-relaxed">
-          {h.sub}
-        </p>
+            <p className="mt-6 text-lg sm:text-xl text-cream/80 max-w-2xl leading-relaxed">
+              {h.sub}
+            </p>
 
-        <div className="mt-10 flex flex-wrap gap-3">
-          {/* /example is a real read-only sample dashboard so the "take a
-              look" CTAs match their words; firm keeps booking as the CTA. */}
-          <Link href={h.ctaHref} className="btn-primary">
-            {h.ctaLabel}
-          </Link>
-          <Link
-            href={h.pricingHref}
-            className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] border border-gold-300/30 text-cream hover:bg-white/5 transition-colors text-sm"
-          >
-            See pricing
-          </Link>
-          <Link
-            href="/login"
-            className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] text-cream/80 hover:text-cream transition-colors text-sm"
-          >
-            Sign in
-          </Link>
+            <div className="mt-10 flex flex-wrap gap-3">
+              {/* /example is a real read-only sample dashboard so the "take a
+                  look" CTAs match their words; firm keeps booking as the CTA. */}
+              <Link href={h.ctaHref} className="btn-primary">
+                {h.ctaLabel}
+              </Link>
+              <Link
+                href={h.pricingHref}
+                className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] border border-gold-300/30 text-cream hover:bg-white/5 transition-colors text-sm"
+              >
+                See pricing
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] text-cream/80 hover:text-cream transition-colors text-sm"
+              >
+                Sign in
+              </Link>
+            </div>
+
+            <p className="mt-6 text-xs uppercase tracking-[0.2em] text-gold-300">
+              {h.footnote}
+            </p>
+          </div>
+
+          <HeroInstrument
+            taxYear={HERO_SAMPLE_TAX_YEAR}
+            asOf={HERO_SAMPLE_DATE}
+            nextPaymentCents={342_000}
+            setAsideCents={215_000}
+          />
         </div>
-
-        <p className="mt-6 text-xs uppercase tracking-[0.2em] text-gold-300">
-          {h.footnote}
-        </p>
       </div>
     </section>
   );
@@ -635,42 +654,6 @@ function HeroFigure({ audience }: { audience: Audience }) {
         </figure>
       </div>
     </section>
-  );
-}
-
-function AudienceToggle({ audience }: { audience: Audience }) {
-  const segments: { id: Audience; label: string }[] = [
-    { id: "personal", label: "For me" },
-    { id: "business", label: "For my business" },
-    { id: "firm", label: "For my firm" },
-  ];
-  return (
-    <div
-      className="inline-flex p-1 rounded-full bg-white/8 border border-gold-300/20 backdrop-blur"
-      role="tablist"
-      aria-label="Choose audience"
-    >
-      {segments.map((s) => {
-        const active = audience === s.id;
-        return (
-          <Link
-            key={s.id}
-            href={`/?audience=${s.id}`}
-            scroll={false}
-            role="tab"
-            aria-selected={active}
-            className={
-              "px-5 py-2 rounded-full text-sm font-medium transition-all " +
-              (active
-                ? "bg-cream text-forest-900 shadow"
-                : "text-cream/80 hover:text-cream hover:bg-white/5")
-            }
-          >
-            {s.label}
-          </Link>
-        );
-      })}
-    </div>
   );
 }
 

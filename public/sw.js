@@ -1303,7 +1303,16 @@
 // worker never stores, and /_next/* chunks are not cached here either
 // (v8), so TrackingHealthBanner's new client chunk arrives by content
 // hash. Bumped to keep the "any client JS or markup change" rule a rule.
-const CACHE_VERSION = "v200";
+//
+// v201: the marketing hero's first screen carries the instrument.
+//
+// The home hero is a two-column grid at desktop with the tax-year runway
+// panel (components/HeroInstrument.tsx) on the right, the h1 drops its
+// gold sweep, and the audience toggle no longer wraps its labels on
+// phones (components/AudienceToggle.tsx). Markup only; the bump makes a
+// WebView that opens the marketing page fetch the new HTML rather than
+// hydrate cached chunks against it.
+const CACHE_VERSION = "v201";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

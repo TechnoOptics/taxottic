@@ -132,9 +132,7 @@ The hero passes a fixed sample `asOf` of `2026-08-20T00:00:00Z`.
   Props: `taxYear`, `asOf`, `nextPaymentCents`, `setAsideCents`. Renders the
   kicker, the runway (rail, fill, four ticks with labels, today marker), and
   two rows. Figures use `.figure`. Money is formatted with the existing
-  `formatCents` helper if one is exported from `lib`, else a local
-  `Intl.NumberFormat("en-US", { style: "currency", currency: "USD",
-  maximumFractionDigits: 0 })`.
+  `formatCents` from `lib/tax/engine/money.ts`.
 - `components/AudienceToggle.tsx`: extracted from `app/page.tsx` unchanged in
   behaviour, plus the phone fix: below `sm` the tablist is a full-width
   three-column grid, labels `text-xs whitespace-nowrap text-center`; at `sm`
