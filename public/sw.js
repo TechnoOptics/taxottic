@@ -1312,7 +1312,28 @@
 // phones (components/AudienceToggle.tsx). Markup only; the bump makes a
 // WebView that opens the marketing page fetch the new HTML rather than
 // hydrate cached chunks against it.
-const CACHE_VERSION = "v201";
+//
+// v202 is reserved for the marketing pass running alongside this one.
+//
+// v203: the trial banner reads as one sentence on a phone.
+//
+// components/TrialBanner.tsx sits under the greeting on /dashboard for
+// every account still in its trial. Its sentence carried `flex-1 min-w-0`
+// between two auto-width siblings, so the row never wrapped and the
+// sentence took the leftover: 29px on a 344px cover screen, which body's
+// `overflow-wrap: anywhere` turned into a 446px column of syllables that
+// pushed the hero figures to y=783. The label and the call to action now
+// share the first row and the sentence spans the width beneath them
+// (one line from `sm` up); the hero starts at y=427 on the same screen.
+// The "ending soon" and "expired" tints also move to tokens, since the
+// old light tints had no dark twin (1.3:1 under cream text).
+//
+// The bump is precautionary, not load-bearing. TrialBanner is a server
+// component and the pages that render it are `private, no-store`, which
+// this worker never stores (see isStorable), and /_next/* chunks are not
+// cached here either (v8). Bumped to keep the "any client JS or markup
+// change" rule a rule.
+const CACHE_VERSION = "v203";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
