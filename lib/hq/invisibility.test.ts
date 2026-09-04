@@ -69,8 +69,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { SANDBOX_SEED } from "./sandbox-seed";
 
 const REPO_ROOT = join(__dirname, "..", "..");
@@ -358,12 +358,32 @@ describe("no account-state copy names the visitor's own plan as a trial", () => 
     for (const entry of readdirSync(full)) {
       const child = join(full, entry);
       if (statSync(child).isDirectory()) out.push(...tsxUnder(join(relDir, entry)));
-      else if (/\.tsx$/.test(entry) && !/\.(test|spec|ct\.spec)\.tsx$/.test(entry)) {
+      else if (/\.tsx$/.test(entry) && !/\.(test|spec|ct\.spec|ct\.fixture)\.tsx$/.test(entry)) {
         out.push(child);
       }
     }
     return out;
   }
+
+  it("skips *.ct.fixture.tsx but still scans a real component", () => {
+    // A component-test FIXTURE is scaffolding that never ships and that
+    // legitimately mounts the real account surfaces to photograph them.
+    // Found 2026-09-03: a dashboard fixture mounting TrialBanner tripped
+    // this block on "free trial" and lib/app-store/purchase-controls on a
+    // /billing link. Pinned with synthetic files under the repo root, so
+    // the skip cannot rot silently in either direction.
+    const rel = `.walker-probe-${process.pid}`;
+    const dir = join(REPO_ROOT, rel);
+    mkdirSync(dir, { recursive: true });
+    try {
+      writeFileSync(join(dir, "Thing.ct.fixture.tsx"), "<p>Your free trial has ended.</p>\n");
+      writeFileSync(join(dir, "Thing.ct.spec.tsx"), "<p>Your free trial has ended.</p>\n");
+      writeFileSync(join(dir, "Thing.tsx"), "<p>Your free trial has ended.</p>\n");
+      expect(tsxUnder(rel).map((f) => basename(f))).toEqual(["Thing.tsx"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   /**
    * The prose a signed-in visitor reads: string literals and JSX text, with

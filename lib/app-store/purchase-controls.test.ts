@@ -54,8 +54,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 
 const REPO_ROOT = join(__dirname, "..", "..");
 const SCANNED = ["app", "components"];
@@ -91,7 +92,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
     if (entry === "node_modules" || entry === ".next") continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) sourceFiles(full, out);
-    else if (/\.tsx?$/.test(entry) && !/\.(test|spec|ct\.spec)\.tsx?$/.test(entry)) {
+    else if (/\.tsx?$/.test(entry) && !/\.(test|spec|ct\.spec|ct\.fixture)\.tsx?$/.test(entry)) {
       out.push(full);
     }
   }
@@ -416,5 +417,28 @@ describe("no purchase control renders inside the native app", () => {
     );
     expect(src).toMatch(/if\s*\(\s*isNative\s*===\s*null\s*\)\s*return null/);
     expect(src).toMatch(/isNative\s*\?\s*<>\{fallback\}<\/>\s*:\s*<>\{children\}<\/>/);
+  });
+});
+
+describe("the file walker", () => {
+  // A component-test FIXTURE is test scaffolding: it never ships, and it
+  // legitimately mounts the real billing surfaces to photograph them.
+  // Found 2026-09-03: a dashboard fixture that mounted TrialBanner and a
+  // /billing link tripped this guard and lib/hq/invisibility.test.ts,
+  // and the next person to add a fixture will hit the same wall unless
+  // the walker knows the difference. The test below pins it with two
+  // synthetic files so that neither the skip nor the scan can rot
+  // silently: a fixture must be ignored, a same-named component must not.
+  it("skips *.ct.fixture.tsx but still scans a real component", () => {
+    const dir = mkdtempSync(join(tmpdir(), "purchase-walker-"));
+    try {
+      writeFileSync(join(dir, "Thing.ct.fixture.tsx"), 'export const a = "/billing";\n');
+      writeFileSync(join(dir, "Thing.ct.spec.tsx"), 'export const b = "/billing";\n');
+      writeFileSync(join(dir, "Thing.tsx"), 'export const c = "/billing";\n');
+      const found = sourceFiles(dir).map((f) => basename(f));
+      expect(found).toEqual(["Thing.tsx"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
