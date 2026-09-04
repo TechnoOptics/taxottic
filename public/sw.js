@@ -1333,7 +1333,27 @@
 // this worker never stores (see isStorable), and /_next/* chunks are not
 // cached here either (v8). Bumped to keep the "any client JS or markup
 // change" rule a rule.
-const CACHE_VERSION = "v203";
+//
+// v204: the outstanding-tasks strip reads in the dark theme.
+//
+// components/OutstandingTasksBanner.tsx sits under the greeting on
+// /dashboard whenever a drive or transaction still needs a business-or-
+// personal call. Its fill was `bg-gold-50/70`, a light tint with no dark
+// twin, under text the dark theme flips to cream: 2.0:1 in every dark
+// screenshot of the 2026-09-03 audit. The fill and border now come from
+// the accent tokens (accent-2 at 10% and 40%), the same formula as the
+// trial banner's "ending soon" state (v203), so one set of classes reads
+// in both themes: 12.9:1 light, 15.2:1 dark. The same 344px measurement
+// showed the sentence squeezed to 152px beside the controls, so the bell
+// and the controls now share the first row on a phone and the sentence
+// spans the width beneath them, as the trial banner does.
+//
+// The bump is precautionary, not load-bearing. The dashboard is
+// `private, no-store`, which this worker never stores (see isStorable),
+// and /_next/* chunks are not cached here either (v8), so the banner's
+// new client chunk arrives by content hash. Bumped to keep the "any
+// client JS or markup change" rule a rule.
+const CACHE_VERSION = "v204";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
