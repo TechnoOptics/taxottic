@@ -1313,7 +1313,8 @@
 // WebView that opens the marketing page fetch the new HTML rather than
 // hydrate cached chunks against it.
 //
-// v202 is reserved for the marketing pass running alongside this one.
+// v202 was reserved for the marketing pass running alongside this one;
+// that pass shipped as v205 below, so v202 was never served.
 //
 // v203: the trial banner reads as one sentence on a phone.
 //
@@ -1353,7 +1354,24 @@
 // and /_next/* chunks are not cached here either (v8), so the banner's
 // new client chunk arrives by content hash. Bumped to keep the "any
 // client JS or markup change" rule a rule.
-const CACHE_VERSION = "v204";
+//
+// v205: the marketing site after the audit's next seven items.
+//
+// Pricing h1 holds "Yearly saves ~17%." as one group, left-aligned, in
+// static brass; every remaining gold-shine on the marketing and personal
+// pages is static brass (the animated sweep cost ~271ms of paint per
+// 2.5s idle); the phone download banner is a compact strip on phones
+// (components/AppDownloadBanner.tsx, AppStoreBadges compact); the hero
+// sub-copy is about 30 words per audience; the booking header keeps
+// "Back to home" on one line; the calculators h1 no longer splits
+// "self-employed"; the navy band gradient is a token (--navy-band in
+// app/globals.css) referenced by var() on every marketing page.
+// Markup, copy and a client component changed, so the WebView must fetch
+// the new HTML rather than hydrate cached chunks against it. v205, not
+// the v202 this PR first reserved: v203 and v204 landed on main while it
+// was open, so it was renumbered at rebase time against origin/main and
+// every open PR. A reserved number is not a number.
+const CACHE_VERSION = "v205";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

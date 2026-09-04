@@ -26,7 +26,7 @@ export default async function WatchLinkPage({
       className="min-h-screen flex items-center justify-center p-6"
       style={{
         background:
-          "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+          "var(--navy-band)",
       }}
     >
       <div className="w-full max-w-sm">

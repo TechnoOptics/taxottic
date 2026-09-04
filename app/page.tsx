@@ -338,7 +338,7 @@ export default async function Home({
         className="fixed top-0 left-0 right-0 z-30"
         style={{
           background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+            "var(--navy-band)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
           // Native iOS draws the WebView UNDER the status bar
           // (capacitor.config.ts StatusBar.overlaysWebView), so without
@@ -429,13 +429,17 @@ const HERO: Record<
     // Phrasing is deliberately the Capabilities card's ("Every business
     // mile, captured on its own") rather than a new claim. The site
     // should make one mileage promise, not three slightly different ones.
+    //
+    // Held to about 30 words (lib/marketing/hero-first-screen.test.ts):
+    // the 46-word version ran five lines at desktop and eight on a phone.
+    // Four capabilities, none dropped: deductions, mileage, the live
+    // federal and state forecast, the set-aside nudge.
     sub: (
       <>
-        Taxottic tracks the personal deductions you&apos;ve already earned,
-        logs every business mile you drive on its own, keeps a live federal +
-        state forecast in step with your accounts, and nudges you to set money
-        aside before you need it. For W-2 earners, freelancers, and
-        side-hustlers.
+        Deductions tracked, every business mile logged on its own, a live
+        federal and state forecast from your accounts, and a nudge to set
+        money aside. For W-2 earners, freelancers, and{" "}
+        <span className="whitespace-nowrap">side-hustlers.</span>
       </>
     ),
     ctaHref: "/example",
@@ -453,9 +457,8 @@ const HERO: Record<
     sub: (
       <>
         Bank-synced expenses auto-matched to IRS codes, business miles tracked
-        automatically, a forecast that keeps pace with your books, and a
-        ready-to-file Schedule C waiting at year-end. For sole props, LLCs,
-        S-corps, and their teams.
+        automatically, a forecast in step with your books, and a Schedule C
+        ready at year-end. For sole props, LLCs, S-corps, and their teams.
       </>
     ),
     ctaHref: "/example",
@@ -472,10 +475,9 @@ const HERO: Record<
     ),
     sub: (
       <>
-        A shared workspace where your clients keep their books in order on
-        their own time, and your team picks up where they left off. Bulk
-        exports, engagement workflow, firm-wide analytics. Branded as your
-        firm, never as ours.
+        One shared workspace: your clients keep their books in order, your
+        team picks up where they left off. Bulk exports, engagement workflow,
+        firm-wide analytics. Branded as your firm, never as ours.
       </>
     ),
     ctaHref: "/book?for=firm",
@@ -503,7 +505,7 @@ function Hero({ audience }: { audience: Audience }) {
         className="absolute inset-0 -z-10"
         style={{
           background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+            "var(--navy-band)",
         }}
       />
       <div
@@ -983,7 +985,7 @@ const TOUR: Record<
     eyebrow: "See it on your return",
     heading: (
       <>
-        Your taxes, <span className="gold-shine">quietly handled.</span>
+        Your taxes, <span className="text-[var(--kicker)]">quietly handled.</span>
       </>
     ),
     intro:
@@ -1030,7 +1032,7 @@ const TOUR: Record<
     eyebrow: "See it on Company X",
     heading: (
       <>
-        A real business, <span className="gold-shine">the calm way.</span>
+        A real business, <span className="text-[var(--kicker)]">the calm way.</span>
       </>
     ),
     intro:
@@ -1070,7 +1072,7 @@ const TOUR: Record<
     eyebrow: "See it across your book",
     heading: (
       <>
-        Every client, <span className="gold-shine">one calm console.</span>
+        Every client, <span className="text-[var(--kicker)]">one calm console.</span>
       </>
     ),
     intro:
@@ -1213,7 +1215,7 @@ function MockupFrame({
           className="flex items-center justify-between px-4 py-2.5"
           style={{
             background:
-              "linear-gradient(180deg, #2a3a5e 0%, #1d2843 100%)",
+              "linear-gradient(180deg, var(--navy-high) 0%, var(--navy) 100%)",
           }}
         >
           <div className="flex items-center gap-2">
@@ -1240,7 +1242,7 @@ function CompanyMonogram() {
       className="size-6 rounded-md flex items-center justify-center text-[10px] font-semibold"
       style={{
         background:
-          "linear-gradient(135deg, #2a3a5e 0%, #1d2843 100%)",
+          "linear-gradient(135deg, var(--navy-high) 0%, var(--navy) 100%)",
         color: "#d5bb7e",
         boxShadow: "inset 0 0 0 1px rgba(213,187,126,0.25)",
       }}
@@ -1570,7 +1572,7 @@ function MileageMockup({ solo = false }: { solo?: boolean } = {}) {
       {/* Stylised route map: navy dial with a few coloured driver trails. */}
       <div
         className="relative rounded-lg overflow-hidden h-32 border border-forest-100"
-        style={{ background: "linear-gradient(180deg,#1d2843,#121a2a)" }}
+        style={{ background: "linear-gradient(180deg, var(--navy), var(--navy-deep))" }}
         aria-hidden="true"
       >
         <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full">
@@ -1714,7 +1716,7 @@ function ProofBand() {
       className="relative"
       style={{
         background:
-          "linear-gradient(180deg, #1d2843 0%, #121a2a 100%)",
+          "linear-gradient(180deg, var(--navy) 0%, var(--navy-deep) 100%)",
       }}
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-cream">
@@ -1727,7 +1729,7 @@ function ProofBand() {
         <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-6">
           {stats.map((s) => (
             <div key={s.label}>
-              <div className="display text-3xl sm:text-4xl text-cream gold-shine inline-block">
+              <div className="display text-3xl sm:text-4xl text-[var(--accent-2)] inline-block">
                 {s.kpi}
               </div>
               <div className="mt-2 text-xs sm:text-sm text-cream/70 leading-relaxed">
@@ -1750,7 +1752,7 @@ const FOMO: Record<Audience, { line: React.ReactNode; sub: string }> = {
     line: (
       <>
         Most of the deductions you have already earned are sitting{" "}
-        <span className="gold-shine">in your bank statements.</span> We help you
+        <span className="text-[var(--kicker)]">in your bank statements.</span> We help you
         find them, gently, before tax day.
       </>
     ),
@@ -1760,7 +1762,7 @@ const FOMO: Record<Audience, { line: React.ReactNode; sub: string }> = {
     line: (
       <>
         The deductions your business earned are hiding{" "}
-        <span className="gold-shine">in your bank feed and your glovebox.</span>{" "}
+        <span className="text-[var(--kicker)]">in your bank feed and your glovebox.</span>{" "}
         Taxottic surfaces them and files them away, all year.
       </>
     ),
@@ -1770,7 +1772,7 @@ const FOMO: Record<Audience, { line: React.ReactNode; sub: string }> = {
     line: (
       <>
         Your firm&apos;s most thoughtful hours{" "}
-        <span className="gold-shine">belong to your clients,</span> not to data
+        <span className="text-[var(--kicker)]">belong to your clients,</span> not to data
         entry. Taxottic gives those hours back to your team.
       </>
     ),

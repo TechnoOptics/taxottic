@@ -132,6 +132,21 @@ html[data-theme="light"] {
   --accent-fg: #f2f5f8;
   --kicker: #8a6a1c;       /* brass that actually passes on cool paper */
 
+  /* The navy band: the marketing header and hero, the product-tour
+     chrome, and the dark bands that borrow it. Three stops and the one
+     gradient they compose, declared once. The same hex sits in the
+     forest ramp below (forest-800, forest-950), but those are theme
+     utilities and `@theme inline` bakes them at build time; a page that
+     needs the band paints `background: var(--navy-band)` inline or via
+     an arbitrary-value utility, both of which follow the property.
+     Guarded by lib/marketing/marketing-skin.test.ts: the stops must
+     equal the literals the pages carried, so lifting them moved no
+     pixel. */
+  --navy-high: #2a3a5e;
+  --navy: #1d2843;
+  --navy-deep: #121a2a;
+  --navy-band: linear-gradient(180deg, var(--navy-high) 0%, var(--navy) 60%, var(--navy-deep) 100%);
+
   /* Display face swaps to a grotesque. See app/layout.tsx for why. */
   --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --font-data: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
