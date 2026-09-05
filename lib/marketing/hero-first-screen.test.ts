@@ -55,26 +55,21 @@ describe("the hero spends brass once", () => {
   });
 });
 
+const SPINE = "components/marketing/YearSpine.tsx";
+
 describe("the runway signature is on the page", () => {
-  it("HeroInstrument exists and renders the runway rail, fill and today marker", () => {
-    expect(existsSync(INSTRUMENT), `${INSTRUMENT} is missing`).toBe(true);
-    const src = code(readFileSync(INSTRUMENT, "utf8"));
-    // Word boundaries, not includes(): "runway-todayx" must not satisfy
-    // "runway-today". A mutation that renamed the class survived the
-    // substring form.
+  it("YearSpine exists and renders the runway rail, fill, ticks and today marker", () => {
+    expect(existsSync(SPINE), `${SPINE} is missing`).toBe(true);
+    const src = code(readFileSync(SPINE, "utf8"));
     for (const cls of ["runway-rail", "runway-fill", "runway-tick", "runway-today"]) {
-      expect(
-        new RegExp(`className="${cls}"`).test(src),
-        `${INSTRUMENT} never renders .${cls}`,
-      ).toBe(true);
+      expect(new RegExp(`className="${cls}"`).test(src), `${SPINE} never renders .${cls}`).toBe(true);
     }
   });
 
-  it("Hero renders HeroInstrument", () => {
-    expect(
-      /<HeroInstrument\b/.test(heroComponent()),
-      "the signature exists but the hero does not mount it",
-    ).toBe(true);
+  it("HeroInstrument mounts the panel spine on the navy band", () => {
+    const src = code(readFileSync(INSTRUMENT, "utf8"));
+    expect(/<YearSpine\b[^>]*variant="panel"/.test(src), "the instrument does not mount the spine").toBe(true);
+    expect(/var\(--navy-band\)/.test(src), "the panel must paint the navy band token").toBe(true);
   });
 });
 
