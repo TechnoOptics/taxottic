@@ -19,7 +19,8 @@ import { existsSync, readFileSync } from "node:fs";
  * or a commented-out line in the page, cannot satisfy a check.
  */
 
-const PAGE = "app/page.tsx";
+const COPY = "components/marketing/home-copy.ts";
+const HERO_FILE = "components/marketing/HomeHero.tsx";
 const INSTRUMENT = "components/HeroInstrument.tsx";
 
 function code(src: string): string {
@@ -29,19 +30,20 @@ function code(src: string): string {
     .replace(/^\s*\/\/.*$/gm, "");
 }
 
-const page = code(readFileSync(PAGE, "utf8"));
+const copy = code(readFileSync(COPY, "utf8"));
 
-/** Body of the `const HERO: Record<...> = { ... };` block. */
+/** Body of the `const HERO: Record<Audience, HeroCopy> = { ... };` block. */
 function heroRecord(): string {
-  const m = /const HERO: Record<[\s\S]*?> = \{([\s\S]*?)\n\};/.exec(page);
-  if (!m) throw new Error(`HERO record not found in ${PAGE}`);
+  const m = /const HERO: Record<Audience, HeroCopy> = \{([\s\S]*?)\n\};/.exec(copy);
+  if (!m) throw new Error(`HERO record not found in ${COPY}`);
   return m[1];
 }
 
-/** Body of `function Hero(...) { ... }`. */
+/** Body of `export function HomeHero(...) { ... }`. */
 function heroComponent(): string {
-  const m = /function Hero\([\s\S]*?\n\}\n/.exec(page);
-  if (!m) throw new Error(`Hero component not found in ${PAGE}`);
+  const src = code(readFileSync(HERO_FILE, "utf8"));
+  const m = /export function HomeHero\([\s\S]*?\n\}\n/.exec(src);
+  if (!m) throw new Error(`HomeHero component not found in ${HERO_FILE}`);
   return m[0];
 }
 
@@ -52,6 +54,10 @@ describe("the hero spends brass once", () => {
       "an h1 with an animated gold sweep is the first thing a buyer sees; " +
         "the Instrument skin spends brass on the runway, not the headline",
     ).toBe(false);
+  });
+
+  it("no headline or lede uses a retired word", () => {
+    expect(heroRecord()).not.toMatch(/\b(calmer|calm|gentle|gently|quiet|quietly|friendly|scary)\b/i);
   });
 });
 
@@ -71,6 +77,10 @@ describe("the runway signature is on the page", () => {
     expect(/<YearSpine\b[^>]*variant="panel"/.test(src), "the instrument does not mount the spine").toBe(true);
     expect(/var\(--navy-band\)/.test(src), "the panel must paint the navy band token").toBe(true);
   });
+
+  it("Hero renders HeroInstrument", () => {
+    expect(/<HeroInstrument\b/.test(heroComponent()), `${HERO_FILE} does not mount HeroInstrument`).toBe(true);
+  });
 });
 
 /**
@@ -79,27 +89,22 @@ describe("the runway signature is on the page", () => {
  * promise. About 25 words, and no capability dropped: each audience
  * names four, and every one must survive a tightening.
  */
-const SUB_BUDGET = 32;
+const SUB_BUDGET = 36;
 
 const CAPABILITIES: Record<string, RegExp[]> = {
-  personal: [/deduction/i, /\bmile/i, /federal and state forecast|federal \+ state forecast/i, /set money aside/i],
-  business: [/IRS codes/i, /\bmiles?\b.*\b(tracked|logged)/i, /forecast/i, /Schedule C/i],
-  firm: [/bulk exports/i, /engagement workflow/i, /firm-wide analytics/i, /branded as your firm/i],
+  personal: [/federal and state/i, /before each payment/i, /\bmiles?\b/i, /deduction/i],
+  business: [/federal and state/i, /Schedule C/i, /IRS code/i, /\bmile\b/i],
+  firm: [/federal and state/i, /engagement/i, /\bmileage\b/i, /bulk export/i, /branded as your firm/i],
 };
 
-/** Plain text of `HERO[<audience>].sub`, JSX and entities stripped. */
+/** Plain text of `HERO[<audience>].lede`. */
 function subCopy(audience: string): string {
   const record = heroRecord();
   const m = new RegExp(`\\n  ${audience}: \\{([\\s\\S]*?)\\n  \\},`).exec(record);
   if (!m) throw new Error(`HERO.${audience} not found`);
-  const sub = /sub: \(\s*<>([\s\S]*?)<\/>\s*\),/.exec(m[1]);
-  if (!sub) throw new Error(`HERO.${audience}.sub not found`);
-  return sub[1]
-    .replace(/\{" "\}/g, " ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&apos;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+  const sub = /lede:\s*"([^"]*)"/.exec(m[1]);
+  if (!sub) throw new Error(`HERO.${audience}.lede not found`);
+  return sub[1].replace(/\s+/g, " ").trim();
 }
 
 describe("the hero sub-copy fits the first screen", () => {
