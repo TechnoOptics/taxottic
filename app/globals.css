@@ -431,10 +431,11 @@ html[data-theme="dark"] [data-skin="classic"] {
   border-bottom: 1px solid var(--border);
 }
 [data-skin="instrument"] .stat-row:last-child { border-bottom: 0; }
-[data-skin="instrument"] .stat-label { font-size: 0.875rem; color: var(--foreground); }
-[data-skin="instrument"] .stat-note { font-size: 0.75rem; color: var(--muted); }
-[data-skin="instrument"] .stat-value { font-size: 1.375rem; font-weight: 500; color: var(--foreground); }
-[data-skin="instrument"] .stat-value-brass { color: var(--kicker); }
+[data-skin="instrument"] .stat-row-label { font-size: 0.875rem; color: var(--foreground); }
+[data-skin="instrument"] .stat-row-note { font-size: 0.75rem; color: var(--muted); }
+[data-skin="instrument"] .stat-row-value { font-size: 1.375rem; font-weight: 500; color: var(--foreground); }
+[data-skin="instrument"] .stat-row-value-brass { color: var(--kicker); }
+[data-skin="instrument"] .stat-row-value-lg { font-size: 2.125rem; }
 [data-skin="instrument"] .ledger-row {
   display: grid;
   grid-template-columns: 3.625rem minmax(0, 1fr) auto auto;

@@ -40,10 +40,10 @@ export function StatRow({
   return (
     <div className="stat-row">
       <div>
-        <div className="stat-label">{label}</div>
-        {note ? <div className="stat-note">{note}</div> : null}
+        <div className="stat-row-label">{label}</div>
+        {note ? <div className="stat-row-note">{note}</div> : null}
       </div>
-      <div className={"figure stat-value" + (brass ? " stat-value-brass" : "")}>{value}</div>
+      <div className={"figure stat-row-value" + (brass ? " stat-row-value-brass" : "")}>{value}</div>
     </div>
   );
 }

@@ -672,10 +672,10 @@ export function StatRow({
   return (
     <div className="stat-row">
       <div>
-        <div className="stat-label">{label}</div>
-        {note ? <div className="stat-note">{note}</div> : null}
+        <div className="stat-row-label">{label}</div>
+        {note ? <div className="stat-row-note">{note}</div> : null}
       </div>
-      <div className={"figure stat-value" + (brass ? " stat-value-brass" : "")}>{value}</div>
+      <div className={"figure stat-row-value" + (brass ? " stat-row-value-brass" : "")}>{value}</div>
     </div>
   );
 }
@@ -781,10 +781,11 @@ Append to `app/globals.css`:
   border-bottom: 1px solid var(--border);
 }
 [data-skin="instrument"] .stat-row:last-child { border-bottom: 0; }
-[data-skin="instrument"] .stat-label { font-size: 0.875rem; color: var(--foreground); }
-[data-skin="instrument"] .stat-note { font-size: 0.75rem; color: var(--muted); }
-[data-skin="instrument"] .stat-value { font-size: 1.375rem; font-weight: 500; color: var(--foreground); }
-[data-skin="instrument"] .stat-value-brass { color: var(--kicker); }
+[data-skin="instrument"] .stat-row-label { font-size: 0.875rem; color: var(--foreground); }
+[data-skin="instrument"] .stat-row-note { font-size: 0.75rem; color: var(--muted); }
+[data-skin="instrument"] .stat-row-value { font-size: 1.375rem; font-weight: 500; color: var(--foreground); }
+[data-skin="instrument"] .stat-row-value-brass { color: var(--kicker); }
+[data-skin="instrument"] .stat-row-value-lg { font-size: 2.125rem; }
 [data-skin="instrument"] .ledger-row {
   display: grid;
   grid-template-columns: 3.625rem minmax(0, 1fr) auto auto;
@@ -959,21 +960,21 @@ export function HeroInstrument({
 
         <dl className="mt-6">
           <div className="stat-row">
-            <div>
-              <dt className="stat-label">Next payment</dt>
-              <dd className="stat-note">{sample.heading}</dd>
-            </div>
-            <dd className="figure stat-value text-[2.125rem] text-[var(--accent-2)]">
+            <dt className="stat-row-label">
+              Next payment
+              <span className="stat-row-note block">{sample.heading}</span>
+            </dt>
+            <dd id="hero-next-payment" className="figure stat-row-value stat-row-value-lg stat-row-value-brass">
               {formatCents(sample.nextPaymentCents)}
             </dd>
           </div>
           <div className="stat-row">
-            <dt className="stat-label">Set aside so far</dt>
-            <dd className="figure stat-value text-[2.125rem]">{formatCents(sample.setAsideCents)}</dd>
+            <dt className="stat-row-label">Set aside so far</dt>
+            <dd className="figure stat-row-value stat-row-value-lg">{formatCents(sample.setAsideCents)}</dd>
           </div>
           <div className="stat-row">
-            <dt className="stat-label">Still to set aside</dt>
-            <dd className="figure stat-value text-[2.125rem]">{formatCents(still)}</dd>
+            <dt className="stat-row-label">Still to set aside</dt>
+            <dd className="figure stat-row-value stat-row-value-lg">{formatCents(still)}</dd>
           </div>
         </dl>
 
@@ -993,7 +994,7 @@ export function HeroInstrument({
 }
 ```
 
-The `.stat-row` rules from Task 4 are scoped to `[data-skin="instrument"]` and use `--foreground`, `--muted`, `--border`, so inside the dark scope they paint cream on navy without a second rule set. `stat-note` doubles as the "Q3 · due Sep 15 · 10 days" line via `sample.heading`, which the copy module builds from the runway in Task 7.
+The `.stat-row` rules from Task 4 are scoped to `[data-skin="instrument"]` and use `--foreground`, `--muted`, `--border`, so inside the dark scope they paint cream on navy without a second rule set. Tailwind size and colour utilities must not be used on the figures: the row classes are unlayered CSS and win over `@layer utilities`, which is why the size and brass are classes (`stat-row-value-lg`, `stat-row-value-brass`). The class names carry the `stat-row-` prefix because bare `.stat-label` and `.stat-value` already exist in `app/globals.css` inside `@layer components` and would leak uppercase tracking and margins into the rows. `components/HeroInstrument.ct.spec.tsx` asserts the computed colour, size and case. `stat-row-note` doubles as the "Q3 · due Sep 15 · 10 days" line via `sample.heading`, which the copy module builds from the runway in Task 7.
 
 - [ ] **Step 3: Type-check and run the guards**
 
@@ -2131,7 +2132,7 @@ export function CountUp({ id, cents }: { id: string; cents: number }) {
 }
 ```
 
-In `components/HeroInstrument.tsx` give the next-payment `<dd>` `id="hero-next-payment"` and render `<CountUp id="hero-next-payment" cents={sample.nextPaymentCents} />` after the `</dl>`. Remove the `<CountUp />` stub call from `HomeHero.tsx`. Confirm `formatCents(342_000)` renders `$3,420` with no cents (check `lib/tax/engine/money.ts` `showCents` default); if it renders `$3,420.00`, pass `{ showCents: false }` in the instrument and keep `maximumFractionDigits: 0` in CountUp so the final frame matches the server text.
+In `components/HeroInstrument.tsx` the next-payment `<dd>` already carries `id="hero-next-payment"`; render `<CountUp id="hero-next-payment" cents={sample.nextPaymentCents} />` after the `</dl>`. Remove the `<CountUp />` stub call from `HomeHero.tsx`. Confirm `formatCents(342_000)` renders `$3,420` with no cents (check `lib/tax/engine/money.ts` `showCents` default); if it renders `$3,420.00`, pass `{ showCents: false }` in the instrument and keep `maximumFractionDigits: 0` in CountUp so the final frame matches the server text.
 
 Append to `app/globals.css`:
 

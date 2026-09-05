@@ -43,21 +43,21 @@ export function HeroInstrument({
 
         <dl className="mt-6">
           <div className="stat-row">
-            <div>
-              <dt className="stat-label">Next payment</dt>
-              <dd className="stat-note">{sample.heading}</dd>
-            </div>
-            <dd className="figure stat-value text-[2.125rem] text-[var(--accent-2)]">
+            <dt className="stat-row-label">
+              Next payment
+              <span className="stat-row-note block">{sample.heading}</span>
+            </dt>
+            <dd id="hero-next-payment" className="figure stat-row-value stat-row-value-lg stat-row-value-brass">
               {formatCents(sample.nextPaymentCents)}
             </dd>
           </div>
           <div className="stat-row">
-            <dt className="stat-label">Set aside so far</dt>
-            <dd className="figure stat-value text-[2.125rem]">{formatCents(sample.setAsideCents)}</dd>
+            <dt className="stat-row-label">Set aside so far</dt>
+            <dd className="figure stat-row-value stat-row-value-lg">{formatCents(sample.setAsideCents)}</dd>
           </div>
           <div className="stat-row">
-            <dt className="stat-label">Still to set aside</dt>
-            <dd className="figure stat-value text-[2.125rem]">{formatCents(still)}</dd>
+            <dt className="stat-row-label">Still to set aside</dt>
+            <dd className="figure stat-row-value stat-row-value-lg">{formatCents(still)}</dd>
           </div>
         </dl>
 
