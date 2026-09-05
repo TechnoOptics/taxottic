@@ -350,19 +350,6 @@ describe("no account-state copy names the visitor's own plan as a trial", () => 
           "Row 3. The heading over the same diagnostic. Same reasoning as the " +
           "component above.",
       },
-      {
-        file: "components/HeroInstrument.tsx",
-        word: "sample",
-        verdict: "not in scope",
-        note:
-          "Row 3. The 'Sample' trailing label on the marketing hero's " +
-          "instrument panel is shown to every visitor of the home page, " +
-          "paying or not, identically. It marks the fixed illustrative " +
-          "figures the panel always renders, not the visitor's own account, " +
-          "plan or data, so revision C's one question answers yes: a real " +
-          "paying customer sees this same label on this same public marketing " +
-          "screen before they ever sign in.",
-      },
     ];
 
   function tsxUnder(relDir: string): string[] {
@@ -403,6 +390,13 @@ describe("no account-state copy names the visitor's own plan as a trial", () => 
    * every row 4 internal removed first. Requiring two adjacent words drops
    * identifiers and single-token attribute values, which is what separates
    * "Your free trial has ended." from `trialState`.
+   *
+   * The quote scan is not attribute-aware: it pairs quotes left to right. It
+   * therefore has to accept an EMPTY string, or an attribute like
+   * `markerPrefix=""` consumes one quote, every later pair is shifted by one,
+   * and the "strings" it returns are the JSX between attributes, expressions
+   * like `{sample.heading}` included. Found 2026-09-05 on HeroInstrument.tsx
+   * and pinned below.
    */
   function visibleProse(file: string): string {
     let src = stripTsComments(readFileSync(file, "utf8"));
@@ -411,7 +405,7 @@ describe("no account-state copy names the visitor's own plan as a trial", () => 
     src = src.replace(/\.test\s*\(/g, ".matches("); //           RegExp.test
     const parts: string[] = [];
     for (const m of src.matchAll(
-      /"([^"\\]{2,200})"|'([^'\\]{2,200})'|`([^`\\$]{2,200})`/g,
+      /"([^"\\]{0,200})"|'([^'\\]{0,200})'|`([^`\\$]{0,200})`/g,
     )) {
       parts.push(m[1] ?? m[2] ?? m[3]);
     }
@@ -452,6 +446,34 @@ describe("no account-state copy names the visitor's own plan as a trial", () => 
     expect(
       visibleProse(join(REPO_ROOT, "components/TrialBanner.tsx")),
     ).not.toMatch(/TrialState/);
+  });
+
+  it("keeps quote pairing in step across an empty attribute value", () => {
+    // Mutation-tested: with a minimum of 2 in the quote regex, `x=""` shifts
+    // the pairing and the prop name in {sample.heading} is read as prose,
+    // which reported "components/HeroInstrument.tsx: sample" as a new
+    // screen naming the visitor's data. A prop name is a row 4 internal.
+    const rel = `.quote-probe-${process.pid}`;
+    const dir = join(REPO_ROOT, rel);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const file = join(dir, "Thing.tsx");
+      writeFileSync(
+        file,
+        [
+          '<Spine variant="panel" trailing="Sample" markerPrefix="" />',
+          '<span className="note block">{sample.heading}</span>',
+          '<dd id="next-payment">{formatCents(sample.nextPaymentCents)}</dd>',
+          "<p>Your free trial has ended.</p>",
+          "",
+        ].join("\n"),
+      );
+      const prose = visibleProse(file);
+      expect(prose).toMatch(/free trial has ended/);
+      expect(prose).not.toMatch(/sample/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("classifies every hit, and has no unclassified one", () => {
