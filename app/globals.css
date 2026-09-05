@@ -343,6 +343,69 @@ html[data-theme="dark"] [data-skin="classic"] {
   color: var(--muted);
 }
 
+/* ---- YEAR GRAMMAR: the spine ------------------------------------
+   Overrides the hero-era .runway-* sizes (1px rail) with the spine's
+   (2px rail, 14px ticks, 20px marker). Specificity: two classes beat
+   the one-class rules above. */
+[data-skin="instrument"] .year-spine { --spine-fill: 0%; position: relative; }
+[data-skin="instrument"] .year-spine-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+[data-skin="instrument"] .year-spine .runway { margin-top: 1.75rem; }
+[data-skin="instrument"] .year-spine .runway-rail {
+  height: 2px;
+  background: var(--border-bright);
+  transform-origin: left center;
+}
+[data-skin="instrument"] .year-spine .runway-fill {
+  height: 2px;
+  width: var(--spine-fill);
+  background: var(--accent-2);
+  transition: width 0.5s ease;
+}
+[data-skin="instrument"] .year-spine .runway-tick {
+  top: -6px;
+  height: 14px;
+  background: var(--foreground);
+  opacity: 0.55;
+}
+[data-skin="instrument"] .year-spine .runway-today {
+  top: -9px;
+  width: 2px;
+  height: 20px;
+  background: var(--accent-2);
+}
+[data-skin="instrument"] .year-spine .runway-today-label {
+  position: absolute;
+  top: -30px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kicker);
+}
+[data-skin="instrument"] .year-spine-panel .runway-today-label { color: var(--accent-2); }
+[data-skin="instrument"] .year-spine .runway-labels {
+  position: relative;
+  margin-top: 0.875rem;
+  height: 1rem;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--muted);
+}
+[data-skin="instrument"] .year-spine .runway-labels span {
+  position: absolute;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-skin="instrument"] .year-spine .runway-fill { transition: none; }
+}
+
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
   --surface: #202d4d;
