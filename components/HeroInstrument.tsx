@@ -1,5 +1,6 @@
 import { formatCents } from "@/lib/tax/engine/money";
 import { YearSpine } from "@/components/marketing/YearSpine";
+import { CountUp } from "@/components/marketing/CountUp";
 
 export type PanelLedgerLine = { date: string; text: string; amount: string };
 export type PanelSample = {
@@ -60,6 +61,7 @@ export function HeroInstrument({
             <dd className="figure stat-row-value stat-row-value-lg">{formatCents(still)}</dd>
           </div>
         </dl>
+        <CountUp id="hero-next-payment" cents={sample.nextPaymentCents} />
 
         <ul className="mt-3 border-t border-edge pt-2.5">
           {sample.ledger.map((l) => (

@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { AudienceToggle, type Audience } from "@/components/AudienceToggle";
 import { HeroInstrument } from "@/components/HeroInstrument";
-import { CountUp } from "@/components/marketing/CountUp";
 import { HERO, PANEL, HOME_AS_OF, HOME_TAX_YEAR } from "@/components/marketing/home-copy";
 import { taxYearRunway } from "@/lib/marketing/tax-year-runway";
 
@@ -39,7 +38,6 @@ export function HomeHero({ audience }: { audience: Audience }) {
         </div>
         <HeroInstrument taxYear={HOME_TAX_YEAR} asOf={HOME_AS_OF} sample={PANEL[audience]} />
       </div>
-      <CountUp />
     </section>
   );
 }

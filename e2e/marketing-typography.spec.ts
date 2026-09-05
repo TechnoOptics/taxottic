@@ -182,3 +182,43 @@ function badgesIn(banner: ReturnType<typeof downloadBanner>) {
     play: banner.getByRole("link", { name: "Get Taxottic on Google Play" }),
   };
 }
+
+test.describe("the year spine moves with the reader", () => {
+  test.use({ viewport: DESKTOP });
+
+  test("fill follows the moment at the viewport centre and returns to today", async ({ page }) => {
+    await ready(page, "/");
+    const spine = page.locator("#year-spine");
+    const today = Number(await spine.getAttribute("data-fill"));
+    const fillOf = () => spine.evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue("--spine-fill")) / 100);
+    expect(Math.abs((await fillOf()) - today)).toBeLessThan(0.001);
+
+    const dec = page.locator("[data-moment='dec']");
+    const target = Number(await dec.getAttribute("data-moment-at"));
+    await dec.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await expect.poll(fillOf, { timeout: 3000 }).toBeCloseTo(target, 2);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(fillOf, { timeout: 3000 }).toBeCloseTo(today, 2);
+  });
+
+  test("the rail draws on load and the marker stays at today", async ({ page }) => {
+    await ready(page, "/");
+    const spine = page.locator("#year-spine");
+    await expect(spine).toHaveClass(/is-drawn/);
+    const rail = (await spine.locator(".runway-rail").boundingBox())!;
+    const marker = (await spine.locator(".runway-today").boundingBox())!;
+    const today = Number(await spine.getAttribute("data-fill"));
+    expect(Math.abs((marker.x - rail.x) / rail.width - today)).toBeLessThan(0.005);
+  });
+
+  test("reduced motion renders the final state at once", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await ready(page, "/");
+    const spine = page.locator("#year-spine");
+    await expect(spine).toHaveClass(/is-drawn/);
+    await expect(spine).not.toHaveClass(/is-drawing/);
+    const figure = page.locator("#hero-next-payment");
+    await expect(figure).toHaveText(/\$3,420|\$4,400/);
+  });
+});

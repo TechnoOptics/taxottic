@@ -406,6 +406,25 @@ html[data-theme="dark"] [data-skin="classic"] {
   [data-skin="instrument"] .year-spine .runway-fill { transition: none; }
 }
 
+/* ---- YEAR GRAMMAR: the one motion moment ------------------------ */
+[data-skin="instrument"] .year-spine.is-drawing .runway-rail { transform: scaleX(0); }
+[data-skin="instrument"] .year-spine.is-drawing .runway-today,
+[data-skin="instrument"] .year-spine.is-drawing .runway-today-label { opacity: 0; }
+[data-skin="instrument"] .year-spine.is-drawn .runway-rail {
+  transform: scaleX(1);
+  transition: transform 0.4s ease;
+}
+[data-skin="instrument"] .year-spine.is-drawn .runway-today,
+[data-skin="instrument"] .year-spine.is-drawn .runway-today-label {
+  opacity: 1;
+  transition: opacity 0.15s ease 0.4s;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-skin="instrument"] .year-spine .runway-rail,
+  [data-skin="instrument"] .year-spine .runway-today,
+  [data-skin="instrument"] .year-spine .runway-today-label { transition: none; }
+}
+
 /* ---- YEAR GRAMMAR: real product screens ------------------------- */
 [data-skin="instrument"] .screen {
   background: var(--surface);
