@@ -77,3 +77,45 @@ describe("the runway signature is on the page", () => {
     ).toBe(true);
   });
 });
+
+/**
+ * The sub-copy under the h1 was 46 words: five lines at desktop, eight
+ * on a phone, so the first screen read as a paragraph rather than a
+ * promise. About 25 words, and no capability dropped: each audience
+ * names four, and every one must survive a tightening.
+ */
+const SUB_BUDGET = 32;
+
+const CAPABILITIES: Record<string, RegExp[]> = {
+  personal: [/deduction/i, /\bmile/i, /federal and state forecast|federal \+ state forecast/i, /set money aside/i],
+  business: [/IRS codes/i, /\bmiles?\b.*\b(tracked|logged)/i, /forecast/i, /Schedule C/i],
+  firm: [/bulk exports/i, /engagement workflow/i, /firm-wide analytics/i, /branded as your firm/i],
+};
+
+/** Plain text of `HERO[<audience>].sub`, JSX and entities stripped. */
+function subCopy(audience: string): string {
+  const record = heroRecord();
+  const m = new RegExp(`\\n  ${audience}: \\{([\\s\\S]*?)\\n  \\},`).exec(record);
+  if (!m) throw new Error(`HERO.${audience} not found`);
+  const sub = /sub: \(\s*<>([\s\S]*?)<\/>\s*\),/.exec(m[1]);
+  if (!sub) throw new Error(`HERO.${audience}.sub not found`);
+  return sub[1]
+    .replace(/\{" "\}/g, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&apos;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+describe("the hero sub-copy fits the first screen", () => {
+  for (const audience of Object.keys(CAPABILITIES)) {
+    it(`${audience}: about 25 words, every capability kept`, () => {
+      const text = subCopy(audience);
+      const words = text.split(" ").length;
+      expect(words, `${words} words: "${text}"`).toBeLessThanOrEqual(SUB_BUDGET);
+      for (const cap of CAPABILITIES[audience]) {
+        expect(cap.test(text), `${audience} sub-copy lost ${cap}: "${text}"`).toBe(true);
+      }
+    });
+  }
+});

@@ -96,7 +96,7 @@ export default async function PersonalForecastPage() {
           </div>
           <h2 className="display mt-2 text-2xl sm:text-3xl text-forest-900 leading-tight">
             You&apos;re projecting{" "}
-            <span className="gold-shine">{formatCents(result.totalTaxCents)}</span>{" "}
+            <span className="text-[var(--kicker)]">{formatCents(result.totalTaxCents)}</span>{" "}
             in total federal + state tax for the year.
           </h2>
 

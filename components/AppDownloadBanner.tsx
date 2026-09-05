@@ -73,20 +73,34 @@ export function AppDownloadBanner() {
         paddingBottom: "max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px))",
       }}
     >
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-forest-900 font-medium">
+      {/* Phones (below sm): a two-line strip, the headline with the
+          dismiss on the first line and both badges side by side on the
+          second, ~75px against the ~173px the stacked layout took on a
+          344px screen (a fifth of it). Text plus two labelled badges
+          cannot share one 344px line at legible size: the compact badges
+          alone are 242px of the 312px available, and at 320px the full
+          badges no longer fit even on their own row, which is why the
+          badges are `compact`. From `sm` up the group div goes back to
+          being one flex item (it is `contents` on phones), so the layout
+          is the one-row strip it always was, wrapping the badge group
+          under the text where the width runs out. */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 sm:py-2.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 sm:flex sm:flex-wrap sm:justify-between sm:gap-3">
+        <p className="text-[13px]/5 sm:text-sm text-forest-900 font-medium">
           Taxottic is on your phone too.{" "}
-          <span className="text-ink-soft font-normal">
+          <span className="hidden sm:inline text-ink-soft font-normal">
             Track expenses and scan receipts on the go.
           </span>
         </p>
-        <div className="flex items-center gap-3">
-          <AppStoreBadges />
+        <div className="contents sm:flex sm:items-center sm:gap-3">
+          <AppStoreBadges
+            compact
+            className="col-span-2 row-start-2 sm:col-auto sm:row-auto"
+          />
           <button
             type="button"
             onClick={dismiss}
             aria-label="Dismiss app download banner"
-            className="text-ink-muted hover:text-forest-900 text-lg leading-none px-1"
+            className="col-start-2 row-start-1 sm:col-auto sm:row-auto text-ink-muted hover:text-forest-900 text-lg leading-none px-1"
           >
             &times;
           </button>
