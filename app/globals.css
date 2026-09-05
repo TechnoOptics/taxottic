@@ -313,6 +313,36 @@ html[data-theme="dark"] [data-skin="classic"] {
   background: var(--accent-2);
 }
 
+/* ---- YEAR GRAMMAR: type -----------------------------------------
+   Headlines on Archivo's width axis, semi-expanded, tight. Lining
+   figures so a year or a dollar figure inside a headline sits on the
+   baseline like the rest of the line. Overrides the base .display,
+   which is tuned for Fraunces on the classic skin. */
+[data-skin="instrument"] .display {
+  font-stretch: 112%;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "kern" 1;
+}
+[data-skin="instrument"] .lede {
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+@media (min-width: 640px) {
+  [data-skin="instrument"] .lede { font-size: 1.1875rem; }
+}
+[data-skin="instrument"] .mono-label {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
   --surface: #202d4d;
