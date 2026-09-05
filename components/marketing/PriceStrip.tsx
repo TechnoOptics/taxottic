@@ -10,7 +10,7 @@ export function PriceStrip() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
         <div>
           <p className="display text-xl sm:text-2xl text-foreground">
-            Free to look around. Solo from {solo} a month.
+            Free to look around. Solo from <span className="figure">{solo}</span> a month.
           </p>
           <p className="mono-label mt-1.5">No card to start · Filer for W-2 only · Practice for firms</p>
         </div>
