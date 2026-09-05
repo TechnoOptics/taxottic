@@ -1371,7 +1371,18 @@
 // the v202 this PR first reserved: v203 and v204 landed on main while it
 // was open, so it was renumbered at rebase time against origin/main and
 // every open PR. A reserved number is not a number.
-const CACHE_VERSION = "v205";
+// v206: the marketing home in the Year grammar.
+//
+// The tax-year runway is the page's spine, fixed under a paper header,
+// filled to the moment the reader is looking at; the hero moves to paper
+// with navy reserved for the instrument panel; the dated sequence with
+// real product screens replaces the capability cards, the photograph
+// cards, the mock product tour, the stats band and the manifesto. Two
+// new client components (the spine motion and the figure count-up) and
+// new markup on every visitor's first screen, so the worker must fetch
+// the new HTML rather than hydrate cached chunks against it. Chosen
+// against origin/main and every open PR at the moment of the bump.
+const CACHE_VERSION = "v206";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
