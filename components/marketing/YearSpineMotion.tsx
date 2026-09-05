@@ -17,14 +17,17 @@ export function YearSpineMotion({ spineId, todayFill }: { spineId: string; today
     const spine = document.getElementById(spineId);
     if (!spine) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    let raf1 = 0;
+    let raf2 = 0;
+
     if (reduce) {
       spine.classList.add("is-drawn");
     } else {
       spine.classList.add("is-drawing");
-      let raf = requestAnimationFrame(() => {
-        raf = requestAnimationFrame(() => spine.classList.add("is-drawn"));
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => spine.classList.add("is-drawn"));
       });
-      void raf;
     }
 
     const moments = Array.from(document.querySelectorAll<HTMLElement>("[data-moment-at]"));
@@ -41,6 +44,8 @@ export function YearSpineMotion({ spineId, todayFill }: { spineId: string; today
     window.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
     return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       window.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
