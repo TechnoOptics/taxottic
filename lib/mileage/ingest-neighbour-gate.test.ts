@@ -92,7 +92,18 @@ describe("the ingest route shows the gate the points the batch lands among", () 
   });
 
   it("bounds the read so a wide backlog cannot fetch the whole table", () => {
-    expect(neighbourQuery()).toContain("limit(NEIGHBOUR_ROW_CAP)");
+    expect(neighbourQuery()).toContain("from < NEIGHBOUR_ROW_CAP");
+  });
+
+  it("pages with .range() because PostgREST truncates at 1000 rows", () => {
+    // .limit(20000) returns 1000 rows and no error (max-rows). The
+    // cap log below it would then never fire and the late part of a
+    // long backlog would lose its witnesses silently.
+    const q = neighbourQuery();
+    expect(q).not.toContain(".limit(");
+    expect(q).toMatch(/\.range\(from,/);
+    expect(q).toMatch(/from \+= NEIGHBOUR_PAGE/);
+    expect(q).toMatch(/< NEIGHBOUR_PAGE\) break/);
   });
 
   it("says so when the window read fails instead of failing open silently", () => {

@@ -221,32 +221,45 @@ export async function POST(req: NextRequest) {
   // diagnostic it is.
   const storedNeighbours: JumpPoint[] = [];
   if (points.length > 0) {
-    const { data: neighbourRows, error: neighbourErr } = await admin
-      .from("mileage_points_raw")
-      .select("lat, lng, captured_at")
-      .eq("driver_user_id", user.id)
-      .eq("company_id", companyId)
-      .gte(
-        "captured_at",
-        new Date(points[0].ts - NEIGHBOUR_WINDOW_MS).toISOString(),
-      )
-      .lte(
-        "captured_at",
-        new Date(
-          points[points.length - 1].ts + NEIGHBOUR_WINDOW_MS,
-        ).toISOString(),
-      )
-      .order("captured_at", { ascending: true })
-      .limit(NEIGHBOUR_ROW_CAP);
-    if (neighbourErr) {
-      // Say it. A swallowed error leaves the gate with no witnesses and
-      // degrades it to exactly the behaviour that lost the drive.
-      console.error(
-        "[ingest] neighbour window read failed, gate has no stored witnesses:",
-        neighbourErr.message,
-      );
+    // PostgREST truncates ANY response at max-rows (1000) regardless of
+    // what .limit() asks for; app/mileage/page.tsx and the other paged
+    // reads in lib/mileage learned this the hard way. A single .limit()
+    // here would silently witness only the first 1000 rows of a long
+    // backlog's window and never reach the cap log below. Page through
+    // with .range() until a short page or the cap.
+    const NEIGHBOUR_PAGE = 1000;
+    let neighbourRows: { lat: unknown; lng: unknown; captured_at: unknown }[] = [];
+    for (let from = 0; from < NEIGHBOUR_ROW_CAP; from += NEIGHBOUR_PAGE) {
+      const { data: pageRows, error: neighbourErr } = await admin
+        .from("mileage_points_raw")
+        .select("lat, lng, captured_at")
+        .eq("driver_user_id", user.id)
+        .eq("company_id", companyId)
+        .gte(
+          "captured_at",
+          new Date(points[0].ts - NEIGHBOUR_WINDOW_MS).toISOString(),
+        )
+        .lte(
+          "captured_at",
+          new Date(
+            points[points.length - 1].ts + NEIGHBOUR_WINDOW_MS,
+          ).toISOString(),
+        )
+        .order("captured_at", { ascending: true })
+        .range(from, Math.min(from + NEIGHBOUR_PAGE, NEIGHBOUR_ROW_CAP) - 1);
+      if (neighbourErr) {
+        // Say it. A swallowed error leaves the gate with no witnesses and
+        // degrades it to exactly the behaviour that lost the drive.
+        console.error(
+          "[ingest] neighbour window read failed, gate has no stored witnesses:",
+          neighbourErr.message,
+        );
+        break;
+      }
+      neighbourRows = neighbourRows.concat(pageRows ?? []);
+      if ((pageRows?.length ?? 0) < NEIGHBOUR_PAGE) break;
     }
-    for (const row of neighbourRows ?? []) {
+    for (const row of neighbourRows) {
       const ts = Date.parse(row.captured_at as string);
       if (Number.isFinite(row.lat as number) && Number.isFinite(ts)) {
         storedNeighbours.push({
@@ -256,7 +269,7 @@ export async function POST(req: NextRequest) {
         });
       }
     }
-    if ((neighbourRows?.length ?? 0) >= NEIGHBOUR_ROW_CAP) {
+    if (neighbourRows.length >= NEIGHBOUR_ROW_CAP) {
       console.error(
         `[ingest] neighbour window hit the ${NEIGHBOUR_ROW_CAP} row cap ` +
           `user=${user.id}; the late part of this batch is checked against ` +
