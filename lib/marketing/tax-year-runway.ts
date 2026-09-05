@@ -31,6 +31,8 @@ export type TaxYearRunway = {
   daysToNext: number | null;
   /** `asOf`, labelled the same way as the ticks, e.g. "Aug 20". */
   asOfLabel: string;
+  /** Days into the tax year, 1-based from 1 January; 0 before it starts. */
+  dayOfYear: number;
 };
 
 const DUE_DATES = {
@@ -69,5 +71,23 @@ export function taxYearRunway(taxYear: number, asOf: Date): TaxYearRunway {
 
   const asOfLabel = `${MONTH[asOf.getUTCMonth()]} ${asOf.getUTCDate()}`;
 
-  return { ticks, fill, next, daysToNext, asOfLabel };
+  const dayOfYear = Math.max(0, Math.min(Math.round((now - start) / DAY_MS) + 1, Math.round(span / DAY_MS) + 1));
+
+  return { ticks, fill, next, daysToNext, asOfLabel, dayOfYear };
+}
+
+/**
+ * Position of an ISO date (YYYY-MM-DD) along the rail, 0..1, clamped.
+ * Same span as the ticks so a section anchored to a date and the tick
+ * for a due date agree to the pixel.
+ */
+export function fractionOf(taxYear: number, isoDate: string): number {
+  const dueDates = DUE_DATES[taxYear as keyof typeof DUE_DATES];
+  if (!dueDates) throw new Error(`no quarterly due dates for tax year ${taxYear}`);
+  const start = Date.UTC(taxYear, 0, 1);
+  const last = dueDates[dueDates.length - 1];
+  const end = Date.UTC(last.inFollowingYear ? taxYear + 1 : taxYear, last.month - 1, last.day);
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const at = Date.UTC(y, m - 1, d);
+  return Math.min(1, Math.max(0, (at - start) / (end - start)));
 }
