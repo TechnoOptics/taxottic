@@ -350,6 +350,19 @@ describe("no account-state copy names the visitor's own plan as a trial", () => 
           "Row 3. The heading over the same diagnostic. Same reasoning as the " +
           "component above.",
       },
+      {
+        file: "components/HeroInstrument.tsx",
+        word: "sample",
+        verdict: "not in scope",
+        note:
+          "Row 3. The 'Sample' trailing label on the marketing hero's " +
+          "instrument panel is shown to every visitor of the home page, " +
+          "paying or not, identically. It marks the fixed illustrative " +
+          "figures the panel always renders, not the visitor's own account, " +
+          "plan or data, so revision C's one question answers yes: a real " +
+          "paying customer sees this same label on this same public marketing " +
+          "screen before they ever sign in.",
+      },
     ];
 
   function tsxUnder(relDir: string): string[] {
