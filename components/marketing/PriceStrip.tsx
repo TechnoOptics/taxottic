@@ -4,7 +4,7 @@ import { formatCents } from "@/lib/tax/engine/money";
 
 /** One line of pricing, from the same table /pricing renders. No new claims. */
 export function PriceStrip() {
-  const solo = formatCents(PLAN_PRICING.solo_monthly.amountCents);
+  const solo = formatCents(PLAN_PRICING.solo_monthly.amountCents, { showCents: true });
   return (
     <section className="border-y border-edge-bright bg-[var(--surface)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
