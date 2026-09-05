@@ -1040,12 +1040,18 @@ In `components/AudienceToggle.ct.spec.tsx` change the mount wrapper to
 ```ts
     const first = page.getByRole("tab", { name: "For me", exact: true });
     await expect(first).toHaveAttribute("aria-selected", "true");
-    const font = await first.evaluate((el) => getComputedStyle(el).fontFamily);
-    expect(font, "the switch is set in the data face").toMatch(/Plex Mono|monospace/i);
+    // The harness has no next/font variables, so the face itself cannot be
+    // asserted here; the switch's setting (mono label rules) can.
+    const setting = await first.evaluate((el) => {
+      const cs = getComputedStyle(el.parentElement!);
+      return { transform: cs.textTransform, tracking: cs.letterSpacing };
+    });
+    expect(setting.transform, "the switch is set as a mono label").toBe("uppercase");
+    expect(setting.tracking, "the switch is tracked like a mono label").not.toBe("normal");
 ```
 
 Run: `npx playwright test -c playwright-ct.config.ts components/AudienceToggle.ct.spec.tsx`
-Expected: FAIL on the font assertion (still Hanken).
+Expected: FAIL on the setting assertions (the pill has no uppercase or tracking).
 
 - [ ] **Step 2: Rewrite the toggle**
 
