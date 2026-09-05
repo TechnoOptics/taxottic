@@ -113,4 +113,4 @@ docs/security-audit-*.md
 # deciding what to do, not for publishing. Land the RESULT of this work,
 # the shipped copy, the shipped schema, the shipped page, and keep the
 # reasoning that produced it out of the public tree.
-.superpowers/gtm/
+.superpowers/
