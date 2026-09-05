@@ -46,12 +46,12 @@ export function MarketingHeader({
           </div>
         </div>
         {spine ? (
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[4.5rem] pt-2">{spine}</div>
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[5.5rem] pt-2">{spine}</div>
         ) : null}
       </header>
       <div
         aria-hidden="true"
-        style={{ height: `calc(${safeTop} + ${spine ? "8.5rem" : "4rem"})` }}
+        style={{ height: `calc(${safeTop} + ${spine ? "9.5rem" : "4rem"})` }}
       />
     </>
   );

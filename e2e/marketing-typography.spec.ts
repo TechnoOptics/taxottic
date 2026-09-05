@@ -92,11 +92,68 @@ for (const vp of [DESKTOP, PHONE]) {
         }
         return tops.size;
       });
-      // Was five lines at desktop and eight on a phone.
-      expect(lines).toBeLessThanOrEqual(vp.width >= 1024 ? 3 : 5);
+      // 36 words at 19px in a 46ch column is four lines by design; the
+      // copy names the number and two capabilities.
+      expect(lines).toBeLessThanOrEqual(vp.width >= 1024 ? 4 : 6);
+    });
+
+    test("the home h1 holds to two lines at desktop and three on a phone", async ({ page }) => {
+      await ready(page, "/");
+      const lines = await page.evaluate(() => {
+        const h = document.querySelector("h1")!;
+        const range = document.createRange();
+        range.selectNodeContents(h);
+        const tops = new Set<number>();
+        for (const r of Array.from(range.getClientRects())) if (r.width > 0) tops.add(Math.round(r.top));
+        return tops.size;
+      });
+      expect(lines).toBeLessThanOrEqual(vp.width >= 1024 ? 2 : 3);
+    });
+
+    test("the fixed header and spine never overlap the hero", async ({ page }) => {
+      await ready(page, "/");
+      const header = (await page.locator("header").first().boundingBox())!;
+      const h1 = (await page.locator("h1").boundingBox())!;
+      expect(h1.y, "the h1 starts under the fixed block").toBeGreaterThan(header.y + header.height);
+      const spine = (await page.locator("#year-spine").boundingBox())!;
+      expect(spine.y + spine.height, "the spine sits inside the header block").toBeLessThanOrEqual(header.y + header.height + 1);
     });
   });
 }
+
+test.describe("at 344px", () => {
+  test.use({ viewport: { width: 344, height: 882 } });
+
+  test("the home h1 holds to two lines at desktop and three on a phone", async ({ page }) => {
+    await ready(page, "/");
+    const lines = await page.evaluate(() => {
+      const h = document.querySelector("h1")!;
+      const range = document.createRange();
+      range.selectNodeContents(h);
+      const tops = new Set<number>();
+      for (const r of Array.from(range.getClientRects())) if (r.width > 0) tops.add(Math.round(r.top));
+      return tops.size;
+    });
+    expect(lines).toBeLessThanOrEqual(3);
+  });
+
+  test("the fixed header and spine never overlap the hero", async ({ page }) => {
+    await ready(page, "/");
+    const header = (await page.locator("header").first().boundingBox())!;
+    const h1 = (await page.locator("h1").boundingBox())!;
+    expect(h1.y, "the h1 starts under the fixed block").toBeGreaterThan(header.y + header.height);
+    const spine = (await page.locator("#year-spine").boundingBox())!;
+    expect(spine.y + spine.height, "the spine sits inside the header block").toBeLessThanOrEqual(header.y + header.height + 1);
+  });
+
+  test("the page does not scroll sideways", async ({ page }) => {
+    await ready(page, "/");
+    const docOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(docOverflow, "the page must not scroll sideways at 344px").toBeLessThanOrEqual(0);
+  });
+});
 
 test.describe("at 375px", () => {
   test.use({ viewport: PHONE });
@@ -206,7 +263,17 @@ test.describe("the year spine moves with the reader", () => {
     await ready(page, "/");
     const spine = page.locator("#year-spine");
     await expect(spine).toHaveClass(/is-drawn/);
-    const rail = (await spine.locator(".runway-rail").boundingBox())!;
+    const railHandle = spine.locator(".runway-rail");
+    // is-drawn only flips the class; the rail's scaleX(0) -> scaleX(1) runs
+    // on a 0.4s CSS transition after that. Measuring the box mid-transition
+    // reads a partial width and misreports the marker's fraction, so wait
+    // for the transform to finish before taking either box.
+    await expect
+      .poll(() =>
+        railHandle.evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).a),
+      )
+      .toBeGreaterThan(0.999);
+    const rail = (await railHandle.boundingBox())!;
     const marker = (await spine.locator(".runway-today").boundingBox())!;
     const today = Number(await spine.getAttribute("data-fill"));
     expect(Math.abs((marker.x - rail.x) / rail.width - today)).toBeLessThan(0.005);
