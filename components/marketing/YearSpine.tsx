@@ -8,7 +8,7 @@ export type YearSpineProps = {
   trailing?: string;
   /** Per-quarter note appended to a tick label, e.g. { 1: "Q1 paid" }. */
   notes?: Partial<Record<1 | 2 | 3 | 4, string>>;
-  /** Prefix on the marker label; "Today" gives "TODAY · SEP 5", omit for "SEP 5". */
+  /** Prefix on the marker label. Omit for the variant's default: "Today" on paper (renders "TODAY · SEP 5"), bare date on panel (renders "SEP 5"). Pass "" to force bare date on either. */
   markerPrefix?: string;
   id?: string;
 };
