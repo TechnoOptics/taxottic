@@ -12,14 +12,15 @@ export function MarketingFooter() {
             attorney.
           </p>
           <p className="mt-4 text-xs text-muted">
-            {/* Ground-coloured chip: it reads as an outlined pill because its
-                fill matches the page. `bg-cream` was baked to #fbf7e9 by
-                `@theme inline` and stopped matching once the skin moved the
-                ground, so it became a warm blob. The var() form tracks it. */}
+            {/* The dot before the studio credit is a separator, not data.
+                Brass in this grammar is spent on today's marker, the live
+                figure and the marks inside a product screen (design spec,
+                section 3), so a brass dot in the footer reads as a fourth
+                claim on the eye for nothing. Ink at 45% instead. */}
             <span className="inline-flex items-center gap-1.5">
               <span
                 aria-hidden="true"
-                className="size-1.5 rounded-full bg-[var(--accent-2)]"
+                className="size-1.5 rounded-full bg-[var(--foreground)] opacity-45"
               />
               {/* Exact attribution wording, do not reword: the string
                   "Powered by Techno Optics LLC" is the agreed studio

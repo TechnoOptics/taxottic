@@ -48,7 +48,11 @@ export function MarketingNav({
       ? (active ? "text-foreground" : "text-muted hover:text-foreground")
       : (active ? "text-cream" : "text-cream/75 hover:text-cream");
   const ring = tone === "paper" ? "focus-visible:ring-[var(--accent-2)]" : "focus-visible:ring-gold-400/70";
-  const rule = tone === "paper" ? "bg-[var(--accent-2)]" : "";
+  // Ink, not brass: the hairline under the hovered or current item is
+  // navigation state, and brass in the Year grammar is spent on today's
+  // marker, the live figure and the marks inside a product screen
+  // (design spec, section 3). The navy tone keeps its gold gradient below.
+  const rule = tone === "paper" ? "bg-[var(--foreground)]" : "";
   const ruleStyle =
     tone === "paper"
       ? undefined

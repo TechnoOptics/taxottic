@@ -58,14 +58,27 @@ All values below are existing tokens in `app/globals.css` under
 | Instrument panel | `--navy-band` | the three-stop navy gradient |
 | Brass | `--accent-2` on navy, `--kicker` on paper | `#c0973f`, `#8a6a1c` |
 
-Brass rule: brass appears on exactly two things, today's marker and the live
-figure (next payment or the estimate). Dates in the eyebrow position may be
-brass on paper because they are the "today" fact. Nothing else is brass: no
-eyebrows, no rings, no dividers, no bullets, no gold-shine.
+Brass rule: brass is spent on the reading, never on the furniture. It appears
+on exactly five things, and this list is the whole of it:
 
-Navy rule: the navy band is reserved for the instrument panel. Page heroes sit
-on paper. The marketing nav sits on paper with a hairline under it. (This
-retires the navy header band on every marketing page and on `/login`.)
+1. Today's marker on the spine.
+2. The live figure (next payment or the estimate).
+3. The data marks inside a product screen: the category bars' fills, the drive
+   path on the drives map and its end disc. These are the screen's reading,
+   the same role the live figure plays in the panel.
+4. The `ask` tag, the "Your call" row a person has to decide.
+5. The 2px focus ring on a control (see the quality floor below).
+
+Dates in the eyebrow position may be brass on paper because they are the
+"today" fact. Nothing else is brass: no eyebrows, no dividers, no bullets, no
+nav hairlines, no footer dots, no gold-shine.
+
+Navy rule: the navy band is reserved for the instrument panel and the drives
+map basemap inside a product screen. Both are the app's own dark surfaces, so
+both carry the skin's dark token values and the marks on them read against
+navy. Page heroes sit on paper. The marketing nav sits on paper with a
+hairline under it. (This retires the navy header band on every marketing page
+and on `/login`.)
 
 ### Type
 

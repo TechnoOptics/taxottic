@@ -106,7 +106,7 @@ export const ORGANIZATION_LD = {
   // bind the brand string to the entity and render a tagline in
   // knowledge panels.
   alternateName: "Taxottic Tax Forecasting",
-  slogan: "A calmer way to handle your taxes.",
+  slogan: "Your taxes, as of today.",
   url: SITE_ORIGIN,
   logo: `${SITE_ORIGIN}/icon.png`,
   description:
@@ -166,7 +166,7 @@ export const WEBSITE_LD = {
   url: SITE_ORIGIN,
   name: "Taxottic",
   description:
-    "A calmer way to handle your taxes. Automatic GPS mileage tracking, bank-synced quarterly forecasts, 1,025 IRS-cited deductions, and Schedule C export.",
+    "Your taxes, as of today. Automatic GPS mileage tracking, bank-synced quarterly forecasts, 1,025 IRS-cited deductions, and Schedule C export.",
   publisher: { "@id": `${SITE_ORIGIN}/#organization` },
   inLanguage: "en-US",
   // Sitelinks searchbox: when this site has an internal search at
