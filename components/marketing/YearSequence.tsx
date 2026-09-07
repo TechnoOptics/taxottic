@@ -9,8 +9,15 @@ import { fractionOf } from "@/lib/marketing/tax-year-runway";
  * The year as Taxottic runs it: five moments, each anchored to a date on
  * the spine, paired with a real product screen. The order is the
  * calendar's, so numbering would repeat what the dates already say.
+ *
+ * Personal and business read the same five screens: both are looking at
+ * one set of books, and the copy beside the screen is what separates
+ * them. A firm is looking at a practice, so it gets its own five with
+ * the same primitives, the same register and figures in the same ranges:
+ * the roster it exports, one client's feed, one client's drives, the
+ * practice's Q3, and one client's playbook.
  */
-const SCREENS: Record<MomentKey, ReactNode> = {
+const SHARED_SCREENS: Record<MomentKey, ReactNode> = {
   q1: (
     <Screen title="Schedule C · 2025" status="Ready to export">
       <CategoryBar label="Line 8 · Advertising" fraction={0.22} amount="$1,240" />
@@ -29,7 +36,12 @@ const SCREENS: Record<MomentKey, ReactNode> = {
       <LedgerRow date="Jun 02" text="Sweetgreen" note="Meal with a client? 50% if so" amount="$24.50" tag="Your call" tagTone="ask" />
       <LedgerRow date="Jun 01" text="Whole Foods" note="Personal, not deductible" amount="$72.18" tag="Skipped" />
       <div className="mt-2 border-t border-edge">
-        <StatRow label="Q2 estimate, after this week" note="was $4,610 on Monday" value="$4,400" brass />
+        <StatRow
+          label="Q2 estimate, after this week"
+          note={<>was <span className="figure">$4,610</span> on Monday</>}
+          value="$4,400"
+          brass
+        />
       </div>
     </Screen>
   ),
@@ -43,9 +55,23 @@ const SCREENS: Record<MomentKey, ReactNode> = {
   ),
   q3: (
     <Screen title="Q3 · due Sep 15" status="10 days">
-      <StatRow label="Estimated payment" note="federal $2,760 · state (MA) $660" value="$3,420" brass />
+      <StatRow
+        label="Estimated payment"
+        note={
+          <>
+            federal <span className="figure">$2,760</span> · state (MA){" "}
+            <span className="figure">$660</span>
+          </>
+        }
+        value="$3,420"
+        brass
+      />
       <StatRow label="Set aside so far" value="$2,150" />
-      <StatRow label="Still to set aside" note="about $127 a day for ten days" value="$1,270" />
+      <StatRow
+        label="Still to set aside"
+        note={<>about <span className="figure">$127</span> a day for ten days</>}
+        value="$1,270"
+      />
       <span className="bar mt-3" aria-hidden="true"><i style={{ width: "63%" }} /></span>
     </Screen>
   ),
@@ -60,6 +86,80 @@ const SCREENS: Record<MomentKey, ReactNode> = {
       </div>
     </Screen>
   ),
+};
+
+const FIRM_SCREENS: Record<MomentKey, ReactNode> = {
+  q1: (
+    <Screen title="Year-end packs · 2025" status="14 clients">
+      <LedgerRow text="Maple Lane Design Co." note="Schedule C, 31 lines cited" amount="$18,972" tag="Ready" />
+      <LedgerRow text="Harbor Point Plumbing" note="Schedule C, 24 lines cited" amount="$41,180" tag="Ready" />
+      <LedgerRow text="Cornerstone Physio" note="Schedule C, 19 lines cited" amount="$12,405" tag="Ready" />
+      <LedgerRow text="Rowan Studio" note="One bank connection to reconnect" amount="$9,640" tag="Ask client" tagTone="ask" />
+      <div className="mt-2 border-t border-edge">
+        <StatRow label="Bulk export" note="13 packs in one pass, in your firm's name" value="13 of 14" />
+      </div>
+    </Screen>
+  ),
+  q2: (
+    <Screen title="Maple Lane Design Co. · this week" status="Synced 14 min ago">
+      <LedgerRow date="Jun 03" text="Vistaprint, client mailers" note="Advertising, IRC 162" amount="$284.10" tag="Applied" />
+      <LedgerRow date="Jun 02" text="Amtrak, BOS to NYC" note="Travel, Pub 463" amount="$188.00" tag="Applied" />
+      <LedgerRow date="Jun 02" text="Legal Sea Foods" note="Meal with a client? 50% if so" amount="$96.40" tag="Ask client" tagTone="ask" />
+      <LedgerRow date="Jun 01" text="Home internet" note="Personal, not deductible" amount="$74.99" tag="Skipped" />
+      <div className="mt-2 border-t border-edge">
+        <StatRow
+          label="Q2 estimate, after this week"
+          note={<>was <span className="figure">$3,980</span> on Monday</>}
+          value="$3,760"
+          brass
+        />
+      </div>
+    </Screen>
+  ),
+  road: (
+    <Screen title="Maple Lane Design Co. · drives, August" status="286 business mi · $200">
+      <MiniMap />
+      <LedgerRow date="Aug 28" text="Studio to client site" note="8:12 to 8:49 · business" amount="22.7 mi" tag="$15.90" />
+      <LedgerRow date="Aug 27" text="Print shop run" note="13:05 to 13:24 · business" amount="9.1 mi" tag="$6.37" />
+      <LedgerRow date="Aug 27" text="Evening drive" note="18:40 to 19:02 · unclassified" amount="12.3 mi" tag="Ask client" tagTone="ask" />
+    </Screen>
+  ),
+  q3: (
+    <Screen title="Q3 · due Sep 15" status="14 clients · 10 days">
+      <StatRow
+        label="Estimated across the practice"
+        note={
+          <>
+            federal <span className="figure">$39,400</span> · state{" "}
+            <span className="figure">$8,500</span>
+          </>
+        }
+        value="$47,900"
+        brass
+      />
+      <StatRow label="Set aside so far" note="9 clients on track" value="$31,400" />
+      <StatRow label="Still to set aside" note="4 clients short, 1 has not opened the app" value="$16,500" />
+      <span className="bar mt-3" aria-hidden="true"><i style={{ width: "66%" }} /></span>
+    </Screen>
+  ),
+  dec: (
+    <Screen title="Playbook · Maple Lane Design Co." status="Est. this year">
+      <LedgerRow text="Open and fund a SEP-IRA" note="up to 20% of net" amount="$3,900" />
+      <LedgerRow text="Max the HSA" note="triple tax-free" amount="$1,020" />
+      <LedgerRow text="Home office, simplified method" note="300 sq ft" amount="$330" />
+      <LedgerRow text="Push December invoices to January" note="defer income" amount="$610" />
+      <div className="mt-2 border-t border-edge">
+        <StatRow label="If this client took all four" value="$5,860" />
+      </div>
+    </Screen>
+  ),
+};
+
+/** Personal and business share a set; the firm has its own. */
+const SCREENS: Record<Audience, Record<MomentKey, ReactNode>> = {
+  personal: SHARED_SCREENS,
+  business: SHARED_SCREENS,
+  firm: FIRM_SCREENS,
 };
 
 export function YearSequence({ audience }: { audience: Audience }) {
@@ -89,7 +189,7 @@ export function YearSequence({ audience }: { audience: Audience }) {
               {m.link}
             </Link>
           </div>
-          <div>{SCREENS[m.key]}</div>
+          <div>{SCREENS[audience][m.key]}</div>
         </article>
       ))}
     </section>

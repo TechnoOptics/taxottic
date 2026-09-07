@@ -12,7 +12,12 @@ export function Screen({
   children,
 }: {
   title: string;
-  status?: string;
+  /**
+   * The right-hand slot of the title bar. ReactNode because a status can
+   * carry a figure; the bar itself is `mono-label`, so a plain string is
+   * already in the data face and only a mixed line needs its own spans.
+   */
+  status?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -33,7 +38,8 @@ export function StatRow({
   brass = false,
 }: {
   label: string;
-  note?: string;
+  /** ReactNode: a note that names a date or an amount wraps it in `figure`. */
+  note?: ReactNode;
   value: string;
   brass?: boolean;
 }) {
@@ -58,7 +64,8 @@ export function LedgerRow({
 }: {
   date?: string;
   text: string;
-  note?: string;
+  /** ReactNode: a note that names a date or an amount wraps it in `figure`. */
+  note?: ReactNode;
   amount: string;
   tag?: string;
   tagTone?: "quiet" | "ask";
@@ -97,23 +104,34 @@ export function CategoryBar({
   );
 }
 
-/** A drive on the app's dark basemap, brass path, start and end discs. */
+/**
+ * A drive on the app's dark basemap, brass path, start and end discs.
+ *
+ * The basemap is the navy band, so the marks on it are read against navy
+ * and have to take the skin's dark token values: the same
+ * data-skin/data-theme scope HeroInstrument puts around its panel. Without
+ * it `--accent-2` resolved to the paper brass (#c0973f) on a navy ground.
+ * `.skin-scope` is display:contents, so it adds no box and moves nothing.
+ * Pinned by Screen.ct.spec.tsx.
+ */
 export function MiniMap() {
   return (
-    <div className="mini-map" aria-hidden="true">
-      <svg viewBox="0 0 400 150" preserveAspectRatio="none">
-        <g stroke="rgba(242,245,248,0.08)">
-          <path d="M0 40h400M0 80h400M0 120h400M80 0v150M160 0v150M240 0v150M320 0v150" />
-        </g>
-        <path
-          d="M20 120 C 90 110, 120 60, 190 70 S 300 40, 380 30"
-          stroke="var(--accent-2)"
-          strokeWidth="2.5"
-          fill="none"
-        />
-        <circle cx="20" cy="120" r="3.5" fill="#f2f5f8" />
-        <circle cx="380" cy="30" r="3.5" fill="var(--accent-2)" />
-      </svg>
+    <div className="skin-scope" data-skin="instrument" data-theme="dark">
+      <div className="mini-map" aria-hidden="true">
+        <svg viewBox="0 0 400 150" preserveAspectRatio="none">
+          <g stroke="rgba(242,245,248,0.08)">
+            <path d="M0 40h400M0 80h400M0 120h400M80 0v150M160 0v150M240 0v150M320 0v150" />
+          </g>
+          <path
+            d="M20 120 C 90 110, 120 60, 190 70 S 300 40, 380 30"
+            stroke="var(--accent-2)"
+            strokeWidth="2.5"
+            fill="none"
+          />
+          <circle cx="20" cy="120" r="3.5" fill="#f2f5f8" />
+          <circle cx="380" cy="30" r="3.5" fill="var(--accent-2)" />
+        </svg>
+      </div>
     </div>
   );
 }

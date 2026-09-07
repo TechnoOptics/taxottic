@@ -1,10 +1,17 @@
 import { formatCents } from "@/lib/tax/engine/money";
 import { YearSpine } from "@/components/marketing/YearSpine";
 import { CountUp } from "@/components/marketing/CountUp";
+import { taxYearRunway } from "@/lib/marketing/tax-year-runway";
 
 export type PanelLedgerLine = { date: string; text: string; amount: string };
 export type PanelSample = {
-  heading: string;
+  /**
+   * Optional text before the due-date fact, e.g. the client a firm is
+   * looking at. The dated half of that note is not copy: it is the same
+   * runway this panel's spine draws, composed below so its date and its
+   * countdown render in the data face rather than the body face.
+   */
+  headingLead?: string;
   nextPaymentCents: number;
   setAsideCents: number;
   ledger: PanelLedgerLine[];
@@ -34,6 +41,7 @@ export function HeroInstrument({
   sample: PanelSample;
 }) {
   const still = Math.max(0, sample.nextPaymentCents - sample.setAsideCents);
+  const r = taxYearRunway(taxYear, asOf);
   return (
     <div className="skin-scope" data-skin="instrument" data-theme="dark">
       <div
@@ -46,7 +54,17 @@ export function HeroInstrument({
           <div className="stat-row">
             <dt className="stat-row-label">
               Next payment
-              <span className="stat-row-note block">{sample.heading}</span>
+              <span className="stat-row-note block">
+                {sample.headingLead ? `${sample.headingLead} · ` : ""}
+                {r.next ? (
+                  <>
+                    Q{r.next.quarter} · due <span className="figure">{r.next.label}</span> ·{" "}
+                    <span className="figure">{r.daysToNext} days</span>
+                  </>
+                ) : (
+                  "All four quarters paid"
+                )}
+              </span>
             </dt>
             <dd id="hero-next-payment" className="figure stat-row-value stat-row-value-lg stat-row-value-brass">
               {formatCents(sample.nextPaymentCents)}

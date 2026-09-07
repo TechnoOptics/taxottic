@@ -13,7 +13,6 @@ import { HeroInstrument } from "./HeroInstrument";
  */
 
 const SAMPLE = {
-  heading: "Q3 · due Sep 15 · 10 days",
   nextPaymentCents: 342_000,
   setAsideCents: 215_000,
   ledger: [{ date: "Sep 4", text: "Drive, client site, 22.7 mi", amount: "-$16" }],

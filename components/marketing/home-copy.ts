@@ -1,7 +1,6 @@
 // components/marketing/home-copy.ts
 import type { Audience } from "@/components/AudienceToggle";
 import type { PanelSample } from "@/components/HeroInstrument";
-import { taxYearRunway } from "@/lib/marketing/tax-year-runway";
 
 /** Fixed sample date so the visual baselines do not drift. Day 248, Q3 in 10 days. */
 export const HOME_TAX_YEAR = 2026;
@@ -47,12 +46,13 @@ export const HERO: Record<Audience, HeroCopy> = {
   },
 };
 
-const r = taxYearRunway(HOME_TAX_YEAR, HOME_AS_OF);
-const NEXT = r.next ? `Q${r.next.quarter} · due ${r.next.label} · ${r.daysToNext} days` : "All four quarters paid";
-
+/**
+ * The panel's due-date note is composed by HeroInstrument from the same
+ * runway its spine draws, so the date and the countdown render in the
+ * data face. Only the text before it is copy, and only the firm has any.
+ */
 export const PANEL: Record<Audience, PanelSample> = {
   personal: {
-    heading: NEXT,
     nextPaymentCents: 342_000,
     setAsideCents: 215_000,
     ledger: [
@@ -63,7 +63,6 @@ export const PANEL: Record<Audience, PanelSample> = {
     foot: "How the number moved this week. Federal and state, in step with your bank.",
   },
   business: {
-    heading: NEXT,
     nextPaymentCents: 440_000,
     setAsideCents: 300_000,
     ledger: [
@@ -74,7 +73,7 @@ export const PANEL: Record<Audience, PanelSample> = {
     foot: "How the number moved this week. Federal and state, in step with the bank feed.",
   },
   firm: {
-    heading: `Maple Lane Design Co. · ${NEXT}`,
+    headingLead: "Maple Lane Design Co.",
     nextPaymentCents: 342_000,
     setAsideCents: 215_000,
     ledger: [
