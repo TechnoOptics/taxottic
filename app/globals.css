@@ -572,8 +572,13 @@ html[data-theme="dark"] [data-skin="classic"] {
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 [data-skin="instrument"] .btn-quiet:hover { border-color: var(--foreground); }
+/* The brass 2px ring is the Year grammar's, so the .btn-primary half is
+   scoped to a page that carries it. `.btn-primary` is sitewide: without
+   the scope this rule swapped the ring on every instrument-skinned page,
+   including ones this PR does not touch. `.btn-quiet` is new with the
+   grammar and rendered nowhere else, so it needs no scope. */
 [data-skin="instrument"] .btn-quiet:focus-visible,
-[data-skin="instrument"] .btn-primary:focus-visible {
+[data-skin="instrument"] [data-grammar="year"] .btn-primary:focus-visible {
   outline: 2px solid var(--accent-2);
   outline-offset: 2px;
 }

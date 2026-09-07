@@ -26,7 +26,13 @@ export function YearSpineMotion({ spineId, todayFill }: { spineId: string; today
     } else {
       spine.classList.add("is-drawing");
       raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => spine.classList.add("is-drawn"));
+        raf2 = requestAnimationFrame(() => {
+          // Both in the same frame: .is-drawn overrides every .is-drawing
+          // rule, so dropping the start state paints nothing new and
+          // leaves one class on the element instead of two.
+          spine.classList.add("is-drawn");
+          spine.classList.remove("is-drawing");
+        });
       });
     }
 
