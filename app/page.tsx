@@ -48,7 +48,7 @@ export default async function Home({
   const today = taxYearRunway(HOME_TAX_YEAR, HOME_AS_OF).fill;
 
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
       <JsonLd data={ORGANIZATION_LD} />
       <JsonLd data={WEBSITE_LD} />
       <JsonLd data={SOFTWARE_APP_LD} />

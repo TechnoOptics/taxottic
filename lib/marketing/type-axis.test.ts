@@ -14,6 +14,7 @@ const strip = (s: string) =>
   s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const layout = strip(readFileSync(join(ROOT, "app/layout.tsx"), "utf8"));
 const css = strip(readFileSync(join(ROOT, "app/globals.css"), "utf8"));
+const homePage = readFileSync(join(ROOT, "app/page.tsx"), "utf8");
 
 describe("Archivo is loaded with its width axis", () => {
   it("layout.tsx declares axes: [\"wdth\"] on the Archivo font", () => {
@@ -23,14 +24,29 @@ describe("Archivo is loaded with its width axis", () => {
     expect(m![1], "a fixed weight list disables the variable axes").not.toMatch(/weight:\s*\[/);
   });
 
-  it("the Instrument display rule sets the width, weight and tracking", () => {
-    const m = /\[data-skin="instrument"\] \.display \{([\s\S]*?)\}/.exec(css);
-    expect(m, "no [data-skin=\"instrument\"] .display rule").toBeTruthy();
+  it("the Instrument display rule sets the width, weight and tracking, scoped to the home page's grammar", () => {
+    // Scoped to [data-grammar="year"] as well as [data-skin="instrument"]:
+    // data-skin sits on <body> and covers nearly every page, but this
+    // treatment belongs to PR 1's home page only. An unscoped rule here
+    // silently reaches pricing, calculators, guides and compare too.
+    const m = /\[data-skin="instrument"\] \[data-grammar="year"\] \.display \{([\s\S]*?)\}/.exec(css);
+    expect(m, 'no [data-skin="instrument"] [data-grammar="year"] .display rule').toBeTruthy();
     expect(m![1]).toMatch(/font-stretch:\s*112%/);
     expect(m![1]).toMatch(/font-weight:\s*600/);
     expect(m![1]).toMatch(/letter-spacing:\s*-0\.025em/);
     expect(m![1]).toMatch(/line-height:\s*1\.02/);
     expect(m![1]).toMatch(/lining-nums/);
+  });
+
+  it("the home page's <main> carries data-grammar=\"year\", the scope the display rule keys on", () => {
+    const m = /<main\s+data-grammar="year"/.exec(homePage);
+    expect(
+      m,
+      'app/page.tsx <main> is missing data-grammar="year"; the scoped ' +
+        '[data-skin="instrument"] [data-grammar="year"] .display rule in ' +
+        "globals.css would then match nowhere and every home heading would " +
+        "fall back to Fraunces.",
+    ).toBeTruthy();
   });
 
   it("defines .lede and .mono-label once", () => {

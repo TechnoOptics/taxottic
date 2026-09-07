@@ -317,8 +317,17 @@ html[data-theme="dark"] [data-skin="classic"] {
    Headlines on Archivo's width axis, semi-expanded, tight. Lining
    figures so a year or a dollar figure inside a headline sits on the
    baseline like the rest of the line. Overrides the base .display,
-   which is tuned for Fraunces on the classic skin. */
-[data-skin="instrument"] .display {
+   which is tuned for Fraunces on the classic skin.
+
+   Scoped to [data-grammar="year"] as well as [data-skin="instrument"]:
+   the skin attribute sits on <body> and covers nearly every page (the
+   whole app except /firm and /admin), but this display treatment is
+   PR 1's home page only. Without the second scope every other page's
+   .display headings (pricing, calculators, guides, compare) silently
+   picked up Archivo's width axis and a 1.02 line-height meant for the
+   home hero. data-grammar="year" is set on the home page's <main> only
+   (app/page.tsx); see lib/marketing/type-axis.test.ts. */
+[data-skin="instrument"] [data-grammar="year"] .display {
   font-stretch: 112%;
   font-weight: 600;
   letter-spacing: -0.025em;
@@ -326,6 +335,18 @@ html[data-theme="dark"] [data-skin="classic"] {
   font-variant-numeric: lining-nums tabular-nums;
   font-feature-settings: "kern" 1;
 }
+/* Every other instrument-skin page (pricing, calculators, guides,
+   compare) sets .display with no explicit font-weight, so it renders
+   at whatever the browser resolves for an unset weight against the
+   loaded Archivo faces. Before Task 1, Archivo loaded fixed instances
+   at 500/600/700 (no 400 face), so an unset weight matched up to 500.
+   Task 1 switched Archivo to axes: ["wdth"] (app/layout.tsx) for the
+   home page's width axis, which next/font can only serve as a full
+   variable range, not fixed instances; that dropped the 500/600/700
+   list, and a true 400 face became available, so every other page's
+   headings silently went from ~500 to a true 400. Pinning it here
+   keeps those pages pixel-identical without touching their source. */
+[data-skin="instrument"] .display { font-weight: 500; }
 [data-skin="instrument"] .lede {
   font-size: 1rem;
   line-height: 1.45;
