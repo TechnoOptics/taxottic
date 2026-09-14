@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { NATIVE_COOKIE } from "@/lib/native/front-door";
 import { pushDecision, type Receive } from "@/lib/native/push-gate";
 import { hasReachedToday, REACHED_TODAY_EVENT } from "@/lib/native/reached-today";
+import { barOf, statusBarPlan } from "@/lib/native/status-bar";
 
 /**
  * One-shot native runtime setup, mounted at the root layout next to
@@ -78,8 +79,25 @@ export function CapacitorNativeInit() {
           await StatusBar.setOverlaysWebView({ overlay: !isAndroid }).catch(
             () => {},
           );
-          // Style.Dark == light/WHITE content (for dark backgrounds).
-          await StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+          // Style and colour follow the page: html[data-bar] (set by
+          // NavyBar while the app header is mounted) and html[data-theme]
+          // decide both the plugin style and the band's colour, and the
+          // plan is reapplied on every change below. See
+          // lib/native/status-bar.ts.
+          const applyStatusBar = () => {
+            const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+            const plan = statusBarPlan(barOf(document.documentElement), theme);
+            void StatusBar.setStyle({ style: plan.style === "Dark" ? Style.Dark : Style.Light }).catch(() => {});
+            if (isAndroid) void StatusBar.setBackgroundColor({ color: plan.color }).catch(() => {});
+          };
+          applyStatusBar();
+          window.addEventListener("resize", applyStatusBar);
+          window.addEventListener("orientationchange", applyStatusBar);
+          document.addEventListener("visibilitychange", applyStatusBar);
+          new MutationObserver(applyStatusBar).observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["data-bar", "data-theme"],
+          });
           if (!isAndroid) {
             // --- iOS: measure the REAL safe-area insets natively ---
             // The header/FAB/sheet all position off
@@ -137,14 +155,6 @@ export function CapacitorNativeInit() {
             }
           }
           if (isAndroid) {
-            // Match the header's TOP gradient stop so the OS-reserved
-            // status-bar strip (overlay=false) blends into the header
-            // instead of showing a hard dark band ("green bar")
-            // between the clock and the header. (#121a2a is the
-            // BOTTOM of the header gradient, wrong end for the strip.)
-            await StatusBar.setBackgroundColor({ color: "#2a3a5e" }).catch(
-              () => {},
-            );
             // Android safe-top is platform-dependent and env() can't be
             // trusted (the Android WebView reports
             // env(safe-area-inset-top)=0 even when drawing UNDER the

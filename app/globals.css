@@ -686,37 +686,21 @@ html[data-theme="dark"] {
 .safe-pad-bottom { padding-bottom: var(--safe-bottom); }
 .safe-pad-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
 
-/* ----------------------------------------------------------------------------
-   Status-bar backdrop (native Android/iOS system bar).
-
-   The native status-bar icons (clock / wifi / battery) are LIGHT - set
-   to white via @capacitor/status-bar Style.Dark - because the app's
-   AppHeader is navy. The WebView OVERLAYS the status bar
-   (overlaysWebView: true), so whatever the page paints in the top
-   safe-area inset shows behind those icons.
-
-   On app pages the navy fixed header fills that strip and the white
-   icons read perfectly. But on CHROMELESS pages (the 404 page, /login,
-   onboarding, marketing) the page background is cream - so the white
-   icons land on cream and effectively vanish. (Reproduced on a Galaxy
-   Z Fold5: the clock/battery were invisible on the 404 page.)
-
-   Fix: paint a navy band behind the status-bar inset on EVERY page via
-   a fixed ::before. It sits BELOW the header (z-30) so app pages still
-   show the header gradient, and ABOVE page content so chromeless pages
-   get a navy backdrop. Zero-height (and invisible) on the web, where
-   there's no safe-area inset. */
-body::before {
-  content: "";
+/* The strip under the OS status bar on the native shell. One element,
+   one attribute: html[data-bar="navy"] is set by the app header while it
+   is mounted; every other page is paper. lib/native/status-bar.ts holds
+   the plugin side. Zero height on the web. */
+#status-bar-band {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   height: max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px));
-  background: #121a2a;
+  background: var(--status-band, var(--background));
   z-index: 20;
   pointer-events: none;
 }
+html[data-bar="navy"] { --status-band: #121a2a; }
 
 /* Scroll without showing a scrollbar. Used on horizontal tab strips and
    side-scrolling lists where a visible Windows-style grey scrollbar

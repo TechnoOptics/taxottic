@@ -113,15 +113,20 @@ describe("the navy band is a token", () => {
   /**
    * Files that must keep a literal, with the reason:
    *   - Satori (next/og ImageResponse) renders no CSS custom properties.
-   *   - The native status bar takes a colour value, not a stylesheet.
    *   - The route-level splash has its own stops (50% mid) and a WebView
    *     compositing history; not a marketing surface, left as is.
+   *
+   * components/CapacitorNativeInit.tsx used to be here for the same
+   * "native status bar takes a colour value" reason, but it no longer
+   * carries this literal: the status-bar colour now comes from
+   * lib/native/status-bar.ts's statusBarPlan(), which follows the page
+   * (--navy-deep #121a2a on a navy page, --background otherwise), not
+   * this gradient's middle stop. See task-3 of the native-front-door plan.
    */
   const LITERAL_ALLOWED = [
     "app/api/og/calc/route.tsx",
     "app/api/og/guide/route.tsx",
     "app/opengraph-image.tsx",
-    "components/CapacitorNativeInit.tsx",
     "app/loading.tsx",
   ];
 

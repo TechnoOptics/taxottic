@@ -366,7 +366,7 @@ git commit -m "Notifications are asked for after sign-in and a first visit to To
 
 **Files:**
 - Create: `lib/native/status-bar.ts`, `lib/native/status-bar.test.ts`, `components/StatusBarBand.tsx`, `components/NavyBar.tsx`, `components/StatusBarBand.ct.spec.tsx`
-- Modify: `app/globals.css:709-719` (delete the first `body::before` rule, add the band rules), `app/layout.tsx:295-302` (mount the band as the first child of `<body>`), `components/AppHeader.tsx` (render `<NavyBar />`; it is an async server component, so the attribute is set by that client child), `components/CapacitorNativeInit.tsx:61-75` and `:135-139` (style and colour from the page, reapplied)
+- Modify: `app/globals.css:709-719` (delete the first `body::before` rule, add the band rules; the `html[data-theme="dark"] body::before` override stays), `lib/marketing/marketing-skin.test.ts` (its allowlist names `CapacitorNativeInit.tsx` for the literal `#2a3a5e`, which this task deletes), `app/layout.tsx:295-302` (mount the band as the first child of `<body>`), `components/AppHeader.tsx` (render `<NavyBar />`; it is an async server component, so the attribute is set by that client child), `components/CapacitorNativeInit.tsx:61-75` and `:135-139` (style and colour from the page, reapplied)
 
 **Interfaces:**
 - Produces: `type Bar = "paper" | "navy"`; `barOf(root: { dataset: { bar?: string } }): Bar`; `statusBarPlan(bar: Bar, theme: "light" | "dark"): { style: "Light" | "Dark"; color: string }`; `<StatusBarBand />`.
@@ -392,7 +392,7 @@ describe("status bar follows the page", () => {
   });
   it("is wired: one band element, no body::before band, the header sets the attribute, the init reapplies", () => {
     const css = readFileSync("app/globals.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(css.match(/body::before\s*\{/g)?.length ?? 0, "only the ambient backdrop remains").toBe(1);
+    expect(css.match(/^body::before\s*\{/gm)?.length ?? 0, "only the ambient backdrop remains").toBe(1);
     expect(css).toMatch(/#status-bar-band\s*\{/);
     expect(css).toMatch(/html\[data-bar="navy"\]\s*\{\s*--status-band:\s*#121a2a/);
     expect(readFileSync("app/layout.tsx", "utf8")).toMatch(/<StatusBarBand \/>/);

@@ -1,4 +1,5 @@
 import { Wordmark } from "./Wordmark";
+import { NavyBar } from "./NavyBar";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { WebOnly } from "./WebOnly";
@@ -274,6 +275,7 @@ export async function AppHeader({
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
+        <NavyBar />
         {/* Header content row. On lg+ the LeftRail occupies the
             first 232px (left-2 + w-56) of the viewport, so we
             left-pad the row by 15rem (240px = rail width + 8px gap)
