@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import { NATIVE_COOKIE } from "@/lib/native/front-door";
+import { pushDecision, type Receive } from "@/lib/native/push-gate";
+import { hasReachedToday, REACHED_TODAY_EVENT } from "@/lib/native/reached-today";
 
 /**
  * One-shot native runtime setup, mounted at the root layout next to
@@ -292,48 +294,68 @@ export function CapacitorNativeInit() {
               }).catch(() => {});
             },
           );
-          const perm = await PushNotifications.checkPermissions();
-          let receive = perm.receive;
-          if (receive === "prompt" || receive === "prompt-with-rationale") {
-            receive = (await PushNotifications.requestPermissions()).receive;
-          }
-          // CRITICAL: register() on Android calls into FirebaseMessaging
-          // which throws IllegalStateException ON THE NATIVE THREAD if
-          // google-services.json hasn't been installed. The native
-          // throw is NOT caught by this JS try/catch, it propagates
-          // up through the Capacitor plugin worker and crashes the
-          // entire app process before the WebView finishes loading.
-          // Diagnosed on emulator-5554 May 22, 2026.
-          //
           // Gate on a build-time flag so we only call register() once
           // Firebase is actually wired up (google-services.json in
           // android/app/, GoogleService-Info.plist for iOS, env var
-          // flipped). The other PushNotifications APIs (listeners,
-          // checkPermissions) don't touch Firebase so they're safe to
-          // keep running unconditionally, they're just no-ops without
-          // a registered token.
-          const pushEnabled =
-            process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1";
-          // Report the branch BEFORE acting on it. These two conditions
-          // are the ones that produce total silence today: neither calls
-          // register(), so neither can ever fire registrationError, and
-          // both leave device_tokens empty with no explanation. `receive`
-          // is carried as the detail because "denied" and
-          // "prompt-with-rationale" mean different things to the user.
-          if (!pushEnabled) {
-            reportPush("flag_disabled", `receive=${receive}`);
-          } else if (receive !== "granted") {
-            reportPush("permission_denied", `receive=${receive}`);
-          }
-          if (receive === "granted" && pushEnabled) {
-            // Stamped before the call. If this status is still what the
-            // table holds hours later, then register() was reached and
-            // APNs answered with neither a token nor an error — a silent
-            // hang that no error handler could ever have surfaced, and a
-            // completely different bug from a refused permission.
-            reportPush("register_called", `receive=${receive}`);
-            await PushNotifications.register();
-          }
+          // flipped). CRITICAL: register() on Android calls into
+          // FirebaseMessaging which throws IllegalStateException ON THE
+          // NATIVE THREAD if google-services.json hasn't been installed.
+          // The native throw is NOT caught by this JS try/catch, it
+          // propagates up through the Capacitor plugin worker and
+          // crashes the entire app process before the WebView finishes
+          // loading. Diagnosed on emulator-5554 May 22, 2026.
+          //
+          // The prompt itself waits for two gates (pushDecision, spec
+          // 4.5): a session exists, and the user has reached Today once.
+          // Android only grants two prompts before blocking the app
+          // (POST_NOTIFICATIONS USER_FIXED), and asking a signed-out
+          // visitor on the marketing page burned both. runPushGate can
+          // run again once Today is reached (the REACHED_TODAY_EVENT
+          // listener below), so a launch that starts signed-out but
+          // signs in and reaches Today still gets asked once.
+          const runPushGate = async () => {
+            let hasSession = false;
+            try {
+              const { createClient } = await import("@/lib/supabase/client");
+              const { data } = await createClient().auth.getSession();
+              hasSession = Boolean(data.session);
+            } catch {
+              /* no client: treat as signed out */
+            }
+            const perm = await PushNotifications.checkPermissions();
+            const decision = pushDecision({
+              hasSession,
+              reachedToday: hasReachedToday(),
+              receive: perm.receive as Receive,
+              pushEnabled:
+                process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1",
+            });
+            reportPush(decision.report, `receive=${perm.receive}`);
+            if (decision.prompt) {
+              const asked = await PushNotifications.requestPermissions();
+              const after = pushDecision({
+                hasSession,
+                reachedToday: true,
+                receive: asked.receive as Receive,
+                pushEnabled:
+                  process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1",
+              });
+              reportPush(after.report, `receive=${asked.receive}`);
+              // Stamped before the call. If this status is still what
+              // the table holds hours later, then register() was
+              // reached and APNs answered with neither a token nor an
+              // error, a silent hang that no error handler could ever
+              // have surfaced, and a completely different bug from a
+              // refused permission.
+              if (after.register) await PushNotifications.register();
+              return;
+            }
+            if (decision.register) await PushNotifications.register();
+          };
+          await runPushGate();
+          window.addEventListener(REACHED_TODAY_EVENT, () => {
+            void runPushGate().catch(() => {});
+          });
         } catch (err) {
           // Previously swallowed entirely. A throw here (dynamic import
           // failing, a plugin API that moved between versions) left the

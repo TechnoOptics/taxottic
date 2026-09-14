@@ -19,6 +19,7 @@ import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { TrialBanner } from "@/components/TrialBanner";
+import { MarkReachedToday } from "@/components/MarkReachedToday";
 import { getTrialState } from "@/lib/plans/usage";
 import { runTrialGuard } from "@/lib/security/trial-guard";
 import { MedalCelebration } from "@/components/MedalCelebration";
@@ -895,6 +896,7 @@ export default async function DashboardPage() {
           items={outstanding.items}
         />
 
+        <MarkReachedToday />
         <TrialBanner trial={trial} />
 
         {/* Hero stat band, three glanceable figures (personal year-end
