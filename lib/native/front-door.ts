@@ -8,6 +8,9 @@
  * first run, and the middleware redirects a signed-out request for "/"
  * that carries it. The very first launch, before the cookie exists, is
  * covered by <NativeFrontDoor /> on the client.
+ *
+ * The front door belongs to the main domain only; admin and firm hosts
+ * keep their own root behaviour.
  */
 export const NATIVE_COOKIE = "taxottic_native";
 
@@ -15,7 +18,9 @@ export function frontDoorRedirect(input: {
   pathname: string;
   hasUser: boolean;
   nativeCookie: boolean;
+  otherHost: boolean;
 }): "/login" | null {
+  if (input.otherHost) return null;
   if (input.pathname !== "/") return null;
   if (input.hasUser) return null;
   return input.nativeCookie ? "/login" : null;

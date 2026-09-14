@@ -337,6 +337,7 @@ async function resolveRequest(request: NextRequest) {
     pathname,
     hasUser: Boolean(user),
     nativeCookie: request.cookies.get(NATIVE_COOKIE)?.value === "1",
+    otherHost: isAdminHost || isFirmHost,
   });
   if (frontDoor) {
     const url = request.nextUrl.clone();

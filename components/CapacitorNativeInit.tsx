@@ -48,6 +48,7 @@ export function CapacitorNativeInit() {
 
       // Mark the shell for the server (lib/native/front-door.ts). One
       // year, Lax, Secure: the WebView loads https://taxottic.com.
+      // Secure means the cookie is never set on a plain-http local dev server.
       document.cookie = `${NATIVE_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
 
       // --- StatusBar: per-platform so the header never overlaps it ---
