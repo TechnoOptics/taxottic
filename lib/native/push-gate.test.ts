@@ -13,6 +13,9 @@ describe("push gate", () => {
     expect(pushDecision(base)).toEqual({ prompt: true, register: false, report: "prompting" });
     expect(pushDecision({ ...base, receive: "prompt-with-rationale" }).prompt).toBe(true);
   });
+  it("never prompts when the flag is disabled, even when both gates are open", () => {
+    expect(pushDecision({ hasSession: true, reachedToday: true, receive: "prompt", pushEnabled: false })).toEqual({ prompt: false, register: false, report: "flag_disabled" });
+  });
   it("never asks again after a denial, and registers only when granted and enabled", () => {
     expect(pushDecision({ ...base, receive: "denied" })).toEqual({ prompt: false, register: false, report: "permission_denied" });
     expect(pushDecision({ ...base, receive: "granted" })).toEqual({ prompt: false, register: true, report: "register_called" });
