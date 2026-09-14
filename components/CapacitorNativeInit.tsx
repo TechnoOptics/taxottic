@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { NATIVE_COOKIE } from "@/lib/native/front-door";
 
 /**
  * One-shot native runtime setup, mounted at the root layout next to
@@ -44,6 +45,10 @@ export function CapacitorNativeInit() {
         return;
       }
       if (!Capacitor?.isNativePlatform()) return;
+
+      // Mark the shell for the server (lib/native/front-door.ts). One
+      // year, Lax, Secure: the WebView loads https://taxottic.com.
+      document.cookie = `${NATIVE_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
 
       // --- StatusBar: per-platform so the header never overlaps it ---
       // iOS: overlay the WebView; the header's env(safe-area-inset-top)
