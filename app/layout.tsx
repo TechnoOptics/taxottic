@@ -58,7 +58,10 @@ const hanken = Hanken_Grotesk({
 const archivo = Archivo({
   variable: "--font-archivo",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  // Variable font. The width axis is what sets the Year grammar's
+  // headlines apart from a default grotesque; next/font downloads an
+  // axis only when it is named here.
+  axes: ["wdth"],
   display: "swap",
 });
 

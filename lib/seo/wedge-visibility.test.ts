@@ -28,31 +28,52 @@ import { readFileSync } from "node:fs";
  * positioning decision (mileage is the wedge), so if the positioning
  * genuinely changes, change this file deliberately rather than letting
  * the copy drift out from under it.
+ *
+ * The Year rewrite (2026-09-05, task 8) retired the per-audience
+ * CAPABILITY[] lists and the TOUR record along with the sections that
+ * rendered them; the grammar guard (lib/marketing/year-grammar.test.ts)
+ * now forbids either construct from coming back. Audience-specific copy
+ * moved to HERO and MOMENTS in components/marketing/home-copy.ts (the hero
+ * lede plus the five-moment year sequence, which is the tour's
+ * replacement), and the JSON-LD builders moved to
+ * lib/marketing/home-jsonld.ts. The helpers below read those in place of
+ * the old blocks; the positioning check they carry (mileage is the wedge,
+ * visible to every audience) is unchanged.
  */
 
 const PAGE = "app/page.tsx";
 const LAYOUT = "app/layout.tsx";
 const LLMS = "public/llms.txt";
+const HOME_COPY = "components/marketing/home-copy.ts";
+const HOME_JSONLD = "lib/marketing/home-jsonld.ts";
 
 const page = readFileSync(PAGE, "utf8");
+const homeCopy = readFileSync(HOME_COPY, "utf8");
+const homeJsonld = readFileSync(HOME_JSONLD, "utf8");
 
-/** Body of a `const NAME: Capability[] = [ ... ];` block. */
-function capabilityBlock(name: string): string {
-  const m = new RegExp(
-    `const ${name}: Capability\\[\\] = \\[([\\s\\S]*?)\\n\\];`,
-  ).exec(page);
-  if (!m) throw new Error(`capability list ${name} not found in ${PAGE}`);
+/** Body of `HERO`'s `{audience}: { ... },` entry in home-copy.ts. */
+function heroBlock(audience: string): string {
+  const m = new RegExp(`\\n {2}${audience}: \\{([\\s\\S]*?)\\n {2}\\},\\n`).exec(homeCopy);
+  if (!m) throw new Error(`HERO.${audience} not found in ${HOME_COPY}`);
   return m[1];
 }
 
-/** Body of one audience key inside the TOUR record. */
+/** Body of `MOMENTS`'s `{audience}: withCopy({ ... }),` entry, every moment concatenated. */
+function momentsBlock(audience: string): string {
+  const m = new RegExp(`\\n {2}${audience}: withCopy\\(\\{([\\s\\S]*?)\\n {2}\\}\\),\\n`).exec(homeCopy);
+  if (!m) throw new Error(`MOMENTS.${audience} not found in ${HOME_COPY}`);
+  return m[1];
+}
+
+/** The audience-specific copy that replaced the capability list: hero lede + every moment. */
+function capabilityBlock(name: string): string {
+  const audience = name.toLowerCase();
+  return `${heroBlock(audience)}\n${momentsBlock(audience)}`;
+}
+
+/** The year sequence for one audience, the tour's replacement. */
 function tourBlock(audience: string): string {
-  const tour = /const TOUR[^=]*= \{([\s\S]*?)\n\};/.exec(page);
-  if (!tour) throw new Error("TOUR record not found");
-  const parts = tour[1].split(/^ {2}(personal|business|firm): \{/m);
-  const i = parts.indexOf(audience);
-  if (i === -1) throw new Error(`tour audience ${audience} not found`);
-  return parts[i + 1];
+  return momentsBlock(audience);
 }
 
 /** Strip comments so this file's own rationale cannot satisfy a check. */
@@ -91,7 +112,7 @@ describe("mileage is visible to every audience", () => {
 
 describe("mileage is visible to machines", () => {
   it("SoftwareApplication featureList names it", () => {
-    const m = /featureList: \[([\s\S]*?)\]/.exec(page);
+    const m = /featureList: \[([\s\S]*?)\]/.exec(homeJsonld);
     expect(m, "featureList not found").not.toBeNull();
     const features = [...m![1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
     expect(features.length).toBeGreaterThan(5);

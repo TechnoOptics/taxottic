@@ -169,7 +169,7 @@ export default function CalculatorsHubPage() {
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+            "var(--navy-band)",
           paddingTop:
             "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
           paddingLeft: "env(safe-area-inset-left, 0px)",
@@ -188,7 +188,8 @@ export default function CalculatorsHubPage() {
           Free tools
         </div>
         <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          Free tax calculators for the self-employed.
+          Free tax calculators for the{" "}
+          <span className="whitespace-nowrap">self-employed.</span>
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Instant estimates for freelancers, 1099 contractors, and small

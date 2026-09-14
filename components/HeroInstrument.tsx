@@ -1,110 +1,96 @@
 import { formatCents } from "@/lib/tax/engine/money";
+import { YearSpine } from "@/components/marketing/YearSpine";
+import { CountUp } from "@/components/marketing/CountUp";
 import { taxYearRunway } from "@/lib/marketing/tax-year-runway";
 
+export type PanelLedgerLine = { date: string; text: string; amount: string };
+export type PanelSample = {
+  /**
+   * Optional text before the due-date fact, e.g. the client a firm is
+   * looking at. The dated half of that note is not copy: it is the same
+   * runway this panel's spine draws, composed below so its date and its
+   * countdown render in the data face rather than the body face.
+   */
+  headingLead?: string;
+  nextPaymentCents: number;
+  setAsideCents: number;
+  ledger: PanelLedgerLine[];
+  foot: string;
+};
+
 /**
- * The instrument on the marketing hero's first screen: where the reader
- * sits in the tax year, and what that means in dollars.
+ * The instrument panel: where the reader sits in the tax year and what
+ * that means in dollars. The one navy surface on a marketing page, and
+ * the one place brass is spent: the spine's marker and the next payment.
  *
- * This is the Instrument skin's signature, the tax-year runway, which
- * app/globals.css defined and nothing rendered. It is not ornament: the
- * rail is ticked at the four federal estimated-tax due dates and filled to
- * a date, so it encodes the one fact this product exists to keep in front
- * of people.
+ * Tokens, not hex. The wrapper carries data-skin="instrument" with
+ * data-theme="dark", a selector app/globals.css already defines, so every
+ * token inside takes the skin's dark value. The band itself is the
+ * --navy-band token so the pixel matches every other navy in the app.
  *
- * Tokens, not hex. The wrapper carries `data-skin="instrument"` with
- * `data-theme="dark"`, a selector globals.css already defines, so every
- * token inside (surface, hairline, brass, figures) takes the skin's dark
- * value. The brass on this screen is spent here and only here: the fill,
- * today's marker, and the one live figure.
- *
- * The figures and the date are a labelled sample, the same convention the
- * product tour uses lower on the page. The date is fixed rather than read
- * from the clock so the visual baselines stay still.
+ * The figures and the date are a labelled sample, fixed so the visual
+ * baselines stay still.
  */
 export function HeroInstrument({
   taxYear,
   asOf,
-  nextPaymentCents,
-  setAsideCents,
+  sample,
 }: {
   taxYear: number;
   asOf: Date;
-  nextPaymentCents: number;
-  setAsideCents: number;
+  sample: PanelSample;
 }) {
+  const still = Math.max(0, sample.nextPaymentCents - sample.setAsideCents);
   const r = taxYearRunway(taxYear, asOf);
-  const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
-  const last = r.ticks.length - 1;
-
   return (
     <div className="skin-scope" data-skin="instrument" data-theme="dark">
-      <div className="card p-5 sm:p-6">
-        <div className="flex items-baseline justify-between gap-3">
-          <div className="kicker-sm">Tax year {taxYear}</div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-muted">
-            Sample
-          </div>
-        </div>
+      <div
+        className="rounded-[10px] p-5 sm:p-6 text-foreground shadow-[0_30px_60px_-30px_rgba(12,16,23,0.6)]"
+        style={{ background: "var(--navy-band)" }}
+      >
+        <YearSpine taxYear={taxYear} asOf={asOf} variant="panel" trailing="Sample" markerPrefix="" />
 
-        <div className="runway mt-10 mb-9" aria-hidden="true">
-          <div className="runway-rail">
-            <div className="runway-fill" style={{ width: pct(r.fill) }} />
-            {r.ticks.map((t) => (
-              <div
-                key={t.quarter}
-                className="runway-tick"
-                style={{ left: pct(t.at) }}
-              />
-            ))}
-            <div className="runway-today" style={{ left: pct(r.fill) }} />
-            <span
-              className="figure absolute -top-6 -translate-x-1/2 whitespace-nowrap text-[11px] text-accent-2"
-              style={{ left: pct(r.fill) }}
-            >
-              {r.asOfLabel}
-            </span>
-          </div>
-          <div className="relative mt-3 h-4 text-[11px] text-muted">
-            {r.ticks.map((t, i) => (
-              <span
-                key={t.quarter}
-                className={
-                  "figure absolute whitespace-nowrap " +
-                  (i === last ? "-translate-x-full" : "-translate-x-1/2")
-                }
-                style={{ left: pct(t.at) }}
-              >
-                {t.label}
+        <dl className="mt-6">
+          <div className="stat-row">
+            <dt className="stat-row-label">
+              Next payment
+              <span className="stat-row-note block">
+                {sample.headingLead ? `${sample.headingLead} · ` : ""}
+                {r.next ? (
+                  <>
+                    Q{r.next.quarter} · due <span className="figure">{r.next.label}</span> ·{" "}
+                    <span className="figure">{r.daysToNext} days</span>
+                  </>
+                ) : (
+                  "All four quarters paid"
+                )}
               </span>
-            ))}
-          </div>
-        </div>
-
-        <dl className="grid gap-4">
-          <div className="flex items-end justify-between gap-4 border-t border-edge pt-4">
-            <div>
-              <dt className="text-sm text-foreground">Next payment</dt>
-              <dd className="mt-0.5 text-[11px] text-muted">
-                {r.next
-                  ? `Q${r.next.quarter} · due ${r.next.label} · ${r.daysToNext} days`
-                  : "All four quarters paid"}
-              </dd>
-            </div>
-            <dd className="figure text-2xl sm:text-3xl text-accent-2">
-              {formatCents(nextPaymentCents)}
+            </dt>
+            <dd id="hero-next-payment" className="figure stat-row-value stat-row-value-lg stat-row-value-brass">
+              {formatCents(sample.nextPaymentCents)}
             </dd>
           </div>
-          <div className="flex items-end justify-between gap-4 border-t border-edge pt-4">
-            <dt className="text-sm text-foreground">Set aside so far</dt>
-            <dd className="figure text-xl text-foreground">
-              {formatCents(setAsideCents)}
-            </dd>
+          <div className="stat-row">
+            <dt className="stat-row-label">Set aside so far</dt>
+            <dd className="figure stat-row-value stat-row-value-lg">{formatCents(sample.setAsideCents)}</dd>
+          </div>
+          <div className="stat-row">
+            <dt className="stat-row-label">Still to set aside</dt>
+            <dd className="figure stat-row-value stat-row-value-lg">{formatCents(still)}</dd>
           </div>
         </dl>
+        <CountUp id="hero-next-payment" cents={sample.nextPaymentCents} />
 
-        <p className="mt-5 text-[11px] leading-relaxed text-muted">
-          Federal + state, in step with your bank.
-        </p>
+        <ul className="mt-3 border-t border-edge pt-2.5">
+          {sample.ledger.map((l) => (
+            <li key={l.date + l.text} className="flex gap-3 py-1.5 text-[13px]">
+              <span className="figure w-12 shrink-0 text-muted">{l.date}</span>
+              <span className="min-w-0 flex-1">{l.text}</span>
+              <span className="figure">{l.amount}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[12px] text-muted">{sample.foot}</p>
       </div>
     </div>
   );
