@@ -21,7 +21,10 @@ import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { TrialBanner } from "@/components/TrialBanner";
 import { MarkReachedToday } from "@/components/MarkReachedToday";
 import { LocationBlockedStrip } from "@/components/mileage/LocationBlockedStrip";
-import { locationBlocked } from "@/lib/mileage/location-blocked";
+import {
+  deviceStatusFloorIso,
+  locationBlocked,
+} from "@/lib/mileage/location-blocked";
 import { getTrialState } from "@/lib/plans/usage";
 import { runTrialGuard } from "@/lib/security/trial-guard";
 import { MedalCelebration } from "@/components/MedalCelebration";
@@ -893,6 +896,16 @@ export default async function DashboardPage() {
   // "first company" convention this page uses elsewhere would silently
   // miss it. The filter is applied in the query so one matching row comes
   // back rather than a set to scan here.
+  //
+  // Two predicates beyond the permission itself, both narrowing to a
+  // phone that is actually trying to record right now:
+  //   - tracking_enabled: a driver who switched tracking off chose that,
+  //     and telling them to widen a permission they are not using is a
+  //     fault report about nothing.
+  //   - reported_at: the row is the last thing the phone said, not a
+  //     probe. An install that stopped beating months ago would pin a
+  //     permanent strip to Today naming a phone that may have been
+  //     reinstalled or re-permissioned since.
   const selfCompanyIds = companies.map((m) => m.company_id);
   const selfDeviceRes = selfCompanyIds.length
     ? await admin
@@ -901,6 +914,8 @@ export default async function DashboardPage() {
         .eq("driver_user_id", user.id)
         .in("company_id", selfCompanyIds)
         .eq("location_authorization", "whenInUse")
+        .eq("tracking_enabled", true)
+        .gte("reported_at", deviceStatusFloorIso())
         .limit(1)
     : null;
   const selfDeviceStatus = ((selfDeviceRes?.data ?? [])[0] ?? null) as {

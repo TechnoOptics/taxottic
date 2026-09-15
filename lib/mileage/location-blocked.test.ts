@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   BLOCK_FROM_CACHE_MAX_AGE_MS,
+  DEVICE_STATUS_MAX_AGE_MS,
   authorizationFromCache,
+  deviceStatusFloorIso,
   locationBlocked,
 } from "./location-blocked";
 
@@ -63,5 +65,45 @@ describe("location blocked", () => {
     // latches the block again one line further down.
     expect(src.match(/authorizationFromCache\(/g) ?? []).toHaveLength(2);
     expect(src).not.toMatch(/setAuthorization\(\s*\w+\.value\.locationAuthorization/);
+  });
+
+  it("says nothing to a driver who turned tracking off", () => {
+    // While Using only blocks capture for someone who asked to be
+    // captured. A driver who switched tracking off made a choice, and a
+    // strip telling them to change a permission they do not need reads
+    // as a bug in the app rather than a fault on the phone.
+    expect(
+      locationBlocked({ locationAuthorization: "whenInUse", trackingEnabled: false }),
+    ).toBeNull();
+    expect(
+      locationBlocked({ locationAuthorization: "whenInUse", trackingEnabled: true })?.blocked,
+    ).toBe(true);
+    // Unknown (the row never carried the column) still speaks, because
+    // that is the pre-plugin shape and not a decision the driver made.
+    expect(
+      locationBlocked({ locationAuthorization: "whenInUse", trackingEnabled: null })?.blocked,
+    ).toBe(true);
+  });
+
+  it("is wired: the dashboard reads only a live, recent row", () => {
+    // The row is the last thing the phone said, not a live probe. A
+    // months-old whenInUse from an install the driver has since
+    // reinstalled or re-permissioned would put a permanent strip on
+    // Today with nothing on the phone left to fix.
+    const dash = readFileSync("app/dashboard/page.tsx", "utf8");
+    const query = dash.slice(dash.indexOf('.from("mileage_device_status")'));
+    expect(query, "the query skips a driver who turned tracking off").toMatch(
+      /\.eq\("tracking_enabled", true\)/,
+    );
+    expect(query, "the query bounds the row's age").toMatch(
+      /\.gte\(\s*"reported_at",\s*deviceStatusFloorIso\(\)/,
+    );
+    expect(DEVICE_STATUS_MAX_AGE_MS).toBe(14 * 24 * 60 * 60 * 1000);
+    // The bound is that constant and not some other window.
+    const now = Date.UTC(2026, 8, 15, 12, 0, 0);
+    expect(deviceStatusFloorIso(now)).toBe(
+      new Date(now - DEVICE_STATUS_MAX_AGE_MS).toISOString(),
+    );
+    expect(deviceStatusFloorIso(now)).toBe("2026-09-01T12:00:00.000Z");
   });
 });
