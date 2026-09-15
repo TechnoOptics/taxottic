@@ -52,5 +52,26 @@ test.describe("Mobile responsive", () => {
     const signIn = await signInLocator.boundingBox();
     expect(mark && signIn && signIn.x - (mark.x + mark.width)).toBeGreaterThanOrEqual(8);
     expect(signIn?.height).toBeGreaterThanOrEqual(44);
+    // The wordmark is a link home, so it is a tap target too.
+    expect(mark?.height, "the wordmark link is 44px tall").toBeGreaterThanOrEqual(44);
+  });
+
+  test("every footer link is a 44px row at 344", async ({ page }) => {
+    // The marketing footer is the densest stack of links on the site and
+    // the audits' I5 named it: 16px rows at the bottom of a phone screen.
+    // The footer lives on the home page (components/marketing/MarketingFooter.tsx);
+    // the sample page has none.
+    await page.setViewportSize({ width: 344, height: 700 });
+    await page.goto("/");
+    const footer = page.locator("footer");
+    await expect(footer.first()).toBeVisible();
+    const short = await footer.locator("a").evaluateAll((els) =>
+      els
+        .filter((e) => e.getBoundingClientRect().height < 44)
+        .map((e) => `${(e as HTMLElement).innerText.trim() || (e as HTMLElement).getAttribute("aria-label")}: ${e.getBoundingClientRect().height}`),
+    );
+    expect(short, "every footer link is at least 44px tall").toEqual([]);
+    const count = await footer.locator("a").count();
+    expect(count, "the footer links are actually there to measure").toBeGreaterThan(10);
   });
 });

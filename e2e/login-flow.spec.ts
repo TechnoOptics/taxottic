@@ -16,7 +16,7 @@ test("/login default `next` is /dashboard on consumer host", async ({ page }) =>
   // The component sets `next` from URL params; without a param the
   // default is /dashboard. We probe by setting the URL with no
   // `next` and confirming the form action goes to /api/auth/* or
-  // similar — but the actual destination is JS-only. A presence
+  // similar, but the actual destination is JS-only. A presence
   // check is enough here; the unit test for the host-aware default
   // sits in lib/auth or app/login (not in scope for E2E).
   await page.goto("/login");
@@ -36,6 +36,10 @@ test("offers passkey first, then Apple and Google, and every control is 44px tal
     els.filter((e) => (e as HTMLElement).offsetParent !== null && e.getBoundingClientRect().height < 44).map((e) => (e as HTMLElement).innerText.trim()),
   );
   expect(short, "every visible control is at least 44px tall").toEqual([]);
+  // The wordmark above the card is a link home, and the audits' I5
+  // counted it as a control on this page.
+  const mark = await page.getByRole("link", { name: "Taxottic home" }).first().boundingBox();
+  expect(mark?.height, "the wordmark link is 44px tall").toBeGreaterThanOrEqual(44);
   await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Microsoft/ })).not.toBeInViewport();
   const disclosure = page.getByText("More ways to sign in");

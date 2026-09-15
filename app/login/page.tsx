@@ -358,7 +358,8 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Wordmark size="lg" />
+          {/* Home link, and a control on this page: 44px row (I5). */}
+          <Wordmark size="lg" className="min-h-11" />
           {forcePicker ? (
             <>
               <p className="mt-3 text-sm font-medium text-forest-900">

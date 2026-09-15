@@ -111,7 +111,9 @@ export default async function ExamplePage() {
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between gap-3">
           <div className="min-w-0 shrink max-w-[52vw] sm:max-w-none">
-            <Wordmark size="md" tone="cream" />
+            {/* The wordmark is the home link, so it is a tap target: the
+                image is 34px, the row it sits in is 44 (audits' I5). */}
+            <Wordmark size="md" tone="cream" className="min-h-11" />
           </div>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             {/* Single, high-contrast CTA. Gold reads clearly on the dark
