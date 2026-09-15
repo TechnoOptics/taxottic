@@ -560,6 +560,10 @@ git commit -m "The status bar reads on every page: one band, one attribute, reap
 
 ---
 
+**Follow-up recorded during execution (2026-09-15):** the deleted band rule had also been suppressing the ambient `body::before` backdrop (its explicit zero height won over the backdrop's `inset: 0`), so deleting it revived a gold and navy gradient behind every component-test screenshot. Ruling: the backdrop and its dark override are removed (invisible for months, not in the spec, gold decoration retired); the `main, footer, nav` stacking rule stays; the unit test now asserts zero bare `body::before` rules.
+
+---
+
 ### Task 4: Back exits when there is nowhere to go back to
 
 **Files:**
