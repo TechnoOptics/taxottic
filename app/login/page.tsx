@@ -398,40 +398,42 @@ export default function LoginPage() {
               available-options-with-fallbacks is a clearer signal
               of what we support, and surfaces the configuration
               gap as a fix-this rather than a missing-feature. */}
+          <PasskeySignInButton emailHint={email || undefined} />
+
+          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
+            <div className="h-px flex-1 bg-forest-200/60" />
+            <span>or continue with</span>
+            <div className="h-px flex-1 bg-forest-200/60" />
+          </div>
+
           <div className="grid gap-2">
             <button
-              onClick={() => oauth("google")}
-              className="btn-ghost w-full"
-              aria-label="Continue with Google"
-            >
-              <SsoGlyph kind="google" />
-              <span>Continue with Google</span>
-            </button>
-            <button
-              onClick={() => oauth("azure")}
-              className="btn-ghost w-full"
-              aria-label="Continue with Microsoft"
-            >
-              <SsoGlyph kind="microsoft" />
-              <span>Continue with Microsoft</span>
-            </button>
-            <button
               onClick={() => oauth("apple")}
-              className="btn-ghost w-full"
+              className="btn-ghost w-full min-h-11"
               aria-label="Continue with Apple"
             >
               <SsoGlyph kind="apple" />
               <span>Continue with Apple</span>
             </button>
+            <button
+              onClick={() => oauth("google")}
+              className="btn-ghost w-full min-h-11"
+              aria-label="Continue with Google"
+            >
+              <SsoGlyph kind="google" />
+              <span>Continue with Google</span>
+            </button>
+            <div className="hidden sm:block">
+              <button
+                onClick={() => oauth("azure")}
+                className="btn-ghost w-full min-h-11"
+                aria-label="Continue with Microsoft"
+              >
+                <SsoGlyph kind="microsoft" />
+                <span>Continue with Microsoft</span>
+              </button>
+            </div>
           </div>
-
-          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
-            <div className="h-px flex-1 bg-forest-200/60" />
-            <span>or passkey · Face ID · Touch ID · Windows Hello · PIN</span>
-            <div className="h-px flex-1 bg-forest-200/60" />
-          </div>
-
-          <PasskeySignInButton emailHint={email || undefined} />
 
           <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
             <div className="h-px flex-1 bg-forest-200/60" />
@@ -473,7 +475,7 @@ export default function LoginPage() {
                 status === "error" ? "magic-link-error" : undefined
               }
               className={
-                "input " +
+                "input min-h-11 " +
                 (status === "error"
                   ? "border-red-400 focus:border-red-500 focus:ring-red-200"
                   : "")
@@ -498,9 +500,27 @@ export default function LoginPage() {
               disabled={status === "sending" || !humanOk}
               className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {status === "sending" ? "Sending..." : "Send magic link"}
+              {status === "sending" ? "Sending code" : "Send code"}
             </button>
           </form>
+
+          {/* Phone-only disclosure for Microsoft: the grid above hides it
+              below sm so passkey, Apple and Google fit above the fold on a
+              phone, per spec 4.2. Desktop shows Microsoft in the grid
+              itself, so this stays sm:hidden. */}
+          <details className="sm:hidden mt-3">
+            <summary className="min-h-11 flex items-center text-sm text-ink-soft cursor-pointer">
+              More ways to sign in
+            </summary>
+            <button
+              onClick={() => oauth("azure")}
+              className="btn-ghost w-full min-h-11 mt-2"
+              aria-label="Continue with Microsoft"
+            >
+              <SsoGlyph kind="microsoft" />
+              <span>Continue with Microsoft</span>
+            </button>
+          </details>
 
           {/* Always-available code entry, works even if the magic-link
               send was rejected (e.g. a non-deliverable address like the
@@ -509,9 +529,9 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowCodeEntry(true)}
-              className="mt-3 w-full text-center text-xs text-ink-muted hover:text-forest-900 underline underline-offset-2"
+              className="mt-3 w-full min-h-11 text-sm text-ink-soft hover:text-forest-900 underline underline-offset-2"
             >
-              Have a sign-in code? Enter it
+              Have a code already? Enter it
             </button>
           ) : null}
 
@@ -519,7 +539,7 @@ export default function LoginPage() {
             <div className="mt-4 grid gap-3">
               <p className="text-sm text-forest-700">
                 {linkSent
-                  ? "Check your inbox for the sign-in link, or enter the 6-digit code from that email below."
+                  ? "We sent a 6-digit code to your email. Enter it below."
                   : "Enter your 6-digit sign-in code below."}
               </p>
               <form onSubmit={verifyCode} className="grid gap-3" noValidate>

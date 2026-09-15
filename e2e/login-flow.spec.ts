@@ -22,3 +22,20 @@ test("/login default `next` is /dashboard on consumer host", async ({ page }) =>
   await page.goto("/login");
   await expect(page.locator("text=/Sign in/i").first()).toBeVisible();
 });
+
+test("offers passkey first, then Apple and Google, and every control is 44px tall on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.goto("/login");
+  const order = await page.locator(".card button, .card a[role=button]").evaluateAll((els) =>
+    els.map((e) => (e as HTMLElement).innerText.trim()).filter(Boolean).slice(0, 4),
+  );
+  expect(order[0]).toMatch(/passkey/i);
+  expect(order[1]).toMatch(/Apple/);
+  expect(order[2]).toMatch(/Google/);
+  const short = await page.locator(".card button, .card a").evaluateAll((els) =>
+    els.filter((e) => (e as HTMLElement).offsetParent !== null && e.getBoundingClientRect().height < 44).map((e) => (e as HTMLElement).innerText.trim()),
+  );
+  expect(short, "every visible control is at least 44px tall").toEqual([]);
+  await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Microsoft/ })).not.toBeInViewport();
+});
