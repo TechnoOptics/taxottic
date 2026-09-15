@@ -39,4 +39,39 @@ test.describe("Mobile responsive", () => {
     expect(box?.width).toBeGreaterThan(80);
     expect(box?.height).toBeGreaterThan(32);
   });
+
+  test("the sample page header at 344: the wordmark and Sign in never touch, and Sign in is 44px tall", async ({ page }) => {
+    await page.setViewportSize({ width: 344, height: 700 });
+    await page.goto("/example");
+    const signInLocator = page.locator('header a[href="/login"]').first();
+    // On the mobile-chrome project the header can be measured (0,0,0,0)
+    // a beat before layout settles; wait for the actionable element
+    // rather than racing the first paint.
+    await expect(signInLocator).toBeVisible();
+    const mark = await page.locator("header a").first().boundingBox();
+    const signIn = await signInLocator.boundingBox();
+    expect(mark && signIn && signIn.x - (mark.x + mark.width)).toBeGreaterThanOrEqual(8);
+    expect(signIn?.height).toBeGreaterThanOrEqual(44);
+    // The wordmark is a link home, so it is a tap target too.
+    expect(mark?.height, "the wordmark link is 44px tall").toBeGreaterThanOrEqual(44);
+  });
+
+  test("every footer link is a 44px row at 344", async ({ page }) => {
+    // The marketing footer is the densest stack of links on the site and
+    // the audits' I5 named it: 16px rows at the bottom of a phone screen.
+    // The footer lives on the home page (components/marketing/MarketingFooter.tsx);
+    // the sample page has none.
+    await page.setViewportSize({ width: 344, height: 700 });
+    await page.goto("/");
+    const footer = page.locator("footer");
+    await expect(footer.first()).toBeVisible();
+    const short = await footer.locator("a").evaluateAll((els) =>
+      els
+        .filter((e) => e.getBoundingClientRect().height < 44)
+        .map((e) => `${(e as HTMLElement).innerText.trim() || (e as HTMLElement).getAttribute("aria-label")}: ${e.getBoundingClientRect().height}`),
+    );
+    expect(short, "every footer link is at least 44px tall").toEqual([]);
+    const count = await footer.locator("a").count();
+    expect(count, "the footer links are actually there to measure").toBeGreaterThan(10);
+  });
 });

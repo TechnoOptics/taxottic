@@ -44,8 +44,11 @@ for (const p of PUBLIC_PAGES) {
  * NOT wait for images the browser deferred. Anything with loading="lazy"
  * below the viewport races the screenshot: the request is often aborted while
  * it is still off-screen, so the same page snapshots with the image present on
- * one run and blank on the next. The home page's photography (see
- * public/marketing/CREDITS.md) is exactly that shape.
+ * one run and blank on the next. The home page's four stock photographs were
+ * exactly that shape. They are gone (the Year rewrite dropped them, and
+ * lib/marketing/year-grammar.test.ts pins that public/marketing does not come
+ * back), but the guides and the store badges still carry deferred images, so
+ * this stays.
  *
  * So: promote every deferred image to eager, scroll the document once to fire
  * anything gated on intersection, return to the top, and only then wait for

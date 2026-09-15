@@ -27,7 +27,7 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+            "var(--navy-band)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
           // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
@@ -38,11 +38,14 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+        {/* gap + shrink-0: at 375px the wordmark left the link ~78px and
+            "Back to home" wrapped to two lines beside it. The Wordmark is
+            min-w-0 with a max-w-full image, so it is the one that yields. */}
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between gap-4">
           <Wordmark size="md" tone="cream" />
           <Link
             href="/"
-            className="text-sm text-cream/80 hover:text-cream transition-colors"
+            className="shrink-0 whitespace-nowrap text-sm text-cream/80 hover:text-cream transition-colors"
           >
             Back to home
           </Link>

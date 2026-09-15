@@ -19,6 +19,12 @@ import { CompanyLogo } from "@/components/CompanyLogo";
 import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { TrialBanner } from "@/components/TrialBanner";
+import { MarkReachedToday } from "@/components/MarkReachedToday";
+import { LocationBlockedStrip } from "@/components/mileage/LocationBlockedStrip";
+import {
+  deviceStatusFloorIso,
+  locationBlocked,
+} from "@/lib/mileage/location-blocked";
 import { getTrialState } from "@/lib/plans/usage";
 import { runTrialGuard } from "@/lib/security/trial-guard";
 import { MedalCelebration } from "@/components/MedalCelebration";
@@ -216,12 +222,19 @@ export default async function DashboardPage() {
 
   if (profile?.tax_filer_type === "w2") {
     return (
-      <PersonalDashboard
-        admin={admin}
-        supabase={supabase}
-        user={user}
-        fullName={profile?.full_name ?? null}
-      />
+      <>
+        {/* A W-2 filer reaches Today here and never through the owner
+            dashboard below, so without this marker the push gate's
+            second condition can never open for them and the install is
+            never asked about notifications. */}
+        <MarkReachedToday />
+        <PersonalDashboard
+          admin={admin}
+          supabase={supabase}
+          user={user}
+          fullName={profile?.full_name ?? null}
+        />
+      </>
     );
   }
   const greeting = buildGreeting({
@@ -267,6 +280,10 @@ export default async function DashboardPage() {
 
     return (
       <main id="main" className="min-h-screen">
+        {/* Same reason as the W-2 return above: this is Today for a user
+            with no company yet, and it is the only Today they see until
+            they make one. */}
+        <MarkReachedToday />
         <AppHeader email={user.email ?? undefined} />
         <section className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
           <div className="surface p-6 sm:p-10 text-center">
@@ -867,6 +884,53 @@ export default async function DashboardPage() {
     /* best-effort */
   }
 
+  // The viewer's OWN phone, from the same table and the same columns
+  // /mileage already reads. A permission that stops capture was named on
+  // /mileage and nowhere else, which is the one page a driver whose
+  // drives have stopped arriving has no reason to open: one iPhone sat at
+  // While Using for 20 days (iOS audit C4, I10).
+  //
+  // Every membership, not the first one. The row is keyed
+  // (driver_user_id, company_id), so a driver who joined a second company
+  // has their blocked row under whichever company they drive for, and the
+  // "first company" convention this page uses elsewhere would silently
+  // miss it. The filter is applied in the query so one matching row comes
+  // back rather than a set to scan here.
+  //
+  // Two predicates beyond the permission itself, both narrowing to a
+  // phone that is actually trying to record right now:
+  //   - tracking_enabled: a driver who switched tracking off chose that,
+  //     and telling them to widen a permission they are not using is a
+  //     fault report about nothing.
+  //   - reported_at: the row is the last thing the phone said, not a
+  //     probe. An install that stopped beating months ago would pin a
+  //     permanent strip to Today naming a phone that may have been
+  //     reinstalled or re-permissioned since.
+  const selfCompanyIds = companies.map((m) => m.company_id);
+  const selfDeviceRes = selfCompanyIds.length
+    ? await admin
+        .from("mileage_device_status")
+        .select("location_authorization, tracking_enabled")
+        .eq("driver_user_id", user.id)
+        .in("company_id", selfCompanyIds)
+        .eq("location_authorization", "whenInUse")
+        .eq("tracking_enabled", true)
+        .gte("reported_at", deviceStatusFloorIso())
+        .limit(1)
+    : null;
+  const selfDeviceStatus = ((selfDeviceRes?.data ?? [])[0] ?? null) as {
+    location_authorization: string | null;
+    tracking_enabled: boolean | null;
+  } | null;
+  const blockedLocation = locationBlocked(
+    selfDeviceStatus
+      ? {
+          locationAuthorization: selfDeviceStatus.location_authorization,
+          trackingEnabled: selfDeviceStatus.tracking_enabled,
+        }
+      : null,
+  );
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -895,6 +959,13 @@ export default async function DashboardPage() {
           items={outstanding.items}
         />
 
+        <MarkReachedToday />
+        {blockedLocation ? (
+          <LocationBlockedStrip
+            short={blockedLocation.short}
+            fix={blockedLocation.fix}
+          />
+        ) : null}
         <TrialBanner trial={trial} />
 
         {/* Hero stat band, three glanceable figures (personal year-end

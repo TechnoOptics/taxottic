@@ -148,7 +148,7 @@ export default function GuidesIndex() {
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+            "var(--navy-band)",
           // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
           // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.

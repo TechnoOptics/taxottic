@@ -1313,7 +1313,8 @@
 // WebView that opens the marketing page fetch the new HTML rather than
 // hydrate cached chunks against it.
 //
-// v202 is reserved for the marketing pass running alongside this one.
+// v202 was reserved for the marketing pass running alongside this one;
+// that pass shipped as v205 below, so v202 was never served.
 //
 // v203: the trial banner reads as one sentence on a phone.
 //
@@ -1353,7 +1354,51 @@
 // and /_next/* chunks are not cached here either (v8), so the banner's
 // new client chunk arrives by content hash. Bumped to keep the "any
 // client JS or markup change" rule a rule.
-const CACHE_VERSION = "v204";
+//
+// v205: the marketing site after the audit's next seven items.
+//
+// Pricing h1 holds "Yearly saves ~17%." as one group, left-aligned, in
+// static brass; every remaining gold-shine on the marketing and personal
+// pages is static brass (the animated sweep cost ~271ms of paint per
+// 2.5s idle); the phone download banner is a compact strip on phones
+// (components/AppDownloadBanner.tsx, AppStoreBadges compact); the hero
+// sub-copy is about 30 words per audience; the booking header keeps
+// "Back to home" on one line; the calculators h1 no longer splits
+// "self-employed"; the navy band gradient is a token (--navy-band in
+// app/globals.css) referenced by var() on every marketing page.
+// Markup, copy and a client component changed, so the WebView must fetch
+// the new HTML rather than hydrate cached chunks against it. v205, not
+// the v202 this PR first reserved: v203 and v204 landed on main while it
+// was open, so it was renumbered at rebase time against origin/main and
+// every open PR. A reserved number is not a number.
+// v206: the marketing home in the Year grammar.
+//
+// The tax-year runway is the page's spine, fixed under a paper header,
+// filled to the moment the reader is looking at; the hero moves to paper
+// with navy reserved for the instrument panel; the dated sequence with
+// real product screens replaces the capability cards, the photograph
+// cards, the mock product tour, the stats band and the manifesto. Two
+// new client components (the spine motion and the figure count-up) and
+// new markup on every visitor's first screen, so the worker must fetch
+// the new HTML rather than hydrate cached chunks against it. Chosen
+// against origin/main and every open PR at the moment of the bump.
+// v207: the native front door.
+//
+// Sign-in comes first on the native shell (cookie plus middleware redirect,
+// with a client fallback); push permission is asked for only inside a real
+// session and gated behind the install's first Today open; the status bar
+// gets a readable band that follows the page and survives Android
+// configuration changes; Back exits when the WebView has nowhere to go back
+// to; a location-blocked state replaces the silent no-op with a strip, a
+// toggle and a self-repair path; the login page leads with passkey and a
+// code; and the tap targets raised are the login controls, the audience
+// switch, the account control, the sample page's Sign in, and the marketing
+// footer's rows and wordmark links. New client components on the dashboard
+// and in the root layout, and changed markup on the login page, the sample
+// page and the home footer, so the worker must fetch the new HTML rather
+// than hydrate cached chunks against it. Chosen against
+// origin/main and every open PR at the moment of the bump.
+const CACHE_VERSION = "v207";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

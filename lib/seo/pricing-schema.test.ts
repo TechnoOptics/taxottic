@@ -25,7 +25,9 @@ import { PLAN_PRICING } from "@/lib/plans/limits";
  * structured data, where it is even harder to notice.
  */
 
-const HOME = "app/page.tsx";
+// The Year rewrite (2026-09-05) moved the JSON-LD builders out of
+// app/page.tsx into lib/marketing/home-jsonld.ts; this file follows.
+const HOME = "lib/marketing/home-jsonld.ts";
 
 function homeSource(): string {
   return readFileSync(HOME, "utf8");

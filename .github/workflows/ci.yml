@@ -376,7 +376,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visual-diff-report
-          path: playwright-report/
+          # test-results/ holds the actual, expected and diff PNGs Playwright
+          # writes for every failed comparison; playwright-report/ exists
+          # only when the html reporter is configured, and it is not, so the
+          # upload used to find nothing and the diff was lost every time.
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
           retention-days: 7
 
   ct:
