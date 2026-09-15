@@ -629,7 +629,7 @@ export function UserMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="size-9 rounded-full overflow-hidden border border-forest-200 bg-white shadow-sm hover:shadow transition-shadow grid place-items-center text-sm font-medium text-forest-800 select-none"
+        className="size-11 rounded-full overflow-hidden border border-forest-200 bg-white shadow-sm hover:shadow transition-shadow grid place-items-center text-sm font-medium text-forest-800 select-none"
       >
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element

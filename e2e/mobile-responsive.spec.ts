@@ -39,4 +39,18 @@ test.describe("Mobile responsive", () => {
     expect(box?.width).toBeGreaterThan(80);
     expect(box?.height).toBeGreaterThan(32);
   });
+
+  test("the sample page header at 344: the wordmark and Sign in never touch, and Sign in is 44px tall", async ({ page }) => {
+    await page.setViewportSize({ width: 344, height: 700 });
+    await page.goto("/example");
+    const signInLocator = page.locator('header a[href="/login"]').first();
+    // On the mobile-chrome project the header can be measured (0,0,0,0)
+    // a beat before layout settles; wait for the actionable element
+    // rather than racing the first paint.
+    await expect(signInLocator).toBeVisible();
+    const mark = await page.locator("header a").first().boundingBox();
+    const signIn = await signInLocator.boundingBox();
+    expect(mark && signIn && signIn.x - (mark.x + mark.width)).toBeGreaterThanOrEqual(8);
+    expect(signIn?.height).toBeGreaterThanOrEqual(44);
+  });
 });

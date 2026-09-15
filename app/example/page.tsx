@@ -109,8 +109,10 @@ export default async function ExamplePage() {
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between gap-3">
+          <div className="min-w-0 shrink max-w-[52vw] sm:max-w-none">
+            <Wordmark size="md" tone="cream" />
+          </div>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             {/* Single, high-contrast CTA. Gold reads clearly on the dark
                 navy header, the old btn-primary navy button blended in.
@@ -120,7 +122,7 @@ export default async function ExamplePage() {
                 every width, so no separate mobile icon is needed. */}
             <Link
               href={isAuthed ? "/dashboard" : "/login"}
-              className="inline-flex items-center justify-center rounded-lg bg-gold-300 px-4 py-2 text-sm font-semibold text-forest-900 whitespace-nowrap transition-colors hover:bg-gold-200"
+              className="min-h-11 inline-flex items-center justify-center rounded-lg bg-gold-300 px-4 py-2 text-sm font-semibold text-forest-900 whitespace-nowrap transition-colors hover:bg-gold-200"
             >
               {isAuthed ? "Open dashboard" : "Sign up"}
             </Link>
