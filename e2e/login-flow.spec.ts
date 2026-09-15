@@ -38,4 +38,8 @@ test("offers passkey first, then Apple and Google, and every control is 44px tal
   expect(short, "every visible control is at least 44px tall").toEqual([]);
   await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Microsoft/ })).not.toBeInViewport();
+  const disclosure = page.getByText("More ways to sign in");
+  await expect(disclosure).toBeVisible();
+  await disclosure.click();
+  await expect(page.getByRole("button", { name: /Microsoft/ })).toBeVisible();
 });

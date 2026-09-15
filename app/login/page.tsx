@@ -94,7 +94,7 @@ export default function LoginPage() {
           "We couldn't complete sign-in with your provider. Please try again.",
         oauth_missing_id_token: "Provider didn't return an ID token.",
         oauth_not_configured:
-          "That sign-in provider isn't set up yet. Try Google, passkey, or magic link instead.",
+          "That sign-in provider isn't set up yet. Try a passkey, Apple, Google, or the email code below.",
         oauth_no_return:
           "Sign-in opened but didn't return to the app. This usually means the app's sign-in redirect isn't fully set up yet. Use the email code below to sign in now.",
         access_denied: "You cancelled the sign-in.",
@@ -291,7 +291,7 @@ export default function LoginPage() {
                   ? "Apple"
                   : "Google";
             setError(
-              `${label} sign-in isn't fully set up yet, try Google, a passkey, or a magic link below.`,
+              `${label} sign-in isn't fully set up yet, try a passkey, Apple, Google, or the email code below.`,
             );
           } else {
             setError(r.error);
@@ -315,7 +315,7 @@ export default function LoginPage() {
             : provider === "apple"
               ? "Apple"
               : "Google"
-        } sign-in needs an app update on this device. For now, use the email sign-in below (magic link or 6-digit code), which stays in the app.`,
+        } sign-in needs an app update on this device. For now, use the email code below, which stays in the app.`,
       );
       return;
     }
@@ -346,7 +346,7 @@ export default function LoginPage() {
               ? "Apple"
               : "Google";
         setError(
-          `${label} sign-in isn't fully set up yet, try Google, a passkey, or a magic link below.`,
+          `${label} sign-in isn't fully set up yet, try a passkey, Apple, Google, or the email code below.`,
         );
         return;
       }
