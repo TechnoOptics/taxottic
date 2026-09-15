@@ -1386,15 +1386,17 @@
 //
 // Sign-in comes first on the native shell (cookie plus middleware redirect,
 // with a client fallback); push permission is asked for only inside a real
-// session and gated behind the day's first Today open; the status bar gets
-// a readable band that follows the page and survives Android configuration
-// changes; native Back closes sheets and modals before it exits; a location-
-// blocked state replaces the silent no-op with a strip, a toggle and a
-// self-repair path; the login page leads with passkey and a code, and every
-// control across the header and dashboard meets the tap-target minimum. New
-// client components on the dashboard and in the root layout, and changed
-// markup on the login page and the sample page, so the worker must fetch
-// the new HTML rather than hydrate cached chunks against it. Chosen against
+// session and gated behind the install's first Today open; the status bar
+// gets a readable band that follows the page and survives Android
+// configuration changes; Back exits when the WebView has nowhere to go back
+// to; a location-blocked state replaces the silent no-op with a strip, a
+// toggle and a self-repair path; the login page leads with passkey and a
+// code; and the tap targets raised are the login controls, the audience
+// switch, the account control, the sample page's Sign in, and the marketing
+// footer's rows and wordmark links. New client components on the dashboard
+// and in the root layout, and changed markup on the login page, the sample
+// page and the home footer, so the worker must fetch the new HTML rather
+// than hydrate cached chunks against it. Chosen against
 // origin/main and every open PR at the moment of the bump.
 const CACHE_VERSION = "v207";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;

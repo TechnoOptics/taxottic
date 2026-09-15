@@ -32,5 +32,14 @@ describe("status bar follows the page", () => {
     expect(init).toMatch(/statusBarPlan\(/);
     expect(init).toMatch(/addEventListener\("resize", applyStatusBar/);
     expect(init).toMatch(/new MutationObserver\(applyStatusBar\)/);
+    // The init runs inside an effect that can be torn down and re-run
+    // (Strict Mode, a remount). A resize listener left behind holds the
+    // whole closure and fires against a dead StatusBar handle.
+    expect(
+      init,
+      "the resize listener is removed on teardown",
+    ).toMatch(
+      /teardown\.push\(\(\) =>\s*window\.removeEventListener\("resize", applyStatusBar\)/,
+    );
   });
 });
