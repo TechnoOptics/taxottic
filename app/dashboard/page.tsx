@@ -219,12 +219,19 @@ export default async function DashboardPage() {
 
   if (profile?.tax_filer_type === "w2") {
     return (
-      <PersonalDashboard
-        admin={admin}
-        supabase={supabase}
-        user={user}
-        fullName={profile?.full_name ?? null}
-      />
+      <>
+        {/* A W-2 filer reaches Today here and never through the owner
+            dashboard below, so without this marker the push gate's
+            second condition can never open for them and the install is
+            never asked about notifications. */}
+        <MarkReachedToday />
+        <PersonalDashboard
+          admin={admin}
+          supabase={supabase}
+          user={user}
+          fullName={profile?.full_name ?? null}
+        />
+      </>
     );
   }
   const greeting = buildGreeting({
@@ -270,6 +277,10 @@ export default async function DashboardPage() {
 
     return (
       <main id="main" className="min-h-screen">
+        {/* Same reason as the W-2 return above: this is Today for a user
+            with no company yet, and it is the only Today they see until
+            they make one. */}
+        <MarkReachedToday />
         <AppHeader email={user.email ?? undefined} />
         <section className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
           <div className="surface p-6 sm:p-10 text-center">

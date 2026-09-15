@@ -377,10 +377,20 @@ export function CapacitorNativeInit() {
             }
             if (decision.register) await PushNotifications.register();
           };
-          await runPushGate();
-          window.addEventListener(REACHED_TODAY_EVENT, () => {
+          // Armed BEFORE the first run, not after it. runPushGate awaits
+          // a dynamic import and a session read, so a user who lands
+          // straight on Today can dispatch the event inside that window;
+          // a listener registered afterwards never hears it and the ask
+          // waits for the next cold start.
+          const onReachedToday = () => {
+            if (cancelled) return;
             void runPushGate().catch(() => {});
-          });
+          };
+          window.addEventListener(REACHED_TODAY_EVENT, onReachedToday);
+          teardown.push(() =>
+            window.removeEventListener(REACHED_TODAY_EVENT, onReachedToday),
+          );
+          await runPushGate();
         } catch (err) {
           // Previously swallowed entirely. A throw here (dynamic import
           // failing, a plugin API that moved between versions) left the

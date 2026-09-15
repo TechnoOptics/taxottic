@@ -32,4 +32,29 @@ describe("push gate", () => {
     expect(init).toMatch(/addEventListener\(REACHED_TODAY_EVENT/);
     expect(readFileSync("app/dashboard/page.tsx", "utf8")).toMatch(/<MarkReachedToday \/>/);
   });
+  it("is wired: Today is marked in every branch the dashboard returns", () => {
+    // The page returns three ways: the W-2 filer's PersonalDashboard, the
+    // no-company empty state, and the owner dashboard. A marker only in
+    // the last one leaves the other two able to reach Today without ever
+    // opening the push gate, so those installs are never asked.
+    const dash = readFileSync("app/dashboard/page.tsx", "utf8");
+    const marks = dash.match(/<MarkReachedToday \/>/g) ?? [];
+    expect(
+      marks.length,
+      "one for the W-2 return, one for the no-company empty state, one for the owner dashboard",
+    ).toBe(3);
+  });
+  it("is wired: the Today listener is armed before the first gate run and torn down", () => {
+    const init = readFileSync("components/CapacitorNativeInit.tsx", "utf8").replace(/\/\/.*$/gm, "");
+    const listen = init.indexOf("addEventListener(REACHED_TODAY_EVENT");
+    const firstRun = init.indexOf("await runPushGate()");
+    expect(listen, "the listener is registered").toBeGreaterThan(-1);
+    expect(
+      firstRun,
+      "the listener is armed before the first run, so a Today reached while the gate is awaiting the session is not dropped",
+    ).toBeGreaterThan(listen);
+    expect(init, "the listener is removed on unmount").toMatch(
+      /removeEventListener\(REACHED_TODAY_EVENT/,
+    );
+  });
 });
