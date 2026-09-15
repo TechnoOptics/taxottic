@@ -20,6 +20,8 @@ import { evaluateBadges } from "@/lib/badges/evaluate";
 import { AchievementsGrid } from "@/components/AchievementsGrid";
 import { TrialBanner } from "@/components/TrialBanner";
 import { MarkReachedToday } from "@/components/MarkReachedToday";
+import { LocationBlockedStrip } from "@/components/mileage/LocationBlockedStrip";
+import { locationBlocked } from "@/lib/mileage/location-blocked";
 import { getTrialState } from "@/lib/plans/usage";
 import { runTrialGuard } from "@/lib/security/trial-guard";
 import { MedalCelebration } from "@/components/MedalCelebration";
@@ -868,6 +870,33 @@ export default async function DashboardPage() {
     /* best-effort */
   }
 
+  // The viewer's OWN phone, one indexed row from the same table and the
+  // same columns /mileage already reads. A permission that stops capture
+  // was named on /mileage and nowhere else, which is the one page a
+  // driver whose drives have stopped arriving has no reason to open: one
+  // iPhone sat at While Using for 20 days (iOS audit C4, I10). Same
+  // "first company" convention the rest of this page uses.
+  const selfDeviceRes = companies[0]
+    ? await admin
+        .from("mileage_device_status")
+        .select("location_authorization, tracking_enabled")
+        .eq("driver_user_id", user.id)
+        .eq("company_id", companies[0].company_id)
+        .maybeSingle()
+    : null;
+  const selfDeviceStatus = (selfDeviceRes?.data ?? null) as {
+    location_authorization: string | null;
+    tracking_enabled: boolean | null;
+  } | null;
+  const blockedLocation = locationBlocked(
+    selfDeviceStatus
+      ? {
+          locationAuthorization: selfDeviceStatus.location_authorization,
+          trackingEnabled: selfDeviceStatus.tracking_enabled,
+        }
+      : null,
+  );
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -897,6 +926,12 @@ export default async function DashboardPage() {
         />
 
         <MarkReachedToday />
+        {blockedLocation ? (
+          <LocationBlockedStrip
+            short={blockedLocation.short}
+            fix={blockedLocation.fix}
+          />
+        ) : null}
         <TrialBanner trial={trial} />
 
         {/* Hero stat band, three glanceable figures (personal year-end

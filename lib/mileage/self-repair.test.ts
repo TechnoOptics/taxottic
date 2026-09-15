@@ -245,6 +245,35 @@ describe("the attempt cap, which is what stops a repair becoming a loop", () => 
     expect(r.summary).toBe("geofence_armed:failed");
     expect(r.attempts).toBe(1);
   });
+
+  it("reports location_always:blocked once the attempt cap is reached, and geofence still waits", async () => {
+    // iOS moved one driver from Always to While Using on 2026-08-20 and
+    // nothing recorded for 20 days while this repair sat in a state that
+    // reads as "still working on it" (iOS audit C4). Past the cap the
+    // permission is a BLOCK: the driver has to change it, and the
+    // dashboard and the manager card say so. `waiting` stays what it has
+    // always been, backoff that has not elapsed, which is why the
+    // geofence repair in the same pass still reports it.
+    const p = {
+      ...androidBase,
+      locationAuthorization: "whenInUse",
+      geofenceArmState: "disarmed_registration_failed",
+    };
+    const nowMs = 1_000_000;
+    const out = await pass(p, {
+      nowMs,
+      ledger: {
+        open: {
+          location_always: { attempts: MAX_REPAIR_ATTEMPTS, lastAtMs: nowMs },
+          geofence_armed: { attempts: 1, lastAtMs: nowMs },
+        },
+      },
+    });
+    expect(out.calls).toEqual([]);
+    expect(out.summary).toContain("location_always:blocked");
+    expect(out.summary).not.toContain("location_always:waiting");
+    expect(out.summary).toContain("geofence_armed:waiting");
+  });
 });
 
 describe("proving a repair actually worked", () => {
