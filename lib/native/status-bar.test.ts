@@ -14,8 +14,13 @@ describe("status bar follows the page", () => {
     expect(barOf({ dataset: {} })).toBe("paper");
   });
   it("is wired: one band element, no body::before band, the header sets the attribute, the init reapplies", () => {
+    // Comments are stripped first so a `body::before` mentioned in prose
+    // can't be counted as a rule.
     const css = readFileSync("app/globals.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(css.match(/^body::before\s*\{/gm)?.length ?? 0, "only the ambient backdrop remains").toBe(1);
+    expect(
+      css.match(/^body::before\s*\{/gm)?.length ?? 0,
+      "no body::before rule remains; the band is #status-bar-band",
+    ).toBe(0);
     expect(css).toMatch(/#status-bar-band\s*\{/);
     expect(css).toMatch(/html\[data-bar="navy"\]\s*\{\s*--status-band:\s*#121a2a/);
     expect(readFileSync("app/layout.tsx", "utf8")).toMatch(/<StatusBarBand \/>/);

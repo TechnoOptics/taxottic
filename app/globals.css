@@ -889,7 +889,7 @@ body {
      - .card → semi-transparent forest with the same gold ring
      - .input → forest-900 with cream text + softer gold border focus
      - Subtle vignette via body::before so the deep green doesn't
-       feel flat
+       feel flat (removed 2026-09-15)
 ============================================================================ */
 html[data-theme="dark"],
 html[data-theme="dark"] body {
@@ -1034,14 +1034,6 @@ html[data-theme="dark"] .pac-item-query,
 html[data-theme="dark"] .pac-matched {
   color: #f2d896;
 }
-html[data-theme="dark"] body::before {
-  /* Dim the gold pool slightly on dark so it reads as "warm depth"
-     not "spotlight." Matches Advottic's dark-mode value. */
-  background-image:
-    radial-gradient(1200px 600px at 90% -10%, hsla(42, 51%, 66%, 0.10), transparent 60%),
-    radial-gradient(900px 500px at -10% 100%, hsla(42, 51%, 66%, 0.04), transparent 60%);
-  mask-image: linear-gradient(180deg, black 0%, black 50%, rgba(0, 0, 0, 0.7) 100%);
-}
 
 /* Honor side safe areas without pushing top/bottom (those are handled by
    `safe-pad-top` / `safe-pad-bottom` so layouts can opt in per page) */
@@ -1068,35 +1060,18 @@ body {
   letter-spacing: -0.006em;
 }
 
-/* Atmospheric backdrop: warm gold veil top-right + forest accent
-   bottom-left only. Sister-brand cohesion: this is the same fixed
-   ambient gradient that runs across Advottic. We picked the exact
-   stop sizes (1200x600 at 90% -10%, 900x500 at -10% 100%) and HSL
-   gold (hsla(42, 51%, 66%, .16) - the brand's gold-400/500 in
-   HSL form) so a buyer landing on either product feels the same
-   "warm depth, premium SaaS" lighting model. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background-image:
-    radial-gradient(1200px 600px at 90% -10%, hsla(42, 51%, 66%, 0.16), transparent 60%),
-    radial-gradient(900px 500px at -10% 100%, rgba(29, 40, 67, 0.06), transparent 60%);
-  mask-image: linear-gradient(180deg, black 0%, black 30%, rgba(0, 0, 0, 0.5) 100%);
-}
-
-/* Keep page content above the fixed body::before backdrop.
+/* Give main, footer and nav their own stacking context (z-index 1).
+   The fixed ambient body gradient this was written against is gone,
+   but the rule stays: other stacking in the app was tuned against
+   these contexts, so dropping it would reshuffle layers app-wide.
    IMPORTANT: do NOT include `header` here. This rule is UNLAYERED,
    and unlayered CSS wins over @layer utilities regardless of
    specificity - so `header { position: relative }` was silently
    overriding Tailwind's `.fixed` / `.sticky` on the app header,
    which is the real reason the header never pinned (sticky AND
    fixed both lost to this). The app header manages its own
-   stacking (position:fixed, z-30, well above the z-0 backdrop);
-   section/marketing headers sit inside <main> (z-1 stacking
-   context) so they stay above the backdrop too. */
+   stacking (position:fixed, z-30); section/marketing headers sit
+   inside <main> so they pick up its stacking context. */
 main, footer, nav {
   position: relative;
   z-index: 1;
