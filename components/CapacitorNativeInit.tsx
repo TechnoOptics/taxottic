@@ -12,10 +12,11 @@ import { barOf, statusBarPlan } from "@/lib/native/status-bar";
  * (isNativePlatform() false). Two jobs:
  *
  *  1. StatusBar, belt-and-suspenders with capacitor.config.ts:
- *     overlay the WebView + light (white) text, so the dark-green
- *     header extends behind the status bar with readable white
- *     clock/battery/signal. Config sets this at launch; doing it
- *     again at runtime survives any plugin re-init.
+ *     overlay handling, plus a style and colour that follow the
+ *     page's data-bar attribute through lib/native/status-bar.ts.
+ *     The plan is reapplied on resize, orientation change,
+ *     visibility change and attribute change, and every listener is
+ *     removed again when the effect is cleaned up.
  *
  *  2. Push notifications, request permission + register so the
  *     OS prompt actually appears and the device gets a token.
@@ -32,6 +33,7 @@ import { barOf, statusBarPlan } from "@/lib/native/status-bar";
 export function CapacitorNativeInit() {
   useEffect(() => {
     let cancelled = false;
+    const teardown: Array<() => void> = [];
 
     (async () => {
       if (typeof window === "undefined") return;
@@ -65,8 +67,9 @@ export function CapacitorNativeInit() {
       //   status bar, so the header rendered ON TOP of the clock /
       //   battery ("header overlapping the notification bar"). With
       //   overlay=false the OS reserves a solid status-bar strip; we
-      //   paint it the brand dark green so it's seamless with the
-      //   header and the header starts cleanly below it.
+      //   paint it the colour statusBarPlan picks from the page's
+      //   data-bar attribute, so the strip always matches whatever
+      //   the page puts directly below it.
       if (Capacitor.isPluginAvailable("StatusBar")) {
         try {
           const isAndroid = Capacitor.getPlatform() === "android";
@@ -85,6 +88,7 @@ export function CapacitorNativeInit() {
           // plan is reapplied on every change below. See
           // lib/native/status-bar.ts.
           const applyStatusBar = () => {
+            if (cancelled) return;
             const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
             const plan = statusBarPlan(barOf(document.documentElement), theme);
             void StatusBar.setStyle({ style: plan.style === "Dark" ? Style.Dark : Style.Light }).catch(() => {});
@@ -92,12 +96,23 @@ export function CapacitorNativeInit() {
           };
           applyStatusBar();
           window.addEventListener("resize", applyStatusBar);
+          teardown.push(() =>
+            window.removeEventListener("resize", applyStatusBar),
+          );
           window.addEventListener("orientationchange", applyStatusBar);
+          teardown.push(() =>
+            window.removeEventListener("orientationchange", applyStatusBar),
+          );
           document.addEventListener("visibilitychange", applyStatusBar);
-          new MutationObserver(applyStatusBar).observe(document.documentElement, {
+          teardown.push(() =>
+            document.removeEventListener("visibilitychange", applyStatusBar),
+          );
+          const barObserver = new MutationObserver(applyStatusBar);
+          barObserver.observe(document.documentElement, {
             attributes: true,
             attributeFilter: ["data-bar", "data-theme"],
           });
+          teardown.push(() => barObserver.disconnect());
           if (!isAndroid) {
             // --- iOS: measure the REAL safe-area insets natively ---
             // The header/FAB/sheet all position off
@@ -473,6 +488,7 @@ export function CapacitorNativeInit() {
 
     return () => {
       cancelled = true;
+      for (const t of teardown.splice(0)) t();
     };
   }, []);
 
