@@ -870,21 +870,29 @@ export default async function DashboardPage() {
     /* best-effort */
   }
 
-  // The viewer's OWN phone, one indexed row from the same table and the
-  // same columns /mileage already reads. A permission that stops capture
-  // was named on /mileage and nowhere else, which is the one page a
-  // driver whose drives have stopped arriving has no reason to open: one
-  // iPhone sat at While Using for 20 days (iOS audit C4, I10). Same
-  // "first company" convention the rest of this page uses.
-  const selfDeviceRes = companies[0]
+  // The viewer's OWN phone, from the same table and the same columns
+  // /mileage already reads. A permission that stops capture was named on
+  // /mileage and nowhere else, which is the one page a driver whose
+  // drives have stopped arriving has no reason to open: one iPhone sat at
+  // While Using for 20 days (iOS audit C4, I10).
+  //
+  // Every membership, not the first one. The row is keyed
+  // (driver_user_id, company_id), so a driver who joined a second company
+  // has their blocked row under whichever company they drive for, and the
+  // "first company" convention this page uses elsewhere would silently
+  // miss it. The filter is applied in the query so one matching row comes
+  // back rather than a set to scan here.
+  const selfCompanyIds = companies.map((m) => m.company_id);
+  const selfDeviceRes = selfCompanyIds.length
     ? await admin
         .from("mileage_device_status")
         .select("location_authorization, tracking_enabled")
         .eq("driver_user_id", user.id)
-        .eq("company_id", companies[0].company_id)
-        .maybeSingle()
+        .in("company_id", selfCompanyIds)
+        .eq("location_authorization", "whenInUse")
+        .limit(1)
     : null;
-  const selfDeviceStatus = (selfDeviceRes?.data ?? null) as {
+  const selfDeviceStatus = ((selfDeviceRes?.data ?? [])[0] ?? null) as {
     location_authorization: string | null;
     tracking_enabled: boolean | null;
   } | null;

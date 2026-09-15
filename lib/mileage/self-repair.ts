@@ -59,8 +59,10 @@
  *               fault that never clears, then it stops and SAYS it
  *               stopped. A silent surrender is indistinguishable from a
  *               healthy device. location_always past the cap reports
- *               `blocked`, which the dashboard and the manager card
- *               surface; `waiting` is reserved for backoff.
+ *               `blocked`, which the heartbeat stores with the rest of
+ *               the summary so a query can tell a phone whose permission
+ *               needs the driver's hand from one that is still backing
+ *               off; `waiting` is reserved for backoff.
  *   Backed off. Each further attempt waits longer than the last, and a
  *               permission prompt waits a week regardless.
  *   Re-armable. The count resets when the fault clears, so a transient

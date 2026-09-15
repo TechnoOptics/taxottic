@@ -84,17 +84,29 @@ for (const theme of ["light", "dark"] as const) {
           contrast(stack(getComputedStyle(el).color), stripBg),
         );
       });
-      const link = strip.querySelector<HTMLElement>("a")!;
-      const linkBg = stack(...ground, bgOf(strip), bgOf(link));
-      out[(link.textContent ?? "").trim()] = round(
-        contrast(stack(getComputedStyle(link).color), linkBg),
+      // The control is an <a> on the web and a <button> on the phone
+      // (OpenLocationSettingsButton picks after mount), so measure
+      // whichever one the strip rendered, against its own ground.
+      const control = strip.querySelector<HTMLElement>("a, button")!;
+      const controlBg = stack(...ground, bgOf(strip), bgOf(control));
+      out[(control.textContent ?? "").trim()] = round(
+        contrast(stack(getComputedStyle(control).color), controlBg),
       );
-      return { stripBg, linkBg, out };
+      return {
+        stripBg,
+        controlBg,
+        controlHeight: control.getBoundingClientRect().height,
+        out,
+      };
     });
     console.log(`${theme}:`, JSON.stringify(ratios));
     for (const [text, ratio] of Object.entries(ratios.out)) {
       expect(ratio, `"${text}" against its ground in ${theme}`).toBeGreaterThanOrEqual(4.5);
     }
     expect(Object.keys(ratios.out).length, "three text runs measured").toBe(3);
+    expect(
+      ratios.controlHeight,
+      "the control is a touch target on the surface where the permission is broken",
+    ).toBeGreaterThanOrEqual(44);
   });
 }

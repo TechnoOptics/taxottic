@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { WarningIcon } from "@/components/ui/Icons";
+import { OpenLocationSettingsButton } from "./OpenLocationSettingsButton";
 
 /** Dashboard strip for the viewer's own phone when its permission blocks capture. */
 export function LocationBlockedStrip({ short, fix }: { short: string; fix: string }) {
@@ -10,9 +10,9 @@ export function LocationBlockedStrip({ short, fix }: { short: string; fix: strin
         <div className="min-w-0">
           <p className="text-sm font-semibold">{short}.</p>
           <p className="mt-1 text-xs">{fix}.</p>
-          <Link href="/mileage" className="btn-primary mt-3 inline-flex min-h-11 items-center text-xs">
-            Open location settings
-          </Link>
+          <div className="mt-3">
+            <OpenLocationSettingsButton />
+          </div>
         </div>
       </div>
     </div>

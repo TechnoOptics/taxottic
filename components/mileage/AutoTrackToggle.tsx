@@ -8,7 +8,10 @@ import {
   onTrackerStartSettle,
   openLocationSettings,
 } from "@/lib/mileage/native-tracker";
-import { locationBlocked } from "@/lib/mileage/location-blocked";
+import {
+  authorizationFromCache,
+  locationBlocked,
+} from "@/lib/mileage/location-blocked";
 
 type DenialPath = "settings" | "retry";
 
@@ -135,13 +138,35 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     void import("@/lib/mileage/device-status")
       .then(async (m) => {
         if (cancelled) return;
+        // Seeded from the cache only while that read is fresh. The cache
+        // is written by a live probe and a live probe runs only from the
+        // tracker's start path, so a driver with tracking off carries the
+        // last whenInUse the phone ever reported: trusting it unbounded
+        // would latch the blocked branch with no way out.
         const cached = m.readDeviceStatusCache();
-        if (cached) setAuthorization(cached.value.locationAuthorization);
+        const seed = authorizationFromCache(
+          cached
+            ? {
+                locationAuthorization: cached.value.locationAuthorization,
+                ageMs: cached.ageMs,
+              }
+            : null,
+        );
+        if (seed) setAuthorization(seed);
         const unsub = await m.onAuthorizationChanged((auth) =>
           setAuthorization(auth),
         );
         if (cancelled) unsub();
         else off = unsub;
+        // Then ask the phone. A foreground mount is when the bridge
+        // demonstrably answers, and this is the exit from the blocked
+        // branch for a driver who granted Always while the app was dead:
+        // no other path refreshes this cache while tracking is off. On
+        // web the probe writes nothing and the read stays null.
+        await m.refreshDeviceStatusCache();
+        if (cancelled) return;
+        const probed = m.readDeviceStatusCache();
+        if (probed) setAuthorization(probed.value.locationAuthorization);
       })
       .catch(() => {
         /* web, or a binary without the plugin: no OS answer to read */
