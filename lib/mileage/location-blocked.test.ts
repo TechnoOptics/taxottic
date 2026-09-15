@@ -56,5 +56,12 @@ describe("location blocked", () => {
     const src = readFileSync("components/mileage/AutoTrackToggle.tsx", "utf8");
     expect(src).toMatch(/authorizationFromCache\(/);
     expect(src).toMatch(/refreshDeviceStatusCache\(/);
+    // BOTH reads, not just the seed. refreshDeviceStatusCache rewrites
+    // the cache only when the probe came back ok, so on an unavailable,
+    // error or null outcome the read after it returns the SAME old entry:
+    // an unbounded second read puts the stale whenInUse straight back and
+    // latches the block again one line further down.
+    expect(src.match(/authorizationFromCache\(/g) ?? []).toHaveLength(2);
+    expect(src).not.toMatch(/setAuthorization\(\s*\w+\.value\.locationAuthorization/);
   });
 });

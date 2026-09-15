@@ -165,8 +165,23 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
         // web the probe writes nothing and the read stays null.
         await m.refreshDeviceStatusCache();
         if (cancelled) return;
+        // Bounded exactly like the seed, because the refresh rewrites the
+        // cache only when the probe came back ok. On an unavailable,
+        // error or null outcome the read below returns the SAME old
+        // entry, so an unbounded read here would put the stale whenInUse
+        // straight back. Applied unconditionally: a cache too old to
+        // speak for the phone must clear the block, not preserve it.
         const probed = m.readDeviceStatusCache();
-        if (probed) setAuthorization(probed.value.locationAuthorization);
+        setAuthorization(
+          authorizationFromCache(
+            probed
+              ? {
+                  locationAuthorization: probed.value.locationAuthorization,
+                  ageMs: probed.ageMs,
+                }
+              : null,
+          ),
+        );
       })
       .catch(() => {
         /* web, or a binary without the plugin: no OS answer to read */
