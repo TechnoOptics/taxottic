@@ -14,9 +14,11 @@ import { PhoneIcon } from "@/components/ui/Icons";
  * for the life of the process, so once it's known, later mounts can read
  * it synchronously instead of re-importing.
  *
- * Hydration-safe: on a full page load this module is freshly evaluated
- * on both server and client, so the cache starts `null` in both places
- * and the first client paint still matches SSR (null on both sides). A
+ * Hydration-safe: this cache is only ever written inside the effect
+ * below, and effects never run during server rendering, so the server
+ * never mutates it, it stays `null` through every SSR pass. The first
+ * client render (before hydration) therefore reads the same `null` a
+ * fresh module instance would, matching the server-rendered markup. A
  * client-side navigation, by contrast, renders client components
  * directly with no server render to hydrate against, so reading an
  * already-warm cache there is just a normal re-render with different
@@ -42,7 +44,13 @@ export function useIsNativeApp(): boolean | null {
         if (!cancelled) setIsNative(value);
       })
       .catch(() => {
-        nativeKnown = false;
+        // Deliberately does NOT write `nativeKnown`. The import is a
+        // network fetch in the remote-WebView shell and can fail
+        // transiently; caching `false` here would wrongly remember a
+        // native session as web with no retry, and WebOnly would then
+        // render checkout/billing controls inside the native app (App
+        // Store 3.1.1). Leave the cache untouched so the next mount
+        // tries again.
         if (!cancelled) setIsNative(false);
       });
     return () => {

@@ -30,4 +30,26 @@ describe("the native check survives remounts", () => {
       "useIsNativeApp must seed its state from the cache on mount, not from null",
     ).toMatch(/useState<boolean \| null>\(\(\) => nativeKnown\)/);
   });
+
+  /**
+   * The app runs as a remote WebView, so `import("@capacitor/core")` is a
+   * network fetch that can transiently fail. If the catch branch wrote
+   * `nativeKnown = false` on that failure, one bad fetch would wrongly
+   * remember the whole session as web with no retry, and `WebOnly` would
+   * then render checkout/billing controls inside the native app (App
+   * Store 3.1.1). The catch branch may still set the local `isNative`
+   * state to `false` for that render, but it must leave the shared cache
+   * alone so the next mount tries the import again.
+   */
+  it("never writes the cache from the catch branch, so a failed import retries", () => {
+    const catchBody = /\.catch\(\(\)\s*=>\s*\{([\s\S]*?)\}\)/.exec(src)?.[1];
+    expect(
+      catchBody,
+      "could not find the `.catch(() => { ... })` block in useIsNativeApp",
+    ).toBeTruthy();
+    expect(
+      catchBody,
+      "the catch branch must not write nativeKnown, a transient import failure has to retry, not be remembered as web",
+    ).not.toMatch(/nativeKnown\s*=/);
+  });
 });
