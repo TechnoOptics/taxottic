@@ -40,7 +40,6 @@ import {
   type ForecastBusinessProfile,
 } from "@/lib/tax/company-forecast";
 import { resolveCombine } from "@/lib/tax/combine-setting";
-import { buildGreeting } from "@/lib/dashboard/greeting";
 import { computeReadiness, type Readiness } from "@/lib/dashboard/readiness";
 import { checkCompanyLimit } from "@/lib/plans/usage";
 import { completeWelcomeTour } from "@/app/actions/tour";
@@ -48,8 +47,16 @@ import { GoalDismissButton } from "@/components/GoalDismissButton";
 import { ReminderDismissButton } from "@/components/ReminderDismissButton";
 import { ReadinessHelp } from "@/components/ReadinessHelp";
 import { WebOnly } from "@/components/WebOnly";
-import { OutstandingTasksBanner } from "@/components/OutstandingTasksBanner";
-import { OutstandingTasksPopup } from "@/components/OutstandingTasksPopup";
+import { TodayHeader } from "@/components/today/TodayHeader";
+import { TodaySpine } from "@/components/today/TodaySpine";
+import { NextPaymentPanel } from "@/components/today/NextPaymentPanel";
+import { NeedsYourCall } from "@/components/today/NeedsYourCall";
+import { ThisWeek } from "@/components/today/ThisWeek";
+import { YearToDate } from "@/components/today/YearToDate";
+import { nextPaymentSummary } from "@/lib/today/next-payment";
+import { spineNotes } from "@/lib/today/spine-notes";
+import { weekLedger } from "@/lib/today/week";
+import { categoryTotals } from "@/lib/today/categories";
 import {
   getOutstandingTasks,
   type OutstandingItem,
@@ -62,7 +69,11 @@ import { clearWorkspaceMode } from "@/app/actions/workspace-mode";
 
 export default async function DashboardPage() {
   const { supabase, admin, user } = await requireUserWithAdmin();
-  const taxYear = new Date().getUTCFullYear();
+  // One clock for the page: the header's date, the spine's today, the
+  // seven-day window and the next payment's countdown all read it, so
+  // they can never disagree by a tick.
+  const now = new Date();
+  const taxYear = now.getUTCFullYear();
 
   // Invited employees: if they joined a company they didn't create and
   // haven't been onboarded yet, route them to a quick "tell us your role"
@@ -129,7 +140,7 @@ export default async function DashboardPage() {
     // 20260806000000_profiles_workspace_mode.sql applied returns no profile
     // at all. Every gate below is written `if (profile && ...)`, so the
     // failure would not throw, it would silently skip the legal-disclaimer
-    // and filer-type redirects and drop the user's name from the greeting.
+    // and filer-type redirects.
     // A remembered UI preference must never be able to do that: it is the
     // least important thing on this page and it was sharing a fate with the
     // most important ones.
@@ -175,8 +186,8 @@ export default async function DashboardPage() {
     redirect(`/c/${companies[0].company.public_id}/expenses`);
   }
 
-  // Personalized greeting + filer-type fork. New signups land on the
-  // dashboard before they've picked W-2 vs business; route them to
+  // Filer-type fork. New signups land on the dashboard before they've
+  // picked W-2 vs business; route them to
   // /onboarding/filer-type. Individual (W-2 / personal) filers get
   // their OWN dashboard — personal readiness, 1040 snapshot, goals,
   // playbook — fully independent of the business side (they used to be
@@ -237,10 +248,6 @@ export default async function DashboardPage() {
       </>
     );
   }
-  const greeting = buildGreeting({
-    fullName: profile?.full_name,
-    email: user.email,
-  });
   const showWelcomeTour = !profile?.tour_completed_at;
   const tourDisplayName =
     profile?.full_name?.split(/\s+/)[0]?.trim() ||
@@ -386,6 +393,152 @@ export default async function DashboardPage() {
     );
   }
 
+  // ── Today ─────────────────────────────────────────────────────────
+  // Both branches below render Today, so its reads happen here, above
+  // the first of the two returns, and each branch composes the same
+  // values. Four of these six are new (this week's three sources and
+  // the year's expenses); the personal tax profile and this year's
+  // personal expenses moved up out of the owner branch's own batch
+  // rather than being read twice.
+  //
+  // Every read is scoped to this user and to either the tax year or the
+  // last seven days, and the three week reads are capped at 20 rows
+  // each, which is more than the seven the ledger shows.
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+  const [
+    { data: personalTaxProfile },
+    { data: personalExpenseRows },
+    { data: weekExpenses },
+    { data: weekTrips },
+    { data: weekApplied },
+    { data: yearExpenses },
+  ] = await Promise.all([
+    admin
+      .from("tax_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("tax_year", taxYear)
+      .maybeSingle(),
+    admin
+      .from("personal_expenses")
+      .select("category, amount_cents")
+      .eq("user_id", user.id)
+      .eq("tax_year", taxYear),
+    // The two expense reads join deduction_categories rather than
+    // spending a query on the catalog: the label a row needs travels
+    // with the row. A code whose row is missing falls back to itself.
+    admin
+      .from("monthly_expenses")
+      .select(
+        "created_at, amount_cents, notes, category_code, category:deduction_categories(label)"
+      )
+      .eq("user_id", user.id)
+      .gte("created_at", sevenDaysAgo)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    admin
+      .from("mileage_trips")
+      .select("ended_at, distance_miles, deduction_cents, classification")
+      .eq("driver_user_id", user.id)
+      .gte("ended_at", sevenDaysAgo)
+      .order("ended_at", { ascending: false })
+      .limit(20),
+    admin
+      .from("account_transactions")
+      .select("applied_at, amount_cents, merchant_name, description")
+      .eq("applied_by", user.id)
+      .gte("applied_at", sevenDaysAgo)
+      .order("applied_at", { ascending: false })
+      .limit(20),
+    admin
+      .from("monthly_expenses")
+      .select("category_code, amount_cents, category:deduction_categories(label)")
+      .eq("user_id", user.id)
+      .eq("tax_year", taxYear)
+      .limit(2000),
+  ]);
+
+  const categoryLabels = categoryLabelMap([
+    ...((weekExpenses ?? []) as CategoryJoinRow[]),
+    ...((yearExpenses ?? []) as CategoryJoinRow[]),
+  ]);
+  const labelForCategory = (code: string) =>
+    categoryLabels.get(code) ?? humaniseCode(code);
+
+  const weekRows = weekLedger({
+    expenses: (
+      (weekExpenses ?? []) as Array<{
+        created_at: string;
+        amount_cents: number | null;
+        notes: string | null;
+        category_code: string | null;
+      }>
+    ).map((e) => ({
+      createdAt: e.created_at,
+      amountCents: Number(e.amount_cents ?? 0),
+      label:
+        e.notes?.trim() ||
+        (e.category_code ? labelForCategory(e.category_code) : "Expense"),
+    })),
+    trips: (
+      (weekTrips ?? []) as Array<{
+        ended_at: string;
+        distance_miles: number | null;
+        deduction_cents: number | null;
+        classification: string | null;
+      }>
+    ).map((t) => ({
+      endedAt: t.ended_at,
+      miles: Number(t.distance_miles ?? 0),
+      deductionCents: Number(t.deduction_cents ?? 0),
+      classification: t.classification,
+    })),
+    applied: (
+      (weekApplied ?? []) as Array<{
+        applied_at: string;
+        amount_cents: number | null;
+        merchant_name: string | null;
+        description: string | null;
+      }>
+    ).map((a) => ({
+      appliedAt: a.applied_at,
+      // An applied transaction is money leaving, so it reads as a
+      // deduction alongside the expenses and the drives.
+      amountCents: -Math.abs(Number(a.amount_cents ?? 0)),
+      label: a.merchant_name || a.description || "Transaction",
+    })),
+    asOf: now,
+  });
+  const ytdRows = categoryTotals(
+    (
+      (yearExpenses ?? []) as Array<{
+        category_code: string | null;
+        amount_cents: number | null;
+      }>
+    ).map((r) => ({
+      categoryCode: r.category_code,
+      amountCents: Number(r.amount_cents ?? 0),
+    })),
+    labelForCategory
+  );
+
+  // The owner's own 1040, built with the same engine /personal/forecast
+  // uses. A null profile just means they have not set up personal taxes
+  // yet, and the next-payment panel then has no quarters to lead with.
+  const personalForecast: ForecastResult | null = personalTaxProfile
+    ? forecast(
+        buildPersonalForecastInput(
+          personalTaxProfile,
+          personalExpenseRows ?? [],
+          taxYear
+        )
+      )
+    : null;
+  const paidSoFarCents = Number(
+    (personalTaxProfile as { estimated_payments_cents?: number | null } | null)
+      ?.estimated_payments_cents ?? 0
+  );
+
   // Plain-member dashboard: a user with zero manager memberships doesn't
   // need the owner-oriented tax forecast, tax-savings playbook, or active
   // goals, those are financial-strategy tools for whoever owns the
@@ -402,7 +555,11 @@ export default async function DashboardPage() {
       supabase,
       admin,
       taxYear,
-      greeting,
+      now,
+      personalForecast,
+      paidSoFarCents,
+      weekRows,
+      ytdRows,
       companies,
       showWelcomeTour,
       tourDisplayName,
@@ -420,8 +577,6 @@ export default async function DashboardPage() {
     { data: activeGoals },
     { data: badges },
     readinessByCompany,
-    { data: personalTaxProfile },
-    { data: personalExpenseRows },
   ] = await Promise.all([
     supabase
       .from("reminders")
@@ -469,22 +624,6 @@ export default async function DashboardPage() {
         return [m.company_id, r] as const;
       })
     ).then((entries) => new Map<string, Readiness>(entries)),
-    // Personal (1040) tax profile + logged personal deductions. The
-    // dashboard is the owner's PERSONAL hub, so it leads with their own
-    // year-end picture — computed by the same engine /personal/forecast
-    // uses. Business numbers stay in each company's hub. A null profile
-    // just means they haven't set up personal taxes yet.
-    admin
-      .from("tax_profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("tax_year", taxYear)
-      .maybeSingle(),
-    admin
-      .from("personal_expenses")
-      .select("category, amount_cents")
-      .eq("user_id", user.id)
-      .eq("tax_year", taxYear),
   ]);
 
   // Recap: figure out what most needs attention this visit.
@@ -730,49 +869,11 @@ export default async function DashboardPage() {
   // user opens to check the bin is never stale.
   const trial = await getTrialState(supabase, user.id);
 
-  // Personal deductions logged YTD, for the hero stat band.
-  //
-  // This slot used to show tracked BUSINESS mileage (classification =
-  // "business", across every company the user drives for). That is
-  // business data on the owner's personal hub, contradicting this page's
-  // own rule that "business numbers stay in each company's hub", and it
-  // read as the personal profile claiming the company's miles. Business
-  // mileage lives on the company forecast and /mileage; where a sole
-  // proprietorship legitimately flows into the 1040 it is already shown
-  // by the lead tile as an explicit "incl. {company}" line, which is the
-  // labelled-inclusion pattern this page uses everywhere else.
-  const personalDeductionsYtdCents = (
-    (personalExpenseRows ?? []) as Array<{ amount_cents: number | null }>
-  ).reduce((a, r) => a + Number(r.amount_cents ?? 0), 0);
-  const hasPersonalDeductions = personalDeductionsYtdCents > 0;
-
-  // ── Hero stat band ────────────────────────────────────────────────
-  // Three glanceable figures under the greeting (personal year-end
-  // snapshot, mileage YTD, next deadline) so the dashboard opens on the
-  // owner's OWN "where do I stand" instead of a single business's
-  // readiness. Each company's readiness stays on its own card in the
-  // "Your businesses" list below, where it belongs.
-  //
-  // Personal year-end snapshot (their own 1040) for the hero lead tile,
-  // built with the same engine as /personal/forecast. A null profile
-  // means the owner hasn't set up their personal taxes yet, so the tile
-  // becomes a "set up" CTA instead of a number.
-  const personalForecast: ForecastResult | null = personalTaxProfile
-    ? forecast(
-        buildPersonalForecastInput(
-          personalTaxProfile,
-          personalExpenseRows ?? [],
-          taxYear
-        )
-      )
-    : null;
-
-  // "incl. business" line: when the owner's business is COMBINED into their
-  // personal return, surface the with-business bottom line under the
-  // personal-only figure (rather than replacing it). Scoped to the primary
-  // company they manage and labeled with its name, so it's honest about
-  // exactly what's folded in. Uses the same engine + real personal profile
-  // as that company's own forecast, so the number matches /c/.../forecast.
+  // The combined 1040: when the owner's business is COMBINED into their
+  // personal return, the quarters Today leads with are the combined
+  // ones, not the personal-only ones. Scoped to the primary company they
+  // manage, and built with the same engine + real personal profile as
+  // that company's own forecast, so the number matches /c/.../forecast.
   const primaryManaged = companies.find((m) => m.role === "manager") ?? null;
   let combinedBusiness: { companyName: string; result: ForecastResult } | null =
     null;
@@ -848,28 +949,11 @@ export default async function DashboardPage() {
       combinedBusiness = { companyName: primaryManaged.company.name, result };
     }
   }
-  // Nearest upcoming deadline, in whole days, for the third stat tile.
-  const nextReminder =
-    upcomingReminders && upcomingReminders.length
-      ? [...dedupeReminders(upcomingReminders)].sort(
-          (a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime()
-        )[0]
-      : null;
-  const nextDeadlineDays = nextReminder
-    ? Math.max(
-        0,
-        Math.ceil(
-          (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000
-        )
-      )
-    : null;
-
   // Outstanding tasks, synced bank/account transactions awaiting a
   // business/personal or category call. Drives are not a source: they
   // are auto-classified on arrival. Best-effort: a tally failure
   // must never break the dashboard render. Follows the same "first
-  // company" convention this page already uses elsewhere (line below,
-  // the hero stat band's forecast link).
+  // company" convention this page already uses elsewhere.
   let outstanding: { items: OutstandingItem[]; count: number } = {
     items: [],
     count: 0,
@@ -931,33 +1015,28 @@ export default async function DashboardPage() {
       : null,
   );
 
+  // Today leads with the return the owner actually files: the combined
+  // one when their business folds into it, the personal-only one when it
+  // does not.
+  const activeForecast = combinedBusiness?.result ?? personalForecast;
+  const { payment, tickNotes } = todayYear(activeForecast, paidSoFarCents, now);
+  const forecastHref = primaryManaged
+    ? `/c/${primaryManaged.company.public_id}/forecast`
+    : "/personal/forecast";
+  const deductionsHref = primaryManaged
+    ? `/c/${primaryManaged.company.public_id}/expenses`
+    : "/personal/expenses";
+  const callItems = toCallItems(outstanding.items);
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <AppDownloadBanner />
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12">
-        <header>
-          <div className="kicker-sm">Tax year {taxYear}</div>
-          <h1 className="display mt-3 text-4xl sm:text-5xl text-forest-900 leading-[1.05]">
-            {greeting.head}
-          </h1>
-          <p className="mt-3 text-base text-ink-soft max-w-xl leading-relaxed">
-            {greeting.pleasantry}
-          </p>
-        </header>
-
-        {outstanding.count > 0 ? (
-          <div className="mt-4">
-            <OutstandingTasksBanner
-              count={outstanding.count}
-              firstHref={outstanding.items[0]?.href ?? "/mileage/classify"}
-            />
-          </div>
-        ) : null}
-        <OutstandingTasksPopup
-          count={outstanding.count}
-          items={outstanding.items}
-        />
+      <section
+        data-grammar="year"
+        className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12"
+      >
+        <TodayHeader asOf={now} taxYear={taxYear} />
 
         <MarkReachedToday />
         {blockedLocation ? (
@@ -968,94 +1047,16 @@ export default async function DashboardPage() {
         ) : null}
         <TrialBanner trial={trial} />
 
-        {/* Hero stat band, three glanceable figures (personal year-end
-            snapshot, mileage YTD, next deadline) so the dashboard opens on
-            the owner's OWN "where do I stand" instead of a stack of equal
-            cards. On mobile the personal tile takes the full row with the
-            two figures beneath it; on sm+ all three form one row. */}
-        <section className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Link
-            href="/personal/forecast"
-            className="surface surface-hover col-span-2 p-5 flex flex-col justify-center min-w-0"
-          >
-            <div className="kicker-sm">Your personal taxes</div>
-            {personalForecast ? (
-              <>
-                <div className="display text-2xl sm:text-3xl text-forest-900 mt-1 tabular-nums">
-                  {personalForecast.refundCents > 0
-                    ? `${formatCents(personalForecast.refundCents)} back`
-                    : `${formatCents(personalForecast.stillOwedCents)} owed`}
-                </div>
-                <div className="text-[13px] text-ink-muted mt-0.5 truncate">
-                  Projected 1040 · {formatCents(personalForecast.totalTaxCents)}{" "}
-                  total tax
-                </div>
-                {/* Combine is on: show the with-business bottom line under
-                    the personal-only figure, clearly labeled with the
-                    company folded in. */}
-                {combinedBusiness ? (
-                  <div className="text-[13px] text-gold-700 mt-1 truncate">
-                    incl. {combinedBusiness.companyName}:{" "}
-                    {combinedBusiness.result.refundCents > 0
-                      ? `${formatCents(
-                          combinedBusiness.result.refundCents
-                        )} back`
-                      : `${formatCents(
-                          combinedBusiness.result.stillOwedCents
-                        )} owed`}
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <div className="display text-2xl text-forest-900 mt-1">
-                  Set up &rarr;
-                </div>
-                <div className="text-[13px] text-ink-muted mt-0.5 truncate">
-                  Add your personal tax profile
-                </div>
-              </>
-            )}
-          </Link>
-
-          <Link
-            href="/personal/expenses"
-            className="surface surface-hover col-span-1 p-5 flex flex-col justify-center min-w-0"
-          >
-            <div className="kicker-sm">Deductions YTD</div>
-            <div className="display text-2xl sm:text-3xl text-forest-900 mt-1 tabular-nums">
-              {formatCents(personalDeductionsYtdCents)}
-            </div>
-            <div className="text-[13px] text-ink-muted mt-0.5 truncate">
-              {hasPersonalDeductions ? "personal" : "Log a deduction"}
-            </div>
-          </Link>
-
-          <Link
-            href="/reminders"
-            className="surface surface-hover col-span-1 p-5 flex flex-col justify-center min-w-0"
-          >
-            <div className="kicker-sm">Next deadline</div>
-            <div className="display text-2xl sm:text-3xl text-forest-900 mt-1">
-              {nextDeadlineDays === null ? (
-                "-"
-              ) : nextDeadlineDays === 0 ? (
-                "Today"
-              ) : (
-                <>
-                  {nextDeadlineDays}
-                  <span className="text-base text-ink-muted font-normal">
-                    {" "}
-                    days
-                  </span>
-                </>
-              )}
-            </div>
-            <div className="text-[13px] text-ink-muted mt-0.5 truncate">
-              {nextReminder ? nextReminder.title : "Nothing scheduled"}
-            </div>
-          </Link>
-        </section>
+        <TodaySpine taxYear={taxYear} asOf={now} tickNotes={tickNotes} />
+        <NextPaymentPanel
+          summary={payment}
+          federalCents={activeForecast?.federalIncomeTaxCents ?? 0}
+          stateCents={activeForecast?.stateTaxCents ?? 0}
+          forecastHref={forecastHref}
+        />
+        <NeedsYourCall items={callItems} count={outstanding.count} />
+        <ThisWeek rows={weekRows} />
+        <YearToDate rows={ytdRows} href={deductionsHref} />
 
         {/* Recap: what needs attention right now.
             Cards that have a `dismissAction` render a small "X" in the
@@ -1476,7 +1477,11 @@ async function renderMemberDashboard(args: {
   supabase: Awaited<ReturnType<typeof requireUserWithAdmin>>["supabase"];
   admin: Awaited<ReturnType<typeof requireUserWithAdmin>>["admin"];
   taxYear: number;
-  greeting: ReturnType<typeof buildGreeting>;
+  now: Date;
+  personalForecast: ForecastResult | null;
+  paidSoFarCents: number;
+  weekRows: ReturnType<typeof weekLedger>;
+  ytdRows: ReturnType<typeof categoryTotals>;
   companies: CompanyMembership[];
   showWelcomeTour: boolean;
   tourDisplayName: string | null;
@@ -1487,7 +1492,11 @@ async function renderMemberDashboard(args: {
     supabase,
     admin,
     taxYear,
-    greeting,
+    now,
+    personalForecast,
+    paidSoFarCents,
+    weekRows,
+    ytdRows,
     companies,
     showWelcomeTour,
     tourDisplayName,
@@ -1513,42 +1522,16 @@ async function renderMemberDashboard(args: {
     /* best-effort */
   }
 
-  const nowIso = new Date().toISOString();
-  const monthStart = new Date(
-    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)
-  ).toISOString();
-
-  const [
-    { data: upcomingReminders },
-    { data: badges },
-    { data: mileageTripRows },
-    { count: thisMonthExpenseCount },
-    { data: recentExpenses },
-  ] = await Promise.all([
-    supabase
-      .from("reminders")
-      .select("id, kind, title, due_at")
-      .eq("user_id", user.id)
-      .is("dismissed_at", null)
-      .gte("due_at", nowIso)
-      .order("due_at", { ascending: true })
-      .limit(3),
+  // The three reads that only fed the retired "Your activity" band
+  // (this month's expense count, mileage year to date, the next
+  // reminder) are gone with it: Today's spine and next-payment panel
+  // carry the deadline, and the week and the year carry the totals.
+  const [{ data: badges }, { data: recentExpenses }] = await Promise.all([
     supabase
       .from("badges")
       .select("badge_code, awarded_at")
       .eq("user_id", user.id)
       .order("awarded_at", { ascending: false }),
-    admin
-      .from("mileage_trips")
-      .select("distance_miles, deduction_cents")
-      .eq("driver_user_id", user.id)
-      .eq("classification", "business")
-      .eq("tax_year", taxYear),
-    admin
-      .from("monthly_expenses")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", monthStart),
     admin
       .from("monthly_expenses")
       .select(
@@ -1559,52 +1542,28 @@ async function renderMemberDashboard(args: {
       .limit(5),
   ]);
 
-  const mileageTrips = mileageTripRows ?? [];
-  const mileageYtdCents = mileageTrips.reduce(
-    (a, t) => a + Number(t.deduction_cents ?? 0),
-    0
-  );
-  const mileageYtdMiles = mileageTrips.reduce(
-    (a, t) => a + Number(t.distance_miles ?? 0),
-    0
-  );
-  const thisMonthExpenses = thisMonthExpenseCount ?? 0;
-  const nextReminder = upcomingReminders?.[0] ?? null;
-  const nextDeadlineDays = nextReminder
-    ? Math.ceil(
-        (new Date(nextReminder.due_at).getTime() - Date.now()) / 86_400_000
-      )
-    : null;
+  const { payment, tickNotes } = todayYear(personalForecast, paidSoFarCents, now);
+  const callItems = toCallItems(outstanding.items);
 
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12">
-        <header>
-          <div className="kicker-sm">Tax year {taxYear}</div>
-          <h1 className="display mt-3 text-4xl sm:text-5xl text-forest-900 leading-[1.05]">
-            {greeting.head}
-          </h1>
-          <p className="mt-3 text-base text-ink-soft max-w-xl leading-relaxed">
-            {greeting.pleasantry}
-          </p>
-          {primary ? (
-            <p className="mt-1 text-sm text-ink-muted">{primary.name}</p>
-          ) : null}
-        </header>
+      <section
+        data-grammar="year"
+        className="max-w-3xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12"
+      >
+        <TodayHeader asOf={now} taxYear={taxYear} />
 
-        {outstanding.count > 0 ? (
-          <div className="mt-4">
-            <OutstandingTasksBanner
-              count={outstanding.count}
-              firstHref={outstanding.items[0]?.href ?? "/mileage/classify"}
-            />
-          </div>
-        ) : null}
-        <OutstandingTasksPopup
-          count={outstanding.count}
-          items={outstanding.items}
+        <TodaySpine taxYear={taxYear} asOf={now} tickNotes={tickNotes} />
+        <NextPaymentPanel
+          summary={payment}
+          federalCents={personalForecast?.federalIncomeTaxCents ?? 0}
+          stateCents={personalForecast?.stateTaxCents ?? 0}
+          forecastHref="/personal/forecast"
         />
+        <NeedsYourCall items={callItems} count={outstanding.count} />
+        <ThisWeek rows={weekRows} />
+        <YearToDate rows={ytdRows} href="/personal/expenses" />
 
         {/* Quick actions, the three things a member actually does day
             to day. Big, obvious tap targets rather than nav-menu hunting. */}
@@ -1643,49 +1602,6 @@ async function renderMemberDashboard(args: {
               <div className="text-[13px] text-ink-muted">
                 Message your team
               </div>
-            </div>
-          </Link>
-        </section>
-
-        {/* Your activity, spending + mileage this user has personally
-            logged, plus the next reminder. Mirrors the owner dashboard's
-            hero stat band shape but scoped to this one person. */}
-        <section className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="surface p-5">
-            <div className="kicker-sm">Logged this month</div>
-            <div className="display text-2xl text-forest-900 mt-1">
-              {thisMonthExpenses}
-            </div>
-            <div className="text-[13px] text-ink-muted mt-0.5">
-              {thisMonthExpenses === 1 ? "expense" : "expenses"}
-            </div>
-          </div>
-          <div className="surface p-5">
-            <div className="kicker-sm">Mileage YTD</div>
-            <div className="display text-2xl text-forest-900 mt-1 tabular-nums">
-              {formatCents(mileageYtdCents)}
-            </div>
-            <div className="text-[13px] text-ink-muted mt-0.5">
-              {mileageYtdMiles.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}{" "}
-              mi
-            </div>
-          </div>
-          <Link
-            href="/reminders"
-            className="surface surface-hover p-5 col-span-2 sm:col-span-1"
-          >
-            <div className="kicker-sm">Next deadline</div>
-            <div className="display text-2xl text-forest-900 mt-1">
-              {nextDeadlineDays === null
-                ? "-"
-                : nextDeadlineDays <= 0
-                ? "Today"
-                : `${nextDeadlineDays}d`}
-            </div>
-            <div className="text-[13px] text-ink-muted mt-0.5 truncate">
-              {nextReminder ? nextReminder.title : "Nothing scheduled"}
             </div>
           </Link>
         </section>
@@ -1744,6 +1660,77 @@ async function renderMemberDashboard(args: {
       <MedalCelebration newlyEarnedCodes={newlyEarnedCodes} />
     </main>
   );
+}
+
+/** A row that carries its category's label along from the join. */
+type CategoryJoinRow = {
+  category_code: string | null;
+  category?: { label?: string | null } | { label?: string | null }[] | null;
+};
+
+/**
+ * Category labels live in public.deduction_categories, so the rows that
+ * need one bring it with them rather than spending a query on the
+ * catalog. PostgREST returns an embedded row as an object or a
+ * single-element array depending on the relationship it infers, so read
+ * both shapes.
+ */
+function categoryLabelMap(rows: CategoryJoinRow[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    const embedded = Array.isArray(r.category) ? r.category[0] : r.category;
+    const label = embedded?.label;
+    if (r.category_code && label) map.set(r.category_code, label);
+  }
+  return map;
+}
+
+/** A code with no catalog row reads as itself, spaced and capitalised. */
+function humaniseCode(code: string): string {
+  const spaced = code.replace(/_/g, " ").trim();
+  return spaced ? spaced[0].toUpperCase() + spaced.slice(1) : code;
+}
+
+/**
+ * The spine's ticks and the next payment, from whichever return the
+ * branch leads with.
+ *
+ * public.reminders records no completion: it has read_at and
+ * dismissed_at and nothing else, and /reminders writes only those two.
+ * So a tick reads past or due, never done, and the "done" case in
+ * spineNotes waits for a column that does not exist yet.
+ */
+function todayYear(
+  activeForecast: ForecastResult | null,
+  paidSoFarCents: number,
+  asOf: Date
+) {
+  const quarters = (activeForecast?.quarterlyEstimates ?? []).map((q) => ({
+    quarter: q.quarter,
+    dueDate: q.dueDate,
+    amountCents: q.amountCents,
+    isPast: q.isPast,
+  }));
+  const completedReminders: { due_at: string }[] = [];
+  const doneDueDates = completedReminders.map((r) =>
+    String(r.due_at).slice(0, 10)
+  );
+  return {
+    payment: nextPaymentSummary({ quarters, paidSoFarCents, asOf }),
+    tickNotes: spineNotes({ quarters, doneDueDates }),
+  };
+}
+
+/**
+ * The company a synced transaction belongs to is already in its href, and
+ * the row's in-place "not business" action needs it. Anything else keeps
+ * its plain "Open" link.
+ */
+function toCallItems(items: OutstandingItem[]) {
+  return items.map((it) => ({
+    ...it,
+    publicId: /^\/c\/([^/]+)\//.exec(it.href)?.[1],
+  }));
 }
 
 /**
