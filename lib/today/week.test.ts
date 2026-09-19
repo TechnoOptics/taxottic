@@ -28,4 +28,22 @@ describe("this week's ledger", () => {
     expect(rows).toHaveLength(7);
     expect(rows.some((r) => r.text === "old")).toBe(false);
   });
+  it("an expense of 40 cents rounds to zero and renders with no sign", () => {
+    const rows = weekLedger({
+      expenses: [{ createdAt: "2026-09-03T10:00:00Z", amountCents: 40, label: "Coffee" }],
+      trips: [],
+      applied: [],
+      asOf,
+    });
+    expect(rows[0].amount).toBe("$0");
+  });
+  it("an applied amount of zero renders with no sign", () => {
+    const rows = weekLedger({
+      expenses: [],
+      trips: [],
+      applied: [{ appliedAt: "2026-09-03T10:00:00Z", amountCents: 0, label: "Void" }],
+      asOf,
+    });
+    expect(rows[0].amount).toBe("$0");
+  });
 });

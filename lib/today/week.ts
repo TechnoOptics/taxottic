@@ -8,7 +8,8 @@ function monthDay(iso: string): string {
 
 /** Signed, whole-dollar figure: expenses and drives negative, income positive. */
 function signed(cents: number, sign: "-" | "+"): string {
-  const whole = formatCents(Math.round(Math.abs(cents) / 100) * 100);
+  const whole = formatCents(Math.abs(cents));
+  if (whole === "$0") return "$0";
   return `${sign}${whole}`;
 }
 
