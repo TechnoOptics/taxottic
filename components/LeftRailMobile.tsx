@@ -39,11 +39,20 @@ export function LeftRailMobile({
   companies = [],
   personalLocked = false,
   storedMode = null,
+  hideFab = false,
 }: {
   companies?: Company[];
   personalLocked?: boolean;
   /** profiles.workspace_mode, forwarded to the sheet's LeftRail. */
   storedMode?: WorkspaceMode | null;
+  /**
+   * The phone tab bar (TabBar) has its own "More" control that opens this
+   * same sheet by event, so when it's showing the FAB would be a second,
+   * redundant opener stacked on top of it. The sheet and its listeners
+   * (including the event below) stay either way, only the FAB's markup
+   * is skipped.
+   */
+  hideFab?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -63,6 +72,14 @@ export function LeftRailMobile({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // The phone tab bar's "More" tab opens this same sheet, so the two
+  // openers (FAB, tab bar) stay in sync with one piece of state.
+  useEffect(() => {
+    const open = () => setOpen(true);
+    window.addEventListener("taxottic:open-rail", open);
+    return () => window.removeEventListener("taxottic:open-rail", open);
+  }, []);
 
   // Edge-swipe detection: 12px hit zone on the left edge. We track
   // touchstart x and follow the next move; ≥ 30 px rightward delta
@@ -175,7 +192,7 @@ export function LeftRailMobile({
   // instead of the viewport, it rendered stuck in the top-left status
   // bar instead of the bottom-left corner. Mounting on <body> (no
   // filtered ancestor) restores true viewport-fixed positioning.
-  const fab = mounted
+  const fab = mounted && !hideFab
     ? createPortal(
         <button
           type="button"
@@ -195,6 +212,7 @@ export function LeftRailMobile({
               "calc(max(env(safe-area-inset-left, 0px), 0px) + 1rem)",
           }}
           className="
+            left-rail-fab
             lg:hidden fixed z-50
             h-14 w-14 rounded-full
             bg-forest-900 text-cream

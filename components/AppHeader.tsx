@@ -10,6 +10,7 @@ import {
 } from "@/lib/entitlements/personal-access";
 import { LeftRail } from "./LeftRail";
 import { LeftRailMobile } from "./LeftRailMobile";
+import { TabBar } from "./TabBar";
 import { SmartSearch } from "./SmartSearch";
 import { OutstandingTasksBell } from "./OutstandingTasksBell";
 import { createClient } from "@/lib/supabase/server";
@@ -141,6 +142,16 @@ export async function AppHeader({
   const companies = memberships.map((m) => ({
     publicId: m.company.public_id,
     name: m.company.name,
+    role: m.role,
+  }));
+
+  // TabBar's tabBarLinks wants { public_id, role }, a smaller shape than
+  // the LeftRail Company type above (which keys off `publicId`, not
+  // `public_id`, and carries `name`). Mapped separately from `memberships`
+  // rather than from `companies` so the two mounts don't have to agree on
+  // a field name neither of them actually needs from the other.
+  const tabBarCompanies = memberships.map((m) => ({
+    public_id: m.company.public_id,
     role: m.role,
   }));
 
@@ -320,6 +331,15 @@ export async function AppHeader({
               personalLocked={personalLocked}
               storedMode={workspaceMode}
             />
+          ) : null}
+          {/* Phone tab bar (spec 4.4), native shells only, `lg:hidden`.
+              A sibling of LeftRailMobile rather than a replacement for
+              it: its own client-side native check decides whether it
+              renders, and when it does, CSS (html[data-tab-bar]
+              .left-rail-fab) hides the FAB so the two openers for the
+              same sheet don't stack. */}
+          {homeHref !== "/" ? (
+            <TabBar companies={tabBarCompanies} storedMode={workspaceMode} />
           ) : null}
           <div className="min-w-0 shrink">
             <Wordmark href={homeHref} size="sm" tone="cream" />

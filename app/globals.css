@@ -619,6 +619,15 @@ html[data-theme="dark"] [data-skin="classic"] {
 [data-skin="instrument"] .today-count { margin-left: 6px; color: var(--muted); font-size: 0.875rem; }
 [data-skin="instrument"] .today-ledger, [data-skin="instrument"] .today-bars { margin-top: 10px; }
 
+/* Phone tab bar (spec 4.4). Native shells only, below lg; see TabBar.tsx
+   and LeftRailMobile.tsx (the FAB it replaces while it's showing). */
+[data-skin="instrument"] .tab-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--border); padding-bottom: var(--safe-bottom, 0px); }
+[data-skin="instrument"] .tab-bar-item { min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-family: var(--font-data); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+[data-skin="instrument"] .tab-bar-item[aria-current="page"] { color: var(--foreground); box-shadow: inset 0 2px 0 var(--foreground); }
+[data-skin="instrument"] .tab-bar-item:focus-visible { outline: 2px solid var(--accent-2); outline-offset: -2px; }
+html[data-tab-bar] main { padding-bottom: calc(56px + var(--safe-bottom, 0px)); }
+html[data-tab-bar] .left-rail-fab { display: none; }
+
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
   --surface: #202d4d;
