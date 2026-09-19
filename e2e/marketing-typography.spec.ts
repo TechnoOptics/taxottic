@@ -54,10 +54,68 @@ async function linesOf(page: Page, selector: string, phrase: string): Promise<nu
   );
 }
 
+/** Number of line boxes the whole first h1 occupies. */
+async function h1Lines(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const h = document.querySelector("h1");
+    if (!h) throw new Error("no h1 on the page");
+    const range = document.createRange();
+    range.selectNodeContents(h);
+    const tops = new Set<number>();
+    for (const r of Array.from(range.getClientRects())) if (r.width > 0) tops.add(Math.round(r.top));
+    return tops.size;
+  });
+}
+
+/**
+ * The fixed block (header plus the spine in its slot) sits entirely above
+ * the h1, and the spine sits inside that block rather than hanging below
+ * it onto the page. `spineId` differs by surface: the home page mounts its
+ * own animated `#year-spine`, every page wearing PageShell mounts the
+ * static `#page-spine`.
+ */
+async function expectShellClearsH1(page: Page, spineId: string) {
+  const header = (await page.locator("header").first().boundingBox())!;
+  const h1 = (await page.locator("h1").boundingBox())!;
+  expect(h1.y, "the h1 starts under the fixed block").toBeGreaterThan(header.y + header.height);
+  const spine = (await page.locator(spineId).boundingBox())!;
+  expect(spine.y + spine.height, "the spine sits inside the header block").toBeLessThanOrEqual(header.y + header.height + 1);
+}
+
+/** Pixels the document scrolls sideways; must never be positive. */
+async function sidewaysOverflow(page: Page): Promise<number> {
+  return page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+}
+
 async function ready(page: Page, path: string) {
   await page.goto(path, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
 }
+
+/**
+ * The secondary public pages, all of which render PageShell. They share
+ * one h1 type scale (`display text-4xl sm:text-6xl`), so a headline that
+ * holds at one width holds at all of them only if the copy is short
+ * enough; that is what the bound below measures. /get is deliberately
+ * out of scope: it is a token surface, not a marketing page.
+ */
+const SECONDARY = ["/pricing", "/calculators", "/guides", "/help", "/changelog", "/compare"];
+
+/** Two lines is the desktop bound, three the phone bound. */
+const h1Bound = (width: number) => (width >= 1024 ? 2 : 3);
+
+/**
+ * Measured on this branch: "Free guides on self-employment taxes, in plain
+ * English." runs to 3 lines at 1280, 4 at 375 and 4 at 344, one over the
+ * bound at every width. The fix is shorter copy, and app/guides/page.tsx
+ * is owned by the index-pages worktree, so the measurement stays here and
+ * the marker comes off with the copy change rather than with the type
+ * scale.
+ */
+const GUIDES_H1_TOO_LONG =
+  "guides h1 copy is one line over the bound at every width; shorten it in app/guides/page.tsx, then delete this marker";
 
 for (const vp of [DESKTOP, PHONE]) {
   test.describe(`at ${vp.width}px`, () => {
@@ -99,25 +157,33 @@ for (const vp of [DESKTOP, PHONE]) {
 
     test("the home h1 holds to two lines at desktop and three on a phone", async ({ page }) => {
       await ready(page, "/");
-      const lines = await page.evaluate(() => {
-        const h = document.querySelector("h1")!;
-        const range = document.createRange();
-        range.selectNodeContents(h);
-        const tops = new Set<number>();
-        for (const r of Array.from(range.getClientRects())) if (r.width > 0) tops.add(Math.round(r.top));
-        return tops.size;
-      });
-      expect(lines).toBeLessThanOrEqual(vp.width >= 1024 ? 2 : 3);
+      expect(await h1Lines(page)).toBeLessThanOrEqual(h1Bound(vp.width));
     });
 
     test("the fixed header and spine never overlap the hero", async ({ page }) => {
       await ready(page, "/");
-      const header = (await page.locator("header").first().boundingBox())!;
-      const h1 = (await page.locator("h1").boundingBox())!;
-      expect(h1.y, "the h1 starts under the fixed block").toBeGreaterThan(header.y + header.height);
-      const spine = (await page.locator("#year-spine").boundingBox())!;
-      expect(spine.y + spine.height, "the spine sits inside the header block").toBeLessThanOrEqual(header.y + header.height + 1);
+      await expectShellClearsH1(page, "#year-spine");
     });
+
+    for (const path of SECONDARY) {
+      test(`${path} h1 holds to two lines at desktop and three on a phone`, async ({ page }) => {
+        test.fixme(path === "/guides", GUIDES_H1_TOO_LONG);
+        await ready(page, path);
+        expect(await h1Lines(page), `${path} h1 wrapped past its bound`).toBeLessThanOrEqual(
+          h1Bound(vp.width),
+        );
+      });
+
+      test(`${path} header and spine never overlap the h1`, async ({ page }) => {
+        await ready(page, path);
+        await expectShellClearsH1(page, "#page-spine");
+      });
+
+      test(`${path} does not scroll sideways`, async ({ page }) => {
+        await ready(page, path);
+        expect(await sidewaysOverflow(page), `${path} scrolls sideways`).toBeLessThanOrEqual(0);
+      });
+    }
   });
 }
 
@@ -126,24 +192,12 @@ test.describe("at 344px", () => {
 
   test("the home h1 holds to two lines at desktop and three on a phone", async ({ page }) => {
     await ready(page, "/");
-    const lines = await page.evaluate(() => {
-      const h = document.querySelector("h1")!;
-      const range = document.createRange();
-      range.selectNodeContents(h);
-      const tops = new Set<number>();
-      for (const r of Array.from(range.getClientRects())) if (r.width > 0) tops.add(Math.round(r.top));
-      return tops.size;
-    });
-    expect(lines).toBeLessThanOrEqual(3);
+    expect(await h1Lines(page)).toBeLessThanOrEqual(3);
   });
 
   test("the fixed header and spine never overlap the hero", async ({ page }) => {
     await ready(page, "/");
-    const header = (await page.locator("header").first().boundingBox())!;
-    const h1 = (await page.locator("h1").boundingBox())!;
-    expect(h1.y, "the h1 starts under the fixed block").toBeGreaterThan(header.y + header.height);
-    const spine = (await page.locator("#year-spine").boundingBox())!;
-    expect(spine.y + spine.height, "the spine sits inside the header block").toBeLessThanOrEqual(header.y + header.height + 1);
+    await expectShellClearsH1(page, "#year-spine");
   });
 
   test("the page does not scroll sideways", async ({ page }) => {
@@ -153,6 +207,26 @@ test.describe("at 344px", () => {
     );
     expect(docOverflow, "the page must not scroll sideways at 344px").toBeLessThanOrEqual(0);
   });
+
+  // The narrowest width the shell has to hold: the longest secondary
+  // headline (/guides) and the one carrying a nowrap span (/pricing).
+  for (const path of ["/pricing", "/guides"]) {
+    test(`${path} h1 holds to three lines at 344px`, async ({ page }) => {
+      test.fixme(path === "/guides", GUIDES_H1_TOO_LONG);
+      await ready(page, path);
+      expect(await h1Lines(page), `${path} h1 wrapped past its bound`).toBeLessThanOrEqual(3);
+    });
+
+    test(`${path} header and spine never overlap the h1 at 344px`, async ({ page }) => {
+      await ready(page, path);
+      await expectShellClearsH1(page, "#page-spine");
+    });
+
+    test(`${path} does not scroll sideways at 344px`, async ({ page }) => {
+      await ready(page, path);
+      expect(await sidewaysOverflow(page), `${path} scrolls sideways`).toBeLessThanOrEqual(0);
+    });
+  }
 });
 
 test.describe("at 375px", () => {
