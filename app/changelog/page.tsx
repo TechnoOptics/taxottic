@@ -1,5 +1,6 @@
 import { PageShell } from "@/components/marketing/PageShell";
 import { LedgerList } from "@/components/marketing/LedgerList";
+import { entryId, formatEntryDate } from "@/lib/marketing/changelog-format";
 import Link from "next/link";
 
 export const metadata = {
@@ -151,26 +152,6 @@ const TAG_LABEL: Record<Tag, string> = {
   security: "Security",
 };
 
-// Each entry is addressable: the row carries `id` so a /changelog#...
-// link lands on the change it names. The id is derived from the date and
-// the title, so it is stable as long as the entry is.
-function entryId(e: Entry): string {
-  const slug = e.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `${e.date}-${slug}`;
-}
-
-function formatEntryDate(date: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${date}T00:00:00Z`));
-}
-
 export default function ChangelogPage() {
   return (
     <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
@@ -202,6 +183,7 @@ export default function ChangelogPage() {
             title: e.title,
             blurb: e.body,
             date: formatEntryDate(e.date),
+            dateTime: e.date,
             tag: e.tags.map((t) => TAG_LABEL[t]).join(" \u00b7 "),
           }))}
         />

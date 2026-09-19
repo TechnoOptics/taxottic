@@ -132,6 +132,131 @@ test("/pricing#tiers scrolls to the tier block", async ({ page }) => {
   expect(top).toBeLessThan(220);
 });
 
+/**
+ * An anchored row has to be READABLE, not merely scrolled to. The
+ * marketing header is `position: fixed` and 169px tall, so a browser
+ * that puts the fragment target flush against the viewport top hides it
+ * completely: before the scroll offset existed, an anchored changelog
+ * row landed at `top: 0` with 100% of it behind the header. The offset
+ * is CSS on the scroller keyed to the grammar attribute, so this also
+ * covers anchors that are not ledger rows (#tiers on /pricing, a
+ * heading), which is why the assertion is "clear of the header", never
+ * "has class x".
+ *
+ * Web fonts are blocked here on purpose. Their reflow races Chromium's
+ * fragment scroll on a cold load: with fonts on, a load carrying a
+ * fragment scrolls about 2 times in 6, and with them blocked about 5.
+ * That race is site-wide and predates the ledger (see the task report);
+ * blocking fonts isolates the thing under test, which is where the
+ * target lands WHEN the browser honours the fragment.
+ */
+for (const width of [375, 1280]) {
+  test(`/changelog anchors land clear of the fixed header at ${width}`, async ({ page }) => {
+    await page.route("**/*.{woff,woff2,ttf,otf}", (r) => r.abort());
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/changelog");
+    await page.waitForLoadState("networkidle");
+    // The header measures 0 until the stylesheet has been applied, and
+    // every assertion below is relative to its height.
+    const headerLaidOut = () =>
+      page.waitForFunction(
+        () => (document.querySelector("header")?.getBoundingClientRect().height ?? 0) > 100,
+      );
+    await headerLaidOut();
+
+    // Read the row ids with a retry: against a dev server the first hit
+    // on a route compiles it and the client reloads underneath us,
+    // which destroys the execution context mid-read.
+    let ids: string[] = [];
+    for (let attempt = 0; attempt < 6 && ids.length < 6; attempt++) {
+      try {
+        ids = await page.$$eval("ul.ledger-list > li", (ls) => ls.map((l) => l.id));
+      } catch {
+        await page.waitForTimeout(500);
+        await headerLaidOut();
+      }
+    }
+    // Far enough down the list that landing behind the header is the
+    // difference between reading the entry and seeing nothing.
+    const id = ids[4];
+    expect(id, "the changelog rendered its rows").toBeTruthy();
+
+    const read = (p: typeof page) =>
+      p.evaluate((id) => {
+        const header = document.querySelector("header")!.getBoundingClientRect();
+        const target = document.getElementById(id)!.getBoundingClientRect();
+        return {
+          headerBottom: Math.round(header.bottom),
+          top: Math.round(target.top),
+          scrollY: Math.round(window.scrollY),
+          reserved: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),
+        };
+      }, id);
+
+    // The mechanism itself: the scroller reserves at least the header.
+    const before = await read(page);
+    expect(before.headerBottom, "the header is fixed and has height").toBeGreaterThan(100);
+    expect(
+      before.reserved,
+      "the scroller reserves the header height for every fragment target",
+    ).toBeGreaterThanOrEqual(before.headerBottom);
+
+    // 1. Hash navigation: the path a reader takes by clicking a row.
+    // Let the route settle first: a click that lands mid-hydration is
+    // swallowed by the half-attached next/link handler and scrolls
+    // nothing, which is a race in the test, not in the page.
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(800);
+    await page.locator(`[id="${id}"] a`).first().click();
+    await expect(page).toHaveURL(new RegExp(`#${id}$`));
+    await page.waitForTimeout(400);
+    const hashNav = await read(page);
+    expect(hashNav.scrollY, "clicking the row scrolled the page").toBeGreaterThan(0);
+    expect(
+      hashNav.top,
+      "the anchored row sits below the fixed header, not behind it",
+    ).toBeGreaterThanOrEqual(hashNav.headerBottom);
+
+    // 2. A programmatic scroll to a row, the deterministic form of the
+    // same question: scroll-padding is what the browser and the router
+    // both consult, so every row has to come to rest below the header,
+    // not just the one clicked above.
+    for (const index of [4, 10, 16]) {
+      const placed = await page.evaluate((index) => {
+        const row = document.querySelectorAll("ul.ledger-list > li")[index];
+        window.scrollTo(0, 0);
+        row.scrollIntoView();
+        const header = document.querySelector("header")!.getBoundingClientRect();
+        const target = row.getBoundingClientRect();
+        return { top: Math.round(target.top), headerBottom: Math.round(header.bottom) };
+      }, index);
+      expect(
+        placed.top,
+        `row ${index} came to rest behind the fixed header`,
+      ).toBeGreaterThanOrEqual(placed.headerBottom);
+    }
+
+    // 3. Cold load carrying the fragment. Chromium honours it only some
+    // of the time on this page, because web-font reflow races its
+    // fragment scroll (measured, and site-wide: see the task report).
+    // That race is not this offset's doing and not something this test
+    // can fix, so the assertion is conditional: any load that DOES act
+    // on the fragment has to land the row clear of the header.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await page.goto("about:blank");
+      await page.goto(`/changelog#${id}`);
+      await headerLaidOut();
+      await page.waitForTimeout(700);
+      const cold = await read(page);
+      if (cold.scrollY === 0) continue;
+      expect(
+        cold.top,
+        "a cold load that honours the fragment lands the row clear of the header",
+      ).toBeGreaterThanOrEqual(cold.headerBottom);
+    }
+  });
+}
+
 test("/example demo page renders", async ({ page }) => {
   await page.goto("/example");
   await expect(page.locator("h1").first()).toBeVisible();

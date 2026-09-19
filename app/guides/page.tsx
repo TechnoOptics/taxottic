@@ -168,25 +168,14 @@ export default function GuidesIndex() {
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
-        <Link
-          href="/calculators"
-          className="card p-6 border-edge transition-colors block"
-        >
-          <div className="mono-label">
-            Free tools
-          </div>
-          <h2 className="display text-lg sm:text-xl text-forest-900 mt-1">
-            Prefer to just see the number?
-          </h2>
-          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-            Try the free self-employment tax calculator, estimate your
-            self-employment tax, income tax, and quarterly payments instantly,
-            no sign-up.
-          </p>
-          <span className="mt-3 inline-block text-sm text-forest-800">
-            Open the calculators
-          </span>
-        </Link>
+        <p className="text-sm text-ink-soft leading-relaxed max-w-xl">
+          Prefer to just see the number? The{" "}
+          <Link href="/calculators" className="underline hover:text-forest-900">
+            free calculators
+          </Link>{" "}
+          estimate your self-employment tax, income tax, and quarterly payments
+          instantly, no sign-up.
+        </p>
       </section>
       </PageShell>
     </main>

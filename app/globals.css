@@ -846,6 +846,14 @@ html[data-theme="dark"] {
      reserve space below the fixed header without duplicating the
      breakpoint math. */
   --app-header-h: 3.25rem;
+  /* The fixed MARKETING header's height, the mirror of --app-header-h
+     for the paper chrome. MarketingHeader sizes its spacer from these
+     and the scroll offset below clears them, so the height lives in one
+     place instead of being retyped wherever something has to sit clear
+     of the header. Two values because the year spine is optional. */
+  --marketing-header-safe: max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px));
+  --marketing-header-h: calc(var(--marketing-header-safe) + 10.5rem);
+  --marketing-header-h-bare: calc(var(--marketing-header-safe) + 4rem);
 }
 @media (min-width: 1024px) {
   :root { --app-header-h: 3.5rem; } /* lg → matches h-14 (56px) */
@@ -857,6 +865,26 @@ html[data-theme="dark"] {
 .safe-pad-top { padding-top: var(--safe-top); }
 .safe-pad-bottom { padding-bottom: var(--safe-bottom); }
 .safe-pad-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+
+/* A fragment target on a Year-grammar page clears the fixed marketing
+   header. Without this the browser scrolls the target flush to the
+   viewport top, which is behind 169px of header: an anchored changelog
+   row landed 100% invisible. Keyed off the grammar attribute and the
+   header-height variable, never off a component's classes, so any
+   anchor on any of these pages (a ledger row, #tiers on /pricing, a
+   heading) is covered the day it is added.
+
+   scroll-padding on the scroller, not scroll-margin on :target. The
+   in-app path is a next/link whose click is a history.pushState, and
+   Chromium does not re-evaluate :target after pushState, so a
+   :target rule never fires on exactly the navigation people actually
+   perform. scroll-padding needs :has() to stay off the authenticated
+   pages, which size their own header from --app-header-h; where :has()
+   is unsupported the rule simply does not match and anchors behave as
+   they did before, which is the safe direction to fail. */
+html:has([data-grammar="year"]) {
+  scroll-padding-top: calc(var(--marketing-header-h) + 16px);
+}
 
 /* The strip under the OS status bar on the native shell. One element,
    one attribute: html[data-bar="navy"] is set by the app header while it

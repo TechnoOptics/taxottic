@@ -50,9 +50,12 @@ export function MarketingHeader({
           <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[6.5rem] pt-2">{spine}</div>
         ) : null}
       </header>
+      {/* The spacer's height IS the header's height, and app/globals.css
+          holds it so the scroll offset for fragment targets can be sized
+          from the same number. Change it there, not here. */}
       <div
         aria-hidden="true"
-        style={{ height: `calc(${safeTop} + ${spine ? "10.5rem" : "4rem"})` }}
+        style={{ height: spine ? "var(--marketing-header-h)" : "var(--marketing-header-h-bare)" }}
       />
     </>
   );
