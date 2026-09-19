@@ -19,4 +19,8 @@ describe("tab bar routes", () => {
     const links = tabBarLinks({ companies: [{ public_id: "abc", role: "manager" }], storedMode: "business", pathname: "/c/abc/expenses/new" });
     expect(links.find((l) => l.key === "money")?.current).toBe(true);
   });
+  it("marks Drives current on a mileage sub-route", () => {
+    const links = tabBarLinks({ companies: [{ public_id: "abc", role: "manager" }], storedMode: "business", pathname: "/mileage/classify" });
+    expect(links.find((l) => l.key === "drives")?.current).toBe(true);
+  });
 });

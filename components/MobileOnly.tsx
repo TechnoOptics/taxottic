@@ -4,20 +4,45 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PhoneIcon } from "@/components/ui/Icons";
 
 /**
+ * Module-scope cache of the native check, shared across every mount of
+ * `useIsNativeApp` in this process. AppHeader (and therefore TabBar) is
+ * rendered per page rather than from a shared layout, so it remounts on
+ * every client-side navigation; without this cache `useIsNativeApp`
+ * would restart from `null` on each remount and the tab bar would blink
+ * out for a frame or more on every tab tap while the dynamic
+ * `@capacitor/core` import resolved again. Whether we're native is fixed
+ * for the life of the process, so once it's known, later mounts can read
+ * it synchronously instead of re-importing.
+ *
+ * Hydration-safe: on a full page load this module is freshly evaluated
+ * on both server and client, so the cache starts `null` in both places
+ * and the first client paint still matches SSR (null on both sides). A
+ * client-side navigation, by contrast, renders client components
+ * directly with no server render to hydrate against, so reading an
+ * already-warm cache there is just a normal re-render with different
+ * initial state, not a hydration mismatch.
+ */
+let nativeKnown: boolean | null = null;
+
+/**
  * True only inside the Capacitor native app (iOS / Android). Returns
  * `null` until it's determined on the client, so SSR and the first
  * paint don't commit to a guess (and the native app never flashes the
  * web fallback before the real control mounts).
  */
 export function useIsNativeApp(): boolean | null {
-  const [isNative, setIsNative] = useState<boolean | null>(null);
+  const [isNative, setIsNative] = useState<boolean | null>(() => nativeKnown);
   useEffect(() => {
+    if (nativeKnown !== null) return;
     let cancelled = false;
     import("@capacitor/core")
       .then(({ Capacitor }) => {
-        if (!cancelled) setIsNative(Capacitor.isNativePlatform());
+        const value = Capacitor.isNativePlatform();
+        nativeKnown = value;
+        if (!cancelled) setIsNative(value);
       })
       .catch(() => {
+        nativeKnown = false;
         if (!cancelled) setIsNative(false);
       });
     return () => {
