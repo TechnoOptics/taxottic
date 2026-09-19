@@ -75,6 +75,10 @@ export function YearSpine({
           {r.ticks.map((t, i) => (
             <span
               key={t.quarter}
+              // The one tick the reader has to act on. Below sm the other
+              // notes are hidden (see .runway-tick-note in globals.css),
+              // because four of them collide with each other at 375.
+              data-due={tickNotes?.[i]?.endsWith(" · due") ? "true" : undefined}
               className={i === last ? "-translate-x-full" : "-translate-x-1/2"}
               style={{ left: pct(t.at) }}
             >

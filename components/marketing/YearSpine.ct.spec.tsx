@@ -68,3 +68,25 @@ test("tick notes render under the dates in the mono label style", async ({ mount
   await expect(notes.nth(2)).toHaveText("Q3 · due");
   expect(await notes.nth(2).evaluate((e) => getComputedStyle(e).textTransform)).toBe("uppercase");
 });
+
+/**
+ * Four notes under four dates need roughly 480px of rail to stay apart.
+ * On a phone they overlapped each other and the dates they belong to, so
+ * only the tick that is actually due keeps its note there; every note is
+ * back at desktop width.
+ */
+for (const [width, visible] of [[375, 1], [1280, 4]] as const) {
+  test(`${visible} tick note(s) visible at ${width}`, async ({ mount, page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mount(
+      <div data-skin="instrument" style={{ padding: 16 }}>
+        <YearSpine taxYear={2026} asOf={AS_OF} variant="paper" id="notes" tickNotes={["Q1 · past", "Q2 · past", "Q3 · due", "Q4"]} />
+      </div>,
+    );
+    const notes = page.locator("#notes .runway-tick-note");
+    await expect(notes).toHaveCount(4);
+    const shown = await notes.evaluateAll((els) => els.filter((e) => getComputedStyle(e).display !== "none").length);
+    expect(shown, `notes visible at ${width}`).toBe(visible);
+    if (visible === 1) await expect(notes.nth(2)).toBeVisible();
+  });
+}

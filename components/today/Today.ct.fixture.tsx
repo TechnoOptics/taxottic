@@ -4,15 +4,25 @@ import { NextPaymentPanel } from "./NextPaymentPanel";
 import { NeedsYourCall } from "./NeedsYourCall";
 import { ThisWeek } from "./ThisWeek";
 import { YearToDate } from "./YearToDate";
+import { nextPaymentSummary, type Quarter } from "@/lib/today/next-payment";
+import { spineNotes } from "@/lib/today/spine-notes";
 
 const AS_OF = new Date("2026-09-19T12:00:00Z");
 
-const SUMMARY = {
-  next: { quarter: 3 as const, dueDate: "2026-09-15", daysUntil: 10, amountCents: 342000 },
-  paidSoFarCents: 215000,
-  stillToPayCents: 342000,
-  progress: 215000 / 557000,
-};
+/**
+ * One set of quarters feeds both the spine's tick notes and the panel's
+ * figure, through the same two functions the dashboard uses. Hand-written
+ * values drifted: the panel said Q3 was due in 10 days while AS_OF was
+ * already four days past the Q3 date the spine was drawing.
+ */
+const QUARTERS: Quarter[] = [
+  { quarter: 1, dueDate: "2026-04-15", amountCents: 0, isPast: true },
+  { quarter: 2, dueDate: "2026-06-15", amountCents: 0, isPast: true },
+  { quarter: 3, dueDate: "2026-09-15", amountCents: 0, isPast: true },
+  { quarter: 4, dueDate: "2027-01-15", amountCents: 342000, isPast: false },
+];
+const SUMMARY = nextPaymentSummary({ quarters: QUARTERS, paidSoFarCents: 215000, asOf: AS_OF });
+const TICK_NOTES = spineNotes({ quarters: QUARTERS, doneDueDates: [] });
 
 const CALL_ITEMS = [
   { kind: "bank_transaction" as const, id: "t1", title: "Sweetgreen", subtitle: "Sep 2 · $24.50 · Meal with a client?", href: "/c/abc/banks?tx=t1", publicId: "abc" },
@@ -29,7 +39,7 @@ const YTD_ROWS = [
   { label: "Software", amountCents: 250000, fraction: 1 },
   { label: "Advertising", amountCents: 124000, fraction: 0.496 },
   { label: "Travel", amountCents: 86000, fraction: 0.344 },
-  { label: "Uncategorised", amountCents: 5000, fraction: 0.02 },
+  { label: "Uncategorized", amountCents: 5000, fraction: 0.02 },
 ];
 
 /**
@@ -50,7 +60,7 @@ export function TodayFixture({ width, theme }: { width: number; theme: "light" |
   return (
     <div data-skin="instrument" data-grammar="year" data-theme={theme} style={{ width, padding: 16 }}>
       <TodayHeader asOf={AS_OF} taxYear={2026} syncedAt={new Date("2026-09-19T11:52:00Z")} />
-      <TodaySpine taxYear={2026} asOf={AS_OF} tickNotes={["Q1 · past", "Q2 · past", "Q3 · due", "Q4"]} />
+      <TodaySpine taxYear={2026} asOf={AS_OF} tickNotes={TICK_NOTES} />
       <NextPaymentPanel summary={SUMMARY} federalCents={276000} stateCents={66000} forecastHref="/personal/forecast" note="Includes Northwind Co." />
       <NeedsYourCall items={CALL_ITEMS} count={CALL_ITEMS.length} />
       <ThisWeek rows={WEEK_ROWS} />

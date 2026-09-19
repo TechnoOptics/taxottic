@@ -15,14 +15,25 @@ type Summary = ReturnType<typeof nextPaymentSummary>;
  */
 export function NextPaymentPanel({ summary, federalCents, stateCents, forecastHref, note }: { summary: Summary; federalCents: number; stateCents: number; forecastHref: string; note?: string }) {
   const n = summary.next;
-  const heading = n
-    ? `Q${n.quarter} · due ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${n.dueDate}T00:00:00Z`))} · ${n.daysUntil} day${n.daysUntil === 1 ? "" : "s"}`
-    : "No payment due";
+  // The due date and the day count are numbers the reader compares, so
+  // they carry `figure` like every other figure on Today; the quarter and
+  // the word "days" around them are plain type.
+  const heading = n ? (
+    <>
+      {`Q${n.quarter} · due `}
+      <span className="figure">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${n.dueDate}T00:00:00Z`))}</span>
+      {" · "}
+      <span className="figure">{n.daysUntil}</span>
+      {` day${n.daysUntil === 1 ? "" : "s"}`}
+    </>
+  ) : (
+    "No payment due"
+  );
   return (
     <section className="today-panel" aria-labelledby="today-next-payment-label">
       <div className="today-lead">
         <div>
-          <div id="today-next-payment-label" className="today-lead-label">Next payment</div>
+          <h2 id="today-next-payment-label" className="today-lead-label">Next payment</h2>
           <div className="mono-label today-lead-note">{heading}</div>
         </div>
         <div id="today-next-payment" className="figure today-lead-figure">{n ? formatCents(n.amountCents) : formatCents(0)}</div>

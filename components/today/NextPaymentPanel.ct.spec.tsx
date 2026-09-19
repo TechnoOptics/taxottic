@@ -101,3 +101,36 @@ test("no note, no line", async ({ mount, page }) => {
   );
   await expect(page.locator(".today-note")).toHaveCount(0);
 });
+
+/**
+ * A five-figure amount is wider than the room left beside "Next payment"
+ * at the narrowest width we ship to, and the figure used to wrap in the
+ * middle of the number ("$25," / "000"). One client rect means one line.
+ */
+for (const width of [344, 375]) {
+  test(`a five-figure amount stays on one line at ${width}`, async ({ mount, page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await mount(
+      <div data-skin="instrument" data-grammar="year" style={{ padding: 16 }}>
+        <NextPaymentPanel
+          summary={{ ...summary, next: { ...summary.next, amountCents: 2500000 }, stillToPayCents: 2500000, progress: 215000 / 2715000 }}
+          federalCents={2000000}
+          stateCents={500000}
+          forecastHref="/personal/forecast"
+        />
+      </div>,
+    );
+    const figure = page.locator("#today-next-payment");
+    await expect(figure).toHaveText("$25,000");
+    // Client rects over the figure's CONTENTS, not over the element: the
+    // figure is a block, so its own getClientRects() is always one border
+    // box however many lines the text takes. A Range returns one rect per
+    // line box, so 1 means one line.
+    const lines = await figure.evaluate((e) => {
+      const range = document.createRange();
+      range.selectNodeContents(e);
+      return range.getClientRects().length;
+    });
+    expect(lines, `"$25,000" wrapped at ${width}`).toBe(1);
+  });
+}

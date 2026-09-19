@@ -107,3 +107,33 @@ test("the row title is readable in the dark theme", async ({ mount, page }) => {
   });
   expect(ratio, "row title against the row ground in dark").toBeGreaterThanOrEqual(4.5);
 });
+
+/**
+ * Both controls on a row are quiet. "Business" was a brass fill, which in
+ * dark was the only filled control on Today and read louder than the
+ * spine's own brass, the one thing on the page that is meant to be brass.
+ * Nothing inside the section may paint either brass value as a ground.
+ */
+const BRASS = [
+  "rgb(213, 187, 126)", // #d5bb7e, the dark accent outside the instrument skin
+  "rgb(212, 174, 92)", // #d4ae5c, the instrument skin's dark accent-2
+  "rgb(192, 151, 63)", // #c0973f, the instrument skin's dark accent, which is
+  // what .btn-primary actually filled with here; the other two are in the list
+  // because they are the brass values the rest of the app paints with.
+];
+
+test("no brass fill anywhere in the section, in dark", async ({ mount, page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "dark";
+  });
+  const component = await mount(
+    <div data-skin="instrument" data-grammar="year" data-theme="dark" style={{ padding: 16 }}>
+      <NeedsYourCall items={items} count={2} />
+    </div>,
+  );
+  const grounds = await component.evaluate((root) =>
+    [root, ...Array.from(root.querySelectorAll("*"))].map((e) => getComputedStyle(e).backgroundColor),
+  );
+  for (const brass of BRASS) expect(grounds, `${brass} is painted as a ground`).not.toContain(brass);
+});

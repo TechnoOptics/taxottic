@@ -1045,9 +1045,12 @@ export default async function DashboardPage() {
             fix={blockedLocation.fix}
           />
         ) : null}
-        <TrialBanner trial={trial} />
 
         <TodaySpine taxYear={taxYear} asOf={now} tickNotes={tickNotes} />
+        {/* Below the spine, per spec 4.3: the year's shape is the first
+            thing on the page after its name, and the trial notice is an
+            interruption of it, not a preamble to it. */}
+        <TrialBanner trial={trial} />
         <NextPaymentPanel
           summary={payment}
           federalCents={activeForecast?.federalIncomeTaxCents ?? 0}

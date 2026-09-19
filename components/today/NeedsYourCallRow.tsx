@@ -59,7 +59,10 @@ export function NeedsYourCallRow({ item }: { item: OutstandingItem & { publicId?
       <div className="today-call-actions">
         {canDismiss ? (
           <>
-            <Link href={item.href} className="btn-primary min-h-11">Business</Link>
+            {/* Quiet, like its sibling: a brass fill here was the only
+                filled control on Today, and in dark it read as the loudest
+                thing on the screen next to the spine's own brass. */}
+            <Link href={item.href} className="btn-quiet min-h-11">Business</Link>
             <form
               action={async (fd) => {
                 try {
