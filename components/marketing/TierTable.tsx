@@ -99,7 +99,7 @@ function Includes({ tier }: { tier: TierRow }) {
 
 export function TierTable({ tiers }: { tiers: readonly TierRow[] }) {
   return (
-    <div id="tiers" className="scroll-mt-32">
+    <div id="tiers">
       <div className="tier-table-desktop">
         <table className="tier-table">
           <thead>
