@@ -20,8 +20,37 @@ test("rows resolve in place where they can and open where they cannot, on 44px c
   expect(box?.height).toBeGreaterThanOrEqual(44);
   await expect(page.getByRole("link", { name: "Business" })).toHaveAttribute("href", "/c/abc/banks?tx=t1");
   await expect(page.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/c/abc/import/i1?highlight=r1");
-  const dates = await page.locator(".figure").allTextContents();
-  expect(dates.some((t) => /Sep 2/.test(t))).toBe(true);
+  const figures = await page.locator(".figure").allTextContents();
+  expect(figures.some((t) => /Sep 2/.test(t))).toBe(true);
+  expect(figures.some((t) => /\$24\.50/.test(t))).toBe(true);
+});
+
+test("hides the row on the server's own say-so, and leaves the other row alone", async ({ mount, page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await mount(
+    <div data-skin="instrument" data-grammar="year" style={{ padding: 16 }}>
+      <NeedsYourCall items={items} count={2} />
+    </div>,
+  );
+  await page.getByRole("button", { name: "Not business" }).click();
+  await expect(page.getByRole("button", { name: "Not business" })).toHaveCount(0);
+  await expect(page.getByText("Sweetgreen")).toHaveCount(0);
+  await expect(page.getByText("Delta 4821")).toBeVisible();
+});
+
+test("keeps the row and explains when the server reports no change", async ({ mount, page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.evaluate(() => {
+    window.__todayActionsResolve = false;
+  });
+  await mount(
+    <div data-skin="instrument" data-grammar="year" style={{ padding: 16 }}>
+      <NeedsYourCall items={items} count={2} />
+    </div>,
+  );
+  await page.getByRole("button", { name: "Not business" }).click();
+  await expect(page.getByText("Could not save this one. Open it instead.")).toBeVisible();
+  await expect(page.getByText("Sweetgreen")).toBeVisible();
 });
 
 // Dark-theme case: the row title read against the row's own ground. Same

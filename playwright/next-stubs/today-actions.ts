@@ -8,24 +8,26 @@
 // rationale as the workspace-mode stub alongside it: NeedsYourCallRow
 // could not be mounted at all without this.
 //
-// The brief's own spec is that "the CT harness cannot execute server
-// actions" and the test asserts markup, not the dismissal, so the stub
-// only needs to exist and resolve. It records calls on window in case a
-// future test wants to assert the row submitted.
+// The real notBusiness reads the transaction back after dismissing it and
+// resolves true only when the row moved off "pending". The stub mirrors
+// that boolean contract without touching Supabase: it records the call on
+// window, then resolves window.__todayActionsResolve (default true) so a
+// test can flip it to false and exercise the "could not save" path.
 declare global {
   interface Window {
     __CT_NOT_BUSINESS_CALLS__?: Array<{ publicId: string; txId: string }>;
+    __todayActionsResolve?: boolean;
   }
 }
 
-export async function notBusiness(formData: FormData): Promise<void> {
-  if (typeof window !== "undefined") {
-    window.__CT_NOT_BUSINESS_CALLS__ = [
-      ...(window.__CT_NOT_BUSINESS_CALLS__ ?? []),
-      {
-        publicId: String(formData.get("publicId") ?? ""),
-        txId: String(formData.get("txId") ?? ""),
-      },
-    ];
-  }
+export async function notBusiness(formData: FormData): Promise<boolean> {
+  if (typeof window === "undefined") return true;
+  window.__CT_NOT_BUSINESS_CALLS__ = [
+    ...(window.__CT_NOT_BUSINESS_CALLS__ ?? []),
+    {
+      publicId: String(formData.get("publicId") ?? ""),
+      txId: String(formData.get("txId") ?? ""),
+    },
+  ];
+  return window.__todayActionsResolve ?? true;
 }
