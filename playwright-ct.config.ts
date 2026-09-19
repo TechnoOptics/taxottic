@@ -69,6 +69,10 @@ export default defineConfig({
           // so a test can assert when the rail persists the workspace mode.
           "@/app/actions/workspace-mode":
             process.cwd() + "/playwright/next-stubs/workspace-mode-action.ts",
+          // Same rationale: a "use server" file whose import chain reaches
+          // next/headers and the Supabase server client via lib/auth.ts.
+          "@/components/today/today-actions":
+            process.cwd() + "/playwright/next-stubs/today-actions.ts",
           "@": process.cwd(),
         },
       },

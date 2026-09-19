@@ -610,6 +610,13 @@ html[data-theme="dark"] [data-skin="classic"] {
 [data-skin="instrument"] .today-section { margin-top: 28px; }
 [data-skin="instrument"] .today-section-title { font-size: 1.125rem; font-weight: 600; color: var(--foreground); }
 [data-skin="instrument"] .today-empty { margin-top: 10px; font-size: 0.875rem; color: var(--muted); }
+[data-skin="instrument"] .today-call-list { margin-top: 10px; display: grid; gap: 8px; }
+[data-skin="instrument"] .today-call-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .today-call-title { font-size: 0.9375rem; color: var(--foreground); }
+[data-skin="instrument"] .today-call-sub { margin-top: 2px; font-size: 0.8125rem; color: var(--muted); }
+[data-skin="instrument"] .today-call-actions { display: flex; gap: 8px; flex-shrink: 0; }
+[data-skin="instrument"] .today-count { margin-left: 6px; color: var(--muted); font-size: 0.875rem; }
+[data-skin="instrument"] .today-ledger, [data-skin="instrument"] .today-bars { margin-top: 10px; }
 
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
