@@ -114,9 +114,6 @@ const h1Bound = (width: number) => (width >= 1024 ? 2 : 3);
  * the marker comes off with the copy change rather than with the type
  * scale.
  */
-const GUIDES_H1_TOO_LONG =
-  "guides h1 copy is one line over the bound at every width; shorten it in app/guides/page.tsx, then delete this marker";
-
 for (const vp of [DESKTOP, PHONE]) {
   test.describe(`at ${vp.width}px`, () => {
     test.use({ viewport: vp });
@@ -167,7 +164,6 @@ for (const vp of [DESKTOP, PHONE]) {
 
     for (const path of SECONDARY) {
       test(`${path} h1 holds to two lines at desktop and three on a phone`, async ({ page }) => {
-        test.fixme(path === "/guides", GUIDES_H1_TOO_LONG);
         await ready(page, path);
         expect(await h1Lines(page), `${path} h1 wrapped past its bound`).toBeLessThanOrEqual(
           h1Bound(vp.width),
@@ -212,7 +208,6 @@ test.describe("at 344px", () => {
   // headline (/guides) and the one carrying a nowrap span (/pricing).
   for (const path of ["/pricing", "/guides"]) {
     test(`${path} h1 holds to three lines at 344px`, async ({ page }) => {
-      test.fixme(path === "/guides", GUIDES_H1_TOO_LONG);
       await ready(page, path);
       expect(await h1Lines(page), `${path} h1 wrapped past its bound`).toBeLessThanOrEqual(3);
     });
@@ -232,12 +227,16 @@ test.describe("at 344px", () => {
 test.describe("at 375px", () => {
   test.use({ viewport: PHONE });
 
-  test("the booking header keeps 'Back to home' on one line", async ({ page }) => {
+  // /book wears the shared paper shell (PR 2); the audit's 344px finding
+  // was the wordmark touching the header's button, so the shell's
+  // wordmark and its Sign in link must keep clear of each other.
+  test("the booking page's shell header keeps the wordmark clear of Sign in", async ({ page }) => {
     await ready(page, "/book?for=firm");
-    const link = page.getByRole("link", { name: "Back to home" });
-    const box = (await link.boundingBox())!;
-    // One line of 14px text is ~20px tall; two lines are ~40px.
-    expect(Math.round(box.height), "the link wrapped beside the wordmark").toBeLessThan(28);
+    const signIn = page.locator("header").getByRole("link", { name: "Sign in" });
+    const box = (await signIn.boundingBox())!;
+    // The header's targets are 44px tall by design (PR #634); a second
+    // line of 13px text would push the box past 56.
+    expect(Math.round(box.height), "the link wrapped to two lines").toBeLessThan(56);
     const wordmark = page.getByRole("link", { name: "Taxottic home" });
     const wm = (await wordmark.boundingBox())!;
     expect(wm.x + wm.width, "the wordmark overlaps the link").toBeLessThanOrEqual(box.x);
