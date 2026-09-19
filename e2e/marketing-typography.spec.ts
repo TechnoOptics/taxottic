@@ -89,6 +89,54 @@ async function sidewaysOverflow(page: Page): Promise<number> {
   );
 }
 
+/** The page gutter every secondary surface holds: px-4, 16px a side. */
+const GUTTER = 16;
+/** Sub-pixel slack. A 16px padding resolves to 15.999... often enough. */
+const EPS = 0.5;
+
+/**
+ * The h1 and every span inside it stay inside the 16px gutter, measured
+ * as rects rather than inferred from the document.
+ *
+ * `sidewaysOverflow` above cannot stand in for this. `html` and `body`
+ * carry `overflow-x: clip`, so a box painted past the viewport edge is
+ * cut off without ever widening documentElement.scrollWidth: the check
+ * returns 0 on a headline that is visibly missing its last characters.
+ * That is exactly how /pricing shipped a 348px `whitespace-nowrap` span
+ * into a 312px content box at 344px, with the line-count bound and the
+ * overflow bound both green. Both bounds stay; neither replaces this one.
+ */
+async function expectH1WithinGutter(page: Page, path: string) {
+  const boxes = await page.evaluate(() => {
+    const h1 = document.querySelector("h1");
+    if (!h1) throw new Error("no h1 on the page");
+    // The h1 itself and each of its child spans: a nowrap span is the
+    // one box that can be wider than the block that contains it.
+    const els: Element[] = [h1, ...Array.from(h1.querySelectorAll("span"))];
+    return els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        tag: el.tagName.toLowerCase(),
+        text: (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 48),
+        left: r.left,
+        right: r.right,
+        inner: window.innerWidth,
+      };
+    });
+  });
+  expect(boxes.length, `${path}: no h1 boxes to measure`).toBeGreaterThan(0);
+  for (const b of boxes) {
+    expect(
+      b.left,
+      `${path}: <${b.tag}> "${b.text}" starts at ${b.left}, left of the ${GUTTER}px gutter`,
+    ).toBeGreaterThanOrEqual(GUTTER - EPS);
+    expect(
+      b.right,
+      `${path}: <${b.tag}> "${b.text}" ends at ${b.right}, past the ${GUTTER}px gutter on a ${b.inner}px viewport`,
+    ).toBeLessThanOrEqual(b.inner - GUTTER + EPS);
+  }
+}
+
 async function ready(page: Page, path: string) {
   await page.goto(path, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
@@ -118,19 +166,24 @@ for (const vp of [DESKTOP, PHONE]) {
   test.describe(`at ${vp.width}px`, () => {
     test.use({ viewport: vp });
 
+    // The non-breaking group is "saves ~17%.", not the whole clause.
+    // The clause measures 348px in the wide face and does not fit the
+    // 312px content box a 344px screen gives this h1, so holding it on
+    // one line is what pushed the figure off the page; the group that
+    // matters is the one that keeps "~17%." attached to its verb.
     test("pricing h1 does not orphan the saving", async ({ page }) => {
       await ready(page, "/pricing");
       expect(
-        await linesOf(page, "h1", "Yearly saves ~17%."),
-        "'~17%.' must sit on the same line as 'Yearly saves'",
+        await linesOf(page, "h1", "saves ~17%."),
+        "'~17%.' must sit on the same line as 'saves'",
       ).toBe(1);
     });
 
     test("calculators h1 does not split the compound", async ({ page }) => {
       await ready(page, "/calculators");
       expect(
-        await linesOf(page, "h1", "self-employed."),
-        "'self-employed.' must not break at its hyphen",
+        await linesOf(page, "h1", "self-employed"),
+        "'self-employed' must not break at its hyphen",
       ).toBe(1);
     });
 
@@ -179,6 +232,11 @@ for (const vp of [DESKTOP, PHONE]) {
         await ready(page, path);
         expect(await sidewaysOverflow(page), `${path} scrolls sideways`).toBeLessThanOrEqual(0);
       });
+
+      test(`${path} h1 and its spans hold the gutter`, async ({ page }) => {
+        await ready(page, path);
+        await expectH1WithinGutter(page, path);
+      });
     }
   });
 }
@@ -204,9 +262,13 @@ test.describe("at 344px", () => {
     expect(docOverflow, "the page must not scroll sideways at 344px").toBeLessThanOrEqual(0);
   });
 
-  // The narrowest width the shell has to hold: the longest secondary
-  // headline (/guides) and the one carrying a nowrap span (/pricing).
-  for (const path of ["/pricing", "/guides"]) {
+  // 344 is the narrowest width the shell has to hold, and it is where
+  // the h1 bound actually bites: /calculators joined this list because
+  // its headline ran to four lines here while passing at 375 and 1280,
+  // and no test was measuring it. The other two are the longest
+  // secondary headline (/guides) and the one carrying a nowrap span
+  // (/pricing).
+  for (const path of ["/pricing", "/calculators", "/guides"]) {
     test(`${path} h1 holds to three lines at 344px`, async ({ page }) => {
       await ready(page, path);
       expect(await h1Lines(page), `${path} h1 wrapped past its bound`).toBeLessThanOrEqual(3);
@@ -220,6 +282,16 @@ test.describe("at 344px", () => {
     test(`${path} does not scroll sideways at 344px`, async ({ page }) => {
       await ready(page, path);
       expect(await sidewaysOverflow(page), `${path} scrolls sideways`).toBeLessThanOrEqual(0);
+    });
+  }
+
+  // The gutter bound runs across the whole set at this width, not just
+  // the three above: 344 is where the content box is narrowest (312px)
+  // and where a box that overshoots is clipped rather than scrolled.
+  for (const path of SECONDARY) {
+    test(`${path} h1 and its spans hold the gutter at 344px`, async ({ page }) => {
+      await ready(page, path);
+      await expectH1WithinGutter(page, path);
     });
   }
 });

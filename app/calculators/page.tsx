@@ -166,9 +166,18 @@ export default function CalculatorsHubPage() {
 
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-6">
+        {/* Reordered, not resized. "Free tax calculators for the
+            self-employed." ran to four lines at 344px (measured: the
+            h1's content box is 312px there and "Free tax calculators"
+            alone is 386px), one over the bound the rest of the shell
+            holds to. The same four words in the order below break as
+            "Free" / "self-employed" / "tax calculators." and land on
+            three, so the keyword phrase survives intact and the type
+            scale is untouched. The compound stays one non-breaking
+            group so it never splits at its hyphen. */}
         <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
-          Free tax calculators for the{" "}
-          <span className="whitespace-nowrap">self-employed.</span>
+          Free <span className="whitespace-nowrap">self-employed</span> tax
+          calculators.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Instant estimates for freelancers, 1099 contractors, and small

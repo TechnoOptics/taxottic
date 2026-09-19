@@ -170,21 +170,32 @@ describe("the navy band is a token", () => {
   });
 });
 
+/**
+ * The non-breaking groups, asserted at source because a source grep is
+ * what removes them by accident. Both groups are NARROWER than the ones
+ * #631 wrote, and that is the fix, not a regression: the Year grammar's
+ * wide face (font-stretch 112%, weight 600) widened both headlines past
+ * the 312px content box a 344px screen gives them, so a group that held
+ * the whole clause on one line held it off the edge of the page. The
+ * rendered bound is in e2e/marketing-typography.spec.ts, which measures
+ * each span's own rect against the 16px gutter at 344, 375 and 1280;
+ * these two only keep the grouping from silently disappearing.
+ */
 describe("headlines hold their last word", () => {
-  it("pricing keeps 'Yearly saves ~17%.' on one line", () => {
+  it("pricing keeps 'saves ~17%.' on one line", () => {
     const src = read("app/pricing/page.tsx");
     // The figure and the pricing copy are unchanged; only the grouping is.
-    expect(src).toMatch(/Honest pricing\./);
+    expect(src).toMatch(/Honest pricing\. Yearly/);
     expect(
-      /<span className="[^"]*\bwhitespace-nowrap\b[^"]*">\s*Yearly saves ~17%\.\s*<\/span>/.test(src),
-      "wrap the phrase in a whitespace-nowrap span, do not shrink the type",
+      /<span className="[^"]*\bwhitespace-nowrap\b[^"]*">\s*saves ~17%\.\s*<\/span>/.test(src),
+      "wrap the verb and the figure in a whitespace-nowrap span, do not shrink the type",
     ).toBe(true);
   });
 
-  it("calculators keeps 'self-employed.' on one line, without a hyphen glyph", () => {
+  it("calculators keeps 'self-employed' on one line, without a hyphen glyph", () => {
     const src = read("app/calculators/page.tsx");
     expect(
-      /<span className="[^"]*\bwhitespace-nowrap\b[^"]*">\s*self-employed\.\s*<\/span>/.test(src),
+      /<span className="[^"]*\bwhitespace-nowrap\b[^"]*">\s*self-employed\s*<\/span>/.test(src),
       "wrap the word in a whitespace-nowrap span",
     ).toBe(true);
     expect(src.includes("self‑employed"), "no non-breaking hyphen glyph").toBe(false);

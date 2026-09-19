@@ -301,14 +301,26 @@ export default function PricingPage() {
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-6">
         {/* Left-aligned like every other header on the skin. The saving
-            is one non-breaking group so "~17%." never sits alone on a
-            line, and it is static brass: the animated sweep cost paint
-            on every idle frame (see .gold-shine in app/globals.css). */}
+            is still one non-breaking group so "~17%." never sits alone
+            on a line, but the group is the verb plus the figure, not
+            the whole clause. Measured: "Yearly saves ~17%." is 348px in
+            the Year grammar's wide face (font-stretch 112%, weight 600),
+            and a 344px screen gives this h1 a 312px content box, so the
+            old whole-clause nowrap painted the final "%." outside the
+            window and broke the 16px gutter at 375 too. "saves ~17%."
+            is 230px and fits both. e2e/marketing-typography.spec.ts
+            measures the span's own rect at 344, 375 and 1280, because
+            html and body carry overflow-x: clip and a scrollWidth check
+            can never see a box painted past the edge.
+
+            The span carries no colour class: it renders in ink like the
+            rest of the h1, so the "pricing h1 brass exception" the plan
+            records no longer exists. Nothing on this page is brass. */}
         <div>
           <h1 className="display text-4xl sm:text-6xl text-forest-900 max-w-2xl leading-tight">
-            Honest pricing.{" "}
+            Honest pricing. Yearly{" "}
             <span className="whitespace-nowrap">
-              Yearly saves ~17%.
+              saves ~17%.
             </span>
           </h1>
           <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
