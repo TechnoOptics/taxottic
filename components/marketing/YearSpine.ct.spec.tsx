@@ -56,3 +56,15 @@ test("panel variant shows the trailing text and no Today prefix", async ({ mount
   await expect(page.locator("#p .year-spine-row")).toContainText("Sample");
   await expect(page.locator("#p .runway-today-label")).toHaveText("Sep 5");
 });
+
+test("tick notes render under the dates in the mono label style", async ({ mount, page }) => {
+  await mount(
+    <div data-skin="instrument" style={{ width: 600 }}>
+      <YearSpine taxYear={2026} asOf={new Date("2026-09-05T00:00:00Z")} variant="paper" tickNotes={["Q1 · done", "Q2 · past", "Q3 · due", "Q4"]} />
+    </div>,
+  );
+  const notes = page.locator(".runway-tick-note");
+  await expect(notes).toHaveCount(4);
+  await expect(notes.nth(2)).toHaveText("Q3 · due");
+  expect(await notes.nth(2).evaluate((e) => getComputedStyle(e).textTransform)).toBe("uppercase");
+});

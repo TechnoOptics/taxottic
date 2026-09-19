@@ -423,6 +423,7 @@ html[data-theme="dark"] [data-skin="classic"] {
   position: absolute;
   white-space: nowrap;
 }
+[data-skin="instrument"] .year-spine .runway-tick-note { margin-top: 2px; font-size: 10px; }
 @media (prefers-reduced-motion: reduce) {
   [data-skin="instrument"] .year-spine .runway-fill { transition: none; }
 }
