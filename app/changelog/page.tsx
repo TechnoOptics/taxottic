@@ -150,6 +150,16 @@ const TAG_LABEL: Record<Tag, string> = {
   security: "Security",
 };
 
+// Tone carries meaning here: Security has to read red, not muted.
+// Deliberately NOT composed with `.mono-label`. That class is unlayered
+// (app/globals.css), and unlayered CSS beats `@layer utilities`
+// regardless of specificity, so its `color: var(--muted)` silently kills
+// every `text-*` below it. Same trap documented at globals.css's
+// `main, footer, nav` rule and in components/HeroInstrument.ct.spec.tsx.
+// The brand classes also stay because the dark theme is implemented as
+// `html[data-theme="dark"] .text-red-700 { ... !important }` overrides:
+// an inline style would win in light and break dark.
+// e2e/help-pricing.spec.ts asserts the rendered colours.
 const TAG_TONE: Record<Tag, string> = {
   shipped: "bg-emerald-50 border-emerald-100 text-emerald-700",
   fix: "bg-amber-50 border-amber-100 text-amber-800",
@@ -203,8 +213,10 @@ export default function ChangelogPage() {
               {e.tags.map((t) => (
                 <span
                   key={t}
+                  data-tag={t}
                   className={
-                    "mono-label px-2 py-0.5 rounded-sm border " +
+                    "text-[10px] font-medium uppercase px-2 py-0.5 " +
+                    "rounded-sm border " +
                     TAG_TONE[t]
                   }
                 >

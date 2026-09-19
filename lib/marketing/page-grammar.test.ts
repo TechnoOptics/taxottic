@@ -27,6 +27,45 @@ export const PUBLIC_MARKETING_PAGES = [
   "components/guides/GuideShell.tsx",
 ].sort();
 
+/**
+ * Class strings, one literal at a time. A className is sometimes a
+ * concatenation (`"a b " + TONE[t]`), so testing the whole file for
+ * `uppercase` and for a tracking value separately would fire on two
+ * unrelated elements; testing each literal keeps the AND honest.
+ */
+function classLiterals(src: string): string[] {
+  const out: string[] = [];
+  const re = /"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) out.push(m[1] ?? m[2] ?? m[3] ?? "");
+  return out;
+}
+
+/** The tracked eyebrow, at any tracking value and in either class order. */
+function tracts(src: string): string[] {
+  return classLiterals(src).filter(
+    (v) => /\buppercase\b/.test(v) && /tracking-\[0?\.\d+em\]/.test(v),
+  );
+}
+
+const count = (src: string, re: RegExp) => (src.match(re) ?? []).length;
+
+/**
+ * The nav key each page must pass to the shell. A page that is IN the
+ * nav has to light its own item; the two off-nav pages (/get, /book)
+ * must pass no key at all, or they light someone else's.
+ */
+function expectedCurrent(file: string): string | null {
+  if (file === "components/guides/GuideShell.tsx") return "guides";
+  if (file.startsWith("app/pricing/")) return "pricing";
+  if (file.startsWith("app/calculators/")) return "calculators";
+  if (file.startsWith("app/compare/")) return "compare";
+  if (file === "app/guides/page.tsx") return "guides";
+  if (file === "app/help/page.tsx") return "help";
+  if (file === "app/changelog/page.tsx") return "changelog";
+  return null; // app/get, app/book: deliberately off-nav.
+}
+
 describe("the secondary marketing pages are in the Year grammar", () => {
   it("covers the pages the spec names", () => {
     expect(PUBLIC_MARKETING_PAGES.length).toBeGreaterThanOrEqual(30);
@@ -48,12 +87,44 @@ describe("the secondary marketing pages are in the Year grammar", () => {
     });
     it(`${file} carries no retired primitive`, () => {
       expect(src).not.toMatch(/\bkicker\b|kicker-sm|gold-shine|text-gold-|bg-gold-|border-gold-|ring-gold-/);
-      expect(src).not.toMatch(/uppercase tracking-\[0\.(2|18|28|32)em\]/);
+      expect(
+        tracts(src),
+        "a tracked uppercase eyebrow, at any tracking value and in either " +
+          "class order. The live primitive is `mono-label`.",
+      ).toEqual([]);
       expect(src).not.toMatch(/rounded-full/);
       expect(src).not.toMatch(/\bitalic\b/);
       expect(src).not.toMatch(/&rarr;|→/);
       expect(src).not.toMatch(/\b(calmer|gentle|gently|quietly|friendly|scary)\b/i);
     });
+    it(`${file} mounts one shell and renders no chrome of its own`, () => {
+      // One shell, opened and closed once. Two shells means two headers,
+      // two spines and two footers; a stray </PageShell> means the page
+      // below it escaped the shell entirely.
+      if (isGuidePage) {
+        expect(count(src, /<GuideShell\b/g), "one GuideShell per guide").toBe(1);
+      } else {
+        expect(count(src, /<PageShell\b/g), "one PageShell per page").toBe(1);
+        expect(count(src, /<\/PageShell>/g), "one closing PageShell").toBe(1);
+      }
+      // The shell owns the header and the footer. A page that renders its
+      // own gets two of them, which is the state this sweep removed.
+      expect(src, "the shell owns the header").not.toMatch(/<header\b/);
+      expect(src, "the shell owns the footer").not.toMatch(/<footer\b/);
+    });
+
+    if (!isGuidePage) {
+      const want = expectedCurrent(file);
+      it(`${file} passes the shell ${want ? `current="${want}"` : "no nav key"}`, () => {
+        const keys = [...src.matchAll(/current="([^"]*)"/g)].map((m) => m[1]);
+        if (want) {
+          expect(keys, `the nav item for ${want} would never light`).toEqual([want]);
+        } else {
+          expect(keys, "an off-nav page must not light another page's item").toEqual([]);
+        }
+      });
+    }
+
     if (isShell) {
       it("GuideShell mounts the shell for every guide", () => {
         expect(src).toMatch(/<PageShell current="guides"/);

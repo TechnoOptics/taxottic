@@ -145,10 +145,11 @@ describe("the navy band is a token", () => {
 
   /**
    * Inverted by PR 2. These four pages wore the band as a page header.
-   * Every public marketing page now wears the paper PageShell, so navy
-   * survives only where navy is the subject: the home instrument, and
-   * the product screen it frames (components/marketing/Screen.tsx).
-   * A band back on a page header is a regression, not a choice.
+   * Every public marketing page now wears the paper PageShell, so the
+   * band's only remaining site in components/ is the home instrument.
+   * (app/example and app/watch/link still paint it; both are outside
+   * spec 4.2 and outside this assertion, deliberately.) A band back on
+   * a page header is a regression, not a choice.
    */
   it("the band is the instrument's alone", () => {
     for (const rel of [
