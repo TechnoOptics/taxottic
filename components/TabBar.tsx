@@ -24,7 +24,10 @@ export function TabBar({ companies, storedMode, forceNative = false }: { compani
   const pathname = usePathname() ?? "/";
   const show = forceNative || native === true;
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: createPortal needs document, which only exists post-mount
+    setMounted(true);
+  }, []);
   useEffect(() => {
     if (!show) return;
     // The clearance the bar needs only exists where the bar itself shows.

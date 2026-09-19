@@ -28,7 +28,10 @@ describe("the native check survives remounts", () => {
     expect(
       src,
       "useIsNativeApp must seed its state from the cache on mount, not from null",
-    ).toMatch(/useState<boolean \| null>\(\(\) => nativeKnown\)/);
+      // Whitespace-tolerant: what matters is that the initializer reads
+      // the cache, not how the call is spaced or whether the type argument
+      // is written with padding.
+    ).toMatch(/useState\s*<\s*boolean\s*\|\s*null\s*>\s*\(\s*\(\s*\)\s*=>\s*nativeKnown\s*\)/);
   });
 
   /**

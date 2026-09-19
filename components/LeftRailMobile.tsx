@@ -39,20 +39,11 @@ export function LeftRailMobile({
   companies = [],
   personalLocked = false,
   storedMode = null,
-  hideFab = false,
 }: {
   companies?: Company[];
   personalLocked?: boolean;
   /** profiles.workspace_mode, forwarded to the sheet's LeftRail. */
   storedMode?: WorkspaceMode | null;
-  /**
-   * The phone tab bar (TabBar) has its own "More" control that opens this
-   * same sheet by event, so when it's showing the FAB would be a second,
-   * redundant opener stacked on top of it. The sheet and its listeners
-   * (including the event below) stay either way, only the FAB's markup
-   * is skipped.
-   */
-  hideFab?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -192,7 +183,11 @@ export function LeftRailMobile({
   // instead of the viewport, it rendered stuck in the top-left status
   // bar instead of the bottom-left corner. Mounting on <body> (no
   // filtered ancestor) restores true viewport-fixed positioning.
-  const fab = mounted && !hideFab
+  // The phone tab bar has its own "More" control that opens this same
+  // sheet by event, so while it is showing the FAB would be a second,
+  // redundant opener. CSS does the hiding (html[data-tab-bar]
+  // .left-rail-fab in globals.css), which is why no prop does.
+  const fab = mounted
     ? createPortal(
         <button
           type="button"

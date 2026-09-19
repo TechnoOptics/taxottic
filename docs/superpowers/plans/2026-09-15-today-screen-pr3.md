@@ -21,7 +21,7 @@ Spec: `docs/superpowers/specs/2026-09-05-year-interface-design.md` sections 3, 4
 - Web behaviour unchanged where the plan does not touch it; the tab bar renders only on native shells and below `lg`; nothing needs a store build.
 - The dashboard's data reads stay bounded: at most three new queries, each scoped to the user (and company where the table is per company) and the tax year or the last seven days.
 - Any client JS or markup change bumps `CACHE_VERSION` in `public/sw.js` (Task 8), chosen against `origin/main` and every open PR at the moment of the bump, keeping every changelog entry.
-- Gates before every commit: `npx tsc --noEmit` clean; `npx eslint . --ignore-pattern 'playwright/.cache/**'` 0 errors and 46 warnings; `npx vitest run` green; the component suite green with no existing snapshot changed.
+- Gates before every commit: `npx tsc --noEmit` clean; `npx eslint . --ignore-pattern 'playwright/.cache/**'` 0 errors and the base's warning count (46 at plan time; 45 measured); `npx vitest run` green; the component suite green with no existing snapshot changed.
 - Commit messages end with the exact trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` and nothing after it.
 - Branch `feat/today-screen`, worktree `/Users/technooptics/Projects/taxottic-wt/today-screen`, stacked on `feat/native-front-door` (PR #634). Never use bare `git stash`.
 
@@ -1121,7 +1121,7 @@ Survey `CACHE_VERSION` on `origin/main` and every open PR (`gh pr list --state o
 
 - [ ] **Step 2: Gates**
 
-`npx tsc --noEmit`; `npx eslint . --ignore-pattern 'playwright/.cache/**' 2>&1 | tail -2` (0 errors, 46 warnings); `npx vitest run 2>&1 | tail -6`; `npx playwright test -c playwright-ct.config.ts 2>&1 | tail -3`; `npx playwright test --workers=1 2>&1 | tail -25` (the home visual baselines must not move: Today is behind sign-in and the tab bar is native-only).
+`npx tsc --noEmit`; `npx eslint . --ignore-pattern 'playwright/.cache/**' 2>&1 | tail -2` (0 errors, the base's warning count: 46 at plan time, 45 measured); `npx vitest run 2>&1 | tail -6`; `npx playwright test -c playwright-ct.config.ts 2>&1 | tail -3`; `npx playwright test --workers=1 2>&1 | tail -25` (the home visual baselines must not move: Today is behind sign-in and the tab bar is native-only).
 
 - [ ] **Step 3: Screenshots for the owner**
 

@@ -1808,10 +1808,7 @@ function todayYear(
     amountCents: q.amountCents,
     isPast: q.isPast,
   }));
-  const completedReminders: { due_at: string }[] = [];
-  const doneDueDates = completedReminders.map((r) =>
-    String(r.due_at).slice(0, 10)
-  );
+  const doneDueDates: string[] = [];
   return {
     payment: nextPaymentSummary({ quarters, paidSoFarCents, asOf }),
     tickNotes: spineNotes({ quarters, doneDueDates }),
