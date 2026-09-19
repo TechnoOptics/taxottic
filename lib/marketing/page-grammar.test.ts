@@ -162,3 +162,18 @@ describe("help and login", () => {
     expect(src).not.toMatch(/navy|bg-forest-9|text-cream/);
   });
 });
+
+describe("the index pages are ledger lists", () => {
+  for (const file of ["app/calculators/page.tsx", "app/guides/page.tsx", "app/compare/page.tsx", "app/changelog/page.tsx"]) {
+    it(`${file} renders its list through LedgerList and no card grid`, () => {
+      const src = strip(readFileSync(file, "utf8"));
+      expect(src).toMatch(/<LedgerList\b/);
+      expect(src).not.toMatch(/grid gap-4|grid-cols-2 gap-3|surface surface-hover/);
+    });
+  }
+  it("the changelog puts the date in the data face and tags in mono labels", () => {
+    const src = strip(readFileSync("app/changelog/page.tsx", "utf8"));
+    expect(src).toMatch(/date: formatEntryDate\(/);
+    expect(src).not.toMatch(/TAG_TONE|px-2 py-0\.5/);
+  });
+});

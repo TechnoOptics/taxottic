@@ -1,5 +1,5 @@
 import { PageShell } from "@/components/marketing/PageShell";
-import Link from "next/link";
+import { LedgerList } from "@/components/marketing/LedgerList";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 const SITE = "https://taxottic.com";
@@ -72,24 +72,15 @@ export default function CompareHubPage() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 grid gap-4">
-        {COMPARISONS.map((c) => (
-          <Link
-            key={c.slug}
-            href={`/compare/${c.slug}`}
-            className="card p-6 transition-colors"
-          >
-            <h2 className="display text-lg sm:text-xl text-forest-900">
-              {c.title}
-            </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {c.blurb}
-            </p>
-            <span className="mt-3 inline-block text-sm text-forest-800">
-              Read the comparison
-            </span>
-          </Link>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+        <LedgerList
+          ariaLabel="Comparisons"
+          items={COMPARISONS.map((c) => ({
+            href: `/compare/${c.slug}`,
+            title: c.title,
+            blurb: c.blurb,
+          }))}
+        />
       </section>
       </PageShell>
     </main>

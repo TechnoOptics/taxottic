@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/marketing/PageShell";
+import { LedgerList } from "@/components/marketing/LedgerList";
 import Link from "next/link";
 import { JsonLd } from "@/components/seo/JsonLd";
 
@@ -44,7 +45,7 @@ export const metadata = {
 const SITE = "https://taxottic.com";
 
 // Each guide is a real article page under /guides/<slug>. Keep this
-// list in sync with the route folders; it drives both the visible cards
+// list in sync with the route folders; it drives both the visible rows
 // and the ItemList structured data.
 const GUIDES = [
   {
@@ -155,24 +156,15 @@ export default function GuidesIndex() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-6 grid gap-4">
-        {GUIDES.map((g) => (
-          <Link
-            key={g.slug}
-            href={`/guides/${g.slug}`}
-            className="card p-6 transition-colors"
-          >
-            <h2 className="display text-lg sm:text-xl text-forest-900">
-              {g.title}
-            </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {g.blurb}
-            </p>
-            <span className="mt-3 inline-block text-sm text-forest-800">
-              Read the guide
-            </span>
-          </Link>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-6">
+        <LedgerList
+          ariaLabel="Guides"
+          items={GUIDES.map((g) => ({
+            href: `/guides/${g.slug}`,
+            title: g.title,
+            blurb: g.blurb,
+          }))}
+        />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">

@@ -20,14 +20,16 @@ test("/changelog renders release notes", async ({ page }) => {
 });
 
 /**
- * The tag tones are meaning, not decoration: Security has to read red.
- * They were inert for one commit because the tag also carried
- * `.mono-label`, which is unlayered and so beat the `text-*` utilities
- * in `@layer utilities` regardless of specificity, painting all four
- * tags `rgb(76, 87, 102)`. A source grep cannot see that; only the
- * resolved colour can, so this asserts the rendered value.
+ * The coloured tag pills are gone: a tag is now the ledger row's mono
+ * label. Two things have to hold, and neither is visible to a source
+ * grep. The label has to resolve to the data face `.mono-label` paints
+ * (uppercase, tracked, muted); that class is unlayered CSS, so a utility
+ * cannot overpaint it, but a missing `data-skin` ancestor would leave it
+ * unstyled. And every row has to carry its own anchor id, with its link
+ * pointing at that id, so a /changelog#... link lands on the change it
+ * names.
  */
-test("/changelog tag tones survive the cascade", async ({ page }) => {
+test("/changelog rows carry a mono-label tag and their own anchor", async ({ page }) => {
   await page.goto("/changelog");
 
   // Resolve --muted the way the browser would paint it, so the
@@ -41,16 +43,33 @@ test("/changelog tag tones survive the cascade", async ({ page }) => {
     return c;
   });
 
-  const colours: Record<string, string> = {};
-  for (const tag of ["shipped", "fix", "security"]) {
-    const el = page.locator(`[data-tag="${tag}"]`).first();
-    await expect(el).toBeVisible();
-    colours[tag] = await el.evaluate((n) => getComputedStyle(n).color);
-    expect(colours[tag], `the ${tag} tag renders as the muted ink`).not.toBe(muted);
+  const rows = page.locator("ul.ledger-list > li");
+  const rowCount = await rows.count();
+  expect(rowCount, "the changelog renders its entries as ledger rows").toBeGreaterThan(10);
+
+  for (const row of await rows.all()) {
+    const id = await row.getAttribute("id");
+    expect(id, "every row is addressable").toBeTruthy();
+    expect(
+      await row.locator("a").first().getAttribute("href"),
+      "the row links to its own anchor",
+    ).toBe(`#${id}`);
   }
-  // Three tones, three distinct colours. One colour for all three is the
-  // exact failure the unlayered class caused.
-  expect(new Set(Object.values(colours)).size).toBe(3);
+
+  // Every entry carries at least one tag, so every row carries one label.
+  const labels = page.locator("ul.ledger-list .mono-label");
+  await expect(labels).toHaveCount(rowCount);
+
+  const style = await labels.first().evaluate((n) => {
+    const s = getComputedStyle(n);
+    return { transform: s.textTransform, tracking: s.letterSpacing, colour: s.color };
+  });
+  expect(style.transform, "the tag reads as a mono label").toBe("uppercase");
+  expect(parseFloat(style.tracking), "the tag is tracked").toBeGreaterThan(0);
+  expect(style.colour, "the tag reads as the muted ink").toBe(muted);
+
+  // Several tags on one entry read as one label, joined by a middot.
+  await expect(labels.first()).toHaveText(/^[A-Za-z]+(?: \u00b7 [A-Za-z]+)*$/);
 });
 
 /**

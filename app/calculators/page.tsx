@@ -1,5 +1,5 @@
 import { PageShell } from "@/components/marketing/PageShell";
-import Link from "next/link";
+import { LedgerList } from "@/components/marketing/LedgerList";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 import { ratePeriodsForYear } from "@/lib/calculators/mileage-reimbursement";
@@ -39,7 +39,7 @@ export const metadata = {
   },
 };
 
-// Live calculators. Add a folder under /calculators/<slug> + a card here.
+// Live calculators. Add a folder under /calculators/<slug> + a row here.
 const CALCULATORS = [
   {
     slug: "self-employment-tax",
@@ -177,24 +177,15 @@ export default function CalculatorsHubPage() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-4 grid gap-4">
-        {CALCULATORS.filter((c) => c.live).map((c) => (
-          <Link
-            key={c.slug}
-            href={`/calculators/${c.slug}`}
-            className="card p-6 transition-colors"
-          >
-            <h2 className="display text-lg sm:text-xl text-forest-900">
-              {c.title}
-            </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {c.blurb}
-            </p>
-            <span className="mt-3 inline-block text-sm text-forest-800">
-              Open the calculator
-            </span>
-          </Link>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-4">
+        <LedgerList
+          ariaLabel="Calculators"
+          items={CALCULATORS.filter((c) => c.live).map((c) => ({
+            href: `/calculators/${c.slug}`,
+            title: c.title,
+            blurb: c.blurb,
+          }))}
+        />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -205,19 +196,14 @@ export default function CalculatorsHubPage() {
           The calculators tell you how much. These plain-English guides tell you
           why, and what you can legally do to owe less.
         </p>
-        <div className="mt-4 grid sm:grid-cols-2 gap-3">
-          {GUIDES.map((g) => (
-            <Link
-              key={g.slug}
-              href={`/guides/${g.slug}`}
-              className="card p-4 transition-colors text-sm text-forest-900"
-            >
-              {g.title}
-              <span className="block mt-1 text-xs text-forest-800">
-                Read the guide
-              </span>
-            </Link>
-          ))}
+        <div className="mt-4">
+          <LedgerList
+            ariaLabel="Guides"
+            items={GUIDES.map((g) => ({
+              href: `/guides/${g.slug}`,
+              title: g.title,
+            }))}
+          />
         </div>
       </section>
       </PageShell>

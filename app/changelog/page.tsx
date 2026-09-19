@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/marketing/PageShell";
+import { LedgerList } from "@/components/marketing/LedgerList";
 import Link from "next/link";
 
 export const metadata = {
@@ -150,22 +151,25 @@ const TAG_LABEL: Record<Tag, string> = {
   security: "Security",
 };
 
-// Tone carries meaning here: Security has to read red, not muted.
-// Deliberately NOT composed with `.mono-label`. That class is unlayered
-// (app/globals.css), and unlayered CSS beats `@layer utilities`
-// regardless of specificity, so its `color: var(--muted)` silently kills
-// every `text-*` below it. Same trap documented at globals.css's
-// `main, footer, nav` rule and in components/HeroInstrument.ct.spec.tsx.
-// The brand classes also stay because the dark theme is implemented as
-// `html[data-theme="dark"] .text-red-700 { ... !important }` overrides:
-// an inline style would win in light and break dark.
-// e2e/help-pricing.spec.ts asserts the rendered colours.
-const TAG_TONE: Record<Tag, string> = {
-  shipped: "bg-emerald-50 border-emerald-100 text-emerald-700",
-  fix: "bg-amber-50 border-amber-100 text-amber-800",
-  ops: "bg-forest-50 border-forest-100 text-forest-700",
-  security: "bg-red-50 border-red-100 text-red-700",
-};
+// Each entry is addressable: the row carries `id` so a /changelog#...
+// link lands on the change it names. The id is derived from the date and
+// the title, so it is stable as long as the entry is.
+function entryId(e: Entry): string {
+  const slug = e.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${e.date}-${slug}`;
+}
+
+function formatEntryDate(date: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
+}
 
 export default function ChangelogPage() {
   return (
@@ -189,44 +193,20 @@ export default function ChangelogPage() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 grid gap-7">
-        {ENTRIES.map((e, i) => (
-          <article key={i} className="card p-5 sm:p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="display text-lg text-forest-900">{e.title}</h2>
-              <time
-                dateTime={e.date}
-                className="text-[11px] text-ink-muted tracking-wide"
-              >
-                {new Intl.DateTimeFormat("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  timeZone: "UTC",
-                }).format(new Date(`${e.date}T00:00:00Z`))}
-              </time>
-            </div>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {e.body}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {e.tags.map((t) => (
-                <span
-                  key={t}
-                  data-tag={t}
-                  className={
-                    "text-[10px] font-medium uppercase px-2 py-0.5 " +
-                    "rounded-sm border " +
-                    TAG_TONE[t]
-                  }
-                >
-                  {TAG_LABEL[t]}
-                </span>
-              ))}
-            </div>
-          </article>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+        <LedgerList
+          ariaLabel="Changes"
+          items={ENTRIES.map((e) => ({
+            id: entryId(e),
+            href: `#${entryId(e)}`,
+            title: e.title,
+            blurb: e.body,
+            date: formatEntryDate(e.date),
+            tag: e.tags.map((t) => TAG_LABEL[t]).join(" \u00b7 "),
+          }))}
+        />
       </section>
+
       </PageShell>
     </main>
   );
