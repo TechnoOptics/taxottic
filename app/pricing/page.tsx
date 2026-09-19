@@ -1,5 +1,6 @@
 import { PageShell } from "@/components/marketing/PageShell";
 import { TierTable, type TierRow } from "@/components/marketing/TierTable";
+import { ChevronDownIcon } from "@/components/ui/Icons";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PLAN_LIMITS, PLAN_PRICING, isUnlimited } from "@/lib/plans/limits";
 
@@ -261,9 +262,10 @@ function limitLabel(value: number): string {
 /**
  * One row per tier, built from the same PLAN_PRICING / PLAN_LIMITS the
  * billing engine reads, so a repricing cannot leave the page behind.
- * The paid CTA carries the href only; TierTable renders it inside
- * <WebOnly>, which is where the App Store 3.1.1 gate belongs now that
- * the control lives there.
+ * A paid CTA carries its plan name and no route: TierTable builds the
+ * billing href inside its <WebOnly>, which is where the App Store 3.1.1
+ * gate belongs now that the control lives there, and keeps the route
+ * itself inside the file the purchase-control guard checks.
  */
 const TIERS: TierRow[] = TIER_ORDER.map((tier) => {
   const pricing = priceFor(tier);
@@ -279,11 +281,8 @@ const TIERS: TierRow[] = TIER_ORDER.map((tier) => {
     bankLinks: limitLabel(limits.bankInstitutions),
     cta:
       tier === "free"
-        ? { href: "/login", label: "Start free" }
-        : {
-            href: `/login?next=/billing&plan=${tier}`,
-            label: `Choose ${NAMES[tier]}`,
-          },
+        ? { kind: "signin", href: "/login", label: "Start free" }
+        : { kind: "purchase", plan: tier, label: `Choose ${NAMES[tier]}` },
     popular: tier === "solo",
   };
 });
@@ -329,8 +328,8 @@ export default function PricingPage() {
           <Faq q="Is there a free trial on paid tiers?">
             Yes, every paid tier ships with a 14-day trial. No credit
             card required to start. We send one reminder email three days
-            before the trial converts. Cancel anytime from{" "}
-            <em>Billing &amp; plan</em>.
+            before the trial converts. Cancel anytime from
+            &ldquo;Billing &amp; plan&rdquo;.
           </Faq>
           <Faq q="How does the credit grant work?">
             Each tier includes a monthly grant of AI credits (used by
@@ -390,8 +389,12 @@ function priceFor(
 function Faq({ q, children }: { q: string; children: React.ReactNode }) {
   return (
     <details className="border-b border-edge py-3">
-      <summary className="min-h-11 flex items-center cursor-pointer select-none font-medium text-[var(--foreground)]">
-        {q}
+      {/* The chevron is the only thing telling the reader the row opens:
+          a flex summary drops the native marker, and this copy used to
+          be visible without a control at all. */}
+      <summary className="faq-summary min-h-11 flex items-center justify-between gap-3 cursor-pointer select-none font-medium text-[var(--foreground)]">
+        <span>{q}</span>
+        <ChevronDownIcon className="faq-chevron size-4 shrink-0" />
       </summary>
       <div className="pb-2">{children}</div>
     </details>

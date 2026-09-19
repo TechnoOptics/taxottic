@@ -15,14 +15,19 @@ import { formatTierPrice } from "@/lib/plans/format";
  * below it, because a six-column table on a 344px screen is a
  * horizontal scroll or a type size nobody can read. The swap is in
  * app/globals.css next to the rest of the block, not in `sm:hidden`
- * here: globals.css is unlayered and would beat the utility. Only one
- * tree is ever displayed, so the row ids live on the table rows; an id
- * on both would be a duplicate.
+ * here: globals.css is unlayered and would beat the utility.
  *
- * The paid CTA is wrapped in <WebOnly> here rather than at the call
- * site: the control is rendered here, so the App Store 3.1.1 gate
- * belongs here too. The page hands over an href and never a rendered
- * purchase control.
+ * Anchors: only one tree is displayed at a time, so a per-tier id can
+ * only ever resolve at one width (an id in both trees would be a
+ * duplicate, and the hidden copy scrolls nowhere). The whole block
+ * therefore carries one id, `tiers`, which is present and displayed at
+ * every width; that is what the home hero's firm CTA links to.
+ *
+ * The paid CTA is wrapped in <WebOnly> here, and its href is BUILT
+ * inside that wrapper: the control is rendered here, so the App Store
+ * 3.1.1 gate belongs here, and keeping the /billing route inside the
+ * gated file is what lets lib/app-store/purchase-controls.test.ts see
+ * this call site at all (it failed to, until 2026-09-19).
  */
 export type TierRow = {
   key: string;
@@ -34,24 +39,33 @@ export type TierRow = {
   /** Rendered as given, e.g. "1", "Unlimited", "-". */
   companies: string;
   bankLinks: string;
-  cta: { href: string; label: string };
+  cta: TierCtaSpec;
   popular?: boolean;
 };
 
-/** The free tier's CTA is sign-in, not a purchase, so it needs no gate. */
-const FREE_KEY = "free";
+/**
+ * Sign-in is a plain link. A purchase names its plan and nothing else:
+ * the route to billing is assembled inside the gate below, so no caller
+ * can hold a ready-made purchase href outside it.
+ */
+export type TierCtaSpec =
+  | { kind: "signin"; href: string; label: string }
+  | { kind: "purchase"; plan: string; label: string };
 
 function TierCta({ tier, block }: { tier: TierRow; block?: boolean }) {
   const className =
     (tier.popular ? "btn-primary" : "btn-quiet") +
     " min-h-11" +
     (block ? " w-full" : "");
-  const link = (
-    <Link href={tier.cta.href} className={className}>
-      {tier.cta.label}
-    </Link>
-  );
-  if (tier.key === FREE_KEY) return link;
+  if (tier.cta.kind === "signin") {
+    return (
+      <Link href={tier.cta.href} className={className}>
+        {tier.cta.label}
+      </Link>
+    );
+  }
+  const plan = tier.cta.plan;
+  const label = tier.cta.label;
   return (
     <WebOnly
       fallback={
@@ -60,7 +74,9 @@ function TierCta({ tier, block }: { tier: TierRow; block?: boolean }) {
         </span>
       }
     >
-      {link}
+      <Link href={`/login?next=/billing&plan=${plan}`} className={className}>
+        {label}
+      </Link>
     </WebOnly>
   );
 }
@@ -83,7 +99,7 @@ function Includes({ tier }: { tier: TierRow }) {
 
 export function TierTable({ tiers }: { tiers: readonly TierRow[] }) {
   return (
-    <>
+    <div id="tiers" className="scroll-mt-32">
       <div className="tier-table-desktop">
         <table className="tier-table">
           <thead>
@@ -100,7 +116,7 @@ export function TierTable({ tiers }: { tiers: readonly TierRow[] }) {
           </thead>
           <tbody>
             {tiers.map((tier) => (
-              <tr key={tier.key} id={tier.key} className="scroll-mt-24">
+              <tr key={tier.key}>
                 <th scope="row">
                   {tier.name}
                   {tier.popular ? (
@@ -136,6 +152,9 @@ export function TierTable({ tiers }: { tiers: readonly TierRow[] }) {
             <h3 className="text-lg font-semibold">
               {tier.name}
             </h3>
+            {tier.popular ? (
+              <span className="mono-label block">Most popular</span>
+            ) : null}
             <p className="text-sm">{tier.tagline}</p>
             <div className="tier-prices">
               <span>
@@ -160,6 +179,6 @@ export function TierTable({ tiers }: { tiers: readonly TierRow[] }) {
           </section>
         ))}
       </div>
-    </>
+    </div>
   );
 }

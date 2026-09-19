@@ -53,6 +53,66 @@ test("/changelog tag tones survive the cascade", async ({ page }) => {
   expect(new Set(Object.values(colours)).size).toBe(3);
 });
 
+/**
+ * The FAQ rows open and close, and a `display: flex` summary drops the
+ * native ::marker, so the chevron IS the affordance. Without it the row
+ * reads as a bold line of text and the answer (visible copy before the
+ * Year rewrite) is behind an invisible control.
+ */
+test("/pricing FAQ rows show a disclosure indicator, closed and open", async ({ page }) => {
+  await page.goto("/pricing");
+  const summary = page.locator("details.border-b > summary").first();
+  await expect(summary).toBeVisible();
+  const chevron = summary.locator("svg").first();
+  await expect(chevron).toBeVisible();
+  const box = (await chevron.boundingBox())!;
+  expect(box.width, "the indicator has a real box when the row is closed").toBeGreaterThan(8);
+  expect(box.height).toBeGreaterThan(8);
+  const closed = await chevron.evaluate((n) => getComputedStyle(n).transform);
+  await summary.click();
+  await expect(summary.locator("xpath=..")).toHaveAttribute("open", "");
+  const open = await chevron.evaluate((n) => getComputedStyle(n).transform);
+  expect(open, "the indicator turns when the row opens").not.toBe(closed);
+});
+
+/**
+ * The home hero's firm CTA links to /pricing#tiers. The tier block is
+ * two responsive trees, so a per-tier id would resolve at one width and
+ * scroll nowhere at the other (a display:none target has a zero box);
+ * this asserts the one anchor that is displayed at every width lands on
+ * the tiers and clears the fixed header.
+ *
+ * The navigation is a hash navigation rather than a cold load with the
+ * fragment in the URL: measured on this app, a cold load never performs
+ * the fragment scroll for ANY id (a `<tr id>` deep in the page behaves
+ * the same), so asserting that would pin a browser/dev-server behaviour
+ * instead of this page's anchors.
+ */
+/**
+ * One test, two projects: chromium runs it wide (the table tree) and
+ * mobile-chrome at a phone width (the ledger tree), so both trees are
+ * covered without emulating a desktop viewport on a mobile device,
+ * where the hash scroll lands on the visual viewport and window.scrollY
+ * stays 0.
+ */
+test("/pricing#tiers scrolls to the tier block", async ({ page }) => {
+  await page.goto("/pricing");
+  const tiers = page.locator("#tiers");
+  await expect(tiers, "the anchor target is displayed at this width").toBeVisible();
+  const box = (await tiers.boundingBox())!;
+  expect(box.height, "and it is the tier block, not an empty node").toBeGreaterThan(200);
+
+  await page.goto("/pricing#tiers");
+  await page.waitForTimeout(400);
+  expect(
+    await page.evaluate(() => window.scrollY),
+    "the fragment scrolls the page",
+  ).toBeGreaterThan(100);
+  const top = await tiers.evaluate((n) => n.getBoundingClientRect().top);
+  expect(top, "the block clears the fixed header rather than hiding under it").toBeGreaterThan(-8);
+  expect(top).toBeLessThan(220);
+});
+
 test("/example demo page renders", async ({ page }) => {
   await page.goto("/example");
   await expect(page.locator("h1").first()).toBeVisible();

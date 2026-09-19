@@ -263,11 +263,21 @@ function analyse(rawSrc: string): Finding[] {
  * purpose. It cannot say which line is wrong, but it cannot be dodged
  * by indirection either, and a file with no gate at all is the failure
  * mode that actually ships.
+ *
+ * The route does not have to open the string. It reaches checkout just
+ * as often as a redirect parameter, `/login?next=/billing&plan=solo`,
+ * where the character in front of it is `=` rather than a quote. That
+ * exact shape was the pricing page's upgrade CTA and this guard could
+ * not see it (found 2026-09-19 while moving the CTA into TierTable:
+ * deleting the <WebOnly> wrapper left the whole file green). So the
+ * character before the route may be a quote, a backtick, or the `=` of
+ * a query parameter; the negative lookahead still keeps
+ * `/billing-history-export` out.
  */
 function mentionsPurchaseRoute(rawSrc: string): boolean {
   const src = stripComments(rawSrc);
   return PURCHASE_ROUTES.some((route) =>
-    new RegExp(`[\`"']${route.replace(/\//g, "\\/")}(?![a-z0-9-])`).test(src),
+    new RegExp(`[\`"'=]${route.replace(/\//g, "\\/")}(?![a-z0-9-])`).test(src),
   );
 }
 
@@ -345,9 +355,35 @@ describe("the purchase-control analyser sees what it claims to see", () => {
     expect(carriesNativeCheck(src)).toBe(false);
   });
 
+  it("catches a purchase route carried as a redirect parameter", () => {
+    // The shape /pricing shipped: the tappable href is /login, and the
+    // purchase route rides in ?next=. Layer A cannot see it (the route
+    // does not open the attribute), so layer B is the whole of the
+    // coverage, and it read this file as mentioning no route at all
+    // until the `=` was allowed in front.
+    const src = "<Link href={`/login?next=/billing&plan=${plan}`}>Choose</Link>";
+    expect(analyse(src)).toEqual([]);
+    expect(mentionsPurchaseRoute(src)).toBe(true);
+    expect(carriesNativeCheck(src)).toBe(false);
+  });
+
+  it("still clears a redirect parameter in a file that carries the gate", () => {
+    const src =
+      'import { WebOnly } from "@/components/WebOnly";\n' +
+      "<WebOnly><Link href={`/login?next=/billing&plan=${plan}`}>Choose</Link></WebOnly>";
+    expect(analyse(src)).toEqual([]);
+    expect(mentionsPurchaseRoute(src)).toBe(true);
+    expect(carriesNativeCheck(src)).toBe(true);
+  });
+
   it("does not mistake an unrelated route for a purchase route", () => {
     const src = `<Link href="/billing-history-export">Export</Link><Link href="/settings">Settings</Link>`;
     expect(analyse(src)).toEqual([]);
+    // Layer B has to hold the same line: the `=` allowance above must not
+    // turn `?next=/billing-history-export` into a purchase route.
+    expect(mentionsPurchaseRoute('<a href="/login?next=/billing-history-export">x</a>')).toBe(
+      false,
+    );
   });
 });
 
