@@ -320,7 +320,7 @@ export default function HelpPage() {
             for the full picture.
           </Faq>
           <Faq q="How do I disconnect a bank?">
-            Open the company, then <em>Banks &raquo; Disconnect</em>.
+            Open the company, then Banks &raquo; Disconnect.
             We&apos;ll revoke the Plaid token and stop syncing.
           </Faq>
           <Faq q="My bank isn't in the Plaid list, what now?">
@@ -370,7 +370,7 @@ export default function HelpPage() {
             We keep your data accessible for 30 days after cancellation
             so you can re-subscribe without losing context. After that,
             company data is deleted on a rolling 90-day window. Export
-            everything from <em>Billing &raquo; Export</em> before
+            everything from Billing &raquo; Export before
             cancelling if you want a permanent copy.
           </Faq>
           <Faq q="How do credits and credit roll-over work?">
@@ -384,7 +384,7 @@ export default function HelpPage() {
 
         <FaqCategory title="Accounts &amp; security">
           <Faq q="How do I switch between two of my accounts?">
-            Profile menu &raquo; <em>Switch accounts</em>. We force the
+            Profile menu &raquo; Switch accounts. We force the
             Google / Microsoft account picker so you explicitly pick
             which identity to use.
           </Faq>

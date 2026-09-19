@@ -103,7 +103,7 @@ describe("the secondary marketing pages are in the Year grammar", () => {
           "class order. The live primitive is `mono-label`.",
       ).toEqual([]);
       expect(src).not.toMatch(/rounded-full/);
-      expect(src).not.toMatch(/\bitalic\b/);
+      expect(src).not.toMatch(/\bitalic\b|<em\b|<i\b/);
       expect(src).not.toMatch(/&rarr;|→/);
       expect(src).not.toMatch(/\b(calmer|gentle|gently|quietly|friendly|scary)\b/i);
     });

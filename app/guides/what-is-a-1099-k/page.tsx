@@ -102,7 +102,7 @@ export default function Page() {
           year.
         </P>
         <Callout>
-          The threshold only decides <em>whether a form is issued</em>, it has
+          The threshold only decides whether a form is issued, it has
           nothing to do with whether the money is taxable. Business income is
           taxable whether or not a 1099-K shows up, so report your income from
           your own records regardless.

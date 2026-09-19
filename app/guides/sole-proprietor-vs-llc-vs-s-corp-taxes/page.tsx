@@ -115,7 +115,7 @@ export default function Page() {
           </LI>
           <LI>
             Remaining profit comes out as <strong>distributions</strong>, which
-            are <em>not</em> subject to self-employment tax.
+            are not subject to self-employment tax.
           </LI>
           <LI>
             That split can cut the 15.3% you&apos;d otherwise pay on all

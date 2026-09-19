@@ -94,7 +94,7 @@ export default function Page() {
             basis, not just now and then.
           </LI>
           <LI>
-            <strong>Exclusive</strong>, that area is used <em>only</em> for
+            <strong>Exclusive</strong>, that area is used only for
             business. A spare room that&apos;s your office passes; the dining
             table you also eat dinner at does not.
           </LI>

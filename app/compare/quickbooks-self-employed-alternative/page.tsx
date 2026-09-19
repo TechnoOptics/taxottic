@@ -145,7 +145,7 @@ export default function QuickBooksAlternativePage() {
             </strong>{" "}
 , it pairs with whatever you file with. What it does instead is keep
             a live answer to the question that actually keeps freelancers up at
-            night: <em>how much will I owe, and am I setting enough aside?</em>
+            night: &ldquo;how much will I owe, and am I setting enough aside?&rdquo;
           </p>
         </div>
 

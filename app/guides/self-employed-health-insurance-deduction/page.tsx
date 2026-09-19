@@ -119,7 +119,7 @@ export default function Page() {
         <UL>
           <LI>It lowers your adjusted gross income (and your income tax).</LI>
           <LI>
-            It does <em>not</em> reduce the profit your 15.3% self-employment
+            It does not reduce the profit your 15.3% self-employment
             tax is figured on (because it&apos;s off Schedule C).
           </LI>
         </UL>

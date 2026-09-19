@@ -124,7 +124,7 @@ export default function Page() {
         </P>
 
         <Callout>
-          QBI stacks <em>on top of</em> your ordinary deductions, it
+          QBI stacks on top of your ordinary deductions, it
           doesn&apos;t replace them. Taxottic factors the QBI math into your
           forecast automatically, so the deduction is reflected in what it tells
           you to set aside rather than being a year-end surprise.
