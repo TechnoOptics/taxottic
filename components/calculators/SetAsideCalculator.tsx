@@ -81,9 +81,7 @@ export function SetAsideCalculator({
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       <div className="card p-6 sm:p-7">
-        <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-          Your year
-        </div>
+        <div className="mono-label">Your year</div>
         <h2 className="display text-xl text-forest-900 mt-1">
           What are you making?
         </h2>
@@ -172,44 +170,41 @@ export function SetAsideCalculator({
 
       <div className="lg:sticky lg:top-6">
         {result ? (
-          <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-                Set aside
-              </div>
+          <div className="card p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-3">
+              <div className="mono-label">Set aside</div>
               <ShareButton onShare={share} copied={copied} />
             </div>
             <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-              <span className="display text-5xl sm:text-6xl text-forest-900">
+              <span className="figure font-medium text-5xl sm:text-6xl text-forest-900">
                 {(result.pct * 100).toFixed(0)}%
               </span>
               <span className="text-sm text-ink-soft">of every payment</span>
             </div>
             <p className="mt-2 text-sm text-ink-soft">
               That&rsquo;s{" "}
-              <span className="font-medium text-forest-800">
+              <span className="figure font-medium text-forest-800">
                 {formatCents(result.perThousandCents)} for every $1,000
               </span>{" "}
               you get paid, about{" "}
-              <span className="font-medium text-forest-800">
+              <span className="figure font-medium text-forest-800">
                 {formatCents(result.totalTaxCents)}
               </span>{" "}
               across the whole year.
             </p>
 
-            <div className="mt-6 rounded-xl bg-forest-900 text-cream px-5 py-4">
-              <div className="text-sm leading-relaxed text-cream/90">
+            <div className="mt-6 border-t border-edge pt-5">
+              <p className="text-sm leading-relaxed text-ink-soft">
                 A percentage is a guess that drifts as your income changes.
                 Taxottic keeps the number{" "}
-                <span className="text-gold-300 font-medium">exact and live</span>
+                <strong className="font-medium text-forest-900">
+                  exact and live
+                </strong>
                 , synced to your bank, so you set aside the right amount, not a
                 rule of thumb.
-              </div>
-              <Link
-                href="/login?intent=signup"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
-              >
-                Get my exact number, free →
+              </p>
+              <Link href="/login?intent=signup" className="btn-primary mt-3">
+                Get my exact number, free
               </Link>
             </div>
 
@@ -222,7 +217,7 @@ export function SetAsideCalculator({
         ) : (
           <div className="card p-6 sm:p-7 grid place-items-center text-center min-h-[240px]">
             <div>
-              <BankIcon className="size-9 mx-auto text-gold-700" />
+              <BankIcon className="size-9 mx-auto text-ink-muted" />
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your income to see the percentage of each payment to move
                 into savings, so April is never a surprise.

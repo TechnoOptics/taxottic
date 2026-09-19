@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
  *   link opens a pre-filled, already-computed calculator with a matching
  *   OG preview. It also returns a `share()` that uses the native share
  *   sheet on mobile and falls back to copy-to-clipboard on desktop.
- * - ShareButton is the pill that calls it.
+ * - ShareButton is the quiet button that calls it.
  */
 export function useCalcShare(
   params: Record<string, string | undefined>,
@@ -74,7 +74,7 @@ export function ShareButton({
     <button
       type="button"
       onClick={onShare}
-      className="shrink-0 -mt-1 inline-flex items-center gap-1.5 rounded-full border border-forest-100 px-3 py-1.5 text-xs font-medium text-forest-800 hover:bg-cream hover:border-gold-300 transition-colors"
+      className="btn-quiet shrink-0 gap-1.5 px-3.5 text-xs"
       aria-label="Share this result"
     >
       {copied ? (
