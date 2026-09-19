@@ -1,7 +1,6 @@
 import { PageShell } from "@/components/marketing/PageShell";
-import Link from "next/link";
+import { TierTable, type TierRow } from "@/components/marketing/TierTable";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { WebOnly } from "@/components/WebOnly";
 import { PLAN_LIMITS, PLAN_PRICING, isUnlimited } from "@/lib/plans/limits";
 
 export const metadata = {
@@ -171,23 +170,33 @@ const PRICING_BREADCRUMB_LD = {
 // pricing, update limits.ts and the strings here in the same commit so
 // they never drift.
 //
-// Structure: hero, audience-aware tier grid (4 cards visible by
-// default; the smaller Filer + bigger Scale/Practice tiers expand on
-// click), the comparison table and the FAQ. The shell supplies the
-// header and the footer.
+// Structure: hero, the six tiers as one ruled table (a stacked ledger
+// on a phone), and the FAQ. The shell supplies the header and the
+// footer. Every tier is on the page at once: the old grid showed four
+// cards and hid Filer and Practice behind an "Also available" line,
+// which is a worse answer to "what does this cost" than six rows.
 
 type TierKey = "free" | "filer" | "solo" | "studio" | "scale" | "practice";
 
-function fmtCents(cents: number): string {
-  if (cents % 100 === 0) return `$${cents / 100}`;
-  return `$${(cents / 100).toFixed(2)}`;
-}
+// The ladder, in the order it is read: cheapest first, the two tiers
+// the old grid hid (Filer, Practice) back in line with the rest.
+const TIER_ORDER: TierKey[] = [
+  "free",
+  "filer",
+  "solo",
+  "studio",
+  "scale",
+  "practice",
+];
 
-// Capture the four primary tiers shown side-by-side. Filer is the
-// secondary entry-paid tier (W-2 only), we link to it but don't show
-// it on the main card row, since the most common starting point is
-// Solo or Studio.
-const PRIMARY: TierKey[] = ["free", "solo", "studio", "scale"];
+const NAMES: Record<TierKey, string> = {
+  free: "Free",
+  filer: "Filer",
+  solo: "Solo",
+  studio: "Studio",
+  scale: "Scale",
+  practice: "Practice",
+};
 
 const TAGLINES: Record<TierKey, string> = {
   free: "Try the calm, no card.",
@@ -243,6 +252,42 @@ const HIGHLIGHTS: Record<TierKey, string[]> = {
   ],
 };
 
+/** A cap as a reader sees it: "Unlimited", a count, or "-" for none. */
+function limitLabel(value: number): string {
+  if (isUnlimited(value)) return "Unlimited";
+  return value === 0 ? "-" : String(value);
+}
+
+/**
+ * One row per tier, built from the same PLAN_PRICING / PLAN_LIMITS the
+ * billing engine reads, so a repricing cannot leave the page behind.
+ * The paid CTA carries the href only; TierTable renders it inside
+ * <WebOnly>, which is where the App Store 3.1.1 gate belongs now that
+ * the control lives there.
+ */
+const TIERS: TierRow[] = TIER_ORDER.map((tier) => {
+  const pricing = priceFor(tier);
+  const limits = PLAN_LIMITS[tier];
+  return {
+    key: tier,
+    name: NAMES[tier],
+    tagline: TAGLINES[tier],
+    monthlyCents: pricing?.monthly ?? 0,
+    yearlyCents: pricing?.yearly ?? 0,
+    highlights: HIGHLIGHTS[tier],
+    companies: limitLabel(limits.companies),
+    bankLinks: limitLabel(limits.bankInstitutions),
+    cta:
+      tier === "free"
+        ? { href: "/login", label: "Start free" }
+        : {
+            href: `/login?next=/billing&plan=${tier}`,
+            label: `Choose ${NAMES[tier]}`,
+          },
+    popular: tier === "solo",
+  };
+});
+
 export default function PricingPage() {
   return (
     <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
@@ -273,36 +318,14 @@ export default function PricingPage() {
           </p>
         </div>
 
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {PRIMARY.map((tier) => (
-            <TierCard key={tier} tier={tier} />
-          ))}
-        </div>
-
-        <div className="mt-8 text-center text-xs text-ink-muted">
-          Also available:{" "}
-          <a href="#filer" className="underline hover:text-forest-900">
-            Filer
-          </a>{" "}
-          (W-2 only) and{" "}
-          <a href="#practice" className="underline hover:text-forest-900">
-            Practice
-          </a>{" "}
-          (firms with 10+ clients).
-        </div>
-      </section>
-
-      {/* Secondary tiers (Filer + Practice) shown below the primary row */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <TierCard tier="filer" anchor="filer" />
-          <TierCard tier="practice" anchor="practice" />
+        <div className="mt-10">
+          <TierTable tiers={TIERS} />
         </div>
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         <h2 className="display text-2xl text-forest-900">FAQ</h2>
-        <div className="mt-6 grid gap-5 text-sm text-ink-soft leading-relaxed">
+        <div className="mt-6 border-t border-edge text-sm text-ink-soft leading-relaxed">
           <Faq q="Is there a free trial on paid tiers?">
             Yes, every paid tier ships with a 14-day trial. No credit
             card required to start. We send one reminder email three days
@@ -355,120 +378,6 @@ export default function PricingPage() {
   );
 }
 
-function TierCard({ tier, anchor }: { tier: TierKey; anchor?: string }) {
-  const pricing = priceFor(tier);
-  const limits = PLAN_LIMITS[tier];
-  const isFeatured = tier === "solo";
-  return (
-    <article
-      id={anchor}
-      className={
-        "card p-6 grid gap-3 " +
-        (isFeatured
-          ? "ring-1 ring-[var(--foreground)] shadow-lg shadow-forest-900/5"
-          : "")
-      }
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="display text-xl text-forest-900 capitalize">{tier}</h3>
-        {isFeatured ? (
-          <span className="mono-label">
-            Most popular
-          </span>
-        ) : null}
-      </div>
-      <p className="text-xs text-ink-muted -mt-1">{TAGLINES[tier]}</p>
-
-      <div className="mt-1">
-        {pricing ? (
-          <>
-            <div className="display text-3xl text-forest-900">
-              {fmtCents(pricing.monthly)}
-              <span className="text-sm text-ink-muted font-normal">/mo</span>
-            </div>
-            <div className="text-[11px] text-ink-muted mt-1">
-              or {fmtCents(pricing.yearly)}/yr · billed annually
-            </div>
-          </>
-        ) : (
-          <div className="display text-3xl text-forest-900">$0</div>
-        )}
-      </div>
-
-      <ul className="mt-3 grid gap-2 text-sm text-ink-soft">
-        {HIGHLIGHTS[tier].map((line) => (
-          <li key={line} className="flex items-start gap-2">
-            <span
-              aria-hidden="true"
-              className="mt-[0.45rem] inline-block size-1.5 bg-[var(--foreground)] opacity-45 shrink-0"
-            />
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-
-      <div className="mt-2 text-[11px] text-ink-muted grid gap-1">
-        <span>
-          Companies:{" "}
-          <span className="text-forest-800 font-medium">
-            {isUnlimited(limits.companies)
-              ? "Unlimited"
-              : limits.companies === 0
-                ? "-"
-                : limits.companies}
-          </span>
-        </span>
-        <span>
-          Bank links:{" "}
-          <span className="text-forest-800 font-medium">
-            {isUnlimited(limits.bankInstitutions)
-              ? "Unlimited"
-              : limits.bankInstitutions === 0
-                ? "-"
-                : limits.bankInstitutions}
-          </span>
-        </span>
-      </div>
-
-      {tier === "free" ? (
-        // "Start free" is sign-in only (no purchase), fine everywhere.
-        <Link
-          href="/login"
-          className={
-            "mt-4 " +
-            (isFeatured ? "btn-primary" : "btn-ghost") +
-            " w-full text-center"
-          }
-        >
-          Start free
-        </Link>
-      ) : (
-        // Paid CTAs funnel to billing, web only (App Store 3.1.1). The
-        // gate is client-side, so crawlers still index the CTA (SEO); the
-        // native app shows a non-tappable note instead.
-        <WebOnly
-          fallback={
-            <span className="mt-4 block w-full text-center text-xs text-ink-muted">
-              Subscribe at taxottic.com
-            </span>
-          }
-        >
-          <Link
-            href={`/login?next=/billing&plan=${tier}`}
-            className={
-              "mt-4 " +
-              (isFeatured ? "btn-primary" : "btn-ghost") +
-              " w-full text-center"
-            }
-          >
-            Choose {tier}
-          </Link>
-        </WebOnly>
-      )}
-    </article>
-  );
-}
-
 function priceFor(
   tier: TierKey,
 ): { monthly: number; yearly: number } | null {
@@ -480,9 +389,11 @@ function priceFor(
 
 function Faq({ q, children }: { q: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="display text-base text-forest-900">{q}</div>
-      <div className="mt-1">{children}</div>
-    </div>
+    <details className="border-b border-edge py-3">
+      <summary className="min-h-11 flex items-center cursor-pointer select-none font-medium text-[var(--foreground)]">
+        {q}
+      </summary>
+      <div className="pb-2">{children}</div>
+    </details>
   );
 }

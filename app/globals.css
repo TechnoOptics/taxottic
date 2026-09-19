@@ -693,6 +693,41 @@ html[data-tab-bar] .left-rail-fab { display: none; }
 [data-skin="instrument"] .ledger-list-blurb { font-size: 0.9375rem; line-height: 1.5; color: var(--muted); }
 [data-skin="instrument"] .ledger-list-aside { display: grid; gap: 4px; justify-items: end; flex-shrink: 0; text-align: right; font-size: 0.875rem; color: var(--muted); }
 
+/* ---- YEAR GRAMMAR: pricing table (spec 4.2) ---- */
+[data-skin="instrument"] .tier-table { width: 100%; border-collapse: collapse; border-top: 1px solid var(--border); }
+[data-skin="instrument"] .tier-table th, [data-skin="instrument"] .tier-table td { text-align: left; vertical-align: top; padding: 16px 12px 16px 0; border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .tier-table thead th { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+[data-skin="instrument"] .tier-table tbody th { font-size: 1.125rem; font-weight: 600; color: var(--foreground); }
+[data-skin="instrument"] .tier-table .figure { font-size: 1.0625rem; }
+/* Ink, stated rather than inherited. The marketing pages inherit a fixed
+   brand ink that does not follow the theme, so a figure inherited as
+   #0c1017 and vanished on the dark ground (measured on the rendered page
+   before this rule). The table states both roles from theme tokens. */
+[data-skin="instrument"] .tier-table tbody td { color: var(--muted); }
+[data-skin="instrument"] .tier-table .figure,
+[data-skin="instrument"] .tier-ledger .figure { color: var(--foreground); }
+[data-skin="instrument"] .tier-ledger h3 { color: var(--foreground); }
+[data-skin="instrument"] .tier-ledger p { color: var(--muted); }
+/* The ledger shares the list style: its own <ul> would otherwise keep the
+   browser's bullets and 40px indent, which is both the wrong register and
+   a horizontal overflow at 344px. */
+[data-skin="instrument"] .tier-table ul, [data-skin="instrument"] .tier-ledger ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 0.9375rem; color: var(--muted); }
+[data-skin="instrument"] .tier-ledger { display: grid; gap: 0; border-top: 1px solid var(--border); }
+/* The table/ledger swap lives here rather than in `hidden sm:block` on
+   the elements: globals.css is unlayered, so `.tier-ledger { display:
+   grid }` beats Tailwind's `sm:hidden` in @layer utilities and the
+   ledger painted under the table at every width. Proven on the rendered
+   page at 1280 (both trees displayed, twelve CTAs) before this rule. */
+[data-skin="instrument"] .tier-table-desktop { display: none; }
+@media (min-width: 640px) {
+  [data-skin="instrument"] .tier-table-desktop { display: block; }
+  [data-skin="instrument"] .tier-ledger { display: none; }
+}
+[data-skin="instrument"] .tier-ledger section { padding: 18px 0; border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .tier-ledger .tier-prices { display: flex; gap: 16px; margin-top: 8px; }
+[data-skin="instrument"] .tier-ledger .tier-prices .figure { font-size: 1.0625rem; }
+[data-skin="instrument"] .tier-ledger-includes { margin-top: 12px; }
+
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
   --surface: #202d4d;
