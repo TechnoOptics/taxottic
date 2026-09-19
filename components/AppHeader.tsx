@@ -11,6 +11,7 @@ import {
 import { LeftRail } from "./LeftRail";
 import { LeftRailMobile } from "./LeftRailMobile";
 import { TabBar } from "./TabBar";
+import { activeCompanyFirst } from "@/lib/today/tab-bar";
 import { SmartSearch } from "./SmartSearch";
 import { OutstandingTasksBell } from "./OutstandingTasksBell";
 import { createClient } from "@/lib/supabase/server";
@@ -150,10 +151,19 @@ export async function AppHeader({
   // `public_id`, and carries `name`). Mapped separately from `memberships`
   // rather than from `companies` so the two mounts don't have to agree on
   // a field name neither of them actually needs from the other.
-  const tabBarCompanies = memberships.map((m) => ({
-    public_id: m.company.public_id,
-    role: m.role,
-  }));
+  //
+  // Ordered active-first so the bar's Money and Forecast tabs point at the
+  // same company the outstanding-tasks tally below does, rather than at
+  // whichever company the user joined first. `id` rides along only for
+  // that ordering; tabBarLinks never reads it.
+  const tabBarCompanies = activeCompanyFirst(
+    memberships.map((m) => ({
+      id: m.company.id,
+      public_id: m.company.public_id,
+      role: m.role,
+    })),
+    activeCompanyId,
+  );
 
   // Employee personal-hub lock: an account whose only relationship is
   // being someone else's employee (no company of their own) doesn't get

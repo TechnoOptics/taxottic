@@ -1,6 +1,23 @@
 /** Spec 4.4: Today, Drives, Money, Forecast (More is the rail). */
 export type TabKey = "today" | "drives" | "money" | "forecast";
 
+/**
+ * Memberships with the active company first.
+ *
+ * Money and Forecast point at one company, so it has to be the one the
+ * rest of the app treats as active: profile.active_company_id when the
+ * user still belongs to it, otherwise their first membership. AppHeader
+ * already resolves its outstanding-tasks tally that way; `companies[0]`
+ * on its own sent a three-company user's tabs to whichever company they
+ * happened to join first, which is not where their header, their rail or
+ * their tally were pointing.
+ */
+export function activeCompanyFirst<T extends { id: string }>(companies: T[], activeCompanyId: string | null): T[] {
+  const at = activeCompanyId ? companies.findIndex((c) => c.id === activeCompanyId) : -1;
+  if (at <= 0) return companies;
+  return [companies[at], ...companies.slice(0, at), ...companies.slice(at + 1)];
+}
+
 export function tabBarLinks(input: {
   companies: { public_id: string; role: string }[];
   storedMode: "business" | "personal" | null;

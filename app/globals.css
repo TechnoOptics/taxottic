@@ -655,7 +655,24 @@ html[data-theme="dark"] [data-skin="classic"] {
 [data-skin="instrument"] .tab-bar-item { min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-family: var(--font-data); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 [data-skin="instrument"] .tab-bar-item[aria-current="page"] { color: var(--foreground); box-shadow: inset 0 2px 0 var(--foreground); }
 [data-skin="instrument"] .tab-bar-item:focus-visible { outline: 2px solid var(--accent-2); outline-offset: -2px; }
-html[data-tab-bar] main { padding-bottom: calc(56px + var(--safe-bottom, 0px)); }
+/* Clearance for the bar, in place of the FAB's. Two things this rule has
+   to get right that the plain `html[data-tab-bar] main` did not:
+
+   1. It only applies where the bar is painted. The nav is `lg:hidden`, so
+      above lg an iPad reserved 56px under content for a bar that was never
+      there. TabBar now sets the attribute only while
+      `(max-width: 1023px)` matches, and this rule is scoped to the same
+      query, so the two cannot disagree.
+   2. It beats the FAB's own clearance rule further down this file
+      (`html[data-theme] main`, same specificity, later in source order),
+      which is why the bar's clearance was silently losing. The first
+      selector carries one more attribute than that rule does. */
+@media (max-width: 1023px) {
+  html[data-tab-bar][data-theme] main,
+  html[data-tab-bar] main {
+    padding-bottom: calc(56px + max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)));
+  }
+}
 html[data-tab-bar] .left-rail-fab { display: none; }
 
 html[data-theme="dark"] {
