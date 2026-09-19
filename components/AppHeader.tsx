@@ -175,7 +175,7 @@ export async function AppHeader({
     const roles = memberships.map((m) => m.role as MembershipRole);
     // Only employee-only accounts can be locked, so only they pay for the
     // extra subscription read. Wrapped defensively: a failed read must
-    // never break the header — it just leaves the personal nav visible
+    // never break the header, it just leaves the personal nav visible
     // (the per-page requirePersonalAccess guard is the real enforcement).
     if (
       roles.length > 0 &&
