@@ -326,8 +326,9 @@ html[data-theme="dark"] [data-skin="classic"] {
    attribute is the opt-in. PR 1 set it on the home page's <main>; PR 2
    set it on the <main> of every public marketing page (pricing,
    calculators, guides, compare, help, changelog, get, book), which is
-   how their h1s take the wide setting. It is still absent from the
-   authenticated app. See lib/marketing/type-axis.test.ts and
+   how their h1s take the wide setting. In the authenticated app only
+   the Today screen (app/dashboard/page.tsx, PR 3) carries it; every
+   other app surface does not. See lib/marketing/type-axis.test.ts and
    lib/marketing/page-grammar.test.ts. */
 [data-skin="instrument"] [data-grammar="year"] .display {
   font-stretch: 112%;
@@ -338,8 +339,8 @@ html[data-theme="dark"] [data-skin="classic"] {
   font-feature-settings: "kern" 1;
 }
 /* The fallback for every instrument-skin surface OUTSIDE the year
-   grammar: the authenticated app, and any page whose <main> carries no
-   data-grammar="year". Those set .display with no explicit font-weight,
+   grammar: the authenticated app apart from Today, and any page whose
+   <main> carries no data-grammar="year". Those set .display with no explicit font-weight,
    so it renders at whatever the browser resolves for an unset weight
    against the loaded Archivo faces. Before Task 1, Archivo loaded fixed
    instances at 500/600/700 (no 400 face), so an unset weight matched up

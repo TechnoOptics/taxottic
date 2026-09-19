@@ -29,7 +29,7 @@ describe("Archivo is loaded with its width axis", () => {
     // data-skin sits on <body> and covers nearly every page, so an
     // unscoped rule here would reach every authenticated screen. The
     // grammar attribute is the opt-in; PR 2 added it to the public
-    // marketing pages, and the authenticated app still does not carry it.
+    // marketing pages; in the app only the Today screen (PR 3) carries it.
     const m = /\[data-skin="instrument"\] \[data-grammar="year"\] \.display \{([\s\S]*?)\}/.exec(css);
     expect(m, 'no [data-skin="instrument"] [data-grammar="year"] .display rule').toBeTruthy();
     expect(m![1]).toMatch(/font-stretch:\s*112%/);
