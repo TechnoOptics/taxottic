@@ -175,11 +175,15 @@ export default function ChangelogPage() {
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+        {/* No href. A changelog entry is a record, not a destination:
+            the row used to link to `#${entryId(e)}`, which is the id on
+            its own <li>, so every row was a link to itself and clicking
+            or tabbing one did nothing visible. The id stays, so
+            /changelog#... still lands on the row it names. */}
         <LedgerList
           ariaLabel="Changes"
           items={ENTRIES.map((e) => ({
             id: entryId(e),
-            href: `#${entryId(e)}`,
             title: e.title,
             blurb: e.body,
             date: formatEntryDate(e.date),

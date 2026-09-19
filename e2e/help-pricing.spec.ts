@@ -25,9 +25,12 @@ test("/changelog renders release notes", async ({ page }) => {
  * grep. The label has to resolve to the data face `.mono-label` paints
  * (uppercase, tracked, muted); that class is unlayered CSS, so a utility
  * cannot overpaint it, but a missing `data-skin` ancestor would leave it
- * unstyled. And every row has to carry its own anchor id, with its link
- * pointing at that id, so a /changelog#... link lands on the change it
- * names.
+ * unstyled. And every row has to carry its own anchor id, so a
+ * /changelog#... link lands on the change it names. The id is on the
+ * <li>; the row itself is not a link, because a link from <li id="x">
+ * to "#x" is a link to its own container and does nothing a reader can
+ * see. That absence is asserted here too, or the self-link comes back
+ * the first time someone makes `href` required again.
  */
 test("/changelog rows carry a mono-label tag and their own anchor", async ({ page }) => {
   await page.goto("/changelog");
@@ -51,9 +54,9 @@ test("/changelog rows carry a mono-label tag and their own anchor", async ({ pag
     const id = await row.getAttribute("id");
     expect(id, "every row is addressable").toBeTruthy();
     expect(
-      await row.locator("a").first().getAttribute("href"),
-      "the row links to its own anchor",
-    ).toBe(`#${id}`);
+      await row.locator("a").count(),
+      `row #${id} is a record, not a destination: no link inside it`,
+    ).toBe(0);
   }
 
   // Every entry carries at least one tag, so every row carries one label.
@@ -201,17 +204,21 @@ for (const width of [375, 1280]) {
       "the scroller reserves the header height for every fragment target",
     ).toBeGreaterThanOrEqual(before.headerBottom);
 
-    // 1. Hash navigation: the path a reader takes by clicking a row.
-    // Let the route settle first: a click that lands mid-hydration is
-    // swallowed by the half-attached next/link handler and scrolls
-    // nothing, which is a race in the test, not in the page.
+    // 1. Hash navigation: the path a reader takes to a row, which is a
+    // /changelog#... link from somewhere else, not a click on the row.
+    // The rows are records now, not links: each used to carry an
+    // <a href="#x"> inside <li id="x">, a link to its own container,
+    // and clicking it is what this step used to do. Setting the hash is
+    // the same navigation the anchor performed, minus the self-link.
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(800);
-    await page.locator(`[id="${id}"] a`).first().click();
+    await page.evaluate((id) => {
+      location.hash = id;
+    }, id);
     await expect(page).toHaveURL(new RegExp(`#${id}$`));
     await page.waitForTimeout(400);
     const hashNav = await read(page);
-    expect(hashNav.scrollY, "clicking the row scrolled the page").toBeGreaterThan(0);
+    expect(hashNav.scrollY, "the fragment scrolled the page").toBeGreaterThan(0);
     expect(
       hashNav.top,
       "the anchored row sits below the fixed header, not behind it",
