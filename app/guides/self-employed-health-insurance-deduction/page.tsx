@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Health insurance"
+        series="Health insurance"
         title={TITLE}
         lead="If you buy your own health coverage, you can likely deduct the premiums, for you and your family. Here's who qualifies and how it works."
         updated="June 2026"

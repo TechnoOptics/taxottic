@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Mileage"
+        series="Mileage"
         title={TITLE}
         lead="If you drive for work, those miles are money. Here's how the deduction works, which trips qualify, and the log you need to keep to claim it cleanly."
         updated="June 2026"

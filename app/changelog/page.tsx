@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 
 export const metadata = {
   title: "Changelog, what's new in Taxottic",
@@ -161,34 +159,12 @@ const TAG_TONE: Record<Tag, string> = {
 
 export default function ChangelogPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav />
-          <SignInIconLink />
-        </div>
-      </header>
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="changelog">
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-8">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Changelog
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          What we shipped, when.
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
+          Changelog: what we shipped, when.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           We update Taxottic in small, frequent steps. This page is the
@@ -228,7 +204,7 @@ export default function ChangelogPage() {
                 <span
                   key={t}
                   className={
-                    "text-[10px] uppercase tracking-[0.18em] px-2 py-0.5 rounded-full border " +
+                    "mono-label px-2 py-0.5 rounded-sm border " +
                     TAG_TONE[t]
                   }
                 >
@@ -239,6 +215,7 @@ export default function ChangelogPage() {
           </article>
         ))}
       </section>
+      </PageShell>
     </main>
   );
 }

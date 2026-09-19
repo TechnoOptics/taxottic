@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 import { ratePeriodsForYear } from "@/lib/calculators/mileage-reimbursement";
@@ -161,33 +159,14 @@ const ITEMLIST_LD = {
 
 export default function CalculatorsHubPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={ITEMLIST_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Free tools
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
           Free tax calculators for the{" "}
           <span className="whitespace-nowrap">self-employed.</span>
         </h1>
@@ -203,7 +182,7 @@ export default function CalculatorsHubPage() {
           <Link
             key={c.slug}
             href={`/calculators/${c.slug}`}
-            className="card p-6 hover:border-gold-300 transition-colors"
+            className="card p-6 transition-colors"
           >
             <h2 className="display text-lg sm:text-xl text-forest-900">
               {c.title}
@@ -211,8 +190,8 @@ export default function CalculatorsHubPage() {
             <p className="mt-2 text-sm text-ink-soft leading-relaxed">
               {c.blurb}
             </p>
-            <span className="mt-3 inline-block text-sm text-gold-800">
-              Open the calculator →
+            <span className="mt-3 inline-block text-sm text-forest-800">
+              Open the calculator
             </span>
           </Link>
         ))}
@@ -231,16 +210,17 @@ export default function CalculatorsHubPage() {
             <Link
               key={g.slug}
               href={`/guides/${g.slug}`}
-              className="card p-4 hover:border-gold-300 transition-colors text-sm text-forest-900"
+              className="card p-4 transition-colors text-sm text-forest-900"
             >
               {g.title}
-              <span className="block mt-1 text-xs text-gold-800">
-                Read the guide →
+              <span className="block mt-1 text-xs text-forest-800">
+                Read the guide
               </span>
             </Link>
           ))}
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

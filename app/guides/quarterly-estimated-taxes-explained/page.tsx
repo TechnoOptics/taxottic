@@ -84,7 +84,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Estimates"
+        series="Estimates"
         title={TITLE}
         lead="No employer is withholding tax from your income, so the IRS asks you to prepay it four times a year. Here's who owes, when, how much, and how to never trip the penalty."
         updated="June 2026"

@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { WebOnly } from "@/components/WebOnly";
 import { PLAN_LIMITS, PLAN_PRICING, isUnlimited } from "@/lib/plans/limits";
@@ -175,7 +173,8 @@ const PRICING_BREADCRUMB_LD = {
 //
 // Structure: hero, audience-aware tier grid (4 cards visible by
 // default; the smaller Filer + bigger Scale/Practice tiers expand on
-// click), the comparison table, the FAQ, and the disclaimer / footer.
+// click), the comparison table and the FAQ. The shell supplies the
+// header and the footer.
 
 type TierKey = "free" | "filer" | "solo" | "studio" | "scale" | "practice";
 
@@ -246,7 +245,8 @@ const HIGHLIGHTS: Record<TierKey, string[]> = {
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="pricing">
       {/* Structured data: Product with per-tier Offers, FAQPage with
           mirror of the visible Q&A below, and a breadcrumb so the
           SERP renders "taxottic.com › Pricing". */}
@@ -254,35 +254,6 @@ export default function PricingPage() {
       <JsonLd data={PRICING_FAQ_LD} />
       <JsonLd data={PRICING_BREADCRUMB_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="pricing" />
-          <SignInIconLink />
-        </div>
-        <div
-          aria-hidden="true"
-          className="absolute left-0 right-0 bottom-0 h-px"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent 0%, rgba(213,187,126,0.55) 35%, rgba(242,216,150,0.95) 50%, rgba(213,187,126,0.55) 65%, transparent 100%)",
-          }}
-        />
-      </header>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-6">
         {/* Left-aligned like every other header on the skin. The saving
@@ -290,12 +261,9 @@ export default function PricingPage() {
             line, and it is static brass: the animated sweep cost paint
             on every idle frame (see .gold-shine in app/globals.css). */}
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-            Pricing
-          </div>
-          <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 max-w-2xl leading-tight">
+          <h1 className="display text-4xl sm:text-6xl text-forest-900 max-w-2xl leading-tight">
             Honest pricing.{" "}
-            <span className="whitespace-nowrap text-[var(--kicker)]">
+            <span className="whitespace-nowrap">
               Yearly saves ~17%.
             </span>
           </h1>
@@ -382,55 +350,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* bg-[var(--color-cream)], not bg-cream. `@theme inline` bakes token
-          values into generated utilities, so `bg-cream` ships as a literal
-          #fbf7e9 that the instrument skin cannot move - it painted a warm
-          band across a cool-paper page. The arbitrary value emits var() and
-          tracks the skin. Same reason everywhere else this pattern appears. */}
-      <footer className="border-t border-forest-100 bg-[var(--color-cream)]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 grid gap-4 sm:grid-cols-2 text-xs text-ink-muted">
-          <div>
-            <Wordmark size="sm" tone="forest" />
-            <p className="mt-2 leading-relaxed max-w-md">
-              Taxottic provides tax forecasting and educational guidance.
-              It is not a substitute for advice from a licensed CPA or
-              tax attorney.
-            </p>
-            <p className="mt-3 leading-relaxed">
-              Powered by{" "}
-              <a
-                href="https://technooptics.com"
-                target="_blank"
-                rel="noreferrer"
-                className="underline hover:text-forest-900"
-              >
-                Techno Optics LLC
-              </a>
-              .
-            </p>
-          </div>
-          <div className="sm:text-right grid gap-1">
-            <Link href="/legal" className="hover:text-forest-900">
-              Legal hub
-            </Link>
-            <Link href="/legal/privacy" className="hover:text-forest-900">
-              Privacy
-            </Link>
-            <Link href="/legal/terms" className="hover:text-forest-900">
-              Terms
-            </Link>
-            <Link
-              href="/legal/location-monitoring"
-              className="hover:text-forest-900"
-            >
-              Location tracking
-            </Link>
-            <Link href="/legal/security" className="hover:text-forest-900">
-              Security
-            </Link>
-          </div>
-        </div>
-      </footer>
+      </PageShell>
     </main>
   );
 }
@@ -445,14 +365,14 @@ function TierCard({ tier, anchor }: { tier: TierKey; anchor?: string }) {
       className={
         "card p-6 grid gap-3 " +
         (isFeatured
-          ? "ring-1 ring-gold-300/70 shadow-lg shadow-forest-900/5"
+          ? "ring-1 ring-[var(--foreground)] shadow-lg shadow-forest-900/5"
           : "")
       }
     >
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="display text-xl text-forest-900 capitalize">{tier}</h3>
         {isFeatured ? (
-          <span className="text-[10px] uppercase tracking-[0.18em] text-gold-700 font-medium">
+          <span className="mono-label">
             Most popular
           </span>
         ) : null}
@@ -480,7 +400,7 @@ function TierCard({ tier, anchor }: { tier: TierKey; anchor?: string }) {
           <li key={line} className="flex items-start gap-2">
             <span
               aria-hidden="true"
-              className="mt-1 inline-block size-1.5 rounded-full bg-gold-500 shrink-0"
+              className="mt-[0.45rem] inline-block size-1.5 bg-[var(--foreground)] opacity-45 shrink-0"
             />
             <span>{line}</span>
           </li>

@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { MarketingNav } from "@/components/MarketingNav";
-import { SignInIconLink } from "@/components/SignInIconLink";
+import { PageShell } from "@/components/marketing/PageShell";
 
 /**
  * Shared chrome for /guides/* articles. Server component (no client
- * interactivity): a navy gradient header matching /help, a breadcrumb,
- * a readable article column, an end-of-article call-to-action, and the
- * standard "not tax advice" disclaimer every Taxottic surface carries.
+ * interactivity): the paper PageShell every public page wears, a
+ * breadcrumb, a readable article column, an end-of-article
+ * call-to-action, and the standard "not tax advice" disclaimer every
+ * Taxottic surface carries.
  *
  * Typographic helpers (H2/H3/P/UL/LI/Callout) are exported so each
  * article writes semantic, consistently-styled prose without repeating
@@ -22,50 +21,23 @@ export type GuideCalc = { href: string; label: string; blurb: string };
 
 export function GuideShell({
   title,
-  kicker,
+  series,
   lead,
   updated,
   calc,
   children,
 }: {
   title: string;
-  kicker: string;
+  /** The guide's series line, rendered as a mono label above the h1. */
+  series: string;
   lead: string;
   updated: string;
   calc?: GuideCalc;
   children: React.ReactNode;
 }) {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="guides" />
-          {/*
-            Was a plain "Sign in" text link, which is the exact thing
-            SignInIconLink was written to replace: next to the full
-            wordmark on a narrow phone it had no room and wrapped to
-            "Sign\nin". Every other marketing header already uses the
-            icon button, so the guides were the last place the old
-            wrapping version survived.
-          */}
-          <SignInIconLink />
-        </div>
-      </header>
-
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="guides">
       <article className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-8">
         {/* Breadcrumb, mirrors the BreadcrumbList JSON-LD each article ships. */}
         <nav
@@ -80,10 +52,11 @@ export function GuideShell({
             Guides
           </Link>
           <span aria-hidden="true">›</span>
-          <span className="text-ink-soft">{kicker}</span>
+          <span className="text-ink-soft">{series}</span>
         </nav>
 
-        <h1 className="display mt-4 text-3xl sm:text-5xl text-forest-900 leading-tight">
+        <p className="mono-label mt-6">{series}</p>
+        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
           {title}
         </h1>
         <p className="mt-4 text-base sm:text-lg text-ink-soft leading-relaxed">
@@ -99,7 +72,7 @@ export function GuideShell({
         {calc ? (
           <Link
             href={calc.href}
-            className="group card mt-7 p-5 flex items-center gap-4 hover:border-gold-300 transition-colors"
+            className="group card mt-7 p-5 flex items-center gap-4 transition-colors"
           >
             <div
               aria-hidden="true"
@@ -126,7 +99,7 @@ export function GuideShell({
               </svg>
             </div>
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.22em] text-gold-700">
+              <div className="mono-label">
                 Free calculator
               </div>
               <div className="text-base font-medium text-forest-900">
@@ -136,8 +109,8 @@ export function GuideShell({
                 {calc.blurb}
               </div>
             </div>
-            <span className="ml-auto shrink-0 text-gold-700 group-hover:text-gold-900 text-sm hidden sm:inline">
-              Open →
+            <span className="ml-auto shrink-0 text-forest-800 group-hover:text-forest-900 text-sm hidden sm:inline">
+              Open
             </span>
           </Link>
         ) : null}
@@ -146,11 +119,9 @@ export function GuideShell({
 
         {/* End-of-article CTA, the conversion path from a search visitor. */}
         <aside className="card mt-12 p-6 sm:p-7">
-          <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-            See it on your own numbers
-          </div>
-          <h2 className="display mt-1 text-xl text-forest-900">
-            Taxottic forecasts this for you, all year
+          <h2 className="display text-xl text-forest-900">
+            See it on your own numbers: Taxottic forecasts this for you,
+            all year
           </h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
             Connect a bank or upload a CSV and Taxottic keeps a running
@@ -162,7 +133,7 @@ export function GuideShell({
               Start free
             </Link>
             <Link href="/example" className="btn-ghost text-sm px-4 h-10">
-              See a live example →
+              See a live example
             </Link>
           </div>
         </aside>
@@ -175,6 +146,7 @@ export function GuideShell({
           guidance or with your preparer.
         </p>
       </article>
+      </PageShell>
     </main>
   );
 }
@@ -208,7 +180,7 @@ export function P({ children }: { children: React.ReactNode }) {
 
 export function UL({ children }: { children: React.ReactNode }) {
   return (
-    <ul className="grid gap-2 text-sm sm:text-base text-ink-soft leading-relaxed list-disc pl-5 marker:text-gold-600">
+    <ul className="grid gap-2 text-sm sm:text-base text-ink-soft leading-relaxed list-disc pl-5 marker:text-[var(--muted)]">
       {children}
     </ul>
   );
@@ -220,7 +192,7 @@ export function LI({ children }: { children: React.ReactNode }) {
 
 export function Callout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-gold-200 bg-gold-50/60 px-4 py-3 text-sm text-forest-900 leading-relaxed">
+    <div className="rounded-xl border border-edge bg-[var(--surface-2)] px-4 py-3 text-sm text-forest-900 leading-relaxed">
       {children}
     </div>
   );

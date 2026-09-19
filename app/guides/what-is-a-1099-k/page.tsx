@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="1099-K"
+        series="1099-K"
         title={TITLE}
         lead="Got a 1099-K from PayPal, Venmo, Stripe, or Etsy and not sure what it means? Here's what it reports, why the number looks too big, and what to do with it."
         updated="June 2026"

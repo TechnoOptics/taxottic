@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="QBI"
+        series="QBI"
         title={TITLE}
         lead="One of the biggest breaks for the self-employed: deduct up to 20% of your business income, on top of your normal expenses. Here's how it works and when limits apply."
         updated="June 2026"

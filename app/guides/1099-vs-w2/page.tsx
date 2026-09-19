@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="1099 vs W-2"
+        series="1099 vs W-2"
         title={TITLE}
         lead="The forms look similar, but they put you on two very different tax footings. Here's what actually changes when income comes on a 1099 instead of a W-2."
         updated="June 2026"

@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Home office"
+        series="Home office"
         title={TITLE}
         lead="If you run your business from home, a slice of your rent, utilities, and insurance can become a deduction. Here's who qualifies and the two ways to calculate it."
         updated="June 2026"

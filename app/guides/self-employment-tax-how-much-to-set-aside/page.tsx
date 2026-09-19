@@ -84,7 +84,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Set-aside"
+        series="Set-aside"
         title={TITLE}
         lead="Short answer: many self-employed people set aside 25-30% of their net income. Here's why, and how to make it automatic so a tax bill never catches you off guard."
         updated="June 2026"
@@ -104,8 +104,8 @@ export default function Page() {
             <strong>Self-employment tax</strong>, Social Security and
             Medicare. It&apos;s a flat <strong>15.3%</strong> (12.4% +
             2.9%) charged on 92.35% of your net business profit. As an
-            employee your employer quietly pays half of this; on your own,
-            you pay both halves.
+            employee your employer pays half of this without it ever reaching
+            your payslip; on your own, you pay both halves.
           </LI>
           <LI>
             <strong>Income tax</strong>, federal (and state, in most
@@ -127,9 +127,9 @@ export default function Page() {
           proprietors that comfortably covers both taxes. Adjust from there:
         </P>
         <UL>
-          <LI>Higher earners or high-tax states → lean to 30-35%+.</LI>
+          <LI>Higher earners or high-tax states: lean to 30-35%+.</LI>
           <LI>
-            Lower total household income, or lots of deductions → you may
+            Lower total household income, or lots of deductions: you may
             need closer to 20%.
           </LI>
           <LI>

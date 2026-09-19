@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
@@ -19,7 +17,7 @@ export const metadata = {
       {
         url: `/api/og/guide?title=${encodeURIComponent(
           "Guides for freelancers & small business",
-        )}&kicker=${encodeURIComponent("Free guides")}`,
+        )}&series=${encodeURIComponent("Free guides")}`,
         width: 1200,
         height: 630,
       },
@@ -33,7 +31,7 @@ export const metadata = {
     images: [
       `/api/og/guide?title=${encodeURIComponent(
         "Guides for freelancers & small business",
-      )}&kicker=${encodeURIComponent("Free guides")}`,
+      )}&series=${encodeURIComponent("Free guides")}`,
     ],
   },
   robots: {
@@ -140,37 +138,15 @@ const ITEMLIST_LD = {
 
 export default function GuidesIndex() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="guides">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={ITEMLIST_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="guides" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Guides
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          Self-employment taxes, in plain English.
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
+          Free guides on self-employment taxes, in plain English.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Short, practical guides for freelancers, contractors, and small
@@ -184,7 +160,7 @@ export default function GuidesIndex() {
           <Link
             key={g.slug}
             href={`/guides/${g.slug}`}
-            className="card p-6 hover:border-gold-300 transition-colors"
+            className="card p-6 transition-colors"
           >
             <h2 className="display text-lg sm:text-xl text-forest-900">
               {g.title}
@@ -192,8 +168,8 @@ export default function GuidesIndex() {
             <p className="mt-2 text-sm text-ink-soft leading-relaxed">
               {g.blurb}
             </p>
-            <span className="mt-3 inline-block text-sm text-gold-800">
-              Read the guide →
+            <span className="mt-3 inline-block text-sm text-forest-800">
+              Read the guide
             </span>
           </Link>
         ))}
@@ -202,9 +178,9 @@ export default function GuidesIndex() {
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
         <Link
           href="/calculators"
-          className="card p-6 border-gold-300/60 hover:border-gold-300 transition-colors block"
+          className="card p-6 border-edge transition-colors block"
         >
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+          <div className="mono-label">
             Free tools
           </div>
           <h2 className="display text-lg sm:text-xl text-forest-900 mt-1">
@@ -215,11 +191,12 @@ export default function GuidesIndex() {
             self-employment tax, income tax, and quarterly payments instantly,
             no sign-up.
           </p>
-          <span className="mt-3 inline-block text-sm text-gold-800">
-            Open the calculators →
+          <span className="mt-3 inline-block text-sm text-forest-800">
+            Open the calculators
           </span>
         </Link>
       </section>
+      </PageShell>
     </main>
   );
 }

@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Entity & tax"
+        series="Entity & tax"
         title={TITLE}
         lead="Sole proprietor, LLC, and S-corp aren't three flavors of the same thing, they're a mix of legal structure and tax treatment. Here's how each actually affects what you owe."
         updated="June 2026"

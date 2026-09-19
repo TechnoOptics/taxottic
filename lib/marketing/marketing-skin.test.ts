@@ -143,9 +143,15 @@ describe("the navy band is a token", () => {
     }
   });
 
-  it("the audited pages reference the band", () => {
+  /**
+   * Inverted by PR 2. These four pages wore the band as a page header.
+   * Every public marketing page now wears the paper PageShell, so navy
+   * survives only where navy is the subject: the home instrument, and
+   * the product screen it frames (components/marketing/Screen.tsx).
+   * A band back on a page header is a regression, not a choice.
+   */
+  it("the band is the instrument's alone", () => {
     for (const rel of [
-      "components/HeroInstrument.tsx",
       "app/pricing/page.tsx",
       "app/book/page.tsx",
       "app/calculators/page.tsx",
@@ -153,9 +159,13 @@ describe("the navy band is a token", () => {
     ]) {
       expect(
         /var\(--navy-band\)/.test(read(rel)),
-        `${rel} does not use --navy-band (the home page paints navy only on the instrument)`,
-      ).toBe(true);
+        `${rel} paints the navy band: it wears PageShell, the band is the instrument's`,
+      ).toBe(false);
     }
+    expect(
+      /var\(--navy-band\)/.test(read("components/HeroInstrument.tsx")),
+      "the instrument no longer paints the band: the token has no remaining site",
+    ).toBe(true);
   });
 });
 

@@ -85,7 +85,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Deductions"
+        series="Deductions"
         title={TITLE}
         lead="Every dollar of legitimate business expense lowers the income you pay tax on. Here are the deductions self-employed people most often miss, and where each one comes from in the tax code."
         updated="June 2026"

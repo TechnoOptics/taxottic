@@ -334,6 +334,16 @@ describe("no account-state copy names the visitor's own plan as a trial", () => 
           "every real customer reads in the same tile.",
       },
       {
+        file: "components/marketing/PageShell.tsx",
+        word: "sample",
+        verdict: "not in scope",
+        note:
+          "Row 3. 'See the sample account' is the public marketing shell's " +
+          "default CTA, pointing at /example, the storefront's own demo data. " +
+          "Every visitor reads the identical string before signing in, and it " +
+          "names our sample, never the visitor's account.",
+      },
+      {
         file: "components/mileage/DiagnoseClient.tsx",
         word: "test",
         verdict: "not in scope",

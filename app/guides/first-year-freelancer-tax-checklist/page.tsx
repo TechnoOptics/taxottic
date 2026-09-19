@@ -73,7 +73,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="First year"
+        series="First year"
         title={TITLE}
         lead="Going out on your own? Do these few things from day one and your first tax season will be boring, in the best way."
         updated="June 2026"
@@ -104,7 +104,7 @@ export default function Page() {
             <strong>Learn your deductions.</strong> Home office, mileage,
             software, phone, supplies, and more all lower your taxable income -
             see our{" "}
-            <a href="/guides/schedule-c-deductions" className="text-gold-800 underline">
+            <a href="/guides/schedule-c-deductions" className="text-forest-800 underline">
               Schedule C deductions guide
             </a>
             .
@@ -112,7 +112,7 @@ export default function Page() {
           <LI>
             <strong>Plan for quarterly estimated taxes.</strong> Four payments
             a year keep you current and penalty-free, see our{" "}
-            <a href="/guides/quarterly-estimated-taxes-explained" className="text-gold-800 underline">
+            <a href="/guides/quarterly-estimated-taxes-explained" className="text-forest-800 underline">
               quarterly taxes guide
             </a>
             .

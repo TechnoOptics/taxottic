@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
@@ -206,40 +204,19 @@ const HELP_BREADCRUMB_LD = {
 
 export default function HelpPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="help">
       <JsonLd data={HELP_FAQ_LD} />
       <JsonLd data={HELP_BREADCRUMB_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-8">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Help &amp; FAQ
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          We&apos;re here when you need a hand.
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
+          Help and FAQ.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
-          Most questions have a quick answer below. If yours doesn&apos;t,
+          We&apos;re here when you need a hand. Most questions have a quick
+          answer below. If yours doesn&apos;t,
           email{" "}
           <a
             href="mailto:contact@taxottic.com"
@@ -252,11 +229,8 @@ export default function HelpPage() {
       </section>
 
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          5-minute quickstart
-        </div>
-        <h2 className="display mt-2 text-2xl text-forest-900">
-          From signup to your first forecast.
+        <h2 className="display text-2xl text-forest-900">
+          The 5-minute quickstart: from signup to your first forecast.
         </h2>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <Step
@@ -486,6 +460,7 @@ export default function HelpPage() {
           </ul>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }
@@ -501,7 +476,7 @@ function Step({
 }) {
   return (
     <article className="card p-5 grid gap-2">
-      <div className="size-7 rounded-full bg-gold-400/20 grid place-items-center text-xs font-semibold text-gold-700">
+      <div className="size-7 rounded-sm border border-edge grid place-items-center text-xs font-semibold text-muted">
         {n}
       </div>
       <h3 className="display text-base text-forest-900">{title}</h3>
