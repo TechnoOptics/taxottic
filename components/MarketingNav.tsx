@@ -24,7 +24,7 @@ import Link from "next/link";
  * gold sweep on navy, rather than anything animated in from nothing.
  */
 
-type NavKey = "pricing" | "guides" | "calculators";
+export type NavKey = "pricing" | "guides" | "calculators" | "help" | "changelog" | "compare";
 
 const ITEMS: { key: NavKey; href: string; label: string }[] = [
   { key: "pricing", href: "/pricing", label: "Pricing" },

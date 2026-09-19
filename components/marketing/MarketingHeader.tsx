@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/Wordmark";
 import { MarketingNav } from "@/components/MarketingNav";
+import type { NavKey } from "@/components/MarketingNav";
 
 /**
  * The marketing header on paper. Fixed rather than sticky: html/body
@@ -16,7 +17,7 @@ export function MarketingHeader({
   cta,
   spine,
 }: {
-  current?: "pricing" | "guides" | "calculators";
+  current?: NavKey;
   cta?: { href: string; label: string };
   spine?: ReactNode;
 }) {

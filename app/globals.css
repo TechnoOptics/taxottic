@@ -675,6 +675,17 @@ html[data-theme="dark"] [data-skin="classic"] {
 }
 html[data-tab-bar] .left-rail-fab { display: none; }
 
+/* ---- YEAR GRAMMAR: ledger lists (spec 4.2) ---- */
+[data-skin="instrument"] .ledger-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+[data-skin="instrument"] .ledger-list-row { border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .ledger-list-link { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; min-height: 44px; padding: 14px 0; color: var(--foreground); text-decoration: none; }
+[data-skin="instrument"] .ledger-list-link:hover .ledger-list-title { text-decoration: underline; text-underline-offset: 3px; }
+[data-skin="instrument"] .ledger-list-link:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+[data-skin="instrument"] .ledger-list-main { display: grid; gap: 4px; min-width: 0; }
+[data-skin="instrument"] .ledger-list-title { font-size: 1.0625rem; line-height: 1.35; font-weight: 500; }
+[data-skin="instrument"] .ledger-list-blurb { font-size: 0.9375rem; line-height: 1.5; color: var(--muted); }
+[data-skin="instrument"] .ledger-list-aside { display: grid; gap: 4px; justify-items: end; flex-shrink: 0; text-align: right; font-size: 0.875rem; color: var(--muted); }
+
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
   --surface: #202d4d;
