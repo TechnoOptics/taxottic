@@ -7,19 +7,24 @@ const SLUG = "self-employed-health-insurance-deduction";
 const TITLE = "The self-employed health insurance deduction";
 const DESCRIPTION =
   "How self-employed people can deduct health, dental, and long-term-care premiums for themselves and their family, who qualifies, what counts, and why it's an adjustment to income, not a Schedule C expense.";
+// The guide's series line. One constant for three places: the
+// visible shell, the OG card and the Article JSON-LD image, which the
+// OG route renders in the eyebrow position.
+const SERIES = "Health insurance";
 
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: `/guides/${SLUG}` },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}`, width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}`] },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" } },
 };
 
 const ARTICLE_LD = guideArticleLd({
   slug: SLUG,
   title: TITLE,
+  series: SERIES,
   description: DESCRIPTION,
   published: "2026-06-08",
   modified: "2026-07-04",
@@ -73,7 +78,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        series="Health insurance"
+        series={SERIES}
         title={TITLE}
         lead="If you buy your own health coverage, you can likely deduct the premiums, for you and your family. Here's who qualifies and how it works."
         updated="June 2026"

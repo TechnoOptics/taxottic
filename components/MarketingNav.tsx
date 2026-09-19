@@ -24,6 +24,16 @@ import Link from "next/link";
  * gold sweep on navy, rather than anything animated in from nothing.
  */
 
+/**
+ * Wider than ITEMS below, on purpose. /help, /changelog and /compare
+ * wear the same shell but have no nav entry (the bar holds three links
+ * at desktop and nothing at phone widths, see above), so passing
+ * current="help" lights nothing at all. That is the intended outcome,
+ * not a missing item: the key exists so every shell page can name
+ * itself, and page-grammar.test.ts asserts each page passes its own,
+ * which keeps a page from lighting someone else's. Add a key here and
+ * a row to ITEMS only when the link is meant to appear in the bar.
+ */
 export type NavKey = "pricing" | "guides" | "calculators" | "help" | "changelog" | "compare";
 
 const ITEMS: { key: NavKey; href: string; label: string }[] = [

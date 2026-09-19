@@ -15,6 +15,13 @@ describe("the page shell", () => {
   it("widens the nav's current key without adding nav items", () => {
     const nav = strip(readFileSync("components/MarketingNav.tsx", "utf8"));
     expect(nav).toMatch(/type NavKey = "pricing" \| "guides" \| "calculators" \| "help" \| "changelog" \| "compare"/);
-    expect(nav.match(/\{ key: "/g)?.length).toBe(3);
+    expect(
+      nav.match(/\{ key: "/g)?.length,
+      "The bar still holds three links. NavKey is deliberately wider: " +
+        "/help, /changelog and /compare wear the shell and name themselves " +
+        "with a key, and their key lights nothing because they have no row " +
+        "here. If this count changes, a link was added to the bar, which is " +
+        "a navigation decision, not a typing one.",
+    ).toBe(3);
   });
 });

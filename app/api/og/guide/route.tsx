@@ -28,7 +28,13 @@ try {
 export function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const title = (sp.get("title") || "Taxottic guide").slice(0, 120);
-  const series = (sp.get("series") || sp.get("kicker") || "Free guide").slice(0, 40);
+  // No `kicker` fallback any more: that parameter was never passed by
+  // anything, and the "Free guide" default was what every card actually
+  // rendered because no caller passed `series` either. Both are wired
+  // now (each guide page, the guides index, and the Article JSON-LD
+  // image), so the default is a genuine last resort rather than the
+  // normal case.
+  const series = (sp.get("series") || "Free guide").slice(0, 40);
 
   return new ImageResponse(
     (

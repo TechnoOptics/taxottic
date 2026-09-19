@@ -83,7 +83,10 @@ test("/changelog rows carry a mono-label tag and their own anchor", async ({ pag
  */
 test("/pricing FAQ rows show a disclosure indicator, closed and open", async ({ page }) => {
   await page.goto("/pricing");
-  const summary = page.locator("details.border-b > summary").first();
+  // Scoped by the shape class, not by a utility: the row's hairline
+  // comes from .faq-row in globals.css, and the `border-b border-edge`
+  // utilities that restated it are gone.
+  const summary = page.locator("details.faq-row > summary").first();
   await expect(summary).toBeVisible();
   const chevron = summary.locator("svg").first();
   await expect(chevron).toBeVisible();

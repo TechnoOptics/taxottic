@@ -852,8 +852,12 @@ html[data-theme="dark"] {
      place instead of being retyped wherever something has to sit clear
      of the header. Two values because the year spine is optional. */
   --marketing-header-safe: max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px));
-  --marketing-header-h: calc(var(--marketing-header-safe) + 10.5rem);
-  --marketing-header-h-bare: calc(var(--marketing-header-safe) + 4rem);
+  /* 4rem of bar, 6.5rem of spine slot, and the 1px border-b the header
+     also paints. The border was missing, so the spacer came up 1px
+     short of the fixed block on every page wearing this header and the
+     first pixel of the page sat behind it. */
+  --marketing-header-h: calc(var(--marketing-header-safe) + 10.5rem + 1px);
+  --marketing-header-h-bare: calc(var(--marketing-header-safe) + 4rem + 1px);
 }
 @media (min-width: 1024px) {
   :root { --app-header-h: 3.5rem; } /* lg → matches h-14 (56px) */
@@ -881,8 +885,17 @@ html[data-theme="dark"] {
    perform. scroll-padding needs :has() to stay off the authenticated
    pages, which size their own header from --app-header-h; where :has()
    is unsupported the rule simply does not match and anchors behave as
-   they did before, which is the safe direction to fail. */
-html:has([data-grammar="year"]) {
+   they did before, which is the safe direction to fail.
+
+   Keyed off #page-spine, the id components/marketing/PageShell.tsx
+   gives the static spine inside the marketing header, NOT off
+   [data-grammar="year"]. The grammar attribute is a skin, and the app's
+   Today screen is specified to wear it (spec 4.3); the day it does,
+   every anchor on Today would reserve this 10.5rem marketing header
+   against its own 3.25rem one. The id is structural: it says this page
+   is carrying THAT header. Anything else that mounts a spine of its own
+   must give it a different id, or it inherits this offset. */
+html:has(#page-spine) {
   scroll-padding-top: calc(var(--marketing-header-h) + 16px);
 }
 

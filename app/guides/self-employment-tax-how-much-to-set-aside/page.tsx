@@ -14,13 +14,17 @@ const SLUG = "self-employment-tax-how-much-to-set-aside";
 const TITLE = "How much should I set aside for taxes when self-employed?";
 const DESCRIPTION =
   "A simple way to size your self-employment tax set-aside: self-employment tax (15.3%) plus federal and state income tax. Why 25-30% of net income is a common starting point, and how to do it without thinking.";
+// The guide's series line. One constant for three places: the
+// visible shell, the OG card and the Article JSON-LD image, which the
+// OG route renders in the eyebrow position.
+const SERIES = "Set-aside";
 
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: `/guides/${SLUG}` },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}`, width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}`] },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`] },
   robots: {
     index: true,
     follow: true,
@@ -31,6 +35,7 @@ export const metadata = {
 const ARTICLE_LD = guideArticleLd({
   slug: SLUG,
   title: TITLE,
+  series: SERIES,
   description: DESCRIPTION,
   published: "2026-06-08",
   modified: "2026-07-04",
@@ -84,7 +89,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        series="Set-aside"
+        series={SERIES}
         title={TITLE}
         lead="Short answer: many self-employed people set aside 25-30% of their net income. Here's why, and how to make it automatic so a tax bill never catches you off guard."
         updated="June 2026"
