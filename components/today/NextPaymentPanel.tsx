@@ -5,8 +5,15 @@ import type { nextPaymentSummary } from "@/lib/today/next-payment";
 
 type Summary = ReturnType<typeof nextPaymentSummary>;
 
-/** Spec 4.3 item 3: the live figure first, in brass, then what is paid and what remains. */
-export function NextPaymentPanel({ summary, federalCents, stateCents, forecastHref }: { summary: Summary; federalCents: number; stateCents: number; forecastHref: string }) {
+/**
+ * Spec 4.3 item 3: the live figure first, in brass, then what is paid and
+ * what remains.
+ *
+ * `note` names what the figure includes when it is not the filer alone,
+ * e.g. a sole proprietorship folded into the personal return. Without it
+ * a combined figure and a personal-only one look identical.
+ */
+export function NextPaymentPanel({ summary, federalCents, stateCents, forecastHref, note }: { summary: Summary; federalCents: number; stateCents: number; forecastHref: string; note?: string }) {
   const n = summary.next;
   const heading = n
     ? `Q${n.quarter} · due ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${n.dueDate}T00:00:00Z`))} · ${n.daysUntil} day${n.daysUntil === 1 ? "" : "s"}`
@@ -23,6 +30,7 @@ export function NextPaymentPanel({ summary, federalCents, stateCents, forecastHr
       <p className="today-split">
         Federal <span className="figure">{formatCents(federalCents)}</span> and state <span className="figure">{formatCents(stateCents)}</span> for the year.
       </p>
+      {note ? <p className="today-note">{note}</p> : null}
       <div className="today-rows">
         <StatRow label="Paid so far" value={formatCents(summary.paidSoFarCents)} />
         <StatRow label="Still to pay" value={formatCents(summary.stillToPayCents)} />

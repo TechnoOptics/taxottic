@@ -74,3 +74,30 @@ for (const theme of ["light", "dark"] as const) {
     expect(ratio, `"Next payment" against the panel ground in ${theme}`).toBeGreaterThanOrEqual(4.5);
   });
 }
+
+/**
+ * A combined figure has to say so. The dashboard passes the note only on
+ * the company branch, where the owner's sole proprietorship folds into
+ * their personal return, so the panel must render it when it is given and
+ * add nothing when it is not.
+ */
+test("the note names what the figure includes, and only when there is one", async ({ mount, page }) => {
+  await mount(
+    <div data-skin="instrument" data-grammar="year" style={{ width: 360, padding: 16 }}>
+      <NextPaymentPanel summary={summary} federalCents={276000} stateCents={66000} forecastHref="/personal/forecast" note="Includes Bella Cleaning" />
+    </div>,
+  );
+  const note = page.locator(".today-note");
+  await expect(note).toHaveText("Includes Bella Cleaning");
+  // Plain type under the split line, never a second figure.
+  await expect(note.locator(".figure")).toHaveCount(0);
+});
+
+test("no note, no line", async ({ mount, page }) => {
+  await mount(
+    <div data-skin="instrument" data-grammar="year" style={{ width: 360, padding: 16 }}>
+      <NextPaymentPanel summary={summary} federalCents={276000} stateCents={66000} forecastHref="/personal/forecast" />
+    </div>,
+  );
+  await expect(page.locator(".today-note")).toHaveCount(0);
+});

@@ -603,6 +603,7 @@ html[data-theme="dark"] [data-skin="classic"] {
 [data-skin="instrument"] .today-lead-figure { font-size: 2.75rem; line-height: 1; font-weight: 500; color: var(--kicker); }
 @media (min-width: 640px) { [data-skin="instrument"] .today-lead-figure { font-size: 3.25rem; } }
 [data-skin="instrument"] .today-split { margin-top: 12px; font-size: 0.875rem; color: var(--muted); }
+[data-skin="instrument"] .today-note { margin-top: 6px; font-size: 0.8125rem; color: var(--muted); }
 [data-skin="instrument"] .today-rows { margin-top: 14px; }
 [data-skin="instrument"] .today-progress { margin-top: 14px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 [data-skin="instrument"] .today-progress i { display: block; height: 100%; background: var(--accent-2); }

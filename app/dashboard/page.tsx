@@ -189,8 +189,8 @@ export default async function DashboardPage() {
   // Filer-type fork. New signups land on the dashboard before they've
   // picked W-2 vs business; route them to
   // /onboarding/filer-type. Individual (W-2 / personal) filers get
-  // their OWN dashboard — personal readiness, 1040 snapshot, goals,
-  // playbook — fully independent of the business side (they used to be
+  // their OWN dashboard (personal readiness, 1040 snapshot, goals,
+  // playbook), fully independent of the business side (they used to be
   // bounced to /personal/forecast and never had a home).
   if (profile && !profile.tax_filer_type) {
     redirect("/onboarding/filer-type");
@@ -608,7 +608,7 @@ export default async function DashboardPage() {
       .eq("user_id", user.id)
       // PERSONAL goals only: the dashboard is the personal hub, so
       // business goals stay on /goals (per-company section) and on the
-      // company's own savings-goals page — never mixed in here.
+      // company's own savings-goals page, never mixed in here.
       .is("company_id", null)
       .eq("status", "active")
       .order("created_at", { ascending: false })
@@ -1053,6 +1053,9 @@ export default async function DashboardPage() {
           federalCents={activeForecast?.federalIncomeTaxCents ?? 0}
           stateCents={activeForecast?.stateTaxCents ?? 0}
           forecastHref={forecastHref}
+          note={
+            combinedBusiness ? `Includes ${combinedBusiness.companyName}` : undefined
+          }
         />
         <NeedsYourCall items={callItems} count={outstanding.count} />
         <ThisWeek rows={weekRows} />
