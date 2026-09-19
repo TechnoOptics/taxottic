@@ -1414,7 +1414,21 @@
 // the worker must fetch the new HTML rather than hydrate cached chunks
 // against it. Chosen against origin/main and every open PR at the moment
 // of the bump (v204 main, v205 #631, v206 #633, v207 #634).
-const CACHE_VERSION = "v208";
+const CACHE_VERSION = "v209";
+// v209: every secondary marketing page wears the paper shell.
+//
+// PR 2 of the Year grammar. Pricing, calculators, guides, compare, help,
+// the changelog, /get and /book, the guide shell and every calculator
+// page swapped their inline navy header for PageShell (paper header,
+// static year spine, shared footer); the index pages render LedgerList
+// rows instead of card grids; pricing is a ruled TierTable on desktop
+// and a stacked ledger on phones with the paid CTAs still behind WebOnly;
+// the FAQ row is a shared component with a stroke chevron; login sits on
+// paper under the grammar. Markup changed on every public page the
+// native shell can open (login included), so the worker must fetch the
+// new HTML rather than hydrate cached chunks against it. Chosen against
+// origin/main and every open PR at the moment of the bump (v204 main,
+// v205 #631, v206 #633, v207 #634, v208 #635).
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
