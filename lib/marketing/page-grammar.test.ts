@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/^\s*\/\/.*$/gm, "");
+/**
+ * Source with its comments removed. Line comments go FIRST: a `//` line
+ * that mentions a path like `/admin/**` otherwise opens a phantom block
+ * comment that runs to the next `*\/`, swallowing live markup in
+ * between (that is exactly what hid /login's wrapper from this guard).
+ */
+const strip = (s: string) =>
+  s
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 
 function pagesUnder(dir: string): string[] {
   const out: string[] = [];
@@ -131,4 +141,24 @@ describe("the secondary marketing pages are in the Year grammar", () => {
       });
     }
   }
+});
+
+describe("help and login", () => {
+  it("help's quickstart is a numbered ledger (a real sequence) and its FAQ is hairline rows", () => {
+    const src = strip(readFileSync("app/help/page.tsx", "utf8"));
+    expect(src).toMatch(/<ol className="quickstart"/);
+    expect(src).not.toMatch(/grid gap-4 sm:grid-cols-3/);
+    // The rows are the shared component (Task 3's restyle, one copy for
+    // /pricing and /help), so the row class is asserted where it is
+    // declared rather than re-typed at every call site.
+    expect(src).toMatch(/<Faq\b/);
+    expect(
+      strip(readFileSync("components/marketing/Faq.tsx", "utf8")),
+    ).toMatch(/className="faq-row/);
+  });
+  it("login sits on paper under the grammar with no navy", () => {
+    const src = strip(readFileSync("app/login/page.tsx", "utf8"));
+    expect(src).toMatch(/data-grammar="year"/);
+    expect(src).not.toMatch(/navy|bg-forest-9|text-cream/);
+  });
 });

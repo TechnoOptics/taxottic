@@ -355,7 +355,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 py-12">
+    <main
+      data-grammar="year"
+      className="min-h-screen bg-[var(--color-cream)] flex items-center justify-center px-6 py-12"
+    >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           {/* Home link, and a control on this page: 44px row (I5). */}
@@ -401,10 +404,10 @@ export default function LoginPage() {
               gap as a fix-this rather than a missing-feature. */}
           <PasskeySignInButton emailHint={email || undefined} />
 
-          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
-            <div className="h-px flex-1 bg-forest-200/60" />
+          <div className="my-6 flex items-center gap-3 mono-label">
+            <div className="h-px flex-1 bg-edge" />
             <span>or continue with</span>
-            <div className="h-px flex-1 bg-forest-200/60" />
+            <div className="h-px flex-1 bg-edge" />
           </div>
 
           <div className="grid gap-2">
@@ -436,10 +439,10 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-ink-muted">
-            <div className="h-px flex-1 bg-forest-200/60" />
+          <div className="my-6 flex items-center gap-3 mono-label">
+            <div className="h-px flex-1 bg-edge" />
             <span>or email</span>
-            <div className="h-px flex-1 bg-forest-200/60" />
+            <div className="h-px flex-1 bg-edge" />
           </div>
 
           {/* Item 18: our own human check, browser only. It gates the email

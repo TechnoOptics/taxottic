@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/marketing/PageShell";
+import { Faq } from "@/components/marketing/Faq";
 import Link from "next/link";
 import { JsonLd } from "@/components/seo/JsonLd";
 
@@ -199,8 +200,8 @@ const HELP_BREADCRUMB_LD = {
 // reach a human. Later, /help/<topic> sub-pages can be added as we
 // learn what users hit hardest.
 //
-// Structure: hero, "5-minute quickstart" three-step cards, FAQ by
-// category, contact card.
+// Structure: hero, the "5-minute quickstart" as a numbered sequence,
+// FAQ by category as hairline rows, contact card.
 
 export default function HelpPage() {
   return (
@@ -212,7 +213,7 @@ export default function HelpPage() {
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-8">
         <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
-          Help and FAQ.
+          Help, and the answers most people need.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           We&apos;re here when you need a hand. Most questions have a quick
@@ -232,22 +233,24 @@ export default function HelpPage() {
         <h2 className="display text-2xl text-forest-900">
           The 5-minute quickstart: from signup to your first forecast.
         </h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <Step
-            n={1}
-            title="Sign in"
-            body="Google, Microsoft, passkey, or magic link. We don't ask for a credit card to try."
-          />
-          <Step
-            n={2}
-            title="Add your first company"
-            body="Schedule C, S-corp, or LLC, pick the entity type and we'll set up the right forms. W-2 only? Pick Filer instead."
-          />
-          <Step
-            n={3}
-            title="Connect a bank or upload a CSV"
-            body="Plaid wires your bank in about 90 seconds. Prefer file uploads? Drag a CSV. Either way the forecast starts updating."
-          />
+        <div className="mt-6">
+          <ol className="quickstart">
+            <Step
+              n={1}
+              title="Sign in"
+              body="Google, Microsoft, passkey, or magic link. We don't ask for a credit card to try."
+            />
+            <Step
+              n={2}
+              title="Add your first company"
+              body="Schedule C, S-corp, or LLC, pick the entity type and we'll set up the right forms. W-2 only? Pick Filer instead."
+            />
+            <Step
+              n={3}
+              title="Connect a bank or upload a CSV"
+              body="Plaid wires your bank in about 90 seconds. Prefer file uploads? Drag a CSV. Either way the forecast starts updating."
+            />
+          </ol>
         </div>
       </section>
 
@@ -475,13 +478,13 @@ function Step({
   body: string;
 }) {
   return (
-    <article className="card p-5 grid gap-2">
-      <div className="size-7 rounded-sm border border-edge grid place-items-center text-xs font-semibold text-muted">
-        {n}
+    <li>
+      <span className="figure text-sm text-muted">{n}</span>
+      <div>
+        <h3 className="display text-base text-forest-900">{title}</h3>
+        <p className="mt-1 text-sm text-ink-soft leading-relaxed">{body}</p>
       </div>
-      <h3 className="display text-base text-forest-900">{title}</h3>
-      <p className="text-sm text-ink-soft leading-relaxed">{body}</p>
-    </article>
+    </li>
   );
 }
 
@@ -495,16 +498,7 @@ function FaqCategory({
   return (
     <div>
       <h2 className="display text-xl text-forest-900">{title}</h2>
-      <div className="mt-4 grid gap-5">{children}</div>
-    </div>
-  );
-}
-
-function Faq({ q, children }: { q: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-sm font-medium text-forest-900">{q}</div>
-      <div className="mt-1 text-sm text-ink-soft leading-relaxed">
+      <div className="mt-4 border-t border-edge text-sm text-ink-soft leading-relaxed">
         {children}
       </div>
     </div>

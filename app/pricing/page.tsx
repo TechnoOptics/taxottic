@@ -1,6 +1,6 @@
 import { PageShell } from "@/components/marketing/PageShell";
 import { TierTable, type TierRow } from "@/components/marketing/TierTable";
-import { ChevronDownIcon } from "@/components/ui/Icons";
+import { Faq } from "@/components/marketing/Faq";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PLAN_LIMITS, PLAN_PRICING, isUnlimited } from "@/lib/plans/limits";
 
@@ -384,19 +384,4 @@ function priceFor(
   const monthly = PLAN_PRICING[`${tier}_monthly`].amountCents;
   const yearly = PLAN_PRICING[`${tier}_yearly`].amountCents;
   return { monthly, yearly };
-}
-
-function Faq({ q, children }: { q: string; children: React.ReactNode }) {
-  return (
-    <details className="border-b border-edge py-3">
-      {/* The chevron is the only thing telling the reader the row opens:
-          a flex summary drops the native marker, and this copy used to
-          be visible without a control at all. */}
-      <summary className="faq-summary min-h-11 flex items-center justify-between gap-3 cursor-pointer select-none font-medium text-[var(--foreground)]">
-        <span>{q}</span>
-        <ChevronDownIcon className="faq-chevron size-4 shrink-0" />
-      </summary>
-      <div className="pb-2">{children}</div>
-    </details>
-  );
 }

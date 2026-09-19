@@ -683,6 +683,21 @@ html[data-theme="dark"] [data-skin="classic"] {
 html[data-tab-bar] .left-rail-fab { display: none; }
 
 /* ---- YEAR GRAMMAR: ledger lists (spec 4.2) ---- */
+/* /help's quickstart: a numbered sequence, not three cards. The step
+   number is a .figure so it reads as data rather than decoration. */
+[data-skin="instrument"] .quickstart {
+  list-style: none;
+  counter-reset: none;
+  border-top: 1px solid var(--border);
+}
+[data-skin="instrument"] .quickstart li {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
 [data-skin="instrument"] .ledger-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
 [data-skin="instrument"] .ledger-list-row { border-bottom: 1px solid var(--border); }
 [data-skin="instrument"] .ledger-list-link { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; min-height: 44px; padding: 14px 0; color: var(--foreground); text-decoration: none; }
@@ -727,9 +742,18 @@ html[data-tab-bar] .left-rail-fab { display: none; }
 [data-skin="instrument"] .tier-ledger .tier-prices { display: flex; gap: 16px; margin-top: 8px; }
 [data-skin="instrument"] .tier-ledger .tier-prices .figure { font-size: 1.0625rem; }
 [data-skin="instrument"] .tier-ledger-includes { margin-top: 12px; }
-/* The FAQ disclosure marker. A `display: flex` summary drops ::marker, so
-   the chevron is a real stroke glyph that turns when the row opens. */
-[data-skin="instrument"] .faq-summary { list-style: none; }
+/* The FAQ row (/pricing and /help share components/marketing/Faq.tsx):
+   one hairline-ruled disclosure, a 44px summary, and a marker. A
+   `display: flex` summary drops ::marker, so the chevron is a real
+   stroke glyph that turns when the row opens. */
+[data-skin="instrument"] .faq-row { border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .faq-summary {
+  list-style: none;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
 [data-skin="instrument"] .faq-summary::-webkit-details-marker { display: none; }
 [data-skin="instrument"] .faq-chevron { color: var(--muted); transition: transform 0.15s ease; }
 [data-skin="instrument"] details[open] > .faq-summary .faq-chevron { transform: rotate(180deg); }
