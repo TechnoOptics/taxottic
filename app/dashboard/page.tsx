@@ -32,6 +32,7 @@ import { WelcomeTour } from "@/components/WelcomeTour";
 import { ensureQuarterlyReminders } from "@/lib/reminders/seed";
 import { formatCents, forecast, type ForecastResult } from "@/lib/tax/forecast";
 import { buildPersonalForecastInput } from "@/lib/tax/personal-forecast-input";
+import { personalCategory } from "@/lib/tax/personal-expense-categories";
 import {
   buildCompanyForecast,
   type IncomeRow,
@@ -395,23 +396,32 @@ export default async function DashboardPage() {
 
   // ── Today ─────────────────────────────────────────────────────────
   // Both branches below render Today, so its reads happen here, above
-  // the first of the two returns, and each branch composes the same
-  // values. Four of these six are new (this week's three sources and
-  // the year's expenses); the personal tax profile and this year's
-  // personal expenses moved up out of the owner branch's own batch
-  // rather than being read twice.
+  // the first of the two returns. WHAT they read is not the same on both.
   //
-  // Every read is scoped to this user and to either the tax year or the
-  // last seven days, and the three week reads are capped at 20 rows
-  // each, which is more than the seven the ledger shows.
+  // The company branch is the owner's business: this week's expenses and
+  // the year to date come from monthly_expenses scoped to the company
+  // they manage, alongside their drives. The personal-only branch is a
+  // plain member, who has no business whose numbers are theirs to read on
+  // a personal hub, so both the week and the year come from
+  // personal_expenses and there are no drives at all.
+  //
+  // Four reads on the company branch, two on the personal-only one (the
+  // year is the same personal_expenses read the personal forecast already
+  // needs). Every read is scoped to this user and to either the tax year
+  // or the last seven days, and each week read is capped at 20 rows,
+  // which is more than the seven the ledger shows.
+  const primaryManaged = companies.find((m) => m.role === "manager") ?? null;
+  const managedCompanyId = primaryManaged?.company_id ?? null;
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
   const [
     { data: personalTaxProfile },
     { data: personalExpenseRows },
-    { data: weekExpenses },
+    { data: weekBusinessExpenses },
+    { data: weekPersonalExpenses },
     { data: weekTrips },
     { data: weekApplied },
-    { data: yearExpenses },
+    { data: yearBusinessExpenses },
+    { data: bankConnections },
   ] = await Promise.all([
     admin
       .from("tax_profiles")
@@ -419,67 +429,131 @@ export default async function DashboardPage() {
       .eq("user_id", user.id)
       .eq("tax_year", taxYear)
       .maybeSingle(),
+    // The personal forecast's own input, and the personal-only branch's
+    // year to date: one read, two readers.
     admin
       .from("personal_expenses")
       .select("category, amount_cents")
       .eq("user_id", user.id)
       .eq("tax_year", taxYear),
-    // The two expense reads join deduction_categories rather than
-    // spending a query on the catalog: the label a row needs travels
+    // The two business expense reads join deduction_categories rather
+    // than spending a query on the catalog: the label a row needs travels
     // with the row. A code whose row is missing falls back to itself.
-    admin
-      .from("monthly_expenses")
-      .select(
-        "created_at, amount_cents, notes, category_code, category:deduction_categories(label)"
-      )
-      .eq("user_id", user.id)
-      .gte("created_at", sevenDaysAgo)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    admin
-      .from("mileage_trips")
-      .select("ended_at, distance_miles, deduction_cents, classification")
-      .eq("driver_user_id", user.id)
-      .gte("ended_at", sevenDaysAgo)
-      .order("ended_at", { ascending: false })
-      .limit(20),
+    managedCompanyId
+      ? admin
+          .from("monthly_expenses")
+          .select(
+            "created_at, amount_cents, notes, category_code, category:deduction_categories(label)"
+          )
+          .eq("user_id", user.id)
+          .eq("company_id", managedCompanyId)
+          .gte("created_at", sevenDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(20)
+      : Promise.resolve({ data: null }),
+    managedCompanyId
+      ? Promise.resolve({ data: null })
+      : admin
+          .from("personal_expenses")
+          .select("created_at, amount_cents, notes, category")
+          .eq("user_id", user.id)
+          .gte("created_at", sevenDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(20),
+    managedCompanyId
+      ? admin
+          .from("mileage_trips")
+          .select("ended_at, distance_miles, deduction_cents, classification")
+          .eq("driver_user_id", user.id)
+          .gte("ended_at", sevenDaysAgo)
+          .order("ended_at", { ascending: false })
+          .limit(20)
+      : Promise.resolve({ data: null }),
+    // Income only. An applied transaction whose applied_to_expense_id is
+    // set is already in this ledger as the monthly_expenses row it wrote,
+    // and a dismissed one was never money that moved.
     admin
       .from("account_transactions")
       .select("applied_at, amount_cents, merchant_name, description")
       .eq("applied_by", user.id)
+      .eq("user_action", "applied")
+      .is("applied_to_expense_id", null)
       .gte("applied_at", sevenDaysAgo)
       .order("applied_at", { ascending: false })
       .limit(20),
-    admin
-      .from("monthly_expenses")
-      .select("category_code, amount_cents, category:deduction_categories(label)")
-      .eq("user_id", user.id)
-      .eq("tax_year", taxYear)
-      .limit(2000),
+    managedCompanyId
+      ? admin
+          .from("monthly_expenses")
+          .select("category_code, amount_cents, category:deduction_categories(label)")
+          .eq("user_id", user.id)
+          .eq("company_id", managedCompanyId)
+          .eq("tax_year", taxYear)
+          .order("created_at", { ascending: false })
+          .limit(2000)
+      : Promise.resolve({ data: null }),
+    // Bank-sync freshness, the same source and the same shape
+    // /c/[publicId]/forecast reads it from: the newest last_synced_at
+    // across the company's live connections. Company branch only, because
+    // the personal hub has no bank feed of its own to be stale.
+    managedCompanyId
+      ? admin
+          .from("bank_connections")
+          .select("last_synced_at")
+          .eq("company_id", managedCompanyId)
+          .is("deleted_at", null)
+      : Promise.resolve({ data: null }),
   ]);
 
+  const lastSyncedAt =
+    ((bankConnections ?? []) as { last_synced_at: string | null }[])
+      .map((c) => c.last_synced_at)
+      .filter((v): v is string => Boolean(v))
+      .sort()
+      .at(-1) ?? null;
+  const syncedAt = lastSyncedAt ? new Date(lastSyncedAt) : null;
+
   const categoryLabels = categoryLabelMap([
-    ...((weekExpenses ?? []) as CategoryJoinRow[]),
-    ...((yearExpenses ?? []) as CategoryJoinRow[]),
+    ...((weekBusinessExpenses ?? []) as CategoryJoinRow[]),
+    ...((yearBusinessExpenses ?? []) as CategoryJoinRow[]),
   ]);
   const labelForCategory = (code: string) =>
     categoryLabels.get(code) ?? humaniseCode(code);
+  /** Personal categories are a fixed list, not a catalog table. */
+  const labelForPersonalCategory = (code: string) =>
+    personalCategory(code)?.label ?? humaniseCode(code);
+
+  const weekExpenseRows = managedCompanyId
+    ? (
+        (weekBusinessExpenses ?? []) as Array<{
+          created_at: string;
+          amount_cents: number | null;
+          notes: string | null;
+          category_code: string | null;
+        }>
+      ).map((e) => ({
+        createdAt: e.created_at,
+        amountCents: Number(e.amount_cents ?? 0),
+        label:
+          e.notes?.trim() ||
+          (e.category_code ? labelForCategory(e.category_code) : "Expense"),
+      }))
+    : (
+        (weekPersonalExpenses ?? []) as Array<{
+          created_at: string;
+          amount_cents: number | null;
+          notes: string | null;
+          category: string | null;
+        }>
+      ).map((e) => ({
+        createdAt: e.created_at,
+        amountCents: Number(e.amount_cents ?? 0),
+        label:
+          e.notes?.trim() ||
+          (e.category ? labelForPersonalCategory(e.category) : "Expense"),
+      }));
 
   const weekRows = weekLedger({
-    expenses: (
-      (weekExpenses ?? []) as Array<{
-        created_at: string;
-        amount_cents: number | null;
-        notes: string | null;
-        category_code: string | null;
-      }>
-    ).map((e) => ({
-      createdAt: e.created_at,
-      amountCents: Number(e.amount_cents ?? 0),
-      label:
-        e.notes?.trim() ||
-        (e.category_code ? labelForCategory(e.category_code) : "Expense"),
-    })),
+    expenses: weekExpenseRows,
     trips: (
       (weekTrips ?? []) as Array<{
         ended_at: string;
@@ -502,25 +576,40 @@ export default async function DashboardPage() {
       }>
     ).map((a) => ({
       appliedAt: a.applied_at,
-      // An applied transaction is money leaving, so it reads as a
-      // deduction alongside the expenses and the drives.
-      amountCents: -Math.abs(Number(a.amount_cents ?? 0)),
+      // Bank sign convention: money leaving the account is positive and
+      // money arriving is negative, the opposite of the ledger's. Flip it
+      // rather than taking the absolute value, which turned every
+      // deposit into a deduction.
+      amountCents: -Number(a.amount_cents ?? 0),
       label: a.merchant_name || a.description || "Transaction",
     })),
     asOf: now,
   });
-  const ytdRows = categoryTotals(
-    (
-      (yearExpenses ?? []) as Array<{
-        category_code: string | null;
-        amount_cents: number | null;
-      }>
-    ).map((r) => ({
-      categoryCode: r.category_code,
-      amountCents: Number(r.amount_cents ?? 0),
-    })),
-    labelForCategory
-  );
+  const ytdRows = managedCompanyId
+    ? categoryTotals(
+        (
+          (yearBusinessExpenses ?? []) as Array<{
+            category_code: string | null;
+            amount_cents: number | null;
+          }>
+        ).map((r) => ({
+          categoryCode: r.category_code,
+          amountCents: Number(r.amount_cents ?? 0),
+        })),
+        labelForCategory
+      )
+    : categoryTotals(
+        (
+          (personalExpenseRows ?? []) as Array<{
+            category: string | null;
+            amount_cents: number | null;
+          }>
+        ).map((r) => ({
+          categoryCode: r.category,
+          amountCents: Number(r.amount_cents ?? 0),
+        })),
+        labelForPersonalCategory
+      );
 
   // The owner's own 1040, built with the same engine /personal/forecast
   // uses. A null profile just means they have not set up personal taxes
@@ -874,7 +963,6 @@ export default async function DashboardPage() {
   // ones, not the personal-only ones. Scoped to the primary company they
   // manage, and built with the same engine + real personal profile as
   // that company's own forecast, so the number matches /c/.../forecast.
-  const primaryManaged = companies.find((m) => m.role === "manager") ?? null;
   let combinedBusiness: { companyName: string; result: ForecastResult } | null =
     null;
   if (primaryManaged && personalTaxProfile) {
@@ -1036,7 +1124,7 @@ export default async function DashboardPage() {
         data-grammar="year"
         className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-8 sm:py-12"
       >
-        <TodayHeader asOf={now} taxYear={taxYear} />
+        <TodayHeader asOf={now} taxYear={taxYear} syncedAt={syncedAt} />
 
         <MarkReachedToday />
         {blockedLocation ? (
@@ -1061,8 +1149,11 @@ export default async function DashboardPage() {
           }
         />
         <NeedsYourCall items={callItems} count={outstanding.count} />
-        <ThisWeek rows={weekRows} />
-        <YearToDate rows={ytdRows} href={deductionsHref} />
+        {/* The week and the year on this branch are the managed company's
+            books, so both sections say whose they are and "All deductions"
+            opens that company's expenses. */}
+        <ThisWeek rows={weekRows} scope={primaryManaged?.company.name} />
+        <YearToDate rows={ytdRows} href={deductionsHref} scope={primaryManaged?.company.name} />
 
         {/* Recap: what needs attention right now.
             Cards that have a `dismissAction` render a small "X" in the

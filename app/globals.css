@@ -644,6 +644,9 @@ html[data-theme="dark"] [data-skin="classic"] {
 [data-skin="instrument"] .today-call-sub { margin-top: 2px; font-size: 0.8125rem; color: var(--muted); }
 [data-skin="instrument"] .today-call-actions { display: flex; gap: 8px; flex-shrink: 0; }
 [data-skin="instrument"] .today-count { margin-left: 6px; color: var(--muted); font-size: 0.875rem; }
+/* Names whose week or year a section is showing, plain type after the
+   heading so the heading itself stays one short phrase. */
+[data-skin="instrument"] .today-scope { color: var(--muted); font-size: 0.8125rem; }
 [data-skin="instrument"] .today-ledger, [data-skin="instrument"] .today-bars { margin-top: 10px; }
 
 /* Phone tab bar (spec 4.4). Native shells only, below lg; see TabBar.tsx

@@ -37,6 +37,45 @@ describe("this week's ledger", () => {
     });
     expect(rows[0].amount).toBe("$0");
   });
+  /**
+   * The page's read is `.eq("user_action", "applied").is("applied_to_expense_id", null)`,
+   * so a dismissed row and a row already written through to monthly_expenses
+   * never reach the ledger: the first was never money that moved, the second
+   * is already in the ledger as an expense. This mirrors that filter and the
+   * mapping beside it so the shape the ledger is fed is pinned somewhere.
+   */
+  type BankRow = { applied_at: string; amount_cents: number; merchant_name: string | null; user_action: string; applied_to_expense_id: string | null };
+  const asPageWouldMap = (rows: BankRow[]) =>
+    rows
+      .filter((r) => r.user_action === "applied" && r.applied_to_expense_id === null)
+      .map((r) => ({ appliedAt: r.applied_at, amountCents: -Number(r.amount_cents ?? 0), label: r.merchant_name ?? "Transaction" }));
+
+  it("a dismissed row never reaches the ledger, and neither does one already written to an expense", () => {
+    const rows = weekLedger({
+      expenses: [],
+      trips: [],
+      applied: asPageWouldMap([
+        { applied_at: "2026-09-03T10:00:00Z", amount_cents: -41000, merchant_name: "Invoice paid, Northwind Co.", user_action: "applied", applied_to_expense_id: null },
+        { applied_at: "2026-09-03T11:00:00Z", amount_cents: 2400, merchant_name: "Not ours", user_action: "dismissed", applied_to_expense_id: null },
+        { applied_at: "2026-09-03T12:00:00Z", amount_cents: 2200, merchant_name: "Adobe, already an expense", user_action: "applied", applied_to_expense_id: "e1" },
+      ]),
+      asOf,
+    });
+    expect(rows.map((r) => r.text)).toEqual(["Invoice paid, Northwind Co."]);
+  });
+
+  it("a negative bank amount is money in, and renders with a plus", () => {
+    const rows = weekLedger({
+      expenses: [],
+      trips: [],
+      applied: asPageWouldMap([
+        { applied_at: "2026-09-03T10:00:00Z", amount_cents: -41000, merchant_name: "Invoice paid, Northwind Co.", user_action: "applied", applied_to_expense_id: null },
+      ]),
+      asOf,
+    });
+    expect(rows[0].amount).toBe("+$410");
+  });
+
   it("an applied amount of zero renders with no sign", () => {
     const rows = weekLedger({
       expenses: [],

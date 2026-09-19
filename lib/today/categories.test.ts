@@ -15,8 +15,19 @@ describe("year to date by category", () => {
     expect(out.map((o) => [o.label, o.amountCents, o.fraction])).toEqual([
       ["Software", 250000, 1],
       ["Advertising", 124000, 0.496],
-      ["Uncategorised", 5000, 0.02],
+      ["Uncategorized", 5000, 0.02],
     ]);
+  });
+  it("keeps the no-category bucket out of the way of a real code", () => {
+    const out = categoryTotals(
+      [
+        { categoryCode: null, amountCents: 5000 },
+        { categoryCode: "uncategorised", amountCents: 100 },
+      ],
+      (c) => c,
+    );
+    expect(out.find((o) => o.label === "Uncategorized")?.code).toBe("__uncategorized");
+    expect(out.map((o) => o.amountCents)).toEqual([5000, 100]);
   });
   it("caps the list", () => {
     const rows = Array.from({ length: 8 }, (_, i) => ({ categoryCode: `c${i}`, amountCents: 1000 * (8 - i) }));

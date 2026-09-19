@@ -40,6 +40,58 @@ describe("the dashboard is Today", () => {
     expect(page).not.toMatch(/buildGreeting|greeting\.head|greeting\.pleasantry/);
     expect(page).not.toMatch(/<OutstandingTasksBanner|<OutstandingTasksPopup/);
   });
+  /**
+   * Freshness is the one thing on Today that a stale page cannot admit to
+   * on its own: every other figure looks the same whether it was synced a
+   * minute or a month ago. The company branch has a bank feed and must
+   * pass its last sync; the personal-only branch has none, so it must not
+   * invent one.
+   */
+  it("tells the owner how fresh the bank data is, and claims nothing on the personal hub", () => {
+    const sections = todaySections(page);
+    const company = sections.find((s) => s.name.includes("max-w-5xl"));
+    const personal = sections.find((s) => s.name.includes("max-w-3xl"));
+    expect(company?.text, "the company branch must pass syncedAt to TodayHeader").toMatch(/<TodayHeader[^>]*syncedAt=/);
+    expect(personal?.text, "the personal-only branch has no bank feed, so no syncedAt").not.toMatch(/<TodayHeader[^>]*syncedAt=/);
+  });
+
+  /**
+   * The week's income comes from the bank feed, and the feed carries rows
+   * the user dismissed and rows already written through to a
+   * monthly_expenses row. Counting either one puts money in the ledger
+   * twice or puts money there that never moved.
+   */
+  it("reads only applied, un-written-through transactions for the week", () => {
+    const read = /\.from\("account_transactions"\)[\s\S]*?\.limit\(/.exec(page)?.[0];
+    expect(read, 'no account_transactions read found').toBeTruthy();
+    expect(read, "the week's bank read must be applied rows only").toMatch(/\.eq\("user_action",\s*"applied"\)/);
+    expect(read, "a transaction already written to an expense is counted there, not here").toMatch(/\.is\("applied_to_expense_id",\s*null\)/);
+  });
+
+  /**
+   * The owner's week and year are their company's books; a plain member's
+   * are their own. Scoping is what keeps one user's business numbers off
+   * the other's personal hub.
+   */
+  it("scopes Today's expense reads to the company the owner manages", () => {
+    // Today's reads are the batch between managedCompanyId and the
+    // personal forecast it feeds; the combined-1040 batch further down has
+    // its own company scoping already.
+    const from = page.indexOf("const managedCompanyId");
+    const to = page.indexOf("const personalForecast");
+    expect(from, "could not find Today's read batch").toBeGreaterThan(-1);
+    expect(to, "could not find the end of Today's read batch").toBeGreaterThan(from);
+    const todayReads = page.slice(from, to);
+    const reads = todayReads.split('.from("monthly_expenses")').slice(1);
+    expect(reads.length, "expected Today's week and year reads from monthly_expenses").toBe(2);
+    for (const read of reads) {
+      const clause = read.slice(0, read.indexOf(".limit("));
+      expect(clause, "a Today expense read that is not scoped to the managed company").toMatch(/\.eq\("company_id",\s*managedCompanyId\)/);
+    }
+    expect(todayReads, "the personal-only branch reads personal_expenses instead").toMatch(/\.from\("personal_expenses"\)/);
+    expect(todayReads, "a plain member has no company drives to show").toMatch(/managedCompanyId[\s\S]{0,200}\.from\("mileage_trips"\)/);
+  });
+
   it("keeps the retired primitives out of the Today components", () => {
     for (const f of readdirSync("components/today").filter((f) => f.endsWith(".tsx") && !f.includes(".ct."))) {
       const src = strip(readFileSync(`components/today/${f}`, "utf8"));
