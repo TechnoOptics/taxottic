@@ -140,7 +140,7 @@ export default async function SetAsidePage({
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           A simple rule you can apply to every payment: the exact percentage to
-          move into savings so quarterly taxes are covered and April is calm.
+          move into savings so quarterly taxes are covered before April.
           Free for 2026, instant, no sign-up.
         </p>
       </section>

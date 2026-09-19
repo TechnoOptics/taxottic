@@ -52,7 +52,7 @@ const GUIDES = [
     slug: "self-employment-tax-how-much-to-set-aside",
     title: "How much should I set aside for taxes when self-employed?",
     blurb:
-      "A simple way to size your tax set-aside, self-employment tax plus income tax, and why a flat percentage of every payment keeps April calm.",
+      "A simple way to size your tax set-aside, self-employment tax plus income tax, and why a flat percentage of every payment covers April before it arrives.",
   },
   {
     slug: "schedule-c-deductions",

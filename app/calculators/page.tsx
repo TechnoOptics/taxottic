@@ -89,7 +89,7 @@ const CALCULATORS = [
     slug: "how-much-to-set-aside",
     title: "How Much to Set Aside for Taxes",
     blurb:
-      "The exact percentage of every payment to move into savings so quarterly taxes are covered and April is calm, not a rule of thumb.",
+      "The exact percentage of every payment to move into savings so quarterly taxes are covered before April, not a rule of thumb.",
     live: true,
   },
   {

@@ -55,8 +55,14 @@ export function GuideShell({
           <span className="text-ink-soft">{series}</span>
         </nav>
 
-        <p className="mono-label mt-6">{series}</p>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
+        {/* No eyebrow over the h1 (spec 4.2). The breadcrumb's last
+            crumb above already says the series, so the mono label that
+            used to sit here was the same string twice, the second time
+            in the one position the grammar retires. The rename from
+            `kicker` to `series` is what carried it past the guard;
+            lib/marketing/page-grammar.test.ts now reads the position,
+            not the word. */}
+        <h1 className="display mt-6 text-3xl sm:text-5xl text-forest-900 leading-tight">
           {title}
         </h1>
         <p className="mt-4 text-base sm:text-lg text-ink-soft leading-relaxed">

@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
 /**
  * Source with its comments removed. Line comments go FIRST: a `//` line
@@ -38,6 +39,58 @@ export const PUBLIC_MARKETING_PAGES = [
 ].sort();
 
 /**
+ * The chrome every one of those pages wears. It is listed rather than
+ * reached through the import graph because it is the one part of the
+ * surface that is on TWELVE pages at once: a retired primitive here
+ * costs twelve times what the same primitive costs on a page, and the
+ * footer's brass-era dot survived exactly because no guard read this
+ * file.
+ */
+export const SHARED_SHELL_FILES = [
+  "components/marketing/PageShell.tsx",
+  "components/marketing/MarketingHeader.tsx",
+  "components/marketing/MarketingFooter.tsx",
+  "components/MarketingNav.tsx",
+];
+
+/**
+ * One level of the import graph: the local component files a page
+ * actually renders.
+ *
+ * The guard used to read `page.tsx` and nothing else, and every client
+ * component a page mounts was invisible to it. That is not a small gap.
+ * `/calculators/self-employment-tax` is a page.tsx of imports and a
+ * component that IS the page body, and the body shipped eleven tracked
+ * gold eyebrows while the page passed. One level is deliberate: it is
+ * the level at which a page chooses what it renders, and it terminates
+ * without a cycle check.
+ *
+ * Resolves `@/components/...` (the tsconfig alias for the repo root) and
+ * relative siblings (`./BookForm`), and keeps only `.tsx`, which is what
+ * a component is. `@/lib/...` helpers are someone else's guard.
+ */
+export function childComponentsOf(file: string): string[] {
+  const src = readFileSync(file, "utf8");
+  const out = new Set<string>();
+  for (const m of src.matchAll(/\bfrom\s*["']([^"']+)["']/g)) {
+    const resolved = resolveLocalComponent(m[1], file);
+    if (resolved && resolved !== file) out.add(resolved);
+  }
+  return [...out].sort();
+}
+
+function resolveLocalComponent(spec: string, fromFile: string): string | null {
+  let base: string;
+  if (spec.startsWith("@/")) base = spec.slice(2);
+  else if (spec.startsWith("./") || spec.startsWith("../")) base = join(dirname(fromFile), spec);
+  else return null; // a package, or an alias this guard does not own.
+  for (const candidate of [`${base}.tsx`, join(base, "index.tsx")]) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
+/**
  * Class strings, one literal at a time. A className is sometimes a
  * concatenation (`"a b " + TONE[t]`), so testing the whole file for
  * `uppercase` and for a tracking value separately would fire on two
@@ -56,6 +109,63 @@ function tracts(src: string): string[] {
   return classLiterals(src).filter(
     (v) => /\buppercase\b/.test(v) && /tracking-\[0?\.\d+em\]/.test(v),
   );
+}
+
+/**
+ * The same eyebrow spelled in CSS instead of utilities.
+ *
+ * `.mono-label` sets `text-transform: uppercase` and a tracking value in
+ * app/globals.css, so an element carrying it is a tracked uppercase
+ * label and `tracts()` above, which reads class literals, cannot see it.
+ * That is how GuideShell put the eyebrow back on eleven guide pages
+ * while passing: the `kicker` to `series` rename moved it past the
+ * literal match and the class moved the styling out of the literal.
+ *
+ * A mono label is legitimate almost everywhere (a ledger row's tag, a
+ * spine's date, a footer column head). What spec 4.2 retires is one
+ * position: "Headings in wide Archivo, no eyebrow." So the rule is
+ * positional, not lexical: a mono-label element whose closing tag is
+ * followed by nothing but whitespace and then an `<h1` IS the eyebrow.
+ */
+function monoLabelEyebrows(src: string): string[] {
+  return [
+    ...src.matchAll(
+      /className="[^"]*\bmono-label\b[^"]*"[^>]*>[\s\S]{0,300}?<\/[A-Za-z][\w.]*>\s*<h1[\s>]/g,
+    ),
+  ].map((m) => m[0].replace(/\s+/g, " ").trim());
+}
+
+/**
+ * The retired register from the design spec, section 3. "calm" is the
+ * root and was missing, so "Try the calm, no card." shipped as the Free
+ * tier's tagline; `calmer` stays spelled out because `\bcalm\b` does not
+ * reach it, and `calmly` is the same word in adverb form.
+ */
+const RETIRED_REGISTER = /\b(calm(er|ly)?|gentle|gently|quietly|friendly|scary)\b/i;
+
+/**
+ * Every retired primitive in one file, as findings that name the file.
+ * A page's finding list is this run over the page AND over the
+ * components it renders, so a failure message points at the file that
+ * has to change rather than at the page that happens to import it.
+ */
+function retiredPrimitivesIn(file: string): string[] {
+  const src = strip(readFileSync(file, "utf8"));
+  const found: string[] = [];
+  const hit = (re: RegExp, what: string) => {
+    const m = src.match(re);
+    if (m) found.push(`${file}: ${what} (${m[0].trim().slice(0, 60)})`);
+  };
+  hit(/\bkicker\b|kicker-sm|gold-shine|text-gold-|bg-gold-|border-gold-|ring-gold-/, "a gold primitive");
+  for (const t of tracts(src)) found.push(`${file}: a tracked uppercase eyebrow ("${t}")`);
+  for (const e of monoLabelEyebrows(src)) {
+    found.push(`${file}: a mono-label eyebrow directly above an h1 (${e.slice(0, 60)})`);
+  }
+  hit(/rounded-full/, "a pill or a dot");
+  hit(/\bitalic\b|<em\b|<i\b/, "an italic");
+  hit(/&rarr;|→/, "an arrow");
+  hit(RETIRED_REGISTER, "a retired register word");
+  return found;
 }
 
 const count = (src: string, re: RegExp) => (src.match(re) ?? []).length;
@@ -95,17 +205,16 @@ describe("the secondary marketing pages are in the Year grammar", () => {
       expect(src).not.toMatch(/<MarketingNav\b/);
       expect(src).not.toMatch(/<SignInIconLink\b/);
     });
-    it(`${file} carries no retired primitive`, () => {
-      expect(src).not.toMatch(/\bkicker\b|kicker-sm|gold-shine|text-gold-|bg-gold-|border-gold-|ring-gold-/);
+    it(`${file} carries no retired primitive, in itself or in what it renders`, () => {
+      const tree = [file, ...childComponentsOf(file)];
       expect(
-        tracts(src),
-        "a tracked uppercase eyebrow, at any tracking value and in either " +
-          "class order. The live primitive is `mono-label`.",
+        tree.flatMap(retiredPrimitivesIn),
+        `the page and the ${tree.length - 1} local component(s) it renders: ` +
+          "a tracked uppercase eyebrow (utility classes OR .mono-label above " +
+          "an h1), a gold primitive, a pill or dot, an italic, an arrow, or a " +
+          "retired register word. The live label primitive is `mono-label`, " +
+          "anywhere but directly above the h1.",
       ).toEqual([]);
-      expect(src).not.toMatch(/rounded-full/);
-      expect(src).not.toMatch(/\bitalic\b|<em\b|<i\b/);
-      expect(src).not.toMatch(/&rarr;|→/);
-      expect(src).not.toMatch(/\b(calmer|gentle|gently|quietly|friendly|scary)\b/i);
     });
     it(`${file} mounts one shell and renders no chrome of its own`, () => {
       // One shell, opened and closed once. Two shells means two headers,
@@ -139,8 +248,98 @@ describe("the secondary marketing pages are in the Year grammar", () => {
       it("GuideShell mounts the shell for every guide", () => {
         expect(src).toMatch(/<PageShell current="guides"/);
       });
+      it("GuideShell says the series once, as the breadcrumb's last crumb", () => {
+        // Two renderings of the same string, the crumb and an eyebrow
+        // over the h1, is the eyebrow spec 4.2 retires wearing the
+        // breadcrumb's words. The crumb is the one that carries meaning
+        // (it mirrors the BreadcrumbList JSON-LD), so it is the one
+        // that stays.
+        expect(count(src, /\{series\}/g), "the series renders once").toBe(1);
+        expect(src).toMatch(/aria-label="Breadcrumb"[\s\S]*\{series\}[\s\S]*<h1/);
+      });
     }
   }
+
+  it("the shared shell carries no retired primitive", () => {
+    expect(SHARED_SHELL_FILES.flatMap(retiredPrimitivesIn)).toEqual([]);
+  });
+});
+
+/**
+ * The guard guarding itself.
+ *
+ * Every claim this file makes rests on `childComponentsOf` actually
+ * reaching a page's children, and a resolver that silently returns
+ * nothing reads exactly like a clean surface. So the resolver is run
+ * against a planted fixture: a page that imports a child, and a child
+ * carrying the eyebrow. The fixture lives in a tmp dir and is never
+ * committed; if it were part of the repo the same sweep that fixes a
+ * real page would eventually "fix" it and the self-test would go quiet.
+ */
+describe("the guard can see into a page's components", () => {
+  const dir = mkdtempSync(join(tmpdir(), "page-grammar-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pageFile = join(dir, "page.tsx");
+  const childFile = join(dir, "PlantedChild.tsx");
+  writeFileSync(
+    pageFile,
+    'import { PlantedChild } from "./PlantedChild";\n' +
+      "export default function Page() {\n  return <PlantedChild />;\n}\n",
+  );
+  writeFileSync(
+    childFile,
+    "export function PlantedChild() {\n" +
+      '  return <p className="text-[10px] uppercase tracking-[0.28em] text-gold-700">Your numbers</p>;\n' +
+      "}\n",
+  );
+
+  it("resolves a relative child import", () => {
+    expect(childComponentsOf(pageFile)).toEqual([childFile]);
+  });
+
+  it("reports the child's eyebrow, and names the child file", () => {
+    const findings = [pageFile, ...childComponentsOf(pageFile)].flatMap(retiredPrimitivesIn);
+    expect(findings, "the planted eyebrow went unseen").not.toEqual([]);
+    // The message has to name the file that has to change. A finding
+    // that says only "this page fails" sends the reader to a page.tsx
+    // of imports, which is where the calculator sweep stalled.
+    expect(findings.join("\n")).toContain("PlantedChild.tsx");
+    expect(findings.join("\n")).toContain("a tracked uppercase eyebrow");
+    expect(findings.every((f) => !f.startsWith(pageFile))).toBe(true);
+  });
+
+  it("says nothing once the child is clean", () => {
+    writeFileSync(
+      childFile,
+      "export function PlantedChild() {\n  return <p className=\"mono-label\">Your numbers</p>;\n}\n",
+    );
+    expect([pageFile, ...childComponentsOf(pageFile)].flatMap(retiredPrimitivesIn)).toEqual([]);
+  });
+});
+
+/**
+ * The positional half of the eyebrow rule, planted the same way: a
+ * `.mono-label` is legitimate until it sits directly above an h1.
+ */
+describe("a mono-label directly above an h1 is an eyebrow", () => {
+  const above =
+    '<p className="mono-label mt-6">{series}</p>\n<h1 className="display">Title</h1>';
+  const beside =
+    '<h1 className="display">Title</h1>\n<p className="mono-label mt-6">{series}</p>';
+
+  it("fires on the label above the heading", () => {
+    expect(monoLabelEyebrows(above)).toHaveLength(1);
+  });
+  it("stays quiet on a label anywhere else", () => {
+    expect(monoLabelEyebrows(beside)).toEqual([]);
+    expect(monoLabelEyebrows('<span className="mono-label">Shipped</span>')).toEqual([]);
+  });
+  it("is what `tracts()` alone cannot see", () => {
+    // `.mono-label` sets uppercase and tracking in CSS, so no class
+    // literal carries both and the utility-class check reads clean.
+    expect(tracts(above)).toEqual([]);
+  });
 });
 
 describe("help and login", () => {

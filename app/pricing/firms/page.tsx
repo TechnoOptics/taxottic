@@ -148,7 +148,7 @@ export default function FirmPricingPage() {
         <p className="mt-4 text-base text-ink-soft leading-relaxed max-w-2xl">
           Multi-client roster, branded portals, e-signature,
           scheduling, invoicing, and tax-form auto-drafting in one
-          calm place. Pick a tier; cancel anytime; pay annually for
+          place. Pick a tier; cancel anytime; pay annually for
           ~15% off.
         </p>
 

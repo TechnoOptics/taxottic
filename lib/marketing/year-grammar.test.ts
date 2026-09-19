@@ -52,8 +52,11 @@ const RETIRED: [RegExp, string][] = [
   [/Mockup\b|MockupFrame/, "mock product window"],
   [/from "next\/image"/, "photograph"],
   [/rounded-full[^"]*\b(px|py)-/, "pill chip"],
-  // The full retired register from the design spec, section 3.
-  [/\b(calmer|gentle|gently|quietly|friendly|scary)\b/i, "retired register"],
+  // The full retired register from the design spec, section 3. "calm"
+  // is the root and was missing from every copy of this list, which is
+  // how "Try the calm, no card." shipped as a tier tagline on /pricing;
+  // `calmer` stays spelled out because `\bcalm\b` does not reach it.
+  [/\b(calm(er|ly)?|gentle|gently|quietly|friendly|scary)\b/i, "retired register"],
 ];
 
 /**

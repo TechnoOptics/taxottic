@@ -200,7 +200,7 @@ const NAMES: Record<TierKey, string> = {
 };
 
 const TAGLINES: Record<TierKey, string> = {
-  free: "Try the calm, no card.",
+  free: "Look around, no card.",
   filer: "W-2 employee, single forecast.",
   solo: "Freelancer or sole proprietor.",
   studio: "Growing business, small team.",

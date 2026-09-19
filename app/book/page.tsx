@@ -22,14 +22,10 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
     <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
       <PageShell>
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <p className="mono-label">
-          {audience === "firm"
-            ? "For tax-prep firms"
-            : audience === "small_business"
-              ? "For small businesses"
-              : "Quick chat"}
-        </p>
-        <h1 className="display mt-3 text-4xl sm:text-6xl text-forest-900 leading-tight">
+        {/* No eyebrow over the h1 (spec 4.2). The label that used to
+            sit here named the audience, and each of the three headlines
+            below already names it: the firm, the business, the chat. */}
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
           {audience === "firm"
             ? "Tell us a little about your firm."
             : audience === "small_business"
