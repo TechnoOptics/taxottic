@@ -106,6 +106,15 @@ export type ProbeInput = {
   /** The stage a failed probe reached. "call" means registered-but-absent. */
   deviceStatusStage: string | null;
   geofenceArmState: string | null;
+  /**
+   * Why the geofence read returned what it did: "ok", "absent",
+   * "error" or "timeout". Only "absent" means the plugin is not
+   * registered; every other value with a null arm state means we did
+   * not manage to look. Without this the three were one null, and one
+   * Android phone was reported dead=geofence_plugin for three weeks
+   * while 163 of its own heartbeats carried armState "armed".
+   */
+  geofenceProbe: string | null;
   geofenceCount: number | null;
   locationAuthorization: string | null;
   /**
@@ -179,17 +188,26 @@ export function evaluate(p: ProbeInput): CapabilityCheck[] {
   } else if (p.geofenceArmState == null && !p.probed) {
     out.push(check("geofence_plugin", "unknown", "Not probed yet."));
     out.push(check("geofence_armed", "unknown", "Not probed yet."));
-  } else if (p.geofenceArmState == null) {
+  } else if (p.geofenceArmState == null && p.geofenceProbe === "absent") {
     out.push(
       check(
         "geofence_plugin",
         "dead",
-        "No arm state reported at all. On iOS this is the registration failure: the plugin ships in the binary and is never handed to the bridge.",
+        "The plugin is not registered with the bridge. It ships in the binary and is never handed to the WebView.",
       ),
     );
     out.push(
       check("geofence_armed", "unknown", "Cannot arm what does not answer."),
     );
+  } else if (p.geofenceArmState == null) {
+    out.push(
+      check(
+        "geofence_plugin",
+        "unknown",
+        `No arm state, and the read did not complete (${p.geofenceProbe ?? "no outcome"}). A backgrounded WebView times these out routinely, so this is not evidence of a dead plugin.`,
+      ),
+    );
+    out.push(check("geofence_armed", "unknown", "Arm state unread."));
   } else {
     out.push(check("geofence_plugin", "live", `Reported "${p.geofenceArmState}".`));
     if (p.geofenceArmState === "armed") {

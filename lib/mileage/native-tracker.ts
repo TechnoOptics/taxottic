@@ -67,7 +67,7 @@ import {
   stopGeofenceCapture,
   startGeofenceCapture,
   syncLearnedPlaces,
-  getGeofenceState,
+  probeGeofenceState,
 } from "./geofence";
 import type { GeofenceArmState } from "./geofence";
 import { drainNativeBuffers, nativeDrainDiag } from "./native-drain";
@@ -922,15 +922,15 @@ function measureTimerLag(ms: number): Promise<number> {
  *  Also reports the measured wall-clock elapsed and the last stage the
  *  probe reached, so a "timeout" says how long it really waited (vs the
  *  nominal box) and which await it was sitting in. */
-async function probeWithin<T>(
+async function probeWithin<T, O extends string = DeviceProbeOutcome>(
   fn: (onStage: (s: DeviceProbeStage) => void) => Promise<{
     value: T | null;
-    outcome: DeviceProbeOutcome;
+    outcome: O;
   }>,
   ms: number,
 ): Promise<{
   value: T | null;
-  outcome: DeviceProbeOutcome;
+  outcome: O | "error" | "timeout";
   ms: number;
   stage: DeviceProbeStage;
 }> {
@@ -941,13 +941,16 @@ async function probeWithin<T>(
   };
   const timeout = new Promise<{
     value: T | null;
-    outcome: DeviceProbeOutcome;
+    outcome: O | "error" | "timeout";
   }>((resolve) =>
     setTimeout(() => resolve({ value: null, outcome: "timeout" }), ms),
   );
-  const run = Promise.resolve()
+  const run: Promise<{
+    value: T | null;
+    outcome: O | "error" | "timeout";
+  }> = Promise.resolve()
     .then(() => fn(onStage))
-    .catch(() => ({ value: null, outcome: "error" as DeviceProbeOutcome }));
+    .catch(() => ({ value: null, outcome: "error" as const }));
   const settled = await Promise.race([run, timeout]);
   return { ...settled, ms: Date.now() - startedAt, stage };
 }
@@ -1082,7 +1085,11 @@ export async function sendHeartbeat(): Promise<void> {
         : null;
     // Geofence resurrection net health. Time-boxed like every other
     // bridge read: this is diagnosis, the heartbeat itself is the point.
-    const geofence = await within(getGeofenceState(), 2_000).catch(() => null);
+    const geofenceProbe = await probeWithin(
+      () => probeGeofenceState(),
+      2_000,
+    );
+    const geofence = geofenceProbe.value;
     let appVersion: string | null = null;
     try {
       const info = await within(
@@ -1129,13 +1136,18 @@ export async function sendHeartbeat(): Promise<void> {
           deviceStatusStage: dsProbe.stage,
           geofenceArmState: geofence?.armState ?? null,
           geofenceCount: geofence?.registeredCount ?? null,
-          // A 2 second time box around getGeofenceState collapses
-          // "no plugin", "threw" and "timed out" into one null. A
-          // backgrounded WebView times out routinely in this codebase,
-          // so treating that null as proof of a dead plugin would
-          // accuse the iOS registration bug on a healthy device. Only
-          // claim we looked when the read actually returned.
-          probed: geofence != null || dsProbe.outcome !== "timeout",
+          // Why the read returned what it did: "absent" is the only
+          // value that convicts the plugin. "timeout" and "error" mean
+          // we did not manage to look, which a backgrounded WebView
+          // produces routinely on a perfectly healthy device.
+          geofenceProbe: geofenceProbe.outcome,
+          // "We looked" means THIS read returned, not that some other
+          // bridge call happened to succeed. The old expression was
+          // `geofence != null || dsProbe.outcome !== "timeout"`, which
+          // let a healthy device-status read vouch for a geofence read
+          // that had timed out, and that is what produced a dead
+          // verdict for a plugin that answers.
+          probed: geofenceProbe.outcome !== "timeout",
           locationAuthorization: truth?.locationAuthorization ?? null,
           // Same source as the heartbeat column four lines up, so the
           // verdict and the raw value can never disagree. Null when the
@@ -1398,6 +1410,13 @@ export async function sendHeartbeat(): Promise<void> {
         // reported as a healthy tracking day.
         geofenceArmState: geofence?.armState ?? null,
         geofenceCount: geofence?.registeredCount ?? null,
+        // Read the outcome BEFORE the arm state. A null arm state next
+        // to "ok" is a plugin reporting nothing; next to "timeout" it
+        // is a read that never came back, and those want opposite
+        // responses. Collapsing them is what produced a dead verdict on
+        // a phone whose own heartbeats said "armed" 163 times.
+        geofenceProbe: geofenceProbe.outcome,
+        geofenceProbeMs: geofenceProbe.ms,
         geofenceCapture: geofence?.lastCapture?.state ?? null,
         geofenceBufferedFixes: geofence?.bufferedFixes ?? null,
         // Did the native buffer get drained by anything other than a

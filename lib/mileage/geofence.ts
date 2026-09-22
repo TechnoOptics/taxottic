@@ -156,6 +156,32 @@ export async function getGeofenceState(): Promise<GeofenceState | null> {
 }
 
 /**
+ * Why a geofence read came back empty.
+ *
+ * `getGeofenceState` collapses three different worlds into one null:
+ * the plugin is not registered, the plugin threw, and the call never
+ * came back. The first is our bug and the other two are not, and the
+ * health check has been reporting all three as death. 163 heartbeats
+ * from one Android phone carried armState "armed" while its self-check
+ * read "dead=geofence_plugin".
+ */
+export type GeofenceProbeOutcome = "ok" | "absent" | "error";
+
+export async function probeGeofenceState(): Promise<{
+  value: GeofenceState | null;
+  outcome: GeofenceProbeOutcome;
+}> {
+  const plugin = (await guard())?.p ?? null;
+  if (!plugin) return { value: null, outcome: "absent" };
+  try {
+    const value = await plugin.getState();
+    return { value, outcome: value ? "ok" : "error" };
+  } catch {
+    return { value: null, outcome: "error" };
+  }
+}
+
+/**
  * Fetch the server's learned places and register them as geofences.
  *
  * Called on every resume rather than once, because a permission change,

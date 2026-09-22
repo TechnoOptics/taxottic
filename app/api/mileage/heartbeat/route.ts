@@ -90,6 +90,16 @@ const CAR_PROBE_VALUES = new Set([
   "timeout",
 ]);
 
+/** Why the geofence read returned what it did. Allowlisted like the
+ *  others so a client cannot write arbitrary text into a column that
+ *  gets grouped on. "absent" is the ONLY value that means the plugin is
+ *  not registered; a null geofence_arm_state next to any other value
+ *  means the read never completed, which a backgrounded WebView causes
+ *  routinely. Reading those as the same thing is what reported
+ *  self_check = "dead=geofence_plugin" on a phone whose own heartbeats
+ *  carried arm state "armed" 163 times. See lib/mileage/geofence.ts. */
+const GEOFENCE_PROBE_VALUES = new Set(["ok", "absent", "error", "timeout"]);
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -347,6 +357,11 @@ export async function POST(req: NextRequest) {
     // verbatim rather than collapsed into a boolean, because "why"
     // is the whole value.
     geofence_arm_state: str("geofenceArmState", 40),
+    // Read this BEFORE geofence_arm_state, never after. It is the
+    // difference between a plugin that is not there and a read that did
+    // not come back, and those want opposite responses.
+    geofence_probe: oneOf("geofenceProbe", GEOFENCE_PROBE_VALUES),
+    geofence_probe_ms: num("geofenceProbeMs"),
     geofence_count: num("geofenceCount"),
     geofence_capture: str("geofenceCapture", 40),
     geofence_buffered_fixes: num("geofenceBufferedFixes"),

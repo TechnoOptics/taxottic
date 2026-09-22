@@ -28,7 +28,7 @@ const web: ProbeInput = {
   platform: "web",
   probed: true,
   deviceStatusOk: null, deviceStatusMs: null, deviceStatusStage: null,
-  geofenceArmState: null, geofenceCount: null,
+  geofenceArmState: null, geofenceCount: null, geofenceProbe: null,
   locationAuthorization: null,
   lowPowerMode: null,
   bluetoothPermission: null, bluetoothPermissionAsked: null, carSignalsOk: null,
@@ -39,6 +39,12 @@ const graceIos: ProbeInput = {
   ...web,
   platform: "ios",
   deviceStatusOk: false, deviceStatusMs: 1, deviceStatusStage: "call",
+  // "absent" is what a NOT-REGISTERED plugin produces: guard() hands
+  // back no plugin at all. Leaving this null here would model a state
+  // this device cannot be in, and a null arm state on its own is no
+  // longer enough to convict, precisely because a timed-out read
+  // produces the same null on a healthy phone.
+  geofenceProbe: "absent",
 };
 
 /** Abel's Android before the Bluetooth prompt was wired. */
@@ -46,7 +52,7 @@ const abelAndroid: ProbeInput = {
   ...web,
   platform: "android",
   deviceStatusOk: true, deviceStatusMs: 12, deviceStatusStage: "done",
-  geofenceArmState: "armed", geofenceCount: 4,
+  geofenceArmState: "armed", geofenceCount: 4, geofenceProbe: "ok",
   locationAuthorization: "always",
   // A device whose plugin ANSWERS reports this. Leaving it null here
   // would model a state this device cannot be in, and the fixture that
@@ -164,6 +170,50 @@ describe("our fault versus the driver's choice", () => {
   it("a real arm failure IS dead", () => {
     const p: ProbeInput = { ...abelAndroid, geofenceArmState: "disarmed_registration_failed" };
     expect(verdictOf(p, "geofence_armed")).toBe("dead");
+  });
+});
+
+/**
+ * A geofence read that did not come back is not a dead plugin.
+ *
+ * One Android phone reported self_check = "dead=geofence_plugin" while
+ * 163 of its own heartbeats between 2026-08-24 and 2026-09-15 carried
+ * geofence_arm_state = "armed". The plugin answered the whole time. The
+ * 2 second time box around the read expired, the null that produced was
+ * read as silence, and silence was read as death.
+ */
+describe("a geofence read that did not return is not a dead plugin", () => {
+  const nativeProbed: ProbeInput = { ...web, platform: "android", probed: true };
+
+  it("a geofence read that timed out is unknown, never dead", () => {
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "timeout",
+      geofenceArmState: null,
+    });
+    const plugin = out.find((c) => c.id === "geofence_plugin")!;
+    expect(plugin.verdict, "a timeout is not evidence of death").toBe("unknown");
+    expect(plugin.builtButDead).toBe(false);
+  });
+
+  it("a geofence plugin that is genuinely absent is dead", () => {
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "absent",
+      geofenceArmState: null,
+    });
+    expect(out.find((c) => c.id === "geofence_plugin")!.verdict).toBe("dead");
+  });
+
+  it("a read that threw is unknown too, and says so", () => {
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "error",
+      geofenceArmState: null,
+    });
+    const plugin = out.find((c) => c.id === "geofence_plugin")!;
+    expect(plugin.verdict).toBe("unknown");
+    expect(plugin.detail).toContain("error");
   });
 });
 
