@@ -105,7 +105,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Re-arm native background location BEFORE anything else.
         //
         // On a location relaunch iOS grants ~10 seconds and Apple warns
-        // against network work in it — and this app's WebView loads a
+        // against network work in it, and this app's WebView loads a
         // REMOTE url, so waiting for JavaScript here would spend the
         // whole budget on a network fetch and often run no JS at all.
         // The bridge and its view controller may not even be built on a
@@ -127,8 +127,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         // Interactive notification categories for the Phase-2
         // "Business / Personal" actions (mileage / clarify). iOS only
-        // renders action buttons — on the lock screen and a paired
-        // Apple Watch — for a category whose identifier matches the
+        // renders action buttons, on the lock screen and a paired
+        // Apple Watch, for a category whose identifier matches the
         // push payload's `aps.category`.
         //
         // These identifiers are a CONTRACT with the JS side and must
@@ -139,7 +139,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         //     ← lib/push/action-map.ts resolvePushAction() (it
         //        lowercases actionId and matches these)
         //
-        // UserNotifications only — no new dependency / SPM change, so
+        // UserNotifications only, no new dependency / SPM change, so
         // this cannot reintroduce the Capacitor-version resolution
         // break. Setting categories here is idempotent and additive;
         // @capacitor/push-notifications still owns delegate/handling.

@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Same App Group as the main app — this is how the widget reads
+    <!-- Same App Group as the main app, this is how the widget reads
          the snapshot the app writes. -->
     <key>com.apple.security.application-groups</key>
     <array>
