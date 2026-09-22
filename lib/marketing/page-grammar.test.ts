@@ -54,8 +54,7 @@ export const SHARED_SHELL_FILES = [
 ];
 
 /**
- * One level of the import graph: the local component files a page
- * actually renders.
+ * The local component files a page actually renders, transitively.
  *
  * The guard used to read `page.tsx` and nothing else, and every client
  * component a page mounts was invisible to it. That is not a small gap.
@@ -65,6 +64,14 @@ export const SHARED_SHELL_FILES = [
  * visited set: a first cut stopped one level down and missed
  * `CalcShare.tsx`, which every calculator body mounts.
  *
+ * It follows COMPONENT imports only, which is the difference between
+ * what a page renders and what it merely links against. `WebOnly.tsx`
+ * imports the hook `useIsNativeApp` from `MobileOnly.tsx`; charging
+ * /pricing with the unrelated notice card that module also exports
+ * would be a finding about a surface the page never paints. A binding
+ * is a component when it is PascalCase, which is the rule React
+ * already enforces at the call site.
+ *
  * Resolves `@/components/...` (the tsconfig alias for the repo root) and
  * relative siblings (`./BookForm`), and keeps only `.tsx`, which is what
  * a component is. `@/lib/...` helpers are someone else's guard.
@@ -73,8 +80,11 @@ export function childComponentsOf(file: string): string[] {
   const out = new Set<string>();
   const walk = (from: string) => {
     const src = readFileSync(from, "utf8");
-    for (const m of src.matchAll(/\bfrom\s*["']([^"']+)["']/g)) {
-      const resolved = resolveLocalComponent(m[1], from);
+    // `import <clause> from "<spec>"`. A side-effect import has no
+    // clause and renders nothing, so it is not followed.
+    for (const m of src.matchAll(/\bimport\s+([^;]*?)\s*from\s*["']([^"']+)["']/g)) {
+      if (!importsAComponent(m[1])) continue;
+      const resolved = resolveLocalComponent(m[2], from);
       if (resolved && resolved !== file && !out.has(resolved)) {
         out.add(resolved);
         walk(resolved);
@@ -83,6 +93,31 @@ export function childComponentsOf(file: string): string[] {
   };
   walk(file);
   return [...out].sort();
+}
+
+/**
+ * True when the import clause binds at least one PascalCase name: a
+ * default import (`import Foo from`), a namespace (`* as Foo`), or a
+ * named or renamed binding (`{ Foo }`, `{ foo as Bar }`). Type-only
+ * imports render nothing, so they do not count.
+ */
+function importsAComponent(clause: string): boolean {
+  if (/^\s*type\b/.test(clause)) return false;
+  const named = /\{([^}]*)\}/.exec(clause);
+  const bindings: string[] = [];
+  if (named) {
+    for (const part of named[1].split(",")) {
+      const piece = part.trim();
+      if (!piece || /^type\s/.test(piece)) continue;
+      const as = /\bas\s+([A-Za-z_$][\w$]*)/.exec(piece);
+      bindings.push(as ? as[1] : piece);
+    }
+  }
+  const outside = clause.replace(/\{[^}]*\}/g, "");
+  for (const m of outside.matchAll(/(?:\*\s*as\s+)?([A-Za-z_$][\w$]*)/g)) {
+    if (m[1] !== "type") bindings.push(m[1]);
+  }
+  return bindings.some((b) => /^[A-Z]/.test(b));
 }
 
 function resolveLocalComponent(spec: string, fromFile: string): string | null {
@@ -302,6 +337,31 @@ describe("the guard can see into a page's components", () => {
 
   it("resolves a relative child import", () => {
     expect(childComponentsOf(pageFile)).toEqual([childFile]);
+  });
+
+  it("follows a component import but not a hook-only one", () => {
+    // What a page renders, versus what it merely links against. The
+    // hook module here carries an eyebrow in a component the importer
+    // never mounts; charging the page with it would be a finding about
+    // a surface no reader of this page can see. This is the real shape
+    // of components/WebOnly.tsx, which imports only useIsNativeApp
+    // from components/MobileOnly.tsx.
+    const hookFile = join(dir, "useThing.tsx");
+    const importerFile = join(dir, "Importer.tsx");
+    writeFileSync(
+      hookFile,
+      "export function useThing() {\n  return null;\n}\n" +
+        "export function UnrenderedNotice() {\n" +
+        '  return <p className="text-[10px] uppercase tracking-[0.28em] text-gold-700">In the app</p>;\n' +
+        "}\n",
+    );
+    writeFileSync(
+      importerFile,
+      'import { useThing } from "./useThing";\n' +
+        "export function Importer() {\n  useThing();\n  return null;\n}\n",
+    );
+    expect(childComponentsOf(importerFile), "a hook import is not a render").toEqual([]);
+    expect(retiredPrimitivesIn(hookFile), "the eyebrow is real, just not this page's").not.toEqual([]);
   });
 
   it("reports the child's eyebrow, and names the child file", () => {
