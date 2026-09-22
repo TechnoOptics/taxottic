@@ -71,6 +71,28 @@ class TaxotticViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(TaxotticDeviceStatusPlugin())
         bridge?.registerPluginInstance(TaxotticGeofencePlugin())
         bridge?.registerPluginInstance(TaxotticWidgetBridgePlugin())
+
+        // The left-edge swipe goes back.
+        //
+        // WKWebView ships with allowsBackForwardNavigationGestures
+        // FALSE, and Capacitor does not turn it on, so the first
+        // gesture an iOS user reaches for did nothing at all here. The
+        // app has no native chrome and no back button of its own, which
+        // left a driver who tapped into a drive detail with no way out
+        // except a tab bar tap, and looked like the screen had frozen.
+        //
+        // This is set on the web view, not on the bridge, and it
+        // survives every navigation because it is a property of the
+        // view rather than of a load. capacitorDidLoad() runs after
+        // prepareWebView() has built the web view and before it is
+        // added to the view hierarchy, which is early enough: the flag
+        // is read per gesture, not at attach time.
+        //
+        // Set HERE, in AppDelegate.swift, for the same reason the
+        // registration above lives here: a new .swift file that is not
+        // added to project.pbxproj compiles to nothing and fails
+        // silently, which this repo has shipped twice.
+        webView?.allowsBackForwardNavigationGestures = true
     }
 }
 
