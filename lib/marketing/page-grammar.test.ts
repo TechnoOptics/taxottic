@@ -61,21 +61,27 @@ export const SHARED_SHELL_FILES = [
  * component a page mounts was invisible to it. That is not a small gap.
  * `/calculators/self-employment-tax` is a page.tsx of imports and a
  * component that IS the page body, and the body shipped eleven tracked
- * gold eyebrows while the page passed. One level is deliberate: it is
- * the level at which a page chooses what it renders, and it terminates
- * without a cycle check.
+ * gold eyebrows while the page passed. The walk is transitive with a
+ * visited set: a first cut stopped one level down and missed
+ * `CalcShare.tsx`, which every calculator body mounts.
  *
  * Resolves `@/components/...` (the tsconfig alias for the repo root) and
  * relative siblings (`./BookForm`), and keeps only `.tsx`, which is what
  * a component is. `@/lib/...` helpers are someone else's guard.
  */
 export function childComponentsOf(file: string): string[] {
-  const src = readFileSync(file, "utf8");
   const out = new Set<string>();
-  for (const m of src.matchAll(/\bfrom\s*["']([^"']+)["']/g)) {
-    const resolved = resolveLocalComponent(m[1], file);
-    if (resolved && resolved !== file) out.add(resolved);
-  }
+  const walk = (from: string) => {
+    const src = readFileSync(from, "utf8");
+    for (const m of src.matchAll(/\bfrom\s*["']([^"']+)["']/g)) {
+      const resolved = resolveLocalComponent(m[1], from);
+      if (resolved && resolved !== file && !out.has(resolved)) {
+        out.add(resolved);
+        walk(resolved);
+      }
+    }
+  };
+  walk(file);
   return [...out].sort();
 }
 
