@@ -92,13 +92,27 @@ const CAR_PROBE_VALUES = new Set([
 
 /** Why the geofence read returned what it did. Allowlisted like the
  *  others so a client cannot write arbitrary text into a column that
- *  gets grouped on. "absent" is the ONLY value that means the plugin is
- *  not registered; a null geofence_arm_state next to any other value
- *  means the read never completed, which a backgrounded WebView causes
- *  routinely. Reading those as the same thing is what reported
- *  self_check = "dead=geofence_plugin" on a phone whose own heartbeats
- *  carried arm state "armed" 163 times. See lib/mileage/geofence.ts. */
-const GEOFENCE_PROBE_VALUES = new Set(["ok", "absent", "error", "timeout"]);
+ *  gets grouped on.
+ *
+ *  Same five words as PROBE_VALUES above, deliberately: all three probe
+ *  outcomes sit side by side in one row, so a word must not mean one
+ *  thing in geofence_probe and another in device_probe. Kept as its own
+ *  Set rather than aliased to PROBE_VALUES so that widening one
+ *  client union cannot silently widen the other two columns.
+ *
+ *  Read geofence_probe WITH geofence_probe_ms. "error" is both an
+ *  unregistered plugin (rejects in 1-2ms) and a live plugin that threw
+ *  (slower); nothing else tells them apart. Collapsing them is what
+ *  reported self_check = "dead=geofence_plugin" on a phone whose own
+ *  heartbeats carried arm state "armed" 163 times.
+ *  See lib/mileage/geofence.ts. */
+const GEOFENCE_PROBE_VALUES = new Set([
+  "ok",
+  "null",
+  "unavailable",
+  "error",
+  "timeout",
+]);
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

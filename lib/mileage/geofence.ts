@@ -164,18 +164,48 @@ export async function getGeofenceState(): Promise<GeofenceState | null> {
  * health check has been reporting all three as death. 163 heartbeats
  * from one Android phone carried armState "armed" while its self-check
  * read "dead=geofence_plugin".
+ *
+ * DELIBERATELY the same four words as `DeviceProbeOutcome` in
+ * ./device-status.ts, minus the "timeout" its caller adds. All three
+ * probe outcomes land in ONE heartbeat row next to each other, so a
+ * private vocabulary here would mean `geofence_probe = 'absent'` and
+ * `device_probe = 'absent'` meaning different things in the same row:
+ * "not registered" in one column and "the client sent nothing we
+ * recognise" in the other. Whoever groups on those columns a year from
+ * now will not know that, so:
+ *
+ *   ok           the plugin answered with data
+ *   null         the plugin answered, nothing to report
+ *   unavailable  no bridge to ask (web, or registerPlugin failed)
+ *   error        the bridge exists but the call rejected
+ *
+ * `error` is the one that matters. `guard()` hands back a
+ * registerPlugin proxy on EVERY native platform, registered or not, so
+ * an unregistered plugin does not come back "unavailable": it comes
+ * back "error", in a millisecond or two, because the bridge looked for
+ * a plugin of that name and found nothing to call. That fast rejection
+ * is the signature, and ./self-check.ts convicts on it with
+ * UNREGISTERED_MS_CEILING, exactly as it already does for
+ * device_status_plugin. "unavailable" is reachable only off-native.
  */
-export type GeofenceProbeOutcome = "ok" | "absent" | "error";
+export type GeofenceProbeOutcome = "ok" | "null" | "unavailable" | "error";
 
 export async function probeGeofenceState(): Promise<{
   value: GeofenceState | null;
   outcome: GeofenceProbeOutcome;
 }> {
   const plugin = (await guard())?.p ?? null;
-  if (!plugin) return { value: null, outcome: "absent" };
+  if (!plugin) return { value: null, outcome: "unavailable" };
   try {
     const value = await plugin.getState();
-    return { value, outcome: value ? "ok" : "error" };
+    // UNREACHABLE today, and labelled correctly anyway. getState is
+    // typed Promise<GeofenceState> and both natives either resolve an
+    // object or reject (TaxotticGeofencePlugin.java, .swift). If one
+    // ever resolves nothing, that is "answered with nothing", which
+    // this vocabulary calls "null" and not "error": a plugin that
+    // answers is registered, and calling it "error" would put it one
+    // millisecond threshold away from being convicted as unregistered.
+    return { value, outcome: value ? "ok" : "null" };
   } catch {
     return { value: null, outcome: "error" };
   }

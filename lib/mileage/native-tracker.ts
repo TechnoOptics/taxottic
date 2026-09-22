@@ -922,7 +922,13 @@ function measureTimerLag(ms: number): Promise<number> {
  *  Also reports the measured wall-clock elapsed and the last stage the
  *  probe reached, so a "timeout" says how long it really waited (vs the
  *  nominal box) and which await it was sitting in. */
-async function probeWithin<T, O extends string = DeviceProbeOutcome>(
+/** Exported for lib/mileage/geofence-probe.test.ts ONLY.
+ *  The self-check now reads a timeout as "we did not manage to look"
+ *  rather than as a dead plugin, so the one value this helper invents
+ *  is load-bearing: if it ever resolved anything other than "timeout"
+ *  for a call that never settles, a real dead plugin would be filed as
+ *  unknown and a slow one convicted. That was an untested constant. */
+export async function probeWithin<T, O extends string = DeviceProbeOutcome>(
   fn: (onStage: (s: DeviceProbeStage) => void) => Promise<{
     value: T | null;
     outcome: O;
@@ -1136,11 +1142,16 @@ export async function sendHeartbeat(): Promise<void> {
           deviceStatusStage: dsProbe.stage,
           geofenceArmState: geofence?.armState ?? null,
           geofenceCount: geofence?.registeredCount ?? null,
-          // Why the read returned what it did: "absent" is the only
-          // value that convicts the plugin. "timeout" and "error" mean
-          // we did not manage to look, which a backgrounded WebView
-          // produces routinely on a perfectly healthy device.
+          // Why the read returned what it did. "timeout" means we did
+          // not manage to look, which a backgrounded WebView produces
+          // routinely on a perfectly healthy device, and "error" on its
+          // own is a live plugin that threw.
           geofenceProbe: geofenceProbe.outcome,
+          // Read WITH the outcome, never without it. An "error" inside
+          // UNREGISTERED_MS_CEILING is the unregistered signature and
+          // the only thing that convicts this plugin; the same outcome
+          // at 400ms is a live plugin that threw.
+          geofenceProbeMs: geofenceProbe.ms,
           // "We looked" means THIS read returned, not that some other
           // bridge call happened to succeed. The old expression was
           // `geofence != null || dsProbe.outcome !== "timeout"`, which
@@ -1410,11 +1421,15 @@ export async function sendHeartbeat(): Promise<void> {
         // reported as a healthy tracking day.
         geofenceArmState: geofence?.armState ?? null,
         geofenceCount: geofence?.registeredCount ?? null,
-        // Read the outcome BEFORE the arm state. A null arm state next
-        // to "ok" is a plugin reporting nothing; next to "timeout" it
-        // is a read that never came back, and those want opposite
-        // responses. Collapsing them is what produced a dead verdict on
-        // a phone whose own heartbeats said "armed" 163 times.
+        // Read these two BEFORE the arm state, and always together. A
+        // null arm state next to "timeout" is a read that never came
+        // back; next to "error" in a millisecond or two it is a plugin
+        // that was never registered with the bridge, and next to the
+        // same "error" at 400ms it is a live plugin that threw.
+        // Collapsing them is what produced a dead verdict on a phone
+        // whose own heartbeats said "armed" 163 times, and keying only
+        // on a "no plugin" outcome would have made the dead verdict
+        // unreachable, because there is no such outcome on a device.
         geofenceProbe: geofenceProbe.outcome,
         geofenceProbeMs: geofenceProbe.ms,
         geofenceCapture: geofence?.lastCapture?.state ?? null,
