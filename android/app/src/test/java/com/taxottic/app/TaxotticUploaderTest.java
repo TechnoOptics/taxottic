@@ -10,6 +10,7 @@ import android.location.Location;
 import androidx.test.core.app.ApplicationProvider;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -33,6 +34,12 @@ import org.junit.Test;
  * file catches one that only misbehaves when actually executed.
  */
 @RunWith(RobolectricTestRunner.class)
+// The app compiles against SDK 36 and Robolectric 4.13 ships no
+// runtime for it, so DefaultSdkPicker rejects the default and every
+// test in the class fails with initializationError before a line of
+// it runs. Pinning the emulated SDK keeps the app's own target where
+// it belongs; nothing here is SDK-version sensitive.
+@Config(sdk = 34)
 public class TaxotticUploaderTest {
 
     private Context ctx;

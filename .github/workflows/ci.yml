@@ -342,6 +342,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-dummy-anon-not-a-secret"
           SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-service-role-not-a-secret"
+          # The associated-domains route fails closed with a 500 when
+          # this is unset, deliberately: Apple caches that file hard, so
+          # serving a placeholder team id would poison deep links for as
+          # long as the cache holds. CI therefore has to supply one, and
+          # a dummy is correct here because the tests assert the file's
+          # SHAPE, not its identity. The real value lives in Vercel.
+          APPLE_TEAM_ID: "ABCDE12345"
 
       - name: Upload Playwright report on failure
         if: failure()
