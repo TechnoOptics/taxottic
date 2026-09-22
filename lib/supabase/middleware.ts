@@ -64,6 +64,15 @@ const PUBLIC_PATHS = [
   // also be linked to directly without an auth bounce. See the
   // `isEnterprise && pathname === "/" && !user` branch below.
   "/enterprise-welcome",
+  // Apple App Site Association. iOS fetches this unauthenticated when the
+  // app is installed, and a 307 to /login means universal links silently
+  // never work (and Apple caches that outcome). The middleware `matcher`
+  // in middleware.ts already excludes the whole /.well-known/ tree, so
+  // that exclusion is the primary gate and this entry is the belt to its
+  // braces: if the matcher is ever narrowed, this keeps the file
+  // reachable instead of re-shipping the redirect regression for the
+  // third time. Guarded by e2e/well-known.spec.ts.
+  "/.well-known/apple-app-site-association",
 ];
 
 const HQ_HOST = "hq.taxottic.com";

@@ -1,7 +1,7 @@
 // Drive-end detection (pure).
 //
 // Today a drive only closes after the server sees 5 minutes of GPS
-// stillness — a deliberately conservative timer that exists ONLY so a
+// stillness, a deliberately conservative timer that exists ONLY so a
 // red light or drive-through doesn't fragment one drive into five. Motion
 // signals let us do better: the moment the driver actually WALKS AWAY from
 // the car (a burst of steps after the vehicle went still), the drive is
@@ -9,7 +9,7 @@
 //
 // The user's own framing, kept as the two-signal design:
 //   "detect once a user starts to walk and takes more than a number of
-//    steps, OR has been stationary for the suggested time" — belt and
+//    steps, OR has been stationary for the suggested time", belt and
 //    suspenders, so a drive closes correctly whether they walk away, sit
 //    in the car, or leave the phone behind.
 //
@@ -76,19 +76,19 @@ export const WALK_FIX_COUNT = 3;
 //   2. A walker LEAVES THE ROAD'S AXIS. Jam creep continues along the
 //      pre-stop driving heading; someone walking into a building
 //      diverges from it. The park→walker vector must differ from the
-//      last driving heading by WALK_OFF_AXIS_MIN_DEG — or, when no
+//      last driving heading by WALK_OFF_AXIS_MIN_DEG, or, when no
 //      heading is known, the displacement must reach the much larger
 //      WALK_NO_BEARING_DISPLACEMENT_M before we trust it.
 // Cost of the guards: someone who parks and walks along the sidewalk in
 // the exact direction they were driving falls back to the stationary
 // timer instead of the fast close. Correct-but-slower beats
-// fast-but-wrong here — a mid-drive close splits an IRS record.
+// fast-but-wrong here, a mid-drive close splits an IRS record.
 
 /** Below this the vehicle is genuinely stopped, not creeping (m/s). */
 export const HARD_STOP_SPEED_MPS = 0.7;
 
 /** Continuous hard-stop time required before walk detection arms. Long
- *  lights arm too (90s+ reds exist) — the off-axis test and the
+ *  lights arm too (90s+ reds exist), the off-axis test and the
  *  any-driving-fix reset still protect them. */
 export const WALK_ARM_STOP_MS = 45_000;
 
@@ -97,7 +97,7 @@ export const WALK_ARM_STOP_MS = 45_000;
 export const WALK_OFF_AXIS_MIN_DEG = 45;
 
 /** With no usable driving heading, require this much displacement
- *  instead — far beyond one jam creep between fixes (meters). */
+ *  instead, far beyond one jam creep between fixes (meters). */
 export const WALK_NO_BEARING_DISPLACEMENT_M = 120;
 
 export type DriveEndSignals = {
@@ -115,7 +115,7 @@ export type DriveEndSignals = {
    *  the distance filter emits nothing from a parked phone). */
   walkDisplacementM?: number;
   walkingFixCount?: number;
-  /** True only after a continuous hard stop of WALK_ARM_STOP_MS — the
+  /** True only after a continuous hard stop of WALK_ARM_STOP_MS, the
    *  precondition traffic creep can never satisfy. */
   walkArmed?: boolean;
   /** Angle (deg, 0-180) between the last driving heading and the

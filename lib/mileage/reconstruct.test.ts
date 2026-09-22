@@ -6,7 +6,7 @@ const T = (startTs: number, endTs: number): TripWindow => ({ startTs, endTs });
 describe("overlapsExistingTrip (recovery duplicate guard)", () => {
   it("the reported bug: a straddle jump spanning a finalized trip overlaps", () => {
     // Real trip 14:14→14:59; parked heartbeats at 14:13 and 15:10 read
-    // as a 'jump' — must be treated as already covered.
+    // as a 'jump', must be treated as already covered.
     const real = T(1414, 1459);
     expect(overlapsExistingTrip(1413, 1510, [real])).toBe(true);
   });

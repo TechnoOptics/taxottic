@@ -106,6 +106,27 @@ export type ProbeInput = {
   /** The stage a failed probe reached. "call" means registered-but-absent. */
   deviceStatusStage: string | null;
   geofenceArmState: string | null;
+  /**
+   * Why the geofence read returned what it did: "ok", "null",
+   * "unavailable", "error" or "timeout". Without this the last three
+   * were one null, and one Android phone was reported
+   * dead=geofence_plugin for three weeks while 163 of its own
+   * heartbeats carried armState "armed".
+   *
+   * Read it WITH geofenceProbeMs, never alone. "error" is both what an
+   * unregistered plugin does and what a live plugin that threw does;
+   * only the elapsed time separates them.
+   */
+  geofenceProbe: string | null;
+  /**
+   * Milliseconds the geofence read took. Load-bearing, not decoration:
+   * a rejection inside UNREGISTERED_MS_CEILING is the only evidence
+   * that convicts the geofence plugin, because guard() in ./geofence.ts
+   * hands back a registerPlugin proxy on every native platform and an
+   * unregistered plugin is therefore indistinguishable from a
+   * registered one until a call is made and instantly rejected.
+   */
+  geofenceProbeMs: number | null;
   geofenceCount: number | null;
   locationAuthorization: string | null;
   /**
@@ -179,17 +200,44 @@ export function evaluate(p: ProbeInput): CapabilityCheck[] {
   } else if (p.geofenceArmState == null && !p.probed) {
     out.push(check("geofence_plugin", "unknown", "Not probed yet."));
     out.push(check("geofence_armed", "unknown", "Not probed yet."));
-  } else if (p.geofenceArmState == null) {
+  } else if (
+    p.geofenceArmState == null &&
+    p.geofenceProbe === "error" &&
+    p.geofenceProbeMs != null &&
+    p.geofenceProbeMs <= UNREGISTERED_MS_CEILING
+  ) {
+    // THE UNREGISTERED SIGNATURE, and the only thing that convicts this
+    // plugin. Same reasoning and the same constant as
+    // device_status_plugin above, because it is the same mechanism:
+    // registerPlugin returns a proxy whatever happens, so a plugin that
+    // was never handed to the bridge is invisible until a method is
+    // called, and then the bridge finds nothing to call and rejects in
+    // one or two milliseconds.
+    //
+    // Nothing else may convict. "error" on its own cannot: a LIVE
+    // plugin that threw produces exactly that, and calling it dead is
+    // the false alarm this whole change exists to remove. A slow
+    // rejection is a plugin doing something and failing, and a timeout
+    // is a backgrounded WebView, which is not evidence of anything.
     out.push(
       check(
         "geofence_plugin",
         "dead",
-        "No arm state reported at all. On iOS this is the registration failure: the plugin ships in the binary and is never handed to the bridge.",
+        `Rejected in ${p.geofenceProbeMs}ms. The plugin is compiled but not registered with the bridge: it ships in the binary and is never handed to the WebView.`,
       ),
     );
     out.push(
       check("geofence_armed", "unknown", "Cannot arm what does not answer."),
     );
+  } else if (p.geofenceArmState == null) {
+    out.push(
+      check(
+        "geofence_plugin",
+        "unknown",
+        `No arm state, and the read did not complete (${p.geofenceProbe ?? "no outcome"}${p.geofenceProbeMs != null ? ` after ${p.geofenceProbeMs}ms` : ""}). A backgrounded WebView times these out routinely, and a plugin that is merely failing still answers, so this is not evidence of a dead plugin.`,
+      ),
+    );
+    out.push(check("geofence_armed", "unknown", "Arm state unread."));
   } else {
     out.push(check("geofence_plugin", "live", `Reported "${p.geofenceArmState}".`));
     if (p.geofenceArmState === "armed") {

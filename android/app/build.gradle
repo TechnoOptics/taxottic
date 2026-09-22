@@ -22,6 +22,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
+        }
+    }
+
 }
 
 repositories {
@@ -35,7 +42,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    // Wear OS Data Layer — powers TaxotticWatchBridgePlugin (phone↔
+    // Wear OS Data Layer, powers TaxotticWatchBridgePlugin (phone↔
     // watch sync). Pure Google Play services, no Firebase, safe to
     // ship; the plugin guards every call so it no-ops without a watch.
     implementation "com.google.android.gms:play-services-wearable:18.2.0"
@@ -62,6 +69,16 @@ dependencies {
     implementation "androidx.car.app:app:1.7.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    // JVM unit tests for the native uploader. Robolectric supplies a
+    // real Context and a working org.json on the JVM, so the uploader's
+    // logic (config, cookie, batching, consume-only-after-2xx) is
+    // exercised by `./gradlew :app:testDebugUnitTest` in CI rather than
+    // waiting for a phone. Without these the test source set compiles
+    // against junit4 alone and the uploader has no executed coverage at
+    // all, which for the component that owns a 5.9 day upload tail is
+    // not a defensible place to stop.
+    testImplementation "org.robolectric:robolectric:4.13"
+    testImplementation "androidx.test:core:1.6.1"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

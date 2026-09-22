@@ -1,5 +1,5 @@
 //  Theme.swift
-//  Taxottic Watch design system — "midnight & gold".
+//  Taxottic Watch design system, "midnight & gold".
 //
 //  The brand is navy (#192539) + a warm metallic gold. On a black
 //  watch bezel that reads like fine jewelry: deep midnight surfaces,
@@ -17,12 +17,12 @@ enum Brand {
     static let ink700 = Color(hex: 0x243150)
     static let ink600 = Color(hex: 0x2F3E63)
 
-    // Metallic gold ramp — the jewelry.
+    // Metallic gold ramp, the jewelry.
     static let goldBright = Color(hex: 0xF2D896)
     static let gold       = Color(hex: 0xD5BB7E)
     static let goldDeep   = Color(hex: 0xC4A25D)
     static let goldShadow = Color(hex: 0xA78540)
-    // Deep anodized edge + machined root — the dark gradient tint the
+    // Deep anodized edge + machined root, the dark gradient tint the
     // gold sinks toward so it reads as cut metal, not flat paint.
     static let goldDark   = Color(hex: 0x6E561F)
     static let goldRoot   = Color(hex: 0x4A3A16)
@@ -30,7 +30,7 @@ enum Brand {
     static let cream = Color(hex: 0xFBF7E9)
     static let creamMuted = Color(hex: 0xFBF7E9).opacity(0.62)
 
-    /// The page backdrop: the SAME blue gradient as the app — a
+    /// The page backdrop: the SAME blue gradient as the app, a
     /// top-lit slate sweeping down into the deepest midnight, with a
     /// soft centre catch-light. Reads as one polished dial surface.
     static var backdrop: some View {
@@ -68,7 +68,7 @@ enum Brand {
         startPoint: .leading, endPoint: .trailing
     )
 
-    /// Dark-biased angular sweep for the scroll bezel — one raking
+    /// Dark-biased angular sweep for the scroll bezel, one raking
     /// catch-light band on a deep anodized field.
     static let goldArc = AngularGradient(
         colors: [goldRoot, goldDark, goldShadow, gold, goldBright, gold, goldShadow, goldDark, goldRoot],
@@ -96,7 +96,7 @@ extension Color {
 
 extension Font {
     /// Tabular, slightly condensed numerals for the "engraved" money
-    /// figures — feels minted rather than typed.
+    /// figures, feels minted rather than typed.
     static func figure(_ size: CGFloat) -> Font {
         .system(size: size, weight: .semibold, design: .rounded)
             .monospacedDigit()
@@ -113,7 +113,7 @@ enum Haptic {
     static func warn()    { WKInterfaceDevice.current().play(.retry) }
 }
 
-/// A gold light that travels across the content — the catch-light of
+/// A gold light that travels across the content, the catch-light of
 /// a polished surface. Used on headline numerals and the medal.
 struct Shimmer: ViewModifier {
     @State private var x: CGFloat = -1
@@ -160,7 +160,7 @@ extension View {
     func pulse(_ active: Bool) -> some View { modifier(Pulse(active: active)) }
 }
 
-/// A money figure that rolls up to its value on appear/change — the
+/// A money figure that rolls up to its value on appear/change, the
 /// "real-time" feel. Renders in the engraved gold sheen.
 struct CountingMoney: View {
     var cents: Int
@@ -190,7 +190,7 @@ struct Eyebrow: View {
     }
 }
 
-/// Hairline-gold rounded rim — the single most "jewelry" detail,
+/// Hairline-gold rounded rim, the single most "jewelry" detail,
 /// reused on every card and button.
 struct GoldRim: ViewModifier {
     var radius: CGFloat = 16
@@ -209,14 +209,14 @@ extension View {
         modifier(GoldRim(radius: radius))
     }
 
-    /// No box. Content lands directly on the guilloché dial — just
+    /// No box. Content lands directly on the guilloché dial, just
     /// breathing room so it clears the fluted bezel + chapter ring.
     func jewelCard(radius: CGFloat = 16) -> some View {
         self.padding(.horizontal, 14).padding(.vertical, 4)
     }
 }
 
-/// Guilloché sunburst + engraved chapter ring — the hand-finished
+/// Guilloché sunburst + engraved chapter ring, the hand-finished
 /// dial texture, kept very subtle, drawn under the content.
 struct RolexDial: View {
     var body: some View {
@@ -251,9 +251,9 @@ struct RolexDial: View {
 
 /// A single thin gold bezel: a faint full rail with a brushed-gold
 /// arc that grows from 12 o'clock and turns slightly as the Digital
-/// Crown scrolls — a fine rotating bezel, nothing thick.
+/// Crown scrolls, a fine rotating bezel, nothing thick.
 struct FlutedBezel: View {
-    /// 0‥1 — page progress, or the Set-Aside value fraction.
+    /// 0‥1, page progress, or the Set-Aside value fraction.
     var progress: Double
 
     var body: some View {

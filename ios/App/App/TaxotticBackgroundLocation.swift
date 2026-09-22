@@ -6,12 +6,12 @@ import CoreLocation
 /// ── Why this exists ────────────────────────────────────────────────
 /// Measured over 10 days: the Android driver's phone uploaded on 10/10
 /// days starting ~05:00 (a foreground service keeps the process alive),
-/// while the iOS driver's first upload averaged 13:52 — every morning
+/// while the iOS driver's first upload averaged 13:52, every morning
 /// commute was lost until she opened the app by hand.
 ///
 /// Three verified platform facts explain it, and dictate this design:
 ///
-///  1. `startUpdatingLocation` — the only service the JS tracker uses —
+///  1. `startUpdatingLocation`, the only service the JS tracker uses , 
 ///     does NOT relaunch a terminated app. Apple: "If your app is
 ///     terminated, the delivery of new location events stops
 ///     altogether." Once iOS reclaims the app overnight, the device is
@@ -27,13 +27,13 @@ import CoreLocation
 ///     explicitly warns against network work in that window. This app
 ///     is a REMOTE-URL WebView (server.url = https://taxottic.com), so
 ///     "let JavaScript handle it" means a DNS + TLS + HTML + bundle
-///     fetch inside a 10-second no-network budget — which on a flaky
+///     fetch inside a 10-second no-network budget, which on a flaky
 ///     connection frequently completes zero JS. Worse, the Capacitor
 ///     plugin hands every fix to a saved bridge call and silently drops
 ///     it when no WebView is attached.
 ///
 /// So capture here is deliberately native and WebView-independent:
-/// persist first, let JavaScript drain later. Late points are fine —
+/// persist first, let JavaScript drain later. Late points are fine , 
 /// the server finalizer works over a 45-day window and reconciles
 /// trips, so a commute uploaded at lunchtime still materialises
 /// correctly. Ingest is idempotent (unique on driver+company+captured
@@ -176,7 +176,7 @@ import CoreLocation
         // Visits is a SECOND force-quit-survivable relaunch trigger and
         // costs almost nothing to run alongside SLC. Its departure
         // events are system-computed, so iOS tells us when the user
-        // actually left a place — a free trip-start anchor that no
+        // actually left a place, a free trip-start anchor that no
         // major mileage app appears to use. Belt and braces: if SLC is
         // throttled (relaunch is capped at ~1 per 3-5 min), a visit
         // event can still wake us.
@@ -451,7 +451,7 @@ import CoreLocation
     // ── Disk buffer ────────────────────────────────────────────────
     //
     // A plain JSON array, written synchronously on the utility queue.
-    // Small, dependency-free, and survives termination — which is the
+    // Small, dependency-free, and survives termination, which is the
     // entire point. Points leave only when JavaScript confirms upload.
 
     private func bufferURL() -> URL? {
@@ -547,7 +547,7 @@ import CoreLocation
     }
 
     /// Hand every buffered point to JavaScript. Nothing is deleted here
-    /// — JS calls `clearBuffered(upTo:)` only after the server has
+    ///, JS calls `clearBuffered(upTo:)` only after the server has
     /// accepted them, so a failed upload can never lose a drive.
     @objc public func drainBuffered() -> [[String: Any]] {
         queue.sync {
