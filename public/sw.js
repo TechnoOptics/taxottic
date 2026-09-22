@@ -1353,7 +1353,17 @@
 // and /_next/* chunks are not cached here either (v8), so the banner's
 // new client chunk arrives by content hash. Bumped to keep the "any
 // client JS or markup change" rule a rule.
-const CACHE_VERSION = "v204";
+const CACHE_VERSION = "v210";
+// v210: the heartbeat learns to say why a probe returned nothing, and
+// the Android service uploads its own fixes.
+//
+// Client JS changed in lib/mileage: the heartbeat payload gained
+// geofenceProbe, geofenceProbeMs and the three nativeUpload fields, and
+// the self-check's verdicts changed shape, so a phone running cached
+// chunks against the new route would keep reporting the old payload and
+// keep reading a live geofence plugin as dead. Chosen against
+// origin/main (v204) and every open PR at the moment of the bump
+// (v205 #631, v206 #633, v207 #634, v208 #635, v209 #636).
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
