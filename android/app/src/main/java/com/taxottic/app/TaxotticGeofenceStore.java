@@ -428,6 +428,70 @@ final class TaxotticGeofenceStore {
     }
 
     /**
+     * The oldest {@code max} buffered fixes, in the shape the ingest
+     * route accepts, without removing them.
+     *
+     * Two things about this are load-bearing.
+     *
+     * OLDEST FIRST, AND ONLY FROM THE HEAD. consumeBuffer() drops lines
+     * from the head of the file. A reader that returned the newest
+     * fixes, or that skipped around, would hand the uploader one set of
+     * points and the consume a different set, and the difference would
+     * be silently deleted unposted. So this walks the file from the
+     * start and stops at max.
+     *
+     * CONVERTED HERE, NEXT TO appendFix(). appendFix stores latitude,
+     * longitude and time; isFinitePoint in app/api/mileage/ingest
+     * requires lat, lng and ts, and DROPS anything else without saying
+     * so, which would read as a successful upload that ingested
+     * nothing. Keeping both halves of the format in one file is what
+     * stops them drifting apart.
+     *
+     * An unreadable line is skipped rather than fatal, which makes the
+     * returned count smaller than the number of lines scanned. That is
+     * safe in exactly one direction and it matters: the caller consumes
+     * as many lines as it got fixes, so the lines it drops are a PREFIX
+     * of the lines it read. Every dropped line was therefore either
+     * posted or unparseable. The worst case is that a posted fix stays
+     * behind and is posted again, and the server dedupes on (driver,
+     * captured_at, lat, lng). The reverse, dropping a fix that was
+     * never posted, cannot happen.
+     */
+    static List<JSONObject> readBufferedFixes(Context context, int max) {
+        List<JSONObject> out = new ArrayList<>();
+        if (max <= 0) return out;
+        synchronized (BUFFER_LOCK) {
+            File file = bufferFile(context);
+            if (!file.exists()) return out;
+            try (RandomAccessFile reader = new RandomAccessFile(file, "r")) {
+                String line;
+                while (out.size() < max && (line = reader.readLine()) != null) {
+                    if (line.isEmpty()) continue;
+                    try {
+                        JSONObject stored = new JSONObject(line);
+                        JSONObject point = new JSONObject();
+                        point.put("lat", stored.getDouble("latitude"));
+                        point.put("lng", stored.getDouble("longitude"));
+                        // The stored wall clock, used as stored. Read the
+                        // WITHDRAWN note below before considering any
+                        // correction here: re-deriving this from
+                        // elapsedNanos makes one line produce different
+                        // timestamps on two reads, which manufactures the
+                        // duplicate that dedupe exists to absorb.
+                        point.put("ts", stored.getLong("time"));
+                        out.add(point);
+                    } catch (JSONException ignored) {
+                        // One corrupt line must not strand the rest.
+                    }
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Could not read buffered fixes for upload", e);
+            }
+        }
+        return out;
+    }
+
+    /**
      * WITHDRAWN. Do not reinstate without reading this.
      *
      * A previous version of this file re-derived each fix's wall clock on
