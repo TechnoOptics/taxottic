@@ -115,7 +115,7 @@ describe("describeDriveHealth", () => {
 
 // Background App Refresh OFF defeats every relaunch mechanism iOS has
 // (SLC and geofences alike) with no client-side error, so it must read
-// as its own state — "silent" would send a manager chasing the wrong
+// as its own state, "silent" would send a manager chasing the wrong
 // remedy, and waiting never fixes it.
 describe("audit: background-refresh blocker", () => {
   it("blocked outranks silence when refresh is off", () => {

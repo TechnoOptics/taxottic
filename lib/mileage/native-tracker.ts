@@ -129,7 +129,7 @@ const LS_HB_DIAG = "taxottic.mileage.heartbeatDiag";
  *  of the live buffer so they stop blocking the queue head, kept for
  *  diagnosis. Capped; oldest quarantined batches are discarded first. */
 const LS_DEADLETTER = "taxottic.mileage.deadletter";
-/** "1" while flushes are failing 401 after a refresh attempt — the
+/** "1" while flushes are failing 401 after a refresh attempt, the
  *  session is genuinely dead and the user must sign in again. Read by
  *  MileageTrackingReminder; cleared on the next successful flush. */
 const LS_AUTH_BLOCKED = "taxottic.mileage.authBlocked";
@@ -234,7 +234,7 @@ let driveEndPosting = false;
 let deLastMovingTs = 0;
 // GPS walk-away state: where the car stopped (first below-driving-speed
 // fix after driving) and how many subsequent fixes landed in the
-// walking-speed band. Permission-free walk detection — see drive-end.ts.
+// walking-speed band. Permission-free walk detection, see drive-end.ts.
 let deParkLat = 0;
 let deParkLng = 0;
 let deParkSet = false;
@@ -319,7 +319,7 @@ export const trackerDiag = {
   cbLastError: "" as string,
   /** Consecutive failed flushes; drives the backoff (skip ticks). */
   failStreak: 0 as number,
-  /** Points evicted at MAX_BUFFER (oldest dropped) — data loss signal. */
+  /** Points evicted at MAX_BUFFER (oldest dropped), data loss signal. */
   evictedPoints: 0 as number,
   /** Parked fixes suppressed as scatter. Pure savings, not data loss:
    *  each carried no movement and the keepalive still reports. */
@@ -446,7 +446,7 @@ function persistBuffer() {
   try {
     // The buffer is stored WITH its owning company (audit major #12):
     // a bare point array adopted by whichever company was active at
-    // reload time attributed one company's miles — and deductions — to
+    // reload time attributed one company's miles, and deductions, to
     // another for multi-company drivers.
     window.localStorage.setItem(
       LS_BUFFER,
@@ -549,7 +549,7 @@ async function drainOrphanBuffer(): Promise<void> {
     // points also remain in localStorage until persistBuffer overwrites,
     // which only happens after this drain on the happy path.
   } catch {
-    /* offline — retry on the next start */
+    /* offline, retry on the next start */
   }
 }
 
@@ -566,8 +566,8 @@ async function drainOrphanBuffer(): Promise<void> {
  */
 /**
  * Drive-end check, run every flush tick while tracking. When the vehicle
- * has been stationary and the driver has walked away (step burst) — or
- * the stationary fallback elapses — force-close the trip with a
+ * has been stationary and the driver has walked away (step burst), or
+ * the stationary fallback elapses, force-close the trip with a
  * sessionEnded flush so it materializes in ~30s instead of the server's
  * 5-min parked timer. Decision logic is the unit-tested evaluateDriveEnd.
  */
@@ -600,7 +600,7 @@ async function maybeCloseDrive(): Promise<void> {
     try {
       // Force-close FIRST; only consume the drive-end state once the
       // server confirmed (2xx). On failure everything stays armed, so
-      // the very next tick re-evaluates and retries — the close can be
+      // the very next tick re-evaluates and retries, the close can be
       // late, but it can no longer be lost.
       const ok = await flush({ sessionEnded: true });
       if (ok) {
@@ -636,7 +636,7 @@ async function maybeCloseDrive(): Promise<void> {
 async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
   const sessionEnded = opts?.sessionEnded === true;
   if (flushing) {
-    // Ordinary ticks can just skip — another flush is already moving the
+    // Ordinary ticks can just skip, another flush is already moving the
     // queue. A sessionEnded flush must NEVER be dropped (it closes the
     // trip): wait out the in-flight one, then proceed.
     if (!sessionEnded) return false;
@@ -699,7 +699,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
         await createClient().auth.refreshSession();
         res = await post();
       } catch {
-        /* refresh unavailable (offline) — fall through to 401 handling */
+        /* refresh unavailable (offline), fall through to 401 handling */
       }
     }
     trackerDiag.flushLastStatus = res.status;
@@ -743,7 +743,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
       trackerDiag.failStreak++;
       if (res.status === 401) {
         // Refresh already failed above: the session is dead. Keep the
-        // buffer (points are safe locally) but tell the user — a silent
+        // buffer (points are safe locally) but tell the user, a silent
         // 401 loop is how a full day of drives went missing before.
         try {
           localStorage.setItem(LS_AUTH_BLOCKED, "1");
@@ -762,7 +762,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
           while (dead.length > 5) dead.shift();
           localStorage.setItem(LS_DEADLETTER, JSON.stringify(dead));
         } catch {
-          /* quota — drop without quarantine, unblocking still matters */
+          /* quota, drop without quarantine, unblocking still matters */
         }
         buffer = removeUploadedPoints(buffer, batch);
         persistBuffer();
@@ -788,13 +788,13 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
  * Report device-truth to the server (reliability plan, workstream C):
  * toggle state, buffer depth, callback age, failure streak. Fired on
  * start/stop/resume and every ~5 min while tracking (every 10th flush
- * tick). Best-effort — a lost heartbeat costs nothing; the server keeps
+ * tick). Best-effort, a lost heartbeat costs nothing; the server keeps
  * the last one it saw. Native-plugin fields (authorization, battery)
  * join this payload when the DeviceStatus plugin ships.
  */
 /** Time-box a native-bridge promise: a hung plugin call must degrade to
  *  null, never wedge the caller (observed: a device whose heartbeats
- *  stopped entirely while flushes kept working — the un-time-boxed
+ *  stopped entirely while flushes kept working, the un-time-boxed
  *  getDeviceStatus await was the only difference between the paths). */
 function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([
@@ -1000,19 +1000,19 @@ export async function sendHeartbeat(): Promise<void> {
     // when the DeviceStatus plugin is in this binary; null on web/old
     // builds and the heartbeat still carries the JS-visible fields.
     // TIME-BOXED: device truth is a bonus, the heartbeat itself is the
-    // point — it must go out even when the native bridge is wedged.
+    // point, it must go out even when the native bridge is wedged.
     // Called through the STATIC import above, not a dynamic one.
     //
     // This used to be `import("@/lib/mileage/device-status")` inside a
-    // 3s timeout — a different specifier for a module this file already
+    // 3s timeout, a different specifier for a module this file already
     // imports relatively. Mixed specifiers can resolve to a separate
     // lazy chunk, and if that chunk is slow or unfetchable (remote-URL
     // WebView, backgrounded, poor signal) the timeout fires and EVERY
     // device field lands as null at once. That matches production
     // exactly: location_authorization / precise_location /
     // battery_optimized / low_power_mode were null on 100%% of devices
-    // on BOTH platforms — even on Android, where the native plugin
-    // demonstrably works (verified live over CDP) — while app_version
+    // on BOTH platforms, even on Android, where the native plugin
+    // demonstrably works (verified live over CDP), while app_version
     // survived because @capacitor/app is already-loaded vendor code.
     // A JS-layer cause is the only kind that explains a cross-platform
     // symptom with a healthy native layer.
@@ -1030,7 +1030,7 @@ export async function sendHeartbeat(): Promise<void> {
     const timerLag = measureTimerLag(1_000);
     const dsProbe = await probeWithin(getDeviceStatusProbed, 3_000);
     const ds = dsProbe.value;
-    // App version (was never sent — the manager health view showed
+    // App version (was never sent, the manager health view showed
     // app_version null for every device). Guarded + time-boxed like
     // everything else on the bridge.
     const exitProbe = await probeWithin(getOsExitInfoProbed, 2_000);
@@ -1257,7 +1257,7 @@ export async function sendHeartbeat(): Promise<void> {
         batteryOptimized: truth?.batteryOptimized ?? null,
         lowPowerMode: truth?.lowPowerMode ?? null,
         // Background App Refresh OFF means iOS relaunches us for NO
-        // location event — SLC and geofences both go dead silent with
+        // location event, SLC and geofences both go dead silent with
         // no error to log. The device could always read this; it was
         // never transmitted, so the blocker stayed invisible.
         backgroundRefresh: truth?.backgroundRefresh ?? null,
@@ -1724,7 +1724,7 @@ export async function startMileageTracking(
       // A real fix proves the watcher is alive, so the restart budget
       // resets. It used to be a per-SESSION cap of 3 that a parked
       // phone (no fixes while stationary, which is correct behaviour)
-      // burned through — leaving nothing left for an actual zombie
+      // burned through, leaving nothing left for an actual zombie
       // tracker later in the same session (audit #30).
       trackerDiag.watchdogRestarts = 0;
         if (error) {
@@ -1787,7 +1787,7 @@ export async function startMileageTracking(
           // calling it on every driving fix costs one bridge hop.
           //
           // This is the case the geofence and Bluetooth wake sources
-          // cannot cover, because there is nothing to wake — the app is
+          // cannot cover, because there is nothing to wake, the app is
           // already running. Already running is not the same as
           // surviving, and the gap between the two is where drives have
           // been disappearing: importance 400 is CACHED, and CACHED is
@@ -1798,7 +1798,7 @@ export async function startMileageTracking(
               trackerDiag.driveForegroundService = ok ? "held" : "refused";
             });
           }
-          // Any walk evidence was traffic creep or noise — reset
+          // Any walk evidence was traffic creep or noise, reset
           // EVERYTHING, including the hard-stop clock, and update the
           // driving heading (used to tell a walker leaving the road from
           // a jam creeping along it).
@@ -1832,7 +1832,7 @@ export async function startMileageTracking(
           } else if (!armed) {
             // Sub-driving movement BEFORE a qualifying hard stop: that is
             // a car creeping in traffic, never a walker (you cannot walk
-            // away from a car that hasn't stopped). Reset the clock — a
+            // away from a car that hasn't stopped). Reset the clock, a
             // real park will restart it and pass with ease.
             deHardStopStartTs = 0;
             deParkSet = false;
@@ -2119,7 +2119,7 @@ export async function openMileageLocationSettings(): Promise<void> {
     );
     if (await openLocationSettingsPrecise()) return;
   } catch {
-    /* device-status plugin absent — fall through to Capgo openSettings */
+    /* device-status plugin absent, fall through to Capgo openSettings */
   }
   const bg = await guard();
   try {
@@ -2172,7 +2172,7 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   companyId = savedCompany;
   void flush(); // drain a killed-mid-drive leftover
   // Upload whatever the NATIVE layer captured while this page was not
-  // alive — on iOS that is the entire morning commute after an
+  // alive, on iOS that is the entire morning commute after an
   // overnight termination, and on Android whatever the geofence
   // resurrection service recorded while the WebView was dead. Late
   // points are fine: the finalizer runs a 45-day window and reconciles,
@@ -2205,7 +2205,7 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   // WebView watcher is not a foreground service. It is a page in a
   // process that drops to importance 400 (CACHED) the moment the screen
   // goes off. So the handoff was never service-to-service, it was
-  // protected-to-unprotected, and it fired at app launch — which, on a
+  // protected-to-unprotected, and it fired at app launch, which, on a
   // geofence resurrection, is precisely the start of a drive.
   //
   // Android then collects the survivor. Four kills in three days with
@@ -2260,7 +2260,7 @@ export async function openLocationSettings(): Promise<void> {
     );
     if (await openLocationSettingsPrecise()) return;
   } catch {
-    /* device-status plugin absent — fall through to Capgo openSettings */
+    /* device-status plugin absent, fall through to Capgo openSettings */
   }
   const bg = await guard();
   if (!bg) return;

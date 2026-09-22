@@ -120,7 +120,7 @@ type GeofencePlugin = {
  * Returns the plugin BOXED. Capacitor's registerPlugin proxy has a callable
  * `.then` (its get trap special-cases only $$typeof, toJSON, addListener and
  * removeListener), so it is a thenable, and returning it bare from an async
- * function makes the runtime call proxy.then(...) — a native method that does
+ * function makes the runtime call proxy.then(...), a native method that does
  * not exist. The promise never settles and every caller here waits forever,
  * which is why geofence_arm_state and geofence_count have always been NULL.
  * See lib/mileage/plugin-box.test.ts.
@@ -417,7 +417,7 @@ export async function startGeofenceCapture(): Promise<boolean> {
  *
  * Deliberately not called on app launch any more. It used to be, on the
  * reasoning that "two location foreground services at once is double the
- * battery for one stream of points" — but the WebView watcher is not a
+ * battery for one stream of points", but the WebView watcher is not a
  * foreground service, so what that actually did was drop the process from
  * protected to CACHED at the exact moment a resurrected drive was starting.
  * Android then reaped it under memory pressure: four LOW_MEMORY kills at

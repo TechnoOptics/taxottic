@@ -5,7 +5,7 @@
 // HAS been uploading recently and then goes silent for hours has a dead
 // tracker: iOS reverted Location "Always" → "While Using" (the observed
 // repeat failure), the toggle got turned off, or the OS killed the app.
-// None of those are visible server-side except as silence — which makes
+// None of those are visible server-side except as silence, which makes
 // silence the trigger for the push escalation, reaching the driver even
 // though the in-app "Always" banner can't (the app isn't open).
 //
@@ -35,7 +35,7 @@ export const STALL_AFTER_MS = 90 * 60_000; // 90m
 /** While a stall persists, remind at most this often. */
 export const RENOTIFY_MS = 24 * 60 * 60_000; // 24h
 
-/** Only drivers with an upload inside this window are watched at all —
+/** Only drivers with an upload inside this window are watched at all , 
  *  someone who never tracks (or stopped weeks ago and knows it) should
  *  not get nagged. */
 export const WATCH_WINDOW_MS = 7 * 24 * 60 * 60_000; // 7 days
@@ -48,7 +48,7 @@ export type StallDecision = "notify" | "silent" | "clear";
  * The escalation notify carries a per-driver-per-day dedupe key, so only
  * the FIRST tick of an episode gets `delivered > 0`; every tick after it
  * is deduped and reports zero. Writing that zero straight into the row
- * erases the timestamp of an escalation that really happened — the same
+ * erases the timestamp of an escalation that really happened, the same
  * defect as stamping notified_at for a delivery that never happened,
  * just inverted, and it lands on the one field that proves a manager was
  * warned.
@@ -67,7 +67,7 @@ export function nextEscalatedAt(
 export function evaluateTrackerStall(args: {
   /** Newest mileage_points_raw.created_at for the driver (ms epoch). */
   lastUploadMs: number;
-  /** Now (ms epoch) — passed in so this stays pure/testable. */
+  /** Now (ms epoch), passed in so this stays pure/testable. */
   nowMs: number;
   /** When we last notified for the CURRENT episode, null if never. */
   lastNotifiedMs: number | null;
@@ -75,7 +75,7 @@ export function evaluateTrackerStall(args: {
   const { lastUploadMs, nowMs, lastNotifiedMs } = args;
   const silence = nowMs - lastUploadMs;
   if (silence < STALL_AFTER_MS) {
-    // Uploading fine — end any open episode so the next stall re-alerts.
+    // Uploading fine, end any open episode so the next stall re-alerts.
     return "clear";
   }
   if (silence > WATCH_WINDOW_MS) {

@@ -60,7 +60,7 @@ export type OverlapAction =
  * no overlaps → insert; an existing trip at least as full → consume the
  * candidate's window to the fullest keeper; otherwise the candidate is
  * fuller → replace the stale fragments. Extracted from the loop below so
- * the branch — the most consequential dedupe logic in the pipeline — is
+ * the branch, the most consequential dedupe logic in the pipeline, is
  * unit-testable without a database.
  */
 export function resolveOverlapAction(
@@ -315,7 +315,7 @@ async function recordRenderRefusal(
  * ever sees currently-unconsumed points, so a drive whose points arrived
  * across multiple flush batches (the delayed-flush / battery case) could
  * be materialised from a partial pool while consume-by-range swallowed
- * the rest — a straight line across the missing stretch. Rebuilding from
+ * the rest, a straight line across the missing stretch. Rebuilding from
  * the window is drift-free for healthy trips (the points the segmenter
  * drops sit outside [start, end]) and corrective for broken ones.
  *
@@ -377,7 +377,7 @@ async function renderTripFromRaw(
 
   // Provenance guard (audit critical #1): manual and route trips carry a
   // user-authored distance that is NOT derivable from raw GPS. A partial
-  // stranded trace inside their window must never overwrite them — that
+  // stranded trace inside their window must never overwrite them, that
   // was destroying IRS-defensible odometer entries with 8-mile fragments.
   {
     const { data: t, error: srcErr } = await admin
@@ -407,7 +407,7 @@ async function renderTripFromRaw(
   // never lose it. If a rebuild would produce fewer points than are
   // already drawn (a truncated/failed window read, a mid-flush race),
   // skip the replace and keep the existing track. This makes the render
-  // path safe-by-construction — it can heal a broken trip but can never
+  // path safe-by-construction, it can heal a broken trip but can never
   // itself corrupt a healthy one.
   const { count: existingCount, error: countErr } = await admin
     .from("mileage_points")
@@ -503,7 +503,7 @@ async function renderTripFromRaw(
     .eq("id", tripId);
   if (updErr) {
     // A started_at collision (unique index) is the only expected failure
-    // and is harmless — the points are already corrected; skip the span
+    // and is harmless, the points are already corrected; skip the span
     // update rather than abort finalize.
     console.error("[finalize] render trip update failed", updErr.message);
   }
@@ -627,7 +627,7 @@ export async function finalizeUserTrips(
   // #15): at a dead stop the 25 m distanceFilter emits no fixes, the
   // 30 s heartbeats keep re-running this test, and any train crossing
   // or drive-through longer than 5 minutes severed the drive into two
-  // trips — shaving deductible connector miles every time.
+  // trips, shaving deductible connector miles every time.
   // The device's own last word, used to tell an IDLE phone from a SILENT
   // one. Heartbeats ride the same fetch path as the points, so an upload
   // stall silences both; a heartbeat newer than the last point is
@@ -757,7 +757,7 @@ export async function finalizeUserTrips(
     // Human classification survives a replace (audit critical #2): if any
     // fragment being superseded was classified by a person, the fuller
     // successor inherits that decision (and its notes) instead of a fresh
-    // auto-suggestion silently discarding review work — or worse,
+    // auto-suggestion silently discarding review work, or worse,
     // flipping a user-marked-personal drive back to business.
     let carried: {
       classification: "business" | "personal" | "unclassified";
@@ -806,7 +806,7 @@ export async function finalizeUserTrips(
     const needsConfirmation = auto?.needsConfirmation ?? false;
     // Tax year from the trip's LOCAL date. A US evening drive on Dec 31
     // is already Jan 1 in UTC, so getUTCFullYear() filed it under the
-    // WRONG tax year — the deduction landed in a return the user had
+    // WRONG tax year, the deduction landed in a return the user had
     // already filed (audit #34). America/Chicago is the fleet default
     // until a per-company timezone exists; any US zone puts a Dec-31
     // evening drive back in the right year.
@@ -1004,8 +1004,8 @@ export type ReconcileResult = {
 
 /**
  * Self-healing safety net. Scans recent trips for the "straight line
- * across no road" signature — a trip whose own time window contains
- * materially more usable raw points than are actually drawn — and
+ * across no road" signature, a trip whose own time window contains
+ * materially more usable raw points than are actually drawn, and
  * rebuilds each from the raw window. renderTripFromRaw is idempotent and
  * can only add detail (see shouldReplaceTrack), so this is safe to run on
  * every cron tick: a healthy trip is left untouched, and any trip a
