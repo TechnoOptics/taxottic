@@ -69,9 +69,6 @@ export function GuideShell({
           {lead}
         </p>
         <div className="mt-3 text-xs text-ink-muted">Updated {updated}</div>
-        <div aria-hidden="true" className="gold-flourish mt-5">
-          <span />
-        </div>
 
         {/* Matching free-calculator card, the in-content path from a
             search reader to the interactive tool. */}
@@ -135,10 +132,10 @@ export function GuideShell({
             IRS-cited deductions as you earn them. Free tier, no credit card.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Link href="/login" className="btn-primary text-sm px-4 h-10">
+            <Link href="/login" className="btn-primary text-sm px-4 min-h-11 inline-flex items-center">
               Start free
             </Link>
-            <Link href="/example" className="btn-ghost text-sm px-4 h-10">
+            <Link href="/example" className="btn-ghost text-sm px-4 min-h-11 inline-flex items-center">
               See a live example
             </Link>
           </div>

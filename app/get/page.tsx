@@ -100,7 +100,7 @@ export default async function GetPage() {
             <li>
               <a
                 href={APP_STORE_URL}
-                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950"
+                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950 inline-flex items-center min-h-11"
               >
                 iPhone, App Store
               </a>
@@ -108,7 +108,7 @@ export default async function GetPage() {
             <li>
               <a
                 href={PLAY_URL}
-                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950"
+                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950 inline-flex items-center min-h-11"
               >
                 Android, Google Play
               </a>
@@ -116,7 +116,7 @@ export default async function GetPage() {
             <li>
               <Link
                 href="/login"
-                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950"
+                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950 inline-flex items-center min-h-11"
               >
                 Any browser, no install
               </Link>

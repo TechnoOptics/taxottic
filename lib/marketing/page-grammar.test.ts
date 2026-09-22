@@ -82,7 +82,9 @@ export function childComponentsOf(file: string): string[] {
     const src = readFileSync(from, "utf8");
     // `import <clause> from "<spec>"`. A side-effect import has no
     // clause and renders nothing, so it is not followed.
-    for (const m of src.matchAll(/\bimport\s+([^;]*?)\s*from\s*["']([^"']+)["']/g)) {
+    // `import <clause> from` and `export <clause> from`: a barrel does
+    // its forwarding with the second, and a page cannot tell them apart.
+    for (const m of src.matchAll(/\b(?:import|export)\s+([^;]*?)\s*from\s*["']([^"']+)["']/g)) {
       if (!importsAComponent(m[1])) continue;
       const resolved = resolveLocalComponent(m[2], from);
       if (resolved && resolved !== file && !out.has(resolved)) {
@@ -125,7 +127,15 @@ function resolveLocalComponent(spec: string, fromFile: string): string | null {
   if (spec.startsWith("@/")) base = spec.slice(2);
   else if (spec.startsWith("./") || spec.startsWith("../")) base = join(dirname(fromFile), spec);
   else return null; // a package, or an alias this guard does not own.
-  for (const candidate of [`${base}.tsx`, join(base, "index.tsx")]) {
+  // A barrel is a real import path: components/ui/Rows.ts re-exports the
+  // Screen primitives, and accepting only .tsx dropped that edge, so a
+  // page importing through the barrel could carry anything.
+  for (const candidate of [
+    `${base}.tsx`,
+    `${base}.ts`,
+    join(base, "index.tsx"),
+    join(base, "index.ts"),
+  ]) {
     if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
   }
   return null;
@@ -197,7 +207,13 @@ function retiredPrimitivesIn(file: string): string[] {
     const m = src.match(re);
     if (m) found.push(`${file}: ${what} (${m[0].trim().slice(0, 60)})`);
   };
-  hit(/\bkicker\b|kicker-sm|gold-shine|text-gold-|bg-gold-|border-gold-|ring-gold-/, "a gold primitive");
+  hit(
+    // gold-flourish is an ornament, not a utility, so it matched none
+    // of the colour patterns and painted a brass disc on all eleven
+    // guide articles while this guard read the file and passed.
+    /\bkicker\b|kicker-sm|gold-shine|gold-flourish|text-gold-|bg-gold-|border-gold-|ring-gold-/,
+    "a gold primitive",
+  );
   for (const t of tracts(src)) found.push(`${file}: a tracked uppercase eyebrow ("${t}")`);
   for (const e of monoLabelEyebrows(src)) {
     found.push(`${file}: a mono-label eyebrow directly above an h1 (${e.slice(0, 60)})`);
