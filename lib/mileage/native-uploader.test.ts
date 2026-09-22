@@ -294,19 +294,28 @@ describe("consuming the buffer is identity-bearing, not count-bearing", () => {
   const code = withoutComments(readFileSync(UPLOADER, "utf8"));
   const geofence = withoutComments(readFileSync("lib/mileage/geofence.ts", "utf8"));
 
-  it("bumps the generation on every append and every consume", () => {
-    const append = methodBody(
-      store,
-      "static boolean appendFix(Context context, Location location, String placeId, String source)",
-    );
-    expect(append, "an append leaves outstanding tokens looking valid").toContain(
-      "BUFFER_GENERATION.incrementAndGet()",
-    );
+  it("bumps the generation on a consume, and only on a consume", () => {
     const consume = methodBody(store, "static void consumeBuffer(Context context, int count)");
     expect(
       consume,
       "a consume leaves the other consumer's token looking valid, which is the loss",
     ).toContain("BUFFER_GENERATION.incrementAndGet()");
+
+    // An append adds to the TAIL, and a consume removes the HEAD, so an
+    // appended line is never among the lines being removed and cannot
+    // make the consume unsafe. Bumping on append was a real regression:
+    // the cold_start_backlog trigger fires just before location updates
+    // begin, so an append landed inside every upload window, every
+    // consume was refused as stale, and the same 500 fixes re-posted at
+    // every geofence exit while the backlog never drained.
+    const append = methodBody(
+      store,
+      "static boolean appendFix(Context context, Location location, String placeId, String source)",
+    );
+    expect(
+      append,
+      "an append must not invalidate a token that describes the head",
+    ).not.toContain("BUFFER_GENERATION.incrementAndGet()");
   });
 
   it("refuses a consume whose token no longer matches, without touching the file", () => {

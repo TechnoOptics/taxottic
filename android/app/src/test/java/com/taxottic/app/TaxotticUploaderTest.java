@@ -222,15 +222,40 @@ public class TaxotticUploaderTest {
     }
 
     @Test
-    public void anAppendAlsoInvalidatesAnOutstandingToken() {
+    public void anAppendDoesNotInvalidateAnOutstandingToken() {
         // The capture service appends at 1 Hz while an upload is in
-        // flight. A token that survived an append would let a consume
-        // drop a line the reader never saw.
+        // flight, and an append only ever adds to the TAIL. consumeBuffer
+        // removes the first N lines, so an appended line is never among
+        // them and the append cannot make the consume unsafe.
+        //
+        // Treating it as unsafe was a real regression: cold_start_backlog
+        // fires just before location updates begin, so an append landed
+        // inside every upload window, every consume was refused, and the
+        // same 500 fixes re-posted at every geofence exit without the
+        // backlog ever draining.
         TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS), "p1", "test");
         TaxotticGeofenceStore.BufferRead read = TaxotticGeofenceStore.readBufferedFixes(ctx, 10);
         TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS + 1000L), "p1", "test");
-        assertFalse(TaxotticGeofenceStore.consumeBuffer(ctx, 1, read.generation));
-        assertEquals(2, TaxotticGeofenceStore.countBufferedFixes(ctx));
+        assertTrue(
+                "an append must not invalidate a token for the head",
+                TaxotticGeofenceStore.consumeBuffer(ctx, 1, read.generation));
+        // The line the reader saw is gone; the one appended behind it
+        // survives, which is exactly the intended outcome.
+        assertEquals(1, TaxotticGeofenceStore.countBufferedFixes(ctx));
+    }
+
+    @Test
+    public void aConsumeStillLosesToAnotherConsume() {
+        // The race the token exists for: two consumers, both holding a
+        // token for the same head, and only the first may truncate.
+        TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS), "p1", "test");
+        TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS + 1000L), "p1", "test");
+        TaxotticGeofenceStore.BufferRead first = TaxotticGeofenceStore.readBufferedFixes(ctx, 10);
+        TaxotticGeofenceStore.BufferRead second = TaxotticGeofenceStore.readBufferedFixes(ctx, 10);
+        assertTrue(TaxotticGeofenceStore.consumeBuffer(ctx, 2, first.generation));
+        assertFalse(
+                "the loser must not truncate a buffer it no longer describes",
+                TaxotticGeofenceStore.consumeBuffer(ctx, 2, second.generation));
     }
 
     /**

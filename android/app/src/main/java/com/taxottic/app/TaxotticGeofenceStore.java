@@ -485,9 +485,22 @@ final class TaxotticGeofenceStore {
                     writer.write(fix.toString());
                     writer.write("\n");
                 }
-                // The file changed, so every token handed out before now
-                // describes a buffer that no longer exists.
-                BUFFER_GENERATION.incrementAndGet();
+                // The generation is deliberately NOT bumped here.
+                //
+                // A token exists to stop one consumer truncating lines a
+                // second consumer already claimed, and an append only
+                // ever adds to the TAIL. It cannot invalidate a consume
+                // of the head, because consumeBuffer removes the first N
+                // lines and an appended line is not among them.
+                //
+                // Bumping here looked conservative and was worse than
+                // useless: the cold_start_backlog trigger fires just
+                // before 1 Hz location updates begin, so an append
+                // landed inside every upload window, every consume was
+                // refused as stale, and the same 500 fixes re-posted at
+                // every geofence exit. No data was lost, but the loop
+                // could never drain a backlog and the radio paid for it
+                // on a phone the OS is already killing for memory.
                 return true;
             } catch (JSONException | IOException e) {
                 Log.e(TAG, "Could not buffer resurrection fix", e);
