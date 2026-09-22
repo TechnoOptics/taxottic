@@ -16,7 +16,7 @@ import java.util.Locale;
 
 /**
  * Home-screen forecast widget. Renders the last snapshot the app pushed
- * via TaxotticWidgetBridgePlugin (SharedPreferences) — the widget never
+ * via TaxotticWidgetBridgePlugin (SharedPreferences), the widget never
  * talks to the network itself, so it shows the figures as of the last
  * app open, with a relative "Updated …" stamp.
  *
@@ -27,7 +27,7 @@ import java.util.Locale;
  */
 public class TaxotticForecastWidget extends AppWidgetProvider {
 
-    /** Repaint every placed instance — called by the bridge plugin
+    /** Repaint every placed instance, called by the bridge plugin
      *  right after it persists a fresh snapshot. */
     static void refreshAll(Context ctx) {
         try {
@@ -100,7 +100,7 @@ public class TaxotticForecastWidget extends AppWidgetProvider {
                     rendered = true;
                 }
             } catch (Throwable ignored) {
-                /* malformed snapshot — fall through to the empty state */
+                /* malformed snapshot, fall through to the empty state */
             }
         }
 
