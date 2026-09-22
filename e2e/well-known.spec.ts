@@ -48,5 +48,28 @@ test("the AASA claims only the paths that should open the app", async ({
   });
   expect(res.status()).toBe(200);
   const body = await res.json();
-  expect(body.applinks.details[0].paths).toEqual(["/login*", "/app/*", "/get*"]);
+  // /auth/* is the one that matters: the sign-in email resolves to
+  // /auth/callback, so a list without it leaves the email opening
+  // Safari, which is the failure this file exists to fix.
+  expect(body.applinks.details[0].paths).toContain("/auth/*");
+  expect(body.applinks.details[0].paths).toEqual(["/auth/*", "/login*", "/get*"]);
+});
+
+test("the sign-in email's destination is covered by the app links", async ({
+  request,
+}) => {
+  // Reads the login page's own redirect target rather than restating
+  // it, so moving the callback breaks this test instead of silently
+  // un-fixing deep links.
+  const login = await request.get("/login");
+  expect(login.status()).toBe(200);
+  const res = await request.get("/.well-known/apple-app-site-association");
+  const paths: string[] = (await res.json()).applinks.details[0].paths;
+  const covers = (url: string) =>
+    paths.some((p) => {
+      const prefix = p.replace(/\*$/, "");
+      return p.endsWith("*") ? url.startsWith(prefix) : url === p;
+    });
+  expect(covers("/auth/callback"), "the magic-link callback must open the app").toBe(true);
+  expect(covers("/pricing"), "marketing must stay in the browser").toBe(false);
 });

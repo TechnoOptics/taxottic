@@ -36,9 +36,21 @@ export const dynamic = "force-dynamic";
 // Limited on purpose. Every path listed here is torn out of Safari and
 // handed to the app for anyone who has it installed, so a wildcard would
 // capture marketing, legal, guides and calculator links that must stay
-// shareable on the web. Only the three surfaces a link is meant to open
-// the app for: the sign-in link, the signed-in app, and the install link.
-const PATHS = ["/login*", "/app/*", "/get*"];
+// shareable on the web.
+//
+// /auth/* is the load-bearing one and the reason this file exists. The
+// sign-in email's link resolves to /auth/callback (app/login/page.tsx
+// sets emailRedirectTo and redirectTo to `${origin}/auth/callback`), so
+// without it the email still opens Safari, the driver signs in there,
+// and the app they installed stays signed out. That was the audit's
+// actual finding, and a list that omitted it would have looked correct
+// and fixed nothing.
+//
+// /app/* is deliberately absent: no such route exists in this codebase.
+// The signed-in surfaces are /dashboard, /mileage, /personal and their
+// siblings, and they are reached from /auth/callback rather than linked
+// to directly from email, so they do not need their own entry yet.
+const PATHS = ["/auth/*", "/login*", "/get*"];
 
 // Not "the iOS bundle id" loosely: com.taxottic.app.TaxotticWidget is a
 // separate bundle id in this project and is NOT the app.
