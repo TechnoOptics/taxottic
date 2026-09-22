@@ -322,6 +322,93 @@ public class TaxotticUploaderTest {
         assertEquals(1, TaxotticGeofenceStore.countBufferedFixes(ctx));
     }
 
+    /**
+     * One trigger drains the whole backlog, not one batch of it.
+     *
+     * The observed buffer on the reporting phone was 1512 fixes, and one
+     * 20 minute drive at 1 Hz is 1200. At 500 per trigger those needed
+     * three separate geofence exits to clear, while remaining was
+     * recorded and never acted on.
+     */
+    @Test
+    public void drainsAMultiBatchBacklogInOneRun() {
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        for (int i = 0; i < 1200; i++) {
+            TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS + i * 1000L), "p1", "test");
+        }
+        final int[] calls = new int[1];
+        TaxotticUploader.Result r = TaxotticUploader.upload(
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> {
+                    calls[0]++;
+                    return ok(200);
+                });
+        assertEquals("ok", r.reason);
+        assertEquals(1200, r.posted);
+        assertEquals(0, r.remaining);
+        assertEquals("500 + 500 + 200", 3, calls[0]);
+        assertEquals(0, TaxotticGeofenceStore.countBufferedFixes(ctx));
+    }
+
+    @Test
+    public void stopsLoopingAsSoonAsABatchIsRefused() {
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        for (int i = 0; i < 1200; i++) {
+            TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS + i * 1000L), "p1", "test");
+        }
+        final int[] calls = new int[1];
+        TaxotticUploader.Result r = TaxotticUploader.upload(
+                ctx, origin -> "sb-access-token=abc", SINK,
+                (url, cookie, body) -> ok(++calls[0] == 1 ? 200 : 503));
+        assertEquals("http_503", r.reason);
+        assertEquals("the accepted batch still counts", 500, r.posted);
+        assertEquals("nothing past the refusal is retried in this run", 2, calls[0]);
+        assertEquals(700, TaxotticGeofenceStore.countBufferedFixes(ctx));
+    }
+
+    /**
+     * sessionEnded tail-closes the trip instead of stranding it open
+     * until the finalize cron. The JS geofence drain has always sent it.
+     * It belongs on the batch carrying the tail and nowhere else: on an
+     * intermediate batch it would close a drive the next batch then
+     * continues, splitting one trip into fragments.
+     */
+    @Test
+    public void sendsSessionEndedOnlyOnTheLastBatchOfAFinishedCapture() throws Exception {
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        for (int i = 0; i < 700; i++) {
+            TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS + i * 1000L), "p1", "test");
+        }
+        final java.util.List<String> bodies = new java.util.ArrayList<>();
+        TaxotticUploader.upload(
+                ctx, "capture_ended", origin -> "sb-access-token=abc", SINK,
+                (url, cookie, body) -> {
+                    bodies.add(body);
+                    return ok(200);
+                });
+        assertEquals(2, bodies.size());
+        assertFalse("the first 500 are not the tail",
+                new org.json.JSONObject(bodies.get(0)).optBoolean("sessionEnded", false));
+        assertTrue("the last 200 are the tail of the capture",
+                new org.json.JSONObject(bodies.get(1)).optBoolean("sessionEnded", false));
+    }
+
+    @Test
+    public void doesNotClaimASessionEndedOnAColdStartBacklog() throws Exception {
+        // A cold start is holding an older session's fixes. Its newest
+        // point is not the end of anything the driver just did, and
+        // claiming otherwise closes a trip that may still be running.
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS), "p1", "test");
+        final String[] body = new String[1];
+        TaxotticUploader.upload(
+                ctx, "cold_start_backlog", origin -> "sb-access-token=abc", SINK,
+                (url, cookie, sent) -> {
+                    body[0] = sent;
+                    return ok(200);
+                });
+        assertFalse(new org.json.JSONObject(body[0]).has("sessionEnded"));
+    }
+
     /** A transport that answers with a status and no rotated cookies. */
     private static TaxotticUploader.Response ok(int status) {
         return new TaxotticUploader.Response(status, null);

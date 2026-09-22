@@ -91,7 +91,7 @@ describe("the native uploader posts before it forgets", () => {
   const code = withoutComments(readFileSync(UPLOADER, "utf8"));
   const upload = methodBody(
     code,
-    "static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport)",
+    "private static Result postOneBatch(Context ctx, String trigger, CookieSource cookies,",
   );
 
   /**
@@ -213,10 +213,10 @@ describe("the native uploader posts before it forgets", () => {
     );
     const background = methodBody(
       code,
-      "static void uploadInBackground(Context ctx, Listener listener)",
+      "static void uploadInBackground(Context ctx, String trigger, Listener listener)",
     );
     const submit = background.indexOf("UPLOAD_EXECUTOR.execute(");
-    const work = background.indexOf("upload(app)");
+    const work = background.indexOf("upload(app, trigger)");
     expect(submit, "uploadInBackground does not use the executor").toBeGreaterThan(-1);
     expect(work, "uploadInBackground never uploads").toBeGreaterThan(-1);
     expect(
@@ -346,7 +346,7 @@ describe("consuming the buffer is identity-bearing, not count-bearing", () => {
   it("makes the native uploader consume with the token it read", () => {
     const upload = methodBody(
       code,
-      "static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport)",
+      "private static Result postOneBatch(Context ctx, String trigger, CookieSource cookies,",
     );
     expect(
       upload,
@@ -403,7 +403,7 @@ describe("the uploader keeps the session it was given", () => {
   const code = withoutComments(readFileSync(UPLOADER, "utf8"));
   const upload = methodBody(
     code,
-    "static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport)",
+    "private static Result postOneBatch(Context ctx, String trigger, CookieSource cookies,",
   );
 
   it("writes the rotated cookies back, after the post and before the consume", () => {
@@ -474,5 +474,109 @@ describe("the uploader keeps the session it was given", () => {
       "throw new CookieJarUnavailable(t)",
     );
     expect(upload).toMatch(/catch\s*\(\s*CookieJarUnavailable[\s\S]*?"no_cookie_jar"/);
+  });
+});
+
+/**
+ * THE INVARIANT: one trigger drains the backlog.
+ *
+ * 500 fixes per trigger with no loop is why the measured phone's real
+ * buffer did not move: 1512 fixes observed, and one 20 minute drive at
+ * 1 Hz is 1200, so clearing either needed three separate geofence exits
+ * while `remaining` was recorded and never acted on.
+ *
+ * The caps are not decoration. This runs inside a foreground service,
+ * and an unbounded loop over a buffer that refills, or one line of
+ * which never parses, would hold the radio awake until the OS killed
+ * the process. The last four deaths on this phone were all LOW_MEMORY.
+ */
+describe("the uploader drains rather than nibbles", () => {
+  const code = withoutComments(readFileSync(UPLOADER, "utf8"));
+  const loop = methodBody(
+    code,
+    "static Result upload(Context ctx, String trigger, CookieSource cookies, CookieSink sink,",
+  );
+
+  it("loops over batches instead of posting one and stopping", () => {
+    expect(loop, "there is no loop, so a 1512 fix buffer needs three triggers").toMatch(
+      /for\s*\(\s*int round = 1;\s*round <= MAX_ROUNDS;\s*round\+\+\s*\)/,
+    );
+    expect(loop).toContain("postOneBatch(ctx, trigger, cookies, sink, transport)");
+  });
+
+  it("stops on the first batch that was not cleanly accepted", () => {
+    // Retrying a refusal in a tight loop is how a 503 becomes a battery
+    // incident.
+    expect(loop).toMatch(
+      /if\s*\(\s*batch\.posted == 0 \|\| !"ok"\.equals\(batch\.reason\)\s*\)[\s\S]*?return/,
+    );
+  });
+
+  it("stops when the buffer is empty", () => {
+    expect(loop).toMatch(/if\s*\(\s*batch\.remaining <= 0\s*\)[\s\S]*?return/);
+  });
+
+  it("has both caps, and the wall clock one is monotonic", () => {
+    expect(code).toMatch(/private static final int MAX_ROUNDS = \d+;/);
+    expect(code).toMatch(/private static final long MAX_RUN_MS = [\d_]+L;/);
+    // elapsedRealtime, not currentTimeMillis: a clock correction mid run
+    // must not turn the cap into an early exit or an endless one.
+    expect(loop).toContain("SystemClock.elapsedRealtime()");
+    expect(code).not.toContain("System.currentTimeMillis()");
+    expect(loop).toMatch(/>= MAX_RUN_MS[\s\S]*?return/);
+  });
+
+  it("re-reads the cookie on every round", () => {
+    // Round one is the round that makes the server rotate the session. A
+    // cookie hoisted out of the loop would send round two the token that
+    // round one just got revoked.
+    expect(loop, "the cookie is read once and reused across rounds").not.toContain(
+      "cookies.cookieFor(",
+    );
+    const batch = methodBody(
+      code,
+      "private static Result postOneBatch(Context ctx, String trigger, CookieSource cookies,",
+    );
+    expect(batch).toContain("cookies.cookieFor(origin)");
+  });
+});
+
+/**
+ * sessionEnded tail-closes the trip instead of leaving it open until the
+ * finalize cron, which is what the JS geofence drain has always sent
+ * (lib/mileage/geofence.ts).
+ *
+ * It is wrong on most batches, though. On an intermediate batch of a
+ * multi-batch drain it closes a trip the next batch then continues,
+ * splitting one drive into fragments; on a cold start backlog it closes
+ * a trip that may still be running. So it rides only the batch that
+ * carries the tail of a capture that just ended.
+ */
+describe("the uploader claims a session ended only when one did", () => {
+  const code = withoutComments(readFileSync(UPLOADER, "utf8"));
+  const batch = methodBody(
+    code,
+    "private static Result postOneBatch(Context ctx, String trigger, CookieSource cookies,",
+  );
+
+  it("sends sessionEnded on the capture-ended trigger", () => {
+    expect(batch).toMatch(/\.put\(\s*"sessionEnded"\s*,\s*true\s*\)/);
+    expect(code).toMatch(/private static final String TRIGGER_CAPTURE_ENDED = "capture_ended";/);
+  });
+
+  it("gates it on the trigger AND on this batch holding the tail", () => {
+    expect(batch).toMatch(
+      /if\s*\(\s*TRIGGER_CAPTURE_ENDED\.equals\(trigger\)\s*&&\s*fixes\.size\(\)\s*<\s*MAX_BATCH\s*\)[\s\S]{0,160}?"sessionEnded"/,
+    );
+  });
+
+  it("is passed the trigger from the service at all", () => {
+    const service = withoutComments(
+      readFileSync(
+        "android/app/src/main/java/com/taxottic/app/TaxotticResurrectionService.java",
+        "utf8",
+      ),
+    );
+    expect(service).toContain("TaxotticUploader.uploadInBackground(app, trigger,");
   });
 });

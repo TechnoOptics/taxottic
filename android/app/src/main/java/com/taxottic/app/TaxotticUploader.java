@@ -1,6 +1,7 @@
 package com.taxottic.app;
 
 import android.content.Context;
+import android.os.SystemClock;
 import android.util.Log;
 import android.webkit.CookieManager;
 
@@ -116,6 +117,33 @@ final class TaxotticUploader {
     private static final int MAX_BATCH = 500;
 
     /**
+     * Batches per run. 6 x 500 = 3000 fixes, comfortably past the
+     * largest buffer observed on the reporting phone (1512) and past a
+     * 40 minute drive at 1 Hz.
+     *
+     * A cap exists at all because this runs inside a foreground service:
+     * an unbounded loop over a corrupt or endlessly refilling buffer
+     * would hold the radio awake until the OS killed the process, and
+     * the last four deaths on this phone were all LOW_MEMORY.
+     */
+    private static final int MAX_ROUNDS = 6;
+
+    /**
+     * And never longer than two minutes, whatever the round cap allows.
+     * Six rounds on a slow rural connection is minutes of radio; the
+     * next trigger picks the rest up.
+     */
+    private static final long MAX_RUN_MS = 120_000L;
+
+    /**
+     * The trigger that means the capture just finished, so the newest
+     * buffered fix is the tail of a drive and ingest should close it now
+     * rather than leave it open until the finalize cron. Matches the
+     * literal TaxotticResurrectionService passes.
+     */
+    private static final String TRIGGER_CAPTURE_ENDED = "capture_ended";
+
+    /**
      * One thread, owned here, shared by every caller.
      *
      * Single, not pooled, on purpose: two uploads running at once would
@@ -128,10 +156,10 @@ final class TaxotticUploader {
     /**
      * The entry point for anything holding a Looper. Returns at once.
      */
-    static void uploadInBackground(Context ctx, Listener listener) {
+    static void uploadInBackground(Context ctx, String trigger, Listener listener) {
         final Context app = ctx.getApplicationContext();
         UPLOAD_EXECUTOR.execute(() -> {
-            Result result = upload(app);
+            Result result = upload(app, trigger);
             Log.i(TAG, "upload " + result.reason + " posted=" + result.posted
                     + " remaining=" + result.remaining);
             if (listener != null) listener.onUploadFinished(result);
@@ -142,12 +170,55 @@ final class TaxotticUploader {
      * Blocking. Call from a background thread, or use
      * uploadInBackground().
      */
-    static Result upload(Context ctx) {
-        return upload(ctx, TaxotticUploader::systemCookie, TaxotticUploader::storeCookies,
+    static Result upload(Context ctx, String trigger) {
+        return upload(ctx, trigger, TaxotticUploader::systemCookie, TaxotticUploader::storeCookies,
                 TaxotticUploader::httpPost);
     }
 
+    /** No trigger, which means no sessionEnded. */
     static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport) {
+        return upload(ctx, null, cookies, sink, transport);
+    }
+
+    /**
+     * Drain the buffer, not one batch of it.
+     *
+     * One batch per trigger was the old shape and it does not move the
+     * number: an observed 1512 fix buffer, or one 20 minute drive at
+     * 1 Hz, needed three separate geofence exits to clear, and remaining
+     * was recorded and never acted on. The loop stops on the first
+     * refusal, on an empty buffer, and on either cap.
+     *
+     * Each round re-reads the cookie on purpose. Round one is the round
+     * that makes the server rotate the session, and round two has to use
+     * what round one just wrote back.
+     */
+    static Result upload(Context ctx, String trigger, CookieSource cookies, CookieSink sink,
+            Transport transport) {
+        long startedAtMs = SystemClock.elapsedRealtime();
+        int posted = 0;
+        for (int round = 1; round <= MAX_ROUNDS; round++) {
+            Result batch = postOneBatch(ctx, trigger, cookies, sink, transport);
+            posted += batch.posted;
+            if (batch.posted == 0 || !"ok".equals(batch.reason)) {
+                // A refusal, an empty buffer, or a consume the other
+                // drain invalidated. In the last case re-reading now
+                // would just duplicate work the JS drain is already
+                // doing, so let its run finish.
+                return new Result(posted, batch.remaining, batch.reason);
+            }
+            if (batch.remaining <= 0) {
+                return new Result(posted, 0, "ok");
+            }
+            if (SystemClock.elapsedRealtime() - startedAtMs >= MAX_RUN_MS) {
+                return new Result(posted, batch.remaining, "capped_time");
+            }
+        }
+        return new Result(posted, TaxotticGeofenceStore.countBufferedFixes(ctx), "capped_rounds");
+    }
+
+    private static Result postOneBatch(Context ctx, String trigger, CookieSource cookies,
+            CookieSink sink, Transport transport) {
         String origin = TaxotticGeofenceStore.getUploadOrigin(ctx);
         String companyId = TaxotticGeofenceStore.getUploadCompanyId(ctx);
         if (origin == null || origin.isEmpty() || companyId == null || companyId.isEmpty()) {
@@ -214,6 +285,15 @@ final class TaxotticUploader {
             JSONObject payload = new JSONObject();
             payload.put("companyId", companyId);
             payload.put("points", points);
+            // The tail of a finished capture closes the trip now instead
+            // of waiting for the finalize cron, which is what the JS
+            // geofence drain has always sent. Only on the batch that
+            // took everything the buffer had: saying it on an
+            // intermediate batch would tail-close a drive the next batch
+            // then continues, splitting one trip into fragments.
+            if (TRIGGER_CAPTURE_ENDED.equals(trigger) && fixes.size() < MAX_BATCH) {
+                payload.put("sessionEnded", true);
+            }
             // Stored and forwarded by construction. The ingest route
             // documents that these must not have their clock skew
             // corrected, because their lag is the design, not a device

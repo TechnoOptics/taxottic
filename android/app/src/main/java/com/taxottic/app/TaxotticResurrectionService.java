@@ -403,7 +403,7 @@ public class TaxotticResurrectionService extends Service {
      */
     private void uploadBufferedFixes(String trigger) {
         final Context app = getApplicationContext();
-        TaxotticUploader.uploadInBackground(app, result ->
+        TaxotticUploader.uploadInBackground(app, trigger, result ->
                 TaxotticGeofenceStore.recordUpload(app, trigger, result.posted, result.reason));
     }
 
