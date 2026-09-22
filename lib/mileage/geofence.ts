@@ -117,8 +117,22 @@ type GeofencePlugin = {
    */
   setUploadConfig(options: { origin: string; companyId: string }): Promise<void>;
   getState(): Promise<GeofenceState>;
-  readBuffer(): Promise<{ fixes: NativeFix[]; count: number }>;
-  consumeBuffer(options: { count: number }): Promise<{ remaining: number }>;
+  /**
+   * `generation` names the exact buffer state these fixes were read
+   * from. Hand it back to consumeBuffer. Optional because an apk built
+   * before the token existed does not return one.
+   */
+  readBuffer(): Promise<{ fixes: NativeFix[]; count: number; generation?: number }>;
+  /**
+   * Without `generation` the count is trusted, which is how a drive is
+   * lost when the native uploader drains the same file at the same
+   * moment. With it, a buffer that moved is left alone and `stale` says
+   * so.
+   */
+  consumeBuffer(options: {
+    count: number;
+    generation?: number;
+  }): Promise<{ remaining: number; stale?: boolean }>;
   stopCapture(): Promise<void>;
   /**
    * Optional: absent on any binary built before the drive-protection
@@ -342,9 +356,13 @@ export async function drainGeofenceBuffer(
   const plugin = (await guard())?.p ?? null;
   if (!plugin || !companyId) return 0;
   let fixes: NativeFix[] = [];
+  let generation: number | undefined;
   try {
     const read = await plugin.readBuffer();
     fixes = read?.fixes ?? [];
+    // The token for THIS read. Passed back to consumeBuffer below so a
+    // buffer the native uploader moved in the meantime is left alone.
+    generation = read?.generation;
   } catch {
     return 0;
   }
@@ -396,14 +414,25 @@ export async function drainGeofenceBuffer(
   onPosted?.(points);
 
   try {
-    // Consume exactly what we POSTED. Anything the service appended while
-    // the upload was in flight, and anything the cap declined to take,
-    // keeps its place at the tail.
-    await plugin.consumeBuffer({ count: fixes.length });
+    // Consume exactly what we POSTED, and only if the buffer is still the
+    // one we read. Anything the service appended while the upload was in
+    // flight, and anything the cap declined to take, keeps its place at
+    // the tail.
+    //
+    // The generation is what stops this line losing a drive. Both this
+    // drain and TaxotticUploader do read, POST, consume(count) over the
+    // same file in the same process. With 900 buffered: this reads 900
+    // and posts its first 800, native reads 500, posts and consumes 500,
+    // and a count-only consume of 800 here would then take lines 801 to
+    // 900, which nobody posted. With the token, native's consume has
+    // already moved the generation, so this one is refused and the tail
+    // survives to be re-read.
+    await plugin.consumeBuffer({ count: fixes.length, generation });
   } catch {
     // The points are already on the server and ingest is idempotent on
     // (driver, company, captured_at), so a failed consume costs one
-    // duplicate upload, never a lost drive.
+    // duplicate upload, never a lost drive. A refused consume is the
+    // same trade and needs no handling here for the same reason.
   }
   return points.length;
 }

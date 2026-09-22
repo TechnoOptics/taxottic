@@ -126,7 +126,14 @@ final class TaxotticUploader {
             return new Result(0, TaxotticGeofenceStore.countBufferedFixes(ctx), "no_session");
         }
 
-        List<JSONObject> fixes = TaxotticGeofenceStore.readBufferedFixes(ctx, MAX_BATCH);
+        // The read carries a token naming the exact buffer it saw. The
+        // JS drain in lib/mileage/geofence.ts drains the same file from
+        // the same process, and without the token a consume expressed as
+        // a COUNT can drop lines the other consumer read but never
+        // posted. See BUFFER_GENERATION in TaxotticGeofenceStore.
+        TaxotticGeofenceStore.BufferRead read =
+                TaxotticGeofenceStore.readBufferedFixes(ctx, MAX_BATCH);
+        List<JSONObject> fixes = read.fixes;
         if (fixes.isEmpty()) return new Result(0, 0, "empty");
 
         String body;
@@ -174,10 +181,18 @@ final class TaxotticUploader {
             return new Result(0, TaxotticGeofenceStore.countBufferedFixes(ctx), "http_" + status);
         }
 
-        // Only here, and only this many. Everything above returns with
-        // the buffer untouched.
-        TaxotticGeofenceStore.consumeBuffer(ctx, fixes.size());
-        return new Result(fixes.size(), TaxotticGeofenceStore.countBufferedFixes(ctx), "ok");
+        // Only here, only this many, and only if the buffer is still the
+        // one that was read. Everything above returns with the buffer
+        // untouched. A refused consume means the JS drain moved the file
+        // while this POST was in flight: those points are on the server,
+        // ingest dedupes them, and the next run re-reads the real state.
+        // The alternative, dropping the count anyway, deletes lines this
+        // run never posted.
+        boolean consumed = TaxotticGeofenceStore.consumeBuffer(ctx, fixes.size(), read.generation);
+        return new Result(
+                fixes.size(),
+                TaxotticGeofenceStore.countBufferedFixes(ctx),
+                consumed ? "ok" : "ok_stale_buffer");
     }
 
     private static String systemCookie(String origin) {

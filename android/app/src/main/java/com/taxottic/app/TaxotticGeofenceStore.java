@@ -18,6 +18,7 @@ import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Durable state for the geofence resurrection net.
@@ -125,6 +126,47 @@ final class TaxotticGeofenceStore {
     private static final long BUFFER_MAX_BYTES = 2L * 1024L * 1024L;
 
     private static final Object BUFFER_LOCK = new Object();
+
+    /**
+     * Which version of the buffer a reader saw.
+     *
+     * Two consumers drain this file and they share a process: the JS
+     * drain in lib/mileage/geofence.ts and TaxotticUploader on its own
+     * executor. There is no android:process anywhere in the manifest, so
+     * they genuinely interleave. BUFFER_LOCK makes each file operation
+     * atomic and does nothing at all for the read, POST, consume WINDOW
+     * that both of them straddle, which is where a drive is lost:
+     *
+     *   900 buffered. JS reads 900 and posts its first 800. Native reads
+     *   500, posts, consumes 500, leaving 400. JS then consumes 800 and
+     *   takes the whole file, including lines 801 to 900, which nobody
+     *   ever posted.
+     *
+     * The count is the bug: it describes how many lines to drop without
+     * saying which buffer they were counted against. A consume now
+     * carries the generation its read saw, and a mismatch is refused
+     * with the buffer untouched, so the caller re-reads and posts again.
+     * That turns a lost race into a duplicate upload, and ingest dedupes
+     * on (driver, company, captured_at).
+     *
+     * In memory rather than on disk on purpose: a token is only ever
+     * held by a caller inside this process, so it cannot outlive the
+     * counter. A restart resets both.
+     */
+    private static final AtomicLong BUFFER_GENERATION = new AtomicLong(1);
+
+    /** The buffer as one reader saw it, with the token that says which buffer that was. */
+    static final class BufferRead {
+        /** Oldest first, wire shape, capped at the caller's max. */
+        final List<JSONObject> fixes;
+        /** Pass back to consumeBuffer. A mismatch means re-read, do not consume. */
+        final long generation;
+
+        BufferRead(List<JSONObject> fixes, long generation) {
+            this.fixes = fixes;
+            this.generation = generation;
+        }
+    }
 
     private TaxotticGeofenceStore() {}
 
@@ -443,6 +485,9 @@ final class TaxotticGeofenceStore {
                     writer.write(fix.toString());
                     writer.write("\n");
                 }
+                // The file changed, so every token handed out before now
+                // describes a buffer that no longer exists.
+                BUFFER_GENERATION.incrementAndGet();
                 return true;
             } catch (JSONException | IOException e) {
                 Log.e(TAG, "Could not buffer resurrection fix", e);
@@ -496,12 +541,12 @@ final class TaxotticGeofenceStore {
      * captured_at, lat, lng). The reverse, dropping a fix that was
      * never posted, cannot happen.
      */
-    static List<JSONObject> readBufferedFixes(Context context, int max) {
+    static BufferRead readBufferedFixes(Context context, int max) {
         List<JSONObject> out = new ArrayList<>();
-        if (max <= 0) return out;
         synchronized (BUFFER_LOCK) {
+            long generation = BUFFER_GENERATION.get();
             File file = bufferFile(context);
-            if (!file.exists()) return out;
+            if (max <= 0 || !file.exists()) return new BufferRead(out, generation);
             try (RandomAccessFile reader = new RandomAccessFile(file, "r")) {
                 String line;
                 while (out.size() < max && (line = reader.readLine()) != null) {
@@ -526,8 +571,10 @@ final class TaxotticGeofenceStore {
             } catch (IOException e) {
                 Log.e(TAG, "Could not read buffered fixes for upload", e);
             }
+            // Taken inside the same lock as the read, so no append can
+            // land between the content and the token that names it.
+            return new BufferRead(out, generation);
         }
-        return out;
     }
 
     /**
@@ -565,30 +612,86 @@ final class TaxotticGeofenceStore {
 
     /** Read every buffered fix without removing it. */
     static JSONArray readBuffer(Context context) {
-        JSONArray out = new JSONArray();
         synchronized (BUFFER_LOCK) {
-            File file = bufferFile(context);
-            if (!file.exists()) return out;
-            try (RandomAccessFile reader = new RandomAccessFile(file, "r")) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.isEmpty()) continue;
-                    try {
-                        out.put(new JSONObject(line));
-                    } catch (JSONException ignored) {
-                        // One corrupt line must not lose the rest.
-                    }
+            return readBufferLocked(context);
+        }
+    }
+
+    /**
+     * The same read, plus the generation, for the Capacitor bridge.
+     *
+     * One lock around both halves. Reading the fixes and then asking for
+     * the generation separately would hand JS a token NEWER than the
+     * content it holds, and a consume against that token would be
+     * accepted although the file had moved under it, which is the exact
+     * loss the token exists to prevent.
+     */
+    static JSONObject readBufferForBridge(Context context) throws JSONException {
+        synchronized (BUFFER_LOCK) {
+            JSONArray fixes = readBufferLocked(context);
+            JSONObject out = new JSONObject();
+            out.put("fixes", fixes);
+            out.put("count", fixes.length());
+            out.put("generation", BUFFER_GENERATION.get());
+            return out;
+        }
+    }
+
+    /** Caller must hold BUFFER_LOCK. */
+    private static JSONArray readBufferLocked(Context context) {
+        JSONArray out = new JSONArray();
+        File file = bufferFile(context);
+        if (!file.exists()) return out;
+        try (RandomAccessFile reader = new RandomAccessFile(file, "r")) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty()) continue;
+                try {
+                    out.put(new JSONObject(line));
+                } catch (JSONException ignored) {
+                    // One corrupt line must not lose the rest.
                 }
-            } catch (IOException e) {
-                Log.e(TAG, "Could not read resurrection buffer", e);
             }
+        } catch (IOException e) {
+            Log.e(TAG, "Could not read resurrection buffer", e);
         }
         return out;
     }
 
     /**
-     * Drop the first {@code count} buffered fixes. Called only after JS
-     * has confirmed the upload, so a failed upload never loses points.
+     * Drop the first {@code count} buffered fixes, but only if the
+     * buffer is still the one the caller read.
+     *
+     * @param generation the token from the BufferRead or readBufferForBridge
+     *                   that produced {@code count}.
+     * @return true when the lines were dropped, false when the token was
+     *         stale and the buffer was left exactly as it was. A false
+     *         is not an error: the caller's points are already on the
+     *         server, ingest dedupes them, and the next read picks up
+     *         the real state.
+     */
+    static boolean consumeBuffer(Context context, int count, long generation) {
+        synchronized (BUFFER_LOCK) {
+            long current = BUFFER_GENERATION.get();
+            if (generation != current) {
+                Log.w(TAG, "refusing a stale consume of " + count
+                        + " fixes: read generation " + generation
+                        + ", buffer is at " + current);
+                return false;
+            }
+            consumeBuffer(context, count);
+            return true;
+        }
+    }
+
+    /**
+     * Drop the first {@code count} buffered fixes, trusting the count.
+     *
+     * Kept, and deliberately not deleted, for one reason: a phone can be
+     * running a NEW apk against an OLD cached web bundle, whose
+     * consumeBuffer call carries no generation. Refusing those would
+     * stall that phone's buffer forever, which is worse than the race
+     * this overload cannot see. New callers use the token overload.
      */
     static void consumeBuffer(Context context, int count) {
         if (count <= 0) return;
@@ -617,6 +720,9 @@ final class TaxotticGeofenceStore {
                 Log.e(TAG, "Could not truncate resurrection buffer", e);
                 return;
             }
+            // The file changed. Any token handed out before now is stale,
+            // including one held by the other consumer mid-flight.
+            BUFFER_GENERATION.incrementAndGet();
             if (remaining.isEmpty()) {
                 prefs(context).edit().putBoolean(KEY_BUFFER_OVERFLOW, false).apply();
             }

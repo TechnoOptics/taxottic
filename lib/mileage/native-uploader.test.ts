@@ -252,7 +252,7 @@ describe("the native uploader posts before it forgets", () => {
     const store = withoutComments(readFileSync(STORE, "utf8"));
     const read = methodBody(
       store,
-      "static List<JSONObject> readBufferedFixes(Context context, int max)",
+      "static BufferRead readBufferedFixes(Context context, int max)",
     );
     // The conversion belongs next to appendFix, which owns the stored
     // names, so the two halves of the format cannot drift apart.
@@ -263,5 +263,121 @@ describe("the native uploader posts before it forgets", () => {
     // file, so a reader that returned the NEWEST fixes would consume
     // lines it never posted.
     expect(read).toMatch(/out\.size\(\)\s*<\s*max/);
+  });
+});
+
+/**
+ * THE INVARIANT: a lost race costs a duplicate, never a drive.
+ *
+ * Two consumers drain the one JSONL file and they share a process: the
+ * JS drain in lib/mileage/geofence.ts and TaxotticUploader on its own
+ * executor. Nothing in AndroidManifest.xml declares android:process, so
+ * this is not theoretical. BUFFER_LOCK makes each file operation atomic
+ * and does nothing for the read, POST, consume window that both of them
+ * straddle.
+ *
+ * The reviewer's sequence, which needs no appends and no timing luck:
+ * 900 buffered; JS reads 900 and posts its first 800; native reads 500,
+ * posts, consumes 500, leaving 400; JS then consumes 800 and takes the
+ * whole file, including lines 801 to 900, which nobody ever posted.
+ *
+ * The count is the bug. It says how many lines to drop without saying
+ * which buffer they were counted against. Every consume now carries the
+ * generation its read saw.
+ *
+ * TaxotticUploaderTest.java executes this sequence end to end. This
+ * file asserts the wiring, because an executed test of the native half
+ * cannot see a JS caller that forgets to pass the token.
+ */
+describe("consuming the buffer is identity-bearing, not count-bearing", () => {
+  const store = withoutComments(readFileSync(STORE, "utf8"));
+  const code = withoutComments(readFileSync(UPLOADER, "utf8"));
+  const geofence = withoutComments(readFileSync("lib/mileage/geofence.ts", "utf8"));
+
+  it("bumps the generation on every append and every consume", () => {
+    const append = methodBody(
+      store,
+      "static boolean appendFix(Context context, Location location, String placeId, String source)",
+    );
+    expect(append, "an append leaves outstanding tokens looking valid").toContain(
+      "BUFFER_GENERATION.incrementAndGet()",
+    );
+    const consume = methodBody(store, "static void consumeBuffer(Context context, int count)");
+    expect(
+      consume,
+      "a consume leaves the other consumer's token looking valid, which is the loss",
+    ).toContain("BUFFER_GENERATION.incrementAndGet()");
+  });
+
+  it("refuses a consume whose token no longer matches, without touching the file", () => {
+    const guarded = methodBody(
+      store,
+      "static boolean consumeBuffer(Context context, int count, long generation)",
+    );
+    expect(guarded).toMatch(/if\s*\(\s*generation\s*!=\s*current\s*\)/);
+    // The refusal must come before anything that rewrites the file.
+    const refusal = guarded.indexOf("return false");
+    const rewrite = guarded.indexOf("consumeBuffer(context, count)");
+    expect(refusal, "the stale branch never returns").toBeGreaterThan(-1);
+    expect(rewrite, "the guarded overload never consumes").toBeGreaterThan(-1);
+    expect(
+      refusal,
+      "the file is rewritten before the token is checked, so the check is decoration",
+    ).toBeLessThan(rewrite);
+  });
+
+  it("reads the fixes and the token under one lock", () => {
+    // Two locks would hand a caller a token NEWER than its content, and
+    // a consume against that token would be accepted although the file
+    // had already moved. That is the same loss with extra steps.
+    const bridge = methodBody(
+      store,
+      "static JSONObject readBufferForBridge(Context context) throws JSONException",
+    );
+    expect(bridge).toMatch(
+      /synchronized\s*\(\s*BUFFER_LOCK\s*\)[\s\S]*readBufferLocked\(context\)[\s\S]*BUFFER_GENERATION\.get\(\)/,
+    );
+    const read = methodBody(store, "static BufferRead readBufferedFixes(Context context, int max)");
+    expect(read).toMatch(
+      /synchronized\s*\(\s*BUFFER_LOCK\s*\)\s*\{\s*long generation = BUFFER_GENERATION\.get\(\)/,
+    );
+  });
+
+  it("makes the native uploader consume with the token it read", () => {
+    const upload = methodBody(
+      code,
+      "static Result upload(Context ctx, CookieSource cookies, Transport transport)",
+    );
+    expect(
+      upload,
+      "the uploader consumes by count alone, which can drop the JS drain's unposted tail",
+    ).toMatch(/consumeBuffer\(\s*ctx\s*,\s*fixes\.size\(\)\s*,\s*read\.generation\s*\)/);
+  });
+
+  it("makes the JS drain consume with the token it read", () => {
+    expect(geofence).toMatch(/const read = await plugin\.readBuffer\(\)/);
+    expect(geofence, "the JS drain never reads the token").toMatch(
+      /generation = read\?\.generation/,
+    );
+    expect(
+      geofence,
+      "the JS drain consumes by count alone, which is the half of the race that loses lines 801 to 900",
+    ).toMatch(/consumeBuffer\(\{\s*count:\s*fixes\.length,\s*generation\s*\}\)/);
+  });
+
+  it("passes the token across the bridge in both directions", () => {
+    const plugin = withoutComments(
+      readFileSync("android/app/src/main/java/com/taxottic/app/TaxotticGeofencePlugin.java", "utf8"),
+    );
+    const read = methodBody(plugin, "public void readBuffer(PluginCall call)");
+    expect(read, "readBuffer does not return the token, so JS cannot send one").toMatch(
+      /out\.put\(\s*"generation"/,
+    );
+    const consume = methodBody(plugin, "public void consumeBuffer(PluginCall call)");
+    expect(consume).toContain('call.getLong("generation")');
+    expect(
+      consume,
+      "a token that arrives is ignored, so the JS half of the guard does nothing",
+    ).toMatch(/consumeBuffer\(\s*\n?\s*getContext\(\),\s*count == null \? 0 : count,\s*generation\)/);
   });
 });
