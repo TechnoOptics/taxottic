@@ -59,6 +59,27 @@ public class TaxotticGeofencePlugin extends Plugin {
         call.resolve(out);
     }
 
+    /**
+     * Where to POST, and for whom.
+     *
+     * Stored rather than held in memory because the process that uses
+     * it is usually a different one: the OS kills the app, the geofence
+     * receiver starts the service cold, and nothing has run any JS.
+     *
+     * @param call origin: page origin to POST to, companyId: owning company
+     */
+    @PluginMethod
+    public void setUploadConfig(PluginCall call) {
+        String origin = call.getString("origin");
+        String companyId = call.getString("companyId");
+        if (origin == null || origin.isEmpty() || companyId == null || companyId.isEmpty()) {
+            call.reject("origin and companyId are both required");
+            return;
+        }
+        TaxotticGeofenceStore.setUploadConfig(getContext(), origin, companyId);
+        call.resolve();
+    }
+
     /** Full durable health picture, including every failure field. */
     @PluginMethod
     public void getState(PluginCall call) {

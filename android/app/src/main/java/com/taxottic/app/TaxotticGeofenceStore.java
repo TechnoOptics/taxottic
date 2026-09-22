@@ -62,6 +62,18 @@ final class TaxotticGeofenceStore {
     private static final String KEY_CAPTURE_RUNNING = "captureRunning";
 
     /**
+     * Where the native uploader posts, and for whom.
+     *
+     * Stored rather than held in memory because the process that uses
+     * it is usually a different one: the OS kills the app, the geofence
+     * receiver starts the service cold, and nothing has run any JS.
+     * Same prefs file as everything else here, so a receiver with about
+     * ten seconds of life opens one file, not two.
+     */
+    private static final String KEY_UPLOAD_ORIGIN = "uploadOrigin";
+    private static final String KEY_UPLOAD_COMPANY_ID = "uploadCompanyId";
+
+    /**
      * How many places we ever monitor.
      *
      * Android's own ceiling is 100 geofences per app, so this is not an
@@ -117,6 +129,28 @@ final class TaxotticGeofenceStore {
 
     private static SharedPreferences prefs(Context context) {
         return context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    // ---------------------------------------------------------------
+    // Upload config
+    // ---------------------------------------------------------------
+
+    /** Record where to POST and which company the fixes belong to. */
+    static void setUploadConfig(Context context, String origin, String companyId) {
+        prefs(context).edit()
+                .putString(KEY_UPLOAD_ORIGIN, origin)
+                .putString(KEY_UPLOAD_COMPANY_ID, companyId)
+                .apply();
+    }
+
+    /** Origin to POST to, or null when JS has never told us. */
+    static String getUploadOrigin(Context context) {
+        return prefs(context).getString(KEY_UPLOAD_ORIGIN, null);
+    }
+
+    /** Company the fixes belong to, or null when JS has never told us. */
+    static String getUploadCompanyId(Context context) {
+        return prefs(context).getString(KEY_UPLOAD_COMPANY_ID, null);
     }
 
     // ---------------------------------------------------------------

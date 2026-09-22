@@ -87,6 +87,14 @@ type GeofencePlugin = {
     armState: GeofenceArmState;
     backgroundLocation: boolean;
   }>;
+  /**
+   * Where the native uploader posts, and which company the fixes
+   * belong to. Same feature-detection caveat as startCapture below:
+   * absent on any binary built before this change, and absent on iOS,
+   * which has no native uploader to configure. Call sites must tolerate
+   * a rejection.
+   */
+  setUploadConfig(options: { origin: string; companyId: string }): Promise<void>;
   getState(): Promise<GeofenceState>;
   readBuffer(): Promise<{ fixes: NativeFix[]; count: number }>;
   consumeBuffer(options: { count: number }): Promise<{ remaining: number }>;
@@ -225,6 +233,29 @@ export async function syncLearnedPlaces(companyId: string): Promise<{
 }> {
   const plugin = (await guard())?.p ?? null;
   if (!plugin || !companyId) return { synced: 0, armState: null };
+
+  // The native uploader posts with no JS running, so it needs the two
+  // things only the web layer knows: where to post, and which company
+  // the fixes belong to. Pushed on the same path as the places
+  // themselves so there is exactly one moment where native learns
+  // about the world, rather than two that can drift apart.
+  //
+  // Ahead of the fetch rather than beside the syncPlaces call below,
+  // because every return between here and there is a path on which the
+  // uploader would otherwise keep yesterday's config or none at all: a
+  // learned-place list that is empty or that fails to fetch says
+  // nothing about where to post.
+  try {
+    await plugin.setUploadConfig({
+      origin: window.location.origin,
+      companyId,
+    });
+  } catch {
+    // An older binary has no such method, and neither does iOS. Places
+    // still sync; the uploader simply stays idle, which is the
+    // pre-uploader behaviour.
+  }
+
   let places: Array<{
     id: string;
     label: string;
