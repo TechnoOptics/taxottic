@@ -147,7 +147,7 @@ export default function GuidesIndex() {
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-6">
         <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
-          Free guides to self-employed taxes.
+          Free guides to self-employment tax.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Short, practical guides for freelancers, contractors, and small
