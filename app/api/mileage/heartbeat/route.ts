@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 /**
  * Device-state heartbeat (reliability plan, workstream C). The tracker
- * reports its OWN view of health — toggle state, buffer depth, seconds
+ * reports its OWN view of health: toggle state, buffer depth, seconds
  * since the last native callback, flush failure streak, and (once the
  * native DeviceStatus plugin ships) the actual location-authorization
  * level. This turns "the server infers death from hours of GPS silence"
@@ -397,6 +397,19 @@ export async function POST(req: NextRequest) {
     // like from the outside.
     native_drain_checked: num("nativeDrainChecked"),
     native_drain_suppressed: num("nativeDrainSuppressed"),
+    // The NATIVE uploader's own outcome, posted by the Android capture
+    // service with no JavaScript in the process. See
+    // supabase/migrations/20260922090000_heartbeat_native_upload.sql.
+    // Read native_upload_reason FIRST and on its own: it is
+    // TaxotticUploader.Result's vocabulary verbatim (ok, no_config,
+    // no_session, bad_origin, empty, http_<code>, io_error), and
+    // 'no_session' everywhere means the cookie jar is empty in a
+    // cold-started process, which is the single assumption this design
+    // could not settle without a phone. Every other column in this row
+    // looks healthy in that case.
+    native_upload_reason: str("nativeUploadReason", 24),
+    native_upload_trigger: str("nativeUploadTrigger", 24),
+    native_upload_points: num("nativeUploadPoints"),
     reported_at: reportedAt,
   };
 

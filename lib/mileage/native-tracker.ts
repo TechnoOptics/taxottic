@@ -1440,6 +1440,21 @@ export async function sendHeartbeat(): Promise<void> {
         // counter alone cannot distinguish from having no backlog.
         nativeDrainTrigger: nativeDrainDiag.lastTrigger,
         nativeDrainPoints: nativeDrainDiag.lastPoints,
+        // And did the NATIVE uploader, the one that runs with no JS in
+        // the process at all, get anywhere? Read the reason before the
+        // count, always. The drain fields above can only ever describe
+        // an app that was alive; these describe the hours it was not,
+        // which is where the 5.9 day p90 actually lives.
+        //
+        // "no_session" on every row is the expected shape of the one
+        // failure nobody could rule out before shipping: CookieManager
+        // returning nothing in a process started cold by a geofence
+        // receiver that has never created a WebView. It looks identical
+        // to a healthy device from every other column, so it gets its
+        // own.
+        nativeUploadReason: geofence?.lastUpload?.reason ?? null,
+        nativeUploadTrigger: geofence?.lastUpload?.trigger ?? null,
+        nativeUploadPoints: geofence?.lastUpload?.posted ?? null,
         // And is the duplicate suppression still alive? The two native
         // buffers hold the same fix stream and posting both stored one
         // drive twice, which made the merged pool unsegmentable. That

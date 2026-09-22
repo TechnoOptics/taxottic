@@ -233,6 +233,25 @@ public class TaxotticResurrectionService extends Service {
         TaxotticGeofenceStore.recordCapture(this, TaxotticGeofenceStore.CAPTURE_BLIND,
                 "awaiting_first_fix", 0, startedAtMs, true);
 
+        // CALL SITE 2 OF 2: this process exists again, and the last one
+        // left fixes on disk.
+        //
+        // This is the moment that owns the tail. The phone sits at home
+        // overnight, the OS kills the app, and whatever the previous
+        // session buffered waits for the driver to open the app: median
+        // 24 hours to the server, p90 5.9 days, measured over 21 days.
+        // A geofence exit is often the first time in those hours that
+        // any of our code runs at all, so it is the first chance to post.
+        //
+        // Guarded on a non-empty buffer rather than run unconditionally,
+        // because waking the radio to post nothing is pure battery cost
+        // on a process whose last four deaths were all LOW_MEMORY. The
+        // count is a line scan of one file and this thread is about to
+        // wait on GPS anyway.
+        if (TaxotticGeofenceStore.countBufferedFixes(this) > 0) {
+            uploadBufferedFixes("cold_start_backlog");
+        }
+
         if (!startLocationUpdates()) {
             stopWithState(TaxotticGeofenceStore.CAPTURE_PROVIDER_OFF, "gps_provider_unavailable");
             return START_NOT_STICKY;
@@ -343,7 +362,49 @@ public class TaxotticResurrectionService extends Service {
         finalState = state;
         finalDetail = detail;
         TaxotticGeofenceStore.recordCapture(this, state, detail, fixCount, startedAtMs, false);
+        // CALL SITE 1 OF 2: the capture is over, so the buffer is final.
+        //
+        // Here rather than in onDestroy, and before stopSelf rather than
+        // after, for one reason: at this instant the service still holds
+        // foreground importance, which is the only state in which the
+        // platform reliably lets this process finish a network round
+        // trip. onDestroy runs as the process is being taken apart, and
+        // an upload submitted there is racing its own teardown.
+        //
+        // Every deliberate end funnels through here: stationary stop,
+        // session cap, handoff to the WebView tracker, provider off and
+        // give-up while blind. The ones with no fixes of their own are
+        // still worth an attempt, because the buffer may hold an older
+        // session's backlog and the uploader answers "empty" cheaply
+        // when it does not.
+        uploadBufferedFixes("capture_ended");
         stopSelf();
+    }
+
+    // -----------------------------------------------------------------
+    // Upload
+    // -----------------------------------------------------------------
+
+    /**
+     * Post the buffer, off this thread, and write down what happened.
+     *
+     * Every caller here is the main thread, where the uploader's 15
+     * second connect and 30 second read timeouts are an ANR, which the
+     * OS resolves by killing the process mid-upload.
+     * TaxotticUploader.uploadInBackground owns the single upload thread
+     * and returns immediately; the listener runs on that thread, so
+     * recordUpload's disk write is off the main thread too.
+     *
+     * The result is recorded, never swallowed. A built, bridged,
+     * never-called function is this project's signature failure and an
+     * upload whose outcome nobody can read is the same failure wearing a
+     * different hat: the reason string is the only way to tell a working
+     * uploader from one returning "no_session" on every single run.
+     */
+    private void uploadBufferedFixes(String trigger) {
+        final Context app = getApplicationContext();
+        TaxotticUploader.uploadInBackground(app, result ->
+                TaxotticGeofenceStore.recordUpload(app, trigger, result.posted, result.reason));
     }
 
     // -----------------------------------------------------------------

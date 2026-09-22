@@ -61,6 +61,27 @@ export type GeofenceState = {
     startedAtMs: number;
     updatedAtMs: number;
   } | null;
+  /**
+   * What the NATIVE uploader last did, written by the capture service in
+   * a process that had no JavaScript in it.
+   *
+   * Distinct from the nativeDrain* diagnostics, which describe the JS
+   * drain running in this page life. This one describes an upload that
+   * happened while the app was dead, which is the case the drain can
+   * never cover and the one the 5.9 day p90 lives in.
+   *
+   * `reason` is the field to read first. It is TaxotticUploader.Result's
+   * vocabulary verbatim: ok, no_config, no_session, bad_origin, empty,
+   * http_<code>, io_error. "no_session" on every row means the cookie
+   * jar is empty in a cold-started process, which is the one assumption
+   * in this design that no test off a phone can settle.
+   */
+  lastUpload: {
+    trigger: string;
+    posted: number;
+    reason: string;
+    atMs: number;
+  } | null;
 };
 
 type NativeFix = {

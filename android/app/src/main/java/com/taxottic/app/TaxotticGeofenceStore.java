@@ -60,6 +60,7 @@ final class TaxotticGeofenceStore {
     private static final String KEY_LAST_CAPTURE = "lastCapture";
     private static final String KEY_BUFFER_OVERFLOW = "bufferOverflow";
     private static final String KEY_CAPTURE_RUNNING = "captureRunning";
+    private static final String KEY_LAST_UPLOAD = "lastUpload";
 
     /**
      * Where the native uploader posts, and for whom.
@@ -281,6 +282,37 @@ final class TaxotticGeofenceStore {
     }
 
     /**
+     * What the last native upload attempt did, and why.
+     *
+     * This is the only evidence the change works. The uploader runs in a
+     * process that is usually dead again long before the next heartbeat,
+     * so nothing it learns survives unless it is written to disk here,
+     * and nothing written here reaches a reader unless snapshot() picks
+     * it up. Both halves are guarded by
+     * lib/mileage/native-upload-call-site.test.ts.
+     *
+     * The reason is the load-bearing field, not the count. Whether
+     * CookieManager hands back a Supabase session cookie inside a
+     * process that was started cold by a geofence receiver and has never
+     * created a WebView cannot be established off a phone. If it does
+     * not, every run reports "no_session", posts nothing, and the upload
+     * latency this whole change exists to cut does not move. A zero
+     * count on its own cannot tell that from a driver who did not drive.
+     */
+    static void recordUpload(Context context, String trigger, int posted, String reason) {
+        try {
+            JSONObject upload = new JSONObject();
+            upload.put("trigger", trigger == null ? "" : trigger);
+            upload.put("posted", posted);
+            upload.put("reason", reason == null ? "" : reason);
+            upload.put("atMs", System.currentTimeMillis());
+            prefs(context).edit().putString(KEY_LAST_UPLOAD, upload.toString()).apply();
+        } catch (JSONException e) {
+            Log.e(TAG, "Could not record upload outcome", e);
+        }
+    }
+
+    /**
      * A running flag is only believed while it is being refreshed.
      *
      * If the OS kills the process outright, onDestroy never runs and
@@ -330,6 +362,13 @@ final class TaxotticGeofenceStore {
         String lastCapture = p.getString(KEY_LAST_CAPTURE, "");
         out.put("lastCapture", lastCapture.isEmpty() ? JSONObject.NULL : new JSONObject(lastCapture));
         out.put("captureRunning", p.getBoolean(KEY_CAPTURE_RUNNING, false));
+        // Travels the same road as lastCapture: snapshot -> getState ->
+        // lib/mileage/geofence.ts -> the heartbeat payload -> the
+        // native_upload_* columns. Null until this device has ever tried
+        // an upload, which on an existing install is every device until
+        // the first geofence exit after the new build lands.
+        String lastUpload = p.getString(KEY_LAST_UPLOAD, "");
+        out.put("lastUpload", lastUpload.isEmpty() ? JSONObject.NULL : new JSONObject(lastUpload));
         out.put("bufferOverflow", p.getBoolean(KEY_BUFFER_OVERFLOW, false));
         out.put("bufferedFixes", countBufferedFixes(context));
         return out;
