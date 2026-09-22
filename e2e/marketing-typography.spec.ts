@@ -294,6 +294,20 @@ test.describe("at 344px", () => {
       await expectH1WithinGutter(page, path);
     });
   }
+
+  // A guide article and a per-calculator page: the deepest routes in the
+  // shell and the ones with the longest headlines. Their line count is
+  // not bounded here, because a long-form title legitimately runs past
+  // the hub bound at this width; what has to hold is the gutter and the
+  // absence of sideways scroll, which is where a headline that overshot
+  // would be clipped off the screen without any test noticing.
+  for (const path of ["/guides/qbi-deduction", "/calculators/mileage-reimbursement"]) {
+    test(`${path} holds the gutter and does not scroll sideways at 344px`, async ({ page }) => {
+      await ready(page, path);
+      await expectH1WithinGutter(page, path);
+      expect(await sidewaysOverflow(page), `${path} scrolls sideways`).toBeLessThanOrEqual(0);
+    });
+  }
 });
 
 test.describe("at 375px", () => {
