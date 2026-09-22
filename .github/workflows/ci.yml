@@ -242,6 +242,18 @@ jobs:
         working-directory: android
         run: ./gradlew :app:compileDebugJavaWithJavac --no-daemon
 
+      # compileDebugJavaWithJavac never compiles the test source set, so
+      # until now no Java in this repo was executed by anything. That was
+      # tolerable while the native half was mostly receivers and plugins
+      # whose behaviour only shows on a device. It stopped being
+      # tolerable with TaxotticUploader, which decides whether a drive is
+      # uploaded or silently dropped: its rule is consume only after a
+      # 2xx, and a mistake there loses drives rather than duplicating
+      # them. Robolectric runs those tests on the JVM here.
+      - name: Run Android unit tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
   verify:
     name: tests + typecheck + lint
     runs-on: ubuntu-latest

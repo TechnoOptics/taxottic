@@ -6,6 +6,8 @@ import android.content.Context;
 import android.location.Location;
 
 import androidx.test.core.app.ApplicationProvider;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -13,25 +15,22 @@ import org.junit.Test;
 /**
  * The uploader's refusals and its one consume rule.
  *
- * HOW TO RUN THIS, because nothing runs it today. The module declares
- * only junit:junit for the test source set, so ApplicationProvider (and
- * a Context, and a working org.json) are not on the unit-test
- * classpath. Making this executable needs two lines in
- * android/app/build.gradle:
+ * HOW THIS RUNS. Robolectric supplies a real Context and a working
+ * org.json on the JVM, so `./gradlew :app:testDebugUnitTest` exercises
+ * the uploader's logic without a phone. The dependencies and the
+ * testOptions block live in android/app/build.gradle, and CI runs that
+ * Gradle task in the "android compiles" job alongside
+ * compileDebugJavaWithJavac, which on its own never compiles this
+ * source set.
  *
- *   testImplementation "org.robolectric:robolectric:4.13"
- *   testImplementation "androidx.test:core:1.6.1"
- *
- * plus @RunWith(RobolectricTestRunner.class) on this class. Those lines
- * are outside the file set this task was allowed to touch, so they are
- * deliberately not here. Until they land, this file documents the
- * contract and the four refusals; the properties that actually matter
- * are asserted from the node suite by lib/mileage/native-uploader.test.ts,
- * which CI does run.
- *
- * Also note that CI runs compileDebugJavaWithJavac, which never
- * compiles this source set, so a break here is silent in CI either way.
+ * The properties that survive without any Java running at all are
+ * asserted separately from the node suite by
+ * lib/mileage/native-uploader.test.ts, which reads this package's
+ * source. Two layers on purpose: the node guard catches a wrong
+ * implementation in a PR even if the Gradle job is skipped, and this
+ * file catches one that only misbehaves when actually executed.
  */
+@RunWith(RobolectricTestRunner.class)
 public class TaxotticUploaderTest {
 
     private Context ctx;
