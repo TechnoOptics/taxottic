@@ -386,8 +386,19 @@ public class TaxotticResurrectionService extends Service {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
+        // Several OEM task killers read a channel's importance when
+        // deciding what to cull, and this phone's last exit was
+        // low_memory, so the capture channel is not the quietest one.
+        //
+        // CAVEAT: Android keeps the importance a channel was CREATED
+        // with. createNotificationChannel() cannot raise it afterwards.
+        // Phones that already created this channel keep the quieter
+        // setting until the app is reinstalled or the user raises it by
+        // hand; only new installs get this. The channel id is not
+        // versioned, deliberately, because a new id would discard the
+        // user's own channel preferences.
         NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID, "Automatic drive capture", NotificationManager.IMPORTANCE_LOW);
+                CHANNEL_ID, "Automatic drive capture", NotificationManager.IMPORTANCE_DEFAULT);
         channel.setDescription("Shown while Taxottic is recording a drive it started automatically.");
         manager.createNotificationChannel(channel);
     }
