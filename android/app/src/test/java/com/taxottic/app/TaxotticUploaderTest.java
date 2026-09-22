@@ -47,7 +47,7 @@ public class TaxotticUploaderTest {
     @Test
     public void refusesWithoutConfig() {
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> "sb-access-token=abc", (url, cookie, body) -> 200);
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> ok(200));
         assertEquals("no_config", r.reason);
         assertEquals(0, r.posted);
     }
@@ -62,7 +62,7 @@ public class TaxotticUploaderTest {
     public void refusesAnOriginThatIsNotHttp() {
         TaxotticGeofenceStore.setUploadConfig(ctx, "capacitor://localhost", "co_1");
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> "sb-access-token=abc", (url, cookie, body) -> 200);
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> ok(200));
         assertEquals("bad_origin", r.reason);
         assertEquals(0, r.posted);
     }
@@ -71,7 +71,7 @@ public class TaxotticUploaderTest {
     public void refusesWithoutASessionCookie() {
         TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> null, (url, cookie, body) -> 200);
+                ctx, origin -> null, SINK, (url, cookie, body) -> ok(200));
         assertEquals("no_session", r.reason);
     }
 
@@ -81,7 +81,7 @@ public class TaxotticUploaderTest {
         // The cookie and the transport are both seams, so the test can
         // supply them without a network or a WebView.
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> "sb-access-token=abc", (url, cookie, body) -> 200);
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> ok(200));
         assertEquals("empty", r.reason);
     }
 
@@ -94,7 +94,7 @@ public class TaxotticUploaderTest {
         TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
         TaxotticGeofenceStore.appendFix(ctx, fixAt(1_700_000_000_000L), "p1", "test");
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> "sb-access-token=abc", (url, cookie, body) -> 500);
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> ok(500));
         assertEquals("http_500", r.reason);
         assertEquals("a rejected batch must stay on the phone",
                 1, TaxotticGeofenceStore.countBufferedFixes(ctx));
@@ -105,7 +105,7 @@ public class TaxotticUploaderTest {
         TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
         TaxotticGeofenceStore.appendFix(ctx, fixAt(1_700_000_000_000L), "p1", "test");
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> "sb-access-token=abc", (url, cookie, body) -> {
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> {
                     throw new java.io.IOException("radio is off");
                 });
         assertEquals("io_error", r.reason);
@@ -118,7 +118,7 @@ public class TaxotticUploaderTest {
         TaxotticGeofenceStore.appendFix(ctx, fixAt(1_700_000_000_000L), "p1", "test");
         TaxotticGeofenceStore.appendFix(ctx, fixAt(1_700_000_001_000L), "p1", "test");
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> "sb-access-token=abc", (url, cookie, body) -> 200);
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> ok(200));
         assertEquals("ok", r.reason);
         assertEquals(2, r.posted);
         assertEquals(0, TaxotticGeofenceStore.countBufferedFixes(ctx));
@@ -135,10 +135,10 @@ public class TaxotticUploaderTest {
         TaxotticGeofenceStore.appendFix(ctx, fixAt(1_700_000_000_000L), "p1", "test");
         final String[] sent = new String[1];
         final String[] posted = new String[1];
-        TaxotticUploader.upload(ctx, origin -> "sb-access-token=abc", (url, cookie, body) -> {
+        TaxotticUploader.upload(ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> {
             posted[0] = url;
             sent[0] = body;
-            return 200;
+            return ok(200);
         });
         assertEquals("https://taxottic.com/api/mileage/ingest", posted[0]);
         org.json.JSONObject payload = new org.json.JSONObject(sent[0]);
@@ -193,8 +193,8 @@ public class TaxotticUploaderTest {
         // batch accepted, any further batch refused.
         final int[] calls = new int[1];
         TaxotticUploader.Result r = TaxotticUploader.upload(
-                ctx, origin -> "sb-access-token=abc",
-                (url, cookie, body) -> ++calls[0] == 1 ? 200 : 500);
+                ctx, origin -> "sb-access-token=abc", SINK,
+                (url, cookie, body) -> ok(++calls[0] == 1 ? 200 : 500));
         assertEquals(500, r.posted);
         assertEquals(400, TaxotticGeofenceStore.countBufferedFixes(ctx));
 
@@ -232,6 +232,103 @@ public class TaxotticUploaderTest {
         assertFalse(TaxotticGeofenceStore.consumeBuffer(ctx, 1, read.generation));
         assertEquals(2, TaxotticGeofenceStore.countBufferedFixes(ctx));
     }
+
+    /**
+     * The session cookie the server rotated must be written back.
+     *
+     * lib/supabase/middleware.ts runs getUser() before its /api/ early
+     * return, so a POST carrying an expired access token makes the
+     * server refresh and rotate. Rotation is on here: 171 of 174 refresh
+     * tokens over one week are revoked. HttpURLConnection has no
+     * CookieHandler, so a dropped Set-Cookie leaves the WebView holding
+     * a revoked token and the driver is signed out at the next app open.
+     * An uploader that does that is worse than no uploader.
+     */
+    @Test
+    public void writesRotatedCookiesBackIntoTheJar() {
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS), "p1", "test");
+        final java.util.List<String> stored = new java.util.ArrayList<>();
+        final String[] storedOrigin = new String[1];
+        TaxotticUploader.Result r = TaxotticUploader.upload(
+                ctx,
+                origin -> "sb-access-token=old",
+                (origin, setCookies) -> {
+                    storedOrigin[0] = origin;
+                    stored.addAll(setCookies);
+                },
+                (url, cookie, body) -> new TaxotticUploader.Response(
+                        200,
+                        java.util.Arrays.asList(
+                                "sb-access-token=new; Path=/; HttpOnly",
+                                "sb-refresh-token=rotated; Path=/; HttpOnly")));
+        assertEquals("ok", r.reason);
+        assertEquals("https://taxottic.com", storedOrigin[0]);
+        assertEquals(2, stored.size());
+        assertTrue(stored.get(0).startsWith("sb-access-token=new"));
+        assertTrue(stored.get(1).startsWith("sb-refresh-token=rotated"));
+    }
+
+    @Test
+    public void writesTheJarBeforeConsumingTheBuffer() {
+        // A rotated session is more expensive to lose than a duplicate
+        // upload, so the write back must not sit behind the consume.
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS), "p1", "test");
+        final int[] bufferedWhenStored = new int[] { -1 };
+        TaxotticUploader.upload(
+                ctx,
+                origin -> "sb-access-token=old",
+                (origin, setCookies) ->
+                        bufferedWhenStored[0] = TaxotticGeofenceStore.countBufferedFixes(ctx),
+                (url, cookie, body) -> ok(200));
+        assertEquals("the cookie was written after the buffer was consumed",
+                1, bufferedWhenStored[0]);
+    }
+
+    /**
+     * A WebView provider that will not load is not a signed-out driver.
+     * One word for both is how a dead feature reads as a user problem.
+     */
+    @Test
+    public void namesAMissingCookieJarSeparatelyFromAMissingSession() {
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS), "p1", "test");
+        TaxotticUploader.Result r = TaxotticUploader.upload(
+                ctx,
+                origin -> {
+                    throw new TaxotticUploader.CookieJarUnavailable(
+                            new RuntimeException("webview provider missing"));
+                },
+                SINK,
+                (url, cookie, body) -> ok(200));
+        assertEquals("no_cookie_jar", r.reason);
+        assertEquals("a refusal must never consume", 1,
+                TaxotticGeofenceStore.countBufferedFixes(ctx));
+    }
+
+    /**
+     * A redirect in front of the route, followed as a GET, returns 200
+     * from an HTML page. Consuming on that would delete the buffer with
+     * nothing ingested.
+     */
+    @Test
+    public void treatsARedirectAsAFailureAndKeepsTheBuffer() {
+        TaxotticGeofenceStore.setUploadConfig(ctx, "https://taxottic.com", "co_1");
+        TaxotticGeofenceStore.appendFix(ctx, fixAt(BASE_TS), "p1", "test");
+        TaxotticUploader.Result r = TaxotticUploader.upload(
+                ctx, origin -> "sb-access-token=abc", SINK, (url, cookie, body) -> ok(301));
+        assertEquals("http_301", r.reason);
+        assertEquals(1, TaxotticGeofenceStore.countBufferedFixes(ctx));
+    }
+
+    /** A transport that answers with a status and no rotated cookies. */
+    private static TaxotticUploader.Response ok(int status) {
+        return new TaxotticUploader.Response(status, null);
+    }
+
+    /** A sink for the tests that are not about cookie rotation. */
+    private static final TaxotticUploader.CookieSink SINK = (origin, setCookies) -> {};
 
     private static final long BASE_TS = 1_700_000_000_000L;
 

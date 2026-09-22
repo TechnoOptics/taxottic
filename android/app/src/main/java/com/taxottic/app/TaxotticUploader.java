@@ -11,7 +11,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,12 +45,55 @@ final class TaxotticUploader {
 
     /** Reads the session cookie. A seam so the test needs no WebView. */
     interface CookieSource {
+        /**
+         * @return the Cookie header value, or null when the jar holds
+         *         nothing for this origin.
+         * @throws CookieJarUnavailable when the WebView provider itself
+         *         will not load, which is a different problem from an
+         *         empty jar and wants a different answer.
+         */
         String cookieFor(String origin);
     }
 
-    /** Performs the POST and returns the status code. A seam for tests. */
+    /**
+     * Writes rotated cookies back. A seam so the test needs no WebView.
+     *
+     * Not an optional nicety. lib/supabase/middleware.ts calls getUser()
+     * BEFORE its /api/ early return, so a POST carrying an expired access
+     * token makes the server refresh and ROTATE the refresh token, which
+     * this project has rotation enabled for: 174 refresh tokens over 7
+     * days across 3 sessions, 171 of them revoked. The new pair comes
+     * back as Set-Cookie. A plain HttpURLConnection has no CookieHandler,
+     * so dropping them leaves the WebView jar holding a token the server
+     * has just revoked, and the driver is signed out at the next app
+     * open, into the silent 401 loop that once cost a full day of drives.
+     * That is strictly worse than not uploading at all.
+     */
+    interface CookieSink {
+        void store(String origin, List<String> setCookies);
+    }
+
+    /** The WebView cookie provider would not load at all. */
+    static final class CookieJarUnavailable extends RuntimeException {
+        CookieJarUnavailable(Throwable cause) {
+            super(cause);
+        }
+    }
+
+    /** What the server said: the status, and any cookies it rotated. */
+    static final class Response {
+        final int status;
+        final List<String> setCookies;
+
+        Response(int status, List<String> setCookies) {
+            this.status = status;
+            this.setCookies = setCookies == null ? Collections.emptyList() : setCookies;
+        }
+    }
+
+    /** Performs the POST. A seam for tests. */
     interface Transport {
-        int post(String url, String cookie, String body) throws IOException;
+        Response post(String url, String cookie, String body) throws IOException;
     }
 
     /** Notified on the uploader's own thread when a run finishes. */
@@ -98,10 +143,11 @@ final class TaxotticUploader {
      * uploadInBackground().
      */
     static Result upload(Context ctx) {
-        return upload(ctx, TaxotticUploader::systemCookie, TaxotticUploader::httpPost);
+        return upload(ctx, TaxotticUploader::systemCookie, TaxotticUploader::storeCookies,
+                TaxotticUploader::httpPost);
     }
 
-    static Result upload(Context ctx, CookieSource cookies, Transport transport) {
+    static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport) {
         String origin = TaxotticGeofenceStore.getUploadOrigin(ctx);
         String companyId = TaxotticGeofenceStore.getUploadCompanyId(ctx);
         if (origin == null || origin.isEmpty() || companyId == null || companyId.isEmpty()) {
@@ -118,7 +164,19 @@ final class TaxotticUploader {
             return new Result(0, TaxotticGeofenceStore.countBufferedFixes(ctx), "bad_origin");
         }
 
-        String cookie = cookies.cookieFor(origin);
+        String cookie;
+        try {
+            cookie = cookies.cookieFor(origin);
+        } catch (CookieJarUnavailable e) {
+            // Distinct from no_session on purpose. An empty jar means
+            // "this driver is signed out", and the answer is to sign in
+            // again. A provider that will not load in a WebView-less
+            // process means the whole design does not work on this
+            // phone, and the answer is to stop shipping it. One word for
+            // both is how a dead feature reads as a user problem.
+            Log.e(TAG, "The WebView cookie provider would not load", e);
+            return new Result(0, TaxotticGeofenceStore.countBufferedFixes(ctx), "no_cookie_jar");
+        }
         // Supabase names every session cookie with an sb- prefix. A
         // cookie string without one is a visitor, not a driver, and
         // posting would just collect 401s.
@@ -170,16 +228,23 @@ final class TaxotticUploader {
             return new Result(0, TaxotticGeofenceStore.countBufferedFixes(ctx), "io_error");
         }
 
-        int status;
+        Response response;
         try {
-            status = transport.post(origin + "/api/mileage/ingest", cookie, body);
+            response = transport.post(origin + "/api/mileage/ingest", cookie, body);
         } catch (IOException e) {
             return new Result(0, TaxotticGeofenceStore.countBufferedFixes(ctx), "io_error");
         }
 
+        int status = response.status;
         if (status < 200 || status >= 300) {
             return new Result(0, TaxotticGeofenceStore.countBufferedFixes(ctx), "http_" + status);
         }
+
+        // Before the consume, because a session this process has just
+        // caused the server to rotate is more expensive to lose than a
+        // duplicate upload. If the write back does not happen the
+        // WebView is left holding a revoked refresh token.
+        sink.store(origin, response.setCookies);
 
         // Only here, only this many, and only if the buffer is still the
         // one that was read. Everything above returns with the buffer
@@ -199,17 +264,44 @@ final class TaxotticUploader {
         try {
             return CookieManager.getInstance().getCookie(origin);
         } catch (Throwable t) {
-            // No WebView has been created in this process yet, which is
-            // the normal state on a cold geofence start. Report it as
-            // no_session rather than crashing the service.
-            return null;
+            // getInstance() loads the WebView provider without a WebView
+            // instance, which is the normal state on a cold geofence
+            // start. If that fails the design does not work on this
+            // phone, and saying so is worth more than crashing the
+            // service or pretending the driver is signed out.
+            throw new CookieJarUnavailable(t);
         }
     }
 
-    private static int httpPost(String url, String cookie, String body) throws IOException {
+    /**
+     * Write rotated cookies back into the jar the WebView reads, then
+     * flush.
+     *
+     * The flush is called even when the server rotated nothing: it is
+     * the only thing that puts this process's cookie state on disk, and
+     * this process is usually minutes from being killed.
+     */
+    private static void storeCookies(String origin, List<String> setCookies) {
+        try {
+            CookieManager manager = CookieManager.getInstance();
+            for (String value : setCookies) {
+                if (value != null && !value.isEmpty()) manager.setCookie(origin, value);
+            }
+            manager.flush();
+        } catch (Throwable t) {
+            Log.e(TAG, "Could not write back the rotated session cookie", t);
+        }
+    }
+
+    private static Response httpPost(String url, String cookie, String body) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setRequestMethod("POST");
+            // A 301 or 302 in front of the route would otherwise be
+            // followed AS A GET, return 200 from an HTML page, and the
+            // buffer would be consumed with nothing ingested. Off, so a
+            // redirect surfaces as http_301 and the fixes stay put.
+            c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(15_000);
             c.setReadTimeout(30_000);
             c.setDoOutput(true);
@@ -218,10 +310,24 @@ final class TaxotticUploader {
             try (OutputStream out = c.getOutputStream()) {
                 out.write(body.getBytes("UTF-8"));
             }
-            return c.getResponseCode();
+            return new Response(c.getResponseCode(), setCookiesFrom(c));
         } finally {
             c.disconnect();
         }
+    }
+
+    /**
+     * Header names are matched case insensitively rather than looked up
+     * by key, because the map's case sensitivity is an implementation
+     * detail of whichever HTTP stack the platform hands back.
+     */
+    private static List<String> setCookiesFrom(HttpURLConnection c) {
+        for (Map.Entry<String, List<String>> header : c.getHeaderFields().entrySet()) {
+            if (header.getKey() != null && header.getKey().equalsIgnoreCase("Set-Cookie")) {
+                return header.getValue();
+            }
+        }
+        return Collections.emptyList();
     }
 
     private TaxotticUploader() {}

@@ -91,7 +91,7 @@ describe("the native uploader posts before it forgets", () => {
   const code = withoutComments(readFileSync(UPLOADER, "utf8"));
   const upload = methodBody(
     code,
-    "static Result upload(Context ctx, CookieSource cookies, Transport transport)",
+    "static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport)",
   );
 
   /**
@@ -346,7 +346,7 @@ describe("consuming the buffer is identity-bearing, not count-bearing", () => {
   it("makes the native uploader consume with the token it read", () => {
     const upload = methodBody(
       code,
-      "static Result upload(Context ctx, CookieSource cookies, Transport transport)",
+      "static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport)",
     );
     expect(
       upload,
@@ -379,5 +379,100 @@ describe("consuming the buffer is identity-bearing, not count-bearing", () => {
       consume,
       "a token that arrives is ignored, so the JS half of the guard does nothing",
     ).toMatch(/consumeBuffer\(\s*\n?\s*getContext\(\),\s*count == null \? 0 : count,\s*generation\)/);
+  });
+});
+
+/**
+ * THE INVARIANT: an upload never costs the driver their session.
+ *
+ * lib/supabase/middleware.ts calls getUser() BEFORE its /api/ early
+ * return, so a POST carrying an expired access token makes the server
+ * refresh the session and rotate the refresh token. Rotation is on for
+ * this project: 174 refresh tokens over 7 days across 3 sessions, 171
+ * of them already revoked. The new pair comes back as Set-Cookie.
+ *
+ * HttpURLConnection has no CookieHandler installed, so those headers go
+ * nowhere by default and the WebView jar keeps a token the server has
+ * just revoked. The driver is signed out at the next app open, into the
+ * silent 401 loop native-tracker.ts records as having cost a full day
+ * of drives. An uploader that does that is worse than no uploader, and
+ * nothing about it is visible until a driver is logged out, which is
+ * why it is guarded here as well as executed in TaxotticUploaderTest.
+ */
+describe("the uploader keeps the session it was given", () => {
+  const code = withoutComments(readFileSync(UPLOADER, "utf8"));
+  const upload = methodBody(
+    code,
+    "static Result upload(Context ctx, CookieSource cookies, CookieSink sink, Transport transport)",
+  );
+
+  it("writes the rotated cookies back, after the post and before the consume", () => {
+    const post = upload.indexOf("transport.post(");
+    const store = upload.indexOf("sink.store(");
+    const consume = upload.indexOf("consumeBuffer(");
+    expect(store, "the Set-Cookie headers are dropped, revoking the driver's session").toBeGreaterThan(-1);
+    expect(store, "cookies are written before the server has answered").toBeGreaterThan(post);
+    // A crash or a refusal in the consume must not be able to lose a
+    // session this process just caused the server to rotate.
+    expect(store, "the session write back sits behind the consume").toBeLessThan(consume);
+  });
+
+  it("only writes them back on a 2xx", () => {
+    const post = upload.indexOf("transport.post(");
+    const store = upload.indexOf("sink.store(");
+    const between = upload.slice(post, store);
+    expect(between).toMatch(/if\s*\(\s*status\s*<\s*200\s*\|\|\s*status\s*>=\s*300\s*\)[\s\S]*?return/);
+  });
+
+  it("carries the Set-Cookie headers out of the transport at all", () => {
+    // A Transport that returns a bare int cannot carry them, which is
+    // the shape this started as.
+    expect(code).toMatch(/interface Transport \{\s*Response post\(/);
+    const headers = methodBody(code, "private static List<String> setCookiesFrom(HttpURLConnection c)");
+    expect(headers).toContain('equalsIgnoreCase("Set-Cookie")');
+  });
+
+  it("persists the jar to disk, because the process is minutes from death", () => {
+    const sink = methodBody(
+      code,
+      "private static void storeCookies(String origin, List<String> setCookies)",
+    );
+    expect(sink).toContain("setCookie(origin, value)");
+    expect(sink, "the rotation lives in memory and dies with the process").toContain("flush()");
+  });
+
+  /**
+   * A 301 or 302 in front of the route is followed AS A GET by default,
+   * returns 200 from an HTML page, and the buffer is consumed with
+   * nothing ingested. Silent, and indistinguishable from success in
+   * every column we record.
+   */
+  it("never follows a redirect", () => {
+    const http = methodBody(
+      code,
+      "private static Response httpPost(String url, String cookie, String body) throws IOException",
+    );
+    expect(http, "a redirect is followed as a GET and its 200 consumes the buffer").toContain(
+      "setInstanceFollowRedirects(false)",
+    );
+    // And the 3xx that now surfaces must fail, which the 2xx-only gate
+    // above already covers; assert the gate has not been widened.
+    expect(upload).toMatch(/status\s*>=\s*300/);
+  });
+
+  /**
+   * "The driver is signed out" and "the WebView provider will not load
+   * in this process" want opposite responses: sign in again, versus
+   * stop shipping this design. One word for both is how a dead feature
+   * reads as a user problem.
+   */
+  it("distinguishes an unavailable cookie jar from an empty one", () => {
+    expect(code).toContain("no_cookie_jar");
+    expect(code).toContain("no_session");
+    const systemCookie = methodBody(code, "private static String systemCookie(String origin)");
+    expect(systemCookie, "a provider failure is swallowed as a missing session").toContain(
+      "throw new CookieJarUnavailable(t)",
+    );
+    expect(upload).toMatch(/catch\s*\(\s*CookieJarUnavailable[\s\S]*?"no_cookie_jar"/);
   });
 });
