@@ -809,13 +809,27 @@ test("the AASA file is served to Apple as JSON, with no redirect", async ({ requ
   expect(res.status(), "a redirect here means deep links never work").toBe(200);
   expect(res.headers()["content-type"]).toContain("application/json");
   const body = await res.json();
-  expect(body.applinks.details[0].appIDs[0]).toMatch(/\.com\.taxottic\.app$/);
+  expect(body.applinks.details[0].appIDs[0]).toMatch(/^[A-Z0-9]{10}\.com\.taxottic\.app$/);
 });
 ```
 
 - [ ] **Step 2: Serve it**
 
-Create the route returning `application/json` with no extension, the `applinks` block naming `<TEAMID>.com.taxottic.app`, and paths limited to the ones that should open the app: `/login*`, `/app/*`, `/get*`. Read the team id from `ios/App/App.xcodeproj/project.pbxproj` (`DEVELOPMENT_TEAM`) rather than inventing one; if it is not there, stop and ask rather than guessing, because a wrong team id fails silently.
+Create the route returning `application/json` with no extension, the `applinks` block naming `${APPLE_TEAM_ID}.com.taxottic.app`, and paths limited to the ones that should open the app: `/login*`, `/app/*`, `/get*`.
+
+The team id is deliberately NOT hardcoded. It is not in the repo: `ios/App/App.xcodeproj/project.pbxproj` has no `DEVELOPMENT_TEAM`, and the release workflow injects it from the `IOS_TEAM_ID` GitHub secret (`.github/workflows/ios-release.yml:48`). So read `process.env.APPLE_TEAM_ID` and, when it is unset, return a 500 rather than a file with a placeholder in it:
+
+```ts
+  const team = process.env.APPLE_TEAM_ID;
+  if (!team) {
+    // A wrong or placeholder team id is worse than no file at all:
+    // Apple caches this aggressively, so a bad one poisons deep links
+    // for as long as the cache holds. A 500 fails closed and visibly.
+    return new NextResponse("APPLE_TEAM_ID is not set", { status: 500 });
+  }
+```
+
+The owner sets `APPLE_TEAM_ID` in Vercel to the same value as the `IOS_TEAM_ID` secret. Say so in the PR body under owner-only items, because deep links stay dead until they do.
 
 Add the path to `PUBLIC_PATHS` in `middleware.ts`, and add `com.apple.developer.associated-domains` with `applinks:taxottic.com` to the entitlements.
 
