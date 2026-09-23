@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
+import { DriveFilter } from "./DriveFilter";
 import { DriveFilterHarness } from "./DriveFilter.ct.fixture";
 
 const drives = [
@@ -103,4 +104,41 @@ test("the load-older control refuses a second tap while it is working", async ({
   expect(box!.height).toBeGreaterThanOrEqual(44);
   await expect(c.getByRole("status")).toContainText("Could not load older drives");
   expect(taps, "a tap got through while a load was already in flight").toBe(0);
+});
+
+/**
+ * ONE OWNER FOR THE WINDOW.
+ *
+ * This control used to hold its own `picked` beside the one its parent
+ * held, each reading its own `Date.now()`, kept in step only because
+ * `onChange` happened to fire in the same handler that set the other.
+ * One control with two owners is one edit away from two answers, and the
+ * answer decides which drives are on screen.
+ *
+ * So the state is the parent's and this only renders it. Given a chosen
+ * window with no tap at all, it must show that window as chosen: a
+ * component holding its own copy would show "All".
+ */
+test("shows the window its owner chose, with no tap of its own", async ({
+  mount,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  const c = await mount(
+    <div data-skin="instrument">
+      <DriveFilter
+        drives={drives}
+        picked={{ key: "month", at: Date.now() }}
+        onChange={() => {}}
+      />
+    </div>,
+  );
+  await expect(
+    c.getByRole("button", { name: "Last 31 days" }),
+    "the control is holding a second copy of the window",
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(c.getByRole("button", { name: "All" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
 });
