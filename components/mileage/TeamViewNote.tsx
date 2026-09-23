@@ -20,7 +20,9 @@ export function TeamViewNote({ selfUserId }: { selfUserId: string }) {
   return (
     <div className="mt-4 flex items-start gap-3 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
       <details className="group min-w-0 flex-1">
-        <summary className="flex cursor-pointer select-none list-none items-center gap-2">
+        {/* min-h-11: this is the control that opens the explanation, and
+            it was 20px. The whole note is chrome a manager taps past. */}
+        <summary className="flex min-h-11 cursor-pointer select-none list-none items-center gap-2">
           <MapIcon className="size-4 shrink-0" />
           <span className="font-medium">Team view</span>
           <ChevronDownIcon className="size-4 shrink-0 text-forest-600 transition-transform group-open:rotate-180" />
@@ -36,7 +38,7 @@ export function TeamViewNote({ selfUserId }: { selfUserId: string }) {
         // drives already loaded, so there is no range for a link to
         // carry. The prop that used to supply one was inert.
         href={`/mileage?driver=${selfUserId}`}
-        className="underline decoration-dotted whitespace-nowrap hover:text-forest-900"
+        className="inline-flex min-h-11 items-center underline decoration-dotted whitespace-nowrap hover:text-forest-900"
       >
         My drive log
       </Link>

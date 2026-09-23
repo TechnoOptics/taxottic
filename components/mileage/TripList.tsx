@@ -436,7 +436,7 @@ function TripCard({
               type="button"
               onClick={doDelete}
               disabled={pending}
-              className="text-[11px] px-2.5 h-8 rounded-full bg-rose-600 text-white font-medium disabled:opacity-60"
+              className="text-[11px] px-3 min-h-11 rounded-xl bg-rose-600 text-white font-medium disabled:opacity-60"
             >
               Delete?
             </button>
@@ -444,7 +444,7 @@ function TripCard({
               type="button"
               onClick={() => setConfirmingDelete(false)}
               disabled={pending}
-              className="text-[11px] px-2.5 h-8 rounded-full border border-forest-200 text-forest-800 disabled:opacity-60"
+              className="text-[11px] px-3 min-h-11 rounded-xl border border-forest-200 text-forest-800 disabled:opacity-60"
             >
               Cancel
             </button>
@@ -455,7 +455,7 @@ function TripCard({
             onClick={() => setConfirmingDelete(true)}
             disabled={pending}
             aria-label="Delete trip"
-            className="shrink-0 size-8 grid place-items-center rounded-full text-ink-muted hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+            className="shrink-0 size-11 grid place-items-center rounded-xl text-ink-muted hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
           >
             <svg
               viewBox="0 0 20 20"
@@ -505,7 +505,7 @@ function TripCard({
             type="button"
             onClick={() => doReclassify(trip.classification)}
             disabled={pending}
-            className="shrink-0 text-[11px] font-medium px-3 h-8 rounded-full bg-amber-600 text-white disabled:opacity-60"
+            className="shrink-0 text-[11px] font-medium px-3 min-h-11 rounded-xl bg-amber-600 text-white disabled:opacity-60"
           >
             Confirm
           </button>
@@ -522,7 +522,7 @@ function TripCard({
             fills in only while THIS trip is the one being reviewed, and
             only one trip can be in review at a time (the parent owns
             reviewingId), so it can't read as "pre-selected" either. */}
-      <div className="grid grid-cols-3 rounded-full bg-forest-50 p-1 gap-1">
+      <div className="grid grid-cols-3 rounded-xl bg-forest-50 p-1 gap-1">
         <button
           type="button"
           aria-pressed={trip.classification === "business"}
@@ -530,7 +530,7 @@ function TripCard({
           onClick={() => doReclassify("business")}
           disabled={pending}
           className={
-            "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
+            "min-h-11 text-xs font-medium rounded-lg transition-colors disabled:opacity-60 " +
             (trip.classification === "business"
               ? "bg-emerald-600 text-white shadow-sm"
               : "text-forest-800 hover:bg-cream")
@@ -545,7 +545,7 @@ function TripCard({
           onClick={() => doReclassify("personal")}
           disabled={pending}
           className={
-            "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
+            "min-h-11 text-xs font-medium rounded-lg transition-colors disabled:opacity-60 " +
             (trip.classification === "personal"
               ? "bg-amber-500 text-white shadow-sm"
               : "text-forest-800 hover:bg-cream")
@@ -559,7 +559,7 @@ function TripCard({
           aria-label="Review this trip on the map"
           onClick={() => onReview(trip.id)}
           className={
-            "h-9 text-xs font-medium rounded-full transition-colors inline-flex items-center justify-center gap-1 " +
+            "min-h-11 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1 " +
             (reviewing
               ? "bg-forest-900 text-cream shadow-sm"
               : "text-forest-800 hover:bg-cream")
@@ -596,7 +596,7 @@ function TripCard({
           onClick={() => doReclassify("passenger")}
           disabled={pending}
           aria-label="Mark this trip as one you rode in, not drove"
-          className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-forest-200 text-[11px] font-medium text-forest-800 hover:border-gold-300 hover:bg-cream disabled:opacity-60"
+          className="shrink-0 inline-flex items-center gap-1.5 min-h-11 px-3 rounded-xl border border-forest-200 text-[11px] font-medium text-forest-800 hover:border-gold-300 hover:bg-cream disabled:opacity-60"
         >
           {/* Steering wheel, crossed out: you were not the one driving. */}
           <svg

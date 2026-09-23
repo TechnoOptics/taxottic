@@ -137,7 +137,7 @@ export function MileageReview({
             <button
               type="button"
               onClick={() => setFocusedId(null)}
-              className="shrink-0 text-xs px-3 h-8 inline-flex items-center gap-1 rounded-full border border-forest-200 text-forest-800 hover:border-gold-300"
+              className="shrink-0 text-xs px-3 min-h-11 inline-flex items-center gap-1 rounded-xl border border-forest-200 text-forest-800 hover:border-gold-300"
             >
               ← All drives
             </button>

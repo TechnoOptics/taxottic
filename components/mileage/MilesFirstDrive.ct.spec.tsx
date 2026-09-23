@@ -86,3 +86,62 @@ test("the waiting count in the head lands on the first drive that wants one", as
   await expect(anchored).toHaveCount(1);
   await expect(anchored).toContainText("22.7 mi");
 });
+
+/**
+ * THE TAP FLOOR, OVER THE WHOLE SCREEN.
+ *
+ * MilesHead.ct.spec.tsx asserts the same two things, but it mounts the
+ * HEAD alone. Everything below it went unmeasured, and at 390px the real
+ * single-driver log carried twelve controls under 44px and twelve
+ * `rounded-full`: Business, Personal and Review at 36px, Passenger at
+ * 32px, delete at 32x32, and the team note's summary and link at 20px.
+ * Those are the controls a driver taps all day, and a guard that cannot
+ * see a whole half of the screen reads as coverage. This fixture already
+ * mounts head, filter, rows and map, so it is the one that can see them.
+ */
+test("every control on the whole screen is at least 44px, and none is a pill", async ({
+  mount,
+  page,
+}) => {
+  await page.route("**/api/mileage/drives*", (r) =>
+    r.fulfill({ json: { points: [] } }),
+  );
+  const c = await mount(<DriverPageHead />);
+  // Open the row's delete confirmation, which is a pair of controls that
+  // only exists after a tap and is therefore invisible to any guard that
+  // measures the first paint alone.
+  await c.getByRole("button", { name: "Delete trip" }).first().click();
+  await expect(c.getByRole("button", { name: "Delete?" })).toBeVisible();
+
+  const small = await c
+    .locator("a, button, summary, [role=button]")
+    .evaluateAll((els) =>
+      els
+        .map((el) => ({
+          text: (el.textContent ?? "").trim().slice(0, 40),
+          h: Math.round(el.getBoundingClientRect().height),
+        }))
+        // A control inside a closed <details> measures zero and is
+        // nobody's tap target until the summary above it is tapped, and
+        // that summary is measured here.
+        .filter((m) => m.h > 0 && m.h < 44),
+    );
+  expect(small, `controls under 44px: ${JSON.stringify(small)}`).toEqual([]);
+  expect(
+    await c.locator(".rounded-full").count(),
+    "the pill treatment this screen was rebuilt to remove is back",
+  ).toBe(0);
+  // Arrow glyphs, in LINK AND BUTTON text. The drive row puts one
+  // between a start and an end time, which is a time range rather than a
+  // control promising to take the reader somewhere.
+  const arrows = await c
+    .locator("a, button, summary, [role=button]")
+    .evaluateAll((els) =>
+      els
+        .map((el) => (el.textContent ?? "").trim())
+        .filter((t) => /[\u2190-\u21FF\u27A1]/u.test(t)),
+    );
+  expect(arrows, `an arrow glyph in a control: ${arrows.join(" | ")}`).toEqual(
+    [],
+  );
+});
