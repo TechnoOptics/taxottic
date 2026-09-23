@@ -59,6 +59,27 @@ public class TaxotticGeofencePlugin extends Plugin {
         call.resolve(out);
     }
 
+    /**
+     * Where to POST, and for whom.
+     *
+     * Stored rather than held in memory because the process that uses
+     * it is usually a different one: the OS kills the app, the geofence
+     * receiver starts the service cold, and nothing has run any JS.
+     *
+     * @param call origin: page origin to POST to, companyId: owning company
+     */
+    @PluginMethod
+    public void setUploadConfig(PluginCall call) {
+        String origin = call.getString("origin");
+        String companyId = call.getString("companyId");
+        if (origin == null || origin.isEmpty() || companyId == null || companyId.isEmpty()) {
+            call.reject("origin and companyId are both required");
+            return;
+        }
+        TaxotticGeofenceStore.setUploadConfig(getContext(), origin, companyId);
+        call.resolve();
+    }
+
     /** Full durable health picture, including every failure field. */
     @PluginMethod
     public void getState(PluginCall call) {
@@ -80,11 +101,21 @@ public class TaxotticGeofencePlugin extends Plugin {
      */
     @PluginMethod
     public void readBuffer(PluginCall call) {
-        JSONArray fixes = TaxotticGeofenceStore.readBuffer(getContext());
-        JSObject out = new JSObject();
-        out.put("fixes", JSArray.from(toArray(fixes)));
-        out.put("count", fixes.length());
-        call.resolve(out);
+        try {
+            JSONObject read = TaxotticGeofenceStore.readBufferForBridge(getContext());
+            JSONArray fixes = read.getJSONArray("fixes");
+            JSObject out = new JSObject();
+            out.put("fixes", JSArray.from(toArray(fixes)));
+            out.put("count", fixes.length());
+            // The token that says WHICH buffer these fixes came from.
+            // Hand it back to consumeBuffer or the native uploader can
+            // drop lines this read never saw. See the BUFFER_GENERATION
+            // comment in TaxotticGeofenceStore for the exact loss.
+            out.put("generation", read.getLong("generation"));
+            call.resolve(out);
+        } catch (JSONException e) {
+            call.reject("geofence_buffer_unreadable: " + e.getMessage());
+        }
     }
 
     private static Object[] toArray(JSONArray array) {
@@ -93,13 +124,35 @@ public class TaxotticGeofencePlugin extends Plugin {
         return out;
     }
 
-    /** Drop the first N buffered fixes, after they have been uploaded. */
+    /**
+     * Drop the first N buffered fixes, after they have been uploaded.
+     *
+     * With a generation, this is a compare-and-consume: a buffer that
+     * moved since the caller's readBuffer is left untouched and the
+     * caller is told so, rather than the caller dropping lines the
+     * sibling native uploader posted or, worse, lines nobody posted.
+     *
+     * Without one, the count is trusted. That path exists for a phone
+     * running this apk against an older cached web bundle, where
+     * refusing every consume would stall the buffer permanently.
+     */
     @PluginMethod
     public void consumeBuffer(PluginCall call) {
         Integer count = call.getInt("count", 0);
-        TaxotticGeofenceStore.consumeBuffer(getContext(), count == null ? 0 : count);
+        Long generation = call.getLong("generation");
+        boolean consumed;
+        boolean tokenless = generation == null;
+        if (tokenless) {
+            TaxotticGeofenceStore.consumeBuffer(getContext(), count == null ? 0 : count);
+            consumed = true;
+        } else {
+            consumed = TaxotticGeofenceStore.consumeBuffer(
+                    getContext(), count == null ? 0 : count, generation);
+        }
         JSObject out = new JSObject();
         out.put("remaining", TaxotticGeofenceStore.countBufferedFixes(getContext()));
+        out.put("consumed", consumed);
+        out.put("stale", !tokenless && !consumed);
         call.resolve(out);
     }
 

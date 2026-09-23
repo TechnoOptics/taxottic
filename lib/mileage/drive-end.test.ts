@@ -22,7 +22,7 @@ describe("evaluateDriveEnd", () => {
     expect(
       evaluateDriveEnd({
         hasDriven: true,
-        stationaryMs: 20_000, // only 20s parked — far under the timeout
+        stationaryMs: 20_000, // only 20s parked, far under the timeout
         stepsSinceStationary: STEP_CLOSE_THRESHOLD,
       }),
     ).toEqual({ close: true, reason: "walked_away" });

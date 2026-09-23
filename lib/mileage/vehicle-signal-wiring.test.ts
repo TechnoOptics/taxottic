@@ -42,7 +42,7 @@ function code(path: string): string {
 function bodyOf(src: string, signature: string): string {
   const start = src.indexOf(signature);
   if (start === -1) {
-    throw new Error(`${signature} not found — this guard is stale`);
+    throw new Error(`${signature} not found, this guard is stale`);
   }
   const open = src.indexOf("{", start);
   let depth = 0;
@@ -50,7 +50,7 @@ function bodyOf(src: string, signature: string): string {
     if (src[i] === "{") depth++;
     else if (src[i] === "}" && --depth === 0) return src.slice(open, i);
   }
-  throw new Error(`${signature} never closes — this guard is stale`);
+  throw new Error(`${signature} never closes, this guard is stale`);
 }
 
 describe("the heartbeat actually runs the drain", () => {

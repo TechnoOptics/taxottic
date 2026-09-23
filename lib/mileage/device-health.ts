@@ -3,8 +3,8 @@
 // Every prior "our drives stopped" incident split into a few distinct
 // device states that need DIFFERENT responses, and the app couldn't tell
 // them apart. This evaluator derives the state purely from what the
-// SERVER already observes in mileage_points_raw — last upload, last real
-// movement — plus the toggle intent. Deriving it from raw uploads (not
+// SERVER already observes in mileage_points_raw, last upload, last real
+// movement, plus the toggle intent. Deriving it from raw uploads (not
 // the device heartbeat) is the whole point: it works even for a phone on
 // a months-old build that never sends our newer heartbeat fields.
 //
@@ -13,7 +13,7 @@
 //     dead (iOS Always->While-Using revert, app killed, permission lost).
 //   - PARKED: uploads are flowing fine, but nothing has MOVED in a long
 //     time. The tracked phone isn't the one being driven with (e.g. a
-//     spare/kiosk device sitting on a desk). Not a bug — needs a human to
+//     spare/kiosk device sitting on a desk). Not a bug, needs a human to
 //     point tracking at the right phone.
 
 /** No upload for this long while tracking is ON = the device went dark.
@@ -45,7 +45,7 @@ export type DriveHealthSignals = {
   /** Newest raw point with speed >= MOVEMENT_SPEED_MPS, or null. */
   lastMovementMs: number | null;
   /** iOS Background App Refresh. FALSE means iOS will relaunch the app
-   *  for NO location event — SLC and geofences alike — so capture
+   *  for NO location event, SLC and geofences alike, so capture
    *  cannot recover on its own no matter how long we wait. Distinct
    *  from "silent" because the fix is a device setting, not a nudge. */
   backgroundRefresh?: boolean | null;

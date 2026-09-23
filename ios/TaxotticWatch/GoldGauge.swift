@@ -22,7 +22,7 @@ struct GoldGauge<Center: View>: View {
                 .opacity(0.7)
 
             // Gold fill with an angular sheen so it looks metallic,
-            // not flat — the light "travels" around the ring.
+            // not flat, the light "travels" around the ring.
             Circle()
                 .trim(from: 0, to: animated)
                 .stroke(
@@ -35,7 +35,7 @@ struct GoldGauge<Center: View>: View {
                 .rotationEffect(.degrees(-90))
                 .shadow(color: Brand.goldBright.opacity(0.45), radius: 4)
 
-            // Tip highlight — the little catch-light of a gemstone.
+            // Tip highlight, the little catch-light of a gemstone.
             Circle()
                 .frame(width: lineWidth + 2, height: lineWidth + 2)
                 .foregroundStyle(Brand.goldBright)
@@ -59,7 +59,7 @@ struct GoldGauge<Center: View>: View {
     }
 }
 
-/// Elegant capsule action — gold for the primary choice, glass-with-
+/// Elegant capsule action, gold for the primary choice, glass-with-
 /// gold-rim for the secondary. Haptic on press.
 struct PillButton: View {
     var title: String

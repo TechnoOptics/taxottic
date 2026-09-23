@@ -57,7 +57,7 @@
 	<!-- Camera + photo-library usage strings. @capacitor/camera is
 	     installed (receipt capture). iOS hard-crashes + App Review
 	     auto-rejects if the camera/photo APIs are reachable without
-	     these purpose strings. Wording is user-facing — keep it
+	     these purpose strings. Wording is user-facing, keep it
 	     specific about WHY. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Taxottic uses the camera so you can photograph receipts and tax documents to attach them to your books.</string>
@@ -89,7 +89,7 @@
 	     if the Core Location APIs are reachable without these purpose
 	     strings, and "always"/background needs UIBackgroundModes:
 	     location. Wording is user-facing and states WHY (tax mileage)
-	     and that it runs while the app is backgrounded — App Review
+	     and that it runs while the app is backgrounded, App Review
 	     requires the background justification to be explicit. -->
 	<key>NSMotionUsageDescription</key>
 	<string>Taxottic uses motion and step activity to tell when a drive has ended (you\u2019ve parked and walked away), so your mileage trips close and appear promptly, and to check afterwards whether a drive was missed while the app was closed.</string>

@@ -82,7 +82,7 @@ private struct SwipeCard: View {
             Text(item.subtitle)
                 .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(Brand.creamMuted)
-            // Swipe OR tap — an explicit target is the reliable path
+            // Swipe OR tap, an explicit target is the reliable path
             // on a tiny screen; the swipe is the delight. Both commit
             // the same classification.
             HStack(spacing: 8) {

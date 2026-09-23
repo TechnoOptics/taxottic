@@ -167,7 +167,7 @@ type DeviceStatusPlugin = {
   queryStepsSince(opts: { fromMs: number }): Promise<{ steps: number; available: boolean }>;
   requestActivityRecognition(): Promise<{ granted: boolean }>;
   /** Deep-links to THIS app's Location permission screen (Android) or
-   *  the app's Settings page (iOS) — closer than the generic app-details
+   *  the app's Settings page (iOS), closer than the generic app-details
    *  page the Capgo plugin's openSettings can reach. */
   openLocationSettings(): Promise<void>;
   enableBackgroundRevival(opts: { companyId: string }): Promise<{ ok: boolean }>;
@@ -300,7 +300,7 @@ async function guard(
     // Measured in production: every field sourced from this plugin was
     // NULL on 100% of devices (0/2) across BOTH platforms, while fields
     // from other sources (@capacitor/app version, tracker callback age)
-    // populated fine — so the plugin was unreachable from JS even on
+    // populated fine, so the plugin was unreachable from JS even on
     // Android, where it is correctly registered via
     // MainActivity.registerPlugin AND annotated @CapacitorPlugin. The
     // availability probe was the only thing common to both platforms,
@@ -309,7 +309,7 @@ async function guard(
     // page's JS context at the moment we ask (and the Android build
     // runs useLegacyBridge).
     //
-    // registerPlugin() itself is safe to call regardless — a missing
+    // registerPlugin() itself is safe to call regardless, a missing
     // native implementation simply makes the METHOD CALL reject, which
     // every caller already handles. Failing at the call site is strictly
     // better than refusing to try: the old gate turned "maybe present"
@@ -484,14 +484,14 @@ export async function openLocationSettingsPrecise(): Promise<boolean> {
 /**
  * FIRM auto-exemption (all Android phones + tablets): make sure the OS
  * isn't battery-optimizing us, prompting the native "allow background"
- * dialog automatically when it is — so a driver never has to discover
+ * dialog automatically when it is, so a driver never has to discover
  * the setup wizard to keep tracking alive. Called on launch + resume
  * (see CapacitorNativeInit) whenever tracking is enabled.
  *
  * Throttled: at most one auto-prompt per ATTEMPT_INTERVAL so we don't
  * nag on every resume, but we DO re-prompt after the interval if the
  * OS silently re-optimized us (Samsung re-enables "sleeping apps" after
- * firmware updates — the exact repeat failure this guards against).
+ * firmware updates, the exact repeat failure this guards against).
  * A grant clears the throttle immediately so the next revocation
  * re-prompts without delay.
  */
@@ -573,7 +573,7 @@ export async function onAuthorizationChanged(
  * Steps taken since `fromMs` (epoch ms), from the device motion
  * coprocessor. Drives the drive-end "walked away" signal
  * (lib/mileage/drive-end.ts). Returns 0 on web / older binaries / when
- * Motion permission is unavailable — the drive-end logic then relies on
+ * Motion permission is unavailable, the drive-end logic then relies on
  * the stationary-timeout fallback, so a 0 is always safe.
  */
 export async function queryStepsSince(fromMs: number): Promise<number> {
@@ -590,7 +590,7 @@ export async function queryStepsSince(fromMs: number): Promise<number> {
 /**
  * Ask for the motion/step permission that powers walk-away drive-end.
  * Android: the ACTIVITY_RECOGNITION runtime prompt. iOS: the plugin has
- * no explicit request — the first pedometer query triggers the Motion &
+ * no explicit request, the first pedometer query triggers the Motion &
  * Fitness prompt, so we fire a probe query instead.
  */
 export async function requestMotionPermission(): Promise<boolean> {
@@ -644,7 +644,7 @@ export async function setBackgroundRevival(
  * flush costs nothing.
  *
  * Returns the number of points handed to the server (0 when there was
- * nothing, or on any failure — the buffer is left intact to retry).
+ * nothing, or on any failure, the buffer is left intact to retry).
  *
  * Called from lib/mileage/native-drain.ts rather than only at app
  * launch. See the matching notes on drainGeofenceBuffer for why the
@@ -748,7 +748,7 @@ export type OsExitInfo = {
  *
  * This is the difference between "tracking stopped" and "Android killed
  * the process for excessive resource usage while the foreground service
- * was alive" — the second is actionable, the first is a guess. Android
+ * was alive", the second is actionable, the first is a guess. Android
  * gives a per-event reason; iOS gives 24h counters, so we surface the
  * dominant non-normal counter as the reason.
  *

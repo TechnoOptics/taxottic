@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
       accuracy_m: p.accuracyM ?? null,
     }));
     // Idempotent: a retried flush (POST succeeded but the response was
-    // lost — routine in a tunnel) must not store the same fix twice, and
+    // lost, routine in a tunnel) must not store the same fix twice, and
     // a second capture path must be able to overlap safely. Identity is
     // (driver, company, captured_at); see migration 20260728000000.
     const { error: stageErr } = await admin

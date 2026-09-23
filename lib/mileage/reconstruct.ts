@@ -47,7 +47,7 @@ export function overlapsExistingTrip(
   return trips.some((t) => t.startTs <= endTs && t.endTs >= startTs);
 }
 
-/** Existing trip windows for the driver since `sinceIso` — the guard
+/** Existing trip windows for the driver since `sinceIso`, the guard
  *  that stops recovery from re-creating a drive that already exists
  *  (fully-tracked or otherwise). Without it, the parked heartbeats
  *  that STRADDLE a finalized trip read as one long "jump" and recovery
@@ -108,7 +108,7 @@ export type ApproxChain = {
   startIdx: number;
   endIdx: number;
   /** Sum of leg distances across the chain (the honest sparse-trace
-   *  length — still an under-count of road miles, never an over-count). */
+   *  length, still an under-count of road miles, never an over-count). */
   meters: number;
 };
 
@@ -162,7 +162,7 @@ export function buildApproxChains(pts: readonly RawPt[]): ApproxChain[] {
     } else if (start >= 0) {
       pauseS += dt;
       if (pauseS > PAUSE_MAX_S) close();
-      // else: hold — a following driving leg resumes the chain, and the
+      // else: hold, a following driving leg resumes the chain, and the
       // trailing pause is trimmed at close() via lastDrivingEnd.
     }
   }
@@ -213,7 +213,7 @@ export async function reconstructApproximateTrips(
     const b = pts[chain.endIdx];
     const meters = chain.meters;
     // A drive that already exists as a trip (fully tracked, manual, or a
-    // prior recovery) must never be recovered again — that was the
+    // prior recovery) must never be recovered again, that was the
     // straight-line-duplicate bug. The end-of-run sweep still consumes
     // these straddle points so they stop counting as recoverable.
     if (overlapsExistingTrip(a.ts, b.ts, tripWindows)) continue;

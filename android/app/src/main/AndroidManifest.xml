@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -201,14 +201,14 @@
 
     <!-- Push notifications: @capacitor/push-notifications is
          installed for tax-deadline reminders. POST_NOTIFICATIONS is
-         REQUIRED on Android 13+ (API 33+) — without it the app
+         REQUIRED on Android 13+ (API 33+), without it the app
          silently fails to show any notification on modern devices. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Background mileage capture (@capgo/background-geolocation).
          Continuous drive logging runs as a foreground service with a
          persistent notification. On Samsung (and other aggressive
-         OEMs) the foreground service alone isn't enough — the OS
+         OEMs) the foreground service alone isn't enough, the OS
          throttles location updates to once-every-many-minutes
          unless ACCESS_BACKGROUND_LOCATION is granted. Without it,
          drives get truncated or skipped entirely when the user
@@ -224,7 +224,7 @@
 
          NOTE: we previously also declared ACTIVITY_RECOGNITION
          (intended to tell driving apart from walking), but nothing
-         ever used it — the @capgo background-geolocation plugin
+         ever used it, the @capgo background-geolocation plugin
          doesn't request it, and the eco-mode "is this a real
          drive?" gate is done purely with the GPS distanceFilter,
          not the Activity Recognition API. It was removed so the
