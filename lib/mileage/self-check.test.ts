@@ -29,6 +29,7 @@ const web: ProbeInput = {
   probed: true,
   deviceStatusOk: null, deviceStatusMs: null, deviceStatusStage: null,
   geofenceArmState: null, geofenceCount: null,
+  geofenceProbe: null, geofenceProbeMs: null,
   locationAuthorization: null,
   lowPowerMode: null,
   bluetoothPermission: null, bluetoothPermissionAsked: null, carSignalsOk: null,
@@ -39,6 +40,14 @@ const graceIos: ProbeInput = {
   ...web,
   platform: "ios",
   deviceStatusOk: false, deviceStatusMs: 1, deviceStatusStage: "call",
+  // The unregistered signature, and the ONLY state an iPhone with a
+  // compiled-but-unregistered plugin can actually produce. guard() in
+  // geofence.ts hands back a registerPlugin proxy on every native
+  // platform, so there is no "no plugin" outcome to report here: the
+  // bridge takes the call, finds nothing of that name, and rejects in
+  // about a millisecond. Same shape and same number as deviceStatusMs
+  // one line up, because it is the same mechanism failing the same way.
+  geofenceProbe: "error", geofenceProbeMs: 1,
 };
 
 /** Abel's Android before the Bluetooth prompt was wired. */
@@ -47,6 +56,7 @@ const abelAndroid: ProbeInput = {
   platform: "android",
   deviceStatusOk: true, deviceStatusMs: 12, deviceStatusStage: "done",
   geofenceArmState: "armed", geofenceCount: 4,
+  geofenceProbe: "ok", geofenceProbeMs: 12,
   locationAuthorization: "always",
   // A device whose plugin ANSWERS reports this. Leaving it null here
   // would model a state this device cannot be in, and the fixture that
@@ -164,6 +174,118 @@ describe("our fault versus the driver's choice", () => {
   it("a real arm failure IS dead", () => {
     const p: ProbeInput = { ...abelAndroid, geofenceArmState: "disarmed_registration_failed" };
     expect(verdictOf(p, "geofence_armed")).toBe("dead");
+  });
+});
+
+/**
+ * A geofence read that did not come back is not a dead plugin, and a
+ * plugin that was never registered still has to be caught.
+ *
+ * One Android phone reported self_check = "dead=geofence_plugin" while
+ * 163 of its own heartbeats between 2026-08-24 and 2026-09-15 carried
+ * geofence_arm_state = "armed". The plugin answered the whole time. The
+ * 2 second time box around the read expired, the null that produced was
+ * read as silence, and silence was read as death.
+ *
+ * The trap on the other side is worse, and the first attempt at this
+ * fix fell into it: if only a "no plugin at all" outcome convicts, then
+ * NOTHING convicts, because guard() returns a registerPlugin proxy on
+ * every native platform. Grace's iPhone would have been filed as
+ * unknown forever. The signature below is what separates them.
+ */
+describe("a geofence read that did not come back is not a dead plugin", () => {
+  const nativeProbed: ProbeInput = { ...web, platform: "android", probed: true };
+
+  it("a geofence read that timed out is unknown, never dead", () => {
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "timeout",
+      geofenceProbeMs: 2001,
+      geofenceArmState: null,
+    });
+    const plugin = out.find((c) => c.id === "geofence_plugin")!;
+    expect(plugin.verdict, "a timeout is not evidence of death").toBe("unknown");
+    expect(plugin.builtButDead).toBe(false);
+  });
+
+  it("a FAST rejection is the unregistered signature, and is dead", () => {
+    // The only thing that convicts. An unregistered plugin cannot
+    // report "no plugin": the bridge takes the call and rejects at once.
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "error",
+      geofenceProbeMs: 1,
+      geofenceArmState: null,
+    });
+    const plugin = out.find((c) => c.id === "geofence_plugin")!;
+    expect(plugin.verdict).toBe("dead");
+    expect(plugin.builtButDead).toBe(true);
+    expect(plugin.detail).toMatch(/not registered/i);
+    expect(plugin.detail).toContain("1ms");
+  });
+
+  it("a SLOW rejection is a live plugin failing, and is unknown", () => {
+    // Same outcome word, opposite verdict. A plugin that took 400ms to
+    // reject is a plugin that exists and is doing something wrong, and
+    // "dead" means we shipped something that will not answer at all.
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "error",
+      geofenceProbeMs: 400,
+      geofenceArmState: null,
+    });
+    const plugin = out.find((c) => c.id === "geofence_plugin")!;
+    expect(plugin.verdict).toBe("unknown");
+    expect(plugin.builtButDead).toBe(false);
+    expect(plugin.detail).toContain("error");
+    expect(plugin.detail).toContain("400ms");
+  });
+
+  it("sits exactly on the ceiling and still convicts", () => {
+    // Boundary pinned so a future edit to the comparison cannot slip
+    // from <= to < without a named failure.
+    expect(
+      evaluate({
+        ...nativeProbed,
+        geofenceProbe: "error",
+        geofenceProbeMs: UNREGISTERED_MS_CEILING,
+        geofenceArmState: null,
+      }).find((c) => c.id === "geofence_plugin")!.verdict,
+    ).toBe("dead");
+    expect(
+      evaluate({
+        ...nativeProbed,
+        geofenceProbe: "error",
+        geofenceProbeMs: UNREGISTERED_MS_CEILING + 1,
+        geofenceArmState: null,
+      }).find((c) => c.id === "geofence_plugin")!.verdict,
+    ).toBe("unknown");
+  });
+
+  it("an error with no elapsed time recorded cannot convict", () => {
+    // An older app build sends the outcome and not the milliseconds.
+    // Without the elapsed there is no signature, and guessing would
+    // convict every live plugin that ever threw.
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "error",
+      geofenceProbeMs: null,
+      geofenceArmState: null,
+    });
+    expect(out.find((c) => c.id === "geofence_plugin")!.verdict).toBe("unknown");
+  });
+
+  it("never convicts a plugin that ANSWERED, however fast", () => {
+    // The mirror of the signature: elapsed time may only ever aggravate
+    // a failed read, never override a successful one.
+    const out = evaluate({
+      ...nativeProbed,
+      geofenceProbe: "ok",
+      geofenceProbeMs: 1,
+      geofenceArmState: "disarmed_no_places",
+      geofenceCount: 0,
+    });
+    expect(out.find((c) => c.id === "geofence_plugin")!.verdict).toBe("live");
   });
 });
 

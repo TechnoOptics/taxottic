@@ -35,7 +35,7 @@ const ROUTE = join(REPO_ROOT, "app", "api", "mileage", "heartbeat", "route.ts");
 function clientStages(): string[] {
   const src = readFileSync(CLIENT, "utf8");
   const start = src.indexOf("export type DeviceProbeStage");
-  expect(start, "DeviceProbeStage not found — test is stale").toBeGreaterThan(-1);
+  expect(start, "DeviceProbeStage not found, test is stale").toBeGreaterThan(-1);
   const end = src.indexOf(";", start);
   return [...src.slice(start, end).matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
 }
@@ -44,7 +44,7 @@ function clientStages(): string[] {
 function serverStages(): string[] {
   const src = readFileSync(ROUTE, "utf8");
   const start = src.indexOf("const STAGE_VALUES");
-  expect(start, "STAGE_VALUES not found — test is stale").toBeGreaterThan(-1);
+  expect(start, "STAGE_VALUES not found, test is stale").toBeGreaterThan(-1);
   const end = src.indexOf(");", start);
   return [...src.slice(start, end).matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
 }
@@ -53,7 +53,7 @@ function serverStages(): string[] {
 function stageMaxLength(): number {
   const src = readFileSync(ROUTE, "utf8");
   const m = src.match(/const oneOf =[\s\S]{0,200}?str\(k,\s*(\d+)\)/);
-  expect(m, "oneOf truncation width not found — test is stale").toBeTruthy();
+  expect(m, "oneOf truncation width not found, test is stale").toBeTruthy();
   return Number(m![1]);
 }
 

@@ -1,9 +1,9 @@
-# Taxottic Watch — premium watchOS app (scaffold + integration runbook)
+# Taxottic Watch, premium watchOS app (scaffold + integration runbook)
 
 A jewelry-grade watch companion: midnight-navy (`#192539`) surfaces,
 hairline-gold rims, a brushed-gold tax-readiness dial, and one-gesture
 trip classification. This folder is **complete, idiomatic watchOS
-source** that is **not yet wired into the Xcode project** — adding a
+source** that is **not yet wired into the Xcode project**, adding a
 watch target edits `ios/App/App.xcodeproj/project.pbxproj`, which is
 deliberately **not hand-edited** (a malformed pbxproj would break the
 working iOS release pipeline). Adding the target is a ~10-minute Xcode
@@ -13,7 +13,7 @@ action on a Mac; once done these files build and ship as-is.
 
 Per `docs/WATCH_AND_NOTIFICATIONS_SPEC.md`, ~90% of the wrist
 experience is delivered by **actionable push notifications** that a
-paired watch mirrors automatically — no watch app needed (that path
+paired watch mirrors automatically, no watch app needed (that path
 is built; it only needs the credentials in
 `docs/MANUAL_KEYS_RUNBOOK.md → Push notifications`). This native app
 is the *additive, premium* layer.
@@ -22,28 +22,28 @@ is the *additive, premium* layer.
 
 Vertical Digital-Crown pages, midnight-and-gold throughout:
 
-- **Hero dial** — animated brushed-gold tax-readiness gauge (spring
+- **Hero dial**, animated brushed-gold tax-readiness gauge (spring
   settle + travelling catch-light), rolling YTD-deduction figure,
   "≈ $X saved", streak chip.
-- **Live forecast window** — projected owed/refund counting up,
+- **Live forecast window**, projected owed/refund counting up,
   effective rate + YTD income; elegant "updates on your iPhone"
   state until the forecast field is fed (no fabricated tax numbers).
-- **Confirm deck** — the signature interaction. A card stack of
+- **Confirm deck**, the signature interaction. A card stack of
   trips / expenses / income the system isn't sure about. **Swipe
   left = Business/Deduct, swipe right = Personal/Skip**: live colour,
   glow, rotation, a commit-threshold haptic, fly-off + spring, a
   running count, and a shimmering "all caught up" finish. Each commit
   hits the same `POST /api/push/action` core as the notification.
-- **Mileage** — auto-track toggle (arms/stops the phone GPS tracker
+- **Mileage**, auto-track toggle (arms/stops the phone GPS tracker
   from the wrist), auto-apply-business toggle, a pulsing live
   indicator, today's miles + deduction.
-- **Available deductions** — captured/uncaptured list with values
+- **Available deductions**, captured/uncaptured list with values
   (readiness-ring summary until the per-deduction feed lands).
-- **Goals** — gold progress bars, saved / target.
-- **Achievements + medal celebration** — latest medal; when a NEW
+- **Goals**, gold progress bars, saved / target.
+- **Achievements + medal celebration**, latest medal; when a NEW
   medal lands, a full-screen gold-ray + struck-medal celebration
   fires once with a success haptic. Plus a "Log an expense" hand-off.
-- **Complications** — circular gold gauge, rectangular, inline,
+- **Complications**, circular gold gauge, rectangular, inline,
   corner; App-Group backed, WidgetKit-refreshed.
 
 ## Files
@@ -82,7 +82,7 @@ Inbound watch → phone messages handled by `lib/watch/bridge.ts`:
    complication: same Team, automatic signing, **App Groups
    `group.com.taxottic.app`** on all three (the complication reads
    `ytdDeductionCents` / `taxReadinessPct` from this shared suite).
-6. Archive with the existing scheme — `ios-release.yml` runs on a
+6. Archive with the existing scheme, `ios-release.yml` runs on a
    macOS runner and includes the embedded watch app automatically
    once the targets exist. Apple requires the watch app to ship with
    the iOS app (same App Store record).
@@ -91,25 +91,25 @@ Inbound watch → phone messages handled by `lib/watch/bridge.ts`:
 
 **The JS/API half already ships** (merged, CI-tested, deploys live):
 
-- `lib/watch/types.ts` — the `WatchSnapshot` contract (mirror of the
+- `lib/watch/types.ts`, the `WatchSnapshot` contract (mirror of the
   Swift `struct WatchSnapshot`).
-- `lib/watch/snapshot.ts` (+ `.test.ts`) — pure builder, unit-tested.
-- `app/api/watch/snapshot/route.ts` — auth + assembles the snapshot
+- `lib/watch/snapshot.ts` (+ `.test.ts`), pure builder, unit-tested.
+- `app/api/watch/snapshot/route.ts`, auth + assembles the snapshot
   from the existing readiness / mileage-deduction cores (best-effort
   per field; never errors).
-- `lib/watch/bridge.ts` — guarded `syncWatch()` (fetch → native
+- `lib/watch/bridge.ts`, guarded `syncWatch()` (fetch → native
   `TaxotticWatchBridge.sync`) and `startWatchBridge()` (inbound watch
   actions → existing `POST /api/push/action`, the same path the
   notification action uses). Mounted in `CapacitorNativeInit`.
 
 **The remaining native half is one Swift file**, scaffolded here:
 
-- `TaxotticWatchBridgePlugin.swift` — add it to the iOS **App**
+- `TaxotticWatchBridgePlugin.swift`, add it to the iOS **App**
   target in Xcode (NOT the watch target): the Capacitor plugin that
   does `updateApplicationContext`, writes the App Group, reloads the
   complication, and forwards inbound watch messages to JS. Because
   the JS half already ships, **data flows the moment this file is
-  compiled into a build** — no further web work.
+  compiled into a build**, no further web work.
 
 Until that file is in the App target, `syncWatch()` cleanly no-ops
 (plugin not available), so the watch shows the "Open Taxottic on
@@ -123,15 +123,15 @@ half and can land in any order.
 > the new-medal one-shot celebration, and the mileage / auto-apply
 > toggles (round-tripped through `lib/watch/bridge.ts`).
 >
-> **Endpoint-only follow-up** (no app/Swift change — the UI already
+> **Endpoint-only follow-up** (no app/Swift change, the UI already
 > renders them the moment the endpoint supplies them): the `forecast`
 > object (deliberately omitted until reused from the real forecast
-> engine — no fabricated tax figure on the wrist), per-deduction
+> engine, no fabricated tax figure on the wrist), per-deduction
 > dollar values, and the `expense`/`income` confirm cards. The deck,
 > forecast page, and deductions page show elegant placeholder states
 > until then.
 
-## Pairing & bidirectional sync — status
+## Pairing & bidirectional sync, status
 
 Audited end-to-end and **the contract has zero drift**: `WatchSnapshot`
 is field-for-field identical across `lib/watch/types.ts`,
@@ -140,14 +140,14 @@ is field-for-field identical across `lib/watch/types.ts`,
 `WatchConnectivityManager` reads `dict["snapshot"] as? Data`); and
 the action messages the watch sends (`confirm`/`mileage`/`autoApply`/
 `open`) are exactly what `lib/watch/bridge.ts` consumes. No protocol
-bug — once wired, sync is correct.
+bug, once wired, sync is correct.
 
 **Live, not one-shot:** `lib/watch/bridge.ts` re-pushes on
 launch/resume, on `@capacitor/app` resume / app-active, and right
 after every inbound watch action.
 
 **Still required for real pairing (device-bound, needs a Mac +
-paired Apple Watch — can't be verified headless):**
+paired Apple Watch, can't be verified headless):**
 1. Add `TaxotticWatchBridgePlugin.swift` to the iOS **App** target
    and register it (Capacitor auto-discovers `CAPBridgedPlugin` in
    the app target).

@@ -46,7 +46,7 @@ function stripComments(src: string): string {
 /** Body of a top-level exported function, up to the next top-level one. */
 function functionBody(src: string, name: string): string {
   const start = src.indexOf(`export async function ${name}`);
-  if (start === -1) throw new Error(`${name} not found — test is stale`);
+  if (start === -1) throw new Error(`${name} not found, test is stale`);
   const rest = src.slice(start + 1);
   const next = rest.search(/\nexport (async )?function /);
   return next === -1 ? rest : rest.slice(0, next);

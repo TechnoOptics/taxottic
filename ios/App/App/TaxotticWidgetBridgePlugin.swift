@@ -7,13 +7,13 @@ import WidgetKit
 /// forecast snapshot JSON to the shared App Group and reloads the
 /// WidgetKit timelines so TaxotticWidget repaints.
 ///
-/// The widget is a dumb renderer of that snapshot — all the plan/entity
+/// The widget is a dumb renderer of that snapshot, all the plan/entity
 /// adaptation already lives in the server snapshot (business- vs
 /// personal-scoped, or `forecast` omitted for a free/empty state), so
 /// there's no gating logic duplicated in Swift.
 ///
 /// Capacitor 6+ auto-registers Swift plugins that conform to
-/// CAPBridgedPlugin and live in the app target — no extra registration
+/// CAPBridgedPlugin and live in the app target, no extra registration
 /// file needed. `jsName` matches registerPlugin("TaxotticWidgetBridge").
 @objc(TaxotticWidgetBridgePlugin)
 public class TaxotticWidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {

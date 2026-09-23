@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 /**
  * Device-state heartbeat (reliability plan, workstream C). The tracker
- * reports its OWN view of health — toggle state, buffer depth, seconds
+ * reports its OWN view of health: toggle state, buffer depth, seconds
  * since the last native callback, flush failure streak, and (once the
  * native DeviceStatus plugin ships) the actual location-authorization
  * level. This turns "the server infers death from hours of GPS silence"
@@ -86,6 +86,30 @@ const CAR_PROBE_VALUES = new Set([
   "ok",
   "unavailable",
   "null",
+  "error",
+  "timeout",
+]);
+
+/** Why the geofence read returned what it did. Allowlisted like the
+ *  others so a client cannot write arbitrary text into a column that
+ *  gets grouped on.
+ *
+ *  Same five words as PROBE_VALUES above, deliberately: all three probe
+ *  outcomes sit side by side in one row, so a word must not mean one
+ *  thing in geofence_probe and another in device_probe. Kept as its own
+ *  Set rather than aliased to PROBE_VALUES so that widening one
+ *  client union cannot silently widen the other two columns.
+ *
+ *  Read geofence_probe WITH geofence_probe_ms. "error" is both an
+ *  unregistered plugin (rejects in 1-2ms) and a live plugin that threw
+ *  (slower); nothing else tells them apart. Collapsing them is what
+ *  reported self_check = "dead=geofence_plugin" on a phone whose own
+ *  heartbeats carried arm state "armed" 163 times.
+ *  See lib/mileage/geofence.ts. */
+const GEOFENCE_PROBE_VALUES = new Set([
+  "ok",
+  "null",
+  "unavailable",
   "error",
   "timeout",
 ]);
@@ -347,6 +371,11 @@ export async function POST(req: NextRequest) {
     // verbatim rather than collapsed into a boolean, because "why"
     // is the whole value.
     geofence_arm_state: str("geofenceArmState", 40),
+    // Read this BEFORE geofence_arm_state, never after. It is the
+    // difference between a plugin that is not there and a read that did
+    // not come back, and those want opposite responses.
+    geofence_probe: oneOf("geofenceProbe", GEOFENCE_PROBE_VALUES),
+    geofence_probe_ms: num("geofenceProbeMs"),
     geofence_count: num("geofenceCount"),
     geofence_capture: str("geofenceCapture", 40),
     geofence_buffered_fixes: num("geofenceBufferedFixes"),
@@ -368,6 +397,19 @@ export async function POST(req: NextRequest) {
     // like from the outside.
     native_drain_checked: num("nativeDrainChecked"),
     native_drain_suppressed: num("nativeDrainSuppressed"),
+    // The NATIVE uploader's own outcome, posted by the Android capture
+    // service with no JavaScript in the process. See
+    // supabase/migrations/20260922090000_heartbeat_native_upload.sql.
+    // Read native_upload_reason FIRST and on its own: it is
+    // TaxotticUploader.Result's vocabulary verbatim (ok, no_config,
+    // no_session, bad_origin, empty, http_<code>, io_error), and
+    // 'no_session' everywhere means the cookie jar is empty in a
+    // cold-started process, which is the single assumption this design
+    // could not settle without a phone. Every other column in this row
+    // looks healthy in that case.
+    native_upload_reason: str("nativeUploadReason", 24),
+    native_upload_trigger: str("nativeUploadTrigger", 24),
+    native_upload_points: num("nativeUploadPoints"),
     reported_at: reportedAt,
   };
 

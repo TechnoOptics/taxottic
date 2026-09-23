@@ -40,7 +40,7 @@ describe("buildTrackFromRaw", () => {
   });
 
   it("the orphaned-batch scenario: a mid-window point is included", () => {
-    // start, [orphaned middle], resume — all in one window
+    // start, [orphaned middle], resume, all in one window
     const t = buildTrackFromRaw([
       p("2026-07-15T14:19:35Z", 44.76174, -93.47278),
       p("2026-07-15T14:22:00Z", 44.77055, -93.46946), // was orphaned
@@ -115,7 +115,7 @@ describe("render jitter suppression", () => {
 // walking in the mall". The cause was a ~16 minute preamble of a nearly
 // stationary phone with 28-44 m accuracy emitting roughly one fix a
 // minute. Each fix was past the 60s dwell-anchor interval, so the
-// jitter filter kept it verbatim — drawing the scribble AND counting
+// jitter filter kept it verbatim, drawing the scribble AND counting
 // every drift hop as real distance.
 describe("sparse GPS drift while stationary", () => {
   const t0 = Date.parse("2026-07-27T19:27:00Z");

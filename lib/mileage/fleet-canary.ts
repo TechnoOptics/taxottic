@@ -5,7 +5,7 @@
 // whole week", "it always misses her drives to work". Per-driver alerts
 // (stall push, parked push, the manager health card) catch ONE device
 // going wrong. None of them catch the class of failure that actually
-// hurt us most — a change that quietly degrades capture for everybody
+// hurt us most, a change that quietly degrades capture for everybody
 // at once, where no single device looks anomalous relative to the rest.
 //
 // This compares the fleet against ITS OWN recent past. A deploy that
@@ -46,7 +46,7 @@ export const MIN_BASELINE_POINTS_PER_DAY = 50;
  * Median, not mean: one huge road-trip day would drag a mean upward and
  * mask a real drop the next day.
  *
- * Deliberately conservative — a false alarm every week trains everyone
+ * Deliberately conservative, a false alarm every week trains everyone
  * to ignore it, which is worse than no alarm at all.
  */
 export function evaluateFleetCapture(
