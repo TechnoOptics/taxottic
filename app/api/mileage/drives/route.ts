@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { getMyCompanies } from "@/lib/auth";
 import { DRIVE_PAGE_SIZE, loadDrivePage } from "@/lib/mileage/drive-page";
+import { resolveTripScope } from "@/lib/mileage/team-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,14 +97,47 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // The company IS taken from the query string, and safely so: the scope
-  // below pins driver_user_id to the session as well, so naming a company
-  // the caller does not belong to returns nothing rather than somebody
-  // else's drives.
+  // The company IS taken from the query string, but it is checked against
+  // the caller's own memberships below rather than trusted, because it
+  // also decides whether this caller is a manager here.
   const companyId = sp.get("company") ?? "";
   if (!companyId) {
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
+
+  // The caller's role comes from their membership of THIS company, read
+  // with the session client (getMyCompanies pins user_id itself, see the
+  // note in lib/auth.ts about super-admins). A company the caller does
+  // not belong to pages empty, for the same reason a foreign trip id
+  // returns no points: an error code distinguishable from "no drives"
+  // tells a stranger which company ids are real.
+  const memberships = await getMyCompanies();
+  const membership = memberships.find((m) => m.company_id === companyId);
+  if (!membership) return NextResponse.json({ drives: [] });
+  const isManager = membership.role === "manager";
+
+  // Who this request may read. The SAME helper the page calls
+  // (app/mileage/page.tsx), fed the same way, so the two cannot drift:
+  // a manager of a 2+ person team pages the team overlay, everyone else
+  // pages their own drives. That matters because a manager LANDS on the
+  // team view, so a route that always paged `self` would quietly drop
+  // every teammate's drives at page two, which looks like "the older
+  // drives are missing" rather than like a bug.
+  //
+  // `driverParam` is deliberately the empty string rather than a query
+  // parameter. resolveTripScope would validate one (it collapses any
+  // driver the caller may not read to `self`), but this route does not
+  // offer one at all: see the note on the pinned-driver case in
+  // .superpowers/sdd/2026-09-22-miles/task-3-report.md.
+  const driverIds = isManager
+    ? await companyDriverIds(admin, companyId)
+    : [user.id];
+  const scope = resolveTripScope({
+    isManager,
+    viewerUserId: user.id,
+    driverParam: "",
+    driverIds,
+  });
 
   // The cursor is a TUPLE, not a bare timestamp. Drives that share an
   // instant are common at millisecond GPS precision, and a timestamp-only
@@ -113,10 +148,30 @@ export async function GET(req: NextRequest) {
 
   const drives = await loadDrivePage<DriveRow>(admin, {
     companyId,
-    scope: { kind: "self", driverUserId: user.id },
+    scope,
     before,
     beforeId,
     limit: DRIVE_PAGE_SIZE,
   });
   return NextResponse.json({ drives });
+}
+
+/**
+ * Every member of `companyId`, which is what resolveTripScope counts to
+ * decide whether a manager has a team at all (a manager alone in their
+ * company pages as `self`, not as a one-person "team").
+ *
+ * Only called for a manager, and only after their membership of this
+ * company has been confirmed, so the service client's reach past RLS is
+ * bounded by that check rather than by the query string.
+ */
+async function companyDriverIds(
+  admin: ReturnType<typeof createServiceClient>,
+  companyId: string,
+): Promise<string[]> {
+  const { data } = await admin
+    .from("company_members")
+    .select("user_id")
+    .eq("company_id", companyId);
+  return ((data ?? []) as { user_id: string }[]).map((m) => m.user_id);
 }

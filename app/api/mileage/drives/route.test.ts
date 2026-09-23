@@ -28,10 +28,17 @@ describe("the drives route", () => {
   });
 
   it("scopes to the caller rather than to a client-supplied driver", () => {
+    // The brief spelled this /searchParams\.get\(["']driver["']\)/, which
+    // this route can never trip: it aliases `const sp = req.nextUrl
+    // .searchParams` (as the brief's own snippet does) and would therefore
+    // write the leak as `sp.get("driver")`. Verified by mutation, the
+    // brief's regex stayed GREEN while the route read the driver from the
+    // query string. Match the CALL rather than one spelling of the
+    // receiver, so any alias trips it.
     expect(
       SRC,
       "taking a driver id from the query string would let anyone read any log",
-    ).not.toMatch(/searchParams\.get\(\s*["']driver["']\s*\)/);
+    ).not.toMatch(/\.get\(\s*["']driver(User)?(Id)?["']\s*\)/i);
   });
 
   it("asks for one trip's polyline, with no paging loop", () => {
@@ -49,6 +56,10 @@ describe("the drives route", () => {
 const h = vi.hoisted(() => ({
   /** Who auth.getUser() resolves to. null is an anonymous caller. */
   user: null as { id: string } | null,
+  /** What getMyCompanies() resolves to for the session. */
+  memberships: [] as { company_id: string; role: string }[],
+  /** company_members rows for the roster read. */
+  memberRows: [] as { user_id: string }[],
   /** The row mileage_trips returns for the ownership probe. */
   ownedRow: null as { id: string } | null,
   /** Every filter applied to the ownership probe, as [column, value]. */
@@ -63,22 +74,47 @@ const h = vi.hoisted(() => ({
   pageRows: [] as Record<string, unknown>[],
 }));
 
+/**
+ * The slice of the PostgREST builder these two reads use. `then` is what
+ * makes the roster read awaitable without a terminal method, the way the
+ * real builder is.
+ */
+type Builder = {
+  select: () => Builder;
+  eq: (col: string, val: unknown) => Builder;
+  maybeSingle: () => Promise<{ data: unknown }>;
+  then: <T>(onOk: (v: { data: unknown }) => T) => Promise<T>;
+};
+
+function builder(
+  result: () => { data: unknown },
+  sink?: [string, unknown][],
+): Builder {
+  const b: Builder = {
+    select: () => b,
+    eq: (col, val) => {
+      sink?.push([col, val]);
+      return b;
+    },
+    maybeSingle: async () => result(),
+    then: (onOk) => Promise.resolve(result()).then(onOk),
+  };
+  return b;
+}
+
+vi.mock("@/lib/auth", () => ({
+  getMyCompanies: async () => h.memberships,
+}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: h.user } }) },
   }),
   createServiceClient: () => ({
-    from: () => {
-      const probe = {
-        select: () => probe,
-        eq: (col: string, val: unknown) => {
-          h.ownershipFilters.push([col, val]);
-          return probe;
-        },
-        maybeSingle: async () => ({ data: h.ownedRow }),
-      };
-      return probe;
-    },
+    from: (table: string) =>
+      table === "company_members"
+        ? builder(() => ({ data: h.memberRows }))
+        : builder(() => ({ data: h.ownedRow }), h.ownershipFilters),
     rpc: async (fn: string, args: Record<string, unknown>) => {
       h.rpcCalls.push({ fn, args });
       return { data: h.polyRows };
@@ -110,6 +146,9 @@ const COMPANY = "44444444-4444-4444-8444-444444444444";
 
 beforeEach(() => {
   h.user = { id: VIEWER };
+  // The default caller is an ordinary member of one company.
+  h.memberships = [{ company_id: COMPANY, role: "member" }];
+  h.memberRows = [{ user_id: VIEWER }];
   h.ownedRow = { id: TRIP };
   h.ownershipFilters = [];
   h.rpcCalls = [];
@@ -220,5 +259,74 @@ describe("the drives handler", () => {
   it("prefers the trip branch over paging", async () => {
     await ask(`?trip=${TRIP}&company=${COMPANY}`);
     expect(h.pageCalls).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The scope the route pages with. It has to be the one the PAGE would have
+// used, because a manager lands on the team overlay: a route that always
+// paged `self` would quietly drop every teammate's drives at page two, which
+// reads as "the older drives are missing" rather than as a bug.
+// ---------------------------------------------------------------------------
+
+const asManagerOf = (...members: string[]) => {
+  h.memberships = [{ company_id: COMPANY, role: "manager" }];
+  h.memberRows = members.map((user_id) => ({ user_id }));
+};
+
+describe("the scope the drives handler pages with", () => {
+  it("pages a solo driver as themselves", async () => {
+    await ask(`?company=${COMPANY}`);
+    expect(h.pageCalls[0].scope).toEqual({
+      kind: "self",
+      driverUserId: VIEWER,
+    });
+  });
+
+  it("pages an ordinary member of a big team as themselves", async () => {
+    h.memberships = [{ company_id: COMPANY, role: "member" }];
+    h.memberRows = [{ user_id: VIEWER }, { user_id: SOMEONE_ELSE }];
+    await ask(`?company=${COMPANY}`);
+    expect(
+      h.pageCalls[0].scope,
+      "a member is not a manager however many colleagues they have",
+    ).toEqual({ kind: "self", driverUserId: VIEWER });
+  });
+
+  it("pages a manager of a team with the team scope their page uses", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    await ask(`?company=${COMPANY}`);
+    expect(
+      h.pageCalls[0].scope,
+      "page one shows the whole team, so page two must too",
+    ).toEqual({ kind: "team", viewerUserId: VIEWER });
+  });
+
+  it("pages a manager who is alone in their company as themselves", async () => {
+    asManagerOf(VIEWER);
+    await ask(`?company=${COMPANY}`);
+    expect(
+      h.pageCalls[0].scope,
+      "one person is not a team; resolveTripScope owns that rule",
+    ).toEqual({ kind: "self", driverUserId: VIEWER });
+  });
+
+  it("does not let a query parameter name the driver, at any role", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    await ask(`?company=${COMPANY}&driver=${SOMEONE_ELSE}`);
+    expect(
+      h.pageCalls[0].scope,
+      "the route offers no driver parameter; the scope comes from membership",
+    ).toEqual({ kind: "team", viewerUserId: VIEWER });
+  });
+
+  it("pages nothing for a company the caller does not belong to", async () => {
+    h.memberships = [{ company_id: COMPANY, role: "manager" }];
+    const res = await ask("?company=99999999-9999-4999-8999-999999999999");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ drives: [] });
+    expect(h.pageCalls, "a stranger's company is not queried at all").toEqual(
+      [],
+    );
   });
 });
