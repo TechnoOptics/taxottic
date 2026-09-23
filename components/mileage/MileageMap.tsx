@@ -588,8 +588,8 @@ export function MileageMap({
         className="card flex items-center justify-center text-sm text-red-700"
         style={{ height }}
       >
-        Couldn&apos;t load the map. The mileage + deduction figures
-        below are unaffected.
+        Couldn&apos;t load the map. The mileage and deduction figures
+        are unaffected.
       </div>
     );
   }
