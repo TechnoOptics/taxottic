@@ -78,9 +78,7 @@ export function BookForm({
   if (done) {
     return (
       <div className="text-center py-6">
-        <div className="text-[11px] uppercase tracking-[0.22em] text-gold-700">
-          Thank you
-        </div>
+        <div className="mono-label">Thank you</div>
         <h2 className="display mt-2 text-2xl text-forest-900">
           Got it. We will be in touch shortly.
         </h2>
@@ -99,9 +97,7 @@ export function BookForm({
       {/* Audience picker - segmented buttons so the user knows which
           fields to expect below. */}
       <div>
-        <label className="text-[11px] uppercase tracking-[0.18em] text-gold-700">
-          I am here as
-        </label>
+        <label className="mono-label">I am here as</label>
         <div className="mt-2 grid sm:grid-cols-3 gap-2">
           {AUDIENCE_OPTIONS.map((opt) => {
             const active = opt.value === audience;
@@ -114,8 +110,8 @@ export function BookForm({
                 className={
                   "text-left rounded-xl border px-3 py-3 transition-colors " +
                   (active
-                    ? "border-forest-700 bg-forest-50/60 ring-1 ring-forest-300"
-                    : "border-forest-100 bg-white hover:border-gold-300/60 hover:bg-cream/40")
+                    ? "border-foreground bg-surface-2"
+                    : "border-edge bg-surface hover:border-edge-bright")
                 }
               >
                 <div className="text-sm font-medium text-forest-900 leading-snug">
@@ -274,7 +270,7 @@ export function BookForm({
           placeholder={
             isFirm
               ? "We're looking to move 30 clients off Lacerte by Q2. Most are Schedule C filers..."
-              : "I'm a freelance designer in MA. Mostly software + travel deductions. Hoping for a calmer April..."
+              : "I'm a freelance designer in MA. Mostly software + travel deductions. I want the April number to be known by March..."
           }
         />
       </Field>
@@ -319,7 +315,7 @@ function Field({
     <div>
       <label
         htmlFor={htmlFor}
-        className="text-[11px] uppercase tracking-[0.18em] text-gold-700 inline-flex items-baseline gap-2"
+        className="mono-label inline-flex items-baseline gap-2"
       >
         <span>{label}</span>
         {required ? (

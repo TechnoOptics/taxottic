@@ -24,11 +24,12 @@ describe("Archivo is loaded with its width axis", () => {
     expect(m![1], "a fixed weight list disables the variable axes").not.toMatch(/weight:\s*\[/);
   });
 
-  it("the Instrument display rule sets the width, weight and tracking, scoped to the home page's grammar", () => {
+  it("the Instrument display rule sets the width, weight and tracking, scoped to the year grammar", () => {
     // Scoped to [data-grammar="year"] as well as [data-skin="instrument"]:
-    // data-skin sits on <body> and covers nearly every page, but this
-    // treatment belongs to PR 1's home page only. An unscoped rule here
-    // silently reaches pricing, calculators, guides and compare too.
+    // data-skin sits on <body> and covers nearly every page, so an
+    // unscoped rule here would reach every authenticated screen. The
+    // grammar attribute is the opt-in; PR 2 added it to the public
+    // marketing pages; in the app only the Today screen (PR 3) carries it.
     const m = /\[data-skin="instrument"\] \[data-grammar="year"\] \.display \{([\s\S]*?)\}/.exec(css);
     expect(m, 'no [data-skin="instrument"] [data-grammar="year"] .display rule').toBeTruthy();
     expect(m![1]).toMatch(/font-stretch:\s*112%/);

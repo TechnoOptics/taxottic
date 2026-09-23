@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
-import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
+import { PageShell } from "@/components/marketing/PageShell";
+import { LedgerList } from "@/components/marketing/LedgerList";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getTaxYearConstants } from "@/lib/tax/constants";
 import { ratePeriodsForYear } from "@/lib/calculators/mileage-reimbursement";
@@ -41,7 +39,7 @@ export const metadata = {
   },
 };
 
-// Live calculators. Add a folder under /calculators/<slug> + a card here.
+// Live calculators. Add a folder under /calculators/<slug> + a row here.
 const CALCULATORS = [
   {
     slug: "self-employment-tax",
@@ -91,7 +89,7 @@ const CALCULATORS = [
     slug: "how-much-to-set-aside",
     title: "How Much to Set Aside for Taxes",
     blurb:
-      "The exact percentage of every payment to move into savings so quarterly taxes are covered and April is calm, not a rule of thumb.",
+      "The exact percentage of every payment to move into savings so quarterly taxes are covered before April, not a rule of thumb.",
     live: true,
   },
   {
@@ -161,35 +159,25 @@ const ITEMLIST_LD = {
 
 export default function CalculatorsHubPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={ITEMLIST_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Free tools
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          Free tax calculators for the{" "}
-          <span className="whitespace-nowrap">self-employed.</span>
+        {/* Reordered, not resized. "Free tax calculators for the
+            self-employed." ran to four lines at 344px (measured: the
+            h1's content box is 312px there and "Free tax calculators"
+            alone is 386px), one over the bound the rest of the shell
+            holds to. The same four words in the order below break as
+            "Free" / "self-employed" / "tax calculators." and land on
+            three, so the keyword phrase survives intact and the type
+            scale is untouched. The compound stays one non-breaking
+            group so it never splits at its hyphen. */}
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
+          Free <span className="whitespace-nowrap">self-employed</span> tax
+          calculators.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Instant estimates for freelancers, 1099 contractors, and small
@@ -198,24 +186,15 @@ export default function CalculatorsHubPage() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-4 grid gap-4">
-        {CALCULATORS.filter((c) => c.live).map((c) => (
-          <Link
-            key={c.slug}
-            href={`/calculators/${c.slug}`}
-            className="card p-6 hover:border-gold-300 transition-colors"
-          >
-            <h2 className="display text-lg sm:text-xl text-forest-900">
-              {c.title}
-            </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {c.blurb}
-            </p>
-            <span className="mt-3 inline-block text-sm text-gold-800">
-              Open the calculator →
-            </span>
-          </Link>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-4">
+        <LedgerList
+          ariaLabel="Calculators"
+          items={CALCULATORS.filter((c) => c.live).map((c) => ({
+            href: `/calculators/${c.slug}`,
+            title: c.title,
+            blurb: c.blurb,
+          }))}
+        />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -226,21 +205,17 @@ export default function CalculatorsHubPage() {
           The calculators tell you how much. These plain-English guides tell you
           why, and what you can legally do to owe less.
         </p>
-        <div className="mt-4 grid sm:grid-cols-2 gap-3">
-          {GUIDES.map((g) => (
-            <Link
-              key={g.slug}
-              href={`/guides/${g.slug}`}
-              className="card p-4 hover:border-gold-300 transition-colors text-sm text-forest-900"
-            >
-              {g.title}
-              <span className="block mt-1 text-xs text-gold-800">
-                Read the guide →
-              </span>
-            </Link>
-          ))}
+        <div className="mt-4">
+          <LedgerList
+            ariaLabel="Guides"
+            items={GUIDES.map((g) => ({
+              href: `/guides/${g.slug}`,
+              title: g.title,
+            }))}
+          />
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

@@ -1,9 +1,7 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SelfEmploymentTaxCalculator } from "@/components/calculators/SelfEmploymentTaxCalculator";
 import { formatCents } from "@/lib/tax/forecast";
@@ -144,27 +142,11 @@ export default async function StateSelfEmploymentTaxPage({
   };
 
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-2">
         <nav
@@ -185,16 +167,13 @@ export default async function StateSelfEmploymentTaxPage({
           <span aria-hidden="true">/</span>
           <span className="text-forest-800">{st.name}</span>
         </nav>
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700 mt-6">
-          Free calculator · 2026
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight max-w-3xl">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 mt-6 leading-tight max-w-3xl">
           Self-Employment Tax in {st.name}
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           {snap.hasIncomeTax
-            ? `What a freelancer or 1099 contractor really owes in ${st.name}, the 15.3% self-employment tax, federal income tax, and ${st.name}'s state income tax. Real numbers, instant, no sign-up.`
-            : `${st.name} has no state income tax, so a self-employed ${st.name} resident owes only federal income tax and the 15.3% self-employment tax. See your number instantly, no sign-up.`}
+            ? `What a freelancer or 1099 contractor really owes in ${st.name}, the 15.3% self-employment tax, federal income tax, and ${st.name}'s state income tax. Free for 2026, real numbers, instant, no sign-up.`
+            : `${st.name} has no state income tax, so a self-employed ${st.name} resident owes only federal income tax and the 15.3% self-employment tax. Free for 2026, instant, no sign-up.`}
         </p>
       </section>
 
@@ -212,7 +191,7 @@ export default async function StateSelfEmploymentTaxPage({
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm min-w-[420px]">
               <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wider text-gold-700">
+                <tr className="mono-label">
                   <th className="pb-2 font-medium">Net profit</th>
                   <th className="pb-2 font-medium">Total tax</th>
                   {snap.hasIncomeTax ? (
@@ -279,8 +258,8 @@ export default async function StateSelfEmploymentTaxPage({
           </div>
         </div>
 
-        <div className="card p-6 border-gold-300/60">
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+        <div className="card p-6 border-edge">
+          <div className="mono-label">
             Other states
           </div>
           <h2 className="display text-xl text-forest-900 mt-1">
@@ -293,7 +272,7 @@ export default async function StateSelfEmploymentTaxPage({
                 <Link
                   key={s.code}
                   href={`${BASE}/${s.slug}`}
-                  className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                  className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
                 >
                   {s.name}
                 </Link>
@@ -302,27 +281,28 @@ export default async function StateSelfEmploymentTaxPage({
               href={BASE}
               className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
             >
-              All states →
+              All states
             </Link>
           </div>
           <div className="mt-4 pt-4 border-t border-forest-100 text-sm text-ink-soft">
             Related reading:{" "}
             <Link
               href="/guides/self-employment-tax-how-much-to-set-aside"
-              className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+              className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
             >
               how much to set aside
             </Link>{" "}
             ·{" "}
             <Link
               href="/guides/quarterly-estimated-taxes-explained"
-              className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+              className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
             >
               quarterly estimated taxes
             </Link>
           </div>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

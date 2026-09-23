@@ -7,19 +7,24 @@ const SLUG = "first-year-freelancer-tax-checklist";
 const TITLE = "Your first year freelancing: a tax checklist";
 const DESCRIPTION =
   "A simple, do-this-now tax checklist for new freelancers and contractors: set aside money, separate your finances, track deductions, and pay quarterly estimates so April never surprises you.";
+// The guide's series line. One constant for three places: the
+// visible shell, the OG card and the Article JSON-LD image, which the
+// OG route renders in the eyebrow position.
+const SERIES = "First year";
 
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: `/guides/${SLUG}` },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}`, width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}`] },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" } },
 };
 
 const ARTICLE_LD = guideArticleLd({
   slug: SLUG,
   title: TITLE,
+  series: SERIES,
   description: DESCRIPTION,
   published: "2026-06-08",
   modified: "2026-07-04",
@@ -73,7 +78,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="First year"
+        series={SERIES}
         title={TITLE}
         lead="Going out on your own? Do these few things from day one and your first tax season will be boring, in the best way."
         updated="June 2026"
@@ -104,7 +109,7 @@ export default function Page() {
             <strong>Learn your deductions.</strong> Home office, mileage,
             software, phone, supplies, and more all lower your taxable income -
             see our{" "}
-            <a href="/guides/schedule-c-deductions" className="text-gold-800 underline">
+            <a href="/guides/schedule-c-deductions" className="text-forest-800 underline">
               Schedule C deductions guide
             </a>
             .
@@ -112,7 +117,7 @@ export default function Page() {
           <LI>
             <strong>Plan for quarterly estimated taxes.</strong> Four payments
             a year keep you current and penalty-free, see our{" "}
-            <a href="/guides/quarterly-estimated-taxes-explained" className="text-gold-800 underline">
+            <a href="/guides/quarterly-estimated-taxes-explained" className="text-forest-800 underline">
               quarterly taxes guide
             </a>
             .

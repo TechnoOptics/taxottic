@@ -12,16 +12,19 @@ export function MarketingFooter() {
             attorney.
           </p>
           <p className="mt-4 text-xs text-muted">
-            {/* The dot before the studio credit is a separator, not data.
-                Brass in this grammar is spent on today's marker, the live
-                figure and the marks inside a product screen (design spec,
-                section 3), so a brass dot in the footer reads as a fourth
-                claim on the eye for nothing. Ink at 45% instead. */}
+            {/* The mark before the studio credit is a separator, not
+                data. It was a brass disc, then an ink disc; it is now a
+                middot, the character the changelog rows already use to
+                join their tags. A drawn disc is `rounded-full`, and
+                `rounded-full` is a retired primitive in this grammar
+                (pill chips and footer dots are the two places it came
+                from), so spelling the separator as punctuation keeps
+                the shared footer inside the same rule every page it
+                sits on has to pass. */}
             <span className="inline-flex items-center gap-1.5">
-              <span
-                aria-hidden="true"
-                className="size-1.5 rounded-full bg-[var(--foreground)] opacity-45"
-              />
+              <span aria-hidden="true" className="opacity-45">
+                &middot;
+              </span>
               {/* Exact attribution wording, do not reword: the string
                   "Powered by Techno Optics LLC" is the agreed studio
                   credit and is used verbatim in every footer. */}

@@ -31,6 +31,14 @@ export type GuideArticleInput = {
   title: string;
   description: string;
   /**
+   * The guide's series line, the same string GuideShell shows in the
+   * breadcrumb. It goes into the derived image URL because the OG card
+   * renders it above the title; leave it out and the card falls back to
+   * the route's generic label, and the card in the JSON-LD stops being
+   * the card the page itself links to.
+   */
+  series: string;
+  /**
    * ISO date (YYYY-MM-DD) the guide first shipped, and the date of its
    * last substantive edit.
    *
@@ -52,6 +60,7 @@ export function guideArticleLd({
   slug,
   title,
   description,
+  series,
   published,
   modified,
 }: GuideArticleInput) {
@@ -65,7 +74,9 @@ export function guideArticleLd({
     url,
     // Same generator the page's own OG card uses, so the two never
     // disagree about what this guide looks like when it is shared.
-    image: [`${SITE}/api/og/guide?title=${encodeURIComponent(title)}`],
+    image: [
+      `${SITE}/api/og/guide?title=${encodeURIComponent(title)}&series=${encodeURIComponent(series)}`,
+    ],
     datePublished: published,
     dateModified: modified,
     author: { "@type": "Organization", name: "Taxottic", url: SITE },

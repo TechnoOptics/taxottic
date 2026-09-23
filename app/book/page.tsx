@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
+import { PageShell } from "@/components/marketing/PageShell";
 import { BookForm } from "./BookForm";
 
 type Sp = Promise<{ for?: string; from?: string }>;
@@ -20,47 +19,13 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
         : "firm";
 
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
-      {/* Calm forest header so the page feels of a piece with the rest
-          of the site, but lighter than the marketing hero. */}
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        {/* gap + shrink-0: at 375px the wordmark left the link ~78px and
-            "Back to home" wrapped to two lines beside it. The Wordmark is
-            min-w-0 with a max-w-full image, so it is the one that yields. */}
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between gap-4">
-          <Wordmark size="md" tone="cream" />
-          <Link
-            href="/"
-            className="shrink-0 whitespace-nowrap text-sm text-cream/80 hover:text-cream transition-colors"
-          >
-            Back to home
-          </Link>
-        </div>
-      </header>
-
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell>
       <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <div className="text-xs uppercase tracking-[0.22em] text-gold-700">
-          {audience === "firm"
-            ? "For tax-prep firms"
-            : audience === "small_business"
-              ? "For small businesses"
-              : "Quick chat"}
-        </div>
-        <h1 className="display mt-3 text-3xl sm:text-5xl text-forest-900 leading-tight">
+        {/* No eyebrow over the h1 (spec 4.2). The label that used to
+            sit here named the audience, and each of the three headlines
+            below already names it: the firm, the business, the chat. */}
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
           {audience === "firm"
             ? "Tell us a little about your firm."
             : audience === "small_business"
@@ -77,20 +42,20 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
           <BookForm initialAudience={audience} />
         </div>
 
-        <div className="mt-8 grid sm:grid-cols-3 gap-3">
+        <ul className="mt-8 grid sm:grid-cols-3 gap-5">
           <Reassurance
-            kicker="No sign-in"
+            label="No sign-in"
             body="The form is the form. You will not get bounced to a sign-up screen."
           />
           <Reassurance
-            kicker="No spam"
+            label="No spam"
             body="One reply from a real person, not a drip campaign."
           />
           <Reassurance
-            kicker="Your data, your call"
+            label="Your data, your call"
             body="Nothing is shared. Drop us a note any time to delete your details."
           />
-        </div>
+        </ul>
 
         <p className="mt-8 text-xs text-ink-muted">
           Prefer email? Write to{" "}
@@ -103,17 +68,16 @@ export default async function BookPage({ searchParams }: { searchParams: Sp }) {
           and we will pick it up from there.
         </p>
       </section>
+      </PageShell>
     </main>
   );
 }
 
-function Reassurance({ kicker, body }: { kicker: string; body: string }) {
+function Reassurance({ label, body }: { label: string; body: string }) {
   return (
-    <div className="rounded-xl border border-forest-100 bg-white/70 p-4">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-        {kicker}
-      </div>
-      <p className="mt-2 text-xs text-ink-soft leading-relaxed">{body}</p>
-    </div>
+    <li>
+      <span className="mono-label">{label}</span>
+      <p className="mt-1.5 text-xs text-ink-soft leading-relaxed">{body}</p>
+    </li>
   );
 }

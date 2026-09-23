@@ -321,12 +321,15 @@ html[data-theme="dark"] [data-skin="classic"] {
 
    Scoped to [data-grammar="year"] as well as [data-skin="instrument"]:
    the skin attribute sits on <body> and covers nearly every page (the
-   whole app except /firm and /admin), but this display treatment is
-   PR 1's home page only. Without the second scope every other page's
-   .display headings (pricing, calculators, guides, compare) silently
-   picked up Archivo's width axis and a 1.02 line-height meant for the
-   home hero. data-grammar="year" is set on the home page's <main> only
-   (app/page.tsx); see lib/marketing/type-axis.test.ts. */
+   whole app except /firm and /admin), so without the second scope this
+   treatment would reach every authenticated screen too. The grammar
+   attribute is the opt-in. PR 1 set it on the home page's <main>; PR 2
+   set it on the <main> of every public marketing page (pricing,
+   calculators, guides, compare, help, changelog, get, book), which is
+   how their h1s take the wide setting. In the authenticated app only
+   the Today screen (app/dashboard/page.tsx, PR 3) carries it; every
+   other app surface does not. See lib/marketing/type-axis.test.ts and
+   lib/marketing/page-grammar.test.ts. */
 [data-skin="instrument"] [data-grammar="year"] .display {
   font-stretch: 112%;
   font-weight: 600;
@@ -335,17 +338,21 @@ html[data-theme="dark"] [data-skin="classic"] {
   font-variant-numeric: lining-nums tabular-nums;
   font-feature-settings: "kern" 1;
 }
-/* Every other instrument-skin page (pricing, calculators, guides,
-   compare) sets .display with no explicit font-weight, so it renders
-   at whatever the browser resolves for an unset weight against the
-   loaded Archivo faces. Before Task 1, Archivo loaded fixed instances
-   at 500/600/700 (no 400 face), so an unset weight matched up to 500.
-   Task 1 switched Archivo to axes: ["wdth"] (app/layout.tsx) for the
-   home page's width axis, which next/font can only serve as a full
-   variable range, not fixed instances; that dropped the 500/600/700
-   list, and a true 400 face became available, so every other page's
-   headings silently went from ~500 to a true 400. Pinning it here
-   keeps those pages pixel-identical without touching their source. */
+/* The fallback for every instrument-skin surface OUTSIDE the year
+   grammar: the authenticated app apart from Today, and any page whose
+   <main> carries no data-grammar="year". Those set .display with no explicit font-weight,
+   so it renders at whatever the browser resolves for an unset weight
+   against the loaded Archivo faces. Before Task 1, Archivo loaded fixed
+   instances at 500/600/700 (no 400 face), so an unset weight matched up
+   to 500. Task 1 switched Archivo to axes: ["wdth"] (app/layout.tsx) for
+   the width axis, which next/font can only serve as a full variable
+   range, not fixed instances; that dropped the 500/600/700 list, and a
+   true 400 face became available, so those pages silently went from ~500
+   to a true 400. Pinning it here keeps them pixel-identical without
+   touching their source. The marketing pages this once covered
+   (pricing, calculators, guides, compare) moved into the year scope in
+   PR 2 and now take the 600 above, which outranks this rule on
+   specificity. */
 [data-skin="instrument"] .display { font-weight: 500; }
 [data-skin="instrument"] .lede {
   font-size: 1rem;
@@ -675,6 +682,82 @@ html[data-theme="dark"] [data-skin="classic"] {
 }
 html[data-tab-bar] .left-rail-fab { display: none; }
 
+/* ---- YEAR GRAMMAR: ledger lists (spec 4.2) ---- */
+/* /help's quickstart: a numbered sequence, not three cards. The step
+   number is a .figure so it reads as data rather than decoration. */
+[data-skin="instrument"] .quickstart {
+  list-style: none;
+  counter-reset: none;
+  border-top: 1px solid var(--border);
+}
+[data-skin="instrument"] .quickstart li {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+[data-skin="instrument"] .ledger-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+[data-skin="instrument"] .ledger-list-row { border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .ledger-list-link { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; min-height: 44px; padding: 14px 0; color: var(--foreground); text-decoration: none; }
+[data-skin="instrument"] .ledger-list-link:hover .ledger-list-title { text-decoration: underline; text-underline-offset: 3px; }
+[data-skin="instrument"] .ledger-list-link:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+[data-skin="instrument"] .ledger-list-main { display: grid; gap: 4px; min-width: 0; }
+[data-skin="instrument"] .ledger-list-title { font-size: 1.0625rem; line-height: 1.35; font-weight: 500; }
+[data-skin="instrument"] .ledger-list-blurb { font-size: 0.9375rem; line-height: 1.5; color: var(--muted); }
+[data-skin="instrument"] .ledger-list-aside { display: grid; gap: 4px; justify-items: end; flex-shrink: 0; text-align: right; font-size: 0.875rem; color: var(--muted); }
+
+/* ---- YEAR GRAMMAR: pricing table (spec 4.2) ---- */
+[data-skin="instrument"] .tier-table { width: 100%; border-collapse: collapse; border-top: 1px solid var(--border); }
+[data-skin="instrument"] .tier-table th, [data-skin="instrument"] .tier-table td { text-align: left; vertical-align: top; padding: 16px 12px 16px 0; border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .tier-table thead th { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+[data-skin="instrument"] .tier-table tbody th { font-size: 1.125rem; font-weight: 600; color: var(--foreground); }
+[data-skin="instrument"] .tier-table .figure { font-size: 1.0625rem; }
+/* Ink, stated rather than inherited. The marketing pages inherit a fixed
+   brand ink that does not follow the theme, so a figure inherited as
+   #0c1017 and vanished on the dark ground (measured on the rendered page
+   before this rule). The table states both roles from theme tokens. */
+[data-skin="instrument"] .tier-table tbody td { color: var(--muted); }
+[data-skin="instrument"] .tier-table .figure,
+[data-skin="instrument"] .tier-ledger .figure { color: var(--foreground); }
+[data-skin="instrument"] .tier-ledger h3 { color: var(--foreground); }
+[data-skin="instrument"] .tier-ledger p { color: var(--muted); }
+/* The ledger shares the list style: its own <ul> would otherwise keep the
+   browser's bullets and 40px indent, which is both the wrong register and
+   a horizontal overflow at 344px. */
+[data-skin="instrument"] .tier-table ul, [data-skin="instrument"] .tier-ledger ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 0.9375rem; color: var(--muted); }
+[data-skin="instrument"] .tier-ledger { display: grid; gap: 0; border-top: 1px solid var(--border); }
+/* The table/ledger swap lives here rather than in `hidden sm:block` on
+   the elements: globals.css is unlayered, so `.tier-ledger { display:
+   grid }` beats Tailwind's `sm:hidden` in @layer utilities and the
+   ledger painted under the table at every width. Proven on the rendered
+   page at 1280 (both trees displayed, twelve CTAs) before this rule. */
+[data-skin="instrument"] .tier-table-desktop { display: none; }
+@media (min-width: 640px) {
+  [data-skin="instrument"] .tier-table-desktop { display: block; }
+  [data-skin="instrument"] .tier-ledger { display: none; }
+}
+[data-skin="instrument"] .tier-ledger section { padding: 18px 0; border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .tier-ledger .tier-prices { display: flex; gap: 16px; margin-top: 8px; }
+[data-skin="instrument"] .tier-ledger .tier-prices .figure { font-size: 1.0625rem; }
+[data-skin="instrument"] .tier-ledger-includes { margin-top: 12px; }
+/* The FAQ row (/pricing and /help share components/marketing/Faq.tsx):
+   one hairline-ruled disclosure, a 44px summary, and a marker. A
+   `display: flex` summary drops ::marker, so the chevron is a real
+   stroke glyph that turns when the row opens. */
+[data-skin="instrument"] .faq-row { border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .faq-summary {
+  list-style: none;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+[data-skin="instrument"] .faq-summary::-webkit-details-marker { display: none; }
+[data-skin="instrument"] .faq-chevron { color: var(--muted); transition: transform 0.15s ease; }
+[data-skin="instrument"] details[open] > .faq-summary .faq-chevron { transform: rotate(180deg); }
+
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */
   --surface: #202d4d;
@@ -763,6 +846,18 @@ html[data-theme="dark"] {
      reserve space below the fixed header without duplicating the
      breakpoint math. */
   --app-header-h: 3.25rem;
+  /* The fixed MARKETING header's height, the mirror of --app-header-h
+     for the paper chrome. MarketingHeader sizes its spacer from these
+     and the scroll offset below clears them, so the height lives in one
+     place instead of being retyped wherever something has to sit clear
+     of the header. Two values because the year spine is optional. */
+  --marketing-header-safe: max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px));
+  /* 4rem of bar, 6.5rem of spine slot, and the 1px border-b the header
+     also paints. The border was missing, so the spacer came up 1px
+     short of the fixed block on every page wearing this header and the
+     first pixel of the page sat behind it. */
+  --marketing-header-h: calc(var(--marketing-header-safe) + 10.5rem + 1px);
+  --marketing-header-h-bare: calc(var(--marketing-header-safe) + 4rem + 1px);
 }
 @media (min-width: 1024px) {
   :root { --app-header-h: 3.5rem; } /* lg → matches h-14 (56px) */
@@ -774,6 +869,35 @@ html[data-theme="dark"] {
 .safe-pad-top { padding-top: var(--safe-top); }
 .safe-pad-bottom { padding-bottom: var(--safe-bottom); }
 .safe-pad-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+
+/* A fragment target on a Year-grammar page clears the fixed marketing
+   header. Without this the browser scrolls the target flush to the
+   viewport top, which is behind 169px of header: an anchored changelog
+   row landed 100% invisible. Keyed off the grammar attribute and the
+   header-height variable, never off a component's classes, so any
+   anchor on any of these pages (a ledger row, #tiers on /pricing, a
+   heading) is covered the day it is added.
+
+   scroll-padding on the scroller, not scroll-margin on :target. The
+   in-app path is a next/link whose click is a history.pushState, and
+   Chromium does not re-evaluate :target after pushState, so a
+   :target rule never fires on exactly the navigation people actually
+   perform. scroll-padding needs :has() to stay off the authenticated
+   pages, which size their own header from --app-header-h; where :has()
+   is unsupported the rule simply does not match and anchors behave as
+   they did before, which is the safe direction to fail.
+
+   Keyed off #page-spine, the id components/marketing/PageShell.tsx
+   gives the static spine inside the marketing header, NOT off
+   [data-grammar="year"]. The grammar attribute is a skin, and the app's
+   Today screen is specified to wear it (spec 4.3); the day it does,
+   every anchor on Today would reserve this 10.5rem marketing header
+   against its own 3.25rem one. The id is structural: it says this page
+   is carrying THAT header. Anything else that mounts a spine of its own
+   must give it a different id, or it inherits this offset. */
+html:has(#page-spine) {
+  scroll-padding-top: calc(var(--marketing-header-h) + 16px);
+}
 
 /* The strip under the OS status bar on the native shell. One element,
    one attribute: html[data-bar="navy"] is set by the app header while it

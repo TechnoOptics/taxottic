@@ -147,9 +147,7 @@ export function MileageDeductionCalculator({
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       <div className="card p-6 sm:p-7">
-        <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-          Your driving
-        </div>
+        <div className="mono-label">Your driving</div>
         <h2 className="display text-xl text-forest-900 mt-1">
           How many business miles?
         </h2>
@@ -208,9 +206,9 @@ export function MileageDeductionCalculator({
             </select>
           </label>
 
-          <div className="rounded-xl bg-cream/70 border border-gold-300/40 px-4 py-3 text-sm text-ink-soft">
+          <div className="border-t border-edge pt-4 text-sm text-ink-soft">
             {TAX_YEAR} IRS standard mileage rate:{" "}
-            <span className="font-medium text-forest-800">
+            <span className="figure font-medium text-forest-800">
               {IS_SPLIT_YEAR
                 ? `${RATE_CENTS}¢ / mile through ${RATE_PERIODS[0].label.split(" to ")[1]}, then ${RATE_CENTS_LATEST}¢ / mile`
                 : `${RATE_CENTS}¢ / mile`}
@@ -228,14 +226,12 @@ export function MileageDeductionCalculator({
 
       <div className="lg:sticky lg:top-6">
         {hasEntered ? (
-          <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-                Your mileage deduction
-              </div>
+          <div className="card p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-3">
+              <div className="mono-label">Your mileage deduction</div>
               <ShareButton onShare={share} copied={copied} />
             </div>
-            <div className="mt-1 display text-4xl sm:text-5xl text-forest-900">
+            <div className="mt-1 figure font-medium text-4xl sm:text-5xl text-forest-900">
               {formatCents(deductionCents)}
             </div>
             <p className="mt-2 text-sm text-ink-soft">
@@ -243,7 +239,7 @@ export function MileageDeductionCalculator({
                 <>
                   {RATE_PERIODS.map((p, i) =>
                     perPeriod[i] > 0 ? (
-                      <span key={p.fromIso} className="block">
+                      <span key={p.fromIso} className="figure block">
                         {perPeriod[i].toLocaleString("en-US")} miles ×{" "}
                         {p.centsPerMile}¢/mile ({p.label})
                       </span>
@@ -261,12 +257,10 @@ export function MileageDeductionCalculator({
               )}
             </p>
 
-            <div className="mt-5 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
-                Estimated tax savings
-              </div>
+            <div className="mt-5 border-t border-edge pt-4">
+              <div className="mono-label">Estimated tax savings</div>
               <div className="mt-0.5 text-forest-900">
-                <span className="display text-lg">
+                <span className="figure font-medium text-lg">
                   ≈ {formatCents(savingsCents)}
                 </span>{" "}
                 <span className="text-sm text-ink-soft">
@@ -275,20 +269,17 @@ export function MileageDeductionCalculator({
               </div>
             </div>
 
-            <div className="mt-6 rounded-xl bg-forest-900 text-cream px-5 py-4">
-              <div className="text-sm leading-relaxed text-cream/90">
+            <div className="mt-6 border-t border-edge pt-5">
+              <p className="text-sm leading-relaxed text-ink-soft">
                 Taxottic{" "}
-                <span className="text-gold-300 font-medium">
+                <strong className="font-medium text-forest-900">
                   logs these miles for you automatically
-                </span>{" "}
+                </strong>{" "}
                 in the background as you drive, an IRS-ready log, no notebook,
                 folded straight into your live tax forecast.
-              </div>
-              <Link
-                href="/login?intent=signup"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
-              >
-                Track my miles automatically, free →
+              </p>
+              <Link href="/login?intent=signup" className="btn-primary mt-3">
+                Track my miles automatically, free
               </Link>
             </div>
 
@@ -302,7 +293,7 @@ export function MileageDeductionCalculator({
         ) : (
           <div className="card p-6 sm:p-7 grid place-items-center text-center min-h-[240px]">
             <div>
-              <CarIcon className="size-9 mx-auto text-gold-700" />
+              <CarIcon className="size-9 mx-auto text-ink-muted" />
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your business miles to see your deduction and roughly what
                 it saves you, instantly.

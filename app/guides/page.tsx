@@ -1,7 +1,6 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
+import { LedgerList } from "@/components/marketing/LedgerList";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
@@ -19,7 +18,7 @@ export const metadata = {
       {
         url: `/api/og/guide?title=${encodeURIComponent(
           "Guides for freelancers & small business",
-        )}&kicker=${encodeURIComponent("Free guides")}`,
+        )}&series=${encodeURIComponent("Free guides")}`,
         width: 1200,
         height: 630,
       },
@@ -33,7 +32,7 @@ export const metadata = {
     images: [
       `/api/og/guide?title=${encodeURIComponent(
         "Guides for freelancers & small business",
-      )}&kicker=${encodeURIComponent("Free guides")}`,
+      )}&series=${encodeURIComponent("Free guides")}`,
     ],
   },
   robots: {
@@ -46,14 +45,14 @@ export const metadata = {
 const SITE = "https://taxottic.com";
 
 // Each guide is a real article page under /guides/<slug>. Keep this
-// list in sync with the route folders; it drives both the visible cards
+// list in sync with the route folders; it drives both the visible rows
 // and the ItemList structured data.
 const GUIDES = [
   {
     slug: "self-employment-tax-how-much-to-set-aside",
     title: "How much should I set aside for taxes when self-employed?",
     blurb:
-      "A simple way to size your tax set-aside, self-employment tax plus income tax, and why a flat percentage of every payment keeps April calm.",
+      "A simple way to size your tax set-aside, self-employment tax plus income tax, and why a flat percentage of every payment covers April before it arrives.",
   },
   {
     slug: "schedule-c-deductions",
@@ -140,37 +139,15 @@ const ITEMLIST_LD = {
 
 export default function GuidesIndex() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="guides">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={ITEMLIST_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "var(--navy-band)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="guides" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Guides
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          Self-employment taxes, in plain English.
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
+          Free guides to self-employment tax.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           Short, practical guides for freelancers, contractors, and small
@@ -179,47 +156,28 @@ export default function GuidesIndex() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-6 grid gap-4">
-        {GUIDES.map((g) => (
-          <Link
-            key={g.slug}
-            href={`/guides/${g.slug}`}
-            className="card p-6 hover:border-gold-300 transition-colors"
-          >
-            <h2 className="display text-lg sm:text-xl text-forest-900">
-              {g.title}
-            </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {g.blurb}
-            </p>
-            <span className="mt-3 inline-block text-sm text-gold-800">
-              Read the guide →
-            </span>
-          </Link>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-6">
+        <LedgerList
+          ariaLabel="Guides"
+          items={GUIDES.map((g) => ({
+            href: `/guides/${g.slug}`,
+            title: g.title,
+            blurb: g.blurb,
+          }))}
+        />
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
-        <Link
-          href="/calculators"
-          className="card p-6 border-gold-300/60 hover:border-gold-300 transition-colors block"
-        >
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-            Free tools
-          </div>
-          <h2 className="display text-lg sm:text-xl text-forest-900 mt-1">
-            Prefer to just see the number?
-          </h2>
-          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-            Try the free self-employment tax calculator, estimate your
-            self-employment tax, income tax, and quarterly payments instantly,
-            no sign-up.
-          </p>
-          <span className="mt-3 inline-block text-sm text-gold-800">
-            Open the calculators →
-          </span>
-        </Link>
+        <p className="text-sm text-ink-soft leading-relaxed max-w-xl">
+          Prefer to just see the number? The{" "}
+          <Link href="/calculators" className="underline hover:text-forest-900">
+            free calculators
+          </Link>{" "}
+          estimate your self-employment tax, income tax, and quarterly payments
+          instantly, no sign-up.
+        </p>
       </section>
+      </PageShell>
     </main>
   );
 }

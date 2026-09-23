@@ -40,7 +40,7 @@ export const HERO: Record<Audience, HeroCopy> = {
     lede: "Every client's number, federal and state, kept current from their own accounts. Engagements move on their own, mileage arrives with a map and a log, bulk export sends the year-end pack. Branded as your firm.",
     ctaHref: "/book?for=firm",
     ctaLabel: "Book a walkthrough",
-    secondaryHref: "/pricing#practice",
+    secondaryHref: "/pricing#tiers",
     secondaryLabel: "See pricing",
     fine: "Per seat or per client.",
   },

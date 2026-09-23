@@ -1433,7 +1433,23 @@
 //
 // v214, not the v208 this PR carried: v210 through v213 landed on main
 // while it waited. A reserved number is not a number.
-const CACHE_VERSION = "v214";
+//
+// v215: every secondary marketing page wears the paper shell.
+//
+// PR 2 of the Year grammar. Pricing, calculators, guides, compare, help,
+// the changelog, /get and /book, the guide shell and every calculator
+// page swapped their inline navy header for PageShell (paper header,
+// static year spine, shared footer); the index pages render LedgerList
+// rows instead of card grids; pricing is a ruled TierTable on desktop
+// and a stacked ledger on phones with the paid CTAs still behind WebOnly;
+// the FAQ row is a shared component with a stroke chevron; login sits on
+// paper under the grammar. Markup changed on every public page the
+// native shell can open (login included), so the worker must fetch the
+// new HTML rather than hydrate cached chunks against it.
+//
+// v215, not the v209 this PR carried: v210 through v214 landed on main
+// while it waited. A reserved number is not a number.
+const CACHE_VERSION = "v215";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

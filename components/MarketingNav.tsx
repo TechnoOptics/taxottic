@@ -24,7 +24,17 @@ import Link from "next/link";
  * gold sweep on navy, rather than anything animated in from nothing.
  */
 
-type NavKey = "pricing" | "guides" | "calculators";
+/**
+ * Wider than ITEMS below, on purpose. /help, /changelog and /compare
+ * wear the same shell but have no nav entry (the bar holds three links
+ * at desktop and nothing at phone widths, see above), so passing
+ * current="help" lights nothing at all. That is the intended outcome,
+ * not a missing item: the key exists so every shell page can name
+ * itself, and page-grammar.test.ts asserts each page passes its own,
+ * which keeps a page from lighting someone else's. Add a key here and
+ * a row to ITEMS only when the link is meant to appear in the bar.
+ */
+export type NavKey = "pricing" | "guides" | "calculators" | "help" | "changelog" | "compare";
 
 const ITEMS: { key: NavKey; href: string; label: string }[] = [
   { key: "pricing", href: "/pricing", label: "Pricing" },
@@ -47,7 +57,12 @@ export function MarketingNav({
     tone === "paper"
       ? (active ? "text-foreground" : "text-muted hover:text-foreground")
       : (active ? "text-cream" : "text-cream/75 hover:text-cream");
-  const ring = tone === "paper" ? "focus-visible:ring-[var(--accent-2)]" : "focus-visible:ring-gold-400/70";
+  // One ring for both tones, from the token rather than the gold
+  // palette. `--accent-2` resolves per surface (brass on paper, the
+  // navy band's brass on navy), so the two tones still paint their own
+  // value while the file carries no `ring-gold-*` utility. Brass on a
+  // focus ring is the fifth of the five things spec 3 allows it on.
+  const ring = "focus-visible:ring-[var(--accent-2)]";
   // Ink, not brass: the hairline under the hovered or current item is
   // navigation state, and brass in the Year grammar is spent on today's
   // marker, the live figure and the marks inside a product screen
