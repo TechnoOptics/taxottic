@@ -213,6 +213,11 @@ export default async function MileagePage({
     tax_year: number;
     deduction_cents: number;
     needs_confirmation: boolean | null;
+    /** The saved place each end matched, if any. mileage_trips has no
+     *  lat/lng of its own, so these two uuids are the only way a row can
+     *  name where it went before its polyline arrives. */
+    start_place_id?: string | null;
+    end_place_id?: string | null;
   };
   type Pt = { lat: number; lng: number; captured_at: string };
 
@@ -401,6 +406,27 @@ export default async function MileagePage({
   // settles either. See lib/mileage/awaiting-decision.ts.
   const awaitingCount = awaitingDecision;
   const showsOwnQueue = viewingSelf || viewingAll;
+
+  // A drive's saved endpoints, by place id. mileage_trips stores the two
+  // place uuids and no coordinates, so this is what turns
+  // `start_place_id` into "Office" on the first paint, with no geocoder
+  // and no polyline. A place the user never named falls back to its kind
+  // ("Home", "Office", "Client", "Stop"), the same wording the business
+  // view uses, rather than showing a raw uuid or nothing at all.
+  const placeById = new Map(
+    places.map((p) => [
+      p.id,
+      {
+        label:
+          p.label ??
+          ({ home: "Home", office: "Office", client: "Client" }[
+            p.kind as string
+          ] ?? "Stop"),
+        lat: p.lat,
+        lng: p.lng,
+      },
+    ]),
+  );
 
   // Belt-and-braces, in the same spirit as stripForeignPrivateTrips: the
   // partition above already removed every passenger drive, and the map has
@@ -782,6 +808,12 @@ export default async function MileagePage({
                   needsConfirmation: t.needs_confirmation === true,
                   points: pointsByTrip.get(t.id) ?? [],
                   companyId: company.id,
+                  // Resolved HERE, on the server, rather than handing the
+                  // whole place list to the row: the row renders a name,
+                  // not a lookup table, and this keeps the id-to-place
+                  // join off the client and out of MileageReview's props.
+                  startPlace: placeById.get(t.start_place_id ?? "") ?? null,
+                  endPlace: placeById.get(t.end_place_id ?? "") ?? null,
                 }))}
                 excludedRows={excludedTrips.map((t) => ({
                   id: t.id,

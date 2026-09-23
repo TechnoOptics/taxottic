@@ -7,6 +7,7 @@ import {
   loadScopedTrips,
   stripForeignPrivateTrips,
   stripPrivateTrips,
+  TRIP_SELECT,
   type TripScope,
 } from "./team-scope";
 
@@ -466,10 +467,32 @@ describe("loadFirmVisibleTrips: an outside firm sees no one's private drives", (
     expect(queries).toHaveLength(0);
   });
 
+  it("leaves the firm's select alone: it already ships coordinates", () => {
+    // The firm view joins mileage_points and draws from the coordinates,
+    // and it loads the company's places separately for its map, so it
+    // never resolves a trip's start_place_id. Adding the two uuids here
+    // would only widen a payload that crosses a company boundary.
+    expect(FIRM_TRIP_SELECT).toContain("mileage_points");
+    expect(FIRM_TRIP_SELECT).not.toContain("start_place_id");
+  });
+
   it("selects needs_confirmation, or the in-memory backstop cannot see it", () => {
     // An unselected column arrives as `undefined`, which passes a
     // `!== true` test and would silently make stripPrivateTrips a no-op.
     expect(FIRM_TRIP_SELECT).toContain("needs_confirmation");
+  });
+});
+
+describe("TRIP_SELECT carries what a drive row renders", () => {
+  it("selects both saved place ids", () => {
+    // A row NAMES its endpoints, and a name is information rather than
+    // decoration (spec 4.1). mileage_trips holds no lat or lng, so
+    // without these two uuids a row cannot say where it went until its
+    // polyline has arrived over the network, and cannot say it at all if
+    // that request fails. With them, a drive between two saved places is
+    // labelled on the first paint with no fetch of any kind.
+    expect(TRIP_SELECT).toContain("start_place_id");
+    expect(TRIP_SELECT).toContain("end_place_id");
   });
 });
 

@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
-import { DriveThumbnail } from "@/components/mileage/DriveThumbnail";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import {
+  DriveThumbnail,
+  type DrivePoint,
+} from "@/components/mileage/DriveThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 import { SelectMenu } from "@/components/ui/SelectMenu";
+import { PinIcon } from "@/components/ui/Icons";
 
 /**
  * Phone-first trip list. Replaces the old "3 pill buttons per row,
@@ -51,7 +55,16 @@ export type TripRow = {
   points: { lat: number; lng: number; captured_at: string }[];
   /** Which company/business this drive currently belongs to. */
   companyId: string;
+  /** The saved place this drive started / ended at, when it matched one.
+   *  Resolved on the server from mileage_trips.start_place_id against the
+   *  company's places, so the row can NAME its endpoints on the first
+   *  paint with no network at all. Null when the end matched no saved
+   *  place; then the name waits for the polyline (see DriveEndpoints). */
+  startPlace?: SavedPlace | null;
+  endPlace?: SavedPlace | null;
 };
+
+export type SavedPlace = { label: string; lat: number; lng: number };
 
 type Props = {
   trips: TripRow[];
@@ -231,17 +244,33 @@ function TripCard({
   // identity that is replaced wholesale when a server action revalidates.
   //
   // The map no longer reads this: DriveThumbnail fetches its own route
-  // when the row nears the viewport. /mileage now ships rows with an
-  // empty `points`, so these labels only appear for a caller that still
-  // supplies them, and their absence costs the reader nothing the row
-  // does not already say in words.
+  // when the row nears the viewport. /mileage ships rows with an empty
+  // `points` now, so this sort is for callers that still supply them and
+  // the fetched route below is what the endpoints usually fall back on.
   const sortedPts = useMemo(
     () =>
       [...trip.points].sort((a, b) => (a.captured_at < b.captured_at ? -1 : 1)),
     [trip.points],
   );
-  const startPt = sortedPts[0];
-  const endPt = sortedPts[sortedPts.length - 1];
+
+  // The route the thumbnail fetched for itself, reused rather than asked
+  // for again. /mileage ships rows with an empty `points`, so for a drive
+  // between two UNSAVED spots this is the only way the row ever learns
+  // where it went, and it costs no request of its own.
+  const [fetchedPts, setFetchedPts] = useState<DrivePoint[] | null>(null);
+  const takePoints = useCallback((pts: DrivePoint[]) => {
+    setFetchedPts(pts);
+  }, []);
+  const routePts = sortedPts.length > 0 ? sortedPts : (fetchedPts ?? []);
+  const startPt = routePts[0];
+  const endPt = routePts[routePts.length - 1];
+
+  // A saved place names an end instantly and exactly ("Office" beats a
+  // street address). A GPS fix names it once the route lands. Either is
+  // enough on its own, so a drive with one saved end and no route still
+  // says half of where it went instead of nothing.
+  const startCoord = startPt ?? trip.startPlace ?? null;
+  const endCoord = endPt ?? trip.endPlace ?? null;
 
   const start = new Date(trip.startedAtISO);
   const end = new Date(trip.endedAtISO);
@@ -318,6 +347,7 @@ function TripCard({
       <div className="flex items-start gap-3 min-w-0">
         <DriveThumbnail
           tripId={trip.id}
+          onPoints={takePoints}
           classification={
             trip.classification === "business" ||
             trip.classification === "personal"
@@ -336,15 +366,13 @@ function TripCard({
               ? ` · ${fmtUsd(Number(trip.deductionCents))} deduction`
               : ""}
           </div>
-          {startPt && endPt ? (
-            <TripEndpoints
-              startLat={startPt.lat}
-              startLng={startPt.lng}
-              endLat={endPt.lat}
-              endLng={endPt.lng}
-              className="mt-1"
-            />
-          ) : null}
+          <DriveEndpoints
+            startCoord={startCoord}
+            endCoord={endCoord}
+            savedStart={trip.startPlace?.label ?? null}
+            savedEnd={trip.endPlace?.label ?? null}
+            className="mt-1"
+          />
         </div>
         {/* Delete affordance. Two-tap with confirm, destructive
             actions should never be one click on a touch device. */}
@@ -565,5 +593,67 @@ function TripCard({
         </form>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * Where a drive went, from whatever the row knows so far.
+ *
+ * Three states, and none of them is a broken row:
+ *
+ *  - Both ends have coordinates (from the drive's own route, or from the
+ *    saved places it matched): the full {@link TripEndpoints}, which
+ *    reverse-geocodes only the ends that have no saved name.
+ *  - No coordinates yet but at least one saved name: that name, now,
+ *    with no network. This is the common case on first paint, because
+ *    /mileage ships no polylines and the saved place ids come down with
+ *    the drive.
+ *  - Nothing at all: nothing. The distance and the times above are still
+ *    the drive, and a "Locating route…" that can never resolve would be
+ *    worse than a quiet gap.
+ *
+ * The middle state is a separate render rather than a call into
+ * TripEndpoints because that component's whole job is geocoding a pair of
+ * coordinates, and here there is no pair: one end may be a saved name
+ * with nothing to look up and the other may be unknown until the
+ * thumbnail's fetch lands. Same wording, same icon, same shape, so the
+ * line does not move when the coordinates arrive.
+ */
+function DriveEndpoints({
+  startCoord,
+  endCoord,
+  savedStart,
+  savedEnd,
+  className,
+}: {
+  startCoord: { lat: number; lng: number } | null;
+  endCoord: { lat: number; lng: number } | null;
+  savedStart: string | null;
+  savedEnd: string | null;
+  className?: string;
+}) {
+  if (startCoord && endCoord) {
+    return (
+      <TripEndpoints
+        startLat={startCoord.lat}
+        startLng={startCoord.lng}
+        endLat={endCoord.lat}
+        endLng={endCoord.lng}
+        savedStart={savedStart}
+        savedEnd={savedEnd}
+        className={className}
+      />
+    );
+  }
+  if (!savedStart && !savedEnd) return null;
+  return (
+    <div
+      className={"text-xs text-forest-800 leading-snug " + (className ?? "")}
+    >
+      <PinIcon className="size-3.5 mr-1 inline-block align-[-2px] text-ink-muted" />
+      <span className="font-medium">{savedStart ?? "Unknown start"}</span>
+      <span className="text-ink-muted"> → </span>
+      <span className="font-medium">{savedEnd ?? "Unknown end"}</span>
+    </div>
   );
 }

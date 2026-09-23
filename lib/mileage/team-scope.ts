@@ -82,8 +82,18 @@ export function resolveTripScope({
   return self;
 }
 
+/**
+ * Every column a drive row renders with.
+ *
+ * `start_place_id` / `end_place_id` are here because the row NAMES its
+ * endpoints, and a name is information, not decoration: mileage_trips
+ * carries no lat or lng of its own, so without these two uuids a row can
+ * say where it went only after its polyline has arrived over the network.
+ * With them, a drive between two saved places is labelled on the first
+ * paint, with no fetch at all. See components/mileage/TripList.tsx.
+ */
 export const TRIP_SELECT =
-  "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, notes";
+  "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, notes, start_place_id, end_place_id";
 
 type TripQueryInput = {
   companyId: string;

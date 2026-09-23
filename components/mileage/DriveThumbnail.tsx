@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
 
-type Pt = { lat: number; lng: number; captured_at: string };
+/** One GPS fix of a drive, as the route hands it over. */
+export type DrivePoint = { lat: number; lng: number; captured_at: string };
+type Pt = DrivePoint;
 
 const SIZE = 64;
 
@@ -34,23 +36,45 @@ const SIZE = 64;
 export function DriveThumbnail({
   tripId,
   classification = "unclassified",
+  onPoints,
 }: {
   tripId: string;
   classification?: "business" | "personal" | "unclassified";
+  /**
+   * The route, handed to the row once, whatever the answer was (an empty
+   * array included). The row uses the first and last fix to name the two
+   * ends of a drive that matched no saved place, so the map is not the
+   * only thing this fetch pays for. Kept in a ref below so that a parent
+   * which passes a fresh closure on every render cannot re-arm the
+   * observer and buy a second request.
+   */
+  onPoints?: (points: Pt[]) => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const asked = useRef(false);
   const [points, setPoints] = useState<Pt[] | null>(null);
+  const report = useRef(onPoints);
+  // Assigned in an effect, not during render: the point is only that the
+  // fetch below calls the LATEST callback without the observer effect
+  // depending on it, so a parent that passes a fresh closure every render
+  // cannot re-arm the observer.
+  useEffect(() => {
+    report.current = onPoints;
+  }, [onPoints]);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const deliver = (pts: Pt[]) => {
+      setPoints(pts);
+      report.current?.(pts);
+    };
     // No IntersectionObserver (very old WebView): ask straight away
     // rather than leave every row blank forever.
     if (typeof IntersectionObserver === "undefined") {
       if (!asked.current) {
         asked.current = true;
-        void load(tripId, setPoints);
+        void load(tripId, deliver);
       }
       return;
     }
@@ -59,7 +83,7 @@ export function DriveThumbnail({
         if (!entries.some((e) => e.isIntersecting) || asked.current) return;
         asked.current = true;
         io.disconnect();
-        void load(tripId, setPoints);
+        void load(tripId, deliver);
       },
       // 200px of runway, so the map is usually there by the time the row
       // reaches the eye.
