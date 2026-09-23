@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Hanken_Grotesk, Archivo, IBM_Plex_Mono } from "next/font/google";
 import { PWASetup } from "@/components/PWASetup";
+import { StatusBarBand } from "@/components/StatusBarBand";
 import { CapacitorAuth } from "@/components/CapacitorAuth";
 import { CapacitorNativeInit } from "@/components/CapacitorNativeInit";
 import { MileageTrackingReminder } from "@/components/MileageTrackingReminder";
@@ -296,6 +297,7 @@ export default function RootLayout({
         data-skin="instrument"
         className="min-h-full flex flex-col safe-pad-bottom"
       >
+        <StatusBarBand />
         {children}
         <PWASetup />
         <CapacitorAuth />

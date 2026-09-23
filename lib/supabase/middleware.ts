@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { frontDoorRedirect, NATIVE_COOKIE } from "@/lib/native/front-door";
 
 const PUBLIC_PATHS = [
   "/",
@@ -338,6 +339,21 @@ async function resolveRequest(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Native shell, signed out, at the root: the app's front door is
+  // sign-in, not the marketing page. lib/native/front-door.ts.
+  const frontDoor = frontDoorRedirect({
+    pathname,
+    hasUser: Boolean(user),
+    nativeCookie: request.cookies.get(NATIVE_COOKIE)?.value === "1",
+    otherHost: isAdminHost || isFirmHost,
+  });
+  if (frontDoor) {
+    const url = request.nextUrl.clone();
+    url.pathname = frontDoor;
+    url.search = "";
+    return NextResponse.redirect(url, 307);
+  }
 
   // enterprise.taxottic.com unauth splash. Without this, anonymous
   // visitors to the enterprise root were getting rewritten to

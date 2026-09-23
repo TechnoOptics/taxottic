@@ -31,7 +31,7 @@ export function MarketingFooter() {
                   href="https://technooptics.com"
                   target="_blank"
                   rel="noreferrer"
-                  className="underline hover:text-forest-900"
+                  className="inline-flex min-h-11 items-center underline hover:text-forest-900"
                 >
                   Techno Optics LLC
                 </a>
@@ -46,79 +46,79 @@ export function MarketingFooter() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-muted sm:justify-self-end sm:text-right">
+        <div className="grid grid-cols-2 gap-x-6 text-xs text-muted sm:justify-self-end sm:text-right">
           {/* Two columns: "Product" (live, conversion-critical pages)
               and "Legal" (compliance surface). Surfaces every page the
               May 2026 audit said should be discoverable from the home
               page, pricing, help, changelog, example, plus the legal
               hub items. */}
-          <div className="grid gap-2 sm:order-1">
+          <div className="grid sm:order-1 sm:justify-items-end">
             <span className="mono-label">
               Product
             </span>
-            <Link href="/pricing" className="hover:text-foreground">
+            <Link href="/pricing" className="inline-flex min-h-11 items-center hover:text-foreground">
               Pricing
             </Link>
-            <Link href="/example" className="hover:text-foreground">
+            <Link href="/example" className="inline-flex min-h-11 items-center hover:text-foreground">
               Example
             </Link>
-            <Link href="/help" className="hover:text-foreground">
+            <Link href="/help" className="inline-flex min-h-11 items-center hover:text-foreground">
               Help
             </Link>
-            <Link href="/guides" className="hover:text-foreground">
+            <Link href="/guides" className="inline-flex min-h-11 items-center hover:text-foreground">
               Guides
             </Link>
-            <Link href="/calculators" className="hover:text-foreground">
+            <Link href="/calculators" className="inline-flex min-h-11 items-center hover:text-foreground">
               Free calculators
             </Link>
-            <Link href="/compare" className="hover:text-foreground">
+            <Link href="/compare" className="inline-flex min-h-11 items-center hover:text-foreground">
               Compare
             </Link>
-            <Link href="/changelog" className="hover:text-foreground">
+            <Link href="/changelog" className="inline-flex min-h-11 items-center hover:text-foreground">
               Changelog
             </Link>
-            <Link href="/book?for=firm" className="hover:text-foreground">
+            <Link href="/book?for=firm" className="inline-flex min-h-11 items-center hover:text-foreground">
               For firms
             </Link>
-            <Link href="/login" className="hover:text-foreground">
+            <Link href="/login" className="inline-flex min-h-11 items-center hover:text-foreground">
               Sign in
             </Link>
           </div>
-          <div className="grid gap-2 sm:order-2">
+          <div className="grid sm:order-2 sm:justify-items-end">
             <span className="mono-label">
               Legal
             </span>
-            <Link href="/legal" className="hover:text-foreground">
+            <Link href="/legal" className="inline-flex min-h-11 items-center hover:text-foreground">
               Legal hub
             </Link>
-            <Link href="/legal/privacy" className="hover:text-foreground">
+            <Link href="/legal/privacy" className="inline-flex min-h-11 items-center hover:text-foreground">
               Privacy
             </Link>
-            <Link href="/legal/terms" className="hover:text-foreground">
+            <Link href="/legal/terms" className="inline-flex min-h-11 items-center hover:text-foreground">
               Terms
             </Link>
             <Link
               href="/legal/location-monitoring"
-              className="hover:text-foreground"
+              className="inline-flex min-h-11 items-center hover:text-foreground"
             >
               Location tracking
             </Link>
-            <Link href="/legal/security" className="hover:text-foreground">
+            <Link href="/legal/security" className="inline-flex min-h-11 items-center hover:text-foreground">
               Security
             </Link>
             <Link
               href="/legal/subprocessors"
-              className="hover:text-foreground"
+              className="inline-flex min-h-11 items-center hover:text-foreground"
             >
               Subprocessors
             </Link>
             <Link
               href="/legal/accessibility"
-              className="hover:text-foreground"
+              className="inline-flex min-h-11 items-center hover:text-foreground"
             >
               Accessibility
             </Link>
-            <Link href="/legal/dmca" className="hover:text-foreground">
+            <Link href="/legal/dmca" className="inline-flex min-h-11 items-center hover:text-foreground">
               DMCA
             </Link>
           </div>

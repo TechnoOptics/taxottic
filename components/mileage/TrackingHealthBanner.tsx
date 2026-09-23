@@ -44,7 +44,6 @@ export function TrackingHealthBanner({ reason, cause, recoverable, recoverAction
             <b>Fix it:</b> set Taxottic&rsquo;s Location permission to{" "}
             <b>Always</b> (not &ldquo;While Using&rdquo;) with <b>Precise</b> on, allow{" "}
             <b>Motion &amp; Fitness</b>, and turn off Low Power Mode while driving.
-            Then toggle tracking off and back on.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
@@ -57,7 +56,7 @@ export function TrackingHealthBanner({ reason, cause, recoverable, recoverAction
                   setOpening(false);
                 }
               }}
-              className="btn-primary text-xs py-1.5 px-3"
+              className="btn-primary text-xs py-1.5 px-3 min-h-11"
             >
               {opening ? "Opening…" : "Open location settings"}
             </button>

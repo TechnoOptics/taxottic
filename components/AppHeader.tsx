@@ -1,4 +1,5 @@
 import { Wordmark } from "./Wordmark";
+import { NavyBar } from "./NavyBar";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { WebOnly } from "./WebOnly";
@@ -274,6 +275,7 @@ export async function AppHeader({
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
+        <NavyBar />
         {/* Header content row. On lg+ the LeftRail occupies the
             first 232px (left-2 + w-56) of the viewport, so we
             left-pad the row by 15rem (240px = rail width + 8px gap)
@@ -319,7 +321,9 @@ export async function AppHeader({
               storedMode={workspaceMode}
             />
           ) : null}
-          <Wordmark href={homeHref} size="sm" tone="cream" />
+          <div className="min-w-0 shrink">
+            <Wordmark href={homeHref} size="sm" tone="cream" />
+          </div>
           {/* Smart search powered by Bella. OPT-IN per user via
               /settings (profile.show_smart_search). When on, it
               sits centered between the wordmark and the user menu

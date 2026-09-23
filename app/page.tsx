@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { NativeFrontDoor } from "@/components/NativeFrontDoor";
 import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { type Audience } from "@/components/AudienceToggle";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
@@ -49,6 +50,7 @@ export default async function Home({
 
   return (
     <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <NativeFrontDoor />
       <JsonLd data={ORGANIZATION_LD} />
       <JsonLd data={WEBSITE_LD} />
       <JsonLd data={SOFTWARE_APP_LD} />

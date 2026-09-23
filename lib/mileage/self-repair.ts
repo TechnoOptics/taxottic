@@ -58,7 +58,11 @@
  *   Capped.     MAX_REPAIR_ATTEMPTS consecutive attempts against a
  *               fault that never clears, then it stops and SAYS it
  *               stopped. A silent surrender is indistinguishable from a
- *               healthy device.
+ *               healthy device. location_always past the cap reports
+ *               `blocked`, which the heartbeat stores with the rest of
+ *               the summary so a query can tell a phone whose permission
+ *               needs the driver's hand from one that is still backing
+ *               off; `waiting` is reserved for backoff.
  *   Backed off. Each further attempt waits longer than the last, and a
  *               permission prompt waits a week regardless.
  *   Re-armable. The count resets when the fault clears, so a transient
@@ -192,6 +196,9 @@ export type RepairRunOptions = {
  * `summary` is one segment per id in a non-idle state, `<id>:<state>`,
  * or "none". The vocabulary, worst understanding first:
  *
+ *   blocked   a permission past the cap. Only the driver can clear it,
+ *             from Settings, so it is reported as a block rather than
+ *             as a repair that is still trying
  *   capped    the fault is still here and we have given up on it
  *   waiting   the fault is still here, backoff has not elapsed
  *   driving   the fault is still here, we stood down for a live drive
@@ -252,7 +259,11 @@ export async function runSelfRepairs(
 
     const attempts = entry?.attempts ?? 0;
     if (attempts >= MAX_REPAIR_ATTEMPTS) {
-      states.push(`${id}:capped`);
+      // A permission past the cap is not a repair still in flight. The
+      // OS has refused every prompt we are allowed to raise, so the only
+      // remaining fix is the driver's own hand in Settings, and the row
+      // has to say that rather than read as work in progress.
+      states.push(`${id}:${id === "location_always" ? "blocked" : "capped"}`);
       continue;
     }
 
