@@ -206,3 +206,90 @@ test("keeps the map on screen while the routes are still coming", async ({
   await expect(c).toContainText("Business");
   release();
 });
+
+/**
+ * A batch that fails is asked again.
+ *
+ * The first version of this marked every id asked BEFORE the request
+ * resolved and folded every failure into an empty answer, so one dropped
+ * connection left the map with no trails until something remounted it.
+ * That is the same shape as the load-more control on this branch, which
+ * latched itself off on a single empty response and could not recover
+ * inside the session. It was fixed there, so it is fixed here, and for
+ * the same reason: a driver who saw a blank map once should not have to
+ * kill the app to see their drives.
+ */
+
+test("a batch that fails is asked again, and the trails arrive", async ({
+  mount,
+  page,
+}) => {
+  let attempts = 0;
+  await page.route("**/api/mileage/drives*", (r) => {
+    attempts += 1;
+    // The first attempt is a dropped connection. The second works.
+    if (attempts === 1) return r.abort();
+    const ids = (new URL(r.request().url()).searchParams.get("trip") ?? "")
+      .split(",")
+      .filter(Boolean);
+    return r.fulfill({
+      json: {
+        points: ids.flatMap((id) => [
+          { trip_id: id, lat: 1, lng: 10, captured_at: "2026-09-20T10:00:00Z" },
+          { trip_id: id, lat: 2, lng: 20, captured_at: "2026-09-20T10:05:00Z" },
+        ]),
+      },
+    });
+  });
+  await installFakeMaps(page);
+  await mount(
+    <MileageMapRoutes
+      trips={[{ id: "t-1", classification: "business" }]}
+      places={[]}
+      height={460}
+    />,
+  );
+  await expect
+    .poll(() => paths(page).then((p) => p.length), {
+      message: "the map never recovered from one failed batch",
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(0);
+  expect(
+    (await paths(page))[0],
+    "the retry drew the route it fetched",
+  ).toEqual([
+    [1, 10],
+    [2, 20],
+  ]);
+  expect(attempts, "one failure, one retry, then it stops").toBe(2);
+});
+
+test("a batch that answers with no routes is not asked again", async ({
+  mount,
+  page,
+}) => {
+  // `{ points: [] }` is an ANSWER: those drives have no stored route, or
+  // none of them are this caller's. Retrying it would ask the same
+  // question three times and get the same reply, which is how a bounded
+  // retry turns into a request amplifier on exactly the accounts that
+  // have the least to show.
+  let attempts = 0;
+  await page.route("**/api/mileage/drives*", (r) => {
+    attempts += 1;
+    return r.fulfill({ json: { points: [] } });
+  });
+  await installFakeMaps(page);
+  const c = await mount(
+    <MileageMapRoutes
+      trips={[{ id: "t-1", classification: "business" }]}
+      places={[]}
+      height={460}
+    />,
+  );
+  await expect.poll(() => attempts).toBe(1);
+  // Past both retry delays, so a retry would have happened by now.
+  await page.waitForTimeout(2000);
+  expect(attempts, "an empty answer is still an answer").toBe(1);
+  await expect(c).not.toContainText("Error");
+});

@@ -726,6 +726,26 @@ const NO_ROUTES: TripRoutes = {
 };
 
 /**
+ * Attempts one batch gets, and the waits between them.
+ *
+ * Bounded, and short. The thing being avoided is a LATCH: the load-more
+ * control on this same branch turned itself off on one empty response
+ * and could not come back inside the session, and a batch that marked
+ * its ids asked before it knew whether the request had worked was the
+ * same bug in a different component. One dropped connection on a phone
+ * leaving the map permanently blank is not a failure mode this feature
+ * gets to have twice.
+ *
+ * Not retried forever, and not retried at all for an ANSWER. A batch
+ * that comes back `{ points: [] }` has told us those drives have no
+ * stored route, and asking again would be asking the same question.
+ */
+const BATCH_ATTEMPTS = 3;
+const BATCH_RETRY_MS = [300, 1200];
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
  * The routes for a set of drives, fetched in as few requests as the id
  * list allows: one, and then one more only when the caller learns about
  * drives it had not heard of (a page of older ones).
@@ -750,11 +770,10 @@ export function useTripRoutes(
       .filter(Boolean)
       .filter((id) => !asked.current.has(id));
     if (wanted.length === 0) return;
-    for (const id of wanted) asked.current.add(id);
     let cancelled = false;
-    void (async () => {
-      const got = await loadRoutes(wanted.join(","));
-      if (cancelled) return;
+
+    /** Merge an answer in, and record that these drives have had one. */
+    const settle = (ids: string[], got: Map<string, RoutePoint[]>) =>
       setState((prev) => {
         const routes = new Map(prev.routes);
         for (const [id, pts] of got) routes.set(id, pts);
@@ -762,9 +781,37 @@ export function useTripRoutes(
         // EVERY id asked for is settled, including the ones that came
         // back with nothing. That is the answer: no route is coming from
         // this batch, so whoever wants one may now go and ask.
-        for (const id of wanted) settled.add(id);
+        for (const id of ids) settled.add(id);
         return { routes, settled };
       });
+
+    void (async () => {
+      for (let attempt = 0; attempt < BATCH_ATTEMPTS; attempt++) {
+        if (attempt > 0) {
+          await wait(
+            BATCH_RETRY_MS[attempt - 1] ??
+              BATCH_RETRY_MS[BATCH_RETRY_MS.length - 1],
+          );
+          if (cancelled) return;
+        }
+        const answer = await loadRoutes(wanted.join(","));
+        if (cancelled) return;
+        // No answer, only a failure to get one. The ids are deliberately
+        // NOT marked asked here, so this batch is retried above and, if
+        // it runs out of attempts, the next time this caller learns
+        // about a drive (a page of older ones) it asks for these again
+        // on the same trip.
+        if (!answer.answered) continue;
+        for (const id of wanted) asked.current.add(id);
+        settle(wanted, answer.routes);
+        return;
+      }
+      // Out of attempts. Settle them anyway, without marking them asked:
+      // a row that wanted one of these routes has been waiting for this
+      // batch, and it must be released to fetch its own rather than
+      // waiting on something that is no longer coming. That is the
+      // latch this whole retry exists to avoid, one level down.
+      settle(wanted, new Map());
     })();
     return () => {
       cancelled = true;
@@ -866,19 +913,41 @@ export function MileageMapRoutes({
   );
 }
 
-/** Every drive's route on this map, in one request. Every outcome ends
- *  in a map, empty at worst: offline, aborted, a body that is not JSON
- *  and "none of those drives are yours" all leave the map drawn and its
- *  trails missing, which is the honest picture in each case. */
-async function loadRoutes(idList: string): Promise<Map<string, RoutePoint[]>> {
+/**
+ * What one attempt at a batch came back with.
+ *
+ * `answered: false` is the only case worth asking again, and keeping it
+ * separate is the whole point. Folding every outcome into an empty map
+ * is what made a dropped connection indistinguishable from "those
+ * drives have no stored route", so the ids were marked done and the map
+ * stayed blank for the rest of the session.
+ */
+type RouteAnswer = {
+  answered: boolean;
+  routes: Map<string, RoutePoint[]>;
+};
+
+const NO_ANSWER: RouteAnswer = { answered: false, routes: new Map() };
+const ANSWERED_EMPTY: RouteAnswer = { answered: true, routes: new Map() };
+
+/** Every drive's route on this map, in one request. */
+async function loadRoutes(idList: string): Promise<RouteAnswer> {
   try {
     const res = await fetch(
       `/api/mileage/drives?trip=${encodeURIComponent(idList)}`,
     );
-    const json = res.ok ? await res.json() : null;
-    return groupByTrip((json?.points ?? []) as BatchPoint[]);
+    // A server error is worth asking again about; a refusal is not. A
+    // 401 says the session has gone and a 400 says the request was
+    // wrong, and neither changes by being repeated three times.
+    if (!res.ok) return res.status >= 500 ? NO_ANSWER : ANSWERED_EMPTY;
+    const json = await res.json();
+    // A 200 whose body is not the contract is a proxy or a captive
+    // portal talking, not this route. Treated as no answer.
+    if (!Array.isArray(json?.points)) return NO_ANSWER;
+    return { answered: true, routes: groupByTrip(json.points as BatchPoint[]) };
   } catch {
-    return new Map();
+    // Offline, aborted, or a body that is not JSON at all.
+    return NO_ANSWER;
   }
 }
 

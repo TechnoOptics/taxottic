@@ -492,3 +492,35 @@ test("a row does not ask for a route the log's batch is still fetching", async (
   expect(singles, "and none asked after it landed either").toEqual([]);
   expect(batches.length).toBe(1);
 });
+
+test("when the batch gives up, the rows are released to fetch their own", async ({
+  mount,
+  page,
+}) => {
+  // The batch is beyond saving: every attempt fails. The rows were
+  // waiting for it (deferToList), and something has to let them go, or
+  // the fix for one latch has built another one level down. Their own
+  // per-row fetch is exactly the fallback that existed before the batch
+  // did, and it still works.
+  const singles: string[] = [];
+  await page.route("**/api/mileage/drives*", (r) => {
+    const url = new URL(r.request().url());
+    const trip = url.searchParams.get("trip");
+    if (trip === null) return r.fulfill({ json: { drives: [] } });
+    const ids = trip.split(",").filter(Boolean);
+    if (ids.length > 1) return r.abort();
+    singles.push(ids[0]);
+    return r.fulfill({ json: { points: fixes(ids[0], 3) } });
+  });
+  await page.setViewportSize({ width: 390, height: 600 });
+  const c = await mountDrives(mount, MANY.slice(0, 3));
+
+  // Past all three attempts and both backoffs.
+  await expect(c.locator('[data-drive-thumbnail="d-0"] *').first()).toBeVisible({
+    timeout: 15_000,
+  });
+  expect(
+    singles,
+    "a row left waiting on a batch that is never coming is the latch again",
+  ).toContain("d-0");
+});
