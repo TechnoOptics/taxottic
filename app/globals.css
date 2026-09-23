@@ -413,7 +413,11 @@ html[data-theme="dark"] [data-skin="classic"] {
 [data-skin="instrument"] .year-spine .runway-labels {
   position: relative;
   margin-top: 0.875rem;
-  height: 1rem;
+  /* The labels are absolutely positioned, so the row needs a floor to
+     reserve; `auto` lets it grow for the one note that still shows on a
+     phone instead of clipping it. */
+  height: auto;
+  min-height: 1rem;
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
@@ -422,6 +426,15 @@ html[data-theme="dark"] [data-skin="classic"] {
 [data-skin="instrument"] .year-spine .runway-labels span {
   position: absolute;
   white-space: nowrap;
+}
+[data-skin="instrument"] .year-spine .runway-tick-note { margin-top: 2px; font-size: 10px; }
+/* Four notes under four dates need about 480px of rail to stay apart. At
+   375 they overlap each other and the dates, so only the tick that is
+   actually due keeps its note (YearSpine marks it data-due); the other
+   three are already legible as dates. */
+@media (max-width: 639px) {
+  [data-skin="instrument"] .year-spine .runway-tick-note { display: none; }
+  [data-skin="instrument"] .year-spine .runway-labels span[data-due] .runway-tick-note { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-skin="instrument"] .year-spine .runway-fill { transition: none; }
@@ -588,6 +601,79 @@ html[data-theme="dark"] [data-skin="classic"] {
 @media (max-width: 359px) {
   [data-skin="instrument"] .audience-seg { padding: 7px 9px; }
 }
+
+/* ---- YEAR GRAMMAR: Today (spec 4.3) ---- */
+[data-skin="instrument"] .today-header { display: flex; flex-direction: column; gap: 6px; }
+/* From sm the title and the meta sit on one line, the meta right-aligned
+   on the title's baseline. Expressed here rather than as sm:flex-row on
+   the element: globals.css is unlayered and Tailwind's utilities live in
+   @layer utilities, so the rule above would win over them anyway. */
+@media (min-width: 640px) {
+  [data-skin="instrument"] .today-header { flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 16px; }
+}
+[data-skin="instrument"] .today-title { font-size: 2.25rem; line-height: 1.02; }
+@media (min-width: 640px) { [data-skin="instrument"] .today-title { font-size: 2.75rem; } }
+[data-skin="instrument"] .today-meta { color: var(--muted); }
+[data-skin="instrument"] .today-spine { margin-top: 20px; }
+[data-skin="instrument"] .today-panel { margin-top: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+[data-skin="instrument"] .today-lead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+/* A five-figure amount ($25,000) is wider than the room left beside the
+   label at 344, and the figure wrapped mid-number. It never wraps and
+   never shrinks; below sm the pair stacks instead. */
+@media (max-width: 639px) {
+  [data-skin="instrument"] .today-lead { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+[data-skin="instrument"] .today-lead-label { font-size: 0.9375rem; color: var(--foreground); }
+[data-skin="instrument"] .today-lead-note { margin-top: 4px; color: var(--muted); }
+[data-skin="instrument"] .today-lead-figure { font-size: 2.75rem; line-height: 1; font-weight: 500; color: var(--kicker); white-space: nowrap; flex-shrink: 0; }
+@media (min-width: 640px) { [data-skin="instrument"] .today-lead-figure { font-size: 3.25rem; } }
+[data-skin="instrument"] .today-split { margin-top: 12px; font-size: 0.875rem; color: var(--muted); }
+[data-skin="instrument"] .today-note { margin-top: 6px; font-size: 0.8125rem; color: var(--muted); }
+[data-skin="instrument"] .today-rows { margin-top: 14px; }
+[data-skin="instrument"] .today-progress { margin-top: 14px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+/* Ink, not brass: the spec's brass list is the spine's fill and marker and
+   the next-payment figure, and a progress bar is not on it. */
+[data-skin="instrument"] .today-progress i { display: block; height: 100%; background: var(--foreground); }
+[data-skin="instrument"] .today-link { margin-top: 16px; }
+[data-skin="instrument"] .today-section { margin-top: 28px; }
+[data-skin="instrument"] .today-section-title { font-size: 1.125rem; font-weight: 600; color: var(--foreground); }
+[data-skin="instrument"] .today-empty { margin-top: 10px; font-size: 0.875rem; color: var(--muted); }
+[data-skin="instrument"] .today-call-list { margin-top: 10px; display: grid; gap: 8px; }
+[data-skin="instrument"] .today-call-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+[data-skin="instrument"] .today-call-title { font-size: 0.9375rem; color: var(--foreground); }
+[data-skin="instrument"] .today-call-sub { margin-top: 2px; font-size: 0.8125rem; color: var(--muted); }
+[data-skin="instrument"] .today-call-actions { display: flex; gap: 8px; flex-shrink: 0; }
+[data-skin="instrument"] .today-count { margin-left: 6px; color: var(--muted); font-size: 0.875rem; }
+/* Names whose week or year a section is showing, plain type after the
+   heading so the heading itself stays one short phrase. */
+[data-skin="instrument"] .today-scope { color: var(--muted); font-size: 0.8125rem; }
+[data-skin="instrument"] .today-ledger, [data-skin="instrument"] .today-bars { margin-top: 10px; }
+
+/* Phone tab bar (spec 4.4). Native shells only, below lg; see TabBar.tsx
+   and LeftRailMobile.tsx (the FAB it replaces while it's showing). */
+[data-skin="instrument"] .tab-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--border); padding-bottom: var(--safe-bottom, 0px); }
+[data-skin="instrument"] .tab-bar-item { min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-family: var(--font-data); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+[data-skin="instrument"] .tab-bar-item[aria-current="page"] { color: var(--foreground); box-shadow: inset 0 2px 0 var(--foreground); }
+[data-skin="instrument"] .tab-bar-item:focus-visible { outline: 2px solid var(--accent-2); outline-offset: -2px; }
+/* Clearance for the bar, in place of the FAB's. Two things this rule has
+   to get right that the plain `html[data-tab-bar] main` did not:
+
+   1. It only applies where the bar is painted. The nav is `lg:hidden`, so
+      above lg an iPad reserved 56px under content for a bar that was never
+      there. TabBar now sets the attribute only while
+      `(max-width: 1023px)` matches, and this rule is scoped to the same
+      query, so the two cannot disagree.
+   2. It beats the FAB's own clearance rule further down this file
+      (`html[data-theme] main`, same specificity, later in source order),
+      which is why the bar's clearance was silently losing. The first
+      selector carries one more attribute than that rule does. */
+@media (max-width: 1023px) {
+  html[data-tab-bar][data-theme] main,
+  html[data-tab-bar] main {
+    padding-bottom: calc(56px + max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)));
+  }
+}
+html[data-tab-bar] .left-rail-fab { display: none; }
 
 html[data-theme="dark"] {
   --background: #121a2a; /* forest-950 */

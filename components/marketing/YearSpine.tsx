@@ -8,6 +8,8 @@ export type YearSpineProps = {
   trailing?: string;
   /** Per-quarter note appended to a tick label, e.g. { 1: "Q1 paid" }. */
   notes?: Partial<Record<1 | 2 | 3 | 4, string>>;
+  /** One note per tick, in tick order, rendered under the date; Today uses it for Q1 · done and so on. */
+  tickNotes?: string[];
   /** Prefix on the marker label. Omit for the variant's default: "Today" on paper (renders "TODAY · SEP 5"), bare date on panel (renders "SEP 5"). Pass "" to force bare date on either. */
   markerPrefix?: string;
   id?: string;
@@ -30,6 +32,7 @@ export function YearSpine({
   variant,
   trailing,
   notes,
+  tickNotes,
   markerPrefix,
   id,
 }: YearSpineProps) {
@@ -72,11 +75,16 @@ export function YearSpine({
           {r.ticks.map((t, i) => (
             <span
               key={t.quarter}
+              // The one tick the reader has to act on. Below sm the other
+              // notes are hidden (see .runway-tick-note in globals.css),
+              // because four of them collide with each other at 375.
+              data-due={tickNotes?.[i]?.endsWith(" · due") ? "true" : undefined}
               className={i === last ? "-translate-x-full" : "-translate-x-1/2"}
               style={{ left: pct(t.at) }}
             >
               {t.label}
               {notes?.[t.quarter] ? ` · ${notes[t.quarter]}` : ""}
+              {tickNotes?.[i] ? <span className="runway-tick-note mono-label block">{tickNotes[i]}</span> : null}
             </span>
           ))}
         </div>

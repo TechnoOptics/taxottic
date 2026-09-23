@@ -64,6 +64,14 @@ export function LeftRailMobile({
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // The phone tab bar's "More" tab opens this same sheet, so the two
+  // openers (FAB, tab bar) stay in sync with one piece of state.
+  useEffect(() => {
+    const open = () => setOpen(true);
+    window.addEventListener("taxottic:open-rail", open);
+    return () => window.removeEventListener("taxottic:open-rail", open);
+  }, []);
+
   // Edge-swipe detection: 12px hit zone on the left edge. We track
   // touchstart x and follow the next move; ≥ 30 px rightward delta
   // opens the menu. Listeners attach to <body> so the user can start
@@ -175,6 +183,10 @@ export function LeftRailMobile({
   // instead of the viewport, it rendered stuck in the top-left status
   // bar instead of the bottom-left corner. Mounting on <body> (no
   // filtered ancestor) restores true viewport-fixed positioning.
+  // The phone tab bar has its own "More" control that opens this same
+  // sheet by event, so while it is showing the FAB would be a second,
+  // redundant opener. CSS does the hiding (html[data-tab-bar]
+  // .left-rail-fab in globals.css), which is why no prop does.
   const fab = mounted
     ? createPortal(
         <button
@@ -195,6 +207,7 @@ export function LeftRailMobile({
               "calc(max(env(safe-area-inset-left, 0px), 0px) + 1rem)",
           }}
           className="
+            left-rail-fab
             lg:hidden fixed z-50
             h-14 w-14 rounded-full
             bg-forest-900 text-cream

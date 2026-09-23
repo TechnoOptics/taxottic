@@ -1414,7 +1414,26 @@
 //
 // v213, not the v207 this PR carried: v210, v211 and v212 landed on main
 // while it waited. A reserved number is not a number.
-const CACHE_VERSION = "v213";
+//
+// v214: Today replaces the dashboard, and the phone gets a tab bar.
+//
+// The dashboard's markup changed on both branches (company and
+// personal-only): the greeting, the outstanding-tasks banner and the old
+// stat band are gone, replaced by TodayHeader, TodaySpine, NextPaymentPanel,
+// NeedsYourCall and its rows, ThisWeek and YearToDate. New client
+// components: NeedsYourCallRow (in-place dismissal via a server action),
+// TabBar (the phone's Today/Drives/Money/Forecast/More bar, native shells
+// only), and MobileOnly's module-scope native-check cache that TabBar and
+// LeftRailMobile now share so the bar does not blink on every route
+// change. The rail's per-company monogram chip lost its gold fill and ring
+// (Task 7). Markup and client-side JS changed on every dashboard visit, so
+// the worker must fetch the new HTML rather than hydrate cached chunks
+// against it. Chosen against origin/main and every open PR at the moment
+// of the bump (v204 main, v205 #631, v206 #633, v207 #634).
+//
+// v214, not the v208 this PR carried: v210 through v213 landed on main
+// while it waited. A reserved number is not a number.
+const CACHE_VERSION = "v214";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

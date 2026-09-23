@@ -226,9 +226,11 @@ The dashboard becomes Today. Order:
    split beside it, then set aside so far and still to set aside as stat rows
    with a progress bar.
 4. Needs your call: the outstanding drives and transactions
-   (`getOutstandingTasks`) as rows with an inline two-way segmented control
-   (Business / Personal, Yes 50% / No) that resolves in place. This replaces
-   `OutstandingTasksBanner` and `OutstandingTasksPopup` on this screen.
+   (`getOutstandingTasks`) as rows with two quiet controls. A bank row
+   resolves "Not business" in place, and "Business" opens the page where the
+   category is chosen, because a business expense needs one and the row has
+   nowhere to ask for it. This replaces `OutstandingTasksBanner` and
+   `OutstandingTasksPopup` on this screen.
 5. This week: the ledger of what moved the number, three to seven rows, each
    with a mono date and a signed mono amount.
 6. Year to date: deductions by category with bars, as the sample shows.

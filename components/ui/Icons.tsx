@@ -245,3 +245,23 @@ export function ChevronDownIcon({ className }: IconProps) {
     </Frame>
   );
 }
+
+/** Calendar. Marks the Today tab / anything scheduled by date. */
+export function CalendarIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 9.5h17" />
+      <path d="M8 3v3.5M16 3v3.5" />
+    </Frame>
+  );
+}
+
+/** Three stacked lines. "More" / open the menu. */
+export function MenuIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <path d="M4 6.5h16M4 12h16M4 17.5h16" />
+    </Frame>
+  );
+}
