@@ -15,6 +15,22 @@ type Row = {
 };
 
 /**
+ * The drivers this alert is about. Exported because the head has to know
+ * whether the marker exists BEFORE it renders it: a marker that shows on
+ * every visit and says nothing is the noise this screen was cut for, and
+ * a second copy of the rule in app/mileage/page.tsx is how the two would
+ * disagree about which phones count.
+ */
+export function driversNeedingAttention(rows: Row[]): Row[] {
+  return rows.filter(
+    (r) =>
+      r.health.status === "silent" ||
+      r.health.status === "parked" ||
+      r.health.status === "blocked",
+  );
+}
+
+/**
  * Manager-only "is everyone's phone actually tracking?" card.
  *
  * The gap this closes: nothing surfaced that a driver's device had gone
@@ -36,12 +52,7 @@ type Row = {
  * wording, unchanged, are one tap away.
  */
 export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
-  const attention = rows.filter(
-    (r) =>
-      r.health.status === "silent" ||
-      r.health.status === "parked" ||
-      r.health.status === "blocked",
-  );
+  const attention = driversNeedingAttention(rows);
   if (attention.length === 0) return null;
 
   // One fix sentence per distinct cause, not per driver: two phones on
@@ -59,7 +70,7 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
   );
 
   return (
-    <details className="group mx-0 mt-4 rounded-2xl border border-amber-300 bg-amber-50">
+    <details className="group mx-0 w-full rounded-2xl border border-amber-300 bg-amber-50">
       <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-4 py-2.5">
         <WarningIcon className="size-4 shrink-0 text-amber-800" />
         <h2 className="min-w-0 flex-1 text-sm font-semibold leading-snug text-amber-900">

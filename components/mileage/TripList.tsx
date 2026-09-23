@@ -7,6 +7,7 @@ import {
 } from "@/components/mileage/DriveThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 import { SelectMenu } from "@/components/ui/SelectMenu";
+import { isAwaitingDecision } from "@/lib/mileage/awaiting-decision";
 
 /**
  * Phone-first trip list. Replaces the old "3 pill buttons per row,
@@ -189,6 +190,23 @@ export function TripList({
 
   const buckets = groupTrips(trips);
 
+  /**
+   * The drive the head's "{n} waiting" count sends the reader to.
+   *
+   * The SAME rule the count itself is computed from
+   * (lib/mileage/awaiting-decision.ts), not a second statement of it:
+   * a link that promises a waiting drive and lands on a settled one is
+   * the "I thought I already did this" report by a shorter route. Newest
+   * first, because that is the order the list is in.
+   */
+  const firstAwaitingId =
+    trips.find((t) =>
+      isAwaitingDecision({
+        classification: t.classification,
+        needs_confirmation: t.needsConfirmation,
+      }),
+    )?.id ?? null;
+
   return (
     <div className="mt-3 grid gap-6">
       {buckets.map((bucket) => (
@@ -205,6 +223,7 @@ export function TripList({
               <TripCard
                 key={t.id}
                 trip={t}
+                anchor={t.id === firstAwaitingId}
                 reclassify={reclassify}
                 deleteTrip={deleteTrip}
                 onReview={onReview}
@@ -222,6 +241,7 @@ export function TripList({
 
 function TripCard({
   trip,
+  anchor,
   reclassify,
   deleteTrip,
   onReview,
@@ -230,6 +250,9 @@ function TripCard({
   moveTripCompany,
 }: {
   trip: TripRow;
+  /** This is the first drive awaiting a decision, so it carries the id
+   *  the head's waiting count links to. */
+  anchor: boolean;
   reclassify: (fd: FormData) => Promise<void>;
   deleteTrip: (fd: FormData) => Promise<void>;
   onReview: (tripId: string) => void;
@@ -351,8 +374,11 @@ function TripCard({
 
   return (
     <li
+      id={anchor ? "first-unclassified" : undefined}
       className={
-        "card p-3 sm:p-4 grid gap-3 " +
+        // scroll-mt keeps the row clear of the fixed AppHeader when the
+        // head's waiting count jumps to it.
+        "card p-3 sm:p-4 grid gap-3 scroll-mt-20 " +
         (pending ? "opacity-60" : "")
       }
       aria-busy={pending}

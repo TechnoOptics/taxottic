@@ -1,11 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
-import {
-  BoltIcon,
-  ClockIcon,
-  EyeIcon,
-  PinIcon,
-} from "@/components/ui/Icons";
+import { WarningIcon } from "@/components/ui/Icons";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import {
   MileageMapRoutes,
@@ -30,7 +25,10 @@ import {
 } from "@/lib/mileage/team-scope";
 import { loadDrivePage } from "@/lib/mileage/drive-page";
 import { indexPlaces, tripPlaces } from "@/lib/mileage/place-names";
-import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
+import {
+  TeamTrackingHealth,
+  driversNeedingAttention,
+} from "@/components/mileage/TeamTrackingHealth";
 import { TeamViewNote } from "@/components/mileage/TeamViewNote";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
 import { describeDeviceCause, evaluateDeviceCause } from "@/lib/mileage/device-cause";
@@ -45,7 +43,7 @@ import {
 } from "@/lib/mileage/finalize-freshness";
 import { FinalizeSettleRefresh } from "@/components/mileage/FinalizeSettleRefresh";
 import { MileageAutoRefresh } from "@/components/mileage/MileageAutoRefresh";
-import { NeedsDecisionPill } from "@/components/mileage/NeedsDecisionPill";
+import { MilesHead } from "@/components/mileage/MilesHead";
 import { countDrivesAwaitingDecision } from "@/lib/mileage/awaiting-decision";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
@@ -485,6 +483,28 @@ export default async function MileagePage({
     selfCause && selfStatus
       ? describeDeviceCause(selfCause, selfStatus.platform, "driver")
       : null;
+  // Does the head carry a tracking marker at all? Asked here, from the
+  // alert's own rule (driversNeedingAttention), because the head must
+  // not render an empty marker: a marker that appears on every visit and
+  // says nothing is the noise this screen was cut for.
+  const teamNeedsAttention =
+    isManager && driversNeedingAttention(teamHealth).length > 0;
+  const selfNeedsAttention =
+    viewingSelf && (health?.status === "degraded" || Boolean(selfCauseText));
+
+  // Whose drives these are, in the words the head says them in. One
+  // line replaces the breadcrumb, the two-line title and the "Reviewing
+  // X's drives" strip: the strip explained in a paragraph what naming
+  // the driver says in two words, and the breadcrumb duplicated the nav
+  // AppHeader already renders.
+  const whoseDrives = viewingAll
+    ? "All drivers"
+    : viewingSelf
+      ? "Your drives"
+      : driverNameById.get(viewingDriverId ?? "") ??
+        viewingDriverLabel?.split(" · ")[0] ??
+        "A teammate";
+
   let recoverable = 0;
   if (company && viewingSelf && health?.status === "degraded") {
     recoverable = await countRecoverableApproxTrips(
@@ -499,23 +519,16 @@ export default async function MileagePage({
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-6 sm:py-10">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          <Link
-            href="/dashboard"
-            className="underline decoration-dotted hover:text-forest-900"
-          >
-            Dashboard
-          </Link>{" "}
-          · Mileage
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
-          Drive log &amp; mileage deduction
-        </h1>
         {!company ? (
-          <p className="mt-4 text-sm text-ink-soft">
-            Join or create a company to start tracking business
-            mileage.
-          </p>
+          <>
+            <h1 className="display text-xl text-[var(--foreground)]">
+              Your drives
+            </h1>
+            <p className="mt-4 text-sm text-ink-soft">
+              Join or create a company to start tracking business
+              mileage.
+            </p>
+          </>
         ) : (
           <>
             {/* The freshness pass was still running when this render had
@@ -533,194 +546,70 @@ export default async function MileagePage({
                 payload rather than reloading the document, which would
                 tear down the live tracker. */}
             <MileageAutoRefresh />
-            {/* No range in this line any more. The window is a client
-                filter over the drives already loaded (the control below),
-                so the server has no range to name and naming one would be
-                a claim about a list it does not decide. */}
-            <div className="mt-2 text-sm text-ink-soft">{company.name}</div>
-
-            {isManager && teamHealth.length > 0 ? (
-              <TeamTrackingHealth rows={teamHealth} />
-            ) : null}
-
-            {/* Manager-only driver switcher. Re-scopes the whole page to
-                a chosen teammate's drives. */}
-            {showDriverPicker ? (
-              <div className="mt-4">
-                <DriverPicker
-                  selfUserId={user.id}
-                  drivers={drivers}
-                  current={viewingAll ? ALL_DRIVERS : viewingDriverId}
-                />
-              </div>
-            ) : null}
-
-            {viewingAll ? (
-              /* The range prop is inert: this page reads no ?range=
-                 any more, so the note's own-log link carries nothing to
-                 honour. Left in place rather than reshaped here because
-                 TeamViewNote is not this task's file; Task 6 rebuilds
-                 this row and can drop the prop. */
-              <TeamViewNote range="" selfUserId={user.id} />
-            ) : !viewingSelf ? (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
-                <EyeIcon className="size-4 shrink-0" />
-                <span>
-                  Reviewing{" "}
-                  <span className="font-medium">
-                    {viewingDriverLabel ?? "a teammate"}
-                  </span>
-                  &apos;s drives. You can re-classify or remove trips; their
-                  own tracking controls stay on their device.
-                </span>
-              </div>
-            ) : null}
-
-            {/* Auto-track toggle + tracker diagnostics are self-only -
-                you can't flip another driver's phone tracker. */}
-            {viewingSelf ? (
-              <div className="mt-4">
-                <MobileOnly
-                  title="Automatic mileage tracking"
-                  description="Taxottic uses your phone's GPS to detect drives and log them in the background, this runs only in the Taxottic mobile app. On the web you can still add drives by hand below."
-                >
-                  <AutoTrackToggle companyId={company.id} />
-                </MobileOnly>
-              </div>
-            ) : null}
-
-            {/* "Is the tracker actually running?", the diagnostic
-                strip the user asked for after their first real
-                drive-day produced zero GPS points. Green when active,
-                red with a checklist + manual-log pointer when not. */}
-            {viewingSelf ? (
-              <TrackerStatus
-                lastPointISO={lastPointISO}
-                lastTripISO={lastTripISO}
-              />
-            ) : null}
-
-            {viewingSelf && (health?.status === "degraded" || selfCauseText) ? (
-              <div className="mt-4">
-                <TrackingHealthBanner
-                  reason={health?.status === "degraded" ? health.reason ?? "" : ""}
-                  cause={selfCauseText ? `${selfCauseText.short}. ${selfCauseText.fix}` : null}
-                  recoverable={recoverable}
-                  recoverAction={recoverApproximateTrips}
-                />
-              </div>
-            ) : null}
-
-            {/* Pending-classification banner. Mirrors the watch's
-                Confirm tab for users without a watch. Big amber CTA
-                links to the phone-side swipe deck at
-                /mileage/classify. Hidden when nothing is pending, and
-                when reviewing another driver (that deck is your own).
-                Shown in the team view too: a teammate's unclassified drives
-                are never fetched, so this count is only ever the viewer's,
-                and making the team view the default must not silently cost
-                a manager their own triage queue. */}
-            {showsOwnQueue && awaitingCount > 0 ? (
-              <Link
-                href="/mileage/classify"
-                className="mt-4 block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-400"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid place-items-center size-9 shrink-0 rounded-full bg-amber-500 text-white">
-                    <BoltIcon className="size-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="display text-sm text-amber-900">
-                      {awaitingCount === 1
-                        ? "1 drive needs a quick call"
-                        : `${awaitingCount} drives need a quick call`}
-                    </div>
-                    {/* Covers both states in one line, because the deck
-                        does: an assumed drive is confirmed by tapping the
-                        call it already carries, and a drive with no call
-                        at all is settled by the same two buttons. No
-                        dollar figure, see #617. */}
-                    <div className="text-xs text-amber-800 mt-0.5">
-                      Tap to confirm business or personal →
-                    </div>
-                  </div>
-                  <span
-                    aria-hidden="true"
-                    className="text-amber-900 text-sm"
-                  >
-                    →
-                  </span>
-                </div>
-              </Link>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {/* Standing answer to "is anything waiting on me?", present
-                  at zero as much as above it. First in the row and never
-                  moving, so it can be learned; the hairline after it says
-                  it is not one of the range filters beside it. */}
-              {showsOwnQueue ? (
-                <>
-                  <NeedsDecisionPill count={awaitingCount} />
-                  <span
-                    aria-hidden="true"
-                    className="hidden sm:block h-5 w-px bg-forest-200"
+            {/* THE HEAD, in one block. It was a breadcrumb, a two-line
+                title, a company line, a tracking alert, a driver
+                selector, a Team view row, a "needs a quick call" card
+                and eight pills in five treatments; measured at 390px it
+                put the window filter at 769px and the first drive row at
+                1405px. Everything it carried that is still a capability
+                is either on this line or below the list. */}
+            <MilesHead
+              who={whoseDrives}
+              where={company.name}
+              miles={businessMiles}
+              deductionCents={deductionCents}
+              driveCount={trips.length}
+              /* Zero when the viewer is reading somebody else's log:
+                 the queue is the viewer's own and the deck only settles
+                 their drives. */
+              awaiting={showsOwnQueue ? awaitingCount : 0}
+              switcher={
+                showDriverPicker ? (
+                  <DriverPicker
+                    selfUserId={user.id}
+                    drivers={drivers}
+                    current={viewingAll ? ALL_DRIVERS : viewingDriverId}
                   />
-                </>
-              ) : null}
-              {/* The four range links used to sit here. They were
-                  navigation on a force-dynamic page: a tap started a
-                  whole server render, this row had no pending state, and
-                  nothing on screen moved until the render came back,
-                  which is the "Today and This month do not react"
-                  report. The window is a filter now, rendered with the
-                  list it filters (components/mileage/DriveLog.tsx), and
-                  it answers on the tap. Guarded by
-                  lib/mileage/drive-first-paint.test.ts. */}
-              {/* Cross-link to the dedicated business-trips
-                  breadcrumb dashboard. Keep this here even when
-                  there are zero business trips so a returning
-                  driver can land on the YTD view in one tap. */}
-              <Link
-                // The business view defaults to year to date on its
-                // own, so this link needs no query at all.
-                href="/mileage/business"
-                className="ml-1 text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400"
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-1.5 rounded-full bg-emerald-500"
-                />
-                Business breadcrumbs
-              </Link>
-              {/* New (May 2026): saved places. Adding a "work" place
-                  here means every future trip that touches it
-                  auto-classifies as business, the auto-deduct hook
-                  the user asked for. Surface it next to the
-                  breadcrumb link so the discovery path is obvious. */}
-              <Link
-                href="/mileage/places"
-                className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
-              >
-                <PinIcon className="size-3.5 shrink-0" />
-                Saved places →
-              </Link>
-              {/* New (May 2026): per-user schedule. Lets the driver
-                  configure which days + hours auto-tracking is
-                  allowed to run (always / weekdays / custom). The
-                  toggle on this page still has the kill switch; the
-                  schedule just bounds when auto-resume kicks in. */}
-              <Link
-                href="/mileage/schedule"
-                className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
-              >
-                {/* Was a clock emoji. Emoji ignore currentColor, render
-                    as vendor bitmaps, and read as consumer-grade beside
-                    the rest of the row; Icons.tsx exists for this. */}
-                <ClockIcon className="size-3.5 shrink-0" />
-                Schedule →
-              </Link>
-            </div>
+                ) : null
+              }
+              /* A marker ONLY when a phone needs attention, which is
+                 why both arms are decided here rather than rendered
+                 unconditionally and left to return null: an empty
+                 marker still costs a line on the identity row. */
+              tracking={
+                teamNeedsAttention || selfNeedsAttention ? (
+                  <>
+                    {teamNeedsAttention ? (
+                      <TeamTrackingHealth rows={teamHealth} />
+                    ) : null}
+                    {selfNeedsAttention ? (
+                      <details className="w-full rounded-xl border border-amber-300 bg-amber-50/60">
+                        <summary className="mono-label flex min-h-11 cursor-pointer select-none list-none items-center gap-2 px-3 text-amber-900">
+                          <WarningIcon className="size-4 shrink-0" />
+                          Tracking needs attention
+                        </summary>
+                        <div className="px-1 pb-1">
+                          <TrackingHealthBanner
+                            reason={
+                              health?.status === "degraded"
+                                ? health.reason ?? ""
+                                : ""
+                            }
+                            cause={
+                              selfCauseText
+                                ? `${selfCauseText.short}. ${selfCauseText.fix}`
+                                : null
+                            }
+                            recoverable={recoverable}
+                            recoverAction={recoverApproximateTrips}
+                          />
+                        </div>
+                      </details>
+                    ) : null}
+                  </>
+                ) : null
+              }
+            />
 
             {viewingAll ? (
               // Team overlay: a read-only map of everyone's trails (one
@@ -796,77 +685,92 @@ export default async function MileagePage({
               />
             )}
 
-            {/* Stat tiles moved below the map/trip list (May 2026), the
-                user asked for the map and logged drives to be the first
-                thing visible on this page, not stats. Kept compact under
-                a small "Details" label rather than the full-size cards
-                that used to sit above the fold. */}
-            <div className="mt-6">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-                Details
-              </div>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Stat
-                  compact
-                  label="Business miles"
-                  value={fmtMiles(businessMiles)}
-                  tone={businessMiles > 0 ? "good" : "neutral"}
-                />
-                <Stat
-                  compact
-                  label="Mileage deduction"
-                  value={fmtUsd(deductionCents)}
-                  tone="good"
-                />
-                {/* Same "needs review" count, but when it's > 0 we wrap
-                    it in a Link to the swipe deck so the stat itself is
-                    the tap target (mirroring the amber banner above -
-                    some users tap the stat instead of the banner). */}
-                {showsOwnQueue && awaitingCount > 0 ? (
-                  <Link
-                    href="/mileage/classify"
-                    className="col-span-2 sm:col-span-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                  >
-                    <Stat
-                      compact
-                      label="Need review"
-                      value={String(awaitingCount)}
-                      tone="warn"
-                      caption="Tap to classify →"
-                    />
-                  </Link>
-                ) : (
-                  <Stat
-                    compact
-                    label="Need review"
-                    value={String(awaitingCount)}
-                    tone={awaitingCount > 0 ? "warn" : "neutral"}
-                    caption={
-                      awaitingCount > 0 ? "Awaiting a call" : "All caught up"
-                    }
-                  />
-                )}
-              </div>
-            </div>
+            {/* EVERYTHING ELSE, BELOW THE DRIVES. Each of these is a
+                place you go or a thing you set up, not a thing you
+                read. The drives are what the screen is for, so they
+                come first and these keep every capability one scroll
+                away.
 
-            {/* Manual backfill entry, collapsed by default. The user
-                ALWAYS has a way to log a drive even if the tracker
-                missed it (the realistic scenario, given GPS background
-                capture on Android is best-effort). Self-only: a manual
-                trip is always logged under the current user, so it's
-                hidden when reviewing another driver. */}
-            {viewingSelf ? <ManualLogTrip action={addManualTrip} /> : null}
-            {/* Route reconstruction, the "phone died mid-drive" recovery.
-                Enter the stops; we compute the driving distance. */}
-            {viewingSelf ? (
-              <CompleteDriveFromStops action={addRouteTrip} />
-            ) : null}
-            {/* "My app closed on the drive back and the drive never
-                showed." Sweeps 45 days of staged points, closes drives
-                the phone left open, and reports what it could NOT turn
-                into a drive rather than reporting silence. Self-only:
-                the sweep runs against the caller's own staging pool. */}
-            {viewingSelf ? <RecoverLostDrives /> : null}
+                The stat tiles that used to sit here went with them:
+                business miles, the deduction and the waiting count are
+                the head now, and a second copy below the list was the
+                same three numbers asked for twice. */}
+            <div className="mt-10 border-t border-edge pt-4">
+              <h2 className="mono-label">More</h2>
+              <nav aria-label="Mileage tools" className="mt-1 grid">
+                <Link
+                  // The business view defaults to year to date on its
+                  // own, so this link needs no query at all.
+                  href="/mileage/business"
+                  className="min-h-11 flex items-center text-sm text-[var(--foreground)] underline decoration-dotted underline-offset-4"
+                >
+                  Business breadcrumbs
+                </Link>
+                {/* Saved places: a "work" place here auto-classifies
+                    every future trip that touches it. */}
+                <Link
+                  href="/mileage/places"
+                  className="min-h-11 flex items-center text-sm text-[var(--foreground)] underline decoration-dotted underline-offset-4"
+                >
+                  Saved places
+                </Link>
+                {/* The per-user schedule bounds when auto-resume runs;
+                    the toggle below is still the kill switch. */}
+                <Link
+                  href="/mileage/schedule"
+                  className="min-h-11 flex items-center text-sm text-[var(--foreground)] underline decoration-dotted underline-offset-4"
+                >
+                  Schedule
+                </Link>
+              </nav>
+
+              {/* What the team overlay shows and what teammates keep
+                  private. It was above the map, where it said the same
+                  thing on every visit; the way back to the manager's own
+                  log is the switch on the identity line. */}
+              {viewingAll ? <TeamViewNote selfUserId={user.id} /> : null}
+
+              {/* Auto-track toggle + tracker diagnostics are self-only:
+                  you cannot flip another driver's phone tracker. */}
+              {viewingSelf ? (
+                <div className="mt-4">
+                  <MobileOnly
+                    title="Automatic mileage tracking"
+                    description="Taxottic uses your phone's GPS to detect drives and log them in the background, this runs only in the Taxottic mobile app. On the web you can still add drives by hand below."
+                  >
+                    <AutoTrackToggle companyId={company.id} />
+                  </MobileOnly>
+                </div>
+              ) : null}
+
+              {/* "Is the tracker actually running?", the diagnostic
+                  strip the user asked for after their first real
+                  drive-day produced zero GPS points. Green when active,
+                  red with a checklist + manual-log pointer when not. */}
+              {viewingSelf ? (
+                <TrackerStatus
+                  lastPointISO={lastPointISO}
+                  lastTripISO={lastTripISO}
+                />
+              ) : null}
+
+              {/* Manual backfill entry, collapsed by default. The user
+                  ALWAYS has a way to log a drive even if the tracker
+                  missed it (the realistic scenario, given GPS background
+                  capture on Android is best-effort). Self-only: a manual
+                  trip is always logged under the current user. */}
+              {viewingSelf ? <ManualLogTrip action={addManualTrip} /> : null}
+              {/* Route reconstruction, the "phone died mid-drive"
+                  recovery. Enter the stops; we compute the distance. */}
+              {viewingSelf ? (
+                <CompleteDriveFromStops action={addRouteTrip} />
+              ) : null}
+              {/* "My app closed on the drive back and the drive never
+                  showed." Sweeps 45 days of staged points, closes drives
+                  the phone left open, and reports what it could NOT turn
+                  into a drive rather than reporting silence. */}
+              {viewingSelf ? <RecoverLostDrives /> : null}
+            </div>
 
             <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
               Deduction uses the IRS standard mileage rate for the
@@ -879,51 +783,5 @@ export default async function MileagePage({
         )}
       </section>
     </main>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone = "neutral",
-  caption,
-  compact = false,
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "good" | "warn";
-  caption?: string;
-  compact?: boolean;
-}) {
-  const dot =
-    tone === "good"
-      ? "bg-emerald-500"
-      : tone === "warn"
-        ? "bg-amber-400"
-        : "bg-gold-400";
-  return (
-    <article
-      className={
-        "card flex items-center gap-3 " + (compact ? "p-3" : "p-4")
-      }
-    >
-      <span aria-hidden="true" className={"size-2.5 rounded-full " + dot} />
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-          {label}
-        </div>
-        <div
-          className={
-            "display text-forest-900 tabular-nums mt-0.5 " +
-            (compact ? "text-lg" : "text-2xl")
-          }
-        >
-          {value}
-        </div>
-        {caption ? (
-          <div className="text-[11px] text-ink-muted mt-0.5">{caption}</div>
-        ) : null}
-      </div>
-    </article>
   );
 }

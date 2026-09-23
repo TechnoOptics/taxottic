@@ -16,15 +16,9 @@ import { ChevronDownIcon, MapIcon } from "@/components/ui/Icons";
  * on first paint with nothing to hydrate, and the first visit is the one
  * where the explanation is wanted anyway.
  */
-export function TeamViewNote({
-  range,
-  selfUserId,
-}: {
-  range: string;
-  selfUserId: string;
-}) {
+export function TeamViewNote({ selfUserId }: { selfUserId: string }) {
   return (
-    <div className="mt-3 flex items-start gap-3 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
+    <div className="mt-4 flex items-start gap-3 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
       <details className="group min-w-0 flex-1">
         <summary className="flex cursor-pointer select-none list-none items-center gap-2">
           <MapIcon className="size-4 shrink-0" />
@@ -38,10 +32,13 @@ export function TeamViewNote({
         </p>
       </details>
       <Link
-        href={`/mileage?range=${range}&driver=${selfUserId}`}
+        // No `?range=` any more: the window is a client filter over the
+        // drives already loaded, so there is no range for a link to
+        // carry. The prop that used to supply one was inert.
+        href={`/mileage?driver=${selfUserId}`}
         className="underline decoration-dotted whitespace-nowrap hover:text-forest-900"
       >
-        My drive log →
+        My drive log
       </Link>
     </div>
   );

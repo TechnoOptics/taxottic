@@ -25,9 +25,8 @@ async function rects(page: import("@playwright/test").Page) {
     };
     return {
       h1: box("h1"),
-      alert: box("section > :nth-child(4)"),
-      controls: box("[data-ct=controls]"),
-      firstPill: box("[data-ct=controls] > *"),
+      head: box("header"),
+      alert: box("header details"),
       map: box("[data-ct=map]"),
       vh: window.innerHeight,
       docWidth: document.documentElement.scrollWidth,
@@ -36,9 +35,9 @@ async function rects(page: import("@playwright/test").Page) {
 }
 
 test.describe("Drive log first paint on the Fold cover screen", () => {
-  test("a manager sees the controls and the map without scrolling", async ({ mount, page }) => {
+  test("a manager sees the whole head and the map without scrolling", async ({ mount, page }) => {
     await mount(<ManagerPageHead />);
-    await expect(page.locator("[data-ct=controls]")).toBeVisible();
+    await expect(page.locator("header")).toBeVisible();
 
     const m = await rects(page);
     console.log("FIRST PAINT metrics:", JSON.stringify(m));
@@ -46,8 +45,8 @@ test.describe("Drive log first paint on the Fold cover screen", () => {
 
     expect(m.docWidth, "horizontal overflow").toBeLessThanOrEqual(FOLD_COVER.width);
     expect(
-      m.controls.bottom,
-      `the control row ends at ${m.controls.bottom}px, past the ${BUDGET}px the WebView can show`,
+      m.head.bottom,
+      `the head ends at ${m.head.bottom}px, past the ${BUDGET}px the WebView can show`,
     ).toBeLessThanOrEqual(BUDGET);
     // Not merely "the map starts on screen": enough of it that a drive
     // drawn there is recognisable as one. 120px is a little under a
@@ -75,6 +74,8 @@ test.describe("Drive log first paint on the Fold cover screen", () => {
       }),
     ).toBeVisible();
 
+    // The note moved below the list with the other cross-links (Task 6),
+    // so this asserts the same shape in its new place.
     const noteBody = page.getByText("never their personal miles", { exact: false });
     await expect(noteBody).toBeHidden();
     // Visible without a tap: this is the manager's way back to their own log.

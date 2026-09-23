@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
 /**
- * THE INVARIANT: on the drive log, the driver's own controls (the
- * "Needs your call" pill, the range pills) and the map are on screen at
+ * THE INVARIANT: on the drive log, the head and the map are on screen at
  * first paint on the narrowest phone we ship to, WITH the manager's
- * device alert still present.
+ * device alert still present, and the question "business or personal?"
+ * is asked once.
  *
  * The drives were loading fine (#622, #623). The layout was hiding them.
  * On a Galaxy Z Fold5 cover screen a manager saw: title, a full-height
@@ -14,10 +14,13 @@ import { existsSync, readFileSync } from "node:fs";
  * every drive sat below the fold, which is what "click around hoping the
  * drive shows up" was describing.
  *
- * The fix keeps every word and moves it behind a tap: both cards become
- * a native <details> that is closed by default. These guards hold that
- * shape. The pixel budget itself is proved by the component test
- * components/mileage/MileageFirstPaint.ct.spec.tsx at 344x882.
+ * The first fix kept every word and moved it behind a tap: both cards
+ * became a native <details> closed by default. The second collapsed the
+ * head itself, which at 390px had put the window filter at 769px and the
+ * first drive row at 1405px. These guards hold both shapes. The pixel
+ * budgets are proved by the component tests
+ * components/mileage/MileageFirstPaint.ct.spec.tsx at 344x882 and
+ * components/mileage/MilesFirstDrive.ct.spec.tsx at 390x844.
  *
  * Source-level on purpose. Server components do not mount under vitest,
  * and this repo's default failure is a correct module with the wrong
@@ -29,6 +32,8 @@ import { existsSync, readFileSync } from "node:fs";
 const PAGE = "app/mileage/page.tsx";
 const TEAM_HEALTH = "components/mileage/TeamTrackingHealth.tsx";
 const TEAM_NOTE = "components/mileage/TeamViewNote.tsx";
+const MILES_HEAD = "components/mileage/MilesHead.tsx";
+const TRIP_LIST = "components/mileage/TripList.tsx";
 
 function stripComments(src: string): string {
   return src
@@ -51,6 +56,8 @@ function source(path: string): string {
 const page = source(PAGE);
 const health = source(TEAM_HEALTH);
 const note = source(TEAM_NOTE);
+const milesHead = source(MILES_HEAD);
+const list = source(TRIP_LIST);
 
 /**
  * The <details> element enclosing `needle`: its opening tag (so `open`
@@ -110,14 +117,77 @@ describe("the manager's device alert is one line until tapped", () => {
     expect(health).toMatch(/describeDriveHealth\s*\(/);
   });
 
-  it("is rendered by the drive log ahead of the controls, not demoted below the map", () => {
+  it("is rendered on the head's identity line, ahead of the drives", () => {
+    // It used to be a block of its own between the title and the
+    // controls. It is the head's tracking marker now, passed to
+    // MilesHead, and it still comes before anything that draws a drive.
+    const head = page.indexOf("<MilesHead");
     const alert = page.indexOf("<TeamTrackingHealth");
-    const pill = page.indexOf("<NeedsDecisionPill");
     const map = page.indexOf("<MileageMap");
+    const log = page.indexOf("<DriveLog");
+    expect(head, "the head is not rendered").toBeGreaterThan(-1);
     expect(alert, "the alert is not rendered").toBeGreaterThan(-1);
-    expect(pill, "the control row is not rendered").toBeGreaterThan(-1);
-    expect(alert).toBeLessThan(pill);
-    expect(pill).toBeLessThan(map);
+    expect(alert, "the alert is not inside the head").toBeGreaterThan(head);
+    expect(alert).toBeLessThan(map);
+    expect(alert).toBeLessThan(log);
+  });
+
+  it("is a marker the head shows only when a phone needs attention", () => {
+    // A marker on every visit that says nothing is the noise this screen
+    // was cut for, and the rule for which phones count lives in
+    // TeamTrackingHealth, not in a second copy on the page.
+    expect(page).toMatch(/const teamNeedsAttention = [^;]*driversNeedingAttention\(/);
+    expect(health).toMatch(/export function driversNeedingAttention/);
+  });
+});
+
+describe("the classification question is asked once, on the row", () => {
+  /**
+   * THE DEFECT: /mileage asked the same question three times before the
+   * reader reached a drive. An amber "3 drives need a quick call" card,
+   * an orange "Needs your call" pill in the control row, and a "Need
+   * review" stat below the list, all above a list whose every row
+   * already carries a business-or-personal control backed by a server
+   * action. The owner's words were "messy and not user friendly".
+   *
+   * The head states the count and links to the first drive waiting; the
+   * row is where the decision is made. These guards are source-level
+   * because the regression is the presence of the markup, and the page
+   * is an async server component that mounts in no test.
+   */
+  it("keeps the amber card out of the head", () => {
+    expect(page, "the review card is back above the drives").not.toMatch(
+      /needs? a quick call/i,
+    );
+  });
+
+  it("keeps the pill out of the control row", () => {
+    expect(page).not.toMatch(/<NeedsDecisionPill/);
+    expect(page, "the pill's own words are back").not.toMatch(
+      /Needs your call/,
+    );
+  });
+
+  it("keeps the duplicate stat tiles out", () => {
+    // Business miles, the deduction and the waiting count are the head.
+    expect(page).not.toMatch(/<Stat\b/);
+    expect(page).not.toMatch(/Need review/);
+  });
+
+  it("states the count in the head and points it at the row", () => {
+    const at = page.indexOf("<MilesHead");
+    expect(at, "the head is not rendered").toBeGreaterThan(-1);
+    const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));
+    expect(tag, "the head is not given the waiting count").toMatch(
+      /awaiting=\{[^}]*awaitingCount/,
+    );
+    expect(milesHead).toMatch(/href="#first-unclassified"/);
+    expect(list, "no row carries the anchor the head links to").toMatch(
+      /id=\{anchor \? "first-unclassified" : undefined\}/,
+    );
+    expect(list, "the anchored row is not chosen by the shared rule").toMatch(
+      /isAwaitingDecision\(/,
+    );
   });
 });
 

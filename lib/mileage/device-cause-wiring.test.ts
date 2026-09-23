@@ -123,8 +123,17 @@ describe("the driver's own page tells them their own cause", () => {
     expect(tag).toMatch(/cause=\{/);
     // The render condition must admit a cause with no "degraded" verdict:
     // Grace had zero uploads, so the teleport detector said "idle".
-    const cond = page.slice(Math.max(0, at - 300), at);
-    expect(cond).toMatch(/selfCause|Cause\b/);
+    //
+    // The gate is a NAMED FLAG above the markup since the head collapse:
+    // the head carries a tracking marker only when a phone needs
+    // attention, and it has to know that before it renders one. So this
+    // reads the flag's own definition rather than the 300 characters
+    // that happen to sit before the element, and then checks that the
+    // element really is the thing that flag governs.
+    const gate = page.match(/const selfNeedsAttention =([^;]+);/);
+    expect(gate, "the banner's gate is not a named flag any more").not.toBeNull();
+    expect(gate![1]).toMatch(/selfCause|Cause\b/);
+    expect(page.slice(Math.max(0, at - 900), at)).toMatch(/selfNeedsAttention/);
   });
 
   it("a driver who turned tracking off is not alarmed about their own choice", () => {
