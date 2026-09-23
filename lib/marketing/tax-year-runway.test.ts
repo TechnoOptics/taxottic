@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taxYearRunway } from "./tax-year-runway";
+import { fractionOf, taxYearRunway } from "./tax-year-runway";
 
 /**
  * The hero's runway is a hairline ticked at the four federal estimated-tax
@@ -88,5 +88,21 @@ describe("taxYearRunway next payment", () => {
 describe("taxYearRunway asOf label", () => {
   it("labels the sample date the way the ticks are labelled", () => {
     expect(taxYearRunway(2026, SAMPLE).asOfLabel).toBe("Aug 20");
+  });
+});
+
+describe("dayOfYear and fractionOf", () => {
+  it("counts days into the tax year from 1 January", () => {
+    expect(taxYearRunway(2026, new Date("2026-01-01T00:00:00Z")).dayOfYear).toBe(1);
+    expect(taxYearRunway(2026, new Date("2026-09-05T00:00:00Z")).dayOfYear).toBe(248);
+    expect(taxYearRunway(2026, new Date("2025-06-01T00:00:00Z")).dayOfYear).toBe(0);
+  });
+
+  it("places a date on the rail with the same span as the ticks", () => {
+    const { ticks } = taxYearRunway(2026, new Date("2026-09-05T00:00:00Z"));
+    expect(fractionOf(2026, "2026-09-15")).toBeCloseTo(ticks[2].at, 9);
+    expect(fractionOf(2026, "2027-01-15")).toBe(1);
+    expect(fractionOf(2026, "2026-12-01")).toBeCloseTo(334 / 379, 6);
+    expect(fractionOf(2026, "2025-01-01")).toBe(0);
   });
 });

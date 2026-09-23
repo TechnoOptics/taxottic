@@ -1378,11 +1378,24 @@
 // Markup, copy and a client component changed, so the WebView must fetch
 // the new HTML rather than hydrate cached chunks against it.
 //
-// v211, not the v205 this PR carried while it was open, and not the
+// v211, not the v205 that PR carried while it was open, and not the
 // v202 it reserved before that. v203, v204 and then v210 all landed on
-// main while it waited, so it is renumbered again at merge time. A
-// reserved number is not a number.
-const CACHE_VERSION = "v211";
+// main while it waited, so it was renumbered at merge time.
+//
+// v212: the marketing home in the Year grammar.
+//
+// The tax-year runway is the page's spine, fixed under a paper header,
+// filled to the moment the reader is looking at; the hero moves to paper
+// with navy reserved for the instrument panel; the dated sequence with
+// real product screens replaces the capability cards, the photograph
+// cards, the mock product tour, the stats band and the manifesto. Two
+// new client components (the spine motion and the figure count-up) and
+// new markup on every visitor's first screen, so the worker must fetch
+// the new HTML rather than hydrate cached chunks against it.
+//
+// v212, not the v206 this PR carried: v210 and v211 landed on main
+// while it waited. A reserved number is not a number.
+const CACHE_VERSION = "v212";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

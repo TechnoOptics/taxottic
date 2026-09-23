@@ -140,13 +140,16 @@ describe("the navy band is a token", () => {
 
   it("the audited pages reference the band", () => {
     for (const rel of [
-      "app/page.tsx",
+      "components/HeroInstrument.tsx",
       "app/pricing/page.tsx",
       "app/book/page.tsx",
       "app/calculators/page.tsx",
       "app/compare/page.tsx",
     ]) {
-      expect(/var\(--navy-band\)/.test(read(rel)), `${rel} does not use --navy-band`).toBe(true);
+      expect(
+        /var\(--navy-band\)/.test(read(rel)),
+        `${rel} does not use --navy-band (the home page paints navy only on the instrument)`,
+      ).toBe(true);
     }
   });
 });
