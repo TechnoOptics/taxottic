@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { DriveFilter } from "@/components/mileage/DriveFilter";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { type TripRow } from "@/components/mileage/TripList";
@@ -102,8 +102,46 @@ export function DriveLog({
   companies: { id: string; name: string }[];
   moveTripCompany: (formData: FormData) => Promise<void>;
 }) {
-  const [drives, setDrives] = useState<SentDrive[]>(initialDrives);
-  const [excluded, setExcluded] = useState<SentDrive[]>(initialExcluded);
+  /**
+   * WHO OWNS THE LIST, and why this is not `useState(initialDrives)`.
+   *
+   * The server owns page one. The client owns only the pages it
+   * appended. Seeding state from the prop once and never resyncing
+   * latches the FIRST server payload for the lifetime of the mount, and
+   * every `revalidatePath("/mileage")` after that is thrown away: the
+   * reclassify action succeeds, the page re-renders with the new row,
+   * this component keeps the old one, and the row stays
+   * `aria-pressed="false"` with the total at zero and no deduction. A
+   * deleted drive stays in the list for the same reason. The only thing
+   * that moved was the head's waiting count, because that is a
+   * pass-through prop and never went through this latch, so the number
+   * dropped while the row it pointed at did not change: the owner's own
+   * "does not react when you click" complaint, rebuilt on the control
+   * the whole screen was reorganised around.
+   *
+   * So page one is READ from the prop on every render, and `appended`
+   * holds only what "load more" fetched. A server revalidate now reaches
+   * the rows.
+   *
+   * KNOWN RESIDUAL, stated rather than hidden: a revalidate refreshes
+   * page one only, so a drive on an APPENDED page keeps the
+   * classification and the deduction it was fetched with until the log
+   * is reloaded. Reclassifying it is not faked locally, because this
+   * component does not know the IRS rate for the drive's tax year and a
+   * deduction invented on the client is worse than one that has not
+   * refreshed yet. The drives that want a decision are overwhelmingly
+   * the newest ones, which are page one.
+   */
+  const [appended, setAppended] = useState<SentDrive[]>([]);
+  const [appendedExcluded, setAppendedExcluded] = useState<SentDrive[]>([]);
+  const drives = useMemo(
+    () => append(initialDrives, appended),
+    [initialDrives, appended],
+  );
+  const excluded = useMemo(
+    () => append(initialExcluded, appendedExcluded),
+    [initialExcluded, appendedExcluded],
+  );
   /**
    * The chosen window, and the instant it was chosen at. Read from the
    * clock in the tap handler rather than during render, for the reason
@@ -190,8 +228,8 @@ export function DriveLog({
       // without it, a drive the driver already said they were riding in
       // would walk straight back into the log.
       const split = partitionLoggedTrips(page);
-      setDrives((prev) => append(prev, split.logged));
-      setExcluded((prev) => append(prev, split.excluded));
+      setAppended((prev) => append(prev, split.logged));
+      setAppendedExcluded((prev) => append(prev, split.excluded));
     } catch {
       // A rejected fetch is an offline phone or a dropped connection, and
       // it was previously unhandled: the promise rejected, the spinner

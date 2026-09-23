@@ -807,3 +807,118 @@ test("the anchor is promised only while every waiting drive is on screen", async
   await expect(link).toContainText("2 waiting");
   await expect(link).toHaveAttribute("href", "/mileage/classify");
 });
+
+/**
+ * THE SERVER STILL OWNS PAGE ONE.
+ *
+ * Every classification on this screen is a server action followed by
+ * `revalidatePath("/mileage")`, which re-renders the page and hands this
+ * component a fresh `initialDrives`. Seeding state from that prop once
+ * threw every one of those re-renders away: the action succeeded, the
+ * row kept `aria-pressed="false"`, the total stayed at zero and the
+ * deduction never appeared. Only the waiting count moved, because it is
+ * a pass-through prop, so the number dropped while the row it pointed at
+ * did not change.
+ *
+ * So this re-renders with the SAME drive reclassified and holds the row,
+ * the total and the deduction to moving together.
+ */
+test("a reclassified drive reaches the row, the total and the deduction", async ({
+  mount,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.route("**/api/mileage/drives*", (r) =>
+    r.fulfill({ json: { points: [] } }),
+  );
+  const before = {
+    ...drive("d-1", 1),
+    classification: "unclassified" as const,
+    deduction_cents: 0,
+  };
+  const log = (d: typeof before, awaiting: number) => (
+    <div data-skin="instrument">
+      <DriveLog
+        who="Your drives"
+        awaiting={awaiting}
+        initialDrives={[d]}
+        initialExcluded={[]}
+        companyId="co-1"
+        driverParam=""
+        places={[]}
+        reclassify={noop}
+        deleteTrip={noop}
+        companies={[{ id: "co-1", name: "Acme" }]}
+        moveTripCompany={noop}
+      />
+    </div>
+  );
+  const c = await mount(log(before, 1));
+
+  const business = c.getByRole("button", { name: "Mark this trip business" });
+  await expect(business).toHaveAttribute("aria-pressed", "false");
+  await expect(c).toContainText("0 mi");
+  await expect(c).toContainText("$0.00");
+
+  // What the server sends back after the action: the same drive, filed.
+  await c.update(
+    log(
+      {
+        ...before,
+        classification: "business" as const,
+        deduction_cents: 1080,
+        distance_miles: 14.2,
+      },
+      0,
+    ),
+  );
+
+  await expect(
+    business,
+    "the row still reads unclassified after the server said otherwise",
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(c, "the total did not follow the row").toContainText("14.2 mi");
+  await expect(c, "the deduction did not follow the row").toContainText(
+    "$10.80",
+  );
+  await expect(c.getByRole("link", { name: /waiting/ })).toHaveCount(0);
+});
+
+/**
+ * The same rule for a DELETED drive: the server drops it from page one,
+ * and the list must drop it too.
+ */
+test("a deleted drive leaves the list when the server drops it", async ({
+  mount,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.route("**/api/mileage/drives*", (r) =>
+    r.fulfill({ json: { points: [] } }),
+  );
+  const log = (drives: ReturnType<typeof drive>[]) => (
+    <div data-skin="instrument">
+      <DriveLog
+        who="Your drives"
+        awaiting={0}
+        initialDrives={drives}
+        initialExcluded={[]}
+        companyId="co-1"
+        driverParam=""
+        places={[]}
+        reclassify={noop}
+        deleteTrip={noop}
+        companies={[{ id: "co-1", name: "Acme" }]}
+        moveTripCompany={noop}
+      />
+    </div>
+  );
+  const c = await mount(log([drive("d-1", 1), drive("d-2", 2)]));
+  await expect(c.locator("li.card")).toHaveCount(2);
+
+  await c.update(log([drive("d-2", 2)]));
+  await expect(
+    c.locator("li.card"),
+    "the deleted drive is still in the list",
+  ).toHaveCount(1);
+});
