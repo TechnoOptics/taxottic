@@ -8,7 +8,7 @@
 //
 //  STATUS: scaffold. Not in project.pbxproj (hand-editing it risks
 //  the working iOS release). Add this one Swift file to the App
-//  target in Xcode (see ios/TaxotticWatch/README.md) — the JS half
+//  target in Xcode (see ios/TaxotticWatch/README.md), the JS half
 //  (lib/watch/bridge.ts, /api/watch/snapshot) already ships, so data
 //  flows the moment this is compiled in.
 
@@ -63,7 +63,7 @@ public class TaxotticWatchBridgePlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDe
         call.resolve()
     }
 
-    // MARK: WCSessionDelegate — inbound one-tap actions from the watch
+    // MARK: WCSessionDelegate, inbound one-tap actions from the watch
 
     public func session(_ s: WCSession, activationDidCompleteWith _: WCSessionActivationState, error _: Error?) {}
     public func sessionDidBecomeInactive(_ s: WCSession) {}

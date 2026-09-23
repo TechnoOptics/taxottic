@@ -71,7 +71,7 @@ describe("heartbeat is armed wherever points are ingested", () => {
     // The check below is per FILE: it passes as long as the string
     // "ensureHeartbeatTimer()" appears anywhere. native-tracker.ts armed
     // the beat in its location callback and in startTracking, so the file
-    // contained the string twice and passed — while BOTH of its actual
+    // contained the string twice and passed, while BOTH of its actual
     // ingest POSTs, the flush loop and the orphan drain, armed nothing.
     //
     // Measured cost, 2026-08-09: a 40-point backlog landed at 23:54 after

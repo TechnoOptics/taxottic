@@ -1,5 +1,5 @@
 //  Models.swift
-//  The watch payload — mirror of lib/watch/types.ts. Decoded from the
+//  The watch payload, mirror of lib/watch/types.ts. Decoded from the
 //  phone via WatchConnectivity. Every collection defaults to empty so
 //  a partial sync never crashes a view.
 
@@ -14,7 +14,7 @@ struct WatchSnapshot: Codable, Equatable {
     var forecast: Forecast?
     var confirmations: [Confirm] = []
     // TRUE total across every outstanding-tasks source (unclassified
-    // drives + pending transactions) — NOT the same as confirmations.count,
+    // drives + pending transactions), NOT the same as confirmations.count,
     // which is a capped preview list. Bind a complication/tile badge to
     // this, not the array length. Defaults to 0 for older cached payloads.
     var outstandingCount: Int = 0

@@ -48,5 +48,25 @@
          application-groups entitlement above needed. -->
     <key>aps-environment</key>
     <string>production</string>
+    <!-- Universal Links. Pairs with the AASA file this app's own server
+         serves at https://taxottic.com/.well-known/apple-app-site-association
+         (app/.well-known/apple-app-site-association/route.ts). Without this
+         entitlement a taxottic.com sign-in link opens Safari instead of the
+         app, which is the bug this fixes; without the server file the
+         entitlement does nothing. Both halves are required.
+         The server file's `paths` deliberately limits the takeover to
+         /auth/*, /login* and /get*, so marketing, legal and calculator
+         links keep opening in the browser. /auth/* is the load-bearing
+         one: the sign-in email resolves to /auth/callback, so a list
+         without it would leave the email opening Safari, which is the
+         whole bug.
+         REQUIRES: the "Associated Domains" capability enabled on the
+         com.taxottic.app App ID in the Apple Developer portal, same
+         portal-side step the entitlements above needed, otherwise
+         signing fails. -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:taxottic.com</string>
+    </array>
 </dict>
 </plist>

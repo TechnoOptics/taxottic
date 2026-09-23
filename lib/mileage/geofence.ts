@@ -61,6 +61,27 @@ export type GeofenceState = {
     startedAtMs: number;
     updatedAtMs: number;
   } | null;
+  /**
+   * What the NATIVE uploader last did, written by the capture service in
+   * a process that had no JavaScript in it.
+   *
+   * Distinct from the nativeDrain* diagnostics, which describe the JS
+   * drain running in this page life. This one describes an upload that
+   * happened while the app was dead, which is the case the drain can
+   * never cover and the one the 5.9 day p90 lives in.
+   *
+   * `reason` is the field to read first. It is TaxotticUploader.Result's
+   * vocabulary verbatim: ok, no_config, no_session, bad_origin, empty,
+   * http_<code>, io_error. "no_session" on every row means the cookie
+   * jar is empty in a cold-started process, which is the one assumption
+   * in this design that no test off a phone can settle.
+   */
+  lastUpload: {
+    trigger: string;
+    posted: number;
+    reason: string;
+    atMs: number;
+  } | null;
 };
 
 type NativeFix = {
@@ -87,9 +108,31 @@ type GeofencePlugin = {
     armState: GeofenceArmState;
     backgroundLocation: boolean;
   }>;
+  /**
+   * Where the native uploader posts, and which company the fixes
+   * belong to. Same feature-detection caveat as startCapture below:
+   * absent on any binary built before this change, and absent on iOS,
+   * which has no native uploader to configure. Call sites must tolerate
+   * a rejection.
+   */
+  setUploadConfig(options: { origin: string; companyId: string }): Promise<void>;
   getState(): Promise<GeofenceState>;
-  readBuffer(): Promise<{ fixes: NativeFix[]; count: number }>;
-  consumeBuffer(options: { count: number }): Promise<{ remaining: number }>;
+  /**
+   * `generation` names the exact buffer state these fixes were read
+   * from. Hand it back to consumeBuffer. Optional because an apk built
+   * before the token existed does not return one.
+   */
+  readBuffer(): Promise<{ fixes: NativeFix[]; count: number; generation?: number }>;
+  /**
+   * Without `generation` the count is trusted, which is how a drive is
+   * lost when the native uploader drains the same file at the same
+   * moment. With it, a buffer that moved is left alone and `stale` says
+   * so.
+   */
+  consumeBuffer(options: {
+    count: number;
+    generation?: number;
+  }): Promise<{ remaining: number; stale?: boolean }>;
   stopCapture(): Promise<void>;
   /**
    * Optional: absent on any binary built before the drive-protection
@@ -112,7 +155,7 @@ type GeofencePlugin = {
  * Returns the plugin BOXED. Capacitor's registerPlugin proxy has a callable
  * `.then` (its get trap special-cases only $$typeof, toJSON, addListener and
  * removeListener), so it is a thenable, and returning it bare from an async
- * function makes the runtime call proxy.then(...) — a native method that does
+ * function makes the runtime call proxy.then(...), a native method that does
  * not exist. The promise never settles and every caller here waits forever,
  * which is why geofence_arm_state and geofence_count have always been NULL.
  * See lib/mileage/plugin-box.test.ts.
@@ -156,6 +199,62 @@ export async function getGeofenceState(): Promise<GeofenceState | null> {
 }
 
 /**
+ * Why a geofence read came back empty.
+ *
+ * `getGeofenceState` collapses three different worlds into one null:
+ * the plugin is not registered, the plugin threw, and the call never
+ * came back. The first is our bug and the other two are not, and the
+ * health check has been reporting all three as death. 163 heartbeats
+ * from one Android phone carried armState "armed" while its self-check
+ * read "dead=geofence_plugin".
+ *
+ * DELIBERATELY the same four words as `DeviceProbeOutcome` in
+ * ./device-status.ts, minus the "timeout" its caller adds. All three
+ * probe outcomes land in ONE heartbeat row next to each other, so a
+ * private vocabulary here would mean `geofence_probe = 'absent'` and
+ * `device_probe = 'absent'` meaning different things in the same row:
+ * "not registered" in one column and "the client sent nothing we
+ * recognise" in the other. Whoever groups on those columns a year from
+ * now will not know that, so:
+ *
+ *   ok           the plugin answered with data
+ *   null         the plugin answered, nothing to report
+ *   unavailable  no bridge to ask (web, or registerPlugin failed)
+ *   error        the bridge exists but the call rejected
+ *
+ * `error` is the one that matters. `guard()` hands back a
+ * registerPlugin proxy on EVERY native platform, registered or not, so
+ * an unregistered plugin does not come back "unavailable": it comes
+ * back "error", in a millisecond or two, because the bridge looked for
+ * a plugin of that name and found nothing to call. That fast rejection
+ * is the signature, and ./self-check.ts convicts on it with
+ * UNREGISTERED_MS_CEILING, exactly as it already does for
+ * device_status_plugin. "unavailable" is reachable only off-native.
+ */
+export type GeofenceProbeOutcome = "ok" | "null" | "unavailable" | "error";
+
+export async function probeGeofenceState(): Promise<{
+  value: GeofenceState | null;
+  outcome: GeofenceProbeOutcome;
+}> {
+  const plugin = (await guard())?.p ?? null;
+  if (!plugin) return { value: null, outcome: "unavailable" };
+  try {
+    const value = await plugin.getState();
+    // UNREACHABLE today, and labelled correctly anyway. getState is
+    // typed Promise<GeofenceState> and both natives either resolve an
+    // object or reject (TaxotticGeofencePlugin.java, .swift). If one
+    // ever resolves nothing, that is "answered with nothing", which
+    // this vocabulary calls "null" and not "error": a plugin that
+    // answers is registered, and calling it "error" would put it one
+    // millisecond threshold away from being convicted as unregistered.
+    return { value, outcome: value ? "ok" : "null" };
+  } catch {
+    return { value: null, outcome: "error" };
+  }
+}
+
+/**
  * Fetch the server's learned places and register them as geofences.
  *
  * Called on every resume rather than once, because a permission change,
@@ -169,6 +268,29 @@ export async function syncLearnedPlaces(companyId: string): Promise<{
 }> {
   const plugin = (await guard())?.p ?? null;
   if (!plugin || !companyId) return { synced: 0, armState: null };
+
+  // The native uploader posts with no JS running, so it needs the two
+  // things only the web layer knows: where to post, and which company
+  // the fixes belong to. Pushed on the same path as the places
+  // themselves so there is exactly one moment where native learns
+  // about the world, rather than two that can drift apart.
+  //
+  // Ahead of the fetch rather than beside the syncPlaces call below,
+  // because every return between here and there is a path on which the
+  // uploader would otherwise keep yesterday's config or none at all: a
+  // learned-place list that is empty or that fails to fetch says
+  // nothing about where to post.
+  try {
+    await plugin.setUploadConfig({
+      origin: window.location.origin,
+      companyId,
+    });
+  } catch {
+    // An older binary has no such method, and neither does iOS. Places
+    // still sync; the uploader simply stays idle, which is the
+    // pre-uploader behaviour.
+  }
+
   let places: Array<{
     id: string;
     label: string;
@@ -234,9 +356,13 @@ export async function drainGeofenceBuffer(
   const plugin = (await guard())?.p ?? null;
   if (!plugin || !companyId) return 0;
   let fixes: NativeFix[] = [];
+  let generation: number | undefined;
   try {
     const read = await plugin.readBuffer();
     fixes = read?.fixes ?? [];
+    // The token for THIS read. Passed back to consumeBuffer below so a
+    // buffer the native uploader moved in the meantime is left alone.
+    generation = read?.generation;
   } catch {
     return 0;
   }
@@ -288,14 +414,25 @@ export async function drainGeofenceBuffer(
   onPosted?.(points);
 
   try {
-    // Consume exactly what we POSTED. Anything the service appended while
-    // the upload was in flight, and anything the cap declined to take,
-    // keeps its place at the tail.
-    await plugin.consumeBuffer({ count: fixes.length });
+    // Consume exactly what we POSTED, and only if the buffer is still the
+    // one we read. Anything the service appended while the upload was in
+    // flight, and anything the cap declined to take, keeps its place at
+    // the tail.
+    //
+    // The generation is what stops this line losing a drive. Both this
+    // drain and TaxotticUploader do read, POST, consume(count) over the
+    // same file in the same process. With 900 buffered: this reads 900
+    // and posts its first 800, native reads 500, posts and consumes 500,
+    // and a count-only consume of 800 here would then take lines 801 to
+    // 900, which nobody posted. With the token, native's consume has
+    // already moved the generation, so this one is refused and the tail
+    // survives to be re-read.
+    await plugin.consumeBuffer({ count: fixes.length, generation });
   } catch {
     // The points are already on the server and ingest is idempotent on
     // (driver, company, captured_at), so a failed consume costs one
-    // duplicate upload, never a lost drive.
+    // duplicate upload, never a lost drive. A refused consume is the
+    // same trade and needs no handling here for the same reason.
   }
   return points.length;
 }
@@ -330,7 +467,7 @@ export async function startGeofenceCapture(): Promise<boolean> {
  *
  * Deliberately not called on app launch any more. It used to be, on the
  * reasoning that "two location foreground services at once is double the
- * battery for one stream of points" — but the WebView watcher is not a
+ * battery for one stream of points", but the WebView watcher is not a
  * foreground service, so what that actually did was drop the process from
  * protected to CACHED at the exact moment a resurrected drive was starting.
  * Android then reaped it under memory pressure: four LOW_MEMORY kills at

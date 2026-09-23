@@ -102,7 +102,7 @@ describe("isPlausibleTrip", () => {
     expect(isPlausibleTrip(1.6, 0, 36_000)).toBe(false); // 163 mph
   });
   it("degenerate zero-duration cannot divide by zero (floored to 30s)", () => {
-    // The 30s floor turns a half-mile zero-duration blip into 60 mph —
+    // The 30s floor turns a half-mile zero-duration blip into 60 mph , 
     // deliberately tolerated; the segmenter's own point/duration minimums
     // are the filter for those. What matters is no NaN/Infinity escape.
     expect(isPlausibleTrip(0.5, 0, 0)).toBe(true);
