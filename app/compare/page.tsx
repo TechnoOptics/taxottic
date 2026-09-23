@@ -64,7 +64,7 @@ export default function CompareHubPage() {
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+            "var(--navy-band)",
           paddingTop:
             "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
           paddingLeft: "env(safe-area-inset-left, 0px)",

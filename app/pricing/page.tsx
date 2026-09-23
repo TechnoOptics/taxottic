@@ -258,7 +258,7 @@ export default function PricingPage() {
         className="relative"
         style={{
           background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
+            "var(--navy-band)",
           borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
           // Native iOS overlays the WebView under the status bar, pad by
           // the real safe-area inset so the wordmark clears the notch /
@@ -285,14 +285,21 @@ export default function PricingPage() {
       </header>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-6">
-        <div className="text-center">
+        {/* Left-aligned like every other header on the skin. The saving
+            is one non-breaking group so "~17%." never sits alone on a
+            line, and it is static brass: the animated sweep cost paint
+            on every idle frame (see .gold-shine in app/globals.css). */}
+        <div>
           <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
             Pricing
           </div>
-          <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 max-w-2xl mx-auto leading-tight">
-            Honest pricing. <span className="gold-shine">Yearly saves ~17%.</span>
+          <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 max-w-2xl leading-tight">
+            Honest pricing.{" "}
+            <span className="whitespace-nowrap text-[var(--kicker)]">
+              Yearly saves ~17%.
+            </span>
           </h1>
-          <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
             No card to try Free. No surprise overages, credits roll over
             up to 2× your monthly grant. Switch tiers anytime; we pro-rate.
           </p>
