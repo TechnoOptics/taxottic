@@ -89,6 +89,21 @@ type TripQueryInput = {
   companyId: string;
   scope: TripScope;
   sinceIso: string;
+  /**
+   * Optional upper bound for keyset pagination: only rows with
+   * `started_at` at or before this instant are returned. Undefined means
+   * no upper bound, i.e. the newest rows.
+   *
+   * Deliberately OPTIONAL and added on the end: the three other callers
+   * of {@link loadScopedTrips} pass only `sinceIso` and keep compiling
+   * and behaving exactly as before. Inclusive (`lte`, not `lt`) so a row
+   * whose `started_at` ties the cursor is still fetched; the caller
+   * (see lib/mileage/drive-page.ts) is the one that knows which tied row
+   * was already shown and excludes it precisely, by id as well as time.
+   * A strict DB-side `lt` would drop tied rows before the caller ever
+   * sees them, with no way to recover them on a later page.
+   */
+  beforeIso?: string;
   limit?: number;
 };
 
@@ -99,14 +114,18 @@ function selfQuery(
   driverUserId: string,
   sinceIso: string,
   limit: number,
+  beforeIso?: string,
 ) {
-  return admin
+  const windowed = admin
     .from("mileage_trips")
     .select(TRIP_SELECT)
     .eq("company_id", companyId)
     .eq("driver_user_id", driverUserId)
-    .gte("started_at", sinceIso)
+    .gte("started_at", sinceIso);
+  const bounded = beforeIso ? windowed.lte("started_at", beforeIso) : windowed;
+  return bounded
     .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
 }
 
@@ -163,6 +182,7 @@ function othersQuery(
   target: { only: string } | { except: string },
   sinceIso: string,
   limit: number,
+  beforeIso?: string,
 ) {
   const base = admin
     .from("mileage_trips")
@@ -172,9 +192,11 @@ function othersQuery(
     "only" in target
       ? base.eq("driver_user_id", target.only)
       : base.neq("driver_user_id", target.except);
-  return restrictToSharedBusiness(scoped)
-    .gte("started_at", sinceIso)
+  const windowed = restrictToSharedBusiness(scoped).gte("started_at", sinceIso);
+  const bounded = beforeIso ? windowed.lte("started_at", beforeIso) : windowed;
+  return bounded
     .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
 }
 
@@ -188,7 +210,7 @@ function othersQuery(
  */
 export async function loadScopedTrips<T>(
   admin: SupabaseClient,
-  { companyId, scope, sinceIso, limit = 500 }: TripQueryInput,
+  { companyId, scope, sinceIso, beforeIso, limit = 500 }: TripQueryInput,
 ): Promise<T[]> {
   if (scope.kind === "self") {
     const { data } = await selfQuery(
@@ -197,6 +219,7 @@ export async function loadScopedTrips<T>(
       scope.driverUserId,
       sinceIso,
       limit,
+      beforeIso,
     );
     return (data ?? []) as unknown as T[];
   }
@@ -207,17 +230,19 @@ export async function loadScopedTrips<T>(
       { only: scope.driverUserId },
       sinceIso,
       limit,
+      beforeIso,
     );
     return (data ?? []) as unknown as T[];
   }
   const [own, others] = await Promise.all([
-    selfQuery(admin, companyId, scope.viewerUserId, sinceIso, limit),
+    selfQuery(admin, companyId, scope.viewerUserId, sinceIso, limit, beforeIso),
     othersQuery(
       admin,
       companyId,
       { except: scope.viewerUserId },
       sinceIso,
       limit,
+      beforeIso,
     ),
   ]);
   return [
