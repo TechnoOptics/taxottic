@@ -27,19 +27,24 @@ describe("the drives route", () => {
     }
   });
 
-  it("scopes to the caller rather than to a client-supplied driver", () => {
-    // The brief spelled this /searchParams\.get\(["']driver["']\)/, which
-    // this route can never trip: it aliases `const sp = req.nextUrl
-    // .searchParams` (as the brief's own snippet does) and would therefore
-    // write the leak as `sp.get("driver")`. Verified by mutation, the
-    // brief's regex stayed GREEN while the route read the driver from the
-    // query string. Match the CALL rather than one spelling of the
-    // receiver, so any alias trips it.
-    expect(
-      SRC,
-      "taking a driver id from the query string would let anyone read any log",
-    ).not.toMatch(/\.get\(\s*["']driver(User)?(Id)?["']\s*\)/i);
-  });
+  // The brief's second source-level test asserted the route never wrote
+  // searchParams.get("driver"). It is GONE, on purpose, and nothing
+  // text-matching replaces it.
+  //
+  // Two reasons. It never worked: it pinned the receiver spelling while
+  // the route aliases `const sp = req.nextUrl.searchParams` (as the
+  // brief's own snippet does), so it stayed GREEN through the very
+  // mutation it existed to catch. And the rule it encoded was wrong.
+  // Reading `?driver=` is not the danger; TRUSTING it is. The route now
+  // reads it and launders it through resolveTripScope against a roster
+  // loaded from the caller's own membership, which is that helper's
+  // entire purpose. Any regex strict enough to forbid the untrusted read
+  // also forbids the laundered one, so keeping it would only pressure
+  // someone into writing worse code to satisfy it.
+  //
+  // "the scope the drives handler pages with" below is the real guard: it
+  // pins the exact scope object for every role and parameter shape,
+  // including the two that must collapse to `self`.
 
   it("asks for one trip's polyline, with no paging loop", () => {
     expect(SRC).toMatch(/mileage_trip_polylines/);
@@ -143,6 +148,8 @@ const VIEWER = "11111111-1111-4111-8111-111111111111";
 const SOMEONE_ELSE = "22222222-2222-4222-8222-222222222222";
 const TRIP = "33333333-3333-4333-8333-333333333333";
 const COMPANY = "44444444-4444-4444-8444-444444444444";
+/** A real user, but not in the caller's company. */
+const A_STRANGER = "55555555-5555-4555-8555-555555555555";
 
 beforeEach(() => {
   h.user = { id: VIEWER };
@@ -166,7 +173,11 @@ describe("the drives handler", () => {
     expect(h.rpcCalls).toEqual([]);
   });
 
-  it("pages as the session's driver, never the query string's", async () => {
+  it("never takes a driver id from the query string as given", async () => {
+    // Both spellings, including one the route does not read at all. The
+    // point is that no parameter reaches the scope unlaundered: this
+    // caller is an ordinary member, so resolveTripScope owes them `self`
+    // whatever they name. The roster-aware cases are grouped below.
     const res = await ask(
       `?company=${COMPANY}&driver=${SOMEONE_ELSE}&driverUserId=${SOMEONE_ELSE}`,
     );
@@ -174,7 +185,7 @@ describe("the drives handler", () => {
     expect(h.pageCalls).toHaveLength(1);
     expect(
       h.pageCalls[0].scope,
-      "a drive log names where somebody was; the driver comes from the session",
+      "a drive log names where somebody was; a member reads only their own",
     ).toEqual({ kind: "self", driverUserId: VIEWER });
   });
 
@@ -256,6 +267,31 @@ describe("the drives handler", () => {
     ).toEqual({ points: [] });
   });
 
+  it("refuses a teammate's polyline even to a manager", async () => {
+    // The LIST may widen to a teammate (a manager pinning one is a product
+    // decision that already exists, and the list is filtered to confirmed
+    // business drives). A raw GPS track pulled by guessable id is not that
+    // decision, so this branch stays strictly the caller's own and does NOT
+    // go through resolveTripScope.
+    h.memberships = [{ company_id: COMPANY, role: "manager" }];
+    h.memberRows = [{ user_id: VIEWER }, { user_id: SOMEONE_ELSE }];
+    h.ownedRow = null; // the probe pins driver_user_id to the session
+    h.polyRows = [
+      {
+        trip_id: TRIP,
+        lat: 41.5,
+        lng: -81.7,
+        captured_at: "2026-09-01T12:00:00.000Z",
+      },
+    ];
+    const res = await ask(`?trip=${TRIP}&driver=${SOMEONE_ELSE}`);
+    expect(res.status).toBe(200);
+    expect(
+      await res.json(),
+      "a manager may read a teammate's list, not their minute-by-minute track",
+    ).toEqual({ points: [] });
+  });
+
   it("prefers the trip branch over paging", async () => {
     await ask(`?trip=${TRIP}&company=${COMPANY}`);
     expect(h.pageCalls).toEqual([]);
@@ -311,13 +347,54 @@ describe("the scope the drives handler pages with", () => {
     ).toEqual({ kind: "self", driverUserId: VIEWER });
   });
 
-  it("does not let a query parameter name the driver, at any role", async () => {
+  // ?driver= is READ, and then laundered. These four pin what laundering
+  // means at each role, because "we validate it" is the kind of claim that
+  // rots quietly.
+
+  it("keeps a non-manager on their own drives however they ask", async () => {
+    h.memberships = [{ company_id: COMPANY, role: "member" }];
+    h.memberRows = [{ user_id: VIEWER }, { user_id: SOMEONE_ELSE }];
+    await ask(`?company=${COMPANY}&driver=${SOMEONE_ELSE}`);
+    expect(
+      h.pageCalls[0].scope,
+      "a member naming a colleague must not read that colleague",
+    ).toEqual({ kind: "self", driverUserId: VIEWER });
+  });
+
+  it("collapses a manager naming somebody off their roster to self", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    await ask(`?company=${COMPANY}&driver=${A_STRANGER}`);
+    expect(
+      h.pageCalls[0].scope,
+      "a manager's reach stops at their own company's roster",
+    ).toEqual({ kind: "self", driverUserId: VIEWER });
+  });
+
+  it("pages the teammate a manager pinned, so page two does not widen", async () => {
     asManagerOf(VIEWER, SOMEONE_ELSE);
     await ask(`?company=${COMPANY}&driver=${SOMEONE_ELSE}`);
     expect(
       h.pageCalls[0].scope,
-      "the route offers no driver parameter; the scope comes from membership",
-    ).toEqual({ kind: "team", viewerUserId: VIEWER });
+      "page one showed one teammate, so page two must show the same one",
+    ).toEqual({ kind: "other", driverUserId: SOMEONE_ELSE });
+  });
+
+  it("pages the team when a manager asks for all drivers", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    await ask(`?company=${COMPANY}&driver=all`);
+    expect(h.pageCalls[0].scope).toEqual({
+      kind: "team",
+      viewerUserId: VIEWER,
+    });
+  });
+
+  it("pages a manager who pinned themselves as self", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    await ask(`?company=${COMPANY}&driver=${VIEWER}`);
+    expect(h.pageCalls[0].scope).toEqual({
+      kind: "self",
+      driverUserId: VIEWER,
+    });
   });
 
   it("pages nothing for a company the caller does not belong to", async () => {

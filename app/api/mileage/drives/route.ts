@@ -15,10 +15,17 @@ export const dynamic = "force-dynamic";
  * route here when it nears the viewport, and the end of the list asks
  * for the next page.
  *
- * Both answers are scoped to the caller, and the caller is the session.
  * A drive log is a location history: it says where somebody was, minute
- * by minute. The driver is therefore NEVER read from the query string,
- * because anything in the query string is chosen by whoever is asking.
+ * by minute. So nothing in the query string is TRUSTED here. That is not
+ * the same as refusing to read it: `?driver=` is read and then laundered
+ * through resolveTripScope against a roster the server loaded from the
+ * caller's own membership, which is exactly what that helper exists for
+ * (lib/mileage/team-scope.ts). A non-manager gets their own drives
+ * whatever they ask for; a manager gets a teammate only if that teammate
+ * is genuinely on their roster; anything else collapses to `self`.
+ *
+ * The polyline branch does NOT go through that helper, deliberately. See
+ * the comment on its ownership probe below.
  */
 
 /**
@@ -71,6 +78,16 @@ export async function GET(req: NextRequest) {
     // `mileage_trips manager + firm read` policy would let a manager read
     // a colleague's private movements, and service role skips even that.
     // So this probe is the whole barrier.
+    //
+    // It pins driver_user_id to the SESSION, and deliberately does not go
+    // through resolveTripScope the way the list below does. The two are
+    // not the same question. A manager reading a teammate's LIST is an
+    // existing product decision, and the list is filtered to confirmed
+    // business drives for exactly that reason. A manager pulling an
+    // arbitrary trip's raw GPS track by id is not that decision: it is
+    // minute-by-minute movement, the id is guessable, and nothing in the
+    // request says the drive was one the list would have shown. So the
+    // polyline stays strictly the caller's own.
     const { data: owned } = await admin
       .from("mileage_trips")
       .select("id")
@@ -117,25 +134,24 @@ export async function GET(req: NextRequest) {
   const isManager = membership.role === "manager";
 
   // Who this request may read. The SAME helper the page calls
-  // (app/mileage/page.tsx), fed the same way, so the two cannot drift:
-  // a manager of a 2+ person team pages the team overlay, everyone else
-  // pages their own drives. That matters because a manager LANDS on the
-  // team view, so a route that always paged `self` would quietly drop
-  // every teammate's drives at page two, which looks like "the older
-  // drives are missing" rather than like a bug.
+  // (app/mileage/page.tsx), fed the same four inputs in the same way, so
+  // the two cannot drift. Page one and page two therefore agree: a
+  // manager on the team overlay keeps the team, a manager who pinned one
+  // teammate keeps that teammate, everyone else keeps themselves.
   //
-  // `driverParam` is deliberately the empty string rather than a query
-  // parameter. resolveTripScope would validate one (it collapses any
-  // driver the caller may not read to `self`), but this route does not
-  // offer one at all: see the note on the pinned-driver case in
-  // .superpowers/sdd/2026-09-22-miles/task-3-report.md.
+  // `?driver=` is read but NOT trusted, and resolveTripScope is where the
+  // difference lives. It is handed the raw value plus `driverIds`, a
+  // roster this server just loaded from the caller's own membership, and
+  // it returns `other` only when the value is genuinely on that roster.
+  // A non-manager never leaves `self` at all. Passing the raw string in
+  // is the helper's documented contract, not a shortcut around it.
   const driverIds = isManager
     ? await companyDriverIds(admin, companyId)
     : [user.id];
   const scope = resolveTripScope({
     isManager,
     viewerUserId: user.id,
-    driverParam: "",
+    driverParam: sp.get("driver") ?? "",
     driverIds,
   });
 
