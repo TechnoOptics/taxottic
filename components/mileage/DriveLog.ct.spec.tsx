@@ -617,3 +617,87 @@ test("the drives come before the map, not after it", async ({
   ).toBeLessThan(m.map);
   await expect(c).toBeVisible();
 });
+
+/**
+ * THE COUNT AND ITS DESTINATION AGREE.
+ *
+ * `countDrivesAwaitingDecision` counts by driver across every company
+ * and every date. `#first-unclassified` is placed by TripList among the
+ * drives actually rendered: one page, one company, after this
+ * component's filter. When those two sets differ, the anchor the head
+ * would use is not in the document at all, and the tap does nothing:
+ * the dead control this whole screen was rebuilt to remove, rebuilt in
+ * its replacement. So the anchor is promised only when every waiting
+ * drive is on screen, and the deck takes the tap otherwise.
+ */
+test("a count larger than the rows on screen sends the reader to the deck", async ({
+  mount,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  // One waiting drive rendered, three waiting in total: the other two
+  // are in another company, or past page one, or outside the filter.
+  const c = await mount(
+    <div data-skin="instrument">
+      <DriveLog
+        who="Your drives"
+        awaiting={3}
+        initialDrives={[
+          { ...drive("d-1", 1), classification: "unclassified" as const },
+          drive("d-2", 2),
+        ]}
+        initialExcluded={[]}
+        companyId="co-1"
+        driverParam=""
+        places={[]}
+        reclassify={noop}
+        deleteTrip={noop}
+        companies={[{ id: "co-1", name: "Acme" }]}
+        moveTripCompany={noop}
+      />
+    </div>,
+  );
+  const link = c.getByRole("link", { name: /waiting/ });
+  await expect(link).toHaveAttribute("href", "/mileage/classify");
+  // And the deck is a real place, unlike an anchor that is not here.
+  expect(await page.locator("#first-unclassified").count()).toBe(1);
+});
+
+test("the anchor is promised only while every waiting drive is on screen", async ({
+  mount,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  // Both waiting drives are rendered, so the head can point at the first
+  // of them. One of them is 40 days old, which the week filter drops.
+  const c = await mount(
+    <div data-skin="instrument">
+      <DriveLog
+        who="Your drives"
+        awaiting={2}
+        initialDrives={[
+          { ...drive("d-1", 1), classification: "unclassified" as const },
+          { ...drive("d-2", 40), classification: "unclassified" as const },
+        ]}
+        initialExcluded={[]}
+        companyId="co-1"
+        driverParam=""
+        places={[]}
+        reclassify={noop}
+        deleteTrip={noop}
+        companies={[{ id: "co-1", name: "Acme" }]}
+        moveTripCompany={noop}
+      />
+    </div>,
+  );
+  const link = c.getByRole("link", { name: /waiting/ });
+  await expect(link).toHaveAttribute("href", "#first-unclassified");
+
+  // The filter drops the older one. The count still says two, because it
+  // counts every date on purpose, so the anchor stops being honest and
+  // the destination changes with it.
+  await c.getByRole("button", { name: "Last 7 days" }).click();
+  await expect(c.locator("li.card")).toHaveCount(1);
+  await expect(link).toContainText("2 waiting");
+  await expect(link).toHaveAttribute("href", "/mileage/classify");
+});

@@ -71,7 +71,10 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
 
   return (
     <details className="group mx-0 w-full rounded-2xl border border-amber-300 bg-amber-50">
-      <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-4 py-2.5">
+      {/* min-h-11: this summary is the whole control, it sits in the
+          head's tracking slot, and it measured 39px against the 44px
+          minimum this screen is held to (MilesHead.ct.spec.tsx). */}
+      <summary className="flex min-h-11 cursor-pointer select-none list-none items-center gap-2 px-4 py-2">
         <WarningIcon className="size-4 shrink-0 text-amber-800" />
         <h2 className="min-w-0 flex-1 text-sm font-semibold leading-snug text-amber-900">
           Some devices aren&apos;t tracking
@@ -94,8 +97,13 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
                 <div className="flex items-center justify-between gap-3">
                   <span className="min-w-0 truncate text-sm text-amber-950">{name}</span>
                   <span className="flex items-center gap-2 whitespace-nowrap">
+                    {/* A square marker, not a round one. The Year
+                        grammar has no round chips and the head is
+                        asserted to carry no `.rounded-full` at all; this
+                        dot was inside the alert, which is inside the
+                        head, and it is the only thing that was. */}
                     <span
-                      className={`inline-block h-2 w-2 rounded-full ${
+                      className={`inline-block h-2 w-2 rounded-[1px] ${
                         silent || r.health.status === "blocked"
                           ? "bg-red-500"
                           : "bg-amber-500"

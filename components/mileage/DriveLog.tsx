@@ -15,6 +15,7 @@ import { filterDrives, type FilterKey } from "@/lib/mileage/drive-filter";
 import { splitScheduleC } from "@/lib/mileage/schedule-c-totals";
 import { MilesHead } from "@/components/mileage/MilesHead";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
+import { isAwaitingDecision } from "@/lib/mileage/awaiting-decision";
 import type { SentDrive } from "@/app/api/mileage/drives/route";
 
 /**
@@ -222,6 +223,34 @@ export function DriveLog({
     shown.filter((d) => d.classification === "business"),
   );
 
+  /**
+   * WHERE THE WAITING COUNT GOES, and why it is decided here.
+   *
+   * `awaiting` is counted by driver across every company and every
+   * date, on purpose. The anchor the head would like to use,
+   * `#first-unclassified`, is placed by TripList among the drives
+   * actually rendered: one page, one company, after this component's
+   * filter. Those two sets are not the same set. A driver in two
+   * companies, one holding waiting drives past page one, or one who
+   * taps "Last 7 days" while the waiting drive is forty days old, would
+   * read "3 waiting", tap it, and get nothing at all, because the
+   * anchor is not in the document. That is the dead control this screen
+   * was rebuilt to remove, rebuilt in its own replacement.
+   *
+   * So the anchor is promised ONLY when every drive the count refers to
+   * is on screen. Otherwise the deck gets the tap: it holds all of them
+   * by the same rule the count uses, and the two are held to that rule
+   * at both call sites by awaiting-decision-wiring.test.ts.
+   */
+  const awaitingShown = shown.filter((d) =>
+    isAwaitingDecision({
+      classification: d.classification,
+      needs_confirmation: d.needs_confirmation,
+    }),
+  ).length;
+  const waitingHref =
+    awaitingShown >= awaiting ? "#first-unclassified" : "/mileage/classify";
+
   // ONE fetch for the map below AND every row in the list, because they
   // want the same sixty routes. Scrolling a full page used to fire one
   // single-id request per row on top of the map's batch, at the full
@@ -291,6 +320,7 @@ export function DriveLog({
         deductionCents={totals.settledCents}
         driveCount={shown.length}
         awaiting={awaiting}
+        waitingHref={waitingHref}
         switcher={switcher}
         tracking={tracking}
       />

@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { MilesHead } from "./MilesHead";
 import { DriverPicker } from "./DriverPicker";
+import { TeamTrackingHealth } from "./TeamTrackingHealth";
+import { TrackingHealthBanner } from "./TrackingHealthBanner";
 
 /**
  * What stands between opening Miles and reading a drive.
@@ -80,12 +82,39 @@ test("the waiting count is a link to the first drive that wants one", async ({
         deductionCents={0}
         driveCount={3}
         awaiting={1}
+        waitingHref="#first-unclassified"
       />
     </div>,
   );
   const link = c.getByRole("link", { name: /waiting/ });
   await expect(link).toHaveAttribute("href", "#first-unclassified");
   await expect(link).toContainText("1 waiting");
+});
+
+test("a caller that promises no anchor gets the deck, not a dead tap", async ({
+  mount,
+  page,
+}) => {
+  // The count is taken across every company and every date; the anchor
+  // exists only among the rows a caller rendered. A caller that says
+  // nothing about what it rendered must not be given the anchor, because
+  // an anchor that is not in the document is a tap that does nothing.
+  await page.setViewportSize({ width: 390, height: 800 });
+  const c = await mount(
+    <div data-skin="instrument">
+      <MilesHead
+        who="All drivers"
+        miles={0}
+        deductionCents={0}
+        driveCount={0}
+        awaiting={4}
+      />
+    </div>,
+  );
+  await expect(c.getByRole("link", { name: /waiting/ })).toHaveAttribute(
+    "href",
+    "/mileage/classify",
+  );
 });
 
 test("every control the thumb reaches is at least 44px", async ({
@@ -112,17 +141,46 @@ test("every control the thumb reaches is at least 44px", async ({
             current="u-2"
           />
         }
+        /* THE REAL NODES, both slots. An earlier version of this test
+           mounted the head with no tracking node and a hand-written
+           stand-in for none of it, so it measured neither injected slot
+           and was green while the real head carried a 39px summary and
+           a round 8px dot. A guard that cannot see a whole slot reads as
+           coverage; this repo has shipped that mistake three times. */
         tracking={
-          <details>
-            <summary className="mono-label min-h-11 inline-flex items-center">
-              Tracking needs attention
-            </summary>
-            <p>The phone stopped uploading.</p>
-          </details>
+          <>
+            <TeamTrackingHealth
+              rows={[
+                {
+                  userId: "u-2",
+                  label: "Grace Hopper · Field",
+                  health: { status: "silent", ageMs: 42 * 3_600_000 },
+                  cause: "authorization_downgraded",
+                  platform: "ios",
+                },
+              ]}
+            />
+            <details className="w-full rounded-xl border border-amber-300 bg-amber-50/60">
+              <summary className="mono-label flex min-h-11 cursor-pointer select-none list-none items-center gap-2 px-3 text-amber-900">
+                Tracking needs attention
+              </summary>
+              <div className="px-1 pb-1">
+                <TrackingHealthBanner
+                  reason="Stops are being logged and drives are not."
+                  cause="Location is While Using."
+                  recoverable={0}
+                  recoverAction={async () => {}}
+                />
+              </div>
+            </details>
+          </>
         }
       />
     </div>,
   );
+  // Every control a thumb can actually reach: the ones inside a closed
+  // <details> measure zero and are nobody's tap target until the summary
+  // above them is tapped, and that summary is measured here.
   const small = await c.locator("a, button, summary, [role=button]").evaluateAll(
     (els) =>
       els
@@ -130,7 +188,7 @@ test("every control the thumb reaches is at least 44px", async ({
           text: (el.textContent ?? "").trim().slice(0, 40),
           h: Math.round(el.getBoundingClientRect().height),
         }))
-        .filter((m) => m.h < 44),
+        .filter((m) => m.h > 0 && m.h < 44),
   );
   expect(small, `controls under 44px: ${JSON.stringify(small)}`).toEqual([]);
   // The head still carries every capability it did: who is being read,
@@ -139,5 +197,8 @@ test("every control the thumb reaches is at least 44px", async ({
   await expect(c).toContainText("Techno Optics LLC");
   await expect(c.getByLabel("View another driver's drives")).toBeVisible();
   await expect(c).toContainText("Tracking needs attention");
+  await expect(c).toContainText("Some devices aren't tracking");
+  // Including everything the two slots brought with them.
   expect(await c.locator(".rounded-full").count()).toBe(0);
+  await expect(c).not.toContainText("\u2192");
 });

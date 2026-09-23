@@ -73,14 +73,19 @@ const noop = async () => {};
 
 export function DriverPageHead() {
   return (
-    <main id="main" className="min-h-screen">
+    /* data-skin carries the Instrument palette and the .figure /
+       .mono-label faces, the same way app/layout.tsx does. Without it
+       this fixture measures an unskinned page. */
+    <main id="main" data-skin="instrument" className="min-h-screen">
       {/* AppHeader is fixed and leaves this spacer in flow (AppHeader.tsx). */}
       <div aria-hidden="true" style={{ height: "3.25rem" }} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <DriveLog
           who="Your drives"
           where="Techno Optics LLC"
-          awaiting={3}
+          /* One waiting drive, and it is the one rendered below, which
+             is what lets the head promise the anchor. */
+          awaiting={1}
           switcher={
             <DriverPicker selfUserId={SELF} drivers={DRIVERS} current={SELF} />
           }

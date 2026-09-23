@@ -34,6 +34,7 @@ const TEAM_HEALTH = "components/mileage/TeamTrackingHealth.tsx";
 const TEAM_NOTE = "components/mileage/TeamViewNote.tsx";
 const MILES_HEAD = "components/mileage/MilesHead.tsx";
 const TRIP_LIST = "components/mileage/TripList.tsx";
+const DRIVE_LOG = "components/mileage/DriveLog.tsx";
 
 function stripComments(src: string): string {
   return src
@@ -58,6 +59,7 @@ const health = source(TEAM_HEALTH);
 const note = source(TEAM_NOTE);
 const milesHead = source(MILES_HEAD);
 const list = source(TRIP_LIST);
+const log = source(DRIVE_LOG);
 
 /**
  * The <details> element enclosing `needle`: its opening tag (so `open`
@@ -192,13 +194,30 @@ describe("the classification question is asked once, on the row", () => {
         /awaiting=\{[^}]*awaitingCount/,
       );
     }
-    expect(milesHead).toMatch(/href="#first-unclassified"/);
+    // The head links where its caller says, and its default is the deck
+    // rather than the anchor: the count is taken across every company
+    // and every date, and only a caller holding the rows can know the
+    // anchor is in the document at all.
+    expect(milesHead).toMatch(/href=\{waitingHref\}/);
+    expect(milesHead).toMatch(
+      /waitingHref = CLASSIFY_DECK|waitingHref = "\/mileage\/classify"/,
+    );
+    // And the caller that does hold the rows promises the anchor only
+    // while every waiting drive is among them.
+    expect(log, "the drive log does not decide the destination").toMatch(
+      /awaitingShown >= awaiting\s*\?\s*"#first-unclassified"/,
+    );
     expect(list, "no row carries the anchor the head links to").toMatch(
       /id=\{anchor \? "first-unclassified" : undefined\}/,
     );
-    expect(list, "the anchored row is not chosen by the shared rule").toMatch(
-      /isAwaitingDecision\(/,
-    );
+    for (const [src, name] of [
+      [list, "the anchored row"],
+      [log, "the drive log's count of what is on screen"],
+    ] as const) {
+      expect(src, `${name} is not chosen by the shared rule`).toMatch(
+        /isAwaitingDecision\(/,
+      );
+    }
   });
 });
 

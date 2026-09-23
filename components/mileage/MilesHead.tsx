@@ -1,5 +1,10 @@
 import type { ReactNode } from "react";
 
+/** The review deck, which holds every drive awaiting a decision by the
+ *  same rule the count is computed from (lib/mileage/awaiting-decision
+ *  .ts, asserted at both call sites in awaiting-decision-wiring.test.ts). */
+const CLASSIFY_DECK = "/mileage/classify";
+
 /**
  * Everything between opening Miles and reading a drive.
  *
@@ -40,6 +45,7 @@ export function MilesHead({
   deductionCents,
   driveCount,
   awaiting,
+  waitingHref = CLASSIFY_DECK,
   switcher,
   tracking,
 }: {
@@ -60,6 +66,22 @@ export function MilesHead({
    *  nothing: the rows ask, and a head that says "none waiting" on every
    *  visit is a line that never changes. */
   awaiting: number;
+  /**
+   * Where the count goes. `#first-unclassified` when the caller can see
+   * that every waiting drive is among the rows it rendered, and the
+   * review deck otherwise.
+   *
+   * THE DEFAULT IS THE DECK, deliberately. The count comes from
+   * countDrivesAwaitingDecision, which counts by driver across every
+   * company and every date; the anchor exists only among the drives a
+   * caller actually rendered, which is one page of one company after a
+   * client filter. A caller that says nothing about what it rendered
+   * cannot promise the anchor, and an anchor that is not in the DOM is
+   * a tap that does nothing: the dead control this whole screen was
+   * rebuilt to remove. Only DriveLog, which holds the rows, may promise
+   * it. See DriveLog.tsx.
+   */
+  waitingHref?: string;
   /** The manager's driver switch, when the viewer has one. */
   switcher?: ReactNode;
   /** The tracking detail, passed ONLY when a phone needs attention. */
@@ -86,10 +108,11 @@ export function MilesHead({
       </p>
       {awaiting > 0 ? (
         // Not a banner and not a pill. It says how many and it goes to
-        // the first one, which is the only action it could offer that
-        // the row does not already offer better.
+        // them: to the first one on screen when they are all on screen,
+        // and to the deck that holds every one of them when they are
+        // not. The number and the destination have to agree.
         <a
-          href="#first-unclassified"
+          href={waitingHref}
           className="mono-label min-h-11 inline-flex items-center self-start underline decoration-dotted underline-offset-4"
         >
           {awaiting} waiting
