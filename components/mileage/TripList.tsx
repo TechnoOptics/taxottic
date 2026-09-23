@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { TripThumbnail } from "@/components/maps/TripThumbnail";
+import { DriveThumbnail } from "@/components/mileage/DriveThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 
@@ -227,11 +227,14 @@ function TripCard({
 
   // First + last GPS fix = the drive's start / end, for reverse-geocoded
   // place labels ("Shakopee, MN → Mounds View, MN"). A drive carries
-  // hundreds of fixes and this list renders hundreds of drives, so the sort
-  // is memoised: it used to run twice per row per render (once here, once
-  // inline in the TripThumbnail prop below) and every re-render of any row
-  // in the list paid for it again. `trip.points` is the identity to key on -
-  // the array is replaced wholesale when the server action revalidates.
+  // hundreds of fixes, so the sort is memoised on `trip.points`, the
+  // identity that is replaced wholesale when a server action revalidates.
+  //
+  // The map no longer reads this: DriveThumbnail fetches its own route
+  // when the row nears the viewport. /mileage now ships rows with an
+  // empty `points`, so these labels only appear for a caller that still
+  // supplies them, and their absence costs the reader nothing the row
+  // does not already say in words.
   const sortedPts = useMemo(
     () =>
       [...trip.points].sort((a, b) => (a.captured_at < b.captured_at ? -1 : 1)),
@@ -239,10 +242,6 @@ function TripCard({
   );
   const startPt = sortedPts[0];
   const endPt = sortedPts[sortedPts.length - 1];
-  const thumbPts = useMemo(
-    () => sortedPts.map((p) => ({ lat: p.lat, lng: p.lng })),
-    [sortedPts],
-  );
 
   const start = new Date(trip.startedAtISO);
   const end = new Date(trip.endedAtISO);
@@ -317,8 +316,8 @@ function TripCard({
       aria-busy={pending}
     >
       <div className="flex items-start gap-3 min-w-0">
-        <TripThumbnail
-          points={thumbPts}
+        <DriveThumbnail
+          tripId={trip.id}
           classification={
             trip.classification === "business" ||
             trip.classification === "personal"
