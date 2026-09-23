@@ -15,8 +15,8 @@ import {
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
 import { MobileOnly } from "@/components/MobileOnly";
 import { TrackerStatus } from "@/components/mileage/TrackerStatus";
-import { type TripRow } from "@/components/mileage/TripList";
-import { MileageReview } from "@/components/mileage/MileageReview";
+import { DriveLog } from "@/components/mileage/DriveLog";
+import type { SentDrive } from "@/app/api/mileage/drives/route";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
 import { RecoverLostDrives } from "@/components/mileage/RecoverLostDrives";
@@ -69,14 +69,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type SP = Promise<{ range?: string; driver?: string }>;
-
-const RANGES: Record<string, { label: string; days: number }> = {
-  day: { label: "Today", days: 1 },
-  week: { label: "This week", days: 7 },
-  month: { label: "This month", days: 31 },
-  quarter: { label: "Quarter", days: 92 },
-};
+type SP = Promise<{ driver?: string }>;
 
 function fmtMiles(m: number) {
   return m.toLocaleString("en-US", { maximumFractionDigits: 1 });
@@ -94,8 +87,7 @@ export default async function MileagePage({
   searchParams: SP;
 }) {
   const { user, admin } = await requireUserWithAdmin();
-  const { range = "day", driver: driverParam = "" } = await searchParams;
-  const rangeCfg = RANGES[range] ?? RANGES.week;
+  const { driver: driverParam = "" } = await searchParams;
 
   const memberships = await getMyCompanies();
   const company = memberships[0]?.company ?? null;
@@ -549,9 +541,11 @@ export default async function MileagePage({
                 payload rather than reloading the document, which would
                 tear down the live tracker. */}
             <MileageAutoRefresh />
-            <div className="mt-2 text-sm text-ink-soft">
-              {company.name} · {rangeCfg.label.toLowerCase()}
-            </div>
+            {/* No range in this line any more. The window is a client
+                filter over the drives already loaded (the control below),
+                so the server has no range to name and naming one would be
+                a claim about a list it does not decide. */}
+            <div className="mt-2 text-sm text-ink-soft">{company.name}</div>
 
             {isManager && teamHealth.length > 0 ? (
               <TeamTrackingHealth rows={teamHealth} />
@@ -570,7 +564,12 @@ export default async function MileagePage({
             ) : null}
 
             {viewingAll ? (
-              <TeamViewNote range={range} selfUserId={user.id} />
+              /* The range prop is inert: this page reads no ?range=
+                 any more, so the note's own-log link carries nothing to
+                 honour. Left in place rather than reshaped here because
+                 TeamViewNote is not this task's file; Task 6 rebuilds
+                 this row and can drop the prop. */
+              <TeamViewNote range="" selfUserId={user.id} />
             ) : !viewingSelf ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
                 <EyeIcon className="size-4 shrink-0" />
@@ -677,34 +676,23 @@ export default async function MileagePage({
                   />
                 </>
               ) : null}
-              {Object.entries(RANGES).map(([k, v]) => (
-                <Link
-                  key={k}
-                  // Carry the driver scope across a range change. Without
-                  // it, switching range drops ?driver= and, now that no
-                  // param means the team view, would throw a manager out
-                  // of whichever single log they were reading.
-                  href={
-                    isManager && driverParam
-                      ? `/mileage?range=${k}&driver=${driverParam}`
-                      : `/mileage?range=${k}`
-                  }
-                  className={
-                    "text-xs px-3 h-8 inline-flex items-center rounded-full border " +
-                    (k === range
-                      ? "bg-forest-900 text-cream border-forest-900"
-                      : "border-forest-200 text-forest-800 hover:border-gold-300")
-                  }
-                >
-                  {v.label}
-                </Link>
-              ))}
+              {/* The four range links used to sit here. They were
+                  navigation on a force-dynamic page: a tap started a
+                  whole server render, this row had no pending state, and
+                  nothing on screen moved until the render came back,
+                  which is the "Today and This month do not react"
+                  report. The window is a filter now, rendered with the
+                  list it filters (components/mileage/DriveLog.tsx), and
+                  it answers on the tap. Guarded by
+                  lib/mileage/drive-first-paint.test.ts. */}
               {/* Cross-link to the dedicated business-trips
                   breadcrumb dashboard. Keep this here even when
                   there are zero business trips so a returning
                   driver can land on the YTD view in one tap. */}
               <Link
-                href="/mileage/business?range=ytd"
+                // The business view defaults to year to date on its
+                // own, so this link needs no query at all.
+                href="/mileage/business"
                 className="ml-1 text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400"
               >
                 <span
@@ -776,38 +764,32 @@ export default async function MileagePage({
                 ) : null}
               </>
             ) : (
-              /* Map + trip list share one client owner so "Review" on a
-                 trip focuses that single drive on the map and only ONE
-                 trip is ever in review at a time. Default (no focus) is
-                 the range overview where all drives plot together. The
-                 list is grouped + timezone-aware (local, not Vercel UTC);
-                 Business/Personal are exact-match toggles that show
-                 nothing selected for an unclassified drive. */
-              <MileageReview
-                mapTrips={mapTrips}
-                places={places}
-                tripRows={trips.map<TripRow>((t) => ({
-                  id: t.id,
-                  startedAtISO: t.started_at,
-                  endedAtISO: t.ended_at,
-                  distanceMiles: Number(t.distance_miles),
-                  classification: t.classification,
-                  deductionCents: Number(t.deduction_cents),
-                  needsConfirmation: t.needs_confirmation === true,
-                  points: pointsByTrip.get(t.id) ?? [],
-                  companyId: company.id,
-                  // Resolved HERE, on the server, rather than handing the
-                  // whole place list to the row: the row renders a name,
-                  // not a lookup table, and this keeps the id-to-place
-                  // join off the client and out of MileageReview's props.
+              /* The filter, the map and the trip list share one client
+                 owner so a tap on the window changes the list without a
+                 round trip, and so "Review" on a trip focuses that single
+                 drive on the map with only ONE trip in review at a time.
+                 The list is grouped + timezone-aware (local, not Vercel
+                 UTC); Business/Personal are exact-match toggles that show
+                 nothing selected for an unclassified drive.
+
+                 Both arrays are handed over in the drives route's own
+                 payload shape, so the page appended after this one is the
+                 same kind of thing as this one. The endpoint names are
+                 resolved HERE, on the server, rather than handing the
+                 whole place list to the client: the row renders a name,
+                 not a lookup table. */
+              <DriveLog
+                initialDrives={trips.map<SentDrive>((t) => ({
+                  ...t,
                   ...tripPlaces(placeIndex, t),
                 }))}
-                excludedRows={excludedTrips.map((t) => ({
-                  id: t.id,
-                  startedAtISO: t.started_at,
-                  endedAtISO: t.ended_at,
-                  distanceMiles: Number(t.distance_miles),
+                initialExcluded={excludedTrips.map<SentDrive>((t) => ({
+                  ...t,
+                  ...tripPlaces(placeIndex, t),
                 }))}
+                companyId={company.id}
+                driverParam={driverParam}
+                places={places}
                 reclassify={reclassifyTrip}
                 deleteTrip={deleteTrip}
                 companies={memberships.map((m) => ({

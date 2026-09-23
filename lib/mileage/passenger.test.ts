@@ -255,7 +255,19 @@ describe("the exclusion is actually wired into /mileage", () => {
 
   it("the excluded drives are still reachable, so the tap is reversible", () => {
     const page = code("app/mileage/page.tsx");
-    expect(page).toContain("excludedRows");
+    // The chain is one link longer since the range control became a
+    // filter: the page hands the excluded half to the drive log, which
+    // holds the growing list, and the drive log hands it on. Every link
+    // is checked, because the drive that is stranded by a broken one is
+    // the drive somebody tapped "passenger" on by mistake.
+    expect(page).toContain("initialExcluded=");
+    const log = code("components/mileage/DriveLog.tsx");
+    expect(log).toContain("initialExcluded");
+    expect(log).toContain("excludedRows=");
+    // The appended pages are partitioned too. The route does not do it,
+    // so without this a passenger drive walks back into the log on page
+    // two.
+    expect(log).toContain("partitionLoggedTrips");
     const review = code("components/mileage/MileageReview.tsx");
     expect(review).toContain("ExcludedTrips");
     const excluded = code("components/mileage/ExcludedTrips.tsx");

@@ -18,6 +18,21 @@ import { describe, it, expect } from "vitest";
  */
 const PAGE = readFileSync("app/mileage/page.tsx", "utf8");
 
+/**
+ * The page with its comments removed.
+ *
+ * The range guards below look for `?range=` and `RANGES`, and the page
+ * names both in prose: the comment standing where the four links used to
+ * be says what they were and why they went. A raw match would fail on the
+ * explanation and pass on the deletion, which is a guard that reads its
+ * own epitaph. Same treatment, and the same reason, as
+ * lib/mileage/first-paint-layout.test.ts.
+ */
+const CODE = PAGE.replace(/\/\*[\s\S]*?\*\//g, "").replace(
+  /(?<!:)\/\/[^\n]*/g,
+  "",
+);
+
 describe("first paint is the drives", () => {
   it("fetches no polylines on the render path", () => {
     expect(
@@ -38,5 +53,24 @@ describe("first paint is the drives", () => {
 
   it("has a skeleton to show while it loads", () => {
     expect(() => readFileSync("app/mileage/loading.tsx", "utf8")).not.toThrow();
+  });
+});
+
+describe("the range control is not navigation", () => {
+  it("carries no ?range= href and no RANGES table", () => {
+    // Four Links to ?range= on a force-dynamic page meant a tap started a
+    // full server render and nothing on screen changed until it came
+    // back. That is what read as a dead control, and this is what stops
+    // them returning.
+    expect(CODE).not.toMatch(/\?range=/);
+    expect(CODE).not.toMatch(/RANGES/);
+  });
+
+  it("renders the window as a filter over the loaded drives", () => {
+    // The paired half of the guard above. Deleting the links satisfies
+    // "not navigation" on its own, including by deleting the control
+    // altogether, which would read to a driver as the same dead end by a
+    // shorter route.
+    expect(CODE).toMatch(/<DriveLog\b/);
   });
 });

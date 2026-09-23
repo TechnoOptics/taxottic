@@ -72,8 +72,15 @@ type DriveRow = {
 
 /** A drive as this route SENDS it: the row, plus the two ends resolved
  *  to names. The client never sees a place id it would have to look up,
- *  because it has no places to look them up in. */
-type SentDrive = DriveRow & {
+ *  because it has no places to look them up in.
+ *
+ *  EXPORTED because components/mileage/DriveLog.tsx appends this payload
+ *  to a list it already holds, and a contract that lives only here is one
+ *  a mis-spelled field on the client silently satisfies: the row would
+ *  arrive whole, render blank, and read as "no data yet", which is this
+ *  feature's standing failure mode. It is a type-only import, so nothing
+ *  of this module reaches the browser bundle. */
+export type SentDrive = DriveRow & {
   startPlace: SavedPlace | null;
   endPlace: SavedPlace | null;
 };
