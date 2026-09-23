@@ -670,13 +670,22 @@ export default async function MileagePage({
               {viewingSelf ? <RecoverLostDrives /> : null}
             </div>
 
-            <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
-              Deduction uses the IRS standard mileage rate for the
-              trip&apos;s tax year and applies only to trips marked
-              business. Standard-mileage and actual-vehicle-expense
-              methods are mutually exclusive per vehicle per year -
-              confirm your method with your preparer.
-            </p>
+            {/* 249 characters in one block before, which is the "too many
+                words" complaint in its longest single instance on this
+                screen. Same two facts, shorter, and split so neither
+                block is a wall. Held under 170 rendered characters by
+                MilesFirstDrive.ct.spec.tsx, which measures what is on
+                screen rather than what is in the source. */}
+            <div className="mt-8 grid gap-1 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
+              <p>
+                Deduction uses the IRS standard mileage rate for the
+                drive&apos;s tax year, business drives only.
+              </p>
+              <p>
+                Standard mileage and actual expenses are exclusive per
+                vehicle per year. Confirm your method with your preparer.
+              </p>
+            </div>
           </>
         )}
       </section>

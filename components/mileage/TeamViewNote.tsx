@@ -27,10 +27,16 @@ export function TeamViewNote({ selfUserId }: { selfUserId: string }) {
           <span className="font-medium">Team view</span>
           <ChevronDownIcon className="size-4 shrink-0 text-forest-600 transition-transform group-open:rotate-180" />
         </summary>
+        {/* 188 characters in one block before. Same three facts, one
+            fewer word and split, so neither block is a wall. Held under
+            170 rendered characters by MilesFirstDrive.ct.spec.tsx. */}
         <p className="mt-2 text-xs leading-relaxed">
           Every driver&apos;s trails in their own colour, numbered to match
-          the legend. Teammates show confirmed business drives only, never
-          their personal miles. Your own drives show every classification.
+          the legend.
+        </p>
+        <p className="mt-1 text-xs leading-relaxed">
+          Teammates show confirmed business drives only, never their
+          personal miles. Yours show every classification.
         </p>
       </details>
       <Link

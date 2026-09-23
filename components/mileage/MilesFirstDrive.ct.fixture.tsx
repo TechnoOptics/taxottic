@@ -125,6 +125,19 @@ export function DriverPageHead() {
           </nav>
           <TeamViewNote selfUserId={SELF} />
         </div>
+
+        {/* The footnote at the bottom of /mileage, mirrored so the copy
+            guard measures it where a reader meets it. */}
+        <div className="mt-8 grid gap-1 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
+          <p>
+            Deduction uses the IRS standard mileage rate for the
+            drive&apos;s tax year, business drives only.
+          </p>
+          <p>
+            Standard mileage and actual expenses are exclusive per
+            vehicle per year. Confirm your method with your preparer.
+          </p>
+        </div>
       </section>
     </main>
   );

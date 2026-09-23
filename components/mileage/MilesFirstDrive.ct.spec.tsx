@@ -145,3 +145,44 @@ test("every control on the whole screen is at least 44px, and none is a pill", a
     [],
   );
 });
+
+/**
+ * "TOO MANY WORDS IN SOME SECTIONS", MEASURED WHERE A READER MEETS IT.
+ *
+ * lib/mileage/miles-copy.test.ts reads source files with a regex for
+ * double-quoted literals. JSX text is not a string literal, so that
+ * guard cannot see a single word this screen actually renders: a 249
+ * character paragraph sat at the bottom of /mileage on every visit with
+ * the guard green. This measures the rendered text instead.
+ *
+ * LEAF blocks only. Every ancestor's innerText is the concatenation of
+ * everything below it, so measuring all elements would measure the whole
+ * page as one string and say nothing.
+ */
+test("no block of copy on the screen runs past 170 characters", async ({
+  mount,
+  page,
+}) => {
+  await page.route("**/api/mileage/drives*", (r) =>
+    r.fulfill({ json: { points: [] } }),
+  );
+  const c = await mount(<DriverPageHead />);
+  // The explanation behind a closed <details> is copy a reader asked
+  // for, and it is measured too, so opening it is part of the guard.
+  await c.getByText("Team view", { exact: true }).click();
+
+  const long = await c.locator("*").evaluateAll((els) =>
+    els
+      .filter((el) =>
+        // A leaf block: no child ELEMENT carries text of its own, so
+        // this element's innerText is one thing somebody reads.
+        [...el.children].every((k) => (k.textContent ?? "").trim() === ""),
+      )
+      .map((el) => ((el as HTMLElement).innerText ?? "").trim())
+      .filter((t) => t.length > 170),
+  );
+  expect(
+    long,
+    `copy over 170 characters: ${long.map((t) => t.slice(0, 70)).join(" | ")}`,
+  ).toEqual([]);
+});
