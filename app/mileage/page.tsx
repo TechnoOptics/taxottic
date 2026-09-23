@@ -24,10 +24,10 @@ import { splitScheduleC } from "@/lib/mileage/schedule-c-totals";
 import { DriverPicker } from "@/components/mileage/DriverPicker";
 import {
   ALL_DRIVERS,
-  loadScopedTrips,
   resolveTripScope,
   stripForeignPrivateTrips,
 } from "@/lib/mileage/team-scope";
+import { loadDrivePage } from "@/lib/mileage/drive-page";
 import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
 import { TeamViewNote } from "@/components/mileage/TeamViewNote";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
@@ -95,9 +95,6 @@ export default async function MileagePage({
   const { user, admin } = await requireUserWithAdmin();
   const { range = "day", driver: driverParam = "" } = await searchParams;
   const rangeCfg = RANGES[range] ?? RANGES.week;
-  const sinceIso = new Date(
-    new Date().getTime() - rangeCfg.days * 86_400_000,
-  ).toISOString();
 
   const memberships = await getMyCompanies();
   const company = memberships[0]?.company ?? null;
@@ -227,12 +224,14 @@ export default async function MileagePage({
   let places: MapPlace[] = [];
   let lastPointISO: string | null = null;
   let lastTripISO: string | null = null;
-  // Route polylines, keyed by trip id. Fetched via the
-  // mileage_trip_polylines RPC, NOT an embedded mileage_points(...) join:
-  // PostgREST caps embedded arrays at 1000 rows, which truncated long
-  // drives mid-route (a 35.8 mi drive drew only its first ~19 mi). The
-  // RPC returns a bounded, evenly-strided sample that still reaches each
-  // route's true start + end.
+  // Route polylines, keyed by trip id. Deliberately EMPTY on the server
+  // now, and kept declared so every prop it feeds holds its shape.
+  //
+  // Filling it used to cost up to sixty sequential database round trips
+  // before the page sent a byte, for thumbnails on rows the reader may
+  // never scroll to, which is the "slow to load drives" report. Each row
+  // fetches its own route when it is on screen instead. Guarded by
+  // lib/mileage/drive-first-paint.test.ts.
   const pointsByTrip = new Map<string, Pt[]>();
 
   // Tracker-status diagnostics are only meaningful for the self view:
@@ -246,9 +245,9 @@ export default async function MileagePage({
   // awaited one after another, so the page paid the SUM of six round
   // trips (measured against the live account: 762 ms) to learn six
   // unrelated facts. Issued together it pays the slowest single one
-  // (measured 247 ms). The two reads that genuinely do have a dependency
-  // stay sequential below: the polylines need the trip ids, and the
-  // recovery count needs the health verdict.
+  // (measured 247 ms). The one read that genuinely does have a
+  // dependency stays sequential below: the recovery count needs the
+  // health verdict.
   const [
     scopedTrips,
     placeRes,
@@ -267,10 +266,13 @@ export default async function MileagePage({
           // team-scope.test.ts; RLS does NOT enforce this, a manager may
           // read every trip in the company, so these filters are the only
           // barrier.
-          loadScopedTrips<ServerTripRow>(admin, {
+          // One page of the newest drives, with no date floor. The page
+          // used to ask for a window computed from ?range=, which showed
+          // a blank screen to a driver whose fixes had not finished
+          // uploading. See lib/mileage/drive-page.ts.
+          loadDrivePage<ServerTripRow>(admin, {
             companyId: company.id,
             scope,
-            sinceIso,
           })
         : Promise.resolve([] as ServerTripRow[]),
       company
@@ -358,34 +360,6 @@ export default async function MileagePage({
     lastTripISO =
       (lastTripRes.data as { started_at?: string } | null)?.started_at ?? null;
 
-    if (trips.length > 0) {
-      // PostgREST truncates ANY response at max-rows (1000). 500 trips x
-      // 250 points blows through that, so only the first ~4 trips (in
-      // uuid order, effectively random) got polylines back and every
-      // other row rendered NO thumbnail. Page through with .range()
-      // until a short page.
-      const polyRows: ({ trip_id: string } & Pt)[] = [];
-      const POLY_PAGE = 1000;
-      for (let from = 0; from < 60_000; from += POLY_PAGE) {
-        const { data: pageRows } = await admin
-          .rpc("mileage_trip_polylines", {
-            p_trip_ids: trips.map((t) => t.id),
-            p_max: 250,
-          })
-          .range(from, from + POLY_PAGE - 1);
-        const rows = (pageRows ?? []) as ({ trip_id: string } & Pt)[];
-        polyRows.push(...rows);
-        if (rows.length < POLY_PAGE) break;
-      }
-      for (const r of polyRows) {
-        const arr = pointsByTrip.get(r.trip_id);
-        if (arr) arr.push({ lat: r.lat, lng: r.lng, captured_at: r.captured_at });
-        else
-          pointsByTrip.set(r.trip_id, [
-            { lat: r.lat, lng: r.lng, captured_at: r.captured_at },
-          ]);
-      }
-    }
   }
 
   // Confirmed business drives only, the same rule /mileage/business
