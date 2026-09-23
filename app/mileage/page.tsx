@@ -515,6 +515,48 @@ export default async function MileagePage({
     );
   }
 
+  // The head's two slots, built once and handed to whichever arm renders
+  // the head. Server-rendered nodes travelling as props into a client
+  // component, which is how the manager's switch and the tracking detail
+  // reach a head that DriveLog renders.
+  const driverSwitcher = showDriverPicker ? (
+    <DriverPicker
+      selfUserId={user.id}
+      drivers={drivers}
+      current={viewingAll ? ALL_DRIVERS : viewingDriverId}
+    />
+  ) : null;
+
+  // A marker ONLY when a phone needs attention, which is why both arms
+  // are decided above rather than rendered unconditionally and left to
+  // return null: an empty marker still costs a line on the identity row.
+  const trackingMarker =
+    teamNeedsAttention || selfNeedsAttention ? (
+      <>
+        {teamNeedsAttention ? <TeamTrackingHealth rows={teamHealth} /> : null}
+        {selfNeedsAttention ? (
+          <details className="w-full rounded-xl border border-amber-300 bg-amber-50/60">
+            <summary className="mono-label flex min-h-11 cursor-pointer select-none list-none items-center gap-2 px-3 text-amber-900">
+              <WarningIcon className="size-4 shrink-0" />
+              Tracking needs attention
+            </summary>
+            <div className="px-1 pb-1">
+              <TrackingHealthBanner
+                reason={health?.status === "degraded" ? health.reason ?? "" : ""}
+                cause={
+                  selfCauseText
+                    ? `${selfCauseText.short}. ${selfCauseText.fix}`
+                    : null
+                }
+                recoverable={recoverable}
+                recoverAction={recoverApproximateTrips}
+              />
+            </div>
+          </details>
+        ) : null}
+      </>
+    ) : null;
+
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
@@ -546,70 +588,32 @@ export default async function MileagePage({
                 payload rather than reloading the document, which would
                 tear down the live tracker. */}
             <MileageAutoRefresh />
-            {/* THE HEAD, in one block. It was a breadcrumb, a two-line
-                title, a company line, a tracking alert, a driver
-                selector, a Team view row, a "needs a quick call" card
-                and eight pills in five treatments; measured at 390px it
-                put the window filter at 769px and the first drive row at
-                1405px. Everything it carried that is still a capability
-                is either on this line or below the list. */}
-            <MilesHead
-              who={whoseDrives}
-              where={company.name}
-              miles={businessMiles}
-              deductionCents={deductionCents}
-              driveCount={trips.length}
-              /* Zero when the viewer is reading somebody else's log:
-                 the queue is the viewer's own and the deck only settles
-                 their drives. */
-              awaiting={showsOwnQueue ? awaitingCount : 0}
-              switcher={
-                showDriverPicker ? (
-                  <DriverPicker
-                    selfUserId={user.id}
-                    drivers={drivers}
-                    current={viewingAll ? ALL_DRIVERS : viewingDriverId}
-                  />
-                ) : null
-              }
-              /* A marker ONLY when a phone needs attention, which is
-                 why both arms are decided here rather than rendered
-                 unconditionally and left to return null: an empty
-                 marker still costs a line on the identity row. */
-              tracking={
-                teamNeedsAttention || selfNeedsAttention ? (
-                  <>
-                    {teamNeedsAttention ? (
-                      <TeamTrackingHealth rows={teamHealth} />
-                    ) : null}
-                    {selfNeedsAttention ? (
-                      <details className="w-full rounded-xl border border-amber-300 bg-amber-50/60">
-                        <summary className="mono-label flex min-h-11 cursor-pointer select-none list-none items-center gap-2 px-3 text-amber-900">
-                          <WarningIcon className="size-4 shrink-0" />
-                          Tracking needs attention
-                        </summary>
-                        <div className="px-1 pb-1">
-                          <TrackingHealthBanner
-                            reason={
-                              health?.status === "degraded"
-                                ? health.reason ?? ""
-                                : ""
-                            }
-                            cause={
-                              selfCauseText
-                                ? `${selfCauseText.short}. ${selfCauseText.fix}`
-                                : null
-                            }
-                            recoverable={recoverable}
-                            recoverAction={recoverApproximateTrips}
-                          />
-                        </div>
-                      </details>
-                    ) : null}
-                  </>
-                ) : null
-              }
-            />
+            {/* THE HEAD. It was a breadcrumb, a two-line title, a
+                company line, a tracking alert, a driver selector, a Team
+                view row, a "needs a quick call" card and eight pills in
+                five treatments; measured at 390px it put the window
+                filter at 769px and the first drive row at 1405px.
+                Everything it carried that is still a capability is
+                either on this line or below the list.
+
+                THE TEAM OVERLAY RENDERS IT HERE; the single-driver arm
+                hands the same three things to DriveLog and lets that
+                component render it, because the total under the identity
+                line has to describe the drives the filter is showing and
+                DriveLog is what holds them. The overlay has no filter,
+                so its total already describes everything it draws. */}
+            {viewingAll ? (
+              <MilesHead
+                who={whoseDrives}
+                where={company.name}
+                miles={businessMiles}
+                deductionCents={deductionCents}
+                driveCount={trips.length}
+                awaiting={showsOwnQueue ? awaitingCount : 0}
+                switcher={driverSwitcher}
+                tracking={trackingMarker}
+              />
+            ) : null}
 
             {viewingAll ? (
               // Team overlay: a read-only map of everyone's trails (one
@@ -664,6 +668,14 @@ export default async function MileagePage({
                  whole place list to the client: the row renders a name,
                  not a lookup table. */
               <DriveLog
+                who={whoseDrives}
+                where={company.name}
+                /* Zero when the viewer is reading somebody else's log:
+                   the queue is the viewer's own and the deck only
+                   settles their drives. */
+                awaiting={showsOwnQueue ? awaitingCount : 0}
+                switcher={driverSwitcher}
+                tracking={trackingMarker}
                 initialDrives={trips.map<SentDrive>((t) => ({
                   ...t,
                   ...tripPlaces(placeIndex, t),

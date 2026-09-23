@@ -1,8 +1,8 @@
 import { TeamTrackingHealth } from "./TeamTrackingHealth";
 import { DriverPicker } from "./DriverPicker";
-import { DriveFilter } from "./DriveFilter";
-import { TripList, type TripRow } from "./TripList";
-import { MilesHead } from "./MilesHead";
+import { DriveLog } from "./DriveLog";
+import { TeamViewNote } from "./TeamViewNote";
+import type { SentDrive } from "@/app/api/mileage/drives/route";
 
 /**
  * Mount fixture for MilesFirstDrive.ct.spec.tsx: the SINGLE-DRIVER arm of
@@ -10,9 +10,11 @@ import { MilesHead } from "./MilesHead";
  * measured at and the arm the team overlay fixture does not cover
  * (MileageFirstPaint.ct.fixture.tsx is the manager's team view at 344px).
  *
- * The real components carry what is measured. Leaflet is not mounted; the
- * page gives that map its default 420px and only its top edge matters
- * here.
+ * The whole drive log is the REAL component here, head, filter, rows and
+ * map, so the distances this measures are the ones the page produces.
+ * Only the section wrappers and the links below the list are mirrored
+ * from app/mileage/page.tsx, which is an async server component behind
+ * auth and cannot mount.
  */
 
 const SELF = "u-self";
@@ -31,30 +33,43 @@ const HEALTH = [
   },
 ];
 
-export const TRIPS: TripRow[] = [
-  {
-    id: "t-1",
-    startedAtISO: "2026-09-22T13:12:00Z",
-    endedAtISO: "2026-09-22T13:41:00Z",
-    distanceMiles: 22.7,
+const DAY = 86_400_000;
+const iso = (daysAgo: number, hour: number) =>
+  new Date(
+    new Date(Date.now() - daysAgo * DAY).setUTCHours(hour, 12, 0, 0),
+  ).toISOString();
+
+function drive(over: Partial<SentDrive> & { id: string }): SentDrive {
+  return {
+    driver_user_id: SELF,
+    started_at: iso(1, 13),
+    ended_at: iso(1, 14),
+    distance_miles: 22.7,
     classification: "unclassified",
-    deductionCents: 0,
-    needsConfirmation: false,
-    points: [],
-    companyId: "c-1",
-  },
-  {
+    tax_year: 2026,
+    deduction_cents: 0,
+    needs_confirmation: false,
+    start_place_id: null,
+    end_place_id: null,
+    startPlace: null,
+    endPlace: null,
+    ...over,
+  };
+}
+
+export const DRIVES: SentDrive[] = [
+  drive({ id: "t-1" }),
+  drive({
     id: "t-2",
-    startedAtISO: "2026-09-21T09:02:00Z",
-    endedAtISO: "2026-09-21T09:31:00Z",
-    distanceMiles: 14.2,
+    started_at: iso(2, 9),
+    ended_at: iso(2, 10),
+    distance_miles: 14.2,
     classification: "business",
-    deductionCents: 1080,
-    needsConfirmation: false,
-    points: [],
-    companyId: "c-1",
-  },
+    deduction_cents: 1080,
+  }),
 ];
+
+const noop = async () => {};
 
 export function DriverPageHead() {
   return (
@@ -62,36 +77,49 @@ export function DriverPageHead() {
       {/* AppHeader is fixed and leaves this spacer in flow (AppHeader.tsx). */}
       <div aria-hidden="true" style={{ height: "3.25rem" }} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <MilesHead
+        <DriveLog
           who="Your drives"
           where="Techno Optics LLC"
-          miles={14.2}
-          deductionCents={1080}
-          driveCount={2}
           awaiting={3}
           switcher={
             <DriverPicker selfUserId={SELF} drivers={DRIVERS} current={SELF} />
           }
           tracking={<TeamTrackingHealth rows={HEALTH} />}
+          initialDrives={DRIVES}
+          initialExcluded={[]}
+          companyId="c-1"
+          driverParam=""
+          places={[]}
+          reclassify={noop}
+          deleteTrip={noop}
+          companies={[{ id: "c-1", name: "Acme" }]}
+          moveTripCompany={noop}
         />
 
-        {/* DriveLog: the window filter, then MileageReview's map and list. */}
-        <div className="mt-4">
-          <DriveFilter drives={[]} onChange={() => {}} />
+        <div data-ct="more" className="mt-10 border-t border-edge pt-4">
+          <h2 className="mono-label">More</h2>
+          <nav aria-label="Mileage tools" className="mt-1 grid">
+            <a
+              href="/mileage/business"
+              className="min-h-11 flex items-center text-sm underline decoration-dotted underline-offset-4"
+            >
+              Business breadcrumbs
+            </a>
+            <a
+              href="/mileage/places"
+              className="min-h-11 flex items-center text-sm underline decoration-dotted underline-offset-4"
+            >
+              Saved places
+            </a>
+            <a
+              href="/mileage/schedule"
+              className="min-h-11 flex items-center text-sm underline decoration-dotted underline-offset-4"
+            >
+              Schedule
+            </a>
+          </nav>
+          <TeamViewNote selfUserId={SELF} />
         </div>
-        <div className="mt-6">
-          <div data-ct="map" className="rounded-2xl bg-forest-100" style={{ height: 420 }} />
-        </div>
-        <h2 className="display text-xl text-forest-900 mt-8">Trips</h2>
-        <TripList
-          trips={TRIPS}
-          reclassify={async () => {}}
-          deleteTrip={async () => {}}
-          onReview={() => {}}
-          reviewingId={null}
-          companies={[{ id: "c-1", name: "Acme" }]}
-          moveTripCompany={async () => {}}
-        />
       </section>
     </main>
   );

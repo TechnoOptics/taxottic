@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { DriveFilter } from "@/components/mileage/DriveFilter";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { type TripRow } from "@/components/mileage/TripList";
@@ -12,6 +12,8 @@ import {
   type RoutelessTrip,
 } from "@/components/mileage/MileageMap";
 import { filterDrives, type FilterKey } from "@/lib/mileage/drive-filter";
+import { splitScheduleC } from "@/lib/mileage/schedule-c-totals";
+import { MilesHead } from "@/components/mileage/MilesHead";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import type { SentDrive } from "@/app/api/mileage/drives/route";
 
@@ -51,6 +53,11 @@ const LOAD_FAILED = "Could not load older drives. Tap to try again.";
  * mis-spelled field starts rendering blank and reading as "no data yet".
  */
 export function DriveLog({
+  who,
+  where,
+  awaiting,
+  switcher,
+  tracking,
   initialDrives,
   initialExcluded,
   companyId,
@@ -61,6 +68,19 @@ export function DriveLog({
   companies,
   moveTripCompany,
 }: {
+  /** The head's identity line: whose drives these are, and the business
+   *  they belong to. Rendered HERE rather than by the page because the
+   *  total beneath it has to describe the drives the filter is showing,
+   *  and this component is what holds them. */
+  who: string;
+  where?: string;
+  /** Drives awaiting a decision across EVERY date, from the page's own
+   *  indexed read. Deliberately not filtered with the rest: the page
+   *  opens on the newest drives and a driver holding ten older ones was
+   *  being told they were caught up (lib/mileage/awaiting-decision.ts). */
+  awaiting: number;
+  switcher?: ReactNode;
+  tracking?: ReactNode;
   /** The newest page's drives, newest first: already scoped, stripped of
    *  a teammate's private drives and partitioned by the server. */
   initialDrives: SentDrive[];
@@ -184,6 +204,24 @@ export function DriveLog({
   const shown = filterDrives(drives, picked.key, picked.at);
   const shownExcluded = filterDrives(excluded, picked.key, picked.at);
 
+  /**
+   * The total, over WHAT IS ON SCREEN.
+   *
+   * It used to be computed on the server, over every loaded drive, and
+   * rendered in a head that sat above a filter it knew nothing about. A
+   * tap on "Last 7 days" changed the list and left the figures saying
+   * what a different set came to. A total that reads as authoritative
+   * and describes another set is worse than no total at all, so it moved
+   * down here, to the component that owns the filtered drives.
+   *
+   * Confirmed business drives only, through the same splitScheduleC the
+   * server used and /mileage/business uses: a machine guess must not
+   * become a tax figure before a human agrees with it (#616).
+   */
+  const totals = splitScheduleC(
+    shown.filter((d) => d.classification === "business"),
+  );
+
   // ONE fetch for the map below AND every row in the list, because they
   // want the same sixty routes. Scrolling a full page used to fire one
   // single-id request per row on top of the map's batch, at the full
@@ -246,6 +284,16 @@ export function DriveLog({
 
   return (
     <>
+      <MilesHead
+        who={who}
+        where={where}
+        miles={totals.settledMiles}
+        deductionCents={totals.settledCents}
+        driveCount={shown.length}
+        awaiting={awaiting}
+        switcher={switcher}
+        tracking={tracking}
+      />
       <div className="mt-4">
         <DriveFilter
           drives={[...drives, ...excluded]}

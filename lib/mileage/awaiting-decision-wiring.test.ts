@@ -62,7 +62,7 @@ describe("the drive log counts every drive awaiting a decision", () => {
     ).toBe(false);
   });
 
-  it("hands that number to the head, and the head alone", () => {
+  it("hands that number to the head unfiltered, on both arms", () => {
     /**
      * THIS RULE WAS DELIBERATELY REVERSED, and the reversal is the point.
      *
@@ -80,14 +80,22 @@ describe("the drive log counts every drive awaiting a decision", () => {
      * when there is not, and the rows do the asking. What still has to
      * hold is that the number the head shows is THIS number: the
      * range-independent count over both undecided states, not a
-     * recount from the loaded page.
+     * recount from the loaded page. The total beside it DOES follow the
+     * window filter (DriveLog computes it from the drives on screen);
+     * this one must not, which is why it is passed in rather than
+     * derived down there.
      */
-    const at = page.indexOf("<MilesHead");
-    expect(at, "the head is not rendered").toBeGreaterThan(-1);
-    const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));
-    expect(tag, "the head is not given the waiting count").toMatch(
-      /awaiting=\{[^}]*awaitingCount/,
-    );
+    // Both arms of the page: the team overlay renders the head itself,
+    // and the single-driver view hands the same number to DriveLog,
+    // which renders the head around a total that follows the filter.
+    for (const el of ["<MilesHead", "<DriveLog"]) {
+      const at = page.indexOf(el);
+      expect(at, `${el} is not rendered`).toBeGreaterThan(-1);
+      const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));
+      expect(tag, `${el} is not given the waiting count`).toMatch(
+        /awaiting=\{[^}]*awaitingCount/,
+      );
+    }
     expect(
       page,
       "the count is derived from the loaded page rather than the indexed read",

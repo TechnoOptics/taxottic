@@ -58,6 +58,8 @@ async function mountLog(
   return mount(
     <div data-skin="instrument">
       <DriveLog
+        who="Your drives"
+        awaiting={0}
         initialDrives={DRIVES}
         initialExcluded={[]}
         companyId="co-1"
@@ -325,6 +327,8 @@ function mountDrives(
   return mount(
     <div data-skin="instrument">
       <DriveLog
+        who="Your drives"
+        awaiting={0}
         initialDrives={list}
         initialExcluded={[]}
         companyId="co-1"
@@ -523,4 +527,93 @@ test("when the batch gives up, the rows are released to fetch their own", async 
     singles,
     "a row left waiting on a batch that is never coming is the latch again",
   ).toContain("d-0");
+});
+
+/**
+ * THE TOTAL DESCRIBES WHAT IS ON SCREEN.
+ *
+ * The miles and the deduction used to be computed on the server, over
+ * every loaded drive, and rendered in a head that sat above a filter it
+ * knew nothing about: a tap on "Last 7 days" changed the list and left
+ * the figures quoting a different set. A total that reads as
+ * authoritative and describes some other set is worse than no total, so
+ * the two have to move together or this test fails.
+ */
+test("a filter tap moves the list and the total together", async ({
+  mount,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  // Two drives inside the week, two well outside it. 4.2 mi and 319
+  // cents each (drive()), so the week is half of everything.
+  const c = await mount(
+    <div data-skin="instrument">
+      <DriveLog
+        who="Your drives"
+        where="Acme"
+        awaiting={7}
+        initialDrives={[drive("d-1", 1), drive("d-2", 2), drive("d-3", 40), drive("d-4", 41)]}
+        initialExcluded={[]}
+        companyId="co-1"
+        driverParam=""
+        places={[]}
+        reclassify={noop}
+        deleteTrip={noop}
+        companies={[{ id: "co-1", name: "Acme" }]}
+        moveTripCompany={noop}
+      />
+    </div>,
+  );
+
+  const rows = c.locator("li.card");
+  await expect(rows).toHaveCount(4);
+  await expect(c).toContainText("16.8 mi");
+  await expect(c).toContainText("$12.76");
+  await expect(c).toContainText("4 drives");
+
+  await c.getByRole("button", { name: "Last 7 days" }).click();
+
+  await expect(rows).toHaveCount(2);
+  await expect(c).toContainText("8.4 mi");
+  await expect(c).toContainText("$6.38");
+  await expect(c).toContainText("2 drives");
+  // The waiting count is NOT filtered with them. It counts every date on
+  // purpose: the page opens on the newest drives and a driver holding
+  // ten older ones was being told they were caught up.
+  await expect(c).toContainText("7 waiting");
+});
+
+/**
+ * The map is below the drives, not above them. 420px of it used to sit
+ * between the filter and the first row.
+ */
+test("the drives come before the map, not after it", async ({
+  mount,
+  page,
+}) => {
+  await page.route("**/api/mileage/drives*", (r) =>
+    r.fulfill({ json: { routes: [] } }),
+  );
+  const c = await mountLog(mount, page);
+  const m = await page.evaluate(() => {
+    const top = (sel: string) => {
+      const el = document.querySelector<HTMLElement>(sel);
+      if (!el) throw new Error(`${sel} is not in the DOM`);
+      return Math.round(el.getBoundingClientRect().top + window.scrollY);
+    };
+    return {
+      head: top("header"),
+      filter: top("[role=group][aria-label='Filter drives']"),
+      firstRow: top("li.card"),
+      map: top("[aria-label='All drives in range']"),
+    };
+  });
+  console.log("DRIVE LOG order:", JSON.stringify(m));
+  expect(m.head).toBeLessThan(m.filter);
+  expect(m.filter).toBeLessThan(m.firstRow);
+  expect(
+    m.firstRow,
+    `the first drive row starts at ${m.firstRow}px, below the map`,
+  ).toBeLessThan(m.map);
+  await expect(c).toBeVisible();
 });

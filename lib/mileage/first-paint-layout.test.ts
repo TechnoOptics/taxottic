@@ -117,19 +117,28 @@ describe("the manager's device alert is one line until tapped", () => {
     expect(health).toMatch(/describeDriveHealth\s*\(/);
   });
 
-  it("is rendered on the head's identity line, ahead of the drives", () => {
+  it("is the head's tracking marker, on both arms of the page", () => {
     // It used to be a block of its own between the title and the
-    // controls. It is the head's tracking marker now, passed to
-    // MilesHead, and it still comes before anything that draws a drive.
-    const head = page.indexOf("<MilesHead");
-    const alert = page.indexOf("<TeamTrackingHealth");
-    const map = page.indexOf("<MileageMap");
-    const log = page.indexOf("<DriveLog");
-    expect(head, "the head is not rendered").toBeGreaterThan(-1);
-    expect(alert, "the alert is not rendered").toBeGreaterThan(-1);
-    expect(alert, "the alert is not inside the head").toBeGreaterThan(head);
-    expect(alert).toBeLessThan(map);
-    expect(alert).toBeLessThan(log);
+    // controls, so this used to be an ordering assertion. It is the
+    // head's marker now: built once as `trackingMarker` and handed to
+    // whichever arm renders the head (MilesHead directly for the team
+    // overlay, DriveLog for the single-driver view, because the total
+    // under the identity line has to follow the filter). Ordering in the
+    // source says nothing about that, so this holds the wiring instead.
+    const at = page.indexOf("const trackingMarker =");
+    expect(at, "the marker is not built at all").toBeGreaterThan(-1);
+    const marker = page.slice(at, page.indexOf("<MilesHead"));
+    expect(marker, "the alert is not in the marker").toMatch(
+      /<TeamTrackingHealth/,
+    );
+    for (const el of ["<MilesHead", "<DriveLog"]) {
+      const from = page.indexOf(el);
+      expect(from, `${el} is not rendered`).toBeGreaterThan(-1);
+      expect(
+        page.slice(from, page.indexOf("/>", page.indexOf("tracking=", from))),
+        `${el} is not given the tracking marker`,
+      ).toMatch(/tracking=\{trackingMarker\}/);
+    }
   });
 
   it("is a marker the head shows only when a phone needs attention", () => {
@@ -175,12 +184,14 @@ describe("the classification question is asked once, on the row", () => {
   });
 
   it("states the count in the head and points it at the row", () => {
-    const at = page.indexOf("<MilesHead");
-    expect(at, "the head is not rendered").toBeGreaterThan(-1);
-    const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));
-    expect(tag, "the head is not given the waiting count").toMatch(
-      /awaiting=\{[^}]*awaitingCount/,
-    );
+    for (const el of ["<MilesHead", "<DriveLog"]) {
+      const at = page.indexOf(el);
+      expect(at, `${el} is not rendered`).toBeGreaterThan(-1);
+      const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));
+      expect(tag, `${el} is not given the waiting count`).toMatch(
+        /awaiting=\{[^}]*awaitingCount/,
+      );
+    }
     expect(milesHead).toMatch(/href="#first-unclassified"/);
     expect(list, "no row carries the anchor the head links to").toMatch(
       /id=\{anchor \? "first-unclassified" : undefined\}/,

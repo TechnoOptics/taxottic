@@ -5,27 +5,30 @@ import { DriverPageHead } from "./MilesFirstDrive.ct.fixture";
  * How far a driver scrolls to reach a drive, on the screen the complaint
  * came from.
  *
- * Measured against this exact fixture at 3c5f0b3, with the head the page
- * had then (breadcrumb, two-line title, company line, tracking alert,
- * driver picker, auto-track card, tracker strip, the "3 drives need a
- * quick call" card and eight pills):
+ * Measured against the page as it stood at 3c5f0b3, with the head it had
+ * then (breadcrumb, two-line title, company line, tracking alert, driver
+ * picker, auto-track card, tracker strip, the "3 drives need a quick
+ * call" card and eight pills) and the map still above the list:
  *
  *   window filter   769px
  *   map             889px
  *   first drive row 1405px
  *
- * The budgets below are held a little above what the collapsed head
- * measures, so an ordinary edit does not trip them and a returning head
- * does.
+ * The budgets below are held a little above what the collapsed head and
+ * the demoted map measure, so an ordinary edit does not trip them and a
+ * returning head does.
  */
 const PHONE = { width: 390, height: 844 };
 
 test.use({ viewport: PHONE });
 
-test("the head is one screen-third, and the filter is above the fold", async ({
+test("the head is one screen-third, and a drive is on the first screen", async ({
   mount,
   page,
 }) => {
+  await page.route("**/api/mileage/drives*", (r) =>
+    r.fulfill({ json: { routes: [] } }),
+  );
   await mount(<DriverPageHead />);
   const m = await page.evaluate(() => {
     const top = (sel: string) => {
@@ -36,8 +39,8 @@ test("the head is one screen-third, and the filter is above the fold", async ({
     return {
       head: top("header"),
       filter: top("[role=group][aria-label='Filter drives']"),
-      map: top("[data-ct=map]"),
       firstRow: top("li.card"),
+      map: top("[aria-label='All drives in range']"),
       docWidth: document.documentElement.scrollWidth,
     };
   });
@@ -53,17 +56,17 @@ test("the head is one screen-third, and the filter is above the fold", async ({
     m.filter,
     `the window filter starts at ${m.filter}px; the head has grown back`,
   ).toBeLessThanOrEqual(330);
-  // The map is what a driver sees first, so enough of it has to be on
-  // screen to read as drives rather than as a grey band.
-  expect(
-    m.map + 200,
-    `the map starts at ${m.map}px; the drives are below the fold`,
-  ).toBeLessThanOrEqual(PHONE.height);
-  // 1405px before. The map is 420px of this and belongs to the drives.
+  // 1405px before, and on the first screen now.
   expect(
     m.firstRow,
     `the first drive row starts at ${m.firstRow}px`,
-  ).toBeLessThanOrEqual(1000);
+  ).toBeLessThanOrEqual(PHONE.height - 120);
+  // The map is below the drives, where spec 4.2 puts everything that is
+  // not a drive. 420px of it used to sit between the filter and the row.
+  expect(
+    m.map,
+    `the map is back above the drives, at ${m.map}px`,
+  ).toBeGreaterThan(m.firstRow);
 });
 
 test("the waiting count in the head lands on the first drive that wants one", async ({

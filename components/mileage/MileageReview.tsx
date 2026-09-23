@@ -98,6 +98,26 @@ export function MileageReview({
 
   return (
     <>
+      <h2 className="sr-only">Drives</h2>
+      <TripList
+        trips={tripRows}
+        reclassify={reclassify}
+        deleteTrip={deleteTrip}
+        onReview={onReview}
+        reviewingId={focusedId}
+        companies={companies}
+        moveTripCompany={moveTripCompany}
+      />
+      <ExcludedTrips trips={excludedRows} reclassify={reclassify} />
+
+      {/* THE MAP SITS BELOW THE DRIVES. It used to be the first thing
+          under the filter, 420px of it, which put the first drive row at
+          958px on a 390px phone even after the head collapsed. Spec 4.2
+          orders the screen identity line, total, filter, the drives, and
+          then everything else; the map is everything else. It is still
+          the same map and it still answers Review the same way: the
+          effect below scrolls it into view, which is what a control
+          below the fold needs anyway. */}
       <div
         ref={mapWrapRef}
         tabIndex={-1}
@@ -132,17 +152,6 @@ export function MileageReview({
         />
       </div>
 
-      <h2 className="display text-xl text-forest-900 mt-8">Trips</h2>
-      <TripList
-        trips={tripRows}
-        reclassify={reclassify}
-        deleteTrip={deleteTrip}
-        onReview={onReview}
-        reviewingId={focusedId}
-        companies={companies}
-        moveTripCompany={moveTripCompany}
-      />
-      <ExcludedTrips trips={excludedRows} reclassify={reclassify} />
     </>
   );
 }
