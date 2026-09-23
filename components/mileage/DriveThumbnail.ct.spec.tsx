@@ -118,8 +118,13 @@ test("a row whose polyline never arrives still reads as a drive", async ({
   await expect(c).toContainText("→");
   // And it is still a row you can act on.
   await expect(c.getByRole("button", { name: "Mark this trip personal" })).toBeVisible();
-  // Never a spinner that cannot resolve, and never a broken image.
+  // Never a spinner that cannot resolve, and never a broken image, and
+  // no endpoint line at all: this drive matched no saved place and its
+  // route never came, so there is nothing honest to put there. "Unknown
+  // start" next to "Unknown end" is a row that looks broken.
   await expect(c.getByText("Loading")).toHaveCount(0);
+  await expect(c).not.toContainText("Unknown start");
+  await expect(c).not.toContainText("Unknown end");
   expect(
     await page.evaluate(
       () =>

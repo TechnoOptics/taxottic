@@ -77,6 +77,10 @@ const h = vi.hoisted(() => ({
   pageCalls: [] as Record<string, unknown>[],
   /** Rows loadDrivePage returns. */
   pageRows: [] as Record<string, unknown>[],
+  /** The company's saved places, as mileage_places returns them. */
+  placeRows: [] as Record<string, unknown>[],
+  /** Every filter applied to the places read, as [column, value]. */
+  placeFilters: [] as [string, unknown][],
 }));
 
 /**
@@ -116,10 +120,13 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: async () => ({ data: { user: h.user } }) },
   }),
   createServiceClient: () => ({
-    from: (table: string) =>
-      table === "company_members"
-        ? builder(() => ({ data: h.memberRows }))
-        : builder(() => ({ data: h.ownedRow }), h.ownershipFilters),
+    from: (table: string) => {
+      if (table === "company_members")
+        return builder(() => ({ data: h.memberRows }));
+      if (table === "mileage_places")
+        return builder(() => ({ data: h.placeRows }), h.placeFilters);
+      return builder(() => ({ data: h.ownedRow }), h.ownershipFilters);
+    },
     rpc: async (fn: string, args: Record<string, unknown>) => {
       h.rpcCalls.push({ fn, args });
       return { data: h.polyRows };
@@ -162,6 +169,8 @@ beforeEach(() => {
   h.polyRows = [];
   h.pageCalls = [];
   h.pageRows = [];
+  h.placeRows = [];
+  h.placeFilters = [];
 });
 
 describe("the drives handler", () => {
@@ -205,7 +214,68 @@ describe("the drives handler", () => {
   it("returns the drives it was given", async () => {
     h.pageRows = [{ id: TRIP, started_at: "2026-09-01T12:00:00.000Z" }];
     const res = await ask(`?company=${COMPANY}`);
-    expect(await res.json()).toEqual({ drives: h.pageRows });
+    // The row, untouched, plus the two ends this drive matched: none.
+    expect(await res.json()).toEqual({
+      drives: [{ ...h.pageRows[0], startPlace: null, endPlace: null }],
+    });
+    expect(
+      h.placeFilters,
+      "a page of drives that matched no place must not read places at all",
+    ).toEqual([]);
+  });
+
+  it("sends a saved place's NAME, never its id", async () => {
+    // The client holds no places, so an id is unreadable to it. A page
+    // appended by this route has to arrive already named or the drive
+    // log silently forgets where its older drives went, which is the
+    // exact regression this feature exists to prevent.
+    h.pageRows = [
+      {
+        id: TRIP,
+        started_at: "2026-09-01T12:00:00.000Z",
+        start_place_id: "place-1",
+        end_place_id: "place-2",
+      },
+    ];
+    h.placeRows = [
+      { id: "place-1", kind: "office", label: "Head Office", lat: 44.98, lng: -93.26 },
+      // Never named by the user: the kind is the fallback, not a uuid.
+      { id: "place-2", kind: "client", label: null, lat: 45.1, lng: -93.2 },
+    ];
+    const res = await ask(`?company=${COMPANY}`);
+    const body = (await res.json()) as {
+      drives: { startPlace: unknown; endPlace: unknown }[];
+    };
+    expect(body.drives[0].startPlace).toEqual({
+      label: "Head Office",
+      lat: 44.98,
+      lng: -93.26,
+    });
+    expect(body.drives[0].endPlace).toEqual({
+      label: "Client",
+      lat: 45.1,
+      lng: -93.2,
+    });
+    expect(
+      h.placeFilters,
+      "places must be read under the same company bound as the drives",
+    ).toEqual([["company_id", COMPANY]]);
+  });
+
+  it("leaves a place from another company unnamed rather than wrong", async () => {
+    h.pageRows = [
+      {
+        id: TRIP,
+        started_at: "2026-09-01T12:00:00.000Z",
+        start_place_id: "a-place-this-company-does-not-have",
+      },
+    ];
+    h.placeRows = [
+      { id: "place-1", kind: "office", label: "Head Office", lat: 1, lng: 2 },
+    ];
+    const res = await ask(`?company=${COMPANY}`);
+    const body = (await res.json()) as { drives: { startPlace: unknown }[] };
+    expect(body.drives[0].startPlace).toBeNull();
   });
 
   it("400s without a company", async () => {

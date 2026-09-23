@@ -7,7 +7,6 @@ import {
 } from "@/components/mileage/DriveThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 import { SelectMenu } from "@/components/ui/SelectMenu";
-import { PinIcon } from "@/components/ui/Icons";
 
 /**
  * Phone-first trip list. Replaces the old "3 pill buttons per row,
@@ -257,9 +256,18 @@ function TripCard({
   // for again. /mileage ships rows with an empty `points`, so for a drive
   // between two UNSAVED spots this is the only way the row ever learns
   // where it went, and it costs no request of its own.
+  //
+  // Sorted on arrival for the same reason `trip.points` is: the first and
+  // last fix decide which end is which. The RPC behind the route happens
+  // to end `order by trip_id, captured_at` today
+  // (supabase/migrations/20260601000001_mileage_trip_polylines.sql), and
+  // depending on that silently would mean a dropped ORDER BY reverses a
+  // drive's endpoints with nothing failing.
   const [fetchedPts, setFetchedPts] = useState<DrivePoint[] | null>(null);
   const takePoints = useCallback((pts: DrivePoint[]) => {
-    setFetchedPts(pts);
+    setFetchedPts(
+      [...pts].sort((a, b) => (a.captured_at < b.captured_at ? -1 : 1)),
+    );
   }, []);
   const routePts = sortedPts.length > 0 ? sortedPts : (fetchedPts ?? []);
   const startPt = routePts[0];
@@ -366,13 +374,23 @@ function TripCard({
               ? ` · ${fmtUsd(Number(trip.deductionCents))} deduction`
               : ""}
           </div>
-          <DriveEndpoints
-            startCoord={startCoord}
-            endCoord={endCoord}
-            savedStart={trip.startPlace?.label ?? null}
-            savedEnd={trip.endPlace?.label ?? null}
-            className="mt-1"
-          />
+          {/* Where the drive went, from whatever the row knows so far: a
+              saved place names its end immediately, an unsaved one once
+              the thumbnail's route lands, and an end with neither is not
+              looked up at all. Nothing known about either end means no
+              line, because the distance and the times above are still
+              the drive. */}
+          {startCoord || endCoord ? (
+            <TripEndpoints
+              startLat={startCoord?.lat}
+              startLng={startCoord?.lng}
+              endLat={endCoord?.lat}
+              endLng={endCoord?.lng}
+              savedStart={trip.startPlace?.label ?? null}
+              savedEnd={trip.endPlace?.label ?? null}
+              className="mt-1"
+            />
+          ) : null}
         </div>
         {/* Delete affordance. Two-tap with confirm, destructive
             actions should never be one click on a touch device. */}
@@ -593,67 +611,5 @@ function TripCard({
         </form>
       ) : null}
     </li>
-  );
-}
-
-/**
- * Where a drive went, from whatever the row knows so far.
- *
- * Three states, and none of them is a broken row:
- *
- *  - Both ends have coordinates (from the drive's own route, or from the
- *    saved places it matched): the full {@link TripEndpoints}, which
- *    reverse-geocodes only the ends that have no saved name.
- *  - No coordinates yet but at least one saved name: that name, now,
- *    with no network. This is the common case on first paint, because
- *    /mileage ships no polylines and the saved place ids come down with
- *    the drive.
- *  - Nothing at all: nothing. The distance and the times above are still
- *    the drive, and a "Locating route…" that can never resolve would be
- *    worse than a quiet gap.
- *
- * The middle state is a separate render rather than a call into
- * TripEndpoints because that component's whole job is geocoding a pair of
- * coordinates, and here there is no pair: one end may be a saved name
- * with nothing to look up and the other may be unknown until the
- * thumbnail's fetch lands. Same wording, same icon, same shape, so the
- * line does not move when the coordinates arrive.
- */
-function DriveEndpoints({
-  startCoord,
-  endCoord,
-  savedStart,
-  savedEnd,
-  className,
-}: {
-  startCoord: { lat: number; lng: number } | null;
-  endCoord: { lat: number; lng: number } | null;
-  savedStart: string | null;
-  savedEnd: string | null;
-  className?: string;
-}) {
-  if (startCoord && endCoord) {
-    return (
-      <TripEndpoints
-        startLat={startCoord.lat}
-        startLng={startCoord.lng}
-        endLat={endCoord.lat}
-        endLng={endCoord.lng}
-        savedStart={savedStart}
-        savedEnd={savedEnd}
-        className={className}
-      />
-    );
-  }
-  if (!savedStart && !savedEnd) return null;
-  return (
-    <div
-      className={"text-xs text-forest-800 leading-snug " + (className ?? "")}
-    >
-      <PinIcon className="size-3.5 mr-1 inline-block align-[-2px] text-ink-muted" />
-      <span className="font-medium">{savedStart ?? "Unknown start"}</span>
-      <span className="text-ink-muted"> → </span>
-      <span className="font-medium">{savedEnd ?? "Unknown end"}</span>
-    </div>
   );
 }

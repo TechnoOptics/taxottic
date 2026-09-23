@@ -14,7 +14,26 @@ import { PinIcon } from "@/components/ui/Icons";
  * raw coords if Google can't resolve a place. `savedStart` / `savedEnd`
  * (a known saved place like "Office") win over the geocoded label when
  * present, since the user's own name for a spot beats a street address.
+ *
+ * The coordinates are OPTIONAL, and an end with none is simply not
+ * looked up. A drive row on /mileage knows a saved place's name before
+ * it has any coordinates at all (the place id ships with the drive,
+ * the polyline arrives later or not at all), and it would otherwise
+ * have to reproduce this component's markup to say so.
  */
+/** Geocode one end, unless it already has a name or has no coordinates
+ *  to look up. */
+function lookup(
+  saved: string | null | undefined,
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): Promise<PlaceLabel | null> {
+  if (saved || typeof lat !== "number" || typeof lng !== "number") {
+    return Promise.resolve(null);
+  }
+  return reverseGeocode(lat, lng);
+}
+
 export function TripEndpoints({
   startLat,
   startLng,
@@ -24,10 +43,10 @@ export function TripEndpoints({
   savedEnd,
   className,
 }: {
-  startLat: number;
-  startLng: number;
-  endLat: number;
-  endLng: number;
+  startLat?: number | null;
+  startLng?: number | null;
+  endLat?: number | null;
+  endLng?: number | null;
   savedStart?: string | null;
   savedEnd?: string | null;
   className?: string;
@@ -39,8 +58,8 @@ export function TripEndpoints({
   useEffect(() => {
     let alive = true;
     Promise.all([
-      savedStart ? Promise.resolve(null) : reverseGeocode(startLat, startLng),
-      savedEnd ? Promise.resolve(null) : reverseGeocode(endLat, endLng),
+      lookup(savedStart, startLat, startLng),
+      lookup(savedEnd, endLat, endLng),
     ])
       .then(([s, e]) => {
         if (!alive) return;

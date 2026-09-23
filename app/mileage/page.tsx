@@ -28,6 +28,7 @@ import {
   stripForeignPrivateTrips,
 } from "@/lib/mileage/team-scope";
 import { loadDrivePage } from "@/lib/mileage/drive-page";
+import { indexPlaces, tripPlaces } from "@/lib/mileage/place-names";
 import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
 import { TeamViewNote } from "@/components/mileage/TeamViewNote";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
@@ -410,23 +411,10 @@ export default async function MileagePage({
   // A drive's saved endpoints, by place id. mileage_trips stores the two
   // place uuids and no coordinates, so this is what turns
   // `start_place_id` into "Office" on the first paint, with no geocoder
-  // and no polyline. A place the user never named falls back to its kind
-  // ("Home", "Office", "Client", "Stop"), the same wording the business
-  // view uses, rather than showing a raw uuid or nothing at all.
-  const placeById = new Map(
-    places.map((p) => [
-      p.id,
-      {
-        label:
-          p.label ??
-          ({ home: "Home", office: "Office", client: "Client" }[
-            p.kind as string
-          ] ?? "Stop"),
-        lat: p.lat,
-        lng: p.lng,
-      },
-    ]),
-  );
+  // and no polyline. Same helper as the drives route uses for the pages
+  // appended after this one, so page one and page two cannot disagree
+  // about what a place is called (lib/mileage/place-names.ts).
+  const placeIndex = indexPlaces(places);
 
   // Belt-and-braces, in the same spirit as stripForeignPrivateTrips: the
   // partition above already removed every passenger drive, and the map has
@@ -812,8 +800,7 @@ export default async function MileagePage({
                   // whole place list to the row: the row renders a name,
                   // not a lookup table, and this keeps the id-to-place
                   // join off the client and out of MileageReview's props.
-                  startPlace: placeById.get(t.start_place_id ?? "") ?? null,
-                  endPlace: placeById.get(t.end_place_id ?? "") ?? null,
+                  ...tripPlaces(placeIndex, t),
                 }))}
                 excludedRows={excludedTrips.map((t) => ({
                   id: t.id,

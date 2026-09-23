@@ -3,6 +3,12 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getMyCompanies } from "@/lib/auth";
 import { DRIVE_PAGE_SIZE, loadDrivePage } from "@/lib/mileage/drive-page";
 import { resolveTripScope } from "@/lib/mileage/team-scope";
+import {
+  indexPlaces,
+  tripPlaces,
+  type PlaceRow,
+  type SavedPlace,
+} from "@/lib/mileage/place-names";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +61,21 @@ type DriveRow = {
   tax_year: number;
   deduction_cents: number;
   needs_confirmation: boolean | null;
+  /** The saved place each end matched. TRIP_SELECT has carried these
+   *  since the row started naming its endpoints, and PostgREST returns
+   *  every selected column, so they were already in this payload before
+   *  they were declared here. Declared now because the handler reads
+   *  them. */
+  start_place_id?: string | null;
+  end_place_id?: string | null;
+};
+
+/** A drive as this route SENDS it: the row, plus the two ends resolved
+ *  to names. The client never sees a place id it would have to look up,
+ *  because it has no places to look them up in. */
+type SentDrive = DriveRow & {
+  startPlace: SavedPlace | null;
+  endPlace: SavedPlace | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -169,7 +190,43 @@ export async function GET(req: NextRequest) {
     beforeId,
     limit: DRIVE_PAGE_SIZE,
   });
-  return NextResponse.json({ drives });
+
+  // The names are resolved HERE, exactly as app/mileage/page.tsx resolves
+  // them for the first page, and for the same reason: a place id means
+  // nothing to a client that holds no places, and a row that cannot name
+  // its endpoints is the regression this feature exists to avoid. Page
+  // one and page two therefore cannot disagree, because neither of them
+  // decides anything.
+  //
+  // One read per request, and only when a drive on this page actually
+  // matched a place. Most accounts have saved none at all, and those pay
+  // nothing for this.
+  const index = indexPlaces(await placesFor(admin, companyId, drives));
+  return NextResponse.json({
+    drives: drives.map<SentDrive>((d) => ({
+      ...d,
+      ...tripPlaces(index, d),
+    })),
+  });
+}
+
+/**
+ * The company's saved places, or none when this page of drives matched
+ * none. Scoped by company_id, the same bound the drives themselves are
+ * loaded under, so an id from another company cannot be named here: it
+ * simply misses the index and the row goes unnamed rather than wrong.
+ */
+async function placesFor(
+  admin: ReturnType<typeof createServiceClient>,
+  companyId: string,
+  drives: readonly DriveRow[],
+): Promise<PlaceRow[]> {
+  if (!drives.some((d) => d.start_place_id || d.end_place_id)) return [];
+  const { data } = await admin
+    .from("mileage_places")
+    .select("id, kind, label, lat, lng")
+    .eq("company_id", companyId);
+  return (data ?? []) as unknown as PlaceRow[];
 }
 
 /**
