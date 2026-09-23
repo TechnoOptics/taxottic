@@ -125,17 +125,17 @@ describe("the manager's device alert is one line until tapped", () => {
     // It used to be a block of its own between the title and the
     // controls, so this used to be an ordering assertion. It is the
     // head's marker now: built once as `trackingMarker` and handed to
-    // whichever arm renders the head (MilesHead directly for the team
-    // overlay, DriveLog for the single-driver view, because the total
-    // under the identity line has to follow the filter). Ordering in the
+    // whichever arm owns the drives (TeamLog for the team overlay,
+    // DriveLog for the single-driver view, because the total under the
+    // identity line has to follow the filter on both). Ordering in the
     // source says nothing about that, so this holds the wiring instead.
     const at = page.indexOf("const trackingMarker =");
     expect(at, "the marker is not built at all").toBeGreaterThan(-1);
-    const marker = page.slice(at, page.indexOf("<MilesHead"));
+    const marker = page.slice(at, page.indexOf("<TeamLog"));
     expect(marker, "the alert is not in the marker").toMatch(
       /<TeamTrackingHealth/,
     );
-    for (const el of ["<MilesHead", "<DriveLog"]) {
+    for (const el of ["<TeamLog", "<DriveLog"]) {
       const from = page.indexOf(el);
       expect(from, `${el} is not rendered`).toBeGreaterThan(-1);
       expect(
@@ -188,7 +188,7 @@ describe("the classification question is asked once, on the row", () => {
   });
 
   it("states the count in the head and points it at the row", () => {
-    for (const el of ["<MilesHead", "<DriveLog"]) {
+    for (const el of ["<TeamLog", "<DriveLog"]) {
       const at = page.indexOf(el);
       expect(at, `${el} is not rendered`).toBeGreaterThan(-1);
       const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));

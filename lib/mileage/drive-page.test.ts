@@ -5,29 +5,66 @@ import * as scope from "./team-scope";
 type FixtureRow = { id: string; started_at: string };
 
 /**
- * A stand-in for loadScopedTrips that behaves like the real query now
- * does: an inclusive upper bound (`beforeIso`), newest-first with id as a
- * tie-break, capped at `limit`. A test built on this exercises the actual
- * pagination contract instead of asserting the shape of a call, which is
- * what let the original "before" bug (no real upper bound) ship unnoticed.
+ * ONE scoped query, as PostgREST runs it: an inclusive upper bound
+ * (`beforeIso`), `order by started_at desc, id desc`, then `limit`. A
+ * test built on this exercises the actual pagination contract instead of
+ * asserting the shape of a call, which is what let the original "before"
+ * bug (no real upper bound) ship unnoticed.
+ *
+ * READ THIS BEFORE USING IT TO TEST THE TIE-BREAK. The id ordering here
+ * is not decoration and it is not a duplicate of sortNewestFirst: it is
+ * what selfQuery and othersQuery genuinely ask the database for, and the
+ * LIMIT is applied after it, in the database, so a fake without it would
+ * hand back a different page than the real query does. The consequence
+ * is that for a SINGLE-source scope the rows always arrive pre-sorted
+ * and sortNewestFirst's tie-break cannot be observed at all: replacing
+ * it with `return 0` leaves every test built on this fake green.
+ *
+ * Where that tie-break is load-bearing is the TEAM scope, which is two
+ * of these queries concatenated with no cross-source sort. Use
+ * {@link fakeTeamScopedTrips} there.
  */
 function fakeScopedTrips(all: readonly FixtureRow[]) {
   return async (
     _admin: unknown,
     args: { sinceIso: string; beforeIso?: string; limit?: number },
-  ) => {
-    const limit = args.limit ?? 500;
-    return all
-      .filter((r) => r.started_at >= args.sinceIso)
-      .filter((r) => !args.beforeIso || r.started_at <= args.beforeIso)
-      .sort((a, b) => {
-        if (a.started_at !== b.started_at)
-          return a.started_at < b.started_at ? 1 : -1;
-        if (a.id === b.id) return 0;
-        return a.id < b.id ? 1 : -1;
-      })
-      .slice(0, limit);
-  };
+  ) => oneQuery(all, args);
+}
+
+function oneQuery(
+  all: readonly FixtureRow[],
+  args: { sinceIso: string; beforeIso?: string; limit?: number },
+) {
+  const limit = args.limit ?? 500;
+  return all
+    .filter((r) => r.started_at >= args.sinceIso)
+    .filter((r) => !args.beforeIso || r.started_at <= args.beforeIso)
+    .sort((a, b) => {
+      if (a.started_at !== b.started_at)
+        return a.started_at < b.started_at ? 1 : -1;
+      if (a.id === b.id) return 0;
+      return a.id < b.id ? 1 : -1;
+    })
+    .slice(0, limit);
+}
+
+/**
+ * THE TEAM BRANCH, in the shape loadScopedTrips really returns it: the
+ * viewer's own rows and everyone else's, each query sorted and limited
+ * on its own, then CONCATENATED with no cross-source sort (see the team
+ * branch of loadScopedTrips in team-scope.ts).
+ *
+ * This is the only shape in which sortNewestFirst's tie-break can be
+ * observed, and it is the shape where losing it loses a drive: two rows
+ * sharing an instant across the two halves arrive ordered by which query
+ * produced them, and isOlderThanCursor then ranks the cursor against the
+ * wrong one and excludes the other for good.
+ */
+function fakeTeamScopedTrips(own: readonly FixtureRow[], others: readonly FixtureRow[]) {
+  return async (
+    _admin: unknown,
+    args: { sinceIso: string; beforeIso?: string; limit?: number },
+  ) => [...oneQuery(own, args), ...oneQuery(others, args)];
 }
 
 describe("the drive page has no window", () => {
@@ -214,6 +251,53 @@ describe("the drive page has no window", () => {
       page2.map((r) => r.id),
       "the tied row not yet shown on page 1 must survive onto page 2, not be dropped",
     ).toEqual(["tie-a"]);
+
+    vi.restoreAllMocks();
+  });
+
+  it("keeps both rows of a tie that straddles the team scope's two queries", async () => {
+    // The tie-break is what this case exists for, and the team scope is
+    // where it is load-bearing: "own" and "others" are two separate
+    // queries, each correctly sorted, concatenated with nothing sorting
+    // ACROSS them. The own row carries the SMALLER id, so the raw
+    // concatenation is in exactly the wrong order and only
+    // sortNewestFirst can put it right. Without it, page 1 ends on the
+    // own row and isOlderThanCursor then excludes the teammate's row
+    // (its id does not sort below the cursor's), losing it for good.
+    const tiedInstant = "2026-01-01T00:00:00.000Z";
+    vi.spyOn(scope, "loadScopedTrips").mockImplementation(
+      fakeTeamScopedTrips(
+        [
+          { id: "newest", started_at: "2026-01-02T00:00:00.000Z" },
+          { id: "tie-aaa", started_at: tiedInstant },
+        ],
+        [{ id: "tie-zzz", started_at: tiedInstant }],
+      ) as never,
+    );
+    const team = { kind: "team", viewerUserId: "u_1" } as const;
+
+    const page1 = await loadDrivePage<FixtureRow>(null as never, {
+      companyId: "co_1",
+      scope: team,
+      limit: 2,
+    });
+    expect(
+      page1.map((r) => r.id),
+      "the two halves were not sorted against each other",
+    ).toEqual(["newest", "tie-zzz"]);
+
+    const last = page1[page1.length - 1];
+    const page2 = await loadDrivePage<FixtureRow>(null as never, {
+      companyId: "co_1",
+      scope: team,
+      limit: 2,
+      before: last.started_at,
+      beforeId: last.id,
+    });
+    expect(
+      page2.map((r) => r.id),
+      "the tied row from the other half of the team query was lost for good",
+    ).toEqual(["tie-aaa"]);
 
     vi.restoreAllMocks();
   });

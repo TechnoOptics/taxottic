@@ -266,8 +266,11 @@ describe("the exclusion is actually wired into /mileage", () => {
     expect(log).toContain("excludedRows=");
     // The appended pages are partitioned too. The route does not do it,
     // so without this a passenger drive walks back into the log on page
-    // two.
-    expect(log).toContain("partitionLoggedTrips");
+    // two. It happens in the hook that owns the appended pages, which
+    // both arms of /mileage share.
+    expect(log).toContain("useDriveWindow");
+    const window = code("components/mileage/useDriveWindow.ts");
+    expect(window).toContain("partitionLoggedTrips");
     const review = code("components/mileage/MileageReview.tsx");
     expect(review).toContain("ExcludedTrips");
     const excluded = code("components/mileage/ExcludedTrips.tsx");

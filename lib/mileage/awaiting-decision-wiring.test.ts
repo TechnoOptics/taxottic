@@ -85,10 +85,10 @@ describe("the drive log counts every drive awaiting a decision", () => {
      * this one must not, which is why it is passed in rather than
      * derived down there.
      */
-    // Both arms of the page: the team overlay renders the head itself,
-    // and the single-driver view hands the same number to DriveLog,
-    // which renders the head around a total that follows the filter.
-    for (const el of ["<MilesHead", "<DriveLog"]) {
+    // Both arms of the page. Each hands the same number to its client
+    // owner, which renders the head around a total that follows the
+    // filter; neither derives the count from what is on screen.
+    for (const el of ["<TeamLog", "<DriveLog"]) {
       const at = page.indexOf(el);
       expect(at, `${el} is not rendered`).toBeGreaterThan(-1);
       const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));
