@@ -46,7 +46,7 @@ import { join } from "node:path";
  *
  * The natural experiment that confirms it, in this repo, unchanged for
  * months: lib/watch/bridge.ts and lib/widget/bridge.ts both return
- * `{ bg: registerPlugin(...) }` — boxed — and both work. device-status
+ * `{ bg: registerPlugin(...) }`, boxed, and both work. device-status
  * and geofence returned it bare, and are precisely the two that have
  * never once reported.
  */

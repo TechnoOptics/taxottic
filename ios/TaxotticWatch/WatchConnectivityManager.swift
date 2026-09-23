@@ -1,7 +1,7 @@
 //  WatchConnectivityManager.swift
 //  Receives the snapshot from the phone and sends one-gesture actions
 //  back. The watch and the actionable push do the SAME server work
-//  (POST /api/push/action) — the watch is just the richer surface.
+//  (POST /api/push/action), the watch is just the richer surface.
 
 import Foundation
 import WatchConnectivity
@@ -91,7 +91,7 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
         DispatchQueue.main.async {
             self.snapshot = decoded
 
-            // One-shot celebration — a new medal, or a reward (goal
+            // One-shot celebration, a new medal, or a reward (goal
             // reached / a new deduction category unlocked).
             if let code = decoded.newBadgeCode,
                code != self.lastCelebratedCode {

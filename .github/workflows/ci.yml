@@ -1,11 +1,11 @@
-name: CI — tests + typecheck + lint + e2e + visual
+name: CI, tests + typecheck + lint + e2e + visual
 
 # Layer 7 of the tax-math verification stack (see docs/forecast-accuracy.md).
 #
 # Runs on every PR targeting main AND on every push to main. The goal is
 # simple: a change that breaks the tax math, breaks TypeScript, or breaks
 # lint can never reach production silently. Before this workflow existed
-# the 125 vitest tests were local-only — someone had to remember to run
+# the 125 vitest tests were local-only, someone had to remember to run
 # `npm test` before pushing, and we caught one near-miss where a PR
 # wouldn't have passed the suite if we had run it.
 #
@@ -242,6 +242,18 @@ jobs:
         working-directory: android
         run: ./gradlew :app:compileDebugJavaWithJavac --no-daemon
 
+      # compileDebugJavaWithJavac never compiles the test source set, so
+      # until now no Java in this repo was executed by anything. That was
+      # tolerable while the native half was mostly receivers and plugins
+      # whose behaviour only shows on a device. It stopped being
+      # tolerable with TaxotticUploader, which decides whether a drive is
+      # uploaded or silently dropped: its rule is consume only after a
+      # 2xx, and a mistake there loses drives rather than duplicating
+      # them. Robolectric runs those tests on the JVM here.
+      - name: Run Android unit tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
   verify:
     name: tests + typecheck + lint
     runs-on: ubuntu-latest
@@ -262,7 +274,7 @@ jobs:
 
       - name: Install dependencies
         # `npm ci` is exact-version, faster than `npm install`, and fails
-        # if package.json and package-lock.json drift — exactly what we
+        # if package.json and package-lock.json drift, exactly what we
         # want on CI.
         run: npm ci
 
@@ -274,7 +286,7 @@ jobs:
 
       - name: TypeScript check
         # `tsc --noEmit` runs the full project type-check without writing
-        # output. Catches the things the IDE missed — last week a literal
+        # output. Catches the things the IDE missed, last week a literal
         # union got widened by .filter() and tsc was the only signal.
         run: npm run typecheck
 
@@ -282,13 +294,13 @@ jobs:
         # Non-blocking until the existing ~55-error backlog is cleaned.
         # `continue-on-error: true` lets the job pass with a yellow
         # warning indicator if lint fails, so the report is still
-        # visible on every PR — we just don't block merges on it yet.
+        # visible on every PR, we just don't block merges on it yet.
         # Flip this to false once the backlog is cleared.
         continue-on-error: true
         run: npm run lint
 
   e2e:
-    name: e2e (Playwright — public surfaces)
+    name: e2e (Playwright, public surfaces)
     runs-on: ubuntu-latest
     # Browser download + `next dev` boot dominate; 15 min is a safe ceiling.
     timeout-minutes: 15
@@ -313,9 +325,9 @@ jobs:
       - name: Run functional e2e
         # `npm run e2e` scopes to the chromium + mobile-chrome projects; the
         # visual-regression project is excluded (its baselines are macOS-
-        # specific — regenerate on Linux to add VR here later).
+        # specific, regenerate on Linux to add VR here later).
         #
-        # THIS is the gate that makes the sitemap-200 guard automatic — the
+        # THIS is the gate that makes the sitemap-200 guard automatic, the
         # check that would have caught the /calculators + /compare
         # PUBLIC_PATHS regression before it shipped.
         #
@@ -324,12 +336,19 @@ jobs:
         # without an Authorization header. None query Supabase for content,
         # so dummy connection env is enough to boot the app (verified: with
         # only these values, public pages serve 200 and /firm/* 307s to
-        # /login). These are NOT secrets — no real connection is ever made.
+        # /login). These are NOT secrets, no real connection is ever made.
         run: npm run e2e
         env:
           NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-dummy-anon-not-a-secret"
           SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-service-role-not-a-secret"
+          # The associated-domains route fails closed with a 500 when
+          # this is unset, deliberately: Apple caches that file hard, so
+          # serving a placeholder team id would poison deep links for as
+          # long as the cache holds. CI therefore has to supply one, and
+          # a dummy is correct here because the tests assert the file's
+          # SHAPE, not its identity. The real value lives in Vercel.
+          APPLE_TEAM_ID: "ABCDE12345"
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -363,7 +382,7 @@ jobs:
         # Compares the public pages against the committed *-linux.png
         # baselines (produced by the visual-baselines job on this same
         # ubuntu image). A layout/style regression fails here with a pixel
-        # diff — the automated catch for the UI polish escapes the audit
+        # diff, the automated catch for the UI polish escapes the audit
         # flagged. Same dummy Supabase env as the e2e job (public pages only).
         run: npm run e2e:visual
         env:
@@ -407,7 +426,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Compare components against Linux baselines
-        # Renders the isolated component harness (its own Vite server — no
+        # Renders the isolated component harness (its own Vite server, no
         # app server, no Supabase) and diffs against the committed
         # *-ct-*-linux.png baselines. Catches component-level layout/style
         # regressions (e.g. the mobile select overflow). Regenerate the
@@ -426,11 +445,11 @@ jobs:
     # Manual only (Actions → this workflow → "Run workflow"). Regenerates
     # the LINUX visual-regression baselines the `visual` job compares
     # against. Screenshot baselines are OS/font-rendering specific, so they
-    # must be produced on the same ubuntu image CI runs on — never on a
+    # must be produced on the same ubuntu image CI runs on, never on a
     # dev's Mac. Download the "visual-baselines-linux" artifact this
     # produces and commit the *-linux.png files. Re-run whenever the UI
     # intentionally changes (or the runner image bumps and rendering shifts).
-    name: visual baselines (manual — regenerate Linux snapshots)
+    name: visual baselines (manual, regenerate Linux snapshots)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -469,8 +488,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-service-role-not-a-secret"
 
       - name: Regenerate component-VR baselines
-        # Component tests render in an isolated Vite harness — no app server,
-        # no Supabase — so no env is needed.
+        # Component tests render in an isolated Vite harness, no app server,
+        # no Supabase, so no env is needed.
         run: npm run test:ct:update
 
       - name: Upload Linux baselines
