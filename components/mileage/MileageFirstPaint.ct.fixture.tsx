@@ -2,6 +2,7 @@ import { TeamTrackingHealth } from "./TeamTrackingHealth";
 import { TeamViewNote } from "./TeamViewNote";
 import { DriverPicker } from "./DriverPicker";
 import { MilesHead } from "./MilesHead";
+import { DriveFilterHarness } from "./DriveFilter.ct.fixture";
 
 // Mount fixture for MileageFirstPaint.ct.spec.tsx. Lives in its own file
 // because Playwright CT can only mount components it imports; one defined
@@ -43,10 +44,12 @@ const HEALTH = [
  * cannot hide a regression in the components under test.
  *
  * THIS IS THE MANAGER'S TEAM OVERLAY, which is the branch the report came
- * from. That branch renders the map and a per-driver rollup directly
- * (app/mileage/page.tsx, the `viewingAll` arm); the window filter belongs
- * to the single-driver arm, in DriveLog, and correctly appears nowhere
- * here (that arm is measured at 390px in MilesFirstDrive.ct.spec.tsx).
+ * from. That branch renders the head, the window filter, the map and a
+ * per-driver rollup (TeamLog). The filter is the REAL control, because
+ * the height it costs above the map is exactly what this test measures;
+ * the map is still mirrored, being a Leaflet client component whose top
+ * edge is all that matters here. The single-driver arm is measured at
+ * 390px in MilesFirstDrive.ct.spec.tsx.
  *
  * RE-SYNCED BY TASK 6. What the head used to be, and what this fixture
  * therefore used to draw, was: a breadcrumb, a two-line title, a company
@@ -55,6 +58,14 @@ const HEALTH = [
  * MilesHead, and the Team view note moved below the list with the other
  * cross-links, which is why it is drawn down there.
  */
+/** Enough drives, recent enough, that the default "All" window covers
+ *  them and the honesty line stays hidden, the way a real first paint
+ *  does. */
+const TEAM_DRIVES = [
+  { started_at: new Date(Date.now() - 86_400_000).toISOString() },
+  { started_at: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+];
+
 export function ManagerPageHead() {
   return (
     <main id="main" className="min-h-screen">
@@ -73,6 +84,13 @@ export function ManagerPageHead() {
           }
           tracking={<TeamTrackingHealth rows={HEALTH} />}
         />
+
+        {/* The window control the team arm gained: four pills, and the
+            load-older line only once a window reaches past the oldest
+            drive loaded, which at first paint ("All") it does not. */}
+        <div className="mt-4">
+          <DriveFilterHarness drives={TEAM_DRIVES} />
+        </div>
 
         {/* MileageMap is a Leaflet client component; only its top edge
             matters here, and the page gives it height={460}. */}

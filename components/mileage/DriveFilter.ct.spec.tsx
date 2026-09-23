@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { DriveFilter } from "./DriveFilter";
+import { DriveFilterHarness } from "./DriveFilter.ct.fixture";
 
 const drives = [
   { id: "a", started_at: "2026-09-22T09:00:00.000Z" },
@@ -19,7 +19,7 @@ test("changes the list without a network call, and meets the tap floor", async (
   const seen: string[] = [];
   const c = await mount(
     <div data-skin="instrument">
-      <DriveFilter drives={drives} onChange={(k) => seen.push(k)} />
+      <DriveFilterHarness drives={drives} onChange={(k) => seen.push(k)} />
     </div>,
   );
   const controls = c.getByRole("button");
@@ -54,7 +54,7 @@ test("the load-older control meets the tap floor, and says when it is working or
   let taps = 0;
   const c = await mount(
     <div data-skin="instrument">
-      <DriveFilter
+      <DriveFilterHarness
         drives={recent}
         onChange={() => {}}
         onLoadOlder={() => {
@@ -85,7 +85,7 @@ test("the load-older control refuses a second tap while it is working", async ({
   let taps = 0;
   const c = await mount(
     <div data-skin="instrument">
-      <DriveFilter
+      <DriveFilterHarness
         drives={recent}
         onChange={() => {}}
         onLoadOlder={() => {

@@ -2,12 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { WarningIcon } from "@/components/ui/Icons";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
-import {
-  MileageMapRoutes,
-  type MapTrip,
-  type MapPlace,
-  type RoutelessTrip,
-} from "@/components/mileage/MileageMap";
+import { type MapPlace } from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
 import { MobileOnly } from "@/components/MobileOnly";
 import { TrackerStatus } from "@/components/mileage/TrackerStatus";
@@ -16,7 +11,6 @@ import type { SentDrive } from "@/app/api/mileage/drives/route";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
 import { RecoverLostDrives } from "@/components/mileage/RecoverLostDrives";
-import { splitScheduleC } from "@/lib/mileage/schedule-c-totals";
 import { DriverPicker } from "@/components/mileage/DriverPicker";
 import {
   ALL_DRIVERS,
@@ -30,6 +24,7 @@ import {
   driversNeedingAttention,
 } from "@/components/mileage/TeamTrackingHealth";
 import { TeamViewNote } from "@/components/mileage/TeamViewNote";
+import { TeamLog } from "@/components/mileage/TeamLog";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
 import { describeDeviceCause, evaluateDeviceCause } from "@/lib/mileage/device-cause";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
@@ -43,7 +38,6 @@ import {
 } from "@/lib/mileage/finalize-freshness";
 import { FinalizeSettleRefresh } from "@/components/mileage/FinalizeSettleRefresh";
 import { MileageAutoRefresh } from "@/components/mileage/MileageAutoRefresh";
-import { MilesHead } from "@/components/mileage/MilesHead";
 import { countDrivesAwaitingDecision } from "@/lib/mileage/awaiting-decision";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
@@ -69,16 +63,6 @@ import {
 export const dynamic = "force-dynamic";
 
 type SP = Promise<{ driver?: string }>;
-
-function fmtMiles(m: number) {
-  return m.toLocaleString("en-US", { maximumFractionDigits: 1 });
-}
-function fmtUsd(cents: number) {
-  return (cents / 100).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-}
 
 export default async function MileagePage({
   searchParams,
@@ -348,29 +332,6 @@ export default async function MileagePage({
 
   }
 
-  // Confirmed business drives only, the same rule /mileage/business
-  // applies since #616, from the same function so the two pages cannot
-  // drift apart.
-  //
-  // WHY. These two stats disagreed with each other, which was visible on
-  // a real phone on 2026-08-24: the miles counted every business drive
-  // while the deduction counted only what was actually claimable,
-  // because an unconfirmed drive carries zero cents until the driver
-  // agrees with the machine's call. That driver's screen read 23.7
-  // business miles against 5.34 USD, an implied 22 cents a mile against
-  // a real rate of 76, of which 16.7 miles were three drives nobody had
-  // confirmed. A driver reading that concludes the app is underpaying
-  // them, and the honest answer is that most of those miles are not
-  // settled yet.
-  //
-  // The drives are not hidden by this. The "Needs your call" control
-  // above counts them and one tap settles either undecided state, at
-  // which point the miles and the money appear together.
-  const businessSplit = splitScheduleC(
-    trips.filter((t) => t.classification === "business"),
-  );
-  const businessMiles = businessSplit.settledMiles;
-  const deductionCents = businessSplit.settledCents;
   // How many drives are waiting on the viewer. NOT derived from `trips`:
   // that array is scoped to the selected range, and this page opens on
   // "Today". Production on 2026-08-24 had one driver holding ten drives
@@ -396,62 +357,11 @@ export default async function MileagePage({
   // about what a place is called (lib/mileage/place-names.ts).
   const placeIndex = indexPlaces(places);
 
-  // Belt-and-braces, in the same spirit as stripForeignPrivateTrips: the
-  // partition above already removed every passenger drive, and the map has
-  // no colour for one because it must never draw one. Re-stating it here
-  // as a real runtime check means a future edit that renders the
-  // unpartitioned rows still cannot put an excluded route on the map.
-  const drawable = trips.filter(
-    (t): t is ServerTripRow & { classification: MapTrip["classification"] } =>
-      t.classification !== "passenger",
-  );
-  // Identity, classification and driver: everything the map needs about a
-  // drive except the drive itself. The routes are NOT here. Reading them
-  // on this path is what cost up to sixty sequential database round trips
-  // before the page sent a byte (the "slow to load drives" report, guarded
-  // by lib/mileage/drive-first-paint.test.ts), so MileageMapRoutes asks
-  // for all of them in one request once the page is on screen.
-  const mapTrips: RoutelessTrip[] = drawable.map((t) => ({
-    id: t.id,
-    classification: t.classification,
-    approximate: ((t as { notes?: string | null }).notes ?? "").startsWith(
-      "Approximate drive",
-    ),
-    // Driver identity only in the "all drivers" overlay, so single-driver
-    // views keep the business/personal classification colours.
-    driverId: viewingAll ? t.driver_user_id ?? null : null,
-    driverName: viewingAll
-      ? driverNameById.get(t.driver_user_id ?? "") ?? null
-      : null,
-  }));
-
-  // Per-driver rollup for the team overlay (business miles + deduction per
-  // teammate), largest deduction first. Empty outside "all drivers" mode.
-  const driverRollup = viewingAll
-    ? (() => {
-        const by = new Map<
-          string,
-          { miles: number; deduction: number; trips: number }
-        >();
-        for (const t of trips) {
-          const k = t.driver_user_id ?? "";
-          const cur = by.get(k) ?? { miles: 0, deduction: 0, trips: 0 };
-          cur.trips += 1;
-          if (t.classification === "business") {
-            cur.miles += Number(t.distance_miles);
-            cur.deduction += Number(t.deduction_cents);
-          }
-          by.set(k, cur);
-        }
-        return Array.from(by.entries())
-          .map(([id, agg]) => ({
-            id,
-            label: driverNameById.get(id) ?? "Driver",
-            ...agg,
-          }))
-          .sort((a, b) => b.deduction - a.deduction);
-      })()
-    : [];
+  // The map's trips, the per-driver rollup and the per-arm totals all
+  // moved into the two client owners (DriveLog, TeamLog). They are
+  // derived from the FILTERED drives now, because a total or a legend
+  // that describes a different set than the map beside it reads as
+  // authoritative and is wrong on the first tap.
 
   // The health verdict itself was fetched in the parallel group above.
   // Only the recovery count is left here, because it is the one read that
@@ -603,64 +513,31 @@ export default async function MileagePage({
                 DriveLog is what holds them. The overlay has no filter,
                 so its total already describes everything it draws. */}
             {viewingAll ? (
-              <MilesHead
+              // Team overlay: a read-only map of everyone's trails (one
+              // colour per driver) + a per-driver rollup, under the SAME
+              // window control the single-driver log has. Per-trip triage
+              // (reclassify / delete) stays on a single driver's log, so
+              // the mixed multi-owner overlay never exposes those actions;
+              // the way to one driver is the picker on the identity line.
+              //
+              // The drives are handed over in the drives route's own
+              // payload shape, so the page appended after this one is the
+              // same kind of thing as this one.
+              <TeamLog
                 who={whoseDrives}
                 where={company.name}
-                miles={businessMiles}
-                deductionCents={deductionCents}
-                driveCount={trips.length}
                 awaiting={showsOwnQueue ? awaitingCount : 0}
                 switcher={driverSwitcher}
                 tracking={trackingMarker}
+                initialDrives={trips.map<SentDrive>((t) => ({
+                  ...t,
+                  ...tripPlaces(placeIndex, t),
+                }))}
+                companyId={company.id}
+                driverParam={driverParam}
+                places={places}
+                driverNames={Object.fromEntries(driverNameById)}
               />
-            ) : null}
-
-            {viewingAll ? (
-              // Team overlay: a read-only map of everyone's trails (one
-              // colour per driver) + a per-driver rollup. Per-trip triage
-              // (reclassify / delete) stays on a single driver's log, so
-              // the mixed multi-owner overlay never exposes those actions.
-              <>
-                <div className="mt-4">
-                  <MileageMapRoutes
-                    trips={mapTrips}
-                    places={places}
-                    height={460}
-                    /* The overlay's whole job is EVERY driver's trail in
-                       their own colour. The polyline route serves a bare
-                       batch strictly to the caller, so without this the
-                       map drew the manager's own and nothing else while
-                       the legend still named the drivers who had none.
-                       The scope is resolved on the server from the
-                       caller's own membership; this only says which log
-                       the ids came out of. */
-                    scope={{ companyId: company.id, driverParam }}
-                  />
-                </div>
-                {driverRollup.length > 0 ? (
-                  <ul className="mt-4 grid gap-2">
-                    {driverRollup.map((d) => (
-                      <li
-                        key={d.id}
-                        className="card p-4 flex items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-forest-900 truncate">
-                            {d.label}
-                          </div>
-                          <div className="text-xs text-ink-muted mt-0.5">
-                            {d.trips} trip{d.trips === 1 ? "" : "s"} ·{" "}
-                            {fmtMiles(d.miles)} business mi
-                          </div>
-                        </div>
-                        <div className="display text-lg text-forest-900 tabular-nums">
-                          {fmtUsd(d.deduction)}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </>
             ) : (
               /* The filter, the map and the trip list share one client
                  owner so a tap on the window changes the list without a

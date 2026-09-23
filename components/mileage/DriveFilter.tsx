@@ -1,11 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import {
-  coversWindow,
-  FILTER_LABELS,
-  type FilterKey,
-} from "@/lib/mileage/drive-filter";
+import { coversWindow, FILTER_LABELS, type FilterKey } from "@/lib/mileage/drive-filter";
+import type { PickedWindow } from "@/components/mileage/useDriveWindow";
 
 const KEYS: FilterKey[] = ["all", "week", "month", "quarter"];
 
@@ -17,12 +13,23 @@ const KEYS: FilterKey[] = ["all", "week", "month", "quarter"];
  */
 export function DriveFilter({
   drives,
+  picked,
   onChange,
   onLoadOlder,
   loadingOlder = false,
   olderError = null,
 }: {
   drives: { started_at: string }[];
+  /**
+   * The chosen window, and the instant it was chosen at.
+   *
+   * CONTROLLED, and owned above. This component used to hold its own
+   * copy alongside the one its parent held, each reading its own
+   * `Date.now()`, kept in step only because `onChange` happened to fire
+   * in the same handler that set the other. One control with two
+   * owners is one edit away from two answers.
+   */
+  picked: PickedWindow;
   onChange: (key: FilterKey) => void;
   onLoadOlder?: () => void;
   /** A load is in flight. The control says so and refuses a second tap,
@@ -33,20 +40,6 @@ export function DriveFilter({
    *  is indistinguishable from a dead control. */
   olderError?: string | null;
 }) {
-  /**
-   * The chosen window, and the instant it was chosen at.
-   *
-   * The clock is read in the tap handler, not during render. A render is
-   * not an event: re-reading Date.now() on every one lets an unrelated
-   * re-render move the window boundary under a list the driver is
-   * looking at, and React's rules-of-hooks lint says the same thing
-   * about calling an impure function while rendering. "All" spans every
-   * instant, so the initial value needs no clock read at all.
-   */
-  const [picked, setPicked] = useState<{ key: FilterKey; at: number }>({
-    key: "all",
-    at: 0,
-  });
   const key = picked.key;
   const short = !coversWindow(drives, key, picked.at);
   return (
@@ -57,10 +50,7 @@ export function DriveFilter({
             key={k}
             type="button"
             aria-pressed={k === key}
-            onClick={() => {
-              setPicked({ key: k, at: Date.now() });
-              onChange(k);
-            }}
+            onClick={() => onChange(k)}
             className={
               "min-h-11 px-3 inline-flex items-center border text-sm " +
               (k === key
