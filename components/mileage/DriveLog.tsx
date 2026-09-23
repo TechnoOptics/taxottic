@@ -11,6 +11,17 @@ import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import type { SentDrive } from "@/app/api/mileage/drives/route";
 
 /**
+ * How many consecutive empty pages end the list. See {@link emptyPages}
+ * inside the component for why this is not one.
+ */
+const END_OF_LIST_EMPTY_PAGES = 2;
+
+/** What a failed load says. Plain, and it names the next action, because
+ *  the failure a driver cannot tell from a dead control is the failure
+ *  this whole change was about. */
+const LOAD_FAILED = "Could not load older drives. Tap to try again.";
+
+/**
  * The drive log's client owner: the loaded drives, the filter key, and
  * the call that appends older pages.
  *
@@ -79,23 +90,35 @@ export function DriveLog({
     at: 0,
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   /**
-   * THE END-OF-LIST SIGNAL: a page that came back with zero drives, and
-   * nothing else.
+   * THE END-OF-LIST SIGNAL: TWO well-formed pages in a row that came back
+   * with zero drives.
    *
-   * NOT `page.length < DRIVE_PAGE_SIZE`. loadDrivePage pages on a tuple
+   * Not `page.length < DRIVE_PAGE_SIZE`. loadDrivePage pages on a tuple
    * cursor and drops the rows it has already shown, so a cluster of
    * drives sharing one instant can return a short page that is not the
    * end at all. Treating short as final would hide every drive behind
-   * such a cluster, permanently, with no error anywhere to say so. An
-   * empty page is the only answer that means what it says: the query
-   * asked for drives strictly older than the cursor and there were none.
-   * Being right costs one extra request, once, at the true end.
+   * such a cluster, permanently, with no error anywhere to say so.
+   *
+   * And not ONE empty page either, which is what this held first. An
+   * empty array is not always an answer: loadScopedTrips swallows a
+   * Supabase error into `data ?? []` (lib/mileage/team-scope.ts) and the
+   * route answers `{ drives: [] }` when a membership does not resolve, so
+   * a 200 carrying nothing can be a blip rather than the end of the log.
+   * Latching on the first one meant a single blip switched "load more"
+   * off for the rest of the session, silently, with no way back short of
+   * a reload. One empty page is "none right now" and leaves the control
+   * usable; two consecutive ones are the end. A page with drives in it
+   * clears the count, and a failure never touches it at all, because a
+   * request that did not answer has said nothing about what is left.
    */
-  const [atEnd, setAtEnd] = useState(false);
+  const [emptyPages, setEmptyPages] = useState(0);
+  const atEnd = emptyPages >= END_OF_LIST_EMPTY_PAGES;
 
   const loadOlder = useCallback(async () => {
     if (loading || atEnd) return;
+    setError(null);
     // The cursor is the oldest row HELD, across both halves. A passenger
     // drive is out of the log but it is still a row the previous page
     // returned, so cursoring past it would ask the server for drives it
@@ -118,19 +141,36 @@ export function DriveLog({
       const res = await fetch(`/api/mileage/drives?${qs.toString()}`, {
         cache: "no-store",
       });
-      if (!res.ok) return;
-      const body = (await res.json()) as { drives?: SentDrive[] };
-      const page = body.drives ?? [];
-      if (page.length === 0) {
-        setAtEnd(true);
+      if (!res.ok) {
+        setError(LOAD_FAILED);
         return;
       }
+      const body = (await res.json()) as { drives?: unknown };
+      // A well-formed answer is an ARRAY. Anything else, including a
+      // `{ error }` body the route returns with a 200, is not an answer
+      // about what is left in the log and must not count towards the end
+      // of it.
+      if (!Array.isArray(body.drives)) {
+        setError(LOAD_FAILED);
+        return;
+      }
+      const page = body.drives as SentDrive[];
+      if (page.length === 0) {
+        setEmptyPages((n) => n + 1);
+        return;
+      }
+      setEmptyPages(0);
       // The route does not partition, so this page does it on arrival:
       // without it, a drive the driver already said they were riding in
       // would walk straight back into the log.
       const split = partitionLoggedTrips(page);
       setDrives((prev) => append(prev, split.logged));
       setExcluded((prev) => append(prev, split.excluded));
+    } catch {
+      // A rejected fetch is an offline phone or a dropped connection, and
+      // it was previously unhandled: the promise rejected, the spinner
+      // never cleared and nothing on screen said a word.
+      setError(LOAD_FAILED);
     } finally {
       setLoading(false);
     }
@@ -190,6 +230,8 @@ export function DriveLog({
           drives={[...drives, ...excluded]}
           onChange={(k) => setPicked({ key: k, at: Date.now() })}
           onLoadOlder={atEnd ? undefined : loadOlder}
+          loadingOlder={loading}
+          olderError={error}
         />
       </div>
       <MileageReview

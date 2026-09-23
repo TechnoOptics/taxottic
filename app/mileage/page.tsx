@@ -699,7 +699,7 @@ export default async function MileagePage({
                   aria-hidden="true"
                   className="size-1.5 rounded-full bg-emerald-500"
                 />
-                Business breadcrumbs →
+                Business breadcrumbs
               </Link>
               {/* New (May 2026): saved places. Adding a "work" place
                   here means every future trip that touches it

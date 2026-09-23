@@ -31,23 +31,24 @@ const HEALTH = [
   { userId: "u-3", label: "Marcus Aurelius · Field", health: { status: "healthy" as const, ageMs: 20 * 60_000 } },
 ];
 
-const RANGES: Record<string, string> = {
-  day: "Today",
-  week: "This week",
-  month: "This month",
-  quarter: "Quarter",
-};
-
 /**
  * The head of /mileage as a manager of a three-person team sees it, in
  * the same order and with the same wrappers app/mileage/page.tsx renders.
  *
  * The real components carry the parts this test exists to measure. The
  * chrome around them (breadcrumb, title, company line, the review CTA
- * card, the range pills) is mirrored from the page because the page is
+ * card, the cross-links) is mirrored from the page because the page is
  * an async server component behind auth and cannot mount here. A drift
  * in the mirrored chrome would make this measurement inexact; it cannot
  * hide a regression in the components under test.
+ *
+ * THIS IS THE MANAGER'S TEAM OVERLAY, which is the branch the report came
+ * from. That branch renders the map and a per-driver rollup directly
+ * (app/mileage/page.tsx, the `viewingAll` arm); the window filter belongs
+ * to the single-driver arm, in DriveLog, and correctly appears nowhere
+ * here. What DID have to go are the four 32px `?range=` links this
+ * fixture went on drawing after the page deleted them, which left the
+ * budget below green about chrome nobody renders.
  */
 export function ManagerPageHead() {
   return (
@@ -61,7 +62,7 @@ export function ManagerPageHead() {
         <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
           Drive log &amp; mileage deduction
         </h1>
-        <div className="mt-2 text-sm text-ink-soft">Techno Optics LLC · today</div>
+        <div className="mt-2 text-sm text-ink-soft">Techno Optics LLC</div>
 
         <TeamTrackingHealth rows={HEALTH} />
 
@@ -69,7 +70,7 @@ export function ManagerPageHead() {
           <DriverPicker selfUserId={SELF} drivers={DRIVERS} current="all" />
         </div>
 
-        <TeamViewNote range="day" selfUserId={SELF} />
+        <TeamViewNote range="" selfUserId={SELF} />
 
         {/* The review CTA card, present whenever the viewer has drives
             waiting. The reporter's screen had it. */}
@@ -91,26 +92,12 @@ export function ManagerPageHead() {
         <div data-ct="controls" className="mt-4 flex flex-wrap items-center gap-2">
           <NeedsDecisionPill count={3} />
           <span aria-hidden="true" className="hidden sm:block h-5 w-px bg-forest-200" />
-          {Object.entries(RANGES).map(([k, label]) => (
-            <a
-              key={k}
-              href={`/mileage?range=${k}`}
-              className={
-                "text-xs px-3 h-8 inline-flex items-center rounded-full border " +
-                (k === "day"
-                  ? "bg-forest-900 text-cream border-forest-900"
-                  : "border-forest-200 text-forest-800")
-              }
-            >
-              {label}
-            </a>
-          ))}
           <a
-            href="/mileage/business?range=ytd"
+            href="/mileage/business"
             className="ml-1 text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800"
           >
             <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500" />
-            Business breadcrumbs →
+            Business breadcrumbs
           </a>
           <a
             href="/mileage/places"

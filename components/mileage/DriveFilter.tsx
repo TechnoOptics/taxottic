@@ -19,10 +19,19 @@ export function DriveFilter({
   drives,
   onChange,
   onLoadOlder,
+  loadingOlder = false,
+  olderError = null,
 }: {
   drives: { started_at: string }[];
   onChange: (key: FilterKey) => void;
   onLoadOlder?: () => void;
+  /** A load is in flight. The control says so and refuses a second tap,
+   *  because a control that looks idle while it works is the exact thing
+   *  this task removed. */
+  loadingOlder?: boolean;
+  /** The last load failed, in words the driver can act on. Silence here
+   *  is indistinguishable from a dead control. */
+  olderError?: string | null;
 }) {
   /**
    * The chosen window, and the instant it was chosen at.
@@ -64,13 +73,28 @@ export function DriveFilter({
         ))}
       </div>
       {short && onLoadOlder ? (
-        <button
-          type="button"
-          onClick={onLoadOlder}
-          className="mono-label min-h-11 inline-flex items-center text-left"
-        >
-          Older drives are not loaded yet. Load more.
-        </button>
+        <div className="grid gap-1">
+          <button
+            type="button"
+            onClick={onLoadOlder}
+            disabled={loadingOlder}
+            aria-busy={loadingOlder}
+            className="mono-label min-h-11 inline-flex items-center text-left disabled:opacity-60"
+          >
+            {loadingOlder
+              ? "Loading older drives."
+              : "Older drives are not loaded yet. Load more."}
+          </button>
+          {olderError ? (
+            // Announced, not just drawn. A driver who taps and gets
+            // nothing has no way to tell a failure from the dead control
+            // this whole change existed to remove, so the failure has to
+            // say so out loud.
+            <p role="status" className="mono-label text-[var(--muted)]">
+              {olderError}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
