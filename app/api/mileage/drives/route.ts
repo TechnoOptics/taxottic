@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getMyCompanies } from "@/lib/auth";
 import { DRIVE_PAGE_SIZE, loadDrivePage } from "@/lib/mileage/drive-page";
-import { resolveTripScope } from "@/lib/mileage/team-scope";
+import {
+  resolveTripScope,
+  tripIdsInScope,
+  type TripScope,
+} from "@/lib/mileage/team-scope";
 import {
   indexPlaces,
   tripPlaces,
@@ -31,8 +35,9 @@ export const dynamic = "force-dynamic";
  * whatever they ask for; a manager gets a teammate only if that teammate
  * is genuinely on their roster; anything else collapses to `self`.
  *
- * The polyline branch does NOT go through that helper, deliberately. See
- * the comment on its ownership probe below.
+ * The polyline branch takes the same route when, and only when, the
+ * request names the company the ids came out of; a bare `?trip=` stays
+ * strictly the caller's own. See the comment on its probe below.
  */
 
 /**
@@ -201,28 +206,39 @@ export async function GET(req: NextRequest) {
     // and service role skips even that. So this probe is the whole
     // barrier.
     //
-    // One query for the whole list, not one per id. `.in()` with the
-    // driver pinned answers "which of these are yours" in a single
-    // indexed read, and a probe per id would be the sixty-round-trip
-    // bug this branch removed, rebuilt on the server. One drive is a
-    // batch of one and takes the same path, so there is a single
-    // ownership rule here rather than two that can drift.
+    // One query per source for the whole list, never one per id. `.in()`
+    // answers "which of these may you see" in a single indexed read, and
+    // a probe per id would be the sixty-round-trip bug this branch
+    // removed, rebuilt on the server.
     //
-    // It pins driver_user_id to the SESSION, and deliberately does not go
-    // through resolveTripScope the way the list below does. The two are
-    // not the same question. A manager reading a teammate's LIST is an
-    // existing product decision, and the list is filtered to confirmed
-    // business drives for exactly that reason. A manager pulling an
-    // arbitrary trip's raw GPS track by id is not that decision: it is
-    // minute-by-minute movement, the id is guessable, and nothing in the
-    // request says the drive was one the list would have shown. So the
-    // polyline stays strictly the caller's own.
-    const { data: owned } = await admin
-      .from("mileage_trips")
-      .select("id")
-      .in("id", ids)
-      .eq("driver_user_id", user.id);
-    const mine = new Set(((owned ?? []) as { id: string }[]).map((r) => r.id));
+    // TWO PATHS, and the query string picks between them by saying which
+    // COMPANY's log the ids came out of.
+    //
+    // WITHOUT `?company=`: strictly the caller's own, pinned to the
+    // session. That is the single-drive path, the one DriveThumbnail
+    // uses, and the request says nothing about which list the id came
+    // from. A raw GPS track is minute-by-minute movement and a uuid is
+    // guessable, so a bare id buys nothing it did not already own.
+    //
+    // WITH `?company=`: the SAME scope the list below is served under,
+    // resolved on the server by resolveTripScope against a roster loaded
+    // from the caller's own membership. That is what the team overlay
+    // needs: its whole job is every driver's trail in their own colour,
+    // and pinning the probe to the caller left it drawing the manager's
+    // own and nothing else. A manager therefore gets routes for exactly
+    // the drives their own list already shows them, which for a teammate
+    // is confirmed business drives only (restrictToSharedBusiness). The
+    // company is not trusted either: an id the caller does not belong to
+    // clears nothing, exactly as it pages nothing below.
+    const batchCompany = sp.get("company") ?? "";
+    const mine = batchCompany
+      ? await scopedBatchIds(admin, {
+          companyId: batchCompany,
+          userId: user.id,
+          driverParam: sp.get("driver") ?? "",
+          ids,
+        })
+      : await ownTripIds(admin, ids, user.id);
     const allowed = ids.filter((id) => mine.has(id));
     // Not the caller's drives, or no such drives. Ids that did not clear
     // are dropped in SILENCE rather than refused: the two cases answer
@@ -266,38 +282,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "missing_company" }, { status: 400 });
   }
 
-  // The caller's role comes from their membership of THIS company, read
-  // with the session client (getMyCompanies pins user_id itself, see the
-  // note in lib/auth.ts about super-admins). A company the caller does
-  // not belong to pages empty, for the same reason a foreign trip id
-  // returns no points: an error code distinguishable from "no drives"
-  // tells a stranger which company ids are real.
-  const memberships = await getMyCompanies();
-  const membership = memberships.find((m) => m.company_id === companyId);
-  if (!membership) return NextResponse.json({ drives: [] });
-  const isManager = membership.role === "manager";
-
-  // Who this request may read. The SAME helper the page calls
-  // (app/mileage/page.tsx), fed the same four inputs in the same way, so
-  // the two cannot drift. Page one and page two therefore agree: a
-  // manager on the team overlay keeps the team, a manager who pinned one
-  // teammate keeps that teammate, everyone else keeps themselves.
+  // A company the caller does not belong to pages empty, for the same
+  // reason a foreign trip id returns no points: an error code
+  // distinguishable from "no drives" tells a stranger which company ids
+  // are real.
   //
-  // `?driver=` is read but NOT trusted, and resolveTripScope is where the
-  // difference lives. It is handed the raw value plus `driverIds`, a
-  // roster this server just loaded from the caller's own membership, and
-  // it returns `other` only when the value is genuinely on that roster.
-  // A non-manager never leaves `self` at all. Passing the raw string in
-  // is the helper's documented contract, not a shortcut around it.
-  const driverIds = isManager
-    ? await companyDriverIds(admin, companyId)
-    : [user.id];
-  const scope = resolveTripScope({
-    isManager,
-    viewerUserId: user.id,
+  // Who this request may read. The SAME resolution the batch above uses
+  // and the SAME helper the page calls (app/mileage/page.tsx), so no two
+  // of the three can drift. Page one and page two therefore agree, and
+  // so does the map drawn beside them: a manager on the team overlay
+  // keeps the team, a manager who pinned one teammate keeps that
+  // teammate, everyone else keeps themselves.
+  const scope = await scopeFor(admin, {
+    companyId,
+    userId: user.id,
     driverParam: sp.get("driver") ?? "",
-    driverIds,
   });
+  if (!scope) return NextResponse.json({ drives: [] });
 
   // The cursor is a TUPLE, not a bare timestamp. Drives that share an
   // instant are common at millisecond GPS precision, and a timestamp-only
@@ -350,6 +351,93 @@ async function placesFor(
     .select("id, kind, label, lat, lng")
     .eq("company_id", companyId);
   return (data ?? []) as unknown as PlaceRow[];
+}
+
+/**
+ * Which of `ids` belong to the CALLER, pinned to the session.
+ *
+ * The bare-id path: one indexed read for the whole list, with the driver
+ * pinned. One drive is a batch of one and takes the same query, so there
+ * is a single rule here rather than two that can drift.
+ */
+async function ownTripIds(
+  admin: ReturnType<typeof createServiceClient>,
+  ids: readonly string[],
+  userId: string,
+): Promise<Set<string>> {
+  const { data } = await admin
+    .from("mileage_trips")
+    .select("id")
+    .in("id", [...ids])
+    .eq("driver_user_id", userId);
+  return new Set(((data ?? []) as { id: string }[]).map((r) => r.id));
+}
+
+/**
+ * Which of `ids` the caller's own drive LIST would have shown them.
+ *
+ * Resolves the scope server-side first, exactly as the list below does,
+ * and only then asks which ids fall inside it. Nothing the client sent
+ * widens anything: `?company=` is checked against the caller's
+ * memberships, `?driver=` is laundered through resolveTripScope against
+ * a roster the server loaded, and the id list can only narrow the
+ * answer. A company the caller does not belong to clears no ids at all.
+ */
+async function scopedBatchIds(
+  admin: ReturnType<typeof createServiceClient>,
+  {
+    companyId,
+    userId,
+    driverParam,
+    ids,
+  }: {
+    companyId: string;
+    userId: string;
+    driverParam: string;
+    ids: readonly string[];
+  },
+): Promise<Set<string>> {
+  const scope = await scopeFor(admin, { companyId, userId, driverParam });
+  if (!scope) return new Set<string>();
+  return tripIdsInScope(admin, { companyId, scope, ids });
+}
+
+/**
+ * The scope a request is served under, or null when the caller does not
+ * belong to the company at all.
+ *
+ * The caller's role comes from their membership of THIS company, read
+ * with the session client (getMyCompanies pins user_id itself, see the
+ * note in lib/auth.ts about super-admins).
+ *
+ * `?driver=` is read but NOT trusted, and resolveTripScope is where the
+ * difference lives. It is handed the raw value plus `driverIds`, a
+ * roster this server just loaded from the caller's own membership, and
+ * it returns `other` only when the value is genuinely on that roster. A
+ * non-manager never leaves `self` at all. Passing the raw string in is
+ * the helper's documented contract, not a shortcut around it.
+ */
+async function scopeFor(
+  admin: ReturnType<typeof createServiceClient>,
+  {
+    companyId,
+    userId,
+    driverParam,
+  }: { companyId: string; userId: string; driverParam: string },
+): Promise<TripScope | null> {
+  const memberships = await getMyCompanies();
+  const membership = memberships.find((m) => m.company_id === companyId);
+  if (!membership) return null;
+  const isManager = membership.role === "manager";
+  const driverIds = isManager
+    ? await companyDriverIds(admin, companyId)
+    : [userId];
+  return resolveTripScope({
+    isManager,
+    viewerUserId: userId,
+    driverParam,
+    driverIds,
+  });
 }
 
 /**

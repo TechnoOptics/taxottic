@@ -831,12 +831,13 @@ test("a reclassified drive reaches the row, the total and the deduction", async 
   await page.route("**/api/mileage/drives*", (r) =>
     r.fulfill({ json: { points: [] } }),
   );
-  const before = {
+  type Drive = ReturnType<typeof drive>;
+  const before: Drive = {
     ...drive("d-1", 1),
-    classification: "unclassified" as const,
+    classification: "unclassified" as Drive["classification"],
     deduction_cents: 0,
   };
-  const log = (d: typeof before, awaiting: number) => (
+  const log = (d: Drive, awaiting: number) => (
     <div data-skin="instrument">
       <DriveLog
         who="Your drives"
@@ -865,7 +866,7 @@ test("a reclassified drive reaches the row, the total and the deduction", async 
     log(
       {
         ...before,
-        classification: "business" as const,
+        classification: "business" as Drive["classification"],
         deduction_cents: 1080,
         distance_miles: 14.2,
       },
@@ -921,4 +922,57 @@ test("a deleted drive leaves the list when the server drops it", async ({
     c.locator("li.card"),
     "the deleted drive is still in the list",
   ).toHaveCount(1);
+});
+
+/**
+ * THE BATCH SAYS WHICH LOG IT CAME OUT OF.
+ *
+ * The drives route serves a bare `?trip=` strictly to the caller, so a
+ * batch that names no company gets the caller's own routes and nothing
+ * else. That is right for a lone guessable uuid and wrong for a list the
+ * server itself scoped: a manager reading a teammate's log would get a
+ * blank thumbnail on every row and a trail-less review map, and the team
+ * overlay would draw the manager's own trails only.
+ *
+ * The scope is resolved on the SERVER from the caller's own membership.
+ * What travels here is only which question to ask.
+ */
+test("the route batch names the company and the driver the log was read under", async ({
+  mount,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  const batches: URL[] = [];
+  await page.route("**/api/mileage/drives*", (r) => {
+    const url = new URL(r.request().url());
+    if (url.searchParams.has("trip")) batches.push(url);
+    return r.fulfill({ json: { points: [] } });
+  });
+  await mount(
+    <div data-skin="instrument">
+      <DriveLog
+        who="Grace Hopper"
+        awaiting={0}
+        initialDrives={DRIVES}
+        initialExcluded={[]}
+        companyId="co-1"
+        driverParam="u-2"
+        places={[]}
+        reclassify={noop}
+        deleteTrip={noop}
+        companies={[{ id: "co-1", name: "Acme" }]}
+        moveTripCompany={noop}
+      />
+    </div>,
+  );
+
+  await expect.poll(() => batches.length).toBeGreaterThan(0);
+  expect(
+    batches[0].searchParams.get("company"),
+    "an unscoped batch is served the caller's own routes only",
+  ).toBe("co-1");
+  expect(
+    batches[0].searchParams.get("driver"),
+    "the teammate the log was pinned to must reach the batch too",
+  ).toBe("u-2");
 });

@@ -69,8 +69,16 @@ const h = vi.hoisted(() => ({
    *  takes a LIST of ids now (one drive is a batch of one), so it
    *  answers with the subset of them that is the caller's. */
   ownedRows: [] as { id: string }[],
-  /** Every filter applied to the ownership probe, as [column, value]. */
+  /** Every filter applied to the ownership probe, as [column, value].
+   *  Shared across every mileage_trips read a request makes; the team
+   *  scope makes two, and {@link ownershipQueries} keeps them apart. */
   ownershipFilters: [] as [string, unknown][],
+  /** The filters of each mileage_trips read separately, in order. */
+  ownershipQueries: [] as [string, unknown][][],
+  /** What a mileage_trips read answers, given its own filters. The team
+   *  scope runs two reads with different filters, so a fixture that
+   *  answers the same rows to both cannot tell them apart. */
+  tripsAnswer: null as null | ((filters: [string, unknown][]) => unknown),
   /** How many times mileage_trips was read. Every id in a batch must be
    *  checked, and checking them must not cost a query each. */
   ownershipReads: 0,
@@ -96,6 +104,8 @@ const h = vi.hoisted(() => ({
 type Builder = {
   select: () => Builder;
   eq: (col: string, val: unknown) => Builder;
+  neq: (col: string, val: unknown) => Builder;
+  not: (col: string, op: string, val: unknown) => Builder;
   in: (col: string, vals: unknown[]) => Builder;
   maybeSingle: () => Promise<{ data: unknown }>;
   then: <T>(onOk: (v: { data: unknown }) => T) => Promise<T>;
@@ -103,16 +113,30 @@ type Builder = {
 
 function builder(
   result: () => { data: unknown },
-  sink?: [string, unknown][],
+  ...sinks: ([string, unknown][] | undefined)[]
 ): Builder {
+  const note = (entry: [string, unknown]) => {
+    for (const sink of sinks) sink?.push(entry);
+  };
   const b: Builder = {
     select: () => b,
     eq: (col, val) => {
-      sink?.push([col, val]);
+      note([col, val]);
+      return b;
+    },
+    // Spelled with their operator, because "which column" is not the
+    // question a privacy filter is asserted on: `neq driver_user_id` and
+    // `eq driver_user_id` are opposite rules on the same column.
+    neq: (col, val) => {
+      note([`neq:${col}`, val]);
+      return b;
+    },
+    not: (col, op, val) => {
+      note([`not:${col}:${op}`, val]);
       return b;
     },
     in: (col, vals) => {
-      sink?.push([col, vals]);
+      note([col, vals]);
       return b;
     },
     maybeSingle: async () => result(),
@@ -136,7 +160,13 @@ vi.mock("@/lib/supabase/server", () => ({
       if (table === "mileage_places")
         return builder(() => ({ data: h.placeRows }), h.placeFilters);
       h.ownershipReads += 1;
-      return builder(() => ({ data: h.ownedRows }), h.ownershipFilters);
+      const filters: [string, unknown][] = [];
+      h.ownershipQueries.push(filters);
+      return builder(
+        () => ({ data: h.tripsAnswer ? h.tripsAnswer(filters) : h.ownedRows }),
+        h.ownershipFilters,
+        filters,
+      );
     },
     rpc: async (fn: string, args: Record<string, unknown>) => {
       h.rpcCalls.push({ fn, args });
@@ -176,6 +206,8 @@ beforeEach(() => {
   h.memberRows = [{ user_id: VIEWER }];
   h.ownedRows = [{ id: TRIP }];
   h.ownershipFilters = [];
+  h.ownershipQueries = [];
+  h.tripsAnswer = null;
   h.ownershipReads = 0;
   h.rpcCalls = [];
   h.polyRows = [];
@@ -656,5 +688,147 @@ describe("the drives handler, asked for several polylines at once", () => {
     // thumbnail anything: it asks for one drive and one drive fits.
     await batch(TRIP);
     expect(h.rpcCalls[0].args.p_max).toBe(250);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The batch, when it says which log the ids came out of.
+//
+// The team overlay's whole job is every driver's trail in their own colour.
+// With the probe pinned to the caller it drew the manager's own and nothing
+// else, while the legend and the rollup still named the drivers who had none,
+// and a manager reading a teammate's log got a blank thumbnail on every row.
+// A batch that names its company is therefore scoped the way the LIST is
+// scoped, server-side, so a caller sees routes for exactly the drives their
+// own list already showed them. A bare `?trip=` stays strictly their own.
+// ---------------------------------------------------------------------------
+
+const TEAMMATE_TRIP = "77777777-7777-4777-8777-777777777777";
+
+/** Which mileage_trips read pinned `driver_user_id` to this user. */
+const queryPinning = (userId: string) =>
+  h.ownershipQueries.find((f) =>
+    f.some(([col, val]) => col === "driver_user_id" && val === userId),
+  );
+
+describe("the drives handler, asked for a scoped batch of polylines", () => {
+  it("gives a manager a teammate's route when the batch names the company", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    // The teammate's trip clears, because the manager's own drive list
+    // under this scope would have shown it.
+    h.tripsAnswer = (filters) =>
+      filters.some(([col, val]) => col === "driver_user_id" && val === VIEWER)
+        ? [{ id: TRIP }]
+        : [{ id: TEAMMATE_TRIP }];
+    h.polyRows = [
+      { trip_id: TRIP, lat: 41.5, lng: -81.7, captured_at: "2026-09-01T12:00:00.000Z" },
+      { trip_id: TEAMMATE_TRIP, lat: 44.9, lng: -93.2, captured_at: "2026-09-01T12:01:00.000Z" },
+    ];
+    const res = await ask(`?trip=${TRIP},${TEAMMATE_TRIP}&company=${COMPANY}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { points: { trip_id: string }[] };
+    expect(
+      body.points.map((p) => p.trip_id).sort(),
+      "the overlay draws every driver's trail; a map missing them reads as broken",
+    ).toEqual([TRIP, TEAMMATE_TRIP].sort());
+  });
+
+  it("asks for a teammate's routes under the business-only filter", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    await ask(`?trip=${TRIP},${TEAMMATE_TRIP}&company=${COMPANY}`);
+    const theirs = h.ownershipQueries.find((f) =>
+      f.some(([col]) => col.startsWith("neq:")),
+    );
+    expect(theirs, "the team scope must read teammates at all").toBeDefined();
+    expect(
+      theirs,
+      "a teammate's route may only come back for a CONFIRMED business drive",
+    ).toContainEqual(["not:needs_confirmation:is", true]);
+    expect(theirs).toContainEqual(["classification", "business"]);
+    expect(
+      queryPinning(VIEWER),
+      "the manager's own drives are read without that restriction",
+    ).toBeDefined();
+  });
+
+  it("keeps a bare batch strictly the caller's own, manager or not", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    h.ownedRows = [];
+    h.polyRows = [
+      { trip_id: TEAMMATE_TRIP, lat: 44.9, lng: -93.2, captured_at: "2026-09-01T12:01:00.000Z" },
+    ];
+    const res = await ask(`?trip=${TEAMMATE_TRIP},${TRIP}`);
+    expect(
+      await res.json(),
+      "a batch that names no list is a pair of guessable uuids, not a scope",
+    ).toEqual({ points: [] });
+    expect(h.ownershipFilters).toContainEqual(["driver_user_id", VIEWER]);
+  });
+
+  it("refuses a teammate's polyline on the single-id path even with a company", async () => {
+    // DriveThumbnail asks for one drive and names no company, so this is
+    // the shape a hand-written request takes. The scope still decides,
+    // and a drive that is not in it clears nothing.
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    h.tripsAnswer = () => [];
+    h.polyRows = [
+      { trip_id: TEAMMATE_TRIP, lat: 44.9, lng: -93.2, captured_at: "2026-09-01T12:01:00.000Z" },
+    ];
+    const res = await ask(`?trip=${TEAMMATE_TRIP}&company=${COMPANY}`);
+    expect(await res.json()).toEqual({ points: [] });
+    expect(h.rpcCalls, "an uncleared id must never reach the point table").toEqual([]);
+  });
+
+  it("clears nothing for a company the caller does not belong to", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    const res = await ask(
+      `?trip=${TRIP},${TEAMMATE_TRIP}&company=99999999-9999-4999-8999-999999999999`,
+    );
+    expect(await res.json()).toEqual({ points: [] });
+    expect(
+      h.ownershipReads,
+      "a stranger's company is not queried for trips at all",
+    ).toBe(0);
+    expect(h.rpcCalls).toEqual([]);
+  });
+
+  it("keeps an ordinary member on their own routes however they ask", async () => {
+    h.memberships = [{ company_id: COMPANY, role: "member" }];
+    h.memberRows = [{ user_id: VIEWER }, { user_id: SOMEONE_ELSE }];
+    h.tripsAnswer = (filters) =>
+      filters.some(([col, val]) => col === "driver_user_id" && val === VIEWER)
+        ? [{ id: TRIP }]
+        : [{ id: TEAMMATE_TRIP }];
+    h.polyRows = [
+      { trip_id: TRIP, lat: 41.5, lng: -81.7, captured_at: "2026-09-01T12:00:00.000Z" },
+      { trip_id: TEAMMATE_TRIP, lat: 44.9, lng: -93.2, captured_at: "2026-09-01T12:01:00.000Z" },
+    ];
+    const res = await ask(
+      `?trip=${TRIP},${TEAMMATE_TRIP}&company=${COMPANY}&driver=${SOMEONE_ELSE}`,
+    );
+    const body = (await res.json()) as { points: { trip_id: string }[] };
+    expect(
+      body.points.map((p) => p.trip_id),
+      "a member naming a colleague must not read that colleague's track",
+    ).toEqual([TRIP]);
+  });
+
+  it("scopes the batch to the teammate a manager pinned", async () => {
+    asManagerOf(VIEWER, SOMEONE_ELSE);
+    await ask(
+      `?trip=${TRIP},${TEAMMATE_TRIP}&company=${COMPANY}&driver=${SOMEONE_ELSE}`,
+    );
+    expect(
+      h.ownershipReads,
+      "one pinned teammate is one read, not the whole team",
+    ).toBe(1);
+    expect(h.ownershipQueries[0]).toContainEqual([
+      "driver_user_id",
+      SOMEONE_ELSE,
+    ]);
+    expect(
+      h.ownershipQueries[0],
+      "a pinned teammate is still confirmed business drives only",
+    ).toContainEqual(["not:needs_confirmation:is", true]);
   });
 });

@@ -262,6 +262,87 @@ export async function loadScopedTrips<T>(
 }
 
 /**
+ * Which of `ids` a scope is allowed to see, as a set.
+ *
+ * THIS IS WHAT LETS THE TEAM OVERLAY DRAW TEAMMATES' TRAILS AGAIN. The
+ * overlay's whole job is every driver's route in their own colour, and
+ * the only polyline source left is a route whose ownership probe pins
+ * `driver_user_id` to the caller, so the map drew the manager's own
+ * trails and nothing else while the legend still named the drivers who
+ * had none.
+ *
+ * It answers the SAME question the drive list answers, with the same
+ * queries, so a caller sees routes for exactly the drives their own list
+ * already showed them: their own without restriction, a teammate's only
+ * through {@link restrictToSharedBusiness}. It cannot be widened by the
+ * caller, because the scope is resolved on the server by
+ * {@link resolveTripScope} before this is called; the id list only ever
+ * NARROWS what comes back.
+ *
+ * Ids that do not clear are simply absent from the set. The caller drops
+ * them in silence, for the reason the route spells out: a distinguishable
+ * answer for "exists but is not yours" is an oracle for guessing ids.
+ */
+/** A mileage_trips id probe, reduced to the chain {@link tripIdsInScope}
+ *  needs. Self-referential and small, like TripQuery above and for the
+ *  same TS2589 reason. */
+type IdQuery = {
+  eq(col: string, val: unknown): IdQuery;
+  neq(col: string, val: unknown): IdQuery;
+  not(col: string, op: string, val: unknown): IdQuery;
+  in(col: string, vals: readonly string[]): PromiseLike<{ data: unknown }>;
+};
+
+export async function tripIdsInScope(
+  admin: SupabaseClient,
+  {
+    companyId,
+    scope,
+    ids,
+  }: { companyId: string; scope: TripScope; ids: readonly string[] },
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set<string>();
+  const wanted = [...ids];
+  // Cast once to the small self-referential type above, for the reason
+  // TripQuery documents: resolving restrictToSharedBusiness's generic
+  // against the real PostgREST builder and then chaining onto the result
+  // makes tsc give up with "type instantiation is excessively deep".
+  const base = () =>
+    admin
+      .from("mileage_trips")
+      .select("id")
+      .eq("company_id", companyId) as unknown as IdQuery;
+  const own = (driverUserId: string) =>
+    base().eq("driver_user_id", driverUserId).in("id", wanted);
+  // Two statements rather than one `or(...)`, for the same reason
+  // loadScopedTrips uses two: an operator-precedence mistake inside a
+  // compound filter would widen the business-only restriction silently.
+  const others = (target: { only: string } | { except: string }) =>
+    restrictToSharedBusiness(
+      "only" in target
+        ? base().eq("driver_user_id", target.only)
+        : base().neq("driver_user_id", target.except),
+    ).in("id", wanted);
+
+  if (scope.kind === "self") return idSet([await own(scope.driverUserId)]);
+  if (scope.kind === "other")
+    return idSet([await others({ only: scope.driverUserId })]);
+  return idSet(
+    await Promise.all([
+      own(scope.viewerUserId),
+      others({ except: scope.viewerUserId }),
+    ]),
+  );
+}
+
+function idSet(results: readonly { data: unknown }[]): Set<string> {
+  const out = new Set<string>();
+  for (const { data } of results)
+    for (const row of (data ?? []) as { id: string }[]) out.add(row.id);
+  return out;
+}
+
+/**
  * Every column the firm's map reads. `needs_confirmation` is selected even
  * though the query already filters on it, so that
  * {@link stripPrivateTrips} below can actually see the flag: an unselected

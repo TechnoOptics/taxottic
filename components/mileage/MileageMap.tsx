@@ -757,10 +757,14 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export function useTripRoutes(
   tripIds: readonly string[] | undefined,
+  scope?: RouteScope,
 ): TripRoutes {
   // A string, not an array: it is the effect's only dependency, and an
   // array literal from a caller would re-arm it on every render.
   const key = (tripIds ?? []).join(",");
+  // Same reason: the scope is flattened into the query string it will
+  // become, so an object literal from a caller cannot re-arm the effect.
+  const scopeQuery = scopeToQuery(scope);
   const [state, setState] = useState<TripRoutes>(NO_ROUTES);
   const asked = useRef<Set<string>>(new Set());
 
@@ -794,7 +798,7 @@ export function useTripRoutes(
           );
           if (cancelled) return;
         }
-        const answer = await loadRoutes(wanted.join(","));
+        const answer = await loadRoutes(wanted.join(","), scopeQuery);
         if (cancelled) return;
         // No answer, only a failure to get one. The ids are deliberately
         // NOT marked asked here, so this batch is retried above and, if
@@ -816,9 +820,40 @@ export function useTripRoutes(
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [key, scopeQuery]);
 
   return state;
+}
+
+/**
+ * WHICH LOG THE IDS CAME OUT OF, and why the batch says so.
+ *
+ * The drives route serves a bare `?trip=` strictly to the caller: a lone
+ * uuid is guessable and a polyline is minute-by-minute movement. But the
+ * team overlay's whole job is every driver's trail in their own colour,
+ * and under that rule it drew the manager's own and nothing else, with
+ * the legend still naming drivers who had none.
+ *
+ * So a batch that came out of a real drive list names that list. The
+ * server then resolves the scope itself, with the same helper and the
+ * same roster it serves the list with, and answers for the ids inside
+ * it: exactly the drives the caller's own list already showed them,
+ * which for a teammate is confirmed business drives only. Nothing here
+ * is trusted; it only says which question to ask.
+ */
+export type RouteScope = {
+  companyId: string;
+  /** The raw `?driver=` the page was read under. Laundered server-side
+   *  by resolveTripScope; a value the caller is not entitled to simply
+   *  collapses to their own drives. */
+  driverParam?: string;
+};
+
+function scopeToQuery(scope: RouteScope | undefined): string {
+  if (!scope?.companyId) return "";
+  const qs = new URLSearchParams({ company: scope.companyId });
+  if (scope.driverParam) qs.set("driver", scope.driverParam);
+  return `&${qs.toString()}`;
 }
 
 /**
@@ -854,6 +889,7 @@ export function MileageMapRoutes({
   focusMode = false,
   focusTripId = null,
   routes,
+  scope,
 }: {
   /** The drives to draw, in order. Authoritative when given: it is both
    *  what is asked for and what is drawn, so a caller holding ids and no
@@ -876,13 +912,17 @@ export function MileageMapRoutes({
    *  its rows, because two fetches of the same sixty routes is the cost
    *  this whole change exists to delete. */
   routes?: Map<string, RoutePoint[]>;
+  /** Which drive log these ids came out of, when this component is the
+   *  one fetching. See {@link RouteScope}: without it the team overlay
+   *  draws the manager's own trails and nobody else's. */
+  scope?: RouteScope;
 }) {
   const ids = tripIds ?? (trips ?? []).map((t) => t.id);
   // A string, not an array: an array literal from a parent would re-arm
   // the memo below on every render.
   const key = ids.join(",");
   // Nothing is asked for when the routes were handed down.
-  const fetched = useTripRoutes(routes ? undefined : ids);
+  const fetched = useTripRoutes(routes ? undefined : ids, scope);
   const known = routes ?? fetched.routes;
 
   const drawn = useMemo<MapTrip[]>(() => {
@@ -931,10 +971,13 @@ const NO_ANSWER: RouteAnswer = { answered: false, routes: new Map() };
 const ANSWERED_EMPTY: RouteAnswer = { answered: true, routes: new Map() };
 
 /** Every drive's route on this map, in one request. */
-async function loadRoutes(idList: string): Promise<RouteAnswer> {
+async function loadRoutes(
+  idList: string,
+  scopeQuery: string,
+): Promise<RouteAnswer> {
   try {
     const res = await fetch(
-      `/api/mileage/drives?trip=${encodeURIComponent(idList)}`,
+      `/api/mileage/drives?trip=${encodeURIComponent(idList)}${scopeQuery}`,
     );
     // A server error is worth asking again about; a refusal is not. A
     // 401 says the session has gone and a 400 says the request was

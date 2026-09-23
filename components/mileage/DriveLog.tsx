@@ -300,7 +300,16 @@ export function DriveLog({
   // range tap costs nothing (it filters what is already here, which is
   // this component's whole reason to exist) and a page of older drives
   // costs exactly one more request for the ids it just learned about.
-  const { routes, settled } = useTripRoutes(drives.map((d) => d.id));
+  //
+  // The scope travels with the batch: without it the route serves the
+  // caller's own routes only, which is right for a lone guessable id and
+  // wrong for a list the server itself scoped. A manager reading a
+  // teammate's log would otherwise get a blank thumbnail on every row
+  // and a trail-less review map.
+  const { routes, settled } = useTripRoutes(
+    drives.map((d) => d.id),
+    { companyId, driverParam },
+  );
 
   const tripRows = shown.map<TripRow>((d) => ({
     id: d.id,

@@ -626,6 +626,15 @@ export default async function MileagePage({
                     trips={mapTrips}
                     places={places}
                     height={460}
+                    /* The overlay's whole job is EVERY driver's trail in
+                       their own colour. The polyline route serves a bare
+                       batch strictly to the caller, so without this the
+                       map drew the manager's own and nothing else while
+                       the legend still named the drivers who had none.
+                       The scope is resolved on the server from the
+                       caller's own membership; this only says which log
+                       the ids came out of. */
+                    scope={{ companyId: company.id, driverParam }}
                   />
                 </div>
                 {driverRollup.length > 0 ? (
