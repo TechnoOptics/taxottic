@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
+import type { RoutePoint } from "@/components/mileage/MileageMap";
 
-/** One GPS fix of a drive, as the route hands it over. */
-export type DrivePoint = { lat: number; lng: number; captured_at: string };
+/** One GPS fix of a drive, as the route hands it over. One definition,
+ *  two names: the list has always called it this, and MileageMap owns
+ *  the shape because it owns the batch that produces it. Type-only, so
+ *  nothing of that module is pulled into a row's bundle. */
+export type DrivePoint = RoutePoint;
 type Pt = DrivePoint;
 
 const SIZE = 64;
@@ -32,14 +36,33 @@ const SIZE = 64;
  *  3. Nothing is drawn until there is something to draw. No spinner: a
  *     row without a map is still a readable row, and a spinner that
  *     cannot resolve is worse than a quiet gap.
+ *  4. The request is a LAST resort. A list that already holds this
+ *     drive's route hands it over (`points`), and one that is still
+ *     fetching it says so (`deferToList`), because scrolling a full
+ *     page used to fire one single-id request per row for routes the
+ *     list was already holding. The fetch stays for the row the list
+ *     could not cover, which is exactly what it is good at.
  */
 export function DriveThumbnail({
   tripId,
   classification = "unclassified",
+  points,
+  deferToList = false,
   onPoints,
 }: {
   tripId: string;
   classification?: "business" | "personal" | "unclassified";
+  /** This drive's route, when the list that holds this row already has
+   *  it. Drawn instead of fetched, and still only once the row is near
+   *  the viewport. Not reported back through `onPoints`: it came from
+   *  the parent, which already has it. */
+  points?: Pt[];
+  /** The list is fetching this drive's route in a batch. Wait for it
+   *  rather than asking for the same route again. Without this a row
+   *  cannot tell "the batch has not landed" from "the batch is not
+   *  bringing one", and racing the batch is what made every route on a
+   *  scrolled page arrive twice. */
+  deferToList?: boolean;
   /**
    * The route, handed to the row once, whatever the answer was (an empty
    * array included). The row uses the first and last fix to name the two
@@ -52,8 +75,17 @@ export function DriveThumbnail({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const asked = useRef(false);
-  const [points, setPoints] = useState<Pt[] | null>(null);
+  const [shown, setShown] = useState<Pt[] | null>(null);
   const report = useRef(onPoints);
+  // Read through a ref for the same reason `onPoints` is: the effect
+  // below must see the latest array without a fresh array identity from
+  // a parent re-arming the observer. Whether there IS one is a boolean,
+  // which is stable, so that can be a real dependency.
+  const supplied = useRef(points);
+  const hasSupplied = (points?.length ?? 0) > 0;
+  useEffect(() => {
+    supplied.current = points;
+  }, [points]);
   // Assigned in an effect, not during render: the point is only that the
   // fetch below calls the LATEST callback without the observer effect
   // depending on it, so a parent that passes a fresh closure every render
@@ -65,25 +97,36 @@ export function DriveThumbnail({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // A route is on its way from the list. Do nothing at all, not even
+    // observe: when it lands this effect runs again with an answer.
+    if (deferToList) return;
+    if (asked.current) return;
     const deliver = (pts: Pt[]) => {
-      setPoints(pts);
+      setShown(pts);
       report.current?.(pts);
     };
-    // No IntersectionObserver (very old WebView): ask straight away
+    // The row's one shot, on screen. Either the list already had this
+    // route, or nobody has it and the row asks for its own.
+    const resolve = () => {
+      asked.current = true;
+      const given = supplied.current;
+      if (given && given.length > 0) {
+        setShown(given);
+        return;
+      }
+      void load(tripId, deliver);
+    };
+    // No IntersectionObserver (very old WebView): resolve straight away
     // rather than leave every row blank forever.
     if (typeof IntersectionObserver === "undefined") {
-      if (!asked.current) {
-        asked.current = true;
-        void load(tripId, deliver);
-      }
+      resolve();
       return;
     }
     const io = new IntersectionObserver(
       (entries) => {
         if (!entries.some((e) => e.isIntersecting) || asked.current) return;
-        asked.current = true;
         io.disconnect();
-        void load(tripId, deliver);
+        resolve();
       },
       // 200px of runway, so the map is usually there by the time the row
       // reaches the eye.
@@ -91,7 +134,7 @@ export function DriveThumbnail({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [tripId]);
+  }, [tripId, deferToList, hasSupplied]);
 
   return (
     <div
@@ -102,9 +145,9 @@ export function DriveThumbnail({
       className="shrink-0"
       style={{ width: SIZE, height: SIZE }}
     >
-      {points ? (
+      {shown ? (
         <TripThumbnail
-          points={points.map((p) => ({ lat: p.lat, lng: p.lng }))}
+          points={shown.map((p) => ({ lat: p.lat, lng: p.lng }))}
           classification={classification}
           size={SIZE}
         />

@@ -6,6 +6,7 @@ import { MileageReview } from "@/components/mileage/MileageReview";
 import { type TripRow } from "@/components/mileage/TripList";
 import { type ExcludedTripRow } from "@/components/mileage/ExcludedTrips";
 import {
+  useTripRoutes,
   type MapTrip,
   type MapPlace,
   type RoutelessTrip,
@@ -183,6 +184,19 @@ export function DriveLog({
   const shown = filterDrives(drives, picked.key, picked.at);
   const shownExcluded = filterDrives(excluded, picked.key, picked.at);
 
+  // ONE fetch for the map below AND every row in the list, because they
+  // want the same sixty routes. Scrolling a full page used to fire one
+  // single-id request per row on top of the map's batch, at the full
+  // 250-vertex budget each, for routes this component was already
+  // holding: the round trips this branch deleted from the first paint,
+  // arriving through the scrollbar instead.
+  //
+  // Keyed on every LOADED drive rather than the filtered subset, so a
+  // range tap costs nothing (it filters what is already here, which is
+  // this component's whole reason to exist) and a page of older drives
+  // costs exactly one more request for the ids it just learned about.
+  const { routes, settled } = useTripRoutes(drives.map((d) => d.id));
+
   const tripRows = shown.map<TripRow>((d) => ({
     id: d.id,
     startedAtISO: d.started_at,
@@ -191,10 +205,14 @@ export function DriveLog({
     classification: d.classification,
     deductionCents: Number(d.deduction_cents),
     needsConfirmation: d.needs_confirmation === true,
-    // Empty on purpose. Each row fetches its own route when it nears the
-    // viewport (DriveThumbnail), which is what took sixty sequential
-    // polyline round trips off the first paint.
-    points: [],
+    // From the batch above, not from the server render: reading these on
+    // the render path is what took sixty sequential polyline round trips
+    // off the first paint. A drive the batch has not answered for yet is
+    // `routePending`, which is what stops the row racing it; one it has
+    // answered for and not covered stays empty, and the row fetches its
+    // own when it nears the viewport.
+    points: routes.get(d.id) ?? [],
+    routePending: !settled.has(d.id),
     companyId,
     startPlace: d.startPlace,
     endPlace: d.endPlace,
@@ -239,6 +257,7 @@ export function DriveLog({
       </div>
       <MileageReview
         mapTrips={mapTrips}
+        routes={routes}
         places={places}
         tripRows={tripRows}
         excludedRows={excludedRows}

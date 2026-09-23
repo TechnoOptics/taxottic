@@ -5,6 +5,7 @@ import {
   MileageMapRoutes,
   type MapPlace,
   type RoutelessTrip,
+  type RoutePoint,
 } from "@/components/mileage/MileageMap";
 import { TripList, type TripRow } from "@/components/mileage/TripList";
 import {
@@ -32,6 +33,7 @@ import {
  */
 export function MileageReview({
   mapTrips,
+  routes,
   places,
   tripRows,
   excludedRows,
@@ -45,6 +47,11 @@ export function MileageReview({
    *  reading them on the server is what cost up to sixty sequential
    *  round trips before the page sent a byte. */
   mapTrips: RoutelessTrip[];
+  /** The routes, when the owner above already holds them. DriveLog does:
+   *  it fetches once for this map and for the rows below it, which want
+   *  the same drives. Passed straight through, because deciding anything
+   *  about them here would be a second place that can drift. */
+  routes?: Map<string, RoutePoint[]>;
   places: MapPlace[];
   tripRows: TripRow[];
   /** Drives the driver marked "passenger". Out of the list and the map
@@ -118,6 +125,7 @@ export function MileageReview({
         ) : null}
         <MileageMapRoutes
           trips={mapTrips}
+          routes={routes}
           focusTripId={focusedTrip ? focusedId : null}
           places={places}
           focusMode={!!focusedTrip}

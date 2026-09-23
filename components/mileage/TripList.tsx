@@ -52,6 +52,11 @@ export type TripRow = {
    *  deduction total until the driver confirms it. */
   needsConfirmation: boolean;
   points: { lat: number; lng: number; captured_at: string }[];
+  /** The list is fetching this drive's route in a batch, so `points` is
+   *  empty only because the answer has not landed yet. The row waits
+   *  instead of asking for its own copy. Absent means nobody is
+   *  fetching it and the row is on its own. */
+  routePending?: boolean;
   /** Which company/business this drive currently belongs to. */
   companyId: string;
   /** The saved place this drive started / ended at, when it matched one.
@@ -242,10 +247,10 @@ function TripCard({
   // hundreds of fixes, so the sort is memoised on `trip.points`, the
   // identity that is replaced wholesale when a server action revalidates.
   //
-  // The map no longer reads this: DriveThumbnail fetches its own route
-  // when the row nears the viewport. /mileage ships rows with an empty
-  // `points` now, so this sort is for callers that still supply them and
-  // the fetched route below is what the endpoints usually fall back on.
+  // /mileage fills this from the batch its owner fetched once for the
+  // map and every row (DriveLog), so on that page it is usually the
+  // route. The fetched fallback below is for a row the batch did not
+  // cover, and for callers that supply nothing at all.
   const sortedPts = useMemo(
     () =>
       [...trip.points].sort((a, b) => (a.captured_at < b.captured_at ? -1 : 1)),
@@ -253,9 +258,9 @@ function TripCard({
   );
 
   // The route the thumbnail fetched for itself, reused rather than asked
-  // for again. /mileage ships rows with an empty `points`, so for a drive
-  // between two UNSAVED spots this is the only way the row ever learns
-  // where it went, and it costs no request of its own.
+  // for again. For a drive the list's batch did not cover, between two
+  // UNSAVED spots, this is the only way the row ever learns where it
+  // went, and it costs no request of its own.
   //
   // Sorted on arrival for the same reason `trip.points` is: the first and
   // last fix decide which end is which. The RPC behind the route happens
@@ -355,6 +360,11 @@ function TripCard({
       <div className="flex items-start gap-3 min-w-0">
         <DriveThumbnail
           tripId={trip.id}
+          // Already sorted, and already the row's own copy. A row whose
+          // route the list holds costs no request; one it does not hold
+          // still fetches, once, when it nears the viewport.
+          points={sortedPts}
+          deferToList={trip.routePending === true && sortedPts.length === 0}
           onPoints={takePoints}
           classification={
             trip.classification === "business" ||

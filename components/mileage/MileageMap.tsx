@@ -691,14 +691,88 @@ export function MileageMap({
  *  it without reading a single GPS fix. */
 export type RoutelessTrip = Omit<MapTrip, "points">;
 
+/** One fix of a drive's route. `captured_at` is carried because the
+ *  first and last fix name where a drive started and ended, which is
+ *  what a row uses when neither end matched a saved place. Same shape as
+ *  DriveThumbnail's `DrivePoint`, which aliases this. */
+export type RoutePoint = { lat: number; lng: number; captured_at: string };
+
 /** One fix, as the drives route sends it. `trip_id` travels with every
  *  point so a batch can be split back up by drive. */
-type BatchPoint = {
-  trip_id: string;
-  lat: number;
-  lng: number;
-  captured_at: string;
+type BatchPoint = RoutePoint & { trip_id: string };
+
+/**
+ * Every route this caller has been given, plus which drives have been
+ * answered for.
+ *
+ * `settled` is the half that matters to a caller with rows as well as a
+ * map. A drive that is NOT settled has a route on its way, and anything
+ * else on screen that wants it must wait rather than ask for its own
+ * copy; a drive that is settled and missing from `routes` is one the
+ * batch did not cover (it fell past the route's cap, or it is not the
+ * caller's), and asking for it separately is the right thing to do.
+ * Without that distinction a row cannot tell "not here yet" from "not
+ * coming", and the safe reading of a bare empty map is to fetch, which
+ * is how you end up fetching every route twice.
+ */
+export type TripRoutes = {
+  routes: Map<string, RoutePoint[]>;
+  settled: ReadonlySet<string>;
 };
+
+const NO_ROUTES: TripRoutes = {
+  routes: new Map(),
+  settled: new Set(),
+};
+
+/**
+ * The routes for a set of drives, fetched in as few requests as the id
+ * list allows: one, and then one more only when the caller learns about
+ * drives it had not heard of (a page of older ones).
+ *
+ * Ids already asked about are never asked about again, so re-rendering,
+ * filtering the list down and filtering it back up all cost nothing. The
+ * accumulated answer is what lets ONE owner feed both a map and a list
+ * of rows from a single request.
+ */
+export function useTripRoutes(
+  tripIds: readonly string[] | undefined,
+): TripRoutes {
+  // A string, not an array: it is the effect's only dependency, and an
+  // array literal from a caller would re-arm it on every render.
+  const key = (tripIds ?? []).join(",");
+  const [state, setState] = useState<TripRoutes>(NO_ROUTES);
+  const asked = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const wanted = key
+      .split(",")
+      .filter(Boolean)
+      .filter((id) => !asked.current.has(id));
+    if (wanted.length === 0) return;
+    for (const id of wanted) asked.current.add(id);
+    let cancelled = false;
+    void (async () => {
+      const got = await loadRoutes(wanted.join(","));
+      if (cancelled) return;
+      setState((prev) => {
+        const routes = new Map(prev.routes);
+        for (const [id, pts] of got) routes.set(id, pts);
+        const settled = new Set(prev.settled);
+        // EVERY id asked for is settled, including the ones that came
+        // back with nothing. That is the answer: no route is coming from
+        // this batch, so whoever wants one may now go and ask.
+        for (const id of wanted) settled.add(id);
+        return { routes, settled };
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  return state;
+}
 
 /**
  * The map, with its routes fetched after it has painted.
@@ -732,6 +806,7 @@ export function MileageMapRoutes({
   height,
   focusMode = false,
   focusTripId = null,
+  routes,
 }: {
   /** The drives to draw, in order. Authoritative when given: it is both
    *  what is asked for and what is drawn, so a caller holding ids and no
@@ -749,24 +824,19 @@ export function MileageMapRoutes({
    *  (the range filter). An id that is not in the list draws all of
    *  them, which is what the reviewer's own fallback did. */
   focusTripId?: string | null;
+  /** Routes an owner above this one already holds. Given them, this
+   *  component asks for nothing: DriveLog fetches once for its map AND
+   *  its rows, because two fetches of the same sixty routes is the cost
+   *  this whole change exists to delete. */
+  routes?: Map<string, RoutePoint[]>;
 }) {
-  // A string, not an array: it is the fetch's cache key, the effect's
-  // only dependency and the query string itself, and an array literal
-  // from a parent would re-arm the effect on every render.
-  const key = (tripIds ?? (trips ?? []).map((t) => t.id)).join(",");
-  const [routes, setRoutes] = useState<Map<string, MapPoint[]> | null>(null);
-
-  useEffect(() => {
-    if (key.length === 0) return;
-    let cancelled = false;
-    void (async () => {
-      const grouped = await loadRoutes(key);
-      if (!cancelled) setRoutes(grouped);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [key]);
+  const ids = tripIds ?? (trips ?? []).map((t) => t.id);
+  // A string, not an array: an array literal from a parent would re-arm
+  // the memo below on every render.
+  const key = ids.join(",");
+  // Nothing is asked for when the routes were handed down.
+  const fetched = useTripRoutes(routes ? undefined : ids);
+  const known = routes ?? fetched.routes;
 
   const drawn = useMemo<MapTrip[]>(() => {
     const styleById = new Map((trips ?? []).map((t) => [t.id, t]));
@@ -778,13 +848,13 @@ export function MileageMapRoutes({
           id,
           classification: "unclassified" as const,
         }),
-        points: routes?.get(id) ?? [],
+        points: known.get(id) ?? [],
       }));
     const focused = focusTripId
       ? all.find((t) => t.id === focusTripId)
       : undefined;
     return focused ? [focused] : all;
-  }, [key, trips, routes, focusTripId]);
+  }, [key, trips, known, focusTripId]);
 
   return (
     <MileageMap
@@ -800,7 +870,7 @@ export function MileageMapRoutes({
  *  in a map, empty at worst: offline, aborted, a body that is not JSON
  *  and "none of those drives are yours" all leave the map drawn and its
  *  trails missing, which is the honest picture in each case. */
-async function loadRoutes(idList: string): Promise<Map<string, MapPoint[]>> {
+async function loadRoutes(idList: string): Promise<Map<string, RoutePoint[]>> {
   try {
     const res = await fetch(
       `/api/mileage/drives?trip=${encodeURIComponent(idList)}`,
@@ -822,7 +892,7 @@ async function loadRoutes(idList: string): Promise<Map<string, MapPoint[]>> {
  * on its destination. Same rule, and the same reason, as `takePoints` in
  * components/mileage/TripList.tsx.
  */
-function groupByTrip(points: BatchPoint[]): Map<string, MapPoint[]> {
+function groupByTrip(points: BatchPoint[]): Map<string, RoutePoint[]> {
   const by = new Map<string, BatchPoint[]>();
   for (const p of points) {
     if (typeof p?.trip_id !== "string") continue;
@@ -830,7 +900,7 @@ function groupByTrip(points: BatchPoint[]): Map<string, MapPoint[]> {
     if (arr) arr.push(p);
     else by.set(p.trip_id, [p]);
   }
-  const out = new Map<string, MapPoint[]>();
+  const out = new Map<string, RoutePoint[]>();
   for (const [id, pts] of by) {
     out.set(
       id,
@@ -842,7 +912,10 @@ function groupByTrip(points: BatchPoint[]): Map<string, MapPoint[]> {
               ? 1
               : 0,
         )
-        .map((p) => ({ lat: p.lat, lng: p.lng })),
+        // `trip_id` is dropped and `captured_at` kept: the map reads
+        // lat/lng, and a row reads the first and last fix's time to
+        // name the two ends of a drive that matched no saved place.
+        .map((p) => ({ lat: p.lat, lng: p.lng, captured_at: p.captured_at })),
     );
   }
   return out;

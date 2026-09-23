@@ -302,3 +302,193 @@ test("the drive log's own map draws nothing and reports nothing when the fetch f
     ),
   ).toBe(0);
 });
+
+/**
+ * One fetch for the whole log, map and rows together.
+ *
+ * The map's batch and the rows' lazy thumbnails wanted the same routes,
+ * so a scrolled page of sixty drives fired up to sixty extra single-id
+ * requests for routes this component was already holding, each at the
+ * full 250-vertex budget. That is the cost this branch deleted from the
+ * first paint, arriving through the scrollbar instead. These two tests
+ * pin the property rather than the plumbing: what matters is how many
+ * requests a full scroll costs, and that a row the batch could not cover
+ * still gets its map.
+ */
+
+const MANY = Array.from({ length: 12 }, (_, i) => drive(`d-${i}`, i));
+
+function mountDrives(
+  mount: ComponentFixtures["mount"],
+  list: ReturnType<typeof drive>[],
+) {
+  return mount(
+    <div data-skin="instrument">
+      <DriveLog
+        initialDrives={list}
+        initialExcluded={[]}
+        companyId="co-1"
+        driverParam=""
+        places={[]}
+        reclassify={noop}
+        deleteTrip={noop}
+        companies={[{ id: "co-1", name: "Acme" }]}
+        moveTripCompany={noop}
+      />
+    </div>,
+  );
+}
+
+/** Two fixes for a drive, enough for a route with a direction. */
+const fixes = (id: string, n: number) => [
+  { trip_id: id, lat: 40 + n, lng: -80, captured_at: "2026-09-20T10:00:00Z" },
+  { trip_id: id, lat: 41 + n, lng: -81, captured_at: "2026-09-20T10:05:00Z" },
+];
+
+/** Drag every row past the eye, which is what used to buy a request each. */
+async function scrollEveryRow(page: Page, c: MountResult) {
+  const boxes = c.locator("[data-drive-thumbnail]");
+  const n = await boxes.count();
+  for (let i = 0; i < n; i++) {
+    await boxes.nth(i).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(40);
+  }
+  await page.waitForTimeout(400);
+}
+
+test("scrolling the whole log costs one route request, not one per row", async ({
+  mount,
+  page,
+}) => {
+  const asks: string[][] = [];
+  await page.route("**/api/mileage/drives*", (r) => {
+    const url = new URL(r.request().url());
+    const trip = url.searchParams.get("trip");
+    if (trip === null) return r.fulfill({ json: { drives: [] } });
+    const ids = trip.split(",").filter(Boolean);
+    asks.push(ids);
+    return r.fulfill({ json: { points: ids.flatMap((id, n) => fixes(id, n)) } });
+  });
+  await page.setViewportSize({ width: 390, height: 600 });
+  const c = await mountDrives(mount, MANY);
+
+  await expect
+    .poll(() => asks.length, { message: "the log never asked for its routes" })
+    .toBe(1);
+  await scrollEveryRow(page, c);
+
+  expect(
+    asks.length,
+    `twelve rows scrolled past the eye cost ${asks.length} requests; the batch ` +
+      `already held every one of those routes`,
+  ).toBe(1);
+  expect(asks[0], "one request naming every drive in the log").toHaveLength(12);
+  // And the rows drew the routes they were handed, rather than sitting
+  // empty waiting for a request they were told not to make.
+  await expect(c.locator('[data-drive-thumbnail="d-0"] *').first()).toBeVisible();
+  await expect(
+    c.locator('[data-drive-thumbnail="d-11"] *').first(),
+  ).toBeVisible();
+});
+
+test("a row the batch could not cover still fetches its own route, and draws it", async ({
+  mount,
+  page,
+}) => {
+  // The route caps a batch, so a list longer than the cap gets routes for
+  // the first ids and nothing for the rest. Here the cap is two. The
+  // lazy per-row fetch is the right answer for the other three, and it
+  // has to keep working: it is why the cap is safe.
+  const COVERED = 2;
+  const batches: string[][] = [];
+  const singles: string[] = [];
+  await page.route("**/api/mileage/drives*", (r) => {
+    const url = new URL(r.request().url());
+    const trip = url.searchParams.get("trip");
+    if (trip === null) return r.fulfill({ json: { drives: [] } });
+    const ids = trip.split(",").filter(Boolean);
+    if (ids.length > 1) {
+      batches.push(ids);
+      const capped = ids.slice(0, COVERED);
+      return r.fulfill({
+        json: { points: capped.flatMap((id, n) => fixes(id, n)) },
+      });
+    }
+    singles.push(ids[0]);
+    return r.fulfill({ json: { points: fixes(ids[0], 7) } });
+  });
+  await page.setViewportSize({ width: 390, height: 600 });
+  const c = await mountDrives(mount, MANY.slice(0, 5));
+
+  await expect
+    .poll(() => batches.length, { message: "the log never asked for its routes" })
+    .toBe(1);
+  await scrollEveryRow(page, c);
+
+  expect(batches.length, "still one batch").toBe(1);
+  expect(
+    singles.slice().sort(),
+    "every drive the batch did not cover, and only those, asked for itself",
+  ).toEqual(["d-2", "d-3", "d-4"]);
+  // Drawn, not merely fetched. An uncovered row that asks and then does
+  // nothing with the answer is the same blank box as before.
+  await expect(c.locator('[data-drive-thumbnail="d-4"] *').first()).toBeVisible();
+  await expect(c.locator('[data-drive-thumbnail="d-0"] *').first()).toBeVisible();
+});
+
+test("a row does not ask for a route the log's batch is still fetching", async ({
+  mount,
+  page,
+}) => {
+  // The batch is held open for the whole scroll, which is the case the
+  // other two cannot see: they answer it instantly, so the rows already
+  // have their routes by the time they are looked at and would pass even
+  // if they were willing to race. On a phone the answer takes a moment,
+  // every visible row is observed inside that moment, and a row that
+  // reads an empty array as "nothing is coming" asks for its own copy of
+  // a route already on the wire.
+  let release = () => {};
+  const held = new Promise<void>((r) => {
+    release = r;
+  });
+  const batches: string[][] = [];
+  const singles: string[] = [];
+  await page.route("**/api/mileage/drives*", async (r) => {
+    const url = new URL(r.request().url());
+    const trip = url.searchParams.get("trip");
+    if (trip === null) return r.fulfill({ json: { drives: [] } });
+    const ids = trip.split(",").filter(Boolean);
+    if (ids.length > 1) {
+      batches.push(ids);
+      await held;
+      return r.fulfill({
+        json: { points: ids.flatMap((id, n) => fixes(id, n)) },
+      });
+    }
+    singles.push(ids[0]);
+    return r.fulfill({ json: { points: fixes(ids[0], 7) } });
+  });
+  await page.setViewportSize({ width: 390, height: 600 });
+  const c = await mountDrives(mount, MANY);
+
+  await expect
+    .poll(() => batches.length, { message: "the log never asked for its routes" })
+    .toBe(1);
+  await scrollEveryRow(page, c);
+  expect(
+    singles,
+    `${singles.length} rows asked for a route the batch was already fetching`,
+  ).toEqual([]);
+
+  release();
+  // Back up the list. The rows that were deferred were never observed,
+  // so they draw when they next come near the eye, which is the rule
+  // this is not allowed to trade away for the saved request.
+  await scrollEveryRow(page, c);
+  await expect(c.locator('[data-drive-thumbnail="d-0"] *').first()).toBeVisible();
+  await expect(
+    c.locator('[data-drive-thumbnail="d-11"] *').first(),
+  ).toBeVisible();
+  expect(singles, "and none asked after it landed either").toEqual([]);
+  expect(batches.length).toBe(1);
+});
