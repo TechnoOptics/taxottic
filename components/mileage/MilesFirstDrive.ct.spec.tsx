@@ -26,8 +26,12 @@ test("the head is one screen-third, and a drive is on the first screen", async (
   mount,
   page,
 }) => {
+  // `{ points: [] }` is the route's contract (loadRoutes in
+  // MileageMap.tsx): a body with any other key is NO ANSWER, and this
+  // stub used to say `routes`, so it quietly measured the layout of the
+  // batch's give-up path instead of its ordinary one.
   await page.route("**/api/mileage/drives*", (r) =>
-    r.fulfill({ json: { routes: [] } }),
+    r.fulfill({ json: { points: [] } }),
   );
   await mount(<DriverPageHead />);
   const m = await page.evaluate(() => {

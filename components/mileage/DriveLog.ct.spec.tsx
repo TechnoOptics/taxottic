@@ -584,6 +584,108 @@ test("a filter tap moves the list and the total together", async ({
 });
 
 /**
+ * A FILTER TAP COSTS NOTHING.
+ *
+ * This is the complaint the branch exists to answer. The range controls
+ * were Links on a force-dynamic page: a tap started a full server render
+ * and nothing on screen moved until it came back, which reads as a dead
+ * control. They filter loaded drives in the browser now, and the
+ * property that makes that true is that NOTHING on a tap touches the
+ * network.
+ *
+ * Nothing else in this suite holds that property where it can break.
+ * DriveFilter.ct.spec.tsx counts requests but mounts the buttons alone,
+ * which can only ever prove that an isolated button does not fetch; the
+ * test above proves the list and the total move but counts nothing. The
+ * regression lives between them, in what this component re-arms when the
+ * shown set changes, so it is asserted here.
+ *
+ * Two things make the count honest:
+ *
+ *   1. Every request is recorded off `page.on("request")`, not off a
+ *      route matcher, so a request this file forgot to stub still
+ *      counts.
+ *   2. The baseline is taken at QUIESCENCE, not after a fixed sleep.
+ *      The mount's own batch (and, if it fails, its retries) must have
+ *      finished before a tap can be blamed for anything still in flight.
+ *
+ * And the batch ANSWERS WITH ROUTES, which is the ordinary case. A batch
+ * that answers empty releases every row to fetch its own, by design (see
+ * "a row the batch could not cover still fetches its own route" above),
+ * and a row scrolled into view by a tap would then be charged to the tap
+ * when it is the cost of being uncovered. Measured: with an empty answer
+ * this same sequence records one request, and it is a row's, not the
+ * filter's.
+ */
+test("a filter tap costs no network request at all", async ({
+  mount,
+  page,
+}) => {
+  // EVERY request, not just the ones to /api/. A filter that went back
+  // to navigating would ask for a PAGE, and a counter that only watches
+  // the API would wave that through: the regression is "the tap goes to
+  // the server", not "the tap goes to that one route". Mutation-proved
+  // against both shapes.
+  const asked: string[] = [];
+  page.on("request", (r) => asked.push(r.method() + " " + r.url()));
+  await page.route("**/api/mileage/drives*", (r) => {
+    const url = new URL(r.request().url());
+    const trip = url.searchParams.get("trip");
+    if (trip === null) return r.fulfill({ json: { drives: [] } });
+    const ids = trip.split(",").filter(Boolean);
+    return r.fulfill({
+      json: { points: ids.flatMap((id, n) => fixes(id, n)) },
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 800 });
+  // Two drives inside the week, two well outside it, so every tap moves
+  // the list rather than leaving it where it was.
+  const c = await mountDrives(mount, [
+    drive("d-1", 1),
+    drive("d-2", 2),
+    drive("d-3", 40),
+    drive("d-4", 70),
+  ]);
+
+  /** Settled means: two seconds with no new request. */
+  const quiet = async () => {
+    for (;;) {
+      const n = asked.length;
+      await page.waitForTimeout(2000);
+      if (asked.length === n) return;
+    }
+  };
+  await quiet();
+  const onMount = asked.length;
+  const api = asked.filter((u) => u.includes("/api/"));
+  expect(
+    api.length,
+    `mounting the log cost ${api.length} API requests: ${api.join(", ")}`,
+  ).toBe(1);
+
+  const controls = c
+    .getByRole("group", { name: "Filter drives" })
+    .getByRole("button");
+  const seen: number[] = [];
+  for (let i = 0; i < (await controls.count()); i++) {
+    await controls.nth(i).click();
+    await page.waitForTimeout(400);
+    seen.push(await c.locator("li.card").count());
+  }
+  await quiet();
+
+  expect(
+    asked.length - onMount,
+    `four filter taps cost ${asked.length - onMount} requests: ` +
+      asked.slice(onMount).join(", "),
+  ).toBe(0);
+  // Paired half: a tap that changes nothing trivially costs nothing, so
+  // the taps above have to have moved the list for the zero to mean
+  // anything. All / 7 / 31 / 92 days over this set is 4 / 2 / 2 / 4.
+  expect(seen, "the filter did not move the list").toEqual([4, 2, 2, 4]);
+});
+
+/**
  * The map is below the drives, not above them. 420px of it used to sit
  * between the filter and the first row.
  */
@@ -591,8 +693,12 @@ test("the drives come before the map, not after it", async ({
   mount,
   page,
 }) => {
+  // `{ points: [] }` is the route's contract (loadRoutes in
+  // MileageMap.tsx). A body with any other key reads as NO ANSWER, which
+  // costs three batch attempts and a per-row fallback: the give-up path,
+  // not the ordinary one this test means to stand on.
   await page.route("**/api/mileage/drives*", (r) =>
-    r.fulfill({ json: { routes: [] } }),
+    r.fulfill({ json: { points: [] } }),
   );
   const c = await mountLog(mount, page);
   const m = await page.evaluate(() => {
