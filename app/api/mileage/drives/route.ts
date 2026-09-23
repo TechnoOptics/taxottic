@@ -76,10 +76,35 @@ const POLYLINE_ROW_BUDGET = 900;
 const POLYLINE_MIN_VERTICES = 12;
 
 /**
- * Vertices per drive for a batch of `count` of them. One drive on its
- * own still gets the full 250, so the per-row thumbnail path is
- * untouched; a full page of sixty gets 14, which is more than a 460px
- * overview can resolve per trail anyway.
+ * Vertices per drive for a batch of `count` of them.
+ *
+ * READ THIS BEFORE RAISING POLYLINE_BATCH OR POLYLINE_VERTICES. The
+ * whole batch comes back in ONE PostgREST response, and PostgREST
+ * truncates any response at max-rows, which is 1000 on this project. So
+ * the budget is a product, not two independent numbers:
+ *
+ *     rows returned  ~=  count * verticesPerDrive(count)
+ *     and that must stay under 1000, always
+ *
+ * which is why the per-drive figure SHRINKS as the batch grows:
+ *
+ *      1 drive  -> 250 vertices,    250 rows   (the row thumbnail path)
+ *      4 drives -> 224 each,        896 rows
+ *     10 drives ->  89 each,        890 rows
+ *     60 drives ->  14 each,        840 rows   (a full page, the map)
+ *
+ * Raising either constant without re-checking that product does not
+ * fail loudly. The response is simply cut at 1000 rows, and because the
+ * RPC ends `order by trip_id, captured_at` the rows that vanish are
+ * whole drives, whichever sort last by uuid, effectively at random.
+ * Their routes never appear and the map reads as "those drives have no
+ * route yet". That is this feature's standing failure mode, and it is
+ * precisely the bug the deleted server-side .range() loop existed to
+ * work around. One request cannot page, so it budgets instead.
+ *
+ * Pinned by "keeps every batch size inside one PostgREST page" in
+ * route.test.ts, which walks the batch sizes rather than trusting this
+ * comment.
  */
 function verticesPerDrive(count: number): number {
   return Math.max(

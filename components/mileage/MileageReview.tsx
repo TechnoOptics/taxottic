@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  MileageMap,
-  type MapTrip,
+  MileageMapRoutes,
   type MapPlace,
+  type RoutelessTrip,
 } from "@/components/mileage/MileageMap";
 import { TripList, type TripRow } from "@/components/mileage/TripList";
 import {
@@ -40,7 +40,11 @@ export function MileageReview({
   companies,
   moveTripCompany,
 }: {
-  mapTrips: MapTrip[];
+  /** The drives to draw, WITHOUT their routes. The routes are fetched
+   *  by MileageMapRoutes below, in one request, once this is on screen:
+   *  reading them on the server is what cost up to sixty sequential
+   *  round trips before the page sent a byte. */
+  mapTrips: RoutelessTrip[];
   places: MapPlace[];
   tripRows: TripRow[];
   /** Drives the driver marked "passenger". Out of the list and the map
@@ -57,8 +61,11 @@ export function MileageReview({
   const focusedTrip = focusedId
     ? (mapTrips.find((t) => t.id === focusedId) ?? null)
     : null;
-  // Review mode shows just the one drive; overview shows them all.
-  const shownTrips = focusedTrip ? [focusedTrip] : mapTrips;
+  // Review mode shows just the one drive; overview shows them all. The
+  // narrowing happens inside MileageMapRoutes (focusTripId) rather than
+  // here, because the list handed to it is also the list it ASKS for:
+  // narrowing it here would make every Review tap fetch a route the
+  // component is already holding.
 
   // Toggle: tapping Review on the trip that's already in review takes
   // you BACK to the all-drives overview. Tapping it on a different trip
@@ -109,8 +116,9 @@ export function MileageReview({
             </button>
           </div>
         ) : null}
-        <MileageMap
-          trips={shownTrips}
+        <MileageMapRoutes
+          trips={mapTrips}
+          focusTripId={focusedTrip ? focusedId : null}
           places={places}
           focusMode={!!focusedTrip}
         />

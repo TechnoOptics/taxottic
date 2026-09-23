@@ -5,7 +5,11 @@ import { DriveFilter } from "@/components/mileage/DriveFilter";
 import { MileageReview } from "@/components/mileage/MileageReview";
 import { type TripRow } from "@/components/mileage/TripList";
 import { type ExcludedTripRow } from "@/components/mileage/ExcludedTrips";
-import { type MapTrip, type MapPlace } from "@/components/mileage/MileageMap";
+import {
+  type MapTrip,
+  type MapPlace,
+  type RoutelessTrip,
+} from "@/components/mileage/MileageMap";
 import { filterDrives, type FilterKey } from "@/lib/mileage/drive-filter";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import type { SentDrive } from "@/app/api/mileage/drives/route";
@@ -206,7 +210,7 @@ export function DriveLog({
   // Re-stated here for the same reason the page re-states it: the map has
   // no colour for a passenger drive because it must never draw one, and a
   // runtime check means a future edit cannot put one on the map.
-  const mapTrips: MapTrip[] = shown
+  const mapTrips: RoutelessTrip[] = shown
     .filter(
       (d): d is SentDrive & { classification: MapTrip["classification"] } =>
         d.classification !== "passenger",
@@ -220,7 +224,6 @@ export function DriveLog({
       approximate: ((d as { notes?: string | null }).notes ?? "").startsWith(
         "Approximate drive",
       ),
-      points: [],
     }));
 
   return (

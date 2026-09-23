@@ -612,24 +612,49 @@ describe("the drives handler, asked for several polylines at once", () => {
     expect(h.ownershipFilters[0][1]).toEqual([TRIP]);
   });
 
-  it("keeps a full batch inside one PostgREST page, so no drive silently loses its route", async () => {
-    // PostgREST truncates ANY response at max-rows (1000). The page's old
-    // server-side fetch hit this with 250 vertices per drive and paged
-    // around it in a loop; one request cannot page, so the vertex budget
-    // per drive has to shrink as the batch grows, and the drives that
-    // would otherwise fall off the end are the ones sorted last by
-    // trip_id, which is effectively random.
-    const many = Array.from(
-      { length: 60 },
-      (_, i) => `${i.toString().padStart(8, "0")}-0000-4000-8000-000000000000`,
-    );
-    h.ownedRows = many.map((id) => ({ id }));
-    await batch(...many);
-    const perDrive = h.rpcCalls[0].args.p_max as number;
-    expect(perDrive, "a route needs more than its two endpoints").toBeGreaterThan(2);
-    expect(
-      perDrive * 60,
-      "a full batch at this vertex budget overruns PostgREST's 1000-row ceiling",
-    ).toBeLessThanOrEqual(1000);
+  it("keeps every batch size inside one PostgREST page, so no drive silently loses its route", async () => {
+    // Every size, not just the biggest one. The cap and the per-drive
+    // vertex maximum are two constants whose PRODUCT is what has to stay
+    // under PostgREST's 1000-row ceiling, and raising either of them on
+    // its own is the edit this walks. A test that only probed a full
+    // batch would stay green while a raised POLYLINE_VERTICES truncated
+    // every mid-sized one.
+    const id = (n: number) =>
+      `${n.toString().padStart(8, "0")}-0000-4000-8000-000000000000`;
+
+    // The top of the walk is the route's OWN cap, read back rather than
+    // written down here. A cap raised in route.ts and not mirrored in a
+    // literal would otherwise leave the biggest batches, the only ones
+    // that can overrun, untested by the very test that exists for them.
+    const probe = Array.from({ length: 500 }, (_, i) => id(i));
+    h.ownedRows = probe.map((x) => ({ id: x }));
+    await batch(...probe);
+    const cap = (h.ownershipFilters[0][1] as string[]).length;
+    expect(cap, "the route accepted no ids at all").toBeGreaterThan(0);
+
+    const sizes = new Set([1, 2, 3, 4, 5, 10, 20, 30, 45, cap - 1, cap]);
+    for (const size of [...sizes].filter((n) => n >= 1 && n <= cap)) {
+      const ids = Array.from({ length: size }, (_, i) => id(i));
+      h.ownedRows = ids.map((x) => ({ id: x }));
+      h.rpcCalls = [];
+      await batch(...ids);
+      const perDrive = h.rpcCalls[0].args.p_max as number;
+      expect(
+        perDrive,
+        `a batch of ${size}: a route needs more than its two endpoints`,
+      ).toBeGreaterThan(2);
+      expect(
+        perDrive * size,
+        `a batch of ${size} at ${perDrive} vertices each overruns PostgREST's ` +
+          `1000-row ceiling, so whole drives would come back with no route`,
+      ).toBeLessThanOrEqual(1000);
+    }
+  });
+
+  it("gives one drive on its own the full vertex budget", async () => {
+    // The budget shrinking with the batch must not cost the row
+    // thumbnail anything: it asks for one drive and one drive fits.
+    await batch(TRIP);
+    expect(h.rpcCalls[0].args.p_max).toBe(250);
   });
 });

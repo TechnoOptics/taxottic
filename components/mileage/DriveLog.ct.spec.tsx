@@ -173,3 +173,132 @@ test("a failed load says so and stays tappable", async ({ mount, page }) => {
   await expect.poll(() => sent.length).toBe(2);
   await expect(c.getByRole("status")).toHaveCount(0);
 });
+
+/**
+ * The self view's map, which is the one almost everybody sees.
+ *
+ * Task 2 deleted the page's blocking polyline fetch; this component then
+ * handed `points: []` to the map underneath it, so the drive log drew no
+ * routes at all. The team-overlay map on app/mileage/page.tsx had the
+ * same fault and is covered by components/mileage/MileageMap.ct.spec.tsx.
+ * Both mount points now go through the same MileageMapRoutes wrapper, so
+ * these two tests pin the wiring at THIS mount point rather than
+ * re-testing the wrapper's own rules.
+ */
+
+/**
+ * A `window.google.maps` good enough to record what reaches the map.
+ * The loader resolves straight from the global when it is already there
+ * (lib/maps/google-maps-loader.ts), so no key and no network is needed.
+ * Same stub, and the same reason, as MileageMap.ct.spec.tsx.
+ */
+async function installFakeMaps(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      __paths: [number, number][][];
+      google: unknown;
+    };
+    w.__paths = [];
+    class FakeMap {
+      fitBounds() {}
+      setCenter() {}
+      setZoom() {}
+      getZoom() {
+        return 12;
+      }
+    }
+    class FakeBounds {
+      extend() {}
+    }
+    class FakePolyline {
+      constructor(opts?: { path?: { lat: number; lng: number }[] }) {
+        if (opts?.path) w.__paths.push(opts.path.map((p) => [p.lat, p.lng]));
+      }
+      setMap() {}
+      setPath() {}
+    }
+    class FakeMarker {
+      setMap() {}
+    }
+    w.google = {
+      maps: {
+        Map: FakeMap,
+        LatLngBounds: FakeBounds,
+        Polyline: FakePolyline,
+        Marker: FakeMarker,
+        SymbolPath: { CIRCLE: 0, FORWARD_CLOSED_ARROW: 1 },
+        event: { addListenerOnce: () => ({ remove() {} }) },
+      },
+    };
+  });
+}
+
+test("the drive log's own map asks for every route in one request, and draws them", async ({
+  mount,
+  page,
+}) => {
+  // Rows ask for their own thumbnails at this endpoint too, one id at a
+  // time and only when they are near the viewport. The MAP's request is
+  // the one that names more than one drive, which is the whole point:
+  // three drives, one request, not three.
+  const batches: string[][] = [];
+  await page.route("**/api/mileage/drives*", (r) => {
+    const url = new URL(r.request().url());
+    const trip = url.searchParams.get("trip");
+    if (trip === null) return r.fulfill({ json: { drives: [] } });
+    const ids = trip.split(",").filter(Boolean);
+    if (ids.length > 1) batches.push(ids);
+    return r.fulfill({
+      json: {
+        points: ids.flatMap((id, n) => [
+          { trip_id: id, lat: 40 + n, lng: -80, captured_at: "2026-09-20T10:00:00Z" },
+          { trip_id: id, lat: 41 + n, lng: -81, captured_at: "2026-09-20T10:05:00Z" },
+        ]),
+      },
+    });
+  });
+  await installFakeMaps(page);
+  await mountLog(mount, page);
+
+  await expect
+    .poll(() => batches.length, { message: "the map never asked for its routes" })
+    .toBe(1);
+  expect(
+    batches[0].slice().sort(),
+    "every drive in the log must be in the one request",
+  ).toEqual(["aaa", "bbb", "ccc"]);
+  // And they reached the map. An empty `points` array was exactly what
+  // this component used to hand over, and it renders as a map that
+  // simply has nothing on it, which reads as "no drives yet".
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window as unknown as { __paths: unknown[] }).__paths.length,
+        ),
+      { message: "no route was ever drawn" },
+    )
+    .toBeGreaterThanOrEqual(3);
+  await page.waitForTimeout(300);
+  expect(batches.length, "one request for the map, not one per drive").toBe(1);
+});
+
+test("the drive log's own map draws nothing and reports nothing when the fetch fails", async ({
+  mount,
+  page,
+}) => {
+  await page.route("**/api/mileage/drives*", (r) => r.abort());
+  await installFakeMaps(page);
+  const c = await mountLog(mount, page);
+  await page.waitForTimeout(300);
+  // The drives themselves are already on the page; the routes are the
+  // only thing missing, and a missing route is not an error.
+  await expect(c).toContainText("4.2 mi");
+  await expect(c).not.toContainText("Error");
+  await expect(c).not.toContainText("undefined");
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __paths: unknown[] }).__paths.length,
+    ),
+  ).toBe(0);
+});

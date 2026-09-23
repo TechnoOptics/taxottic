@@ -731,6 +731,7 @@ export function MileageMapRoutes({
   places = [],
   height,
   focusMode = false,
+  focusTripId = null,
 }: {
   /** The drives to draw, in order. Authoritative when given: it is both
    *  what is asked for and what is drawn, so a caller holding ids and no
@@ -742,6 +743,12 @@ export function MileageMapRoutes({
   places?: MapPlace[];
   height?: number;
   focusMode?: boolean;
+  /** Draw only this drive, when it is one of them. The REQUEST is still
+   *  the whole list: focusing a drive is a tap, and a tap that costs a
+   *  round trip is the dead control this branch has already fixed once
+   *  (the range filter). An id that is not in the list draws all of
+   *  them, which is what the reviewer's own fallback did. */
+  focusTripId?: string | null;
 }) {
   // A string, not an array: it is the fetch's cache key, the effect's
   // only dependency and the query string itself, and an array literal
@@ -763,7 +770,7 @@ export function MileageMapRoutes({
 
   const drawn = useMemo<MapTrip[]>(() => {
     const styleById = new Map((trips ?? []).map((t) => [t.id, t]));
-    return key
+    const all = key
       .split(",")
       .filter(Boolean)
       .map((id) => ({
@@ -773,7 +780,11 @@ export function MileageMapRoutes({
         }),
         points: routes?.get(id) ?? [],
       }));
-  }, [key, trips, routes]);
+    const focused = focusTripId
+      ? all.find((t) => t.id === focusTripId)
+      : undefined;
+    return focused ? [focused] : all;
+  }, [key, trips, routes, focusTripId]);
 
   return (
     <MileageMap
