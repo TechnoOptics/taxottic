@@ -65,10 +65,15 @@ const h = vi.hoisted(() => ({
   memberships: [] as { company_id: string; role: string }[],
   /** company_members rows for the roster read. */
   memberRows: [] as { user_id: string }[],
-  /** The row mileage_trips returns for the ownership probe. */
-  ownedRow: null as { id: string } | null,
+  /** The rows mileage_trips returns for the ownership probe. The probe
+   *  takes a LIST of ids now (one drive is a batch of one), so it
+   *  answers with the subset of them that is the caller's. */
+  ownedRows: [] as { id: string }[],
   /** Every filter applied to the ownership probe, as [column, value]. */
   ownershipFilters: [] as [string, unknown][],
+  /** How many times mileage_trips was read. Every id in a batch must be
+   *  checked, and checking them must not cost a query each. */
+  ownershipReads: 0,
   /** Every argument the polyline RPC was called with. */
   rpcCalls: [] as { fn: string; args: Record<string, unknown> }[],
   /** Rows the polyline RPC returns. */
@@ -91,6 +96,7 @@ const h = vi.hoisted(() => ({
 type Builder = {
   select: () => Builder;
   eq: (col: string, val: unknown) => Builder;
+  in: (col: string, vals: unknown[]) => Builder;
   maybeSingle: () => Promise<{ data: unknown }>;
   then: <T>(onOk: (v: { data: unknown }) => T) => Promise<T>;
 };
@@ -103,6 +109,10 @@ function builder(
     select: () => b,
     eq: (col, val) => {
       sink?.push([col, val]);
+      return b;
+    },
+    in: (col, vals) => {
+      sink?.push([col, vals]);
       return b;
     },
     maybeSingle: async () => result(),
@@ -125,7 +135,8 @@ vi.mock("@/lib/supabase/server", () => ({
         return builder(() => ({ data: h.memberRows }));
       if (table === "mileage_places")
         return builder(() => ({ data: h.placeRows }), h.placeFilters);
-      return builder(() => ({ data: h.ownedRow }), h.ownershipFilters);
+      h.ownershipReads += 1;
+      return builder(() => ({ data: h.ownedRows }), h.ownershipFilters);
     },
     rpc: async (fn: string, args: Record<string, unknown>) => {
       h.rpcCalls.push({ fn, args });
@@ -163,8 +174,9 @@ beforeEach(() => {
   // The default caller is an ordinary member of one company.
   h.memberships = [{ company_id: COMPANY, role: "member" }];
   h.memberRows = [{ user_id: VIEWER }];
-  h.ownedRow = { id: TRIP };
+  h.ownedRows = [{ id: TRIP }];
   h.ownershipFilters = [];
+  h.ownershipReads = 0;
   h.rpcCalls = [];
   h.polyRows = [];
   h.pageCalls = [];
@@ -296,22 +308,38 @@ describe("the drives handler", () => {
     ];
     const res = await ask(`?trip=${TRIP}`);
     expect(res.status).toBe(200);
+    // `trip_id` travels with every point, on this path as on the batch
+    // path, because a response shape that depends on how many ids were
+    // asked for is a trap for whoever adds the second caller. The three
+    // fields DriveThumbnail reads are unchanged, which is what "the
+    // single-id behaviour still works" means to the only caller it has.
     expect(await res.json()).toEqual({
       points: [
-        { lat: 41.5, lng: -81.7, captured_at: "2026-09-01T12:00:00.000Z" },
+        {
+          trip_id: TRIP,
+          lat: 41.5,
+          lng: -81.7,
+          captured_at: "2026-09-01T12:00:00.000Z",
+        },
       ],
     });
     expect(h.rpcCalls[0].fn).toBe("mileage_trip_polylines");
     expect(h.rpcCalls[0].args).toMatchObject({ p_trip_ids: [TRIP] });
+    expect(
+      h.rpcCalls[0].args.p_max,
+      "one drive on its own still gets the full 250 vertices",
+    ).toBe(250);
   });
 
   it("checks the trip belongs to the caller", async () => {
     await ask(`?trip=${TRIP}`);
     expect(
       h.ownershipFilters,
-      "the probe must pin BOTH the trip id and the session's driver",
+      "the probe must pin BOTH the trip ids and the session's driver",
     ).toEqual([
-      ["id", TRIP],
+      // One drive is a batch of one: the same `.in()` the batch uses, so
+      // there is one ownership path rather than two that can drift.
+      ["id", [TRIP]],
       ["driver_user_id", VIEWER],
     ]);
   });
@@ -320,7 +348,7 @@ describe("the drives handler", () => {
     // The probe finds nothing, which is what a foreign or non-existent id
     // looks like. Both must look identical from outside: an error code that
     // distinguishes them turns the endpoint into an id oracle.
-    h.ownedRow = null;
+    h.ownedRows = [];
     h.polyRows = [
       {
         trip_id: TRIP,
@@ -345,7 +373,7 @@ describe("the drives handler", () => {
     // go through resolveTripScope.
     h.memberships = [{ company_id: COMPANY, role: "manager" }];
     h.memberRows = [{ user_id: VIEWER }, { user_id: SOMEONE_ELSE }];
-    h.ownedRow = null; // the probe pins driver_user_id to the session
+    h.ownedRows = []; // the probe pins driver_user_id to the session
     h.polyRows = [
       {
         trip_id: TRIP,
@@ -475,5 +503,133 @@ describe("the scope the drives handler pages with", () => {
     expect(h.pageCalls, "a stranger's company is not queried at all").toEqual(
       [],
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The batch. The page's 460px map draws every drive it was given, so it asks
+// for every route in ONE request; a request per drive is the sixty-round-trip
+// bug this branch removed, moved to the client. A batch is therefore a list
+// of ids the caller supplied, and a polyline is a location history, so every
+// id in it is checked before a single point is read.
+// ---------------------------------------------------------------------------
+
+/** A real trip, belonging to somebody who is not the caller. */
+const FOREIGN_TRIP = "66666666-6666-4666-8666-666666666666";
+
+const batch = (...ids: string[]) => ask(`?trip=${ids.join(",")}`);
+
+describe("the drives handler, asked for several polylines at once", () => {
+  it("returns the caller's points only, and no error, for a batch that names somebody else's drive", async () => {
+    // The probe clears one of the two ids. The other is dropped in
+    // silence: an error, or a different status, would tell a caller which
+    // guessed trip ids are real, which is exactly what the single-id
+    // branch refuses to do.
+    h.ownedRows = [{ id: TRIP }];
+    h.polyRows = [
+      { trip_id: TRIP, lat: 41.5, lng: -81.7, captured_at: "2026-09-01T12:00:00.000Z" },
+      { trip_id: FOREIGN_TRIP, lat: 44.9, lng: -93.2, captured_at: "2026-09-01T12:01:00.000Z" },
+    ];
+    const res = await batch(TRIP, FOREIGN_TRIP);
+    expect(res.status, "a foreign id in the batch is not an error").toBe(200);
+    expect(
+      await res.json(),
+      "one foreign id in a batch must not drag somebody else's movements back with it",
+    ).toEqual({
+      points: [
+        {
+          trip_id: TRIP,
+          lat: 41.5,
+          lng: -81.7,
+          captured_at: "2026-09-01T12:00:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("never names an uncleared id to the point table", async () => {
+    h.ownedRows = [{ id: TRIP }];
+    await batch(TRIP, FOREIGN_TRIP);
+    expect(
+      h.rpcCalls[0].args.p_trip_ids,
+      "the RPC bypasses RLS: an uncleared id must never reach it",
+    ).toEqual([TRIP]);
+  });
+
+  it("checks every id in the batch with one query, not one per id", async () => {
+    const ids = [TRIP, FOREIGN_TRIP, SOMEONE_ELSE];
+    h.ownedRows = [{ id: TRIP }];
+    await batch(...ids);
+    expect(
+      h.ownershipReads,
+      "a probe per id is the round-trip bug again, on the server side",
+    ).toBe(1);
+    expect(
+      h.ownershipFilters,
+      "the one probe must pin the whole id list AND the session's driver",
+    ).toEqual([
+      ["id", ids],
+      ["driver_user_id", VIEWER],
+    ]);
+  });
+
+  it("reads nothing at all when the batch clears no ids", async () => {
+    h.ownedRows = [];
+    const res = await batch(FOREIGN_TRIP);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ points: [] });
+    expect(h.rpcCalls, "nothing left to ask the point table for").toEqual([]);
+  });
+
+  it("reads nothing at all for a batch of empty strings", async () => {
+    const res = await ask("?trip=,,");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ points: [] });
+    expect(h.ownershipReads, "there is no id here to check").toBe(0);
+    expect(h.rpcCalls).toEqual([]);
+  });
+
+  it("caps the batch at one page of drives", async () => {
+    // The map draws the drives the page loaded, and that is DRIVE_PAGE_SIZE
+    // of them, so the cap never truncates a map the page could build. It
+    // bounds what a hand-written query string can ask for.
+    const many = Array.from(
+      { length: 90 },
+      (_, i) => `${i.toString().padStart(8, "0")}-0000-4000-8000-000000000000`,
+    );
+    h.ownedRows = many.map((id) => ({ id }));
+    await batch(...many);
+    const asked = h.ownershipFilters[0][1] as string[];
+    expect(asked, "the batch is capped at one page of drives").toHaveLength(60);
+    expect(asked, "the cap keeps the drives asked for first").toEqual(
+      many.slice(0, 60),
+    );
+  });
+
+  it("drops a repeated id rather than asking for it twice", async () => {
+    h.ownedRows = [{ id: TRIP }];
+    await batch(TRIP, TRIP, TRIP);
+    expect(h.ownershipFilters[0][1]).toEqual([TRIP]);
+  });
+
+  it("keeps a full batch inside one PostgREST page, so no drive silently loses its route", async () => {
+    // PostgREST truncates ANY response at max-rows (1000). The page's old
+    // server-side fetch hit this with 250 vertices per drive and paged
+    // around it in a loop; one request cannot page, so the vertex budget
+    // per drive has to shrink as the batch grows, and the drives that
+    // would otherwise fall off the end are the ones sorted last by
+    // trip_id, which is effectively random.
+    const many = Array.from(
+      { length: 60 },
+      (_, i) => `${i.toString().padStart(8, "0")}-0000-4000-8000-000000000000`,
+    );
+    h.ownedRows = many.map((id) => ({ id }));
+    await batch(...many);
+    const perDrive = h.rpcCalls[0].args.p_max as number;
+    expect(perDrive, "a route needs more than its two endpoints").toBeGreaterThan(2);
+    expect(
+      perDrive * 60,
+      "a full batch at this vertex budget overruns PostgREST's 1000-row ceiling",
+    ).toBeLessThanOrEqual(1000);
   });
 });

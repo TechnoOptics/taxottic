@@ -14,12 +14,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Older drives, and one drive's polyline.
+ * Older drives, and the polylines for one drive or for a page of them.
  *
  * The page no longer fetches thumbnails on its render path (see
  * lib/mileage/drive-first-paint.test.ts), so each row asks for its own
- * route here when it nears the viewport, and the end of the list asks
- * for the next page.
+ * route here when it nears the viewport, the page's big map asks for
+ * every route it draws in one batch, and the end of the list asks for
+ * the next page.
  *
  * A drive log is a location history: it says where somebody was, minute
  * by minute. So nothing in the query string is TRUSTED here. That is not
@@ -42,6 +43,68 @@ export const dynamic = "force-dynamic";
  * One round trip, bounded work, whatever the drive.
  */
 const POLYLINE_VERTICES = 250;
+
+/**
+ * How many drives one request may ask for.
+ *
+ * DRIVE_PAGE_SIZE, because the only batch caller is the page's 460px
+ * map and it draws the drives the page loaded, which is exactly one
+ * page of them. So the cap never truncates a map the page could build;
+ * what it bounds is a hand-written query string.
+ */
+const POLYLINE_BATCH = DRIVE_PAGE_SIZE;
+
+/**
+ * Rows one response may carry, and the reason the vertex budget shrinks
+ * as the batch grows.
+ *
+ * PostgREST truncates ANY response at max-rows (1000). The page used to
+ * hit this exactly here, with 250 vertices per drive across a whole
+ * range, and paged around it in a .range() loop bounded at 60,000 rows.
+ * A single request cannot page. So instead of paging, the batch spends
+ * a fixed row budget across the drives in it: the truncation this
+ * avoids does not fail loudly, it drops whichever drives sort last by
+ * trip_id (effectively at random) and their routes simply never appear.
+ *
+ * 900 rather than 1000 is headroom: the RPC's stride is integer
+ * division, so a drive whose fix count sits just above the budget comes
+ * back with a few more points than asked for.
+ */
+const POLYLINE_ROW_BUDGET = 900;
+
+/** Fewer vertices than this is not a route, it is a scribble. */
+const POLYLINE_MIN_VERTICES = 12;
+
+/**
+ * Vertices per drive for a batch of `count` of them. One drive on its
+ * own still gets the full 250, so the per-row thumbnail path is
+ * untouched; a full page of sixty gets 14, which is more than a 460px
+ * overview can resolve per trail anyway.
+ */
+function verticesPerDrive(count: number): number {
+  return Math.max(
+    POLYLINE_MIN_VERTICES,
+    Math.min(POLYLINE_VERTICES, Math.floor(POLYLINE_ROW_BUDGET / count) - 1),
+  );
+}
+
+/**
+ * The trip ids in `?trip=`: a comma-separated list, de-duplicated,
+ * blanks dropped, capped at POLYLINE_BATCH. Nothing here is validated
+ * as a uuid on purpose. An id that is not one simply fails to match the
+ * ownership probe below, which is the same answer a real id belonging
+ * to somebody else gets, and the one answer this endpoint is allowed to
+ * give.
+ */
+function parseTripIds(raw: string): string[] {
+  const ids = new Set<string>();
+  for (const part of raw.split(",")) {
+    const id = part.trim();
+    if (id.length > 0) ids.add(id);
+    if (ids.size >= POLYLINE_BATCH) break;
+  }
+  return [...ids];
+}
 
 type PolylineRow = {
   trip_id: string;
@@ -99,13 +162,26 @@ export async function GET(req: NextRequest) {
   const trip = sp.get("trip");
 
   if (trip) {
-    // Ownership FIRST, before a single point is read. The trip ids this
-    // route hands out came from a page already scoped to the caller, but
-    // a uuid in a query string is supplied by the caller, not by us, and
-    // the service client below bypasses RLS entirely: the
-    // `mileage_trips manager + firm read` policy would let a manager read
-    // a colleague's private movements, and service role skips even that.
-    // So this probe is the whole barrier.
+    const ids = parseTripIds(trip);
+    // Nothing to check and nothing to read. Same empty answer as an id
+    // that is not the caller's, for the same reason.
+    if (ids.length === 0) return NextResponse.json({ points: [] });
+
+    // Ownership FIRST, before a single point is read, and for EVERY id
+    // in the batch. The trip ids this route hands out came from a page
+    // already scoped to the caller, but a uuid in a query string is
+    // supplied by the caller, not by us, and the service client below
+    // bypasses RLS entirely: the `mileage_trips manager + firm read`
+    // policy would let a manager read a colleague's private movements,
+    // and service role skips even that. So this probe is the whole
+    // barrier.
+    //
+    // One query for the whole list, not one per id. `.in()` with the
+    // driver pinned answers "which of these are yours" in a single
+    // indexed read, and a probe per id would be the sixty-round-trip
+    // bug this branch removed, rebuilt on the server. One drive is a
+    // batch of one and takes the same path, so there is a single
+    // ownership rule here rather than two that can drift.
     //
     // It pins driver_user_id to the SESSION, and deliberately does not go
     // through resolveTripScope the way the list below does. The two are
@@ -119,26 +195,41 @@ export async function GET(req: NextRequest) {
     const { data: owned } = await admin
       .from("mileage_trips")
       .select("id")
-      .eq("id", trip)
-      .eq("driver_user_id", user.id)
-      .maybeSingle();
-    // Not the caller's drive, or no such drive. The two cases answer
-    // identically on purpose: a distinct status for "exists but is not
-    // yours" would turn this endpoint into an oracle for guessing which
-    // trip ids are real.
-    if (!owned) return NextResponse.json({ points: [] });
+      .in("id", ids)
+      .eq("driver_user_id", user.id);
+    const mine = new Set(((owned ?? []) as { id: string }[]).map((r) => r.id));
+    const allowed = ids.filter((id) => mine.has(id));
+    // Not the caller's drives, or no such drives. Ids that did not clear
+    // are dropped in SILENCE rather than refused: the two cases answer
+    // identically on purpose, because a distinct status for "exists but
+    // is not yours" would turn this endpoint into an oracle for guessing
+    // which trip ids are real. A batch that clears nothing reads nothing.
+    if (allowed.length === 0) return NextResponse.json({ points: [] });
 
     const { data } = await admin.rpc("mileage_trip_polylines", {
-      p_trip_ids: [trip],
-      p_max: POLYLINE_VERTICES,
+      p_trip_ids: allowed,
+      p_max: verticesPerDrive(allowed.length),
     });
     const rows = (data ?? []) as PolylineRow[];
     return NextResponse.json({
-      points: rows.map((r) => ({
-        lat: r.lat,
-        lng: r.lng,
-        captured_at: r.captured_at,
-      })),
+      // `trip_id` travels with every point so a batch can be grouped,
+      // and it travels on the single-id answer too: a response shape
+      // that depends on how many ids were asked for is a trap for
+      // whoever adds the second caller. DriveThumbnail reads lat, lng
+      // and captured_at and is unaffected.
+      //
+      // Filtered against `mine` a second time. The RPC was only handed
+      // cleared ids, so this can only ever drop nothing; it is here so
+      // that a future edit which widens what goes IN still cannot widen
+      // what comes OUT.
+      points: rows
+        .filter((r) => mine.has(r.trip_id))
+        .map((r) => ({
+          trip_id: r.trip_id,
+          lat: r.lat,
+          lng: r.lng,
+          captured_at: r.captured_at,
+        })),
     });
   }
 

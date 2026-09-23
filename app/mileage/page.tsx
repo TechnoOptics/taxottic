@@ -8,9 +8,10 @@ import {
 } from "@/components/ui/Icons";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
 import {
-  MileageMap,
+  MileageMapRoutes,
   type MapTrip,
   type MapPlace,
+  type RoutelessTrip,
 } from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
 import { MobileOnly } from "@/components/MobileOnly";
@@ -212,7 +213,6 @@ export default async function MileagePage({
     start_place_id?: string | null;
     end_place_id?: string | null;
   };
-  type Pt = { lat: number; lng: number; captured_at: string };
 
   let trips: ServerTripRow[] = [];
   // Drives the driver marked "I was a passenger". Held back from the log,
@@ -222,16 +222,6 @@ export default async function MileagePage({
   let places: MapPlace[] = [];
   let lastPointISO: string | null = null;
   let lastTripISO: string | null = null;
-  // Route polylines, keyed by trip id. Deliberately EMPTY on the server
-  // now, and kept declared so every prop it feeds holds its shape.
-  //
-  // Filling it used to cost up to sixty sequential database round trips
-  // before the page sent a byte, for thumbnails on rows the reader may
-  // never scroll to, which is the "slow to load drives" report. Each row
-  // fetches its own route when it is on screen instead. Guarded by
-  // lib/mileage/drive-first-paint.test.ts.
-  const pointsByTrip = new Map<string, Pt[]>();
-
   // Tracker-status diagnostics are only meaningful for the self view:
   // "is YOUR tracker running" says nothing useful when a manager is
   // reviewing a teammate's log, and TrackerStatus is hidden there.
@@ -417,7 +407,13 @@ export default async function MileagePage({
     (t): t is ServerTripRow & { classification: MapTrip["classification"] } =>
       t.classification !== "passenger",
   );
-  const mapTrips: MapTrip[] = drawable.map((t) => ({
+  // Identity, classification and driver: everything the map needs about a
+  // drive except the drive itself. The routes are NOT here. Reading them
+  // on this path is what cost up to sixty sequential database round trips
+  // before the page sent a byte (the "slow to load drives" report, guarded
+  // by lib/mileage/drive-first-paint.test.ts), so MileageMapRoutes asks
+  // for all of them in one request once the page is on screen.
+  const mapTrips: RoutelessTrip[] = drawable.map((t) => ({
     id: t.id,
     classification: t.classification,
     approximate: ((t as { notes?: string | null }).notes ?? "").startsWith(
@@ -429,10 +425,6 @@ export default async function MileagePage({
     driverName: viewingAll
       ? driverNameById.get(t.driver_user_id ?? "") ?? null
       : null,
-    points: (pointsByTrip.get(t.id) ?? [])
-      .slice()
-      .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
-      .map((p) => ({ lat: p.lat, lng: p.lng })),
   }));
 
   // Per-driver rollup for the team overlay (business miles + deduction per
@@ -737,7 +729,11 @@ export default async function MileagePage({
               // the mixed multi-owner overlay never exposes those actions.
               <>
                 <div className="mt-4">
-                  <MileageMap trips={mapTrips} places={places} height={460} />
+                  <MileageMapRoutes
+                    trips={mapTrips}
+                    places={places}
+                    height={460}
+                  />
                 </div>
                 {driverRollup.length > 0 ? (
                   <ul className="mt-4 grid gap-2">

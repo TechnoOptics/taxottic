@@ -686,3 +686,153 @@ export function MileageMap({
     </div>
   );
 }
+
+/** A drive on the map minus its route: everything the page knows about
+ *  it without reading a single GPS fix. */
+export type RoutelessTrip = Omit<MapTrip, "points">;
+
+/** One fix, as the drives route sends it. `trip_id` travels with every
+ *  point so a batch can be split back up by drive. */
+type BatchPoint = {
+  trip_id: string;
+  lat: number;
+  lng: number;
+  captured_at: string;
+};
+
+/**
+ * The map, with its routes fetched after it has painted.
+ *
+ * The page used to read every polyline on the server before it sent a
+ * byte, in a loop that could make sixty sequential database round trips.
+ * Task 2 deleted that loop and left the map's `points` arrays empty, so
+ * the largest element on /mileage drew nothing at all. This is what puts
+ * the routes back without putting the round trips back.
+ *
+ * Three rules hold it together:
+ *
+ *  1. ONE request for the whole map, never one per drive. Sixty requests
+ *     from the browser is the same cost as sixty from the server, just
+ *     harder to see in a trace. The route takes the whole id list and
+ *     answers once.
+ *  2. The map is on screen before its routes are. Every drive starts
+ *     with an empty route, so the frame, the saved places and the legend
+ *     paint immediately and the trails appear when the answer lands. No
+ *     spinner: a map without its trails is still a map, and a spinner
+ *     that cannot resolve is worse than a quiet gap.
+ *  3. A failure is silent, exactly as it is for a row's thumbnail. The
+ *     route answers `{ points: [] }` for a drive that is not the
+ *     caller's, so an empty answer is a normal answer rather than an
+ *     error, and an aborted fetch is treated the same way.
+ */
+export function MileageMapRoutes({
+  tripIds,
+  trips,
+  places = [],
+  height,
+  focusMode = false,
+}: {
+  /** The drives to draw, in order. Authoritative when given: it is both
+   *  what is asked for and what is drawn, so a caller holding ids and no
+   *  metadata is a first-class one. Defaults to the ids in `trips`. */
+  tripIds?: string[];
+  /** How to draw each of them. Looked up by id; an id with no entry
+   *  draws unclassified, which is honestly what it is. */
+  trips?: RoutelessTrip[];
+  places?: MapPlace[];
+  height?: number;
+  focusMode?: boolean;
+}) {
+  // A string, not an array: it is the fetch's cache key, the effect's
+  // only dependency and the query string itself, and an array literal
+  // from a parent would re-arm the effect on every render.
+  const key = (tripIds ?? (trips ?? []).map((t) => t.id)).join(",");
+  const [routes, setRoutes] = useState<Map<string, MapPoint[]> | null>(null);
+
+  useEffect(() => {
+    if (key.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const grouped = await loadRoutes(key);
+      if (!cancelled) setRoutes(grouped);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  const drawn = useMemo<MapTrip[]>(() => {
+    const styleById = new Map((trips ?? []).map((t) => [t.id, t]));
+    return key
+      .split(",")
+      .filter(Boolean)
+      .map((id) => ({
+        ...(styleById.get(id) ?? {
+          id,
+          classification: "unclassified" as const,
+        }),
+        points: routes?.get(id) ?? [],
+      }));
+  }, [key, trips, routes]);
+
+  return (
+    <MileageMap
+      trips={drawn}
+      places={places}
+      height={height}
+      focusMode={focusMode}
+    />
+  );
+}
+
+/** Every drive's route on this map, in one request. Every outcome ends
+ *  in a map, empty at worst: offline, aborted, a body that is not JSON
+ *  and "none of those drives are yours" all leave the map drawn and its
+ *  trails missing, which is the honest picture in each case. */
+async function loadRoutes(idList: string): Promise<Map<string, MapPoint[]>> {
+  try {
+    const res = await fetch(
+      `/api/mileage/drives?trip=${encodeURIComponent(idList)}`,
+    );
+    const json = res.ok ? await res.json() : null;
+    return groupByTrip((json?.points ?? []) as BatchPoint[]);
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Split a batch back into one route per drive, each in the order it was
+ * driven.
+ *
+ * The RPC behind the route ends `order by trip_id, captured_at`, and
+ * this does not lean on that. A route drawn in arrival order reverses a
+ * drive: its direction arrows point backwards and its start disc lands
+ * on its destination. Same rule, and the same reason, as `takePoints` in
+ * components/mileage/TripList.tsx.
+ */
+function groupByTrip(points: BatchPoint[]): Map<string, MapPoint[]> {
+  const by = new Map<string, BatchPoint[]>();
+  for (const p of points) {
+    if (typeof p?.trip_id !== "string") continue;
+    const arr = by.get(p.trip_id);
+    if (arr) arr.push(p);
+    else by.set(p.trip_id, [p]);
+  }
+  const out = new Map<string, MapPoint[]>();
+  for (const [id, pts] of by) {
+    out.set(
+      id,
+      [...pts]
+        .sort((a, b) =>
+          a.captured_at < b.captured_at
+            ? -1
+            : a.captured_at > b.captured_at
+              ? 1
+              : 0,
+        )
+        .map((p) => ({ lat: p.lat, lng: p.lng })),
+    );
+  }
+  return out;
+}
