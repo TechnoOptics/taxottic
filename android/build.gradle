@@ -13,7 +13,7 @@ buildscript {
         // Kotlin toolchain for the :wear module ONLY. The Capacitor
         // :app / :capacitor-* modules are Java and never apply the
         // Kotlin plugin, so these classpaths are inert for the phone
-        // release build (bundleRelease is unchanged) — they just let
+        // release build (bundleRelease is unchanged), they just let
         // wear/build.gradle.kts resolve the `org.jetbrains.kotlin.*`
         // plugin ids without a per-module version, so the Wear OS app
         // builds from a clean checkout (adb sideload + Play pipeline).

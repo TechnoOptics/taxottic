@@ -6,7 +6,7 @@ import MetricKit
 import UIKit
 
 /// Device-truth probe for mileage reliability (plan §C). Reports the
-/// EXACT location authorization level — the thing nothing else in the
+/// EXACT location authorization level, the thing nothing else in the
 /// stack can see: iOS silently downgrades provisional "Always" to
 /// "While Using" without any error reaching the Capgo tracker, which is
 /// how a driver lost 17 hours of drives twice. Also fires an
@@ -64,7 +64,7 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
             "preciseLocation": m.accuracyAuthorization == .fullAccuracy,
             "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
             // Walk-away drive-end support: step counting available and
-            // not explicitly denied (notDetermined is fine — the first
+            // not explicitly denied (notDetermined is fine, the first
             // pedometer query triggers the Motion & Fitness prompt).
             "motionPermission": CMPedometer.isStepCountingAvailable()
                 && CMPedometer.authorizationStatus() != .denied
@@ -195,7 +195,7 @@ public class TaxotticDeviceStatusPlugin: CAPPlugin, CAPBridgedPlugin, CLLocation
     /// exactly the shape of a tracker writing its buffer as the system
     /// suspends it.
     ///
-    /// Simulator returns nothing — MetricKit needs a physical device.
+    /// Simulator returns nothing, MetricKit needs a physical device.
     @objc func getExitInfo(_ call: CAPPluginCall) {
         guard #available(iOS 14.0, *),
               let payload = MXMetricManager.shared.pastPayloads.last,

@@ -2,7 +2,7 @@
 //
 // Extracted from native-tracker so the dangerous parts are testable.
 // The tracker itself is a web of Capacitor/DOM/fetch side effects, but
-// the decisions that lose user data are pure — and every mileage
+// the decisions that lose user data are pure, and every mileage
 // incident so far has come from one of them.
 
 import type { GpsPoint } from "./segmentation";
@@ -16,7 +16,7 @@ import type { GpsPoint } from "./segmentation";
  * callback keeps pushing during the request, and at MAX_BUFFER the
  * tracker evicts from the HEAD (`buffer.slice(-MAX_BUFFER)`). When that
  * happens mid-flight the head shifts left, and slicing by count then
- * deletes points that were never sent — silent, permanent loss of the
+ * deletes points that were never sent, silent, permanent loss of the
  * newest data, precisely while the device is under the heaviest load
  * (long drive, poor connectivity, big backlog).
  *
@@ -57,7 +57,7 @@ export function capBuffer(
  *
  * A `sessionEnded` flush is the force-close that materialises a drive.
  * It must NEVER be silently dropped just because a routine heartbeat
- * flush is in flight — that defect made walk-away fast-close dead code
+ * flush is in flight, that defect made walk-away fast-close dead code
  * in production. Regular flushes may be skipped freely (the next tick
  * retries); a sessionEnded flush has to be queued instead.
  */

@@ -20,7 +20,7 @@ export type BuiltTrack = {
  * its time window. This is the fix for the "straight line across no road"
  * bug: the finalizer used to render a trip from the in-memory segmentation
  * pool (which only ever saw the CURRENTLY-unconsumed points) while
- * consuming raw by time-range — so any point that arrived in a later flush
+ * consuming raw by time-range, so any point that arrived in a later flush
  * batch got marked consumed WITHOUT being drawn, leaving a straight hop.
  *
  * Rebuilding from every raw point inside the trip's own [start, end]
@@ -36,7 +36,7 @@ export type BuiltTrack = {
  * MAX_ACCURACY_M are dropped (same threshold as segmentation).
  */
 /** Accuracy worse than this never renders (segmentation keeps its own
- *  wider cap — detection and drawing have different stakes). */
+ *  wider cap, detection and drawing have different stakes). */
 export const RENDER_MAX_ACCURACY_M = 60;
 
 /** Keep one anchor fix at least this often even inside the noise
@@ -60,7 +60,7 @@ export function buildTrackFromRaw(raw: readonly RawPoint[]): BuiltTrack {
     a.captured_at < b.captured_at ? -1 : a.captured_at > b.captured_at ? 1 : 0,
   );
   // Render-time jitter suppression (2026-07-27, "messy lines"). Fixes in
-  // the 50-100m accuracy band pass the segmentation cap (rightly — they
+  // the 50-100m accuracy band pass the segmentation cap (rightly, they
   // still prove the phone was somewhere) but DRAWING them scribbles the
   // route: parked or slow-moving phones scatter inside their own GPS
   // error circle and the polyline zigzags through the noise, inflating
@@ -85,7 +85,7 @@ export function buildTrackFromRaw(raw: readonly RawPoint[]): BuiltTrack {
         // not travel.
         if (dtMs < JITTER_ANCHOR_MS) continue;
         // Past the anchor interval we still want a point, so a long
-        // dwell stays visible on the drawn track — but we must NOT let
+        // dwell stays visible on the drawn track, but we must NOT let
         // it carry the noisy coordinate. A phone sitting still with a
         // 40 m fix emits one drifting point per minute; keeping those
         // verbatim drew the scribble a user reported as "it tracked me

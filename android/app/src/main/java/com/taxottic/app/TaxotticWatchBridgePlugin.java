@@ -31,7 +31,7 @@ import java.util.Iterator;
  *    ("action", …) which lib/watch/bridge.ts forwards to
  *    /api/watch/confirm (reclassify trip / setTxCategory|ignoreTx).
  *
- * Java (the Capacitor app module is Java-only — no Kotlin toolchain
+ * Java (the Capacitor app module is Java-only, no Kotlin toolchain
  * added to the release build). Every Wearable call is guarded so the
  * app never crashes on a binary/device without Play services or a
  * paired watch; lib/watch/bridge.ts additionally gates on
@@ -43,7 +43,7 @@ import java.util.Iterator;
  * publish/receive code without that transport, an opt-in relay
  * mirrors the same bytes over adb. It is gated on the system property
  * `debug.twb.relay == "1"` (set via `adb shell setprop`), so it is
- * completely inert in production and on real devices — there, GMS is
+ * completely inert in production and on real devices, there, GMS is
  * the only path and the prop is never set. Nothing here changes the
  * normal sync()/onMessageReceived() behaviour when the prop is unset.
  */
@@ -64,7 +64,7 @@ public class TaxotticWatchBridgePlugin extends Plugin
     private BroadcastReceiver relaySimSnapRx;
 
     /** True only when `adb shell setprop debug.twb.relay 1` was run.
-     *  Reflection (SystemProperties is hidden) — any failure → OFF. */
+     *  Reflection (SystemProperties is hidden), any failure → OFF. */
     private static boolean relayEnabled() {
         try {
             Class<?> sp = Class.forName("android.os.SystemProperties");
@@ -81,7 +81,7 @@ public class TaxotticWatchBridgePlugin extends Plugin
         try {
             Wearable.getMessageClient(getContext()).addListener(this);
         } catch (Throwable ignored) {
-            /* no Play services / Wearable in this binary — no-op */
+            /* no Play services / Wearable in this binary, no-op */
         }
         if (relayEnabled()) registerRelay();
     }
@@ -132,7 +132,7 @@ public class TaxotticWatchBridgePlugin extends Plugin
                     })
                     .addOnFailureListener(e -> {
                         // Relay demo: GMS absent on the emulator is
-                        // expected — the relay already carried it.
+                        // expected, the relay already carried it.
                         if (call == null) return;
                         if (relay) call.resolve();
                         else call.reject(e.getMessage());
@@ -153,12 +153,12 @@ public class TaxotticWatchBridgePlugin extends Plugin
         deliverAction(new String(event.getData()));
     }
 
-    /** Shared by the GMS path and the relay receiver — identical
+    /** Shared by the GMS path and the relay receiver, identical
      *  JSON → notifyListeners("action", …) handoff to bridge.ts. */
     private void deliverAction(String jsonStr) {
         // Relay-only positive proof the phone received the watch's
         // selection (the real handoff to bridge.ts is silent). No-op
-        // in production — relayEnabled() is false there.
+        // in production, relayEnabled() is false there.
         if (relayEnabled()) Log.i(TAG, "ACTION-IN " + jsonStr);
         try {
             JSONObject in = new JSONObject(jsonStr);
@@ -170,7 +170,7 @@ public class TaxotticWatchBridgePlugin extends Plugin
             }
             notifyListeners("action", out);
         } catch (Throwable ignored) {
-            /* malformed message — drop it */
+            /* malformed message, drop it */
         }
     }
 
@@ -188,7 +188,7 @@ public class TaxotticWatchBridgePlugin extends Plugin
             relaySimSnapRx = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context c, Intent i) {
-                    // Represents "the phone produced a snapshot" —
+                    // Represents "the phone produced a snapshot" , 
                     // routed through the exact real publish path.
                     // base64 so the JSON survives adb/am shell quoting
                     // (symmetric with the watch's TWB_SNAP receiver).

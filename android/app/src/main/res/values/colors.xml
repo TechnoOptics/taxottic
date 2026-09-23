@@ -3,7 +3,7 @@
     <!-- This file was missing entirely, so AppTheme's colorPrimary /
          colorPrimaryDark / colorAccent (styles.xml) were silently
          resolving to the stock Material template defaults baked into
-         the AppCompat library — colorAccent=#FF4081 (hot pink). That
+         the AppCompat library, colorAccent=#FF4081 (hot pink). That
          color drives the native EditText cursor/selection-handle tint
          across the whole app, which is why a bright magenta flash
          showed up when tapping into any text field (e.g. the "add

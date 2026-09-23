@@ -1,8 +1,8 @@
 //  TaxotticWatchApp.swift
-//  Taxottic Watch — Phase 4 (optional) native watchOS companion.
+//  Taxottic Watch, Phase 4 (optional) native watchOS companion.
 //
 //  STATUS: scaffold. This source is complete and idiomatic but is NOT
-//  yet wired into the Xcode project — adding a watchOS target edits
+//  yet wired into the Xcode project, adding a watchOS target edits
 //  ios/App/App.xcodeproj/project.pbxproj, which is intentionally NOT
 //  hand-edited (a malformed pbxproj would break the working iOS
 //  release pipeline). See ios/TaxotticWatch/README.md for the exact
@@ -13,7 +13,7 @@
 //  cannot read the web app directly. Data arrives over
 //  WatchConnectivity from a tiny phone-side bridge (also described in
 //  the README) and via the existing push pipeline (actionable
-//  notifications mirror to the watch with zero watch code — this app
+//  notifications mirror to the watch with zero watch code, this app
 //  is purely the *richer-than-a-notification* glanceable layer the
 //  spec calls Phase 4).
 

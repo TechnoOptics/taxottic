@@ -30,6 +30,11 @@ const androidBase: ProbeInput = {
   deviceStatusMs: 12,
   deviceStatusStage: "done",
   geofenceArmState: "armed",
+  // The read completed. A fixture leaving this null would model a
+  // device that answered with an arm state without the read returning,
+  // which cannot happen.
+  geofenceProbe: "ok",
+  geofenceProbeMs: 12,
   geofenceCount: 4,
   locationAuthorization: "always",
   lowPowerMode: false,
@@ -46,6 +51,14 @@ const deadPlugins: ProbeInput = {
   deviceStatusMs: 1,
   deviceStatusStage: "call",
   geofenceArmState: null,
+  // A rejection in about a millisecond is what an UNREGISTERED plugin
+  // produces, and it is the only thing that convicts one. guard() hands
+  // back a registerPlugin proxy on every native platform, so there is
+  // no "no plugin" outcome to report: the bridge takes the call and
+  // finds nothing of that name. A bare null arm state cannot convict,
+  // because a timed-out read on a healthy phone produces the same null.
+  geofenceProbe: "error",
+  geofenceProbeMs: 1,
   geofenceCount: null,
   locationAuthorization: null,
   lowPowerMode: null,

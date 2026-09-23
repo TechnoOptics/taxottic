@@ -71,6 +71,28 @@ class TaxotticViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(TaxotticDeviceStatusPlugin())
         bridge?.registerPluginInstance(TaxotticGeofencePlugin())
         bridge?.registerPluginInstance(TaxotticWidgetBridgePlugin())
+
+        // The left-edge swipe goes back.
+        //
+        // WKWebView ships with allowsBackForwardNavigationGestures
+        // FALSE, and Capacitor does not turn it on, so the first
+        // gesture an iOS user reaches for did nothing at all here. The
+        // app has no native chrome and no back button of its own, which
+        // left a driver who tapped into a drive detail with no way out
+        // except a tab bar tap, and looked like the screen had frozen.
+        //
+        // This is set on the web view, not on the bridge, and it
+        // survives every navigation because it is a property of the
+        // view rather than of a load. capacitorDidLoad() runs after
+        // prepareWebView() has built the web view and before it is
+        // added to the view hierarchy, which is early enough: the flag
+        // is read per gesture, not at attach time.
+        //
+        // Set HERE, in AppDelegate.swift, for the same reason the
+        // registration above lives here: a new .swift file that is not
+        // added to project.pbxproj compiles to nothing and fails
+        // silently, which this repo has shipped twice.
+        webView?.allowsBackForwardNavigationGestures = true
     }
 }
 
@@ -83,7 +105,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Re-arm native background location BEFORE anything else.
         //
         // On a location relaunch iOS grants ~10 seconds and Apple warns
-        // against network work in it — and this app's WebView loads a
+        // against network work in it, and this app's WebView loads a
         // REMOTE url, so waiting for JavaScript here would spend the
         // whole budget on a network fetch and often run no JS at all.
         // The bridge and its view controller may not even be built on a
@@ -105,8 +127,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         // Interactive notification categories for the Phase-2
         // "Business / Personal" actions (mileage / clarify). iOS only
-        // renders action buttons — on the lock screen and a paired
-        // Apple Watch — for a category whose identifier matches the
+        // renders action buttons, on the lock screen and a paired
+        // Apple Watch, for a category whose identifier matches the
         // push payload's `aps.category`.
         //
         // These identifiers are a CONTRACT with the JS side and must
@@ -117,7 +139,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         //     ← lib/push/action-map.ts resolvePushAction() (it
         //        lowercases actionId and matches these)
         //
-        // UserNotifications only — no new dependency / SPM change, so
+        // UserNotifications only, no new dependency / SPM change, so
         // this cannot reintroduce the Capacitor-version resolution
         // break. Setting categories here is idempotent and additive;
         // @capacitor/push-notifications still owns delegate/handling.
