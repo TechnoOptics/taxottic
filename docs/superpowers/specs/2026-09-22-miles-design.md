@@ -70,9 +70,13 @@ at 171, 213 and 157, and `app/mileage/page.tsx:606` at 195.
 
 ### 4.1 Data flow
 
-**First paint is the drives.** The server query returns the newest `PAGE_SIZE`
-drives for the viewer (or the selected driver), ordered by `started_at`
-descending, with no polylines. Everything the head needs that is not a drive
+**First paint is the drives.** The server query returns the newest 60 drives
+for the viewer (or the selected driver), ordered by `started_at` descending,
+with no polylines. Sixty because the filter runs over what is loaded: it covers
+a month of heavy driving, so the common filters resolve locally, and it is small
+enough that one indexed read stays cheap. The number lives in
+`lib/mileage/drive-page.ts` as the single contract the page and the route
+handler share. Everything the head needs that is not a drive
 (the awaiting-decision count, tracking health, the driver list) either already
 runs as a cheap indexed read or moves behind a `Suspense` boundary so it cannot
 delay the list.
