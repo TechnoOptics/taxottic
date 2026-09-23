@@ -576,8 +576,8 @@ export function MileageMap({
           </div>
           Set <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in the
           deployment env (HTTP-referrer restricted to taxottic.com
-          + the app WebView, Maps JavaScript API). Trips + the
-          deduction below still work without the map.
+          + the app WebView, Maps JavaScript API). Trips and the
+          deduction still work without the map.
         </div>
       </div>
     );

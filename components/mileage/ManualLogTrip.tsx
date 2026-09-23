@@ -89,9 +89,9 @@ export function ManualLogTrip({ action }: Props) {
         </button>
       </div>
       <p className="text-[11px] text-ink-muted leading-relaxed">
-        Use this when the tracker missed a drive (app killed,
-        permissions blocked, etc). Counts the same toward your
-        deduction as a tracker-logged trip.
+        Use this when the tracker missed a drive, or when you&apos;re
+        on the web. Counts the same toward your deduction as a
+        tracker-logged trip.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-3">

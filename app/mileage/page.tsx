@@ -748,7 +748,7 @@ export default async function MileagePage({
                 <div className="mt-4">
                   <MobileOnly
                     title="Automatic mileage tracking"
-                    description="Taxottic uses your phone's GPS to detect drives and log them in the background, this runs only in the Taxottic mobile app. On the web you can still add drives by hand below."
+                    description="Drive detection runs in the Taxottic mobile app."
                   >
                     <AutoTrackToggle companyId={company.id} />
                   </MobileOnly>

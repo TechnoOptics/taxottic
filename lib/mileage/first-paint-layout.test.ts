@@ -104,13 +104,15 @@ describe("the manager's device alert is one line until tapped", () => {
   });
 
   it("keeps every sentence of the alert wording, verbatim", () => {
-    // The wording was written carefully and the task was to reshape the
-    // container, not the copy. The one em dash below is pre-existing in
-    // that copy and is quoted as an escape so this file carries none.
+    // Reworded by the copy-length task (each sentence says its thing and
+    // stops, under the 170-char bound enforced by
+    // lib/mileage/miles-copy.test.ts). This guard's job now is the same
+    // as it always was for the container-reshape task: nothing here
+    // should silently drop a sentence or move it out of the details.
     const sentences = [
-      "Silent means the phone stopped uploading, usually location permission dropped to “While Using” or the app was force-closed. ",
-      "Background refresh off means iOS will not wake Taxottic for any drive. That phone cannot track until it is turned back on in Settings > General > Background App Refresh. ",
-      "Parked means the phone is uploading but hasn’t moved in days, it may not be the device that person drives with. ",
+      "Silent means the phone stopped uploading. Usually location dropped to While Using, or the app was force-closed. ",
+      "Background refresh is off, so iOS will not wake Taxottic for a drive. Turn it on: Settings > General > Background App Refresh. ",
+      "Parked means the phone uploads but has not moved in days. ",
       "Ask them to open Taxottic, update if prompted, and confirm location is set to Always.",
     ];
     for (const s of sentences) {

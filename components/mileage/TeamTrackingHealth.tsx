@@ -125,13 +125,19 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
         <p className="mt-3 text-xs leading-relaxed text-amber-800">
           {fixes.join("")}
           {attention.some((r) => r.health.status === "silent" && r.cause == null)
-            ? "Silent means the phone stopped uploading, usually location permission dropped to “While Using” or the app was force-closed. "
+            ? "Silent means the phone stopped uploading. Usually location dropped to While Using, or the app was force-closed. "
             : ""}
           {attention.some((r) => r.health.status === "blocked")
-            ? "Background refresh off means iOS will not wake Taxottic for any drive. That phone cannot track until it is turned back on in Settings > General > Background App Refresh. "
+            ? /* The catch-all sentence after this block ("Ask them to
+                 open Taxottic... confirm location is set to Always")
+                 does not name Settings > General > Background App
+                 Refresh, so it cannot carry the path for this cause.
+                 The path stays here, in the shortest sentence that
+                 states it, rather than being dropped. */
+              "Background refresh is off, so iOS will not wake Taxottic for a drive. Turn it on: Settings > General > Background App Refresh. "
             : ""}
           {attention.some((r) => r.health.status === "parked")
-            ? "Parked means the phone is uploading but hasn’t moved in days, it may not be the device that person drives with. "
+            ? "Parked means the phone uploads but has not moved in days. "
             : ""}
           Ask them to open Taxottic, update if prompted, and confirm location is set to Always.
         </p>
