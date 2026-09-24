@@ -15,6 +15,22 @@ type Row = {
 };
 
 /**
+ * The drivers this alert is about. Exported because the head has to know
+ * whether the marker exists BEFORE it renders it: a marker that shows on
+ * every visit and says nothing is the noise this screen was cut for, and
+ * a second copy of the rule in app/mileage/page.tsx is how the two would
+ * disagree about which phones count.
+ */
+export function driversNeedingAttention(rows: Row[]): Row[] {
+  return rows.filter(
+    (r) =>
+      r.health.status === "silent" ||
+      r.health.status === "parked" ||
+      r.health.status === "blocked",
+  );
+}
+
+/**
  * Manager-only "is everyone's phone actually tracking?" card.
  *
  * The gap this closes: nothing surfaced that a driver's device had gone
@@ -36,12 +52,7 @@ type Row = {
  * wording, unchanged, are one tap away.
  */
 export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
-  const attention = rows.filter(
-    (r) =>
-      r.health.status === "silent" ||
-      r.health.status === "parked" ||
-      r.health.status === "blocked",
-  );
+  const attention = driversNeedingAttention(rows);
   if (attention.length === 0) return null;
 
   // One fix sentence per distinct cause, not per driver: two phones on
@@ -59,8 +70,11 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
   );
 
   return (
-    <details className="group mx-0 mt-4 rounded-2xl border border-amber-300 bg-amber-50">
-      <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-4 py-2.5">
+    <details className="group mx-0 w-full rounded-2xl border border-amber-300 bg-amber-50">
+      {/* min-h-11: this summary is the whole control, it sits in the
+          head's tracking slot, and it measured 39px against the 44px
+          minimum this screen is held to (MilesHead.ct.spec.tsx). */}
+      <summary className="flex min-h-11 cursor-pointer select-none list-none items-center gap-2 px-4 py-2">
         <WarningIcon className="size-4 shrink-0 text-amber-800" />
         <h2 className="min-w-0 flex-1 text-sm font-semibold leading-snug text-amber-900">
           Some devices aren&apos;t tracking
@@ -83,8 +97,13 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
                 <div className="flex items-center justify-between gap-3">
                   <span className="min-w-0 truncate text-sm text-amber-950">{name}</span>
                   <span className="flex items-center gap-2 whitespace-nowrap">
+                    {/* A square marker, not a round one. The Year
+                        grammar has no round chips and the head is
+                        asserted to carry no `.rounded-full` at all; this
+                        dot was inside the alert, which is inside the
+                        head, and it is the only thing that was. */}
                     <span
-                      className={`inline-block h-2 w-2 rounded-full ${
+                      className={`inline-block h-2 w-2 rounded-[1px] ${
                         silent || r.health.status === "blocked"
                           ? "bg-red-500"
                           : "bg-amber-500"
@@ -106,13 +125,19 @@ export function TeamTrackingHealth({ rows }: { rows: Row[] }) {
         <p className="mt-3 text-xs leading-relaxed text-amber-800">
           {fixes.join("")}
           {attention.some((r) => r.health.status === "silent" && r.cause == null)
-            ? "Silent means the phone stopped uploading, usually location permission dropped to “While Using” or the app was force-closed. "
+            ? "Silent means the phone stopped uploading. Usually location dropped to While Using, or the app was force-closed. "
             : ""}
           {attention.some((r) => r.health.status === "blocked")
-            ? "Background refresh off means iOS will not wake Taxottic for any drive. That phone cannot track until it is turned back on in Settings > General > Background App Refresh. "
+            ? /* The catch-all sentence after this block ("Ask them to
+                 open Taxottic... confirm location is set to Always")
+                 does not name Settings > General > Background App
+                 Refresh, so it cannot carry the path for this cause.
+                 The path stays here, in the shortest sentence that
+                 states it, rather than being dropped. */
+              "Background refresh is off, so iOS will not wake Taxottic for a drive. Turn it on: Settings > General > Background App Refresh. "
             : ""}
           {attention.some((r) => r.health.status === "parked")
-            ? "Parked means the phone is uploading but hasn’t moved in days, it may not be the device that person drives with. "
+            ? "Parked means the phone uploads but has not moved in days. "
             : ""}
           Ask them to open Taxottic, update if prompted, and confirm location is set to Always.
         </p>

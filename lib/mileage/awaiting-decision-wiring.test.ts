@@ -62,38 +62,44 @@ describe("the drive log counts every drive awaiting a decision", () => {
     ).toBe(false);
   });
 
-  it("keeps the control on screen when the count is zero", () => {
-    // "The drives that have not been coded should always show or have a
-    // tab or pill." A control that only exists above zero is a control the
-    // driver cannot learn, and the page they land on defaults to Today.
-    // Anchored on the ELEMENT, not the bare name. An earlier version
-    // searched for "NeedsDecisionPill" and found the import statement at
-    // the top of the file, so the slice it went on to examine was a list
-    // of imports and every mutation of the real gate left it green. Two
-    // ways for one guard to be blind, in one assertion.
-    const at = page.indexOf("<NeedsDecisionPill");
-    expect(at, "the persistent control is not rendered").toBeGreaterThan(-1);
-
-    // The JSX expression that decides whether the pill exists at all: the
-    // nearest `{` before it, which the `count={...}` prop sits after and
-    // so cannot contaminate.
-    //
-    // The invariant is stated as "the gate does not mention the count",
-    // not as "the gate contains no `> 0`". An earlier version of this
-    // test asserted the latter with an end-anchored pattern and was
-    // BLIND: re-gating the pill on `awaitingCount > 0` left it green,
-    // because the anchor expected the `?` to end the slice and the real
-    // markup continues `? (`. A guard that cannot see the exact
-    // regression it was written for reads as coverage and is worse than
-    // no guard.
-    const gate = page.slice(page.lastIndexOf("{", at), at);
+  it("hands that number to the head unfiltered, on both arms", () => {
+    /**
+     * THIS RULE WAS DELIBERATELY REVERSED, and the reversal is the point.
+     *
+     * It used to read "keeps the control on screen when the count is
+     * zero": a persistent pill, present at zero as much as at fifty, so
+     * a driver could learn where the review queue lived. That was
+     * correct while the only place to settle a drive was a separate
+     * deck. It is not correct now. Every row carries a business-or-
+     * personal control backed by a server action, so the screen asked
+     * the same question three times before the reader reached a drive:
+     * an amber card, this pill, and a "Need review" stat below the list.
+     * The owner's words were "messy and not user friendly".
+     *
+     * So the head states the count when there is one and says nothing
+     * when there is not, and the rows do the asking. What still has to
+     * hold is that the number the head shows is THIS number: the
+     * range-independent count over both undecided states, not a
+     * recount from the loaded page. The total beside it DOES follow the
+     * window filter (DriveLog computes it from the drives on screen);
+     * this one must not, which is why it is passed in rather than
+     * derived down there.
+     */
+    // Both arms of the page. Each hands the same number to its client
+    // owner, which renders the head around a total that follows the
+    // filter; neither derives the count from what is on screen.
+    for (const el of ["<TeamLog", "<DriveLog"]) {
+      const at = page.indexOf(el);
+      expect(at, `${el} is not rendered`).toBeGreaterThan(-1);
+      const tag = page.slice(at, page.indexOf("/>", page.indexOf("tracking=", at)));
+      expect(tag, `${el} is not given the waiting count`).toMatch(
+        /awaiting=\{[^}]*awaitingCount/,
+      );
+    }
     expect(
-      gate,
-      "the pill's existence is conditioned on the count",
-    ).not.toMatch(/awaitingCount|awaitingDecision/);
-    expect(gate, "the pill is gated on a count threshold").not.toMatch(
-      />\s*0/,
-    );
+      page,
+      "the count is derived from the loaded page rather than the indexed read",
+    ).toMatch(/const awaitingCount = awaitingDecision/);
   });
 });
 

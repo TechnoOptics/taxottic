@@ -1449,7 +1449,26 @@
 //
 // v215, not the v209 this PR carried: v210 through v214 landed on main
 // while it waited. A reserved number is not a number.
-const CACHE_VERSION = "v215";
+//
+// v216: Miles opens on drives, and the filter answers in the browser.
+//
+// /mileage no longer opens on a one-day window that was usually empty on
+// a phone whose fixes arrive a day late; it opens on the newest drives
+// with no window at all. The range pills stopped being links on a
+// force-dynamic page and became a client filter over the drives already
+// loaded, so a tap re-renders in the browser and issues no request. The
+// render path fetches no polyline: the map and the rows share one
+// batched route request after paint, in place of up to sixty sequential
+// per-drive thumbnail lookups before the first byte. The head collapsed
+// from a breadcrumb, a two-line title, a company line, a tracking alert,
+// a driver selector, a Team view row, a quick-call card and eight 32px
+// pills into one line, and the classification questions moved onto the
+// row. New client components: DriveLog, DriveFilter, DriveThumbnail,
+// MilesHead. Markup and client-side JS changed on every Miles visit, so
+// the worker must fetch the new HTML rather than hydrate cached chunks
+// against it. Chosen against origin/main (v215 at b86e68e) and every
+// open PR at the moment of the bump (#599 at v192, the only one open).
+const CACHE_VERSION = "v216";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 

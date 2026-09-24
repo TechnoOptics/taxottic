@@ -9,6 +9,7 @@ import {
 } from "@/components/mileage/MileageMap";
 import { TripThumbnail } from "@/components/maps/TripThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
+import { indexPlaces, savedPlace } from "@/lib/mileage/place-names";
 import {
   splitScheduleC,
   type ClassifiableTrip,
@@ -344,12 +345,9 @@ export default async function BusinessTripsPage({
   // Place lookup so each trip-list row can show "Home → Office"
   // instead of bare lat/lng. Places that aren't tied to a trip
   // (the user's other stops) still render on the map as markers.
-  const placeById = new Map(places.map((p) => [p.id, p] as const));
+  const placeIndex = indexPlaces(places);
   function placeLabel(id: string | null): string | null {
-    if (!id) return null;
-    const p = placeById.get(id);
-    if (!p) return null;
-    return p.label ?? defaultLabel(p.kind);
+    return savedPlace(placeIndex, id)?.label ?? null;
   }
 
   return (
@@ -678,19 +676,6 @@ export default async function BusinessTripsPage({
       </section>
     </main>
   );
-}
-
-function defaultLabel(kind: MapPlace["kind"]): string {
-  switch (kind) {
-    case "home":
-      return "Home";
-    case "office":
-      return "Office";
-    case "client":
-      return "Client";
-    default:
-      return "Stop";
-  }
 }
 
 function Stat({

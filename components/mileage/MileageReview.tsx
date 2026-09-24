@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  MileageMap,
-  type MapTrip,
+  MileageMapRoutes,
   type MapPlace,
+  type RoutelessTrip,
+  type RoutePoint,
 } from "@/components/mileage/MileageMap";
 import { TripList, type TripRow } from "@/components/mileage/TripList";
 import {
@@ -32,6 +33,7 @@ import {
  */
 export function MileageReview({
   mapTrips,
+  routes,
   places,
   tripRows,
   excludedRows,
@@ -40,7 +42,16 @@ export function MileageReview({
   companies,
   moveTripCompany,
 }: {
-  mapTrips: MapTrip[];
+  /** The drives to draw, WITHOUT their routes. The routes are fetched
+   *  by MileageMapRoutes below, in one request, once this is on screen:
+   *  reading them on the server is what cost up to sixty sequential
+   *  round trips before the page sent a byte. */
+  mapTrips: RoutelessTrip[];
+  /** The routes, when the owner above already holds them. DriveLog does:
+   *  it fetches once for this map and for the rows below it, which want
+   *  the same drives. Passed straight through, because deciding anything
+   *  about them here would be a second place that can drift. */
+  routes?: Map<string, RoutePoint[]>;
   places: MapPlace[];
   tripRows: TripRow[];
   /** Drives the driver marked "passenger". Out of the list and the map
@@ -57,8 +68,11 @@ export function MileageReview({
   const focusedTrip = focusedId
     ? (mapTrips.find((t) => t.id === focusedId) ?? null)
     : null;
-  // Review mode shows just the one drive; overview shows them all.
-  const shownTrips = focusedTrip ? [focusedTrip] : mapTrips;
+  // Review mode shows just the one drive; overview shows them all. The
+  // narrowing happens inside MileageMapRoutes (focusTripId) rather than
+  // here, because the list handed to it is also the list it ASKS for:
+  // narrowing it here would make every Review tap fetch a route the
+  // component is already holding.
 
   // Toggle: tapping Review on the trip that's already in review takes
   // you BACK to the all-drives overview. Tapping it on a different trip
@@ -84,6 +98,26 @@ export function MileageReview({
 
   return (
     <>
+      <h2 className="sr-only">Drives</h2>
+      <TripList
+        trips={tripRows}
+        reclassify={reclassify}
+        deleteTrip={deleteTrip}
+        onReview={onReview}
+        reviewingId={focusedId}
+        companies={companies}
+        moveTripCompany={moveTripCompany}
+      />
+      <ExcludedTrips trips={excludedRows} reclassify={reclassify} />
+
+      {/* THE MAP SITS BELOW THE DRIVES. It used to be the first thing
+          under the filter, 420px of it, which put the first drive row at
+          958px on a 390px phone even after the head collapsed. Spec 4.2
+          orders the screen identity line, total, filter, the drives, and
+          then everything else; the map is everything else. It is still
+          the same map and it still answers Review the same way: the
+          effect below scrolls it into view, which is what a control
+          below the fold needs anyway. */}
       <div
         ref={mapWrapRef}
         tabIndex={-1}
@@ -103,30 +137,21 @@ export function MileageReview({
             <button
               type="button"
               onClick={() => setFocusedId(null)}
-              className="shrink-0 text-xs px-3 h-8 inline-flex items-center gap-1 rounded-full border border-forest-200 text-forest-800 hover:border-gold-300"
+              className="shrink-0 text-xs px-3 min-h-11 inline-flex items-center gap-1 rounded-xl border border-forest-200 text-forest-800 hover:border-gold-300"
             >
               ← All drives
             </button>
           </div>
         ) : null}
-        <MileageMap
-          trips={shownTrips}
+        <MileageMapRoutes
+          trips={mapTrips}
+          routes={routes}
+          focusTripId={focusedTrip ? focusedId : null}
           places={places}
           focusMode={!!focusedTrip}
         />
       </div>
 
-      <h2 className="display text-xl text-forest-900 mt-8">Trips</h2>
-      <TripList
-        trips={tripRows}
-        reclassify={reclassify}
-        deleteTrip={deleteTrip}
-        onReview={onReview}
-        reviewingId={focusedId}
-        companies={companies}
-        moveTripCompany={moveTripCompany}
-      />
-      <ExcludedTrips trips={excludedRows} reclassify={reclassify} />
     </>
   );
 }

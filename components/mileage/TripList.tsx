@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
-import { TripThumbnail } from "@/components/maps/TripThumbnail";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import {
+  DriveThumbnail,
+  type DrivePoint,
+} from "@/components/mileage/DriveThumbnail";
 import { TripEndpoints } from "@/components/mileage/TripEndpoints";
 import { SelectMenu } from "@/components/ui/SelectMenu";
+import { isAwaitingDecision } from "@/lib/mileage/awaiting-decision";
 
 /**
  * Phone-first trip list. Replaces the old "3 pill buttons per row,
@@ -49,9 +53,23 @@ export type TripRow = {
    *  deduction total until the driver confirms it. */
   needsConfirmation: boolean;
   points: { lat: number; lng: number; captured_at: string }[];
+  /** The list is fetching this drive's route in a batch, so `points` is
+   *  empty only because the answer has not landed yet. The row waits
+   *  instead of asking for its own copy. Absent means nobody is
+   *  fetching it and the row is on its own. */
+  routePending?: boolean;
   /** Which company/business this drive currently belongs to. */
   companyId: string;
+  /** The saved place this drive started / ended at, when it matched one.
+   *  Resolved on the server from mileage_trips.start_place_id against the
+   *  company's places, so the row can NAME its endpoints on the first
+   *  paint with no network at all. Null when the end matched no saved
+   *  place; then the name waits for the polyline (see DriveEndpoints). */
+  startPlace?: SavedPlace | null;
+  endPlace?: SavedPlace | null;
 };
+
+export type SavedPlace = { label: string; lat: number; lng: number };
 
 type Props = {
   trips: TripRow[];
@@ -172,6 +190,23 @@ export function TripList({
 
   const buckets = groupTrips(trips);
 
+  /**
+   * The drive the head's "{n} waiting" count sends the reader to.
+   *
+   * The SAME rule the count itself is computed from
+   * (lib/mileage/awaiting-decision.ts), not a second statement of it:
+   * a link that promises a waiting drive and lands on a settled one is
+   * the "I thought I already did this" report by a shorter route. Newest
+   * first, because that is the order the list is in.
+   */
+  const firstAwaitingId =
+    trips.find((t) =>
+      isAwaitingDecision({
+        classification: t.classification,
+        needs_confirmation: t.needsConfirmation,
+      }),
+    )?.id ?? null;
+
   return (
     <div className="mt-3 grid gap-6">
       {buckets.map((bucket) => (
@@ -188,6 +223,7 @@ export function TripList({
               <TripCard
                 key={t.id}
                 trip={t}
+                anchor={t.id === firstAwaitingId}
                 reclassify={reclassify}
                 deleteTrip={deleteTrip}
                 onReview={onReview}
@@ -205,6 +241,7 @@ export function TripList({
 
 function TripCard({
   trip,
+  anchor,
   reclassify,
   deleteTrip,
   onReview,
@@ -213,6 +250,9 @@ function TripCard({
   moveTripCompany,
 }: {
   trip: TripRow;
+  /** This is the first drive awaiting a decision, so it carries the id
+   *  the head's waiting count links to. */
+  anchor: boolean;
   reclassify: (fd: FormData) => Promise<void>;
   deleteTrip: (fd: FormData) => Promise<void>;
   onReview: (tripId: string) => void;
@@ -227,22 +267,46 @@ function TripCard({
 
   // First + last GPS fix = the drive's start / end, for reverse-geocoded
   // place labels ("Shakopee, MN → Mounds View, MN"). A drive carries
-  // hundreds of fixes and this list renders hundreds of drives, so the sort
-  // is memoised: it used to run twice per row per render (once here, once
-  // inline in the TripThumbnail prop below) and every re-render of any row
-  // in the list paid for it again. `trip.points` is the identity to key on -
-  // the array is replaced wholesale when the server action revalidates.
+  // hundreds of fixes, so the sort is memoised on `trip.points`, the
+  // identity that is replaced wholesale when a server action revalidates.
+  //
+  // /mileage fills this from the batch its owner fetched once for the
+  // map and every row (DriveLog), so on that page it is usually the
+  // route. The fetched fallback below is for a row the batch did not
+  // cover, and for callers that supply nothing at all.
   const sortedPts = useMemo(
     () =>
       [...trip.points].sort((a, b) => (a.captured_at < b.captured_at ? -1 : 1)),
     [trip.points],
   );
-  const startPt = sortedPts[0];
-  const endPt = sortedPts[sortedPts.length - 1];
-  const thumbPts = useMemo(
-    () => sortedPts.map((p) => ({ lat: p.lat, lng: p.lng })),
-    [sortedPts],
-  );
+
+  // The route the thumbnail fetched for itself, reused rather than asked
+  // for again. For a drive the list's batch did not cover, between two
+  // UNSAVED spots, this is the only way the row ever learns where it
+  // went, and it costs no request of its own.
+  //
+  // Sorted on arrival for the same reason `trip.points` is: the first and
+  // last fix decide which end is which. The RPC behind the route happens
+  // to end `order by trip_id, captured_at` today
+  // (supabase/migrations/20260601000001_mileage_trip_polylines.sql), and
+  // depending on that silently would mean a dropped ORDER BY reverses a
+  // drive's endpoints with nothing failing.
+  const [fetchedPts, setFetchedPts] = useState<DrivePoint[] | null>(null);
+  const takePoints = useCallback((pts: DrivePoint[]) => {
+    setFetchedPts(
+      [...pts].sort((a, b) => (a.captured_at < b.captured_at ? -1 : 1)),
+    );
+  }, []);
+  const routePts = sortedPts.length > 0 ? sortedPts : (fetchedPts ?? []);
+  const startPt = routePts[0];
+  const endPt = routePts[routePts.length - 1];
+
+  // A saved place names an end instantly and exactly ("Office" beats a
+  // street address). A GPS fix names it once the route lands. Either is
+  // enough on its own, so a drive with one saved end and no route still
+  // says half of where it went instead of nothing.
+  const startCoord = startPt ?? trip.startPlace ?? null;
+  const endCoord = endPt ?? trip.endPlace ?? null;
 
   const start = new Date(trip.startedAtISO);
   const end = new Date(trip.endedAtISO);
@@ -310,15 +374,24 @@ function TripCard({
 
   return (
     <li
+      id={anchor ? "first-unclassified" : undefined}
       className={
-        "card p-3 sm:p-4 grid gap-3 " +
+        // scroll-mt keeps the row clear of the fixed AppHeader when the
+        // head's waiting count jumps to it.
+        "card p-3 sm:p-4 grid gap-3 scroll-mt-20 " +
         (pending ? "opacity-60" : "")
       }
       aria-busy={pending}
     >
       <div className="flex items-start gap-3 min-w-0">
-        <TripThumbnail
-          points={thumbPts}
+        <DriveThumbnail
+          tripId={trip.id}
+          // Already sorted, and already the row's own copy. A row whose
+          // route the list holds costs no request; one it does not hold
+          // still fetches, once, when it nears the viewport.
+          points={sortedPts}
+          deferToList={trip.routePending === true && sortedPts.length === 0}
+          onPoints={takePoints}
           classification={
             trip.classification === "business" ||
             trip.classification === "personal"
@@ -337,12 +410,20 @@ function TripCard({
               ? ` · ${fmtUsd(Number(trip.deductionCents))} deduction`
               : ""}
           </div>
-          {startPt && endPt ? (
+          {/* Where the drive went, from whatever the row knows so far: a
+              saved place names its end immediately, an unsaved one once
+              the thumbnail's route lands, and an end with neither is not
+              looked up at all. Nothing known about either end means no
+              line, because the distance and the times above are still
+              the drive. */}
+          {startCoord || endCoord ? (
             <TripEndpoints
-              startLat={startPt.lat}
-              startLng={startPt.lng}
-              endLat={endPt.lat}
-              endLng={endPt.lng}
+              startLat={startCoord?.lat}
+              startLng={startCoord?.lng}
+              endLat={endCoord?.lat}
+              endLng={endCoord?.lng}
+              savedStart={trip.startPlace?.label ?? null}
+              savedEnd={trip.endPlace?.label ?? null}
               className="mt-1"
             />
           ) : null}
@@ -355,7 +436,7 @@ function TripCard({
               type="button"
               onClick={doDelete}
               disabled={pending}
-              className="text-[11px] px-2.5 h-8 rounded-full bg-rose-600 text-white font-medium disabled:opacity-60"
+              className="text-[11px] px-3 min-h-11 rounded-xl bg-rose-600 text-white font-medium disabled:opacity-60"
             >
               Delete?
             </button>
@@ -363,7 +444,7 @@ function TripCard({
               type="button"
               onClick={() => setConfirmingDelete(false)}
               disabled={pending}
-              className="text-[11px] px-2.5 h-8 rounded-full border border-forest-200 text-forest-800 disabled:opacity-60"
+              className="text-[11px] px-3 min-h-11 rounded-xl border border-forest-200 text-forest-800 disabled:opacity-60"
             >
               Cancel
             </button>
@@ -374,7 +455,7 @@ function TripCard({
             onClick={() => setConfirmingDelete(true)}
             disabled={pending}
             aria-label="Delete trip"
-            className="shrink-0 size-8 grid place-items-center rounded-full text-ink-muted hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+            className="shrink-0 size-11 grid place-items-center rounded-xl text-ink-muted hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
           >
             <svg
               viewBox="0 0 20 20"
@@ -424,7 +505,7 @@ function TripCard({
             type="button"
             onClick={() => doReclassify(trip.classification)}
             disabled={pending}
-            className="shrink-0 text-[11px] font-medium px-3 h-8 rounded-full bg-amber-600 text-white disabled:opacity-60"
+            className="shrink-0 text-[11px] font-medium px-3 min-h-11 rounded-xl bg-amber-600 text-white disabled:opacity-60"
           >
             Confirm
           </button>
@@ -441,7 +522,7 @@ function TripCard({
             fills in only while THIS trip is the one being reviewed, and
             only one trip can be in review at a time (the parent owns
             reviewingId), so it can't read as "pre-selected" either. */}
-      <div className="grid grid-cols-3 rounded-full bg-forest-50 p-1 gap-1">
+      <div className="grid grid-cols-3 rounded-xl bg-forest-50 p-1 gap-1">
         <button
           type="button"
           aria-pressed={trip.classification === "business"}
@@ -449,7 +530,7 @@ function TripCard({
           onClick={() => doReclassify("business")}
           disabled={pending}
           className={
-            "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
+            "min-h-11 text-xs font-medium rounded-lg transition-colors disabled:opacity-60 " +
             (trip.classification === "business"
               ? "bg-emerald-600 text-white shadow-sm"
               : "text-forest-800 hover:bg-cream")
@@ -464,7 +545,7 @@ function TripCard({
           onClick={() => doReclassify("personal")}
           disabled={pending}
           className={
-            "h-9 text-xs font-medium rounded-full transition-colors disabled:opacity-60 " +
+            "min-h-11 text-xs font-medium rounded-lg transition-colors disabled:opacity-60 " +
             (trip.classification === "personal"
               ? "bg-amber-500 text-white shadow-sm"
               : "text-forest-800 hover:bg-cream")
@@ -478,7 +559,7 @@ function TripCard({
           aria-label="Review this trip on the map"
           onClick={() => onReview(trip.id)}
           className={
-            "h-9 text-xs font-medium rounded-full transition-colors inline-flex items-center justify-center gap-1 " +
+            "min-h-11 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1 " +
             (reviewing
               ? "bg-forest-900 text-cream shadow-sm"
               : "text-forest-800 hover:bg-cream")
@@ -515,7 +596,7 @@ function TripCard({
           onClick={() => doReclassify("passenger")}
           disabled={pending}
           aria-label="Mark this trip as one you rode in, not drove"
-          className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-forest-200 text-[11px] font-medium text-forest-800 hover:border-gold-300 hover:bg-cream disabled:opacity-60"
+          className="shrink-0 inline-flex items-center gap-1.5 min-h-11 px-3 rounded-xl border border-forest-200 text-[11px] font-medium text-forest-800 hover:border-gold-300 hover:bg-cream disabled:opacity-60"
         >
           {/* Steering wheel, crossed out: you were not the one driving. */}
           <svg

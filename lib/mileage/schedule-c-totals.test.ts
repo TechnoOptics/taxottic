@@ -95,9 +95,17 @@ describe("every page showing a deduction applies the same split", () => {
   // A page that shows business miles or a mileage deduction and does
   // not go through splitScheduleC is the bug, so the list is the
   // assertion. Add a page here when it starts showing either number.
+  //
+  // /mileage itself no longer computes either number: both of its arms
+  // are client owners that hold the FILTERED drives, because a total
+  // that describes a different set than the list or the map under it
+  // reads as authoritative and is wrong on the first tap. So the two
+  // owners are what is listed, and the page is held to routing through
+  // them rather than to computing a total of its own.
   const DEDUCTION_PAGES = [
     "app/mileage/business/page.tsx",
-    "app/mileage/page.tsx",
+    "components/mileage/DriveLog.tsx",
+    "components/mileage/TeamLog.tsx",
   ] as const;
 
   it("routes every deduction page through the shared rule", () => {
@@ -125,6 +133,25 @@ describe("every page showing a deduction applies the same split", () => {
         /reduce\(\s*\(a[^)]*\)\s*=>\s*a\s*\+\s*Number\(t\.deduction_cents\)/,
       );
     }
+  });
+
+  it("keeps /mileage itself out of the deduction business", () => {
+    // The page hands its drives to the two owners above and computes
+    // neither number. If it starts computing one again it must be added
+    // to DEDUCTION_PAGES, not left to drift; this is what says so.
+    const src = readFileSync(
+      resolve(process.cwd(), "app/mileage/page.tsx"),
+      "utf8",
+    );
+    expect(src).toMatch(/<DriveLog/);
+    expect(src).toMatch(/<TeamLog/);
+    // `deduction_cents` still appears once, in the row TYPE the page
+    // passes through. What must not come back is a total computed here:
+    // either the shared rule, or a hand-rolled sum of the column.
+    expect(
+      src,
+      "/mileage computes a deduction again; add it back to DEDUCTION_PAGES",
+    ).not.toMatch(/splitScheduleC|\+\s*Number\(t\.deduction_cents\)/);
   });
 });
 

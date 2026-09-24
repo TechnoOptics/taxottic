@@ -55,15 +55,17 @@ export function DriverPicker({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[11px] uppercase tracking-[0.2em] text-gold-700 whitespace-nowrap">
-        Driver
-      </span>
       <SelectMenu
         ariaLabel="View another driver's drives"
         value={current}
         onValueChange={onChange}
         options={options}
-        buttonClassName="h-9 text-sm min-w-[12rem]"
+        // `buttonClassName` REPLACES SelectMenu's own trigger classes
+        // rather than adding to them, so the old value dropped `input`
+        // and `flex` as well as fixing the height: the label and the
+        // chevron stacked, and the control measured 36px against the
+        // 44px minimum this screen is held to. Restated in full.
+        buttonClassName="input w-full flex items-center justify-between gap-2 text-left min-h-11 text-sm min-w-[11rem]"
       />
     </div>
   );
