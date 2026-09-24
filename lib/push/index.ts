@@ -7,7 +7,12 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendToUser, type SendResult } from "./send";
 import { createSupabasePushStore } from "./store";
 import { resolveProvider } from "./providers";
-import type { PushEvent } from "./payloads";
+import { eventParties, type PushEvent } from "./payloads";
+import {
+  screenOutbound,
+  type OutboundRealmSource,
+  type Recipient,
+} from "@/lib/hq/outbound-allowlist";
 
 export type { PushEvent } from "./payloads";
 
@@ -28,7 +33,36 @@ export async function notify(
   event: PushEvent,
 ): Promise<SendResult> {
   try {
-    const store = createSupabasePushStore(createServiceClient());
+    const admin = createServiceClient();
+
+    // Fleet contract 6.5, the SMS/push/voice row: "Same rule, same chokepoint
+    // shape, same allowlist" as transactional email. This is that chokepoint.
+    // It runs BEFORE the dedupe claim, so a refused event is not recorded as
+    // sent and does not burn its idempotency key.
+    //
+    // The parties are the recipient plus anyone the event is about, which for
+    // the two manager alerts is the driver. Screening the recipient alone
+    // could never refuse anything, because one recipient is always wholly on
+    // one side of the boundary.
+    //
+    // A refusal is a drop, not a throw: notify() is documented as
+    // fire-and-forget and 16 producers call it after a write has committed.
+    const parties: Recipient[] = [
+      { kind: "user", id: userId },
+      ...eventParties(event).map((id) => ({ kind: "user" as const, id })),
+    ];
+    const screen = await screenOutbound(
+      parties,
+      () => admin as unknown as OutboundRealmSource,
+    );
+    if (!screen.allowed) {
+      console.warn(
+        `[hq-egress] push dropped kind=${event.kind} user=${userId} reason=${screen.reason}`,
+      );
+      return { sent: false, delivered: 0, revoked: 0 };
+    }
+
+    const store = createSupabasePushStore(admin);
     const result = await sendToUser(store, resolveProvider(), userId, event);
     console.log(
       `[push] ${event.kind} user=${userId} sent=${result.sent} delivered=${result.delivered} revoked=${result.revoked}`,

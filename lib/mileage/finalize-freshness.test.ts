@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
-import { settleWithinBudget } from "./finalize-freshness";
+import {
+  RENDER_FRESHNESS_WINDOW_MS,
+  settleWithinBudget,
+} from "./finalize-freshness";
 
 /**
  * THE BUG.
@@ -144,5 +147,113 @@ describe("the stale-list fix is wired into /mileage", () => {
     expect(src).not.toContain("setTimeout");
     // Same never-sever-an-open-drive contract the page render uses.
     expect(src).toMatch(/forceClose:\s*false/);
+  });
+});
+
+// ---------------------------------------------------------------------
+// THE SECOND BUG, the one the refresh signal did NOT fix.
+//
+// The stale-list symptom was cured, but the render STALL was not. The
+// page still hands finalize a 7-day window, and finalize's first act is
+// to page the whole unconsumed staging pool for that window out of
+// PostgREST 1000 rows at a time. Raw points that never become a trip
+// (parked, sub-threshold, noise) are never marked consumed, so that pool
+// does not shrink: it is permanent residue that every single render
+// re-fetches. Measured on the owner's live account: 6,743 rows over 7
+// sequential HTTP pages, 1.1-1.5s, producing nothing.
+//
+// The render path is the THIRD line of defence behind two that already
+// cover this data far better:
+//   - /api/mileage/ingest finalizes a 24h window on every upload
+//   - the mileage-finalize cron finalizes a 45-day window every 10 min
+// So the only gap a render can close is a drive that landed since the
+// last cron tick. A window measured in hours closes that gap; a 7-day
+// window just re-reads a week of residue on every page load.
+//
+// These tests pin the window to the narrow one AND pin the ordering
+// against the two paths that back it up, so widening it back, or
+// narrowing the cron below it, fails here.
+// ---------------------------------------------------------------------
+
+/**
+ * Every FINALIZE window in a comment-stripped source, in ms.
+ *
+ * Two things this helper is careful about, both learned by getting them
+ * wrong first:
+ *
+ * 1. The window expression is CAPTURED and evaluated, never pattern
+ *    matched against an expected literal. A draft that baked
+ *    "45 * 24 * 60 * 60_000" into the regex would have responded to a
+ *    narrowed window by failing to match, reporting a missing marker
+ *    rather than the narrowing the guard exists to catch.
+ *
+ * 2. It is anchored to `sinceIso`, the argument finalize actually
+ *    receives. A draft that took the narrowest `Date.now() - ...` in the
+ *    whole file picked up the cron's unrelated device-status and
+ *    escalation windows and measured those instead.
+ */
+function finalizeWindowsMsIn(path: string): number[] {
+  const src = code(path);
+  const found = [
+    ...src.matchAll(
+      /\bsinceIso\s*[:=]\s*new Date\(\s*Date\.now\(\)\s*-\s*([0-9_]+(?:\s*\*\s*[0-9_]+)*)/g,
+    ),
+  ].map((m) => Function(`"use strict";return (${m[1]})`)() as number);
+  expect(found.length).toBeGreaterThan(0);
+  return found;
+}
+
+/**
+ * The NARROWEST finalize window a source uses, which is the honest
+ * bound: a backstop covers the render path only as well as its tightest
+ * sweep does.
+ */
+function narrowestWindowMsIn(path: string): number {
+  return Math.min(...finalizeWindowsMsIn(path));
+}
+
+describe("the render-path freshness window is the narrowest of the three", () => {
+  it("the page renders with the narrow window constant, not an inline 7 days", () => {
+    const src = code("app/mileage/page.tsx");
+    expect(src).toContain("RENDER_FRESHNESS_WINDOW_MS");
+    // The literal that cost 1.1-1.5s a render must be gone from the call.
+    expect(src).not.toMatch(/sinceIso:[\s\S]{0,80}7\s*\*\s*86_400_000/);
+  });
+
+  it("is shorter than the ingest window, which finalizes on every upload", () => {
+    const ingest = narrowestWindowMsIn("app/api/mileage/ingest/route.ts");
+    expect(RENDER_FRESHNESS_WINDOW_MS).toBeLessThan(ingest);
+  });
+
+  it("is far shorter than the cron window, which is the real backstop", () => {
+    const cron = narrowestWindowMsIn(
+      "app/api/cron/mileage-finalize/route.ts",
+    );
+    expect(RENDER_FRESHNESS_WINDOW_MS).toBeLessThan(cron);
+    // Not merely shorter: the cron must cover it many times over, so a
+    // render that skips a drive is always picked up within a tick or two.
+    expect(cron / RENDER_FRESHNESS_WINDOW_MS).toBeGreaterThan(24);
+  });
+
+  it("still spans many cron ticks, so a missed tick cannot strand a drive", () => {
+    // The cron runs every 10 minutes (vercel.json). The render window has
+    // to be comfortably wider than that gap or it stops being a useful
+    // third line of defence at all.
+    const CRON_TICK_MS = 10 * 60_000;
+    expect(RENDER_FRESHNESS_WINDOW_MS / CRON_TICK_MS).toBeGreaterThanOrEqual(12);
+  });
+
+  it("is measured in hours, not days", () => {
+    expect(RENDER_FRESHNESS_WINDOW_MS).toBeGreaterThanOrEqual(60 * 60_000);
+    expect(RENDER_FRESHNESS_WINDOW_MS).toBeLessThanOrEqual(12 * 60 * 60_000);
+  });
+});
+
+describe("the settle endpoint finishes the SAME run the render started", () => {
+  it("shares the render window rather than restating it", () => {
+    const src = code("app/api/mileage/finalize/route.ts");
+    expect(src).toContain("RENDER_FRESHNESS_WINDOW_MS");
+    // A restated literal is how the two drifted apart before.
+    expect(src).not.toMatch(/7\s*\*\s*86_400_000/);
   });
 });

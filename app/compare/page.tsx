@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
-import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
+import { PageShell } from "@/components/marketing/PageShell";
+import { LedgerList } from "@/components/marketing/LedgerList";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 const SITE = "https://taxottic.com";
@@ -57,32 +55,13 @@ const BREADCRUMB_LD = {
 
 export default function CompareHubPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="compare">
       <JsonLd data={BREADCRUMB_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Compare
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
           How Taxottic compares.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
@@ -93,25 +72,17 @@ export default function CompareHubPage() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 grid gap-4">
-        {COMPARISONS.map((c) => (
-          <Link
-            key={c.slug}
-            href={`/compare/${c.slug}`}
-            className="card p-6 hover:border-gold-300 transition-colors"
-          >
-            <h2 className="display text-lg sm:text-xl text-forest-900">
-              {c.title}
-            </h2>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {c.blurb}
-            </p>
-            <span className="mt-3 inline-block text-sm text-gold-800">
-              Read the comparison →
-            </span>
-          </Link>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+        <LedgerList
+          ariaLabel="Comparisons"
+          items={COMPARISONS.map((c) => ({
+            href: `/compare/${c.slug}`,
+            title: c.title,
+            blurb: c.blurb,
+          }))}
+        />
       </section>
+      </PageShell>
     </main>
   );
 }

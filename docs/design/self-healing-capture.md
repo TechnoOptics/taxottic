@@ -1,6 +1,16 @@
 # Self-healing mileage capture: three approaches
 
-Status: **proposal, needs a decision.** Nothing here is built.
+Status: **decided, steps A and B built.** Step C is not.
+
+- **Step A shipped.** `lib/mileage/device-stall.ts`, and the finalize
+  cron escalates on a `dead=` self-check verdict.
+- **Step B shipped.** `lib/mileage/self-repair.ts`. The device repairs
+  the two verdicts it safely can, capped and reported on the heartbeat
+  in `self_repair` / `self_repair_attempts`.
+- **Step C not started.** Expectations and the reconciler.
+
+The three open questions at the bottom of this document were answered by
+the owner and are recorded there.
 
 Written 2026-08-16, immediately after a night that produced an unusually
 complete failure taxonomy. Every claim below is grounded in production
@@ -168,14 +178,30 @@ Honest boundaries, so nobody expects otherwise:
   an unregistered plugin. What C changes is the *detection* latency: six
   weeks becomes one heartbeat.
 
-## Open questions for the decision
+## The three questions, answered
 
-1. How eager should driver-facing prompts be? Every false prompt spends
-   trust we cannot re-earn.
-2. Does a manager get alerted about an employee's device, and does that
-   change under the personal/business split?
-3. What is the smallest honest definition of "expected capture" for a
-   driver who simply did not drive?
+Decided by the owner. Build against these rather than re-litigating them.
+
+1. **Prompt eagerness.** Prompt the driver only for `degraded`: a device
+   setting they control and can fix in ten seconds. Never for `dead`,
+   which is our bug, and telling a driver about it makes them distrust
+   the app while being unable to act on it. At most one prompt per
+   condition per week, permanently dismissible.
+2. **Manager visibility.** A manager sees tracking health only: `dead`
+   and silence. Never location, never drive detail, never `degraded` or
+   `denied`, and nothing at all for a driver in personal mode. Ours
+   versus theirs: the manager sees our failures, the driver sees their
+   own settings.
+3. **"Expected capture" for a driver who did not drive.** Do not define
+   it. Alarm on CONTRADICTION, not absence. Tracking enabled plus a
+   fresh heartbeat plus zero location callbacks for 30 minutes is a
+   fault. Tracking enabled with no points and no heartbeat is a closed
+   app. Silence alone is never evidence.
+
+Answer 1 is why `self-repair.ts` rations the Always re-prompt to one a
+week and three ever, and why nothing in step B puts a `dead` verdict in
+front of a driver. Answer 3 is already the rule `device-stall.ts`
+implements: it refuses to judge a device whose heartbeat is stale.
 
 Related: `lib/mileage/self-check.ts`, `lib/mileage/clock-skew.ts`,
 `app/api/cron/mileage-finalize/route.ts`.

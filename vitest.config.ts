@@ -29,7 +29,20 @@ export default defineConfig({
     // was added it matched nothing and vitest reported "No test files
     // found" for it while the suite as a whole stayed green. A test that
     // silently never runs is worse than no test: it looks like coverage.
-    include: ["lib/**/*.test.ts", "scripts/**/*.test.mjs"],
+    //
+    // `app/**` was missing from this list from the config's first commit
+    // (311f8923, 2026-05-12) until 2026-09-22, roughly four months. No
+    // test was actually lost to it, because this repo has never had a
+    // test file under app/ until now (`git log --diff-filter=A --
+    // 'app/**/*.test.ts'` returns exactly one). It was a trap rather than
+    // a loss: the FIRST such test would have been dead on arrival, and
+    // the usual gate spelling hides that, because vitest ORs its
+    // positional filters and only errors when the whole set is empty. So
+    // `npx vitest run lib/mileage app/api` reported 929 green with zero
+    // app tests found, which is the exact "a guard that cannot see a
+    // whole class reads as coverage" failure the scripts note above
+    // describes.
+    include: ["app/**/*.test.ts", "lib/**/*.test.ts", "scripts/**/*.test.mjs"],
     // Each test file runs in its own context but they share a single
     // Node process for speed. None of our tax-engine tests mutate
     // shared state, so this is safe.

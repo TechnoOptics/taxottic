@@ -1,9 +1,7 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SelfEmploymentTaxCalculator } from "@/components/calculators/SelfEmploymentTaxCalculator";
 import { formatCents } from "@/lib/tax/forecast";
@@ -183,27 +181,11 @@ export default async function IncomeSelfEmploymentTaxPage({
   };
 
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-2">
         <nav
@@ -224,10 +206,7 @@ export default async function IncomeSelfEmploymentTaxPage({
           <span aria-hidden="true">/</span>
           <span className="text-forest-800">On {money}</span>
         </nav>
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700 mt-6">
-          Free calculator · 2026
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight max-w-3xl">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 mt-6 leading-tight max-w-3xl">
           Self-Employment Tax on {money}
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
@@ -237,7 +216,7 @@ export default async function IncomeSelfEmploymentTaxPage({
           </strong>{" "}
           in 2026 federal tax, roughly a {(snap.effectiveRate * 100).toFixed(1)}%
           effective rate. Here&rsquo;s the breakdown, then add your state and
-          expenses below.
+          expenses below. Free, no sign-up.
         </p>
       </section>
 
@@ -255,7 +234,7 @@ export default async function IncomeSelfEmploymentTaxPage({
               </p>
             </div>
             <div className="text-right">
-              <div className="text-[11px] uppercase tracking-wider text-gold-700">
+              <div className="mono-label">
                 Total federal tax
               </div>
               <div className="display text-3xl text-forest-900 tabular-nums">
@@ -348,8 +327,8 @@ export default async function IncomeSelfEmploymentTaxPage({
           </div>
         </div>
 
-        <div className="card p-6 border-gold-300/60">
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+        <div className="card p-6 border-edge">
+          <div className="mono-label">
             Other amounts
           </div>
           <h2 className="display text-xl text-forest-900 mt-1">
@@ -360,7 +339,7 @@ export default async function IncomeSelfEmploymentTaxPage({
               <Link
                 key={n}
                 href={`${BASE}/on/${n}`}
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
                 {formatDollars(n)}
               </Link>
@@ -371,27 +350,28 @@ export default async function IncomeSelfEmploymentTaxPage({
               href={BASE}
               className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
             >
-              Full self-employment tax calculator →
+              Full self-employment tax calculator
             </Link>
           </div>
           <div className="mt-4 pt-4 border-t border-forest-100 text-sm text-ink-soft">
             Related reading:{" "}
             <Link
               href="/guides/self-employment-tax-how-much-to-set-aside"
-              className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+              className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
             >
               how much to set aside
             </Link>{" "}
             ·{" "}
             <Link
               href="/guides/quarterly-estimated-taxes-explained"
-              className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+              className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
             >
               quarterly estimated taxes
             </Link>
           </div>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

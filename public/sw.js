@@ -16,7 +16,7 @@
  */
 // Bump on every behavior change to this SW. Bumping forces existing
 // clients to drop stale caches in the `activate` handler below.
-// v8 (May 2026): stop caching /_next/* — Next content-hashes its
+// v8 (May 2026): stop caching /_next/*, Next content-hashes its
 // chunks, the browser's HTTP cache handles freshness, and caching
 // them in the SW was the root cause of a persistent React #418
 // hydration error after deploys (old client chunks hydrating against
@@ -29,11 +29,11 @@
 // so the new server HTML hydrates against newly-fetched chunks even
 // for clients that still had a v8 SW controlling them.
 // v10 (May 2026 Round-2 follow-up): bumping again for the next-audit
-// UX changes — dashboard "Coming up" urgency colors, achievements
+// UX changes, dashboard "Coming up" urgency colors, achievements
 // next-up row, expenses/income empty-state CTAs, vendor autocomplete.
 // All HTML/markup tweaks; bumping prevents v9 clients from hydrating
 // new server HTML against cached v9 chunks.
-// v11 (May 2026): mobile-responsive pass — page-wrapper padding
+// v11 (May 2026): mobile-responsive pass, page-wrapper padding
 // `px-6` → `px-4 sm:px-6` across 35+ files, card internal padding
 // gets a mobile shrink (`p-5 sm:p-7` patterns), ReadinessHelp
 // popover viewport-clamped. Pure CSS/markup changes; bump invalidates
@@ -43,7 +43,7 @@
 // shims + inline edit on income & expense rows + confirm-on-Remove.
 // Markup changes warrant a cache flush so the v11 clients pick up
 // the new server HTML on next visit.
-// v13 (May 2026 Round-6): brand refresh — the new chart-arrow icon
+// v13 (May 2026 Round-6): brand refresh, the new chart-arrow icon
 // shipped with the SAME urls as the old marks (icon-mark.svg,
 // icon-mark-cream.svg, favicon-*.png, icon-*.png). Cache-first SW
 // kept serving the OLD bytes for every returning visitor, so the
@@ -113,7 +113,7 @@
 // /mileage so the v27 cache would serve stale HTML without the
 // banner; bump forces fresh fetch.
 // v29: mileage cross-page propagation fix. /c/{id}/money-out had
-// `.select("miles, deduction_cents")` against mileage_trips —
+// `.select("miles, deduction_cents")` against mileage_trips , 
 // wrong column (it's distance_miles), so PostgREST errored out
 // and the "Miles driven" tile was permanently zero no matter how
 // many trips got classified business. Fixed the column + the
@@ -122,12 +122,12 @@
 // flip, force-dynamic'd money-out, and polished /mileage stats +
 // mobile trip rows. Bump so phone WebViews drop v28 HTML and
 // pull the corrected markup on next nav.
-// v30: LeftRail is now FLOATING below the header — moved its
+// v30: LeftRail is now FLOATING below the header, moved its
 // top anchor from safe-top + 0.5rem (which lined it up with the
 // TAXOTTIC wordmark in the header strip) to safe-top + 9rem,
 // which lines the first menu item up with the company-name row
 // ("Techno Optics LLC · this week") that sits below the H1 on
-// authenticated pages. Pure CSS — no JS or markup change — but
+// authenticated pages. Pure CSS, no JS or markup change, but
 // bumping the SW so existing clients drop the v29 HTML cache
 // and pick up the new rail position on next nav.
 // v31: mileage UX rebuild after the first real-drive day. The
@@ -140,17 +140,17 @@
 // Yesterday / This week / This month / Older. New
 // TrackerStatus strip surfaces "is the tracker actually
 // running" with the most recent ingested GPS point timestamp
-// — green/amber/red dot + diagnostic checklist when red. New
+//, green/amber/red dot + diagnostic checklist when red. New
 // ManualLogTrip form for backfilling drives the tracker
 // missed. SW bump so v30 clients pull the new markup.
-// v32: /mileage/places — fixing "Add a place." Single-field
+// v32: /mileage/places, fixing "Add a place." Single-field
 // AddressAutocomplete now writes the FULL formatted address on
 // pick (was dropping city/state/zip), and AddPlaceForm carries
 // the picked lat/lng in hidden inputs that the server action
 // consumes to skip geocode entirely. New HIDDEN INPUTS need the
 // fresh HTML to be wired up, so v31 clients have to drop their
-// cached /mileage/places HTML — that's the reason for this bump.
-// v33: import review page — 12 new Schedule C categories (state
+// cached /mileage/places HTML, that's the reason for this bump.
+// v33: import review page, 12 new Schedule C categories (state
 // & gov fees, COGS, postage/shipping, phone/internet,
 // parking/tolls, merchant fees, dues/subs, equipment purchase,
 // business gifts, bad debts, pension, bookkeeping) + searchable
@@ -163,17 +163,17 @@
 // with the header's lg:pl-60 / xl:pl-64 / 2xl:pl-72 padding
 // mirror. Page containers across consumer surfaces step
 // progressively wider on xl + 2xl so a 1920px+ monitor uses the
-// real estate. Pure layout — no JS or data change — but the
+// real estate. Pure layout, no JS or data change, but the
 // markup is in every consumer page, so v33 clients need to drop
 // their cached HTML on next nav.
 // v35: bunch of import-review fixes after the user reported (1)
 // re-run Bella didn't refresh the page (missing revalidatePath),
-// (2) the app crashed with "page could not load" — no error
+// (2) the app crashed with "page could not load", no error
 // boundary, so added app/error.tsx so future throws surface
 // inline instead of dumping Next's default crash page, (3)
-// please group imported csv into months — debits now group by
+// please group imported csv into months, debits now group by
 // posted_at month with subtotals per month, (4) Bella should
-// show what was detected and the relevant IRC — new "Bella's
+// show what was detected and the relevant IRC, new "Bella's
 // pass" summary card at the top + per-row citation strip
 // showing Sched C line, IRC §, IRS Pub, and a link out to
 // irs.gov, (5) mobile floating menu now anchors to the header
@@ -195,7 +195,7 @@
 // it off the list ... so the user feels like they are making
 // progress going down the list"). TxRow extracted to a Client
 // Component that animates out (opacity + translateX + max-height
-// collapse over 350ms) BEFORE the server action fires — the
+// collapse over 350ms) BEFORE the server action fires, the
 // page revalidates the row gone right after the animation
 // completes. Page splits debits into Active (untouched) and
 // Tagged (categorized but not yet booked) piles so the active
@@ -218,11 +218,11 @@
 // truncate on sm+). v37 clients flush their HTML cache.
 // v39: real desktop layout fix. The v34 pass added rail-clearing
 // pl-60/64/72 to the AppHeader but I forgot to add the same
-// padding to the PAGE SECTIONS — so on lg+ the content was
+// padding to the PAGE SECTIONS, so on lg+ the content was
 // centered in the full viewport instead of in the post-rail
 // viewport, leaving a giant empty gap between the rail and the
 // H1. Fixed: every consumer page section now matches the header
-// padding pattern. Pure CSS — but every consumer page is in the
+// padding pattern. Pure CSS, but every consumer page is in the
 // markup so v38 clients must drop their cached HTML for the new
 // classes to take effect.
 // v40: mileage tracker reliability. User: "I drove around the
@@ -236,7 +236,7 @@
 //       app after a drive auto-restarts the tracker.
 //   (2) New /mileage/diagnose self-test page with a Client
 //       component that walks every step of the plugin's start
-//       path live — native shell, plugin registered, JS import,
+//       path live, native shell, plugin registered, JS import,
 //       start() resolution, callbacks firing, first fix lat/lng.
 //       Each step lights up green/red so the user can screenshot
 //       the exact failure mode on their phone.
@@ -266,9 +266,9 @@
 // the AutoTrackToggle diag line shows
 // `flush#N last=ok trips=K left=M` so the user can see from
 // the toggle card whether their device is reaching the server.
-// Ingest route now console.logs every request — Vercel runtime
+// Ingest route now console.logs every request, Vercel runtime
 // logs will finally show what's happening.
-// v42: layout pass — drop content centering on lg+. User: "I do
+// v42: layout pass, drop content centering on lg+. User: "I do
 // not like how it looks. With the menu all the way to the
 // left." Root cause: on lg+ the rail sat at left-2 but content
 // was mx-auto centered with a max-w, so on a wide monitor the
@@ -280,14 +280,14 @@
 // breathing room on the right. Content now fills the post-
 // rail area instead of floating in a centered island.
 // v43: three concrete UI/UX fixes after the user's "drive a
-// thorough audit" feedback —
+// thorough audit" feedback , 
 //  (1) UserMenu dropdown was position:fixed top:50% left:50%
 //      (center-screen) which felt completely disconnected from
 //      the avatar that triggered it. Now anchors below the
 //      button (top: rect.bottom+8, right: viewport-right-edge).
 //  (2) AppHeader was max-w-6xl xl:max-w-7xl 2xl:max-w-none
 //      mx-auto, which on lg+ centered the row inside a capped
-//      box — leaving empty space to the LEFT of the wordmark
+//      box, leaving empty space to the LEFT of the wordmark
 //      AND to the RIGHT of the user menu. Now: lg:max-w-none
 //      lg:mx-0 lg:pr-6, so the row spans edge-to-edge with the
 //      rail-clearing lg:pl-N already there. Wordmark sits flush
@@ -301,10 +301,10 @@
 // so many that we are not showing our clients that need to be
 // here ... we can group them by category but we need to give
 // them all"). Three migrations applied:
-//   20260525000002 — added display_group column +
+//   20260525000002, added display_group column +
 //     deduction_scope.credit enum value. Backfilled
 //     display_group on every existing row.
-//   20260525000003 — ~40 new categories: insurance variants
+//   20260525000003, ~40 new categories: insurance variants
 //     (workers comp, liability, vehicle insurance, employee
 //     group health), payroll (processing fees, FUTA/SUTA),
 //     travel (lodging, per-diem meals, conference fees),
@@ -321,20 +321,20 @@
 //
 // CategoryCombobox now renders section headers ("Insurance",
 // "Vehicle", "Federal tax credits", etc.) between groups when
-// no query is active — so scanning 80+ categories is grouped
+// no query is active, so scanning 80+ categories is grouped
 // instead of one long alphabetical run. applyTransactions also
 // routes credit-scope picks through ignored=true (alongside
 // transfer + personal) so credits never inflate Schedule C.
 // v45: REAL layout fix after looking at the user's ultrawide via
 // computer-use. Even after refreshing to v44, content still capped
 // at ~30% of the viewport. Diagnosis: Tailwind sorts variant
-// utilities by breakpoint width — so `xl:max-w-6xl` and
+// utilities by breakpoint width, so `xl:max-w-6xl` and
 // `2xl:max-w-7xl` got emitted AFTER `lg:max-w-none` in the CSS
 // output and won on wide monitors. lg:max-w-none was effectively
 // dead code. Bulk-stripped the xl/2xl max-w override pairs from
 // every consumer page. Now lg:max-w-none wins everywhere ≥ lg.
 // v46: LeftRail looks like a real sidebar now. Was a rounded card
-// floating at left-2 starting at safe-top+9rem — read as a popup
+// floating at left-2 starting at safe-top+9rem, read as a popup
 // detached from the layout. New treatment: position fixed to the
 // LEFT EDGE of the viewport, full-height from just under the
 // header to the bottom safe-area, flat bg-paper/95 + border-r
@@ -347,7 +347,7 @@
 // Chat / Settings underneath. User-level items (Tax profile,
 // Goals, Reminders, Billing, Security, Your data, Recycle bin)
 // moved entirely into the profile-icon dropdown. CompanyNav 5-tab
-// strip neutralized (returns null) — the rail is now the only
+// strip neutralized (returns null), the rail is now the only
 // navigation. Mobile menu opener moved from a header-row tab to a
 // bottom-left FAB so it stops overlaying the header. Labels:
 // Money in → Income, Money out → Expenses, Talk → Chat, Setup →
@@ -370,7 +370,7 @@
 //      tracker instead of returning "warming" and going silent.
 //  (2) AutoTrackToggle subscribes to a new onTrackerStartSettle hook
 //      so a bg.start() rejection flips the toggle back off and
-//      surfaces a real error — previously the toggle stayed visually
+//      surfaces a real error, previously the toggle stayed visually
 //      ON while LS_ENABLED was silently written to "0", which the
 //      user only discovered on next reload.
 //  (3) flush() runs every 30 s (was 120 s) AND fires a HEARTBEAT
@@ -380,7 +380,7 @@
 //      ever hit the server, so the in-progress trip was never
 //      materialized.
 // v51: Defer tail-close in segmentation when the user is still
-// driving. SW v50 introduced 30s heartbeats while tracking — combined
+// driving. SW v50 introduced 30s heartbeats while tracking, combined
 // with the segmenter's "always close whatever's open at end of
 // stream" logic, every heartbeat materialized the in-progress trip
 // as a fragment, then subsequent points (after those fragments were
@@ -402,7 +402,7 @@
 // on the user's phone would be silently lost.
 // v53: Toggle cold-start race recovery. Real-device diag showed
 // plug=true imp=true start=true (plugin loaded) BUT
-// call=unsupported err=guard_timeout — guardWithTimeout's 5s timeout
+// call=unsupported err=guard_timeout, guardWithTimeout's 5s timeout
 // fired before guard() finished caching the plugin ref. Fix: after
 // the timeout, re-check the module-level plugin cache; if guard()
 // won the race, use it. Also bumped GUARD_TIMEOUT_MS 5s → 10s. Net
@@ -414,18 +414,18 @@
 // @capgo plugin's foreground service survived a WebView reload. New
 // JS called bg.start(); plugin returned ALREADY_STARTED but DID NOT
 // register the new callback. The orphaned old callback (in dead JS
-// context) was the sole listener — every GPS fix during the drive
+// context) was the sole listener, every GPS fix during the drive
 // went to /dev/null. Fix: startMileageTracking now ALWAYS calls
 // `await bg.stop()` before `bg.start()` to nuke any orphan service
 // before registering our fresh subscription. The pre-stop is wrapped
 // in try/catch because "nothing to stop" is the common case.
-// v55: CRITICAL last-mile fix. On-device proof finally arrived — a
+// v55: CRITICAL last-mile fix. On-device proof finally arrived, a
 // clean 1.2 km drive (41 points, 0→22 m/s, 3.8 m accuracy) was
 // captured end-to-end while the app was backgrounded (the v54 +
 // @capgo onUnbind patch worked). But ZERO trips materialized: the
 // drive ended without a 5-min stationary dwell, so the segment
 // stayed OPEN, and stopMileageTracking's final flush sent no
-// "session ended" signal — the server kept closeOpenAtEnd=false and
+// "session ended" signal, the server kept closeOpenAtEnd=false and
 // the flush timer was already cleared, so no later heartbeat ever
 // closed it. The drive sat stranded open in staging forever. Fix:
 // the stop-tracking flush now posts { sessionEnded: true }, and the
@@ -434,14 +434,14 @@
 // v56: TWO confirmed drive-killers, found via live DevTools forensics on
 // the user's actual Galaxy Z Fold5 (every prior "fix" was validated on
 // the emulator; the real phone had NEVER sent a single point).
-//   (1) bg.start(opts, cb).then().catch() — on Android, start() with a
+//   (1) bg.start(opts, cb).then().catch(), on Android, start() with a
 //       callback is NOT a thenable; calling .then() throws
 //       "BackgroundGeolocation.then() is not implemented on android",
 //       which tripped the rejection path and flipped tracking OFF +
 //       wrote enabled="0" the instant tracking began. Fixed: fire-and-
 //       forget start(); report success optimistically; only observe a
 //       promise off-native (web shim).
-//   (2) flush used fetch({keepalive:true}) — keepalive caps the body at
+//   (2) flush used fetch({keepalive:true}), keepalive caps the body at
 //       64 KB, so once the buffer passed ~700 points EVERY flush threw
 //       "TypeError: Failed to fetch" and the buffer pegged at 5000 with
 //       ZERO points reaching the server (proven: a tiny POST returned
@@ -475,12 +475,12 @@
 // source + member of target). Hidden for single-company users.
 // v62: Dark-mode dropdown fix. The app never declared a color-scheme, so
 // on a phone in dark mode the Android WebView painted every native
-// <select> popup SOLID BLACK — tapping the vehicle-method picker (or any
+// <select> popup SOLID BLACK, tapping the vehicle-method picker (or any
 // dropdown) blanked the screen until you pressed Back. Pin html to
 // color-scheme:light so native dropdowns render as readable lists.
 // v63: Custom in-app dropdown (SelectMenu). Replaces native <select>
 // popups (still rough/dim even with color-scheme:light) with a crisp,
-// on-brand in-DOM menu — no OS popup at all. Rolled across the core
+// on-brand in-DOM menu, no OS popup at all. Rolled across the core
 // consumer forms: business-profile vehicle method, trip business
 // picker, income (month/source), goals (type/company), tax-profile
 // (filing status/state), and import row (match type / treat-as).
@@ -496,10 +496,10 @@
 // keep just the page label ("Banks", "Team") to avoid repeating it.
 // v67: Interaction fixes from on-device QA. (1) Killed the uncaught
 // "BackgroundGeolocation.then() is not implemented" exception that
-// fired on every page load — bg.stop() is callback-style on Android,
+// fired on every page load, bg.stop() is callback-style on Android,
 // so awaiting it tripped the .then proxy (same root cause as start);
 // now fired without awaiting `.then` on native. (2) Dashboard "dismiss
-// overdue reminders" X actually dismisses now — the server-action
+// overdue reminders" X actually dismisses now, the server-action
 // <form> in the Server Component was submitting as a plain POST with no
 // Next-Action header (action never ran); moved to a client component
 // that invokes the action directly. (3) Removed a stray NUL byte from
@@ -507,10 +507,10 @@
 // v68: Scope the dashboard reminder + goal queries to the signed-in
 // user (.eq user_id). RLS lets a super-admin read every user's rows, so
 // the consumer dashboard recap was showing OTHER people's overdue
-// reminders/goals — and the (correctly user-scoped) dismiss-X could
+// reminders/goals, and the (correctly user-scoped) dismiss-X could
 // never clear them, so the card looked permanently stuck. Now the recap
 // only ever shows your own rows.
-// v69: iOS safe-area fix — hamburger FAB / header chrome were "lost in
+// v69: iOS safe-area fix, hamburger FAB / header chrome were "lost in
 // the status bar" because WKWebView's env(safe-area-inset-*) reporting
 // is flaky. CapacitorNativeInit now measures the REAL insets natively
 // (capacitor-plugin-safe-area) on iOS and publishes them as CSS-var
@@ -524,34 +524,34 @@
 // becomes the probe: the page reads env() insets, the CSS-var
 // overrides, native SafeArea insets, real header/FAB geometry, app
 // build + SW generation into one copyable blob.
-// v71: mileage map now shows direction of travel — forward arrowheads
+// v71: mileage map now shows direction of travel, forward arrowheads
 // riding each breadcrumb at a steady cadence, a green start dot, and a
-// checkered-flag end disc — so a glance answers "which way did this
+// checkered-flag end disc, so a glance answers "which way did this
 // drive go?". Plus: hand-entered (manual) trips now fire the same
 // saved-drive push as GPS-tracked ones.
-// v72: dashboard calm/editorial redesign — one accent (gold), one card
+// v72: dashboard calm/editorial redesign, one accent (gold), one card
 // treatment (.surface), .kicker-sm eyebrows, generous spacing. Bump so
 // installed shells pull the restyled bundle.
-// v73: redesign fixes after seeing it live — .surface now genuinely lifts
+// v73: redesign fixes after seeing it live, .surface now genuinely lifts
 // (soft shadow in light, lighter-navy + edge in dark; the bare-hairline
 // first cut read as ghost cards), and Tailwind's `dark:` variant now
 // follows the app's data-theme instead of the OS media query (the two
-// dark systems were fighting — e.g. the left rail vanished).
-// v74: world-class dashboard hero — a gold readiness ring + a glanceable
+// dark systems were fighting, e.g. the left rail vanished).
+// v74: world-class dashboard hero, a gold readiness ring + a glanceable
 // stat band (readiness · mileage YTD · next deadline) opens the page on
 // "where do I stand", replacing the flat stack of equal cards. The lone
 // mileage tile folds into the band.
-// v75: mileage now shows DAY-BY-DAY in the deduction lists — each
+// v75: mileage now shows DAY-BY-DAY in the deduction lists, each
 // business drive is its own dated line in the Expenses month accordion
 // and a per-drive list on My Deductions, instead of a single monthly
 // rollup. (Mileage stays its own deduction stream; this is presentation.)
 // v76: calmed the app-wide `.card` primitive to match the dashboard's
-// `.surface` — dropped the gold ring, inset champagne highlight, and the
+// `.surface`, dropped the gold ring, inset champagne highlight, and the
 // ::before top-edge gold line; now a hairline border + soft shadow
 // (lighter-navy in dark). One change brings every screen that uses
 // `.card` into the calm system at once.
 // v77: clicking a mileage deduction line (Expenses + My Deductions) now
-// opens THAT specific drive on the map — /mileage/business?trip=<id>
+// opens THAT specific drive on the map, /mileage/business?trip=<id>
 // scopes the page to the one trip (map auto-fits to its route, list
 // shows its details) instead of dumping the user on the full mileage page.
 // v78: Deduction explorer promoted to a main left-rail item ("Explore
@@ -564,79 +564,79 @@
 // New charitable_donations table (personal, kept out of business
 // expenses), a log-a-gift form on the explorer, a "give back" year-end
 // to-do, and the badge awarded on the first logged donation.
-// v80: layout — cap the authenticated content column at 80rem and center
+// v80: layout, cap the authenticated content column at 80rem and center
 // it in the space right of the rail on large/ultrawide screens (was
 // max-w-none, which stretched a single card to ~2,500px on a 3000px+
 // display and pushed buttons off-screen). One unlayered CSS rule; rail
 // stays attached on laptops.
-// v81: left-rail polish — company section header is now a serif monogram
+// v81: left-rail polish, company section header is now a serif monogram
 // chip (identity), and the active nav item gets a gold icon + stronger
 // gold ring + medium weight so the current page reads clearly.
-// v82: Forecast two-column on lg+ — the narrative (hero, year-end view,
+// v82: Forecast two-column on lg+, the narrative (hero, year-end view,
 // breakdown, chart) flows in the main column while a sticky right panel
 // holds the personalized "year-end moves" + quick actions. Uses the
 // width with intent instead of one long centered column; collapses to a
 // single column (panel last) below lg.
-// v83: unified page headers — a shared <PageHeader> (kicker eyebrow +
+// v83: unified page headers, a shared <PageHeader> (kicker eyebrow +
 // serif title + optional subtitle + gold flourish) now drives Expenses,
 // My deductions, and the Mileage business-trips pages, ending the
 // eyebrow size/tracking + flourish drift between screens.
 // v84: fold the logo-led headers (Forecast, Deduction explorer) into the
-// same <PageHeader> via an optional `logo` slot — they keep the company
+// same <PageHeader> via an optional `logo` slot, they keep the company
 // logo but now share the identical eyebrow/title/flourish. Every content
 // screen is on one header primitive.
 // v85: Income + Expenses each get an always-visible "Import (CSV) /
 // Connect an account" action row under the header (shared
-// ImportConnectActions) — previously these only showed in the empty
+// ImportConnectActions), previously these only showed in the empty
 // state. Income's header also moved onto the shared <PageHeader>.
-// v86: Team — added "Team" to the left rail (was only reachable via a
+// v86: Team, added "Team" to the left rail (was only reachable via a
 // forecast link), and the team roster now shows each member's YTD
 // expenses + BUSINESS mileage (managers only) with a "View expenses"
 // link. Privacy: a manager reviewing a teammate's /mileage log now only
-// sees BUSINESS drives — their personal + unclassified drives stay
+// sees BUSINESS drives, their personal + unclassified drives stay
 // private.
-// v87: battery — the mileage tracker now accepts a recent cached OS-fused
+// v87: battery, the mileage tracker now accepts a recent cached OS-fused
 // fix (stale:true) by default instead of forcing a fresh GPS sample on
 // every trigger; per the team's own notes this is the biggest Samsung
 // battery win, and it can't affect trip distance/deduction. (Ships via
 // the web bundle, so no APK rebuild.) Eco mode (100m filter) still
 // available for more.
-// v88: Team roster fix (part 1) — the Team page rendered an empty roster
+// v88: Team roster fix (part 1), the Team page rendered an empty roster
 // and mislabeled the manager as a plain "member". Made the page
 // force-dynamic and moved the roster/invite/financial reads to the service
 // client behind the RLS company-access gate.
-// v89: Team roster fix (part 2, the REAL cause) — the roster query embedded
+// v89: Team roster fix (part 2, the REAL cause), the roster query embedded
 // `profile:profiles(...)`, but company_members.user_id has no foreign key to
 // profiles (it points at auth.users), so PostgREST could not resolve the
 // embed: the query errored and returned null, blanking the roster regardless
 // of which client ran it. Now we fetch member rows and their profiles in two
 // queries and stitch them by user_id.
-// v90: Team — the account creator is now always treated as the company
+// v90: Team, the account creator is now always treated as the company
 // manager (a safety net in both the server invite/remove/revoke gate and the
 // /manage UI), so whoever created the company can never get locked out of
 // inviting teammates even if their membership row is ever missing or demoted.
-// v91: native-only gating — a reusable <MobileOnly> gate now fences genuinely
+// v91: native-only gating, a reusable <MobileOnly> gate now fences genuinely
 // native capabilities to the mobile app (automatic GPS mileage tracking, watch
 // pairing); on the web those controls are replaced by a tasteful "in the
 // mobile app" card. Makes the iOS app visibly do things the website can't,
 // keeping it clear of App Store Review Guideline 4.2 (Minimum Functionality).
-// v92: login — the email path now reveals a "6-digit code" field after the
+// v92: login, the email path now reveals a "6-digit code" field after the
 // magic link is sent (verifyOtp), so anyone who'd rather type a code than
-// open their inbox can, and — paired with a Supabase test OTP on the demo
-// account — the App Store / Play reviewer can sign in without clicking a link
+// open their inbox can, and, paired with a Supabase test OTP on the demo
+// account, the App Store / Play reviewer can sign in without clicking a link
 // in a mailbox they don't control (a hard requirement for review of a
 // passwordless, login-gated app).
-// v93: review sign-in — the 6-digit code field now also routes through a
+// v93: review sign-in, the 6-digit code field now also routes through a
 // server bypass (/api/auth/demo-login) that signs in one hardwired demo
 // account when a fixed code is presented, gated behind REVIEW_DEMO_EMAIL/
 // REVIEW_DEMO_CODE env vars (off otherwise). Lets a store reviewer reach a
 // seeded demo without inbox access; everyday users fall through to OTP.
-// v94: App Store Guideline 3.1.1 — every purchase/upgrade/billing control
+// v94: App Store Guideline 3.1.1, every purchase/upgrade/billing control
 // (CheckoutButton, ManageBillingButton, TrialBanner CTA, ProGate CTA, the
 // dashboard Pro upsell, UserMenu "Billing & plan", /billing + /pricing buy
 // buttons) is now hidden inside the native app via <WebOnly>. Subscriptions
 // run through Stripe on the web (not Apple IAP); the app is view+use only.
-// v95: login — the 6-digit code field is now reachable via an "Have a
+// v95: login, the 6-digit code field is now reachable via an "Have a
 // sign-in code? Enter it" affordance that doesn't require the magic-link
 // send to succeed. Fixes store-review sign-in: the demo account's address
 // isn't deliverable, so signInWithOtp 400s, but the code (verified by the
@@ -648,32 +648,32 @@
 // v97: mileage map rendering changes (#382 dashed approximate trips
 // with full sparse traces, #383 Directions road-snapping) shipped
 // WITHOUT a bump, so WebView clients kept serving the cached pre-#382
-// map — reported on a real device as drives still displaying wrong
+// map, reported on a real device as drives still displaying wrong
 // while the server data was verified healthy. Bump forces existing
 // clients to drop the stale HTML/JS on next nav.
-// v98: mileage reliability — TrackingHealthBanner gains the "Run the
+// v98: mileage reliability, TrackingHealthBanner gains the "Run the
 // reliability check" link, new /mileage/setup wizard, tracker gains
 // device-status heartbeat enrichment + instant permission-downgrade
 // reaction. Bump so WebViews drop stale JS (the v96 lesson).
-// v99: firm auto battery-exemption — CapacitorNativeInit now
+// v99: firm auto battery-exemption, CapacitorNativeInit now
 // auto-prompts the "allow background" dialog on every Android device
 // when tracking is enabled and the OS is optimizing us, so no driver
 // has to find the setup wizard. Client-JS change → bump so WebViews
 // drop the v98 cache.
-// v100: walk-away drive-end detection — the tracker now closes a
+// v100: walk-away drive-end detection, the tracker now closes a
 // drive ~30s after the driver walks away from the car (step burst via
 // the DeviceStatus plugin) or after a 6-min stationary fallback,
 // instead of only the server's 5-min parked timer. Client-JS change
 // (native-tracker + wizard row) → bump so WebViews drop v99.
-// v101: heartbeat resilience — time-boxed native-bridge reads so a
+// v101: heartbeat resilience, time-boxed native-bridge reads so a
 // wedged plugin can't silently kill device heartbeats (observed on a
 // real device: flushes fine, heartbeats stopped), appVersion now sent,
 // result surfaced in trackerDiag. Client-JS change → bump.
-// v102: QA pass — location-settings deep-link + gate business surfaces
+// v102: QA pass, location-settings deep-link + gate business surfaces
 // for members (see #404).
 // v103: employee personal-hub gate. An account whose only role is
 // being someone else's employee (owns no company) no longer gets the
-// personal tax hub for free — the Personal nav is replaced by an
+// personal tax hub for free, the Personal nav is replaced by an
 // upgrade upsell, /dashboard sends them to their work home, and the
 // /personal/* routes redirect to /personal/upgrade. Owners and
 // employees with their own paid plan are unaffected. Client chrome
@@ -685,17 +685,17 @@
 // v105: the personal hub no longer shows tracked BUSINESS mileage in
 // its hero band (that is company data on a personal page); the slot now
 // shows personal deductions YTD. Dashboard markup changed -> bump.
-// v106: OutdatedAppBanner — native shells below the min supported
+// v106: OutdatedAppBanner, native shells below the min supported
 // build now get a persistent "update to keep tracking" nudge, the
 // durable antidote to devices sitting on stale builds and silently
 // losing drive capture. New client component -> bump.
-// v107: manager Team-tracking-health card on /mileage — flags a
+// v107: manager Team-tracking-health card on /mileage, flags a
 // driver whose phone went silent or has been parked, computed from raw
 // uploads so it works on any build. New server markup -> bump.
-// v108: audit fixes 1/3 — walk-away close can no longer be dropped by
+// v108: audit fixes 1/3, walk-away close can no longer be dropped by
 // a colliding flush (client change), manual/route trips protected from
 // machine rewrite. Client JS changed -> bump.
-// v109: audit money-math fixes — IRS split-rate 2026 mileage pricing
+// v109: audit money-math fixes, IRS split-rate 2026 mileage pricing
 // (72.5¢ H1 / 76¢ H2), car_truck no longer double-counted under
 // standard mileage, projections on elapsed months. Forecast copy
 // changed -> bump.
@@ -708,7 +708,7 @@
 // v112: dead stops no longer sever drives (10-min server dwell,
 // 12-min client fallback); chat attachment paths confined. Client JS
 // changed -> bump.
-// v113: tax-engine corrections — NIIT/EITC see capital gains, AMT
+// v113: tax-engine corrections, NIIT/EITC see capital gains, AMT
 // keeps credits, additional-Medicare withholding credited, QBI cap
 // excludes net capital gain, combined 1040 keeps family credits.
 // v114: marketing/pricing copy corrected to match shipped reality
@@ -720,24 +720,24 @@
 // v115: device-clock skew now shifts a batch instead of collapsing it
 // (drives keep their shape), watchdog budget resets on real fixes,
 // employee filter gated to manager/lead. Client JS changed -> bump.
-// v117: GPS walk-away detection — permission-free fast drive close
+// v117: GPS walk-away detection, permission-free fast drive close
 // from walking-band GPS drift; restores fast close on Android (no step
 // counter) and doubles as a second witness on iOS. Client JS -> bump.
-// v118: trip thumbnails — polyline fetch paginated past PostgREST's
+// v118: trip thumbnails, polyline fetch paginated past PostgREST's
 // 1000-row cap (most trips had NO preview), dark navy basemap with the
 // big map's gold path (was invisible light-on-light), placeholder tile
 // for manual trips. Client markup changed -> bump.
-// v119: actionable classify banners — Business / Personal buttons
+// v119: actionable classify banners, Business / Personal buttons
 // resolve from the notification without opening the app (background
 // POST to /api/push/action + confirmation toast); Review deep-links.
 // Trip banners now lead with the snippet ("3.2 mi drive · 7:41 PM").
-// v120: GPS walk-away hardened — arms only after a 45s hard stop and
+// v120: GPS walk-away hardened, arms only after a 45s hard stop and
 // requires off-axis movement, so highway stop-and-go (walking-pace
 // creep) can never close a drive mid-motion again.
-// v121: render-time GPS jitter suppression — 50-100m-accuracy scatter
+// v121: render-time GPS jitter suppression, 50-100m-accuracy scatter
 // no longer scribbles routes; noise-circle bounce is dropped from the
 // drawn track (segmentation unchanged).
-// v122: iOS background revival — native SLC capture + disk buffer,
+// v122: iOS background revival, native SLC capture + disk buffer,
 // drained on page load. Also fixes the iOS DeviceStatus plugin never
 // having been compiled into the app at all.
 // v123: Background App Refresh now travels to the server and shows
@@ -745,7 +745,7 @@
 // path); native Visits monitoring added as a second revival trigger.
 // v124: flush now removes uploaded points by identity, so buffer
 // eviction during an in-flight POST can no longer delete unsent fixes.
-// v125: device-status plugin no longer gated on isPluginAvailable —
+// v125: device-status plugin no longer gated on isPluginAvailable , 
 // that probe was silently returning false on BOTH platforms, so device
 // truth (permissions, battery, low-power) was never reported at all.
 // v126: mileage uploads now use the NATIVE http stack on device.
@@ -756,14 +756,14 @@
 // process death (Android ApplicationExitInfo / iOS MetricKit), so
 // "tracking stopped" becomes a named cause instead of a guess.
 // v128: a stationary phone's sparse GPS drift no longer draws as a
-// zigzag or counts as distance — dwell anchors snap to the last real
+// zigzag or counts as distance, dwell anchors snap to the last real
 // position instead of carrying the noisy coordinate.
 // v128: heartbeat reads device status through the STATIC import.
 // The old aliased dynamic import could resolve to a separate lazy
 // chunk; when it failed to load in time every device field went null
-// at once — on both platforms, which is why it looked native.
+// at once, on both platforms, which is why it looked native.
 // v130: pending synced bank/Stripe transactions can finally be
-// resolved in place — category picker + "Not business" on each pending
+// resolved in place, category picker + "Not business" on each pending
 // row, so the action item can actually be cleared.
 // v131: design-system alignment with Techottic. New semantic surface
 // tokens drive the card / input / button / nav primitives, cards and
@@ -1161,7 +1161,314 @@
 // JS, so a phone on the stale bundle keeps the silent version: it goes
 // on reporting success over refused writes, which is worse than an
 // error, because the driver has no reason to look again.
-const CACHE_VERSION = "v192";
+// v193: the self-check stops reporting and starts repairing.
+//
+// Two verdicts a device can genuinely fix by itself now get a bounded
+// repair attempt from the heartbeat: a learned-place geofence mesh whose
+// registration failed is re-armed, and Always location is re-requested
+// when the OS can still raise a dialog. Capped at three consecutive
+// attempts with backoff, once a week for a permission, and it stands
+// down entirely while a drive is in flight.
+//
+// The bump is load-bearing, not housekeeping. native-tracker.ts and the
+// new self-repair.ts are WebView client JS, so a phone on the stale
+// bundle keeps a tracker that can only report a fault it is now able to
+// repair, and the new self_repair column stays null on exactly the
+// devices the repairer was written for.
+// v194: four built, bridged, registered iOS functions gain a caller.
+//
+// drainVehicleSignals, clearVehicleSignals and auditCaptureGap have
+// shipped in the iOS binary on a bridge that demonstrably works, and
+// NOTHING in the app has ever invoked one of them. The native buffer
+// filled, aged out, and no row anywhere recorded a vehicle signal.
+// sendHeartbeat now drains it, folds the instants into intervals, and
+// posts the result, acknowledging the buffer only after the server
+// accepts it.
+//
+// The bump is load-bearing rather than housekeeping. native-tracker.ts
+// and device-status.ts are WebView client JS: on the stale bundle the
+// drain simply does not exist, so the phone keeps reporting nothing and
+// the new columns fill with nulls that read as "no data yet", which is
+// the exact silence this change was written to break.
+// v195: trim the two heaviest fetches on the cold-start critical path.
+//
+// app/loading.tsx pointed at /brand/icon-mark-cream.svg, which is not a
+// vector: it is a 512x512 PNG base64-embedded in an SVG wrapper, 39,754
+// bytes on disk and 29,699 on the wire, painted at 96 CSS pixels.
+// Because loading.tsx is the root Suspense fallback, React emits it as
+// <link rel="preload" as="image"> at the top of every route's <head>,
+// making it the highest-priority fetch of every cold start. It now
+// points at a pre-sized 288px PNG, 16,313 bytes. Fraunces is likewise
+// no longer preloaded: it is the display face for [data-skin="classic"]
+// only, which is /firm and /admin, and no screen the mobile app shows
+// ever renders it. Measured on the built shell, /example went from
+// 126,276 bytes of woff2 across five files to 89,716 across four.
+//
+// The bump is load-bearing, not housekeeping. The old bundle's markup
+// still names the fat SVG, and the runtime cache is cache-first for
+// images, so without a new version a phone keeps fetching the 29,699
+// byte mark on every launch and none of this reaches the device.
+// v196: App Store 3.1.1 coverage, the remaining purchase controls
+// (billing auto-top-up form, settings "Open billing", the Bella
+// paywall CTA, the personal upgrade CTA, the firm Stripe-portal
+// link) now sit behind <WebOnly>, so the native shell renders no
+// purchase mechanism. Client JS changed (BellaChat plus the WebOnly
+// import on four routes). Every page touched is authenticated, and
+// lib/supabase/middleware.ts marks those `private, no-store`, which
+// isStorable() below refuses to cache, so this bump is belt and
+// braces rather than load-bearing, kept for the invariant that any
+// client-JS change carries one.
+// v197: the drive log refreshes itself, and undeclared drives are always
+// visible.
+//
+// Two reports, one page. First, /mileage never asked the server again
+// once it had rendered: the app is a WebView the OS keeps alive across a
+// drive, so a driver opened the app, drove, came back, and was shown the
+// render from before the drive. Their workaround was to "click around"
+// until something navigated. MileageAutoRefresh now refetches the RSC
+// payload when the app comes forward and the render has gone stale,
+// riding visibilitychange and gating on the wall clock, because a
+// backgrounded WebView freezes timers while still delivering that event.
+//
+// Second, the page counted `classification = 'unclassified'` only. The
+// commoner pending state is a drive the machine classified with
+// `needs_confirmation`, which #616 correctly holds out of the Schedule C
+// headline; sixteen such drives existed in production and appeared in no
+// count on the page. The count now covers both, ignores the range pills
+// (the page opens on Today, and one driver's ten pending drives were all
+// older than that), and a persistent pill carries it whether it is zero
+// or not. /mileage/classify was extended to match, or the pill would
+// have led to a deck that bounced straight back.
+//
+// The bump is load-bearing. MileageAutoRefresh and NeedsDecisionPill are
+// new WebView client JS, and without a new version a phone keeps running
+// the bundle that has neither.
+// v198: opening the app finishes the drive that was waiting on it.
+//
+// v197 made /mileage re-render when the driver came back. It re-rendered
+// the same answer, because the drive genuinely was not closeable yet. A
+// finished drive becomes a trip only when finalize can prove the phone was
+// alive AND quiet: mileage_device_status.reported_at at least one 10-minute
+// dwell newer than the last GPS point. Heartbeats are the only thing that
+// writes that column and they ride ingest, so parking the car (no
+// movement, no fixes, no ingest) stopped them, and nothing restarted them
+// on foregrounding. appStateChange isActive refreshed a LOCAL cache and
+// posted nothing.
+//
+// Measured on the reporting driver's handset: three drives on 2026-08-23
+// became trip rows 6h 33m, 8h 57m and 12h 35m after they ended, all three
+// within four minutes of the beats resuming when the app was next opened.
+//
+// So a genuine foregrounding now sends a heartbeat, gated on the same wall
+// clock and the same constant as the ingest-driven beat, and the drive log
+// waits for that beat to land before its second render rather than racing
+// it. This cannot shorten a live drive: shouldCloseOpenTail still refuses
+// before a full dwell of GPS silence however fresh the beat is, and
+// forceClose is untouched.
+//
+// The bump is load-bearing: heartbeat-timer, native-tracker,
+// return-refresh and MileageAutoRefresh are all WebView client JS.
+// v199: the drive log's controls and map are on screen at first paint.
+//
+// The drives were loading (v197, v198). The layout was hiding them. On a
+// Fold5 cover screen a manager's /mileage opened on a 212px card about a
+// TEAMMATE'S silent phone, then the driver picker, then a five-line card
+// of prose that reads the same on every visit. The range pills started
+// at 780 CSS px and the map at 948, on a panel that shows about 810.
+// Both cards are now a native <details>, closed by default, with every
+// word of the alert unchanged and one tap away. Measured in the
+// component harness at 344x882: control row 501 to 653, map from 669.
+//
+// The bump is precautionary, not load-bearing. TeamTrackingHealth and
+// TeamViewNote are server components and the page HTML is `private,
+// no-store`, which this worker never stores (see the navigate handler),
+// so a phone on v198 gets the new markup on its next request. What does
+// change is the shared Icons.tsx chunk, which ChevronDownIcon joins and
+// which client components import; bumping keeps "any client JS or markup
+// change" a rule to follow rather than a case to argue.
+// v200: the device alert names the cause the phone already reported.
+//
+// Driver c6218e2c's mileage_device_status row said location_authorization
+// = 'whenInUse' from 2026-08-25, and for nine days the manager's alert
+// showed "Silent 42h" beside prose that it is "usually" While Using,
+// while the driver's own page said nothing. The manager's row now reads
+// "Location is While Using. Ask them to set it to Always: Settings >
+// Taxottic > Location > Always." and the driver's banner reads the same
+// in the second person, both derived from the columns the row already
+// carries (lib/mileage/device-cause.ts). The generic wording stays only
+// for a row that does not know.
+//
+// The bump is precautionary, not load-bearing. TeamTrackingHealth and
+// the page are server-rendered under `private, no-store`, which this
+// worker never stores, and /_next/* chunks are not cached here either
+// (v8), so TrackingHealthBanner's new client chunk arrives by content
+// hash. Bumped to keep the "any client JS or markup change" rule a rule.
+//
+// v201: the marketing hero's first screen carries the instrument.
+//
+// The home hero is a two-column grid at desktop with the tax-year runway
+// panel (components/HeroInstrument.tsx) on the right, the h1 drops its
+// gold sweep, and the audience toggle no longer wraps its labels on
+// phones (components/AudienceToggle.tsx). Markup only; the bump makes a
+// WebView that opens the marketing page fetch the new HTML rather than
+// hydrate cached chunks against it.
+//
+// v202 was reserved for the marketing pass running alongside this one;
+// that pass shipped as v205 below, so v202 was never served.
+//
+// v203: the trial banner reads as one sentence on a phone.
+//
+// components/TrialBanner.tsx sits under the greeting on /dashboard for
+// every account still in its trial. Its sentence carried `flex-1 min-w-0`
+// between two auto-width siblings, so the row never wrapped and the
+// sentence took the leftover: 29px on a 344px cover screen, which body's
+// `overflow-wrap: anywhere` turned into a 446px column of syllables that
+// pushed the hero figures to y=783. The label and the call to action now
+// share the first row and the sentence spans the width beneath them
+// (one line from `sm` up); the hero starts at y=427 on the same screen.
+// The "ending soon" and "expired" tints also move to tokens, since the
+// old light tints had no dark twin (1.3:1 under cream text).
+//
+// The bump is precautionary, not load-bearing. TrialBanner is a server
+// component and the pages that render it are `private, no-store`, which
+// this worker never stores (see isStorable), and /_next/* chunks are not
+// cached here either (v8). Bumped to keep the "any client JS or markup
+// change" rule a rule.
+//
+// v204: the outstanding-tasks strip reads in the dark theme.
+//
+// components/OutstandingTasksBanner.tsx sits under the greeting on
+// /dashboard whenever a drive or transaction still needs a business-or-
+// personal call. Its fill was `bg-gold-50/70`, a light tint with no dark
+// twin, under text the dark theme flips to cream: 2.0:1 in every dark
+// screenshot of the 2026-09-03 audit. The fill and border now come from
+// the accent tokens (accent-2 at 10% and 40%), the same formula as the
+// trial banner's "ending soon" state (v203), so one set of classes reads
+// in both themes: 12.9:1 light, 15.2:1 dark. The same 344px measurement
+// showed the sentence squeezed to 152px beside the controls, so the bell
+// and the controls now share the first row on a phone and the sentence
+// spans the width beneath them, as the trial banner does.
+//
+// The bump is precautionary, not load-bearing. The dashboard is
+// `private, no-store`, which this worker never stores (see isStorable),
+// and /_next/* chunks are not cached here either (v8), so the banner's
+// new client chunk arrives by content hash. Bumped to keep the "any
+// client JS or markup change" rule a rule.
+//
+// v210: the heartbeat learns to say why a probe returned nothing, and
+// the Android service uploads its own fixes.
+//
+// Client JS changed in lib/mileage: the heartbeat payload gained
+// geofenceProbe, geofenceProbeMs and the three nativeUpload fields, and
+// the self-check's verdicts changed shape, so a phone running cached
+// chunks against the new route would keep reporting the old payload and
+// keep reading a live geofence plugin as dead.
+//
+// v211: the marketing site after the audit's next seven items.
+//
+// Pricing h1 holds "Yearly saves ~17%." as one group, left-aligned, in
+// static brass; every remaining gold-shine on the marketing and personal
+// pages is static brass (the animated sweep cost ~271ms of paint per
+// 2.5s idle); the phone download banner is a compact strip on phones
+// (components/AppDownloadBanner.tsx, AppStoreBadges compact); the hero
+// sub-copy is about 30 words per audience; the booking header keeps
+// "Back to home" on one line; the calculators h1 no longer splits
+// "self-employed"; the navy band gradient is a token (--navy-band in
+// app/globals.css) referenced by var() on every marketing page.
+// Markup, copy and a client component changed, so the WebView must fetch
+// the new HTML rather than hydrate cached chunks against it.
+//
+// v211, not the v205 that PR carried while it was open, and not the
+// v202 it reserved before that. v203, v204 and then v210 all landed on
+// main while it waited, so it was renumbered at merge time.
+//
+// v212: the marketing home in the Year grammar.
+//
+// The tax-year runway is the page's spine, fixed under a paper header,
+// filled to the moment the reader is looking at; the hero moves to paper
+// with navy reserved for the instrument panel; the dated sequence with
+// real product screens replaces the capability cards, the photograph
+// cards, the mock product tour, the stats band and the manifesto. Two
+// new client components (the spine motion and the figure count-up) and
+// new markup on every visitor's first screen, so the worker must fetch
+// the new HTML rather than hydrate cached chunks against it.
+//
+// v212, not the v206 this PR carried: v210 and v211 landed on main
+// while it waited. A reserved number is not a number.
+//
+// v213: the native front door.
+//
+// Sign-in comes first on the native shell (cookie plus middleware redirect,
+// with a client fallback); push permission is asked for only inside a real
+// session and gated behind the install's first Today open; the status bar
+// gets a readable band that follows the page and survives Android
+// configuration changes; Back exits when the WebView has nowhere to go back
+// to; a location-blocked state replaces the silent no-op with a strip, a
+// toggle and a self-repair path; the login page leads with passkey and a
+// code; and the tap targets raised are the login controls, the audience
+// switch, the account control, the sample page's Sign in, and the marketing
+// footer's rows and wordmark links. New client components on the dashboard
+// and in the root layout, and changed markup on the login page, the sample
+// page and the home footer, so the worker must fetch the new HTML rather
+// than hydrate cached chunks against it.
+//
+// v213, not the v207 this PR carried: v210, v211 and v212 landed on main
+// while it waited. A reserved number is not a number.
+//
+// v214: Today replaces the dashboard, and the phone gets a tab bar.
+//
+// The dashboard's markup changed on both branches (company and
+// personal-only): the greeting, the outstanding-tasks banner and the old
+// stat band are gone, replaced by TodayHeader, TodaySpine, NextPaymentPanel,
+// NeedsYourCall and its rows, ThisWeek and YearToDate. New client
+// components: NeedsYourCallRow (in-place dismissal via a server action),
+// TabBar (the phone's Today/Drives/Money/Forecast/More bar, native shells
+// only), and MobileOnly's module-scope native-check cache that TabBar and
+// LeftRailMobile now share so the bar does not blink on every route
+// change. The rail's per-company monogram chip lost its gold fill and ring
+// (Task 7). Markup and client-side JS changed on every dashboard visit, so
+// the worker must fetch the new HTML rather than hydrate cached chunks
+// against it. Chosen against origin/main and every open PR at the moment
+// of the bump (v204 main, v205 #631, v206 #633, v207 #634).
+//
+// v214, not the v208 this PR carried: v210 through v213 landed on main
+// while it waited. A reserved number is not a number.
+//
+// v215: every secondary marketing page wears the paper shell.
+//
+// PR 2 of the Year grammar. Pricing, calculators, guides, compare, help,
+// the changelog, /get and /book, the guide shell and every calculator
+// page swapped their inline navy header for PageShell (paper header,
+// static year spine, shared footer); the index pages render LedgerList
+// rows instead of card grids; pricing is a ruled TierTable on desktop
+// and a stacked ledger on phones with the paid CTAs still behind WebOnly;
+// the FAQ row is a shared component with a stroke chevron; login sits on
+// paper under the grammar. Markup changed on every public page the
+// native shell can open (login included), so the worker must fetch the
+// new HTML rather than hydrate cached chunks against it.
+//
+// v215, not the v209 this PR carried: v210 through v214 landed on main
+// while it waited. A reserved number is not a number.
+//
+// v216: Miles opens on drives, and the filter answers in the browser.
+//
+// /mileage no longer opens on a one-day window that was usually empty on
+// a phone whose fixes arrive a day late; it opens on the newest drives
+// with no window at all. The range pills stopped being links on a
+// force-dynamic page and became a client filter over the drives already
+// loaded, so a tap re-renders in the browser and issues no request. The
+// render path fetches no polyline: the map and the rows share one
+// batched route request after paint, in place of up to sixty sequential
+// per-drive thumbnail lookups before the first byte. The head collapsed
+// from a breadcrumb, a two-line title, a company line, a tracking alert,
+// a driver selector, a Team view row, a quick-call card and eight 32px
+// pills into one line, and the classification questions moved onto the
+// row. New client components: DriveLog, DriveFilter, DriveThumbnail,
+// MilesHead. Markup and client-side JS changed on every Miles visit, so
+// the worker must fetch the new HTML rather than hydrate cached chunks
+// against it. Chosen against origin/main (v215 at b86e68e) and every
+// open PR at the moment of the bump (#599 at v192, the only one open).
+const CACHE_VERSION = "v216";
 const STATIC_CACHE = `taxottic-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `taxottic-runtime-${CACHE_VERSION}`;
 
@@ -1293,7 +1600,7 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/auth/")) return;
 
   // SKIP /_next/* entirely. Next.js content-hashes its JS chunks and
-  // static assets — the filename changes on every deploy, so the
+  // static assets, the filename changes on every deploy, so the
   // browser's HTTP cache handles freshness correctly. Caching them
   // in the service worker means old chunks survive deploys, and a
   // returning visitor gets new server HTML hydrating against old
@@ -1306,7 +1613,7 @@ self.addEventListener("fetch", (event) => {
     return; // fall through to default browser fetch
   }
 
-  // Other static assets — cache-first is fine because these don't
+  // Other static assets, cache-first is fine because these don't
   // version-skew the React tree.
   if (
     url.pathname.startsWith("/fonts/") ||
@@ -1430,7 +1737,7 @@ self.addEventListener("notificationclick", (event) => {
   const tapped = event.action || "";
 
   // One-tap classify: Business / Personal resolve ENTIRELY in the
-  // background — no app launch. The endpoint re-validates the session
+  // background, no app launch. The endpoint re-validates the session
   // and row ownership server-side (a notification tap is untrusted);
   // a silent confirmation banner replaces the prompt on success.
   if (tapped === "business" || tapped === "personal") {
@@ -1451,7 +1758,7 @@ self.addEventListener("notificationclick", (event) => {
         await self.registration.showNotification(
           ok
             ? `Marked ${tapped === "business" ? "business" : "personal"} ✓`
-            : "Couldn't save — tap to review",
+            : "Couldn't save, tap to review",
           {
             body: ok ? "" : "Open the app to classify this drive.",
             icon: "/icon-192.png",

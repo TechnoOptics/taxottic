@@ -21,7 +21,7 @@ describe("removeUploadedPoints", () => {
     const bufferAfterEviction = [pt(10), pt(11), pt(12), pt(13)];
 
     // Positional removal (the old `buffer.slice(batch.length)`) would
-    // delete 10, 11 and 12 — three points the server never saw.
+    // delete 10, 11 and 12, three points the server never saw.
     const positional = bufferAfterEviction.slice(batch.length);
     expect(positional.map((p) => p.ts)).toEqual([13]); // the bug
 

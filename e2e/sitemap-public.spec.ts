@@ -98,4 +98,45 @@ test.describe("Public routes stay public", () => {
       }. Check PUBLIC_PATHS in lib/supabase/middleware.ts.`,
     ).toBe(200);
   });
+
+  /**
+   * The contractor W-9 fill link is noindex for the same reason, so the
+   * sitemap sweep cannot cover it either. The recipient is an outside
+   * contractor with no Taxottic account, and the token in the URL is the
+   * only credential the flow has, so a 307 to /login kills every W-9
+   * request email a firm has ever sent.
+   *
+   * The assertion is "not a redirect" rather than an exact 404 on the
+   * bad token, deliberately. The root app/loading.tsx boundary makes
+   * this dynamic route stream: Next commits 200 and flushes the loading
+   * shell before the page's notFound() ever runs, so an unknown token
+   * comes back 200 with the not-found payload inside the stream. The
+   * body check below is what actually proves the token gate still
+   * holds; the status check is what proves the auth gate is off.
+   */
+  test("/w9/<token> reaches the page instead of the auth gate", async ({
+    request,
+  }) => {
+    for (const path of [
+      "/w9/e2e-nonexistent-token",
+      "/w9/e2e-nonexistent-token/thank-you",
+    ]) {
+      const res = await request.get(path, { maxRedirects: 0 });
+      expect(
+        res.status(),
+        `${path} must render for an anonymous contractor, got ${res.status()} -> ${
+          res.headers()["location"] ?? "no location"
+        }. A 307 to /login means "/w9" is missing from PUBLIC_PATHS in lib/supabase/middleware.ts.`,
+      ).toBeLessThan(300);
+    }
+
+    // A token that resolves to nothing must not render the form, so
+    // making the route public cannot leak a firm's branding or the
+    // TIN fields to anyone who guesses a URL.
+    const bad = await request.get("/w9/e2e-nonexistent-token");
+    expect(
+      await bad.text(),
+      "an unresolvable token must not render the W-9 form",
+    ).not.toContain("Submit W-9");
+  });
 });

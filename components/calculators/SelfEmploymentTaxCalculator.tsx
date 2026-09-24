@@ -182,9 +182,7 @@ export function SelfEmploymentTaxCalculator({
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       {/* ---- Inputs ---- */}
       <div className="card p-6 sm:p-7">
-        <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-          Your numbers
-        </div>
+        <div className="mono-label">Your numbers</div>
         <h2 className="display text-xl text-forest-900 mt-1">
           Tell us about your year
         </h2>
@@ -318,15 +316,13 @@ export function SelfEmploymentTaxCalculator({
       {/* ---- Result ---- */}
       <div className="lg:sticky lg:top-6">
         {result ? (
-          <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-                Estimated {TAX_YEAR} tax
-              </div>
+          <div className="card p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-3">
+              <div className="mono-label">Estimated {TAX_YEAR} tax</div>
               <ShareButton onShare={share} copied={copied} />
             </div>
             <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-              <span className="display text-4xl sm:text-5xl text-forest-900">
+              <span className="figure font-medium text-4xl sm:text-5xl text-forest-900">
                 {formatCents(result.totalTaxCents)}
               </span>
               <span className="text-sm text-ink-soft">
@@ -359,8 +355,8 @@ export function SelfEmploymentTaxCalculator({
             </dl>
 
             {showFullQuarterlySchedule ? (
-              <div className="mt-5 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">
-                <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
+              <div className="mt-5 border-t border-edge pt-4">
+                <div className="mono-label">
                   Your {TAX_YEAR} quarterly payment schedule
                 </div>
                 <ul className="mt-2 grid gap-1.5">
@@ -372,7 +368,7 @@ export function SelfEmploymentTaxCalculator({
                         (q.isPast ? "opacity-55" : "")
                       }
                     >
-                      <span className="text-ink-soft">
+                      <span className="figure text-ink-soft">
                         Q{q.quarter} · due{" "}
                         {new Date(q.dueDate + "T00:00:00").toLocaleDateString(
                           "en-US",
@@ -380,7 +376,7 @@ export function SelfEmploymentTaxCalculator({
                         )}
                         {q.isPast ? " (passed)" : ""}
                       </span>
-                      <span className="tabular-nums font-medium text-forest-900">
+                      <span className="figure font-medium text-forest-900">
                         {formatCents(Math.max(0, q.amountCents))}
                       </span>
                     </li>
@@ -388,15 +384,13 @@ export function SelfEmploymentTaxCalculator({
                 </ul>
               </div>
             ) : nextQuarter ? (
-              <div className="mt-5 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">
-                <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700 font-medium">
-                  Next quarterly payment
-                </div>
+              <div className="mt-5 border-t border-edge pt-4">
+                <div className="mono-label">Next quarterly payment</div>
                 <div className="mt-0.5 text-forest-900">
-                  <span className="display text-lg">
+                  <span className="figure font-medium text-lg">
                     {formatCents(nextQuarter.amountCents)}
                   </span>{" "}
-                  <span className="text-sm text-ink-soft">
+                  <span className="figure text-sm text-ink-soft">
                     due{" "}
                     {new Date(
                       nextQuarter.dueDate + "T00:00:00",
@@ -410,24 +404,23 @@ export function SelfEmploymentTaxCalculator({
               </div>
             ) : null}
 
-            <div className="mt-6 rounded-xl bg-forest-900 text-cream px-5 py-4">
-              <div className="text-sm leading-relaxed text-cream/90">
-                This is a snapshot. Taxottic keeps this forecast{" "}
-                <span className="text-gold-300 font-medium">live all year</span>
-                , synced to your bank, so the number is always current and
-                you&rsquo;re never surprised in April.
-              </div>
-              <Link
-                href="/login?intent=signup"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
-              >
-                Track it automatically, free →
+            <div className="mt-6 border-t border-edge pt-5">
+              <p className="text-sm leading-relaxed text-ink-soft">
+                This is a snapshot. Taxottic keeps the forecast{" "}
+                <strong className="font-medium text-forest-900">
+                  live all year
+                </strong>
+                , synced to your bank, so the number is current on the day you
+                look at it and on the day you file.
+              </p>
+              <Link href="/login?intent=signup" className="btn-primary mt-3">
+                Track it automatically, free
               </Link>
             </div>
 
             <p className="mt-4 text-[11px] text-ink-muted leading-relaxed">
-              Estimate only, for planning. Uses {TAX_YEAR} federal rules and
-              your state&rsquo;s brackets. Not tax advice or a substitute for a
+              Estimate only, for planning. Uses {TAX_YEAR}{" "}
+              federal rules and your state&rsquo;s brackets. Not tax advice or a substitute for a
               licensed CPA. Your figures stay in your browser, nothing is
               sent anywhere.
             </p>
@@ -435,7 +428,7 @@ export function SelfEmploymentTaxCalculator({
         ) : (
           <div className="card p-6 sm:p-7 grid place-items-center text-center min-h-[280px]">
             <div>
-              <CalculatorIcon className="size-9 mx-auto text-gold-700" />
+              <CalculatorIcon className="size-9 mx-auto text-ink-muted" />
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your self-employment income to see your estimated
                 federal + state tax, self-employment tax, and quarterly
@@ -463,7 +456,7 @@ function Row({
       <dt className="text-ink-soft">{label}</dt>
       <dd
         className={
-          "tabular-nums font-medium " +
+          "figure font-medium " +
           (positive ? "text-emerald-700" : "text-forest-900")
         }
       >

@@ -7,19 +7,24 @@ const SLUG = "1099-vs-w2";
 const TITLE = "1099 vs W-2: how each affects your taxes";
 const DESCRIPTION =
   "The real tax difference between 1099 contractor and W-2 employee income: who withholds, who pays self-employment tax, who can deduct expenses, and who owes quarterly estimates.";
+// The guide's series line. One constant for three places: the
+// visible shell, the OG card and the Article JSON-LD image, which the
+// OG route renders in the eyebrow position.
+const SERIES = "1099 vs W-2";
 
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: `/guides/${SLUG}` },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}`, width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}`] },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" } },
 };
 
 const ARTICLE_LD = guideArticleLd({
   slug: SLUG,
   title: TITLE,
+  series: SERIES,
   description: DESCRIPTION,
   published: "2026-06-08",
   modified: "2026-07-04",
@@ -73,7 +78,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="1099 vs W-2"
+        series={SERIES}
         title={TITLE}
         lead="The forms look similar, but they put you on two very different tax footings. Here's what actually changes when income comes on a 1099 instead of a W-2."
         updated="June 2026"

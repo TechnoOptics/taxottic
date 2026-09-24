@@ -1,7 +1,6 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
+import { Faq } from "@/components/marketing/Faq";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 export const metadata = {
@@ -201,45 +200,24 @@ const HELP_BREADCRUMB_LD = {
 // reach a human. Later, /help/<topic> sub-pages can be added as we
 // learn what users hit hardest.
 //
-// Structure: hero, "5-minute quickstart" three-step cards, FAQ by
-// category, contact card.
+// Structure: hero, the "5-minute quickstart" as a numbered sequence,
+// FAQ by category as hairline rows, contact card.
 
 export default function HelpPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="help">
       <JsonLd data={HELP_FAQ_LD} />
       <JsonLd data={HELP_BREADCRUMB_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-8">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Help &amp; FAQ
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          We&apos;re here when you need a hand.
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
+          Help, and the answers most people need.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
-          Most questions have a quick answer below. If yours doesn&apos;t,
+          We&apos;re here when you need a hand. Most questions have a quick
+          answer below. If yours doesn&apos;t,
           email{" "}
           <a
             href="mailto:contact@taxottic.com"
@@ -252,28 +230,27 @@ export default function HelpPage() {
       </section>
 
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          5-minute quickstart
-        </div>
-        <h2 className="display mt-2 text-2xl text-forest-900">
-          From signup to your first forecast.
+        <h2 className="display text-2xl text-forest-900">
+          The 5-minute quickstart: from signup to your first forecast.
         </h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <Step
-            n={1}
-            title="Sign in"
-            body="Google, Microsoft, passkey, or magic link. We don't ask for a credit card to try."
-          />
-          <Step
-            n={2}
-            title="Add your first company"
-            body="Schedule C, S-corp, or LLC, pick the entity type and we'll set up the right forms. W-2 only? Pick Filer instead."
-          />
-          <Step
-            n={3}
-            title="Connect a bank or upload a CSV"
-            body="Plaid wires your bank in about 90 seconds. Prefer file uploads? Drag a CSV. Either way the forecast starts updating."
-          />
+        <div className="mt-6">
+          <ol className="quickstart">
+            <Step
+              n={1}
+              title="Sign in"
+              body="Google, Microsoft, passkey, or magic link. We don't ask for a credit card to try."
+            />
+            <Step
+              n={2}
+              title="Add your first company"
+              body="Schedule C, S-corp, or LLC, pick the entity type and we'll set up the right forms. W-2 only? Pick Filer instead."
+            />
+            <Step
+              n={3}
+              title="Connect a bank or upload a CSV"
+              body="Plaid wires your bank in about 90 seconds. Prefer file uploads? Drag a CSV. Either way the forecast starts updating."
+            />
+          </ol>
         </div>
       </section>
 
@@ -343,7 +320,7 @@ export default function HelpPage() {
             for the full picture.
           </Faq>
           <Faq q="How do I disconnect a bank?">
-            Open the company, then <em>Banks &raquo; Disconnect</em>.
+            Open the company, then Banks &raquo; Disconnect.
             We&apos;ll revoke the Plaid token and stop syncing.
           </Faq>
           <Faq q="My bank isn't in the Plaid list, what now?">
@@ -393,7 +370,7 @@ export default function HelpPage() {
             We keep your data accessible for 30 days after cancellation
             so you can re-subscribe without losing context. After that,
             company data is deleted on a rolling 90-day window. Export
-            everything from <em>Billing &raquo; Export</em> before
+            everything from Billing &raquo; Export before
             cancelling if you want a permanent copy.
           </Faq>
           <Faq q="How do credits and credit roll-over work?">
@@ -407,7 +384,7 @@ export default function HelpPage() {
 
         <FaqCategory title="Accounts &amp; security">
           <Faq q="How do I switch between two of my accounts?">
-            Profile menu &raquo; <em>Switch accounts</em>. We force the
+            Profile menu &raquo; Switch accounts. We force the
             Google / Microsoft account picker so you explicitly pick
             which identity to use.
           </Faq>
@@ -486,6 +463,7 @@ export default function HelpPage() {
           </ul>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }
@@ -500,13 +478,13 @@ function Step({
   body: string;
 }) {
   return (
-    <article className="card p-5 grid gap-2">
-      <div className="size-7 rounded-full bg-gold-400/20 grid place-items-center text-xs font-semibold text-gold-700">
-        {n}
+    <li>
+      <span className="figure text-sm text-muted">{n}</span>
+      <div>
+        <h3 className="display text-base text-forest-900">{title}</h3>
+        <p className="mt-1 text-sm text-ink-soft leading-relaxed">{body}</p>
       </div>
-      <h3 className="display text-base text-forest-900">{title}</h3>
-      <p className="text-sm text-ink-soft leading-relaxed">{body}</p>
-    </article>
+    </li>
   );
 }
 
@@ -520,16 +498,7 @@ function FaqCategory({
   return (
     <div>
       <h2 className="display text-xl text-forest-900">{title}</h2>
-      <div className="mt-4 grid gap-5">{children}</div>
-    </div>
-  );
-}
-
-function Faq({ q, children }: { q: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-sm font-medium text-forest-900">{q}</div>
-      <div className="mt-1 text-sm text-ink-soft leading-relaxed">
+      <div className="mt-4 border-t border-edge text-sm text-ink-soft leading-relaxed">
         {children}
       </div>
     </div>

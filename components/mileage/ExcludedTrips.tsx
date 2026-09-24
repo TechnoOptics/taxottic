@@ -50,7 +50,7 @@ export function ExcludedTrips({
       <summary className="cursor-pointer list-none px-4 py-3 flex items-center gap-3 text-sm text-forest-900 hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400">
         <span
           aria-hidden="true"
-          className="size-2.5 shrink-0 rounded-full bg-forest-200"
+          className="size-2.5 shrink-0 rounded-sm bg-forest-200"
         />
         <span className="min-w-0 flex-1">
           Excluded as passenger
@@ -129,7 +129,7 @@ function ExcludedRow({
           onClick={() => restore("business")}
           disabled={pending}
           aria-label="Restore this drive as a business trip"
-          className="h-8 px-3 text-[11px] font-medium rounded-full border border-emerald-300 text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+          className="min-h-11 px-3 text-[11px] font-medium rounded-xl border border-emerald-300 text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
         >
           Business
         </button>
@@ -138,7 +138,7 @@ function ExcludedRow({
           onClick={() => restore("personal")}
           disabled={pending}
           aria-label="Restore this drive as a personal trip"
-          className="h-8 px-3 text-[11px] font-medium rounded-full border border-amber-300 text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+          className="min-h-11 px-3 text-[11px] font-medium rounded-xl border border-amber-300 text-amber-800 hover:bg-amber-50 disabled:opacity-60"
         >
           Personal
         </button>

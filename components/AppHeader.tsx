@@ -1,4 +1,5 @@
 import { Wordmark } from "./Wordmark";
+import { NavyBar } from "./NavyBar";
 import { UserMenu } from "./UserMenu";
 import { GdprBanner } from "./GdprBanner";
 import { WebOnly } from "./WebOnly";
@@ -9,6 +10,8 @@ import {
 } from "@/lib/entitlements/personal-access";
 import { LeftRail } from "./LeftRail";
 import { LeftRailMobile } from "./LeftRailMobile";
+import { TabBar } from "./TabBar";
+import { activeCompanyFirst } from "@/lib/today/tab-bar";
 import { SmartSearch } from "./SmartSearch";
 import { OutstandingTasksBell } from "./OutstandingTasksBell";
 import { createClient } from "@/lib/supabase/server";
@@ -143,6 +146,25 @@ export async function AppHeader({
     role: m.role,
   }));
 
+  // TabBar's tabBarLinks wants { public_id, role }, a smaller shape than
+  // the LeftRail Company type above (which keys off `publicId`, not
+  // `public_id`, and carries `name`). Mapped separately from `memberships`
+  // rather than from `companies` so the two mounts don't have to agree on
+  // a field name neither of them actually needs from the other.
+  //
+  // Ordered active-first so the bar's Money and Forecast tabs point at the
+  // same company the outstanding-tasks tally below does, rather than at
+  // whichever company the user joined first. `id` rides along only for
+  // that ordering; tabBarLinks never reads it.
+  const tabBarCompanies = activeCompanyFirst(
+    memberships.map((m) => ({
+      id: m.company.id,
+      public_id: m.company.public_id,
+      role: m.role,
+    })),
+    activeCompanyId,
+  );
+
   // Employee personal-hub lock: an account whose only relationship is
   // being someone else's employee (no company of their own) doesn't get
   // the personal tax hub unless they hold their own paid plan. Computed
@@ -153,7 +175,7 @@ export async function AppHeader({
     const roles = memberships.map((m) => m.role as MembershipRole);
     // Only employee-only accounts can be locked, so only they pay for the
     // extra subscription read. Wrapped defensively: a failed read must
-    // never break the header — it just leaves the personal nav visible
+    // never break the header, it just leaves the personal nav visible
     // (the per-page requirePersonalAccess guard is the real enforcement).
     if (
       roles.length > 0 &&
@@ -274,6 +296,7 @@ export async function AppHeader({
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
+        <NavyBar />
         {/* Header content row. On lg+ the LeftRail occupies the
             first 232px (left-2 + w-56) of the viewport, so we
             left-pad the row by 15rem (240px = rail width + 8px gap)
@@ -319,7 +342,18 @@ export async function AppHeader({
               storedMode={workspaceMode}
             />
           ) : null}
-          <Wordmark href={homeHref} size="sm" tone="cream" />
+          {/* Phone tab bar (spec 4.4), native shells only, `lg:hidden`.
+              A sibling of LeftRailMobile rather than a replacement for
+              it: its own client-side native check decides whether it
+              renders, and when it does, CSS (html[data-tab-bar]
+              .left-rail-fab) hides the FAB so the two openers for the
+              same sheet don't stack. */}
+          {homeHref !== "/" ? (
+            <TabBar companies={tabBarCompanies} storedMode={workspaceMode} />
+          ) : null}
+          <div className="min-w-0 shrink">
+            <Wordmark href={homeHref} size="sm" tone="cream" />
+          </div>
           {/* Smart search powered by Bella. OPT-IN per user via
               /settings (profile.show_smart_search). When on, it
               sits centered between the wordmark and the user menu

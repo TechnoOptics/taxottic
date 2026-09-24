@@ -1,6 +1,6 @@
-/* eslint-disable @next/next/no-img-element -- the brand mark is a
-   tiny SVG; next/image would need remotePatterns + an optimizer
-   round-trip on a screen we already want to show in milliseconds. */
+/* eslint-disable @next/next/no-img-element -- next/image would need an
+   optimizer round-trip on a screen we already want to show in
+   milliseconds, so the mark is served as a plain pre-sized file. */
 
 /**
  * Global loading screen, shown by Next.js during any route segment
@@ -53,8 +53,22 @@ export default function Loading() {
       />
 
       <div className="relative grid place-items-center taxottic-pulse">
+        {/*
+          Pre-sized to 288px = 3x the 96px render box, which is the
+          highest pixel density any shipping phone asks for.
+
+          This used to point at /brand/icon-mark-cream.svg, which is not
+          a vector: it is a 512x512 PNG base64-embedded in an SVG
+          wrapper, 39,754 bytes on disk and 29,699 on the wire after
+          brotli. Because app/loading.tsx is the root Suspense fallback,
+          React emits this asset as <link rel="preload" as="image"> at
+          the very top of every route's <head>, so it was the single
+          highest-priority fetch of every cold start, and the native
+          shell loads a REMOTE url so every cold start pays it. The
+          pre-sized PNG is 16,313 bytes and is the same artwork.
+        */}
         <img
-          src="/brand/icon-mark-cream.svg"
+          src="/brand/icon-mark-cream-288.png"
           alt=""
           width={96}
           height={96}

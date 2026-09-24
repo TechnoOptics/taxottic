@@ -50,7 +50,11 @@ export function renderDrivesAwaitingEmail(args: DrivesAwaitingArgs): {
       timeZone: "UTC",
     });
 
-  const rows = r.drives
+  // `listed` is capped (see MAX_LISTED): a reinstall triggers a 45-day
+  // recovery sweep and can materialise dozens of drives at once. The
+  // count and the mileage above still describe every pending drive, so
+  // the cap shortens the list without understating the backlog.
+  const rows = r.listed
     .map((d) => {
       const route = routeLabel(d);
       return `<tr>
@@ -93,6 +97,14 @@ export function renderDrivesAwaitingEmail(args: DrivesAwaitingArgs): {
         </thead>
         <tbody>${rows}</tbody>
       </table>
+      ${
+        r.omitted > 0
+          ? `<p style="margin:-8px 0 20px;color:${inkSoft};font-size:13px;">
+               ${r.omitted} more ${r.omitted === 1 ? "drive is" : "drives are"} waiting behind
+               ${r.omitted === 1 ? "this one" : "these"}. All of them are in the queue below.
+             </p>`
+          : ""
+      }
       <a href="${escapeAttr(args.classifyUrl)}"
          style="display:inline-block;background:${navy};color:${cream};text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:600;">
         Confirm these drives
@@ -100,7 +112,8 @@ export function renderDrivesAwaitingEmail(args: DrivesAwaitingArgs): {
     </div>
     <p style="margin:16px 0 0;color:${inkSoft};font-size:12px;">
       Sent because you have drives awaiting confirmation. You will get at
-      most one of these every few days.
+      most one of these every six hours, and only when a drive you have
+      not been told about is waiting.
     </p>
   </div>
 </body></html>`;
@@ -114,10 +127,15 @@ export function renderDrivesAwaitingEmail(args: DrivesAwaitingArgs): {
       ? ["", `The oldest has been waiting ${r.oldestDays} days.`]
       : []),
     "",
-    ...r.drives.map((d) => {
+    ...r.listed.map((d) => {
       const route = routeLabel(d);
       return `- ${dateOf(d.startedAt)}${route ? `, ${route}` : ""}, ${d.distanceMiles.toFixed(1)} mi`;
     }),
+    ...(r.omitted > 0
+      ? [
+          `- and ${r.omitted} more ${r.omitted === 1 ? "drive" : "drives"}, all in the queue below`,
+        ]
+      : []),
     "",
     `Confirm these drives: ${args.classifyUrl}`,
   ].join("\n");

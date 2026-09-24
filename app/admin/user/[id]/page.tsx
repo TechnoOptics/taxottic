@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { blockUser, unblockUser, deleteUserHard } from "../../actions";
 import { TypedConfirmDelete } from "@/components/admin/TypedConfirmDelete";
 
@@ -11,7 +11,7 @@ type Params = Promise<{ id: string }>;
 export default async function AdminUserPage({ params }: { params: Params }) {
   const { id } = await params;
   const { user: adminUser } = await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
 
   const [{ data: profile }, { data: sub }, { data: members }, { data: events }] =
     await Promise.all([

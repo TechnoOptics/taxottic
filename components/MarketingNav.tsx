@@ -19,9 +19,22 @@ import Link from "next/link";
  * measured total blocking time of 0ms, and the current page is passed in
  * as a prop rather than read from usePathname precisely so this
  * component cannot become the thing that costs them that.
+ *
+ * The active-item indicator is a static hairline, brass on paper and a
+ * gold sweep on navy, rather than anything animated in from nothing.
  */
 
-type NavKey = "pricing" | "guides" | "calculators";
+/**
+ * Wider than ITEMS below, on purpose. /help, /changelog and /compare
+ * wear the same shell but have no nav entry (the bar holds three links
+ * at desktop and nothing at phone widths, see above), so passing
+ * current="help" lights nothing at all. That is the intended outcome,
+ * not a missing item: the key exists so every shell page can name
+ * itself, and page-grammar.test.ts asserts each page passes its own,
+ * which keeps a page from lighting someone else's. Add a key here and
+ * a row to ITEMS only when the link is meant to appear in the bar.
+ */
+export type NavKey = "pricing" | "guides" | "calculators" | "help" | "changelog" | "compare";
 
 const ITEMS: { key: NavKey; href: string; label: string }[] = [
   { key: "pricing", href: "/pricing", label: "Pricing" },
@@ -32,11 +45,34 @@ const ITEMS: { key: NavKey; href: string; label: string }[] = [
 export function MarketingNav({
   current,
   className = "",
+  tone = "navy",
 }: {
   /** Highlights the item for the page being viewed. Omit off-nav pages. */
   current?: NavKey;
   className?: string;
+  /** "paper" for the Year grammar header; "navy" keeps the pre-PR-2 pages readable. */
+  tone?: "paper" | "navy";
 }) {
+  const link = (active: boolean) =>
+    tone === "paper"
+      ? (active ? "text-foreground" : "text-muted hover:text-foreground")
+      : (active ? "text-cream" : "text-cream/75 hover:text-cream");
+  // One ring for both tones, from the token rather than the gold
+  // palette. `--accent-2` resolves per surface (brass on paper, the
+  // navy band's brass on navy), so the two tones still paint their own
+  // value while the file carries no `ring-gold-*` utility. Brass on a
+  // focus ring is the fifth of the five things spec 3 allows it on.
+  const ring = "focus-visible:ring-[var(--accent-2)]";
+  // Ink, not brass: the hairline under the hovered or current item is
+  // navigation state, and brass in the Year grammar is spent on today's
+  // marker, the live figure and the marks inside a product screen
+  // (design spec, section 3). The navy tone keeps its gold gradient below.
+  const rule = tone === "paper" ? "bg-[var(--foreground)]" : "";
+  const ruleStyle =
+    tone === "paper"
+      ? undefined
+      : { background: "linear-gradient(90deg, transparent 0%, rgba(213,187,126,0.55) 20%, rgba(242,216,150,0.95) 50%, rgba(213,187,126,0.55) 80%, transparent 100%)" };
+
   return (
     <nav
       aria-label="Primary"
@@ -53,31 +89,29 @@ export function MarketingNav({
               "group relative inline-flex items-center py-1 text-[0.9375rem] " +
               "font-medium tracking-[0.01em] transition-colors " +
               "focus-visible:outline-none focus-visible:ring-2 " +
-              "focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 " +
+              ring + " focus-visible:ring-offset-2 " +
               "focus-visible:ring-offset-transparent rounded-sm " +
-              (active ? "text-cream" : "text-cream/75 hover:text-cream")
+              link(active)
             }
           >
             {item.label}
             {/*
-              The indicator is the header's own gold hairline sweep,
-              scaled down to the width of one label. Reusing the
-              signature the header already has, rather than inventing a
-              second accent to sit next to it, is the whole idea: on
-              hover the sweep appears to echo beneath the item.
+              The indicator is the header's own hairline sweep, scaled
+              down to the width of one label. Reusing the signature the
+              header already has, rather than inventing a second accent
+              to sit next to it, is the whole idea: on hover the sweep
+              appears to echo beneath the item.
             */}
             <span
               aria-hidden="true"
               className={
                 "pointer-events-none absolute left-0 right-0 -bottom-0.5 h-px " +
+                rule + " " +
                 "origin-center transition-transform duration-200 " +
                 "motion-reduce:transition-none " +
                 (active ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100")
               }
-              style={{
-                background:
-                  "linear-gradient(90deg, transparent 0%, rgba(213,187,126,0.55) 20%, rgba(242,216,150,0.95) 50%, rgba(213,187,126,0.55) 80%, transparent 100%)",
-              }}
+              style={ruleStyle}
             />
           </Link>
         );

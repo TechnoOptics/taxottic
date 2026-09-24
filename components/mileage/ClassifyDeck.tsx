@@ -178,6 +178,21 @@ export function ClassifyDeck({ pending, action }: Props) {
           {(trip.estDeductionCents / 100).toFixed(2)} if business
         </div>
 
+        {/* Say what the app already decided, when it decided anything.
+            These drives carry a machine call with no saved place behind
+            it, so they read as classified on the trip list while being
+            held out of the deduction until the driver agrees. Arriving in
+            a deck that asks "business or personal?" with no mention of
+            the existing label invites "I thought I already had this one".
+            No dollar figure attaches to the assumption itself, see #617:
+            the flag is written alongside a zeroed deduction, and the
+            estimate above is what the drive is worth IF confirmed. */}
+        {trip.assumed ? (
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-900">
+            Logged as {trip.assumed} automatically, not yet confirmed
+          </div>
+        ) : null}
+
         {/* Where the drive actually went, the user asked for this
             specifically: the deck previously showed only distance and
             dollars, giving no way to recognize the drive before calling

@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from "node:fs";
 // The Android foreground service only survives the Capacitor Activity
 // unbinding because of a local patch to @capgo/background-geolocation.
 // Upstream's onUnbind() stops every watcher and terminates the service
-// the moment the user backgrounds the app — which would silently lose
+// the moment the user backgrounds the app, which would silently lose
 // EVERY drive that isn't watched on-screen. That is the single most
 // load-bearing line of native code we own, and it lives in a patch file
 // that a dependency bump can silently invalidate.
@@ -26,7 +26,7 @@ describe("critical native patch integrity", () => {
 
   it("the installed service carries our patch marker", () => {
     if (!existsSync(SERVICE)) {
-      // Fresh clone without install — nothing to assert against.
+      // Fresh clone without install, nothing to assert against.
       return;
     }
     const src = readFileSync(SERVICE, "utf8");

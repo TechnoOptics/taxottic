@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
 /**
  * Dynamic OG image for /guides/* articles.
  *
- * GET /api/og/guide?title=<guide title>&kicker=<optional eyebrow> → a
+ * GET /api/og/guide?title=<guide title>&series=<optional label> gives a
  * 1200×630 branded card carrying the guide's own title, so a shared
  * guide link shows a bespoke, on-brand preview instead of no image.
  * Mirrors /api/og/calc's artwork so the marketing surface is coherent.
@@ -28,7 +28,13 @@ try {
 export function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const title = (sp.get("title") || "Taxottic guide").slice(0, 120);
-  const kicker = (sp.get("kicker") || "Free guide").slice(0, 40);
+  // No `kicker` fallback any more: that parameter was never passed by
+  // anything, and the "Free guide" default was what every card actually
+  // rendered because no caller passed `series` either. Both are wired
+  // now (each guide page, the guides index, and the Article JSON-LD
+  // image), so the default is a genuine last resort rather than the
+  // normal case.
+  const series = (sp.get("series") || "Free guide").slice(0, 40);
 
   return new ImageResponse(
     (
@@ -79,7 +85,7 @@ export function GET(req: NextRequest) {
               display: "flex",
             }}
           >
-            {kicker}
+            {series}
           </div>
         </div>
 

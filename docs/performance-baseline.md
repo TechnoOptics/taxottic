@@ -1,5 +1,22 @@
 # Performance baseline
 
+> ## STATUS 2026-08-17: SUPERSEDED IN PART, SEE THE RUNTIME PASS BELOW
+>
+> A second pass on 2026-08-17 measured server render cost directly against
+> the live database and found that two of the four claims below do not
+> survive measurement:
+>
+> - Claim 2 ("`/mileage/business` bounded") shipped a bound that barely
+>   bites. The page still ships **12,168 lat/lng values / 776 KB** of
+>   polyline, against the 12,186 / 929 KB it was supposed to fix.
+> - Claim 4 is correct about `/dashboard` writes and about the two false
+>   N+1 sightings, but `/dashboard` still had a serial pair of counts.
+>
+> It also found the render stall that the earlier freshness work did not
+> address: `/mileage` was paging **6,745 rows over 7 sequential HTTP
+> round trips** on every single load. See
+> [Runtime pass, 2026-08-17](#runtime-pass-2026-08-17).
+>
 > ## STATUS 2026-08-16: ALL FOUR RECOMMENDATIONS HAVE SHIPPED
 >
 > This document still reads as a to-do list, and it is not one. Verified
@@ -21,6 +38,152 @@
 > fortnight of changes on top. Acting on them as if they were current is
 > the same mistake this document was written to prevent.
 
+
+## Runtime pass, 2026-08-17
+
+Measured against `origin/main` at `b49c4ff`, in an isolated worktree, on a
+production build (`next build`, exit 0 before and after). Scope: server
+render cost and post-load responsiveness. Cold start, the WebView load
+path, fonts and the service worker were another pass's subject and are
+untouched here.
+
+### How these numbers were obtained
+
+Each page's data-fetch sequence was reproduced query-for-query in a
+throwaway Vitest harness and timed with `performance.now()`, running
+against the **live production database** with the service-role client and
+the owner's real user id. Three runs each; the spread is quoted, not an
+average. The harness was strictly read-only: `finalizeUserTrips` was never
+invoked against production, only its read half (the paged staging-pool
+fetch) was replicated, so no row was written, and no migration was run.
+
+Two caveats on reading the absolute milliseconds:
+
+- They include this workstation's round-trip to Supabase, which is longer
+  than Vercel's. **The round-trip COUNT is the latency-independent fact**,
+  and that is what the fixes change: 7 sequential HTTP pages became 1, and
+  6 sequential reads became 1 parallel batch.
+- They are one account's data. That account is the owner's, which is the
+  account the "slow and unresponsive" report came from.
+
+### `/mileage`, the confirmed culprit
+
+The 2.5 s `Promise.race` budget was replaced by `settleWithinBudget` in
+earlier work, which fixed the stale-list symptom. **The stall itself was
+never addressed**: the page still awaited finalize for up to 2.5 s.
+
+Root cause of why that budget was actually being spent, which had not been
+diagnosed before: `finalizeUserTrips` begins by paging its whole
+unconsumed staging pool out of PostgREST, 1000 rows per HTTP round trip,
+and the page handed it a **7-day** window. Raw points are only marked
+consumed inside a formed trip's time range, so points that never become a
+trip (parked, sub-threshold, GPS noise) are **never consumed and never
+shrink the pool**. Live figures at time of measurement:
+
+| Pool | Rows |
+| --- | --- |
+| Unconsumed, all time | 21,270 |
+| Unconsumed, 7-day window (what the render fetched) | 6,745 |
+| Unconsumed, 6-hour window | 27 |
+
+So every single load re-read a week of residue that the cron and the
+ingest path had already rejected dozens of times, and created nothing.
+
+| Measurement | Before | After |
+| --- | --- | --- |
+| Staging-pool fetch | **1,055 / 1,147 / 1,545 ms**, 7 HTTP pages, 6,745 rows | **77 / 89 / 118 ms**, 1 HTTP page, 27 rows |
+| Six independent reads (trips, places, last point, last trip, self health, team health) | **586 / 817 / 838 ms** serial | **201 / 306 / 371 ms** in one `Promise.all` |
+
+Net: roughly **1.3-1.8 s off every `/mileage` render**.
+
+The fix is a window, not a skipped guard. `finalize` still runs on the
+render path, with the same `forceClose: false` contract and every
+integrity check intact. What changed is how far back it looks, and that is
+safe because the render path is the *third* line of defence:
+
+- `/api/mileage/ingest` finalizes a **24-hour** window on every device
+  upload;
+- the `mileage-finalize` cron finalizes a **45-day** window every **10
+  minutes**.
+
+`RENDER_FRESHNESS_WINDOW_MS` is 6 hours, which is 36 cron ticks of slack.
+The ordering invariant (render < ingest < cron) is pinned by
+`lib/mileage/finalize-freshness.test.ts` against the real windows parsed
+out of those two routes, so widening it back, or narrowing either backstop
+under it, fails the suite.
+
+### `/dashboard`
+
+The previous pass's claims were re-checked rather than trusted, and its
+two "false positive" warnings were correct: the `Promise.all` and the
+`.in(companyIds)` batch are genuinely parallel, and `computeReadiness`
+fans out inside a `Promise.all` (1 company on this account, so no fan-out
+at all in practice). The blocking recycle-bin sweep is indeed gone.
+
+One real serial pair remained, and was fixed:
+
+| Measurement | Before | After |
+| --- | --- | --- |
+| The two `monthly_expenses` counts | **305 / 311 ms** serial | **178 / 225 ms** in one `Promise.all` |
+
+`runTrialGuard` was measured and **deliberately left alone**: on the
+steady-state path it is a single `profiles` read that early-returns on
+`trial_validated_at` (measured 128-239 ms). It could in principle be
+merged with the `active_platform` read a few lines above it, but that read
+gates a `redirect()`, and hoisting a guard that can WRITE above a redirect
+changes behaviour for a ~150 ms gain. Not worth it.
+
+### `/mileage/business`, an open judgement call, NOT changed
+
+The "visible bound" recorded as shipped above does not actually reduce the
+payload much, because `PAGE_SIZE = 100` covers 100 of this account's 101
+year-to-date business drives.
+
+| Measurement | Value |
+| --- | --- |
+| Polyline fetch | **1,158 / 1,193 ms**, 7 sequential HTTP pages |
+| Rows returned | 6,084 |
+| Serialized payload | **776 KB** |
+| lat/lng values shipped to the client | **12,168** (the figure this was meant to fix was 12,186) |
+
+This is left unchanged on purpose: every way to fix it is a **user-visible
+UX trade**, and that is a product decision, not a performance one. The
+options, with the lever each pulls:
+
+1. **Lower `OVERVIEW_POLY_POINTS` from 60 to ~20.** Roughly a 3x payload
+   cut. Route thumbnails on the overview get visibly coarser; the
+   single-trip view is unaffected since it uses its own
+   `SINGLE_TRIP_POLY_POINTS = 250`.
+2. **Lower `PAGE_SIZE` from 100 to 25.** Roughly a 4x cut and turns the
+   7-page polyline fetch into ~2. Costs more pagination clicks for anyone
+   reviewing a full year.
+3. **Drop overview polylines entirely and render each row's thumbnail
+   lazily on scroll.** Largest win, biggest change, and it moves cost from
+   server render to client interaction rather than removing it.
+4. **Leave it.** It is ~1.2 s on a page people open far less often than
+   `/mileage`.
+
+A number is needed for how often `/mileage/business` is opened before
+choosing; nobody should pick from this list on taste alone.
+
+### What could not be verified in this pass
+
+- **No end-to-end authenticated page timing.** Timing a real `/mileage`
+  request against `next start` needs a signed-in session as the owner.
+  Creating one means handling their credentials, so it was not done. The
+  numbers above are the server data-fetch cost, which is where essentially
+  all of the wall clock goes on these routes (the JSX render is
+  microseconds against 1.4 s of I/O), but they are not a measured TTFB.
+- **Only one account's data.** 6,745 rows of residue is this owner's pool.
+  A driver with a smaller pool was already fast, and a heavier one was
+  slower still; the shape of the fix does not depend on the size.
+- **Why the residue exists at all** is out of scope here and was not
+  changed. Marking never-consumed raw points as consumed would shrink the
+  pool permanently, but that is a mileage-pipeline correctness decision
+  with re-render implications, not a rendering optimisation, and it is not
+  this pass's call to make.
+
+---
 
 Measured 2026-08-01 against `origin/main` at `b6faa71` (release 1.3.6), in an
 isolated worktree. Nothing in this pass was optimised. The only code edits made

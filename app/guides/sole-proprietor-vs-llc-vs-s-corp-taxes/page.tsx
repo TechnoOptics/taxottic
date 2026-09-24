@@ -7,19 +7,24 @@ const SLUG = "sole-proprietor-vs-llc-vs-s-corp-taxes";
 const TITLE = "Sole proprietor, LLC, or S-corp: how each is taxed";
 const DESCRIPTION =
   "How a sole proprietorship, single-member LLC, and S-corp election differ for taxes, pass-through income, self-employment tax, and when an S-corp salary-plus-distributions setup can save money.";
+// The guide's series line. One constant for three places: the
+// visible shell, the OG card and the Article JSON-LD image, which the
+// OG route renders in the eyebrow position.
+const SERIES = "Entity & tax";
 
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: `/guides/${SLUG}` },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}`, width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}`] },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" } },
 };
 
 const ARTICLE_LD = guideArticleLd({
   slug: SLUG,
   title: TITLE,
+  series: SERIES,
   description: DESCRIPTION,
   published: "2026-06-08",
   modified: "2026-07-04",
@@ -73,7 +78,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Entity & tax"
+        series={SERIES}
         title={TITLE}
         lead="Sole proprietor, LLC, and S-corp aren't three flavors of the same thing, they're a mix of legal structure and tax treatment. Here's how each actually affects what you owe."
         updated="June 2026"
@@ -115,7 +120,7 @@ export default function Page() {
           </LI>
           <LI>
             Remaining profit comes out as <strong>distributions</strong>, which
-            are <em>not</em> subject to self-employment tax.
+            are not subject to self-employment tax.
           </LI>
           <LI>
             That split can cut the 15.3% you&apos;d otherwise pay on all

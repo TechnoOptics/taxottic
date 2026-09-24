@@ -1,4 +1,42 @@
 /**
+ * How far back the RENDER-PATH freshness pass looks.
+ *
+ * ## Why this is hours and not days
+ *
+ * finalize's first act is to page the whole unconsumed staging pool for
+ * its window out of PostgREST, 1000 rows per HTTP round trip. Raw points
+ * that never become a trip (parked, sub-threshold, GPS noise) are never
+ * marked consumed, because consumption is keyed to a formed trip's time
+ * range. That residue therefore never shrinks, and a wide window re-reads
+ * all of it on every single page load. Measured against the owner's live
+ * account in August 2026: a 7-day window pulled 6,743 rows over 7
+ * sequential HTTP pages and cost 1.1-1.5s of blocking render time, while
+ * producing nothing, because every one of those points had already been
+ * offered to finalize dozens of times and rejected.
+ *
+ * The render path is the third line of defence, not the first. Two paths
+ * already cover this data far more thoroughly:
+ *
+ *   - `/api/mileage/ingest` finalizes a 24-hour window on EVERY upload
+ *     from the device, so a drive is normally materialised while it is
+ *     still being driven.
+ *   - the `mileage-finalize` cron finalizes a 45-DAY window every 10
+ *     minutes for every driver with a pool (see vercel.json).
+ *
+ * So the only gap a render can close is a drive that landed since the
+ * last cron tick and that ingest did not close. Six hours is 36 cron
+ * ticks of slack for that, which absorbs a lengthy cron outage and still
+ * fits the common case in a single HTTP page (27 rows on the same live
+ * account, versus 6,743). Widening this back to days buys no coverage the
+ * cron does not already provide, and charges every reader for it.
+ *
+ * The ordering invariant (render < ingest < cron) is pinned by
+ * finalize-freshness.test.ts against the real windows in those two
+ * routes, so narrowing the cron or widening this fails the suite.
+ */
+export const RENDER_FRESHNESS_WINDOW_MS = 6 * 60 * 60_000;
+
+/**
  * Did the freshness pass finish before the page had to render?
  *
  * ## The failure this exists to end

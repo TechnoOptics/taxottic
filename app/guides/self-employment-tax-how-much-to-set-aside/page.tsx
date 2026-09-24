@@ -14,13 +14,17 @@ const SLUG = "self-employment-tax-how-much-to-set-aside";
 const TITLE = "How much should I set aside for taxes when self-employed?";
 const DESCRIPTION =
   "A simple way to size your self-employment tax set-aside: self-employment tax (15.3%) plus federal and state income tax. Why 25-30% of net income is a common starting point, and how to do it without thinking.";
+// The guide's series line. One constant for three places: the
+// visible shell, the OG card and the Article JSON-LD image, which the
+// OG route renders in the eyebrow position.
+const SERIES = "Set-aside";
 
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: `/guides/${SLUG}` },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}`, width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}`] },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`] },
   robots: {
     index: true,
     follow: true,
@@ -31,6 +35,7 @@ export const metadata = {
 const ARTICLE_LD = guideArticleLd({
   slug: SLUG,
   title: TITLE,
+  series: SERIES,
   description: DESCRIPTION,
   published: "2026-06-08",
   modified: "2026-07-04",
@@ -84,7 +89,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Set-aside"
+        series={SERIES}
         title={TITLE}
         lead="Short answer: many self-employed people set aside 25-30% of their net income. Here's why, and how to make it automatic so a tax bill never catches you off guard."
         updated="June 2026"
@@ -104,8 +109,8 @@ export default function Page() {
             <strong>Self-employment tax</strong>, Social Security and
             Medicare. It&apos;s a flat <strong>15.3%</strong> (12.4% +
             2.9%) charged on 92.35% of your net business profit. As an
-            employee your employer quietly pays half of this; on your own,
-            you pay both halves.
+            employee your employer pays half of this without it ever reaching
+            your payslip; on your own, you pay both halves.
           </LI>
           <LI>
             <strong>Income tax</strong>, federal (and state, in most
@@ -127,9 +132,9 @@ export default function Page() {
           proprietors that comfortably covers both taxes. Adjust from there:
         </P>
         <UL>
-          <LI>Higher earners or high-tax states → lean to 30-35%+.</LI>
+          <LI>Higher earners or high-tax states: lean to 30-35%+.</LI>
           <LI>
-            Lower total household income, or lots of deductions → you may
+            Lower total household income, or lots of deductions: you may
             need closer to 20%.
           </LI>
           <LI>

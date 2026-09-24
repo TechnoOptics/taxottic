@@ -82,13 +82,38 @@ export function resolveTripScope({
   return self;
 }
 
+/**
+ * Every column a drive row renders with.
+ *
+ * `start_place_id` / `end_place_id` are here because the row NAMES its
+ * endpoints, and a name is information, not decoration: mileage_trips
+ * carries no lat or lng of its own, so without these two uuids a row can
+ * say where it went only after its polyline has arrived over the network.
+ * With them, a drive between two saved places is labelled on the first
+ * paint, with no fetch at all. See components/mileage/TripList.tsx.
+ */
 export const TRIP_SELECT =
-  "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, notes";
+  "id, driver_user_id, started_at, ended_at, distance_miles, classification, tax_year, deduction_cents, needs_confirmation, notes, start_place_id, end_place_id";
 
 type TripQueryInput = {
   companyId: string;
   scope: TripScope;
   sinceIso: string;
+  /**
+   * Optional upper bound for keyset pagination: only rows with
+   * `started_at` at or before this instant are returned. Undefined means
+   * no upper bound, i.e. the newest rows.
+   *
+   * Deliberately OPTIONAL and added on the end: the three other callers
+   * of {@link loadScopedTrips} pass only `sinceIso` and keep compiling
+   * and behaving exactly as before. Inclusive (`lte`, not `lt`) so a row
+   * whose `started_at` ties the cursor is still fetched; the caller
+   * (see lib/mileage/drive-page.ts) is the one that knows which tied row
+   * was already shown and excludes it precisely, by id as well as time.
+   * A strict DB-side `lt` would drop tied rows before the caller ever
+   * sees them, with no way to recover them on a later page.
+   */
+  beforeIso?: string;
   limit?: number;
 };
 
@@ -99,14 +124,18 @@ function selfQuery(
   driverUserId: string,
   sinceIso: string,
   limit: number,
+  beforeIso?: string,
 ) {
-  return admin
+  const windowed = admin
     .from("mileage_trips")
     .select(TRIP_SELECT)
     .eq("company_id", companyId)
     .eq("driver_user_id", driverUserId)
-    .gte("started_at", sinceIso)
+    .gte("started_at", sinceIso);
+  const bounded = beforeIso ? windowed.lte("started_at", beforeIso) : windowed;
+  return bounded
     .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
 }
 
@@ -163,6 +192,7 @@ function othersQuery(
   target: { only: string } | { except: string },
   sinceIso: string,
   limit: number,
+  beforeIso?: string,
 ) {
   const base = admin
     .from("mileage_trips")
@@ -172,9 +202,11 @@ function othersQuery(
     "only" in target
       ? base.eq("driver_user_id", target.only)
       : base.neq("driver_user_id", target.except);
-  return restrictToSharedBusiness(scoped)
-    .gte("started_at", sinceIso)
+  const windowed = restrictToSharedBusiness(scoped).gte("started_at", sinceIso);
+  const bounded = beforeIso ? windowed.lte("started_at", beforeIso) : windowed;
+  return bounded
     .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
 }
 
@@ -188,7 +220,7 @@ function othersQuery(
  */
 export async function loadScopedTrips<T>(
   admin: SupabaseClient,
-  { companyId, scope, sinceIso, limit = 500 }: TripQueryInput,
+  { companyId, scope, sinceIso, beforeIso, limit = 500 }: TripQueryInput,
 ): Promise<T[]> {
   if (scope.kind === "self") {
     const { data } = await selfQuery(
@@ -197,6 +229,7 @@ export async function loadScopedTrips<T>(
       scope.driverUserId,
       sinceIso,
       limit,
+      beforeIso,
     );
     return (data ?? []) as unknown as T[];
   }
@@ -207,23 +240,106 @@ export async function loadScopedTrips<T>(
       { only: scope.driverUserId },
       sinceIso,
       limit,
+      beforeIso,
     );
     return (data ?? []) as unknown as T[];
   }
   const [own, others] = await Promise.all([
-    selfQuery(admin, companyId, scope.viewerUserId, sinceIso, limit),
+    selfQuery(admin, companyId, scope.viewerUserId, sinceIso, limit, beforeIso),
     othersQuery(
       admin,
       companyId,
       { except: scope.viewerUserId },
       sinceIso,
       limit,
+      beforeIso,
     ),
   ]);
   return [
     ...((own.data ?? []) as unknown as T[]),
     ...((others.data ?? []) as unknown as T[]),
   ];
+}
+
+/**
+ * Which of `ids` a scope is allowed to see, as a set.
+ *
+ * THIS IS WHAT LETS THE TEAM OVERLAY DRAW TEAMMATES' TRAILS AGAIN. The
+ * overlay's whole job is every driver's route in their own colour, and
+ * the only polyline source left is a route whose ownership probe pins
+ * `driver_user_id` to the caller, so the map drew the manager's own
+ * trails and nothing else while the legend still named the drivers who
+ * had none.
+ *
+ * It answers the SAME question the drive list answers, with the same
+ * queries, so a caller sees routes for exactly the drives their own list
+ * already showed them: their own without restriction, a teammate's only
+ * through {@link restrictToSharedBusiness}. It cannot be widened by the
+ * caller, because the scope is resolved on the server by
+ * {@link resolveTripScope} before this is called; the id list only ever
+ * NARROWS what comes back.
+ *
+ * Ids that do not clear are simply absent from the set. The caller drops
+ * them in silence, for the reason the route spells out: a distinguishable
+ * answer for "exists but is not yours" is an oracle for guessing ids.
+ */
+/** A mileage_trips id probe, reduced to the chain {@link tripIdsInScope}
+ *  needs. Self-referential and small, like TripQuery above and for the
+ *  same TS2589 reason. */
+type IdQuery = {
+  eq(col: string, val: unknown): IdQuery;
+  neq(col: string, val: unknown): IdQuery;
+  not(col: string, op: string, val: unknown): IdQuery;
+  in(col: string, vals: readonly string[]): PromiseLike<{ data: unknown }>;
+};
+
+export async function tripIdsInScope(
+  admin: SupabaseClient,
+  {
+    companyId,
+    scope,
+    ids,
+  }: { companyId: string; scope: TripScope; ids: readonly string[] },
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set<string>();
+  const wanted = [...ids];
+  // Cast once to the small self-referential type above, for the reason
+  // TripQuery documents: resolving restrictToSharedBusiness's generic
+  // against the real PostgREST builder and then chaining onto the result
+  // makes tsc give up with "type instantiation is excessively deep".
+  const base = () =>
+    admin
+      .from("mileage_trips")
+      .select("id")
+      .eq("company_id", companyId) as unknown as IdQuery;
+  const own = (driverUserId: string) =>
+    base().eq("driver_user_id", driverUserId).in("id", wanted);
+  // Two statements rather than one `or(...)`, for the same reason
+  // loadScopedTrips uses two: an operator-precedence mistake inside a
+  // compound filter would widen the business-only restriction silently.
+  const others = (target: { only: string } | { except: string }) =>
+    restrictToSharedBusiness(
+      "only" in target
+        ? base().eq("driver_user_id", target.only)
+        : base().neq("driver_user_id", target.except),
+    ).in("id", wanted);
+
+  if (scope.kind === "self") return idSet([await own(scope.driverUserId)]);
+  if (scope.kind === "other")
+    return idSet([await others({ only: scope.driverUserId })]);
+  return idSet(
+    await Promise.all([
+      own(scope.viewerUserId),
+      others({ except: scope.viewerUserId }),
+    ]),
+  );
+}
+
+function idSet(results: readonly { data: unknown }[]): Set<string> {
+  const out = new Set<string>();
+  for (const { data } of results)
+    for (const row of (data ?? []) as { id: string }[]) out.add(row.id);
+  return out;
 }
 
 /**

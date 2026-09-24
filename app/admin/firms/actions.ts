@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { invitationToken } from "@/lib/ids";
 import {
   enterpriseSiteOrigin,
@@ -27,7 +27,7 @@ import { isValidSlugFormat, pickAvailableSlug } from "@/lib/firm/slug";
  */
 export async function approveFirmRequest(formData: FormData) {
   await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   const requestId = String(formData.get("request_id") ?? "");
   // Optional operator-supplied slug. We validate against the
   // firms_slug_format_check + reserved-words list; if invalid we
@@ -155,7 +155,7 @@ export async function approveFirmRequest(formData: FormData) {
  */
 export async function createFirmDirect(formData: FormData) {
   await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
 
   const firmName = String(formData.get("firm_name") ?? "").trim();
   const contactEmail = String(formData.get("contact_email") ?? "")
@@ -242,7 +242,7 @@ export async function createFirmDirect(formData: FormData) {
 
 export async function rejectFirmRequest(formData: FormData) {
   await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
   const requestId = String(formData.get("request_id") ?? "");
   if (!requestId) throw new Error("Missing request id");
 

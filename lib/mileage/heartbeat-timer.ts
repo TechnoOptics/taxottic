@@ -36,7 +36,16 @@
 export const HEARTBEAT_EVERY_MS = 5 * 60_000;
 
 let timer: ReturnType<typeof setInterval> | null = null;
-let beat: (() => void) | null = null;
+/**
+ * The sender's return value is deliberately `unknown` rather than `void`.
+ *
+ * The ingest-driven path does not care: it fires and forgets. beatOnForeground
+ * does, because the render that follows it reads the column this beat writes,
+ * and a caller that cannot await the send is a caller that renders first and
+ * asks the server second. sendHeartbeat already returns a promise; the old
+ * `() => void` signature was throwing it away at the registration site.
+ */
+let beat: (() => unknown) | null = null;
 
 /**
  * Wall-clock time of the last beat, and the reason this module no longer
@@ -77,7 +86,7 @@ let lastBeatAt = 0;
  * This is an optimisation, not the contract. If native-tracker never loads,
  * the timer fetches the sender itself. See ensureHeartbeatTimer.
  */
-export function registerHeartbeatSender(fn: () => void): void {
+export function registerHeartbeatSender(fn: () => unknown): void {
   beat = fn;
 }
 
@@ -104,14 +113,15 @@ export function registerHeartbeatSender(fn: () => void): void {
  * timer callback minutes after module init, so there is no cycle to resolve
  * and nothing is half-initialised by the time it lands.
  */
-async function resolveSender(): Promise<(() => void) | null> {
+async function resolveSender(): Promise<(() => unknown) | null> {
   if (beat) return beat;
   try {
     const mod = await import("./native-tracker");
     if (!beat && typeof mod.sendHeartbeat === "function") {
-      beat = () => {
-        void mod.sendHeartbeat();
-      };
+      // Returns the promise rather than discarding it, so a caller that
+      // needs to know when the beat LANDED can wait for it. sendHeartbeat
+      // swallows its own failures, so this never rejects.
+      beat = () => mod.sendHeartbeat();
     }
   } catch {
     // Offline, or the chunk failed to load. The next tick tries again;
@@ -165,7 +175,94 @@ function maybeBeat(): void {
   const now = Date.now();
   if (lastBeatAt && now - lastBeatAt < HEARTBEAT_EVERY_MS) return;
   lastBeatAt = now;
-  void resolveSender().then((fn) => fn?.());
+  void resolveSender().then((fn) => {
+    // The sender now returns sendHeartbeat's promise (see `beat` above).
+    // This path does not wait for it, but it must not leave the rejection
+    // unhandled either.
+    void Promise.resolve(fn?.()).catch(() => {});
+  });
+}
+
+/**
+ * The beat that is in flight for the current foregrounding, if any.
+ *
+ * Both triggers fire on the same return: native-tracker's appStateChange
+ * listener, which is the OS's own statement that the app came forward, and
+ * the drive log's own visibility handler, which needs to know when the beat
+ * LANDED so it can re-render after it. Refusing the second caller would
+ * technically be correct anti-spam and would break the thing this exists
+ * for, so they share one send and both await it.
+ */
+let pendingForegroundBeat: Promise<boolean> | null = null;
+
+/**
+ * Beat because the app just came forward. Resolves true once a heartbeat
+ * has actually been sent, false if the wall-clock gate refused.
+ *
+ * ## Why foregrounding needs its own trigger at all
+ *
+ * A finished drive becomes a trip only when finalize can prove the phone was
+ * alive AND quiet: `mileage_device_status.reported_at` at least one
+ * TRIP_END_DWELL_MS newer than the newest GPS point (see ./tail-close.ts).
+ * Heartbeats are the only thing that advances that column and they ride
+ * ingest, so a parked car (no movement, no fixes, no ingest) stops them
+ * dead. Nothing then restarted them until the driver's next drive, the
+ * ten-minute cron catching a device that happened to beat, or the six-hour
+ * ceiling. Measured on the reporting driver's handset: three drives on
+ * 2026-08-23 became trip rows 6h 33m, 8h 57m and 12h 35m after they ended,
+ * all three within four minutes of the beats resuming when the app was next
+ * opened. That gap is the "click around and hope the drive shows up" the
+ * driver described.
+ *
+ * ## Why it cannot shorten a drive
+ *
+ * A heartbeat is evidence of LIFE, never of parking. shouldCloseOpenTail
+ * refuses to close before a full dwell of GPS silence however fresh the beat
+ * is, so a driver still moving is untouched by this. Nothing here goes near
+ * forceClose, which is the flag that would bypass that check.
+ *
+ * ## Anti-spam
+ *
+ * Same gate, same field, same constant as maybeBeat: one wall-clock reading
+ * of "how recently did we beat". A driver flicking to a text message and
+ * back six times posts one heartbeat, not six. Deliberately NOT a second
+ * scheme of its own, because two answers to that question means the one
+ * nobody reads is the one that spams.
+ *
+ * No timer, on purpose. A backgrounded WebView freezes setInterval while
+ * native callbacks keep arriving; this rides a real OS event and compares
+ * the wall clock, which is the only combination that works across a
+ * background stretch.
+ */
+export function beatOnForeground(): Promise<boolean> {
+  if (pendingForegroundBeat) return pendingForegroundBeat;
+
+  const now = Date.now();
+  if (lastBeatAt && now - lastBeatAt < HEARTBEAT_EVERY_MS)
+    return Promise.resolve(false);
+  // Stamped BEFORE the send, exactly as maybeBeat does it, so a slow send
+  // cannot queue a second beat behind it.
+  lastBeatAt = now;
+
+  const run = resolveSender()
+    .then(async (fn) => {
+      if (!fn) return false;
+      await fn();
+      return true;
+    })
+    // Offline, a chunk that would not load, or a sender that threw. The
+    // caller must not be told fresh evidence exists when it does not.
+    .catch(() => false);
+  pendingForegroundBeat = run;
+  void run.then(
+    () => {
+      pendingForegroundBeat = null;
+    },
+    () => {
+      pendingForegroundBeat = null;
+    },
+  );
+  return run;
 }
 
 /** Test seam. Not used by the app. */
@@ -174,4 +271,5 @@ export function __resetHeartbeatTimerForTest(): void {
   timer = null;
   beat = null;
   lastBeatAt = 0;
+  pendingForegroundBeat = null;
 }

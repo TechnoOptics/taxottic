@@ -1,36 +1,44 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
-import { BoltIcon, EyeIcon, MapIcon, PinIcon } from "@/components/ui/Icons";
+import { WarningIcon } from "@/components/ui/Icons";
 import { requireUserWithAdmin, getMyCompanies } from "@/lib/auth";
-import {
-  MileageMap,
-  type MapTrip,
-  type MapPlace,
-} from "@/components/mileage/MileageMap";
+import { type MapPlace } from "@/components/mileage/MileageMap";
 import { AutoTrackToggle } from "@/components/mileage/AutoTrackToggle";
 import { MobileOnly } from "@/components/MobileOnly";
 import { TrackerStatus } from "@/components/mileage/TrackerStatus";
-import { type TripRow } from "@/components/mileage/TripList";
-import { MileageReview } from "@/components/mileage/MileageReview";
+import { DriveLog } from "@/components/mileage/DriveLog";
+import type { SentDrive } from "@/app/api/mileage/drives/route";
 import { ManualLogTrip } from "@/components/mileage/ManualLogTrip";
 import { CompleteDriveFromStops } from "@/components/mileage/CompleteDriveFromStops";
 import { RecoverLostDrives } from "@/components/mileage/RecoverLostDrives";
 import { DriverPicker } from "@/components/mileage/DriverPicker";
 import {
   ALL_DRIVERS,
-  loadScopedTrips,
   resolveTripScope,
   stripForeignPrivateTrips,
 } from "@/lib/mileage/team-scope";
-import { TeamTrackingHealth } from "@/components/mileage/TeamTrackingHealth";
+import { loadDrivePage } from "@/lib/mileage/drive-page";
+import { indexPlaces, tripPlaces } from "@/lib/mileage/place-names";
+import {
+  TeamTrackingHealth,
+  driversNeedingAttention,
+} from "@/components/mileage/TeamTrackingHealth";
+import { TeamViewNote } from "@/components/mileage/TeamViewNote";
+import { TeamLog } from "@/components/mileage/TeamLog";
 import { loadTeamTrackingHealth } from "@/lib/mileage/team-health";
+import { describeDeviceCause, evaluateDeviceCause } from "@/lib/mileage/device-cause";
 import { TrackingHealthBanner } from "@/components/mileage/TrackingHealthBanner";
 import {
   assessMileageTrackingHealth,
 } from "@/lib/mileage/health";
 import { finalizeUserTrips } from "@/lib/mileage/finalize";
-import { settleWithinBudget } from "@/lib/mileage/finalize-freshness";
+import {
+  RENDER_FRESHNESS_WINDOW_MS,
+  settleWithinBudget,
+} from "@/lib/mileage/finalize-freshness";
 import { FinalizeSettleRefresh } from "@/components/mileage/FinalizeSettleRefresh";
+import { MileageAutoRefresh } from "@/components/mileage/MileageAutoRefresh";
+import { countDrivesAwaitingDecision } from "@/lib/mileage/awaiting-decision";
 import { partitionLoggedTrips } from "@/lib/mileage/passenger";
 import { countRecoverableApproxTrips } from "@/lib/mileage/reconstruct";
 import { recoverApproximateTrips } from "./actions";
@@ -54,24 +62,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type SP = Promise<{ range?: string; driver?: string }>;
-
-const RANGES: Record<string, { label: string; days: number }> = {
-  day: { label: "Today", days: 1 },
-  week: { label: "This week", days: 7 },
-  month: { label: "This month", days: 31 },
-  quarter: { label: "Quarter", days: 92 },
-};
-
-function fmtMiles(m: number) {
-  return m.toLocaleString("en-US", { maximumFractionDigits: 1 });
-}
-function fmtUsd(cents: number) {
-  return (cents / 100).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-}
+type SP = Promise<{ driver?: string }>;
 
 export default async function MileagePage({
   searchParams,
@@ -79,11 +70,7 @@ export default async function MileagePage({
   searchParams: SP;
 }) {
   const { user, admin } = await requireUserWithAdmin();
-  const { range = "day", driver: driverParam = "" } = await searchParams;
-  const rangeCfg = RANGES[range] ?? RANGES.week;
-  const sinceIso = new Date(
-    new Date().getTime() - rangeCfg.days * 86_400_000,
-  ).toISOString();
+  const { driver: driverParam = "" } = await searchParams;
 
   const memberships = await getMyCompanies();
   const company = memberships[0]?.company ?? null;
@@ -105,11 +92,21 @@ export default async function MileagePage({
   // client, which waits for that single run and refreshes ONCE. A run that
   // finished inside the budget leaves this false and costs no second
   // render at all.
+  //
+  // The WINDOW is what makes that budget affordable. It used to be 7
+  // days, which made finalize page ~6,700 rows of permanently-unconsumed
+  // staging residue out of PostgREST on every single load (7 sequential
+  // HTTP round trips, 1.1-1.5s measured) and create nothing, because the
+  // cron and the ingest path had already processed all of it. See
+  // RENDER_FRESHNESS_WINDOW_MS for why hours is the right order of
+  // magnitude here and which paths cover the rest.
   let finalizeOutstanding = false;
   if (company) {
     const { finished } = await settleWithinBudget(
       finalizeUserTrips(admin, user.id, company.id, {
-        sinceIso: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+        sinceIso: new Date(
+          Date.now() - RENDER_FRESHNESS_WINDOW_MS,
+        ).toISOString(),
         // Never sever a drive that is still in progress; and the user
         // is looking at the page, so no push ping for what they see.
         forceClose: false,
@@ -176,14 +173,6 @@ export default async function MileagePage({
     drivers.find((d) => d.userId === viewingDriverId)?.label ?? null;
   const showDriverPicker = isManager && drivers.length >= 2;
 
-  // Team drive-tracking health (manager-only), computed from raw uploads
-  // so it is accurate even for a teammate on an old build. Surfaces a
-  // driver whose phone went silent or has been parked, the failure that
-  // used to go unnoticed until a week of drives had already gone missing.
-  const teamHealth =
-    isManager && drivers.length >= 1
-      ? await loadTeamTrackingHealth(admin, company!.id, drivers, Date.now())
-      : [];
   // Driver display names for the map legend + rollup (strip the "· you"
   // / "· Dept" suffixes the picker label carries).
   const driverNameById = new Map(
@@ -200,8 +189,12 @@ export default async function MileagePage({
     tax_year: number;
     deduction_cents: number;
     needs_confirmation: boolean | null;
+    /** The saved place each end matched, if any. mileage_trips has no
+     *  lat/lng of its own, so these two uuids are the only way a row can
+     *  name where it went before its polyline arrives. */
+    start_place_id?: string | null;
+    end_place_id?: string | null;
   };
-  type Pt = { lat: number; lng: number; captured_at: string };
 
   let trips: ServerTripRow[] = [];
   // Drives the driver marked "I was a passenger". Held back from the log,
@@ -211,205 +204,283 @@ export default async function MileagePage({
   let places: MapPlace[] = [];
   let lastPointISO: string | null = null;
   let lastTripISO: string | null = null;
-  // Route polylines, keyed by trip id. Fetched via the
-  // mileage_trip_polylines RPC, NOT an embedded mileage_points(...) join:
-  // PostgREST caps embedded arrays at 1000 rows, which truncated long
-  // drives mid-route (a 35.8 mi drive drew only its first ~19 mi). The
-  // RPC returns a bounded, evenly-strided sample that still reaches each
-  // route's true start + end.
-  const pointsByTrip = new Map<string, Pt[]>();
+  // Tracker-status diagnostics are only meaningful for the self view:
+  // "is YOUR tracker running" says nothing useful when a manager is
+  // reviewing a teammate's log, and TrackerStatus is hidden there.
+  const wantsSelfDiagnostics = Boolean(company) && viewingSelf;
+  const wantsTeamHealth = Boolean(company) && isManager && drivers.length >= 1;
+
+  // These six reads are mutually independent: they hit different tables
+  // and not one of them consumes another's result. They used to be
+  // awaited one after another, so the page paid the SUM of six round
+  // trips (measured against the live account: 762 ms) to learn six
+  // unrelated facts. Issued together it pays the slowest single one
+  // (measured 247 ms). The one read that genuinely does have a
+  // dependency stays sequential below: the recovery count needs the
+  // health verdict.
+  const [
+    scopedTrips,
+    placeRes,
+    lastPointRes,
+    lastTripRes,
+    selfHealth,
+    teamHealth,
+    awaitingDecision,
+    selfStatusRes,
+  ] = await Promise.all([
+      company
+        ? // PRIVACY. Every restriction is applied in the query, server
+          // side: your own drives come back whole, anyone else's are
+          // narrowed to confirmed business trips. Nothing personal is
+          // fetched and then hidden. See lib/mileage/team-scope.ts +
+          // team-scope.test.ts; RLS does NOT enforce this, a manager may
+          // read every trip in the company, so these filters are the only
+          // barrier.
+          // One page of the newest drives, with no date floor. The page
+          // used to ask for a window computed from ?range=, which showed
+          // a blank screen to a driver whose fixes had not finished
+          // uploading. See lib/mileage/drive-page.ts.
+          loadDrivePage<ServerTripRow>(admin, {
+            companyId: company.id,
+            scope,
+          })
+        : Promise.resolve([] as ServerTripRow[]),
+      company
+        ? admin
+            .from("mileage_places")
+            .select("id, kind, label, lat, lng")
+            .eq("company_id", company.id)
+        : Promise.resolve({ data: null }),
+      // Most recent GPS point ingested by THIS user, across any company
+      // they belong to. mileage_points has no driver_user_id; join
+      // through the trip. A single 1-row fetch, so the page render cost
+      // is constant regardless of how many points exist.
+      wantsSelfDiagnostics
+        ? admin
+            .from("mileage_points")
+            .select("captured_at, trip:mileage_trips!inner(driver_user_id)")
+            .eq("trip.driver_user_id", user.id)
+            .order("captured_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      wantsSelfDiagnostics
+        ? admin
+            .from("mileage_trips")
+            .select("started_at")
+            .eq("driver_user_id", user.id)
+            .order("started_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      // Tracking-health check (self only, you can't fix another driver's
+      // phone). When drives aren't being captured, warn + offer recovery.
+      wantsSelfDiagnostics
+        ? assessMileageTrackingHealth(admin, user.id, company!.id)
+        : Promise.resolve(null),
+      // Team drive-tracking health (manager-only), computed from raw
+      // uploads so it is accurate even for a teammate on an old build.
+      // Surfaces a driver whose phone went silent or has been parked, the
+      // failure that used to go unnoticed until a week of drives had
+      // already gone missing.
+      wantsTeamHealth
+        ? loadTeamTrackingHealth(admin, company!.id, drivers, Date.now())
+        : Promise.resolve([]),
+      // How many of the VIEWER'S OWN drives are waiting on a decision,
+      // across every date. Range-independent on purpose: this page opens
+      // on "Today", and the driver holding ten pending drives had none
+      // from today, so a range-scoped count told them they were caught
+      // up. Joining the parallel group means the page pays the slowest
+      // member rather than the sum, and this is a single indexed head
+      // request (0.25 ms measured against the live account), so the
+      // group's cost does not move. See lib/mileage/awaiting-decision.ts.
+      company
+        ? countDrivesAwaitingDecision(admin, user.id)
+        : Promise.resolve(0),
+      // The viewer's own phone, in its own words (self only). The
+      // heartbeat row already names the setting that stops capture,
+      // Location at While Using above all, and a driver who opens this
+      // page with that row written should read it here, not find out
+      // from a manager nine days later. Columns pre-exist; no new query
+      // shape, one indexed row.
+      wantsSelfDiagnostics
+        ? admin
+            .from("mileage_device_status")
+            .select("platform, location_authorization, background_refresh, low_power_mode, battery_optimized, tracking_enabled")
+            .eq("driver_user_id", user.id)
+            .eq("company_id", company!.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
   if (company) {
-    // PRIVACY. Every restriction is applied in the query, server side:
-    // your own drives come back whole, anyone else's are narrowed to
-    // confirmed business trips. Nothing personal is fetched and then
-    // hidden. See lib/mileage/team-scope.ts + team-scope.test.ts; RLS
-    // does NOT enforce this, a manager may read every trip in the
-    // company, so these filters are the only barrier.
     // The privacy strip feeds the passenger partition DIRECTLY, so no name
     // in scope ever holds the unpartitioned rows for a later edit to
     // render by accident. A teammate's row can never be a passenger one
     // anyway (loadScopedTrips restricts foreign drives to business), so
     // everything held back here is the viewer's own.
     ({ logged: trips, excluded: excludedTrips } = partitionLoggedTrips(
-      stripForeignPrivateTrips(
-        await loadScopedTrips<ServerTripRow>(admin, {
-          companyId: company.id,
-          scope,
-          sinceIso,
-        }),
-        user.id,
-      ),
+      stripForeignPrivateTrips(scopedTrips, user.id),
     ));
 
-    if (trips.length > 0) {
-      // PostgREST truncates ANY response at max-rows (1000). 500 trips x
-      // 250 points blows through that, so only the first ~4 trips (in
-      // uuid order, effectively random) got polylines back and every
-      // other row rendered NO thumbnail. Page through with .range()
-      // until a short page.
-      const polyRows: ({ trip_id: string } & Pt)[] = [];
-      const POLY_PAGE = 1000;
-      for (let from = 0; from < 60_000; from += POLY_PAGE) {
-        const { data: pageRows } = await admin
-          .rpc("mileage_trip_polylines", {
-            p_trip_ids: trips.map((t) => t.id),
-            p_max: 250,
-          })
-          .range(from, from + POLY_PAGE - 1);
-        const rows = (pageRows ?? []) as ({ trip_id: string } & Pt)[];
-        polyRows.push(...rows);
-        if (rows.length < POLY_PAGE) break;
-      }
-      for (const r of polyRows) {
-        const arr = pointsByTrip.get(r.trip_id);
-        if (arr) arr.push({ lat: r.lat, lng: r.lng, captured_at: r.captured_at });
-        else
-          pointsByTrip.set(r.trip_id, [
-            { lat: r.lat, lng: r.lng, captured_at: r.captured_at },
-          ]);
-      }
-    }
+    places = (placeRes.data ?? []) as unknown as MapPlace[];
+    lastPointISO =
+      (lastPointRes.data as { captured_at?: string } | null)?.captured_at ??
+      null;
+    lastTripISO =
+      (lastTripRes.data as { started_at?: string } | null)?.started_at ?? null;
 
-    const { data: placeData } = await admin
-      .from("mileage_places")
-      .select("id, kind, label, lat, lng")
-      .eq("company_id", company.id);
-    places = (placeData ?? []) as unknown as MapPlace[];
-
-    // Tracker-status diagnostic, most recent GPS point ingested by
-    // THIS user, across any company they belong to. mileage_points
-    // doesn't have driver_user_id; join through the trip. Using a
-    // single 1-row fetch so the page render cost is constant
-    // regardless of how many points exist. Only computed for the
-    // self view, "is YOUR tracker running" is meaningless when a
-    // manager is reviewing another driver's log (TrackerStatus is
-    // hidden in that case).
-    if (viewingSelf) {
-      const { data: lastPoint } = await admin
-        .from("mileage_points")
-        .select("captured_at, trip:mileage_trips!inner(driver_user_id)")
-        .eq("trip.driver_user_id", user.id)
-        .order("captured_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      lastPointISO =
-        (lastPoint as { captured_at?: string } | null)?.captured_at ?? null;
-
-      const { data: lastTrip } = await admin
-        .from("mileage_trips")
-        .select("started_at")
-        .eq("driver_user_id", user.id)
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      lastTripISO =
-        (lastTrip as { started_at?: string } | null)?.started_at ?? null;
-    }
   }
 
-  const businessMiles = trips
-    .filter((t) => t.classification === "business")
-    .reduce((a, t) => a + Number(t.distance_miles), 0);
-  const deductionCents = trips
-    .filter((t) => t.classification === "business")
-    .reduce((a, t) => a + Number(t.deduction_cents), 0);
-  const unclassifiedCount = trips.filter(
-    (t) => t.classification === "unclassified",
-  ).length;
+  // How many drives are waiting on the viewer. NOT derived from `trips`:
+  // that array is scoped to the selected range, and this page opens on
+  // "Today". Production on 2026-08-24 had one driver holding ten drives
+  // awaiting a decision, the newest from the day before, so a
+  // range-scoped number greeted them with "All caught up".
+  //
+  // It also used to count `classification === "unclassified"` alone,
+  // which by August was the rarer of the two undecided states. Sixteen
+  // production drives carried `needs_confirmation`: classified business
+  // by the machine with no place evidence behind the call, held out of
+  // the Schedule C headline by #616, and absent from every count here.
+  // The product withheld the deduction and never asked. Both states are
+  // the same request of the driver, and one tap in the review deck
+  // settles either. See lib/mileage/awaiting-decision.ts.
+  const awaitingCount = awaitingDecision;
+  const showsOwnQueue = viewingSelf || viewingAll;
 
-  // Belt-and-braces, in the same spirit as stripForeignPrivateTrips: the
-  // partition above already removed every passenger drive, and the map has
-  // no colour for one because it must never draw one. Re-stating it here
-  // as a real runtime check means a future edit that renders the
-  // unpartitioned rows still cannot put an excluded route on the map.
-  const drawable = trips.filter(
-    (t): t is ServerTripRow & { classification: MapTrip["classification"] } =>
-      t.classification !== "passenger",
-  );
-  const mapTrips: MapTrip[] = drawable.map((t) => ({
-    id: t.id,
-    classification: t.classification,
-    approximate: ((t as { notes?: string | null }).notes ?? "").startsWith(
-      "Approximate drive",
-    ),
-    // Driver identity only in the "all drivers" overlay, so single-driver
-    // views keep the business/personal classification colours.
-    driverId: viewingAll ? t.driver_user_id ?? null : null,
-    driverName: viewingAll
-      ? driverNameById.get(t.driver_user_id ?? "") ?? null
-      : null,
-    points: (pointsByTrip.get(t.id) ?? [])
-      .slice()
-      .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
-      .map((p) => ({ lat: p.lat, lng: p.lng })),
-  }));
+  // A drive's saved endpoints, by place id. mileage_trips stores the two
+  // place uuids and no coordinates, so this is what turns
+  // `start_place_id` into "Office" on the first paint, with no geocoder
+  // and no polyline. Same helper as the drives route uses for the pages
+  // appended after this one, so page one and page two cannot disagree
+  // about what a place is called (lib/mileage/place-names.ts).
+  const placeIndex = indexPlaces(places);
 
-  // Per-driver rollup for the team overlay (business miles + deduction per
-  // teammate), largest deduction first. Empty outside "all drivers" mode.
-  const driverRollup = viewingAll
-    ? (() => {
-        const by = new Map<
-          string,
-          { miles: number; deduction: number; trips: number }
-        >();
-        for (const t of trips) {
-          const k = t.driver_user_id ?? "";
-          const cur = by.get(k) ?? { miles: 0, deduction: 0, trips: 0 };
-          cur.trips += 1;
-          if (t.classification === "business") {
-            cur.miles += Number(t.distance_miles);
-            cur.deduction += Number(t.deduction_cents);
-          }
-          by.set(k, cur);
-        }
-        return Array.from(by.entries())
-          .map(([id, agg]) => ({
-            id,
-            label: driverNameById.get(id) ?? "Driver",
-            ...agg,
-          }))
-          .sort((a, b) => b.deduction - a.deduction);
-      })()
-    : [];
+  // The map's trips, the per-driver rollup and the per-arm totals all
+  // moved into the two client owners (DriveLog, TeamLog). They are
+  // derived from the FILTERED drives now, because a total or a legend
+  // that describes a different set than the map beside it reads as
+  // authoritative and is wrong on the first tap.
 
-  // Tracking-health check (self only, you can't fix another driver's
-  // phone). When drives aren't being captured, warn + offer recovery.
-  let health: Awaited<ReturnType<typeof assessMileageTrackingHealth>> | null =
-    null;
+  // The health verdict itself was fetched in the parallel group above.
+  // Only the recovery count is left here, because it is the one read that
+  // genuinely depends on that verdict: it is asked for solely to size the
+  // "recover lost drives" offer, and a healthy tracker never shows one.
+  const health = selfHealth;
+  // A driver who turned tracking off is not alarmed about their own
+  // choice (the same rule as evaluateDriveTrackingHealth's "off").
+  const selfStatus = (selfStatusRes?.data ?? null) as {
+    platform: string | null;
+    location_authorization: string | null;
+    background_refresh: boolean | null;
+    low_power_mode: boolean | null;
+    battery_optimized: boolean | null;
+    tracking_enabled: boolean | null;
+  } | null;
+  const selfCause =
+    selfStatus && selfStatus.tracking_enabled !== false
+      ? evaluateDeviceCause({
+          platform: selfStatus.platform,
+          locationAuthorization: selfStatus.location_authorization,
+          backgroundRefresh: selfStatus.background_refresh,
+          lowPowerMode: selfStatus.low_power_mode,
+          batteryOptimized: selfStatus.battery_optimized,
+          trackingEnabled: selfStatus.tracking_enabled,
+        })
+      : null;
+  const selfCauseText =
+    selfCause && selfStatus
+      ? describeDeviceCause(selfCause, selfStatus.platform, "driver")
+      : null;
+  // Does the head carry a tracking marker at all? Asked here, from the
+  // alert's own rule (driversNeedingAttention), because the head must
+  // not render an empty marker: a marker that appears on every visit and
+  // says nothing is the noise this screen was cut for.
+  const teamNeedsAttention =
+    isManager && driversNeedingAttention(teamHealth).length > 0;
+  const selfNeedsAttention =
+    viewingSelf && (health?.status === "degraded" || Boolean(selfCauseText));
+
+  // Whose drives these are, in the words the head says them in. One
+  // line replaces the breadcrumb, the two-line title and the "Reviewing
+  // X's drives" strip: the strip explained in a paragraph what naming
+  // the driver says in two words, and the breadcrumb duplicated the nav
+  // AppHeader already renders.
+  const whoseDrives = viewingAll
+    ? "All drivers"
+    : viewingSelf
+      ? "Your drives"
+      : driverNameById.get(viewingDriverId ?? "") ??
+        viewingDriverLabel?.split(" · ")[0] ??
+        "A teammate";
+
   let recoverable = 0;
-  if (company && viewingSelf) {
-    health = await assessMileageTrackingHealth(admin, user.id, company.id);
-    if (health.status === "degraded") {
-      recoverable = await countRecoverableApproxTrips(
-        admin,
-        user.id,
-        company.id,
-        new Date(Date.now() - 90 * 86_400_000).toISOString(),
-      );
-    }
+  if (company && viewingSelf && health?.status === "degraded") {
+    recoverable = await countRecoverableApproxTrips(
+      admin,
+      user.id,
+      company.id,
+      new Date(Date.now() - 90 * 86_400_000).toISOString(),
+    );
   }
+
+  // The head's two slots, built once and handed to whichever arm renders
+  // the head. Server-rendered nodes travelling as props into a client
+  // component, which is how the manager's switch and the tracking detail
+  // reach a head that DriveLog renders.
+  const driverSwitcher = showDriverPicker ? (
+    <DriverPicker
+      selfUserId={user.id}
+      drivers={drivers}
+      current={viewingAll ? ALL_DRIVERS : viewingDriverId}
+    />
+  ) : null;
+
+  // A marker ONLY when a phone needs attention, which is why both arms
+  // are decided above rather than rendered unconditionally and left to
+  // return null: an empty marker still costs a line on the identity row.
+  const trackingMarker =
+    teamNeedsAttention || selfNeedsAttention ? (
+      <>
+        {teamNeedsAttention ? <TeamTrackingHealth rows={teamHealth} /> : null}
+        {selfNeedsAttention ? (
+          <details className="w-full rounded-xl border border-amber-300 bg-amber-50/60">
+            <summary className="mono-label flex min-h-11 cursor-pointer select-none list-none items-center gap-2 px-3 text-amber-900">
+              <WarningIcon className="size-4 shrink-0" />
+              Tracking needs attention
+            </summary>
+            <div className="px-1 pb-1">
+              <TrackingHealthBanner
+                reason={health?.status === "degraded" ? health.reason ?? "" : ""}
+                cause={
+                  selfCauseText
+                    ? `${selfCauseText.short}. ${selfCauseText.fix}`
+                    : null
+                }
+                recoverable={recoverable}
+                recoverAction={recoverApproximateTrips}
+              />
+            </div>
+          </details>
+        ) : null}
+      </>
+    ) : null;
 
   return (
     <main id="main" className="min-h-screen">
       <AppHeader email={user.email ?? undefined} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:pl-60 xl:pl-64 2xl:pl-72 lg:max-w-none lg:mx-0 lg:pr-8 xl:pr-12 2xl:pr-16 py-6 sm:py-10">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          <Link
-            href="/dashboard"
-            className="underline decoration-dotted hover:text-forest-900"
-          >
-            Dashboard
-          </Link>{" "}
-          · Mileage
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900 leading-tight">
-          Drive log &amp; mileage deduction
-        </h1>
         {!company ? (
-          <p className="mt-4 text-sm text-ink-soft">
-            Join or create a company to start tracking business
-            mileage.
-          </p>
+          <>
+            <h1 className="display text-xl text-[var(--foreground)]">
+              Your drives
+            </h1>
+            <p className="mt-4 text-sm text-ink-soft">
+              Join or create a company to start tracking business
+              mileage.
+            </p>
+          </>
         ) : (
           <>
             {/* The freshness pass was still running when this render had
@@ -418,252 +489,90 @@ export default async function MileagePage({
                 Renders nothing, and is not rendered at all when finalize
                 finished inside its budget. */}
             {finalizeOutstanding ? <FinalizeSettleRefresh /> : null}
-            <div className="mt-2 text-sm text-ink-soft">
-              {company.name} · {rangeCfg.label.toLowerCase()}
-            </div>
+            {/* Re-renders this page when the driver comes back to the app.
+                Different hole from the one above: that one covers a
+                freshness pass still running as the page shipped, this one
+                covers a page that was correct when it shipped and has
+                since gone stale in a WebView the OS kept alive across a
+                drive. Renders nothing, never polls, and refetches the
+                payload rather than reloading the document, which would
+                tear down the live tracker. */}
+            <MileageAutoRefresh />
+            {/* THE HEAD. It was a breadcrumb, a two-line title, a
+                company line, a tracking alert, a driver selector, a Team
+                view row, a "needs a quick call" card and eight pills in
+                five treatments; measured at 390px it put the window
+                filter at 769px and the first drive row at 1405px.
+                Everything it carried that is still a capability is
+                either on this line or below the list.
 
-            {isManager && teamHealth.length > 0 ? (
-              <TeamTrackingHealth rows={teamHealth} />
-            ) : null}
-
-            {/* Manager-only driver switcher. Re-scopes the whole page to
-                a chosen teammate's drives. */}
-            {showDriverPicker ? (
-              <div className="mt-4">
-                <DriverPicker
-                  selfUserId={user.id}
-                  drivers={drivers}
-                  current={viewingAll ? ALL_DRIVERS : viewingDriverId}
-                />
-              </div>
-            ) : null}
-
-            {viewingAll ? (
-              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
-                <MapIcon className="size-4 shrink-0" />
-                <span>
-                  Team view: every driver&apos;s trails in their own colour,
-                  numbered to match the legend. Teammates show confirmed
-                  business drives only, never their personal miles. Your own
-                  drives show every classification.
-                </span>
-                <Link
-                  href={`/mileage?range=${range}&driver=${user.id}`}
-                  className="underline decoration-dotted whitespace-nowrap hover:text-forest-900"
-                >
-                  My drive log →
-                </Link>
-              </div>
-            ) : !viewingSelf ? (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-forest-200 bg-forest-50 px-4 py-2.5 text-sm text-forest-800">
-                <EyeIcon className="size-4 shrink-0" />
-                <span>
-                  Reviewing{" "}
-                  <span className="font-medium">
-                    {viewingDriverLabel ?? "a teammate"}
-                  </span>
-                  &apos;s drives. You can re-classify or remove trips; their
-                  own tracking controls stay on their device.
-                </span>
-              </div>
-            ) : null}
-
-            {/* Auto-track toggle + tracker diagnostics are self-only -
-                you can't flip another driver's phone tracker. */}
-            {viewingSelf ? (
-              <div className="mt-4">
-                <MobileOnly
-                  title="Automatic mileage tracking"
-                  description="Taxottic uses your phone's GPS to detect drives and log them in the background, this runs only in the Taxottic mobile app. On the web you can still add drives by hand below."
-                >
-                  <AutoTrackToggle companyId={company.id} />
-                </MobileOnly>
-              </div>
-            ) : null}
-
-            {/* "Is the tracker actually running?", the diagnostic
-                strip the user asked for after their first real
-                drive-day produced zero GPS points. Green when active,
-                red with a checklist + manual-log pointer when not. */}
-            {viewingSelf ? (
-              <TrackerStatus
-                lastPointISO={lastPointISO}
-                lastTripISO={lastTripISO}
-              />
-            ) : null}
-
-            {viewingSelf && health?.status === "degraded" ? (
-              <div className="mt-4">
-                <TrackingHealthBanner
-                  reason={health.reason ?? ""}
-                  recoverable={recoverable}
-                  recoverAction={recoverApproximateTrips}
-                />
-              </div>
-            ) : null}
-
-            {/* Pending-classification banner. Mirrors the watch's
-                Confirm tab for users without a watch. Big amber CTA
-                links to the phone-side swipe deck at
-                /mileage/classify. Hidden when nothing is pending, and
-                when reviewing another driver (that deck is your own).
-                Shown in the team view too: a teammate's unclassified drives
-                are never fetched, so this count is only ever the viewer's,
-                and making the team view the default must not silently cost
-                a manager their own triage queue. */}
-            {(viewingSelf || viewingAll) && unclassifiedCount > 0 ? (
-              <Link
-                href="/mileage/classify"
-                className="mt-4 block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-400"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid place-items-center size-9 shrink-0 rounded-full bg-amber-500 text-white">
-                    <BoltIcon className="size-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="display text-sm text-amber-900">
-                      {unclassifiedCount === 1
-                        ? "1 drive needs a quick call"
-                        : `${unclassifiedCount} drives need a quick call`}
-                    </div>
-                    <div className="text-xs text-amber-800 mt-0.5">
-                      Tap to swipe business / personal →
-                    </div>
-                  </div>
-                  <span
-                    aria-hidden="true"
-                    className="text-amber-900 text-sm"
-                  >
-                    →
-                  </span>
-                </div>
-              </Link>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {Object.entries(RANGES).map(([k, v]) => (
-                <Link
-                  key={k}
-                  // Carry the driver scope across a range change. Without
-                  // it, switching range drops ?driver= and, now that no
-                  // param means the team view, would throw a manager out
-                  // of whichever single log they were reading.
-                  href={
-                    isManager && driverParam
-                      ? `/mileage?range=${k}&driver=${driverParam}`
-                      : `/mileage?range=${k}`
-                  }
-                  className={
-                    "text-xs px-3 h-8 inline-flex items-center rounded-full border " +
-                    (k === range
-                      ? "bg-forest-900 text-cream border-forest-900"
-                      : "border-forest-200 text-forest-800 hover:border-gold-300")
-                  }
-                >
-                  {v.label}
-                </Link>
-              ))}
-              {/* Cross-link to the dedicated business-trips
-                  breadcrumb dashboard. Keep this here even when
-                  there are zero business trips so a returning
-                  driver can land on the YTD view in one tap. */}
-              <Link
-                href="/mileage/business?range=ytd"
-                className="ml-1 text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400"
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-1.5 rounded-full bg-emerald-500"
-                />
-                Business breadcrumbs →
-              </Link>
-              {/* New (May 2026): saved places. Adding a "work" place
-                  here means every future trip that touches it
-                  auto-classifies as business, the auto-deduct hook
-                  the user asked for. Surface it next to the
-                  breadcrumb link so the discovery path is obvious. */}
-              <Link
-                href="/mileage/places"
-                className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
-              >
-                <PinIcon className="size-3.5 shrink-0" />
-                Saved places →
-              </Link>
-              {/* New (May 2026): per-user schedule. Lets the driver
-                  configure which days + hours auto-tracking is
-                  allowed to run (always / weekdays / custom). The
-                  toggle on this page still has the kill switch; the
-                  schedule just bounds when auto-resume kicks in. */}
-              <Link
-                href="/mileage/schedule"
-                className="text-xs px-3 h-8 inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 text-gold-900 hover:border-gold-400"
-              >
-                <span aria-hidden="true">⏰</span>
-                Schedule →
-              </Link>
-            </div>
-
+                THE TEAM OVERLAY RENDERS IT HERE; the single-driver arm
+                hands the same three things to DriveLog and lets that
+                component render it, because the total under the identity
+                line has to describe the drives the filter is showing and
+                DriveLog is what holds them. The overlay has no filter,
+                so its total already describes everything it draws. */}
             {viewingAll ? (
               // Team overlay: a read-only map of everyone's trails (one
-              // colour per driver) + a per-driver rollup. Per-trip triage
+              // colour per driver) + a per-driver rollup, under the SAME
+              // window control the single-driver log has. Per-trip triage
               // (reclassify / delete) stays on a single driver's log, so
-              // the mixed multi-owner overlay never exposes those actions.
-              <>
-                <div className="mt-4">
-                  <MileageMap trips={mapTrips} places={places} height={460} />
-                </div>
-                {driverRollup.length > 0 ? (
-                  <ul className="mt-4 grid gap-2">
-                    {driverRollup.map((d) => (
-                      <li
-                        key={d.id}
-                        className="card p-4 flex items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-forest-900 truncate">
-                            {d.label}
-                          </div>
-                          <div className="text-xs text-ink-muted mt-0.5">
-                            {d.trips} trip{d.trips === 1 ? "" : "s"} ·{" "}
-                            {fmtMiles(d.miles)} business mi
-                          </div>
-                        </div>
-                        <div className="display text-lg text-forest-900 tabular-nums">
-                          {fmtUsd(d.deduction)}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </>
-            ) : (
-              /* Map + trip list share one client owner so "Review" on a
-                 trip focuses that single drive on the map and only ONE
-                 trip is ever in review at a time. Default (no focus) is
-                 the range overview where all drives plot together. The
-                 list is grouped + timezone-aware (local, not Vercel UTC);
-                 Business/Personal are exact-match toggles that show
-                 nothing selected for an unclassified drive. */
-              <MileageReview
-                mapTrips={mapTrips}
+              // the mixed multi-owner overlay never exposes those actions;
+              // the way to one driver is the picker on the identity line.
+              //
+              // The drives are handed over in the drives route's own
+              // payload shape, so the page appended after this one is the
+              // same kind of thing as this one.
+              <TeamLog
+                who={whoseDrives}
+                where={company.name}
+                awaiting={showsOwnQueue ? awaitingCount : 0}
+                switcher={driverSwitcher}
+                tracking={trackingMarker}
+                initialDrives={trips.map<SentDrive>((t) => ({
+                  ...t,
+                  ...tripPlaces(placeIndex, t),
+                }))}
+                companyId={company.id}
+                driverParam={driverParam}
                 places={places}
-                tripRows={trips.map<TripRow>((t) => ({
-                  id: t.id,
-                  startedAtISO: t.started_at,
-                  endedAtISO: t.ended_at,
-                  distanceMiles: Number(t.distance_miles),
-                  classification: t.classification,
-                  deductionCents: Number(t.deduction_cents),
-                  needsConfirmation: t.needs_confirmation === true,
-                  points: pointsByTrip.get(t.id) ?? [],
-                  companyId: company.id,
+                driverNames={Object.fromEntries(driverNameById)}
+              />
+            ) : (
+              /* The filter, the map and the trip list share one client
+                 owner so a tap on the window changes the list without a
+                 round trip, and so "Review" on a trip focuses that single
+                 drive on the map with only ONE trip in review at a time.
+                 The list is grouped + timezone-aware (local, not Vercel
+                 UTC); Business/Personal are exact-match toggles that show
+                 nothing selected for an unclassified drive.
+
+                 Both arrays are handed over in the drives route's own
+                 payload shape, so the page appended after this one is the
+                 same kind of thing as this one. The endpoint names are
+                 resolved HERE, on the server, rather than handing the
+                 whole place list to the client: the row renders a name,
+                 not a lookup table. */
+              <DriveLog
+                who={whoseDrives}
+                where={company.name}
+                /* Zero when the viewer is reading somebody else's log:
+                   the queue is the viewer's own and the deck only
+                   settles their drives. */
+                awaiting={showsOwnQueue ? awaitingCount : 0}
+                switcher={driverSwitcher}
+                tracking={trackingMarker}
+                initialDrives={trips.map<SentDrive>((t) => ({
+                  ...t,
+                  ...tripPlaces(placeIndex, t),
                 }))}
-                excludedRows={excludedTrips.map((t) => ({
-                  id: t.id,
-                  startedAtISO: t.started_at,
-                  endedAtISO: t.ended_at,
-                  distanceMiles: Number(t.distance_miles),
+                initialExcluded={excludedTrips.map<SentDrive>((t) => ({
+                  ...t,
+                  ...tripPlaces(placeIndex, t),
                 }))}
+                companyId={company.id}
+                driverParam={driverParam}
+                places={places}
                 reclassify={reclassifyTrip}
                 deleteTrip={deleteTrip}
                 companies={memberships.map((m) => ({
@@ -674,134 +583,112 @@ export default async function MileagePage({
               />
             )}
 
-            {/* Stat tiles moved below the map/trip list (May 2026), the
-                user asked for the map and logged drives to be the first
-                thing visible on this page, not stats. Kept compact under
-                a small "Details" label rather than the full-size cards
-                that used to sit above the fold. */}
-            <div className="mt-6">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-                Details
-              </div>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Stat
-                  compact
-                  label="Business miles"
-                  value={fmtMiles(businessMiles)}
-                  tone={businessMiles > 0 ? "good" : "neutral"}
-                />
-                <Stat
-                  compact
-                  label="Mileage deduction"
-                  value={fmtUsd(deductionCents)}
-                  tone="good"
-                />
-                {/* Same "needs review" count, but when it's > 0 we wrap
-                    it in a Link to the swipe deck so the stat itself is
-                    the tap target (mirroring the amber banner above -
-                    some users tap the stat instead of the banner). */}
-                {(viewingSelf || viewingAll) && unclassifiedCount > 0 ? (
-                  <Link
-                    href="/mileage/classify"
-                    className="col-span-2 sm:col-span-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            {/* EVERYTHING ELSE, BELOW THE DRIVES. Each of these is a
+                place you go or a thing you set up, not a thing you
+                read. The drives are what the screen is for, so they
+                come first and these keep every capability one scroll
+                away.
+
+                The stat tiles that used to sit here went with them:
+                business miles, the deduction and the waiting count are
+                the head now, and a second copy below the list was the
+                same three numbers asked for twice. */}
+            <div className="mt-10 border-t border-edge pt-4">
+              <h2 className="mono-label">More</h2>
+              <nav aria-label="Mileage tools" className="mt-1 grid">
+                <Link
+                  // The business view defaults to year to date on its
+                  // own, so this link needs no query at all.
+                  href="/mileage/business"
+                  className="min-h-11 flex items-center text-sm text-[var(--foreground)] underline decoration-dotted underline-offset-4"
+                >
+                  Business breadcrumbs
+                </Link>
+                {/* Saved places: a "work" place here auto-classifies
+                    every future trip that touches it. */}
+                <Link
+                  href="/mileage/places"
+                  className="min-h-11 flex items-center text-sm text-[var(--foreground)] underline decoration-dotted underline-offset-4"
+                >
+                  Saved places
+                </Link>
+                {/* The per-user schedule bounds when auto-resume runs;
+                    the toggle below is still the kill switch. */}
+                <Link
+                  href="/mileage/schedule"
+                  className="min-h-11 flex items-center text-sm text-[var(--foreground)] underline decoration-dotted underline-offset-4"
+                >
+                  Schedule
+                </Link>
+              </nav>
+
+              {/* What the team overlay shows and what teammates keep
+                  private. It was above the map, where it said the same
+                  thing on every visit; the way back to the manager's own
+                  log is the switch on the identity line. */}
+              {viewingAll ? <TeamViewNote selfUserId={user.id} /> : null}
+
+              {/* Auto-track toggle + tracker diagnostics are self-only:
+                  you cannot flip another driver's phone tracker. */}
+              {viewingSelf ? (
+                <div className="mt-4">
+                  <MobileOnly
+                    title="Automatic mileage tracking"
+                    description="Drive detection runs in the Taxottic mobile app."
                   >
-                    <Stat
-                      compact
-                      label="Need review"
-                      value={String(unclassifiedCount)}
-                      tone="warn"
-                      caption="Tap to classify →"
-                    />
-                  </Link>
-                ) : (
-                  <Stat
-                    compact
-                    label="Need review"
-                    value={String(unclassifiedCount)}
-                    tone={unclassifiedCount > 0 ? "warn" : "neutral"}
-                    caption={
-                      unclassifiedCount > 0 ? "Unclassified" : "All caught up"
-                    }
-                  />
-                )}
-              </div>
+                    <AutoTrackToggle companyId={company.id} />
+                  </MobileOnly>
+                </div>
+              ) : null}
+
+              {/* "Is the tracker actually running?", the diagnostic
+                  strip the user asked for after their first real
+                  drive-day produced zero GPS points. Green when active,
+                  red with a checklist + manual-log pointer when not. */}
+              {viewingSelf ? (
+                <TrackerStatus
+                  lastPointISO={lastPointISO}
+                  lastTripISO={lastTripISO}
+                />
+              ) : null}
+
+              {/* Manual backfill entry, collapsed by default. The user
+                  ALWAYS has a way to log a drive even if the tracker
+                  missed it (the realistic scenario, given GPS background
+                  capture on Android is best-effort). Self-only: a manual
+                  trip is always logged under the current user. */}
+              {viewingSelf ? <ManualLogTrip action={addManualTrip} /> : null}
+              {/* Route reconstruction, the "phone died mid-drive"
+                  recovery. Enter the stops; we compute the distance. */}
+              {viewingSelf ? (
+                <CompleteDriveFromStops action={addRouteTrip} />
+              ) : null}
+              {/* "My app closed on the drive back and the drive never
+                  showed." Sweeps 45 days of staged points, closes drives
+                  the phone left open, and reports what it could NOT turn
+                  into a drive rather than reporting silence. */}
+              {viewingSelf ? <RecoverLostDrives /> : null}
             </div>
 
-            {/* Manual backfill entry, collapsed by default. The user
-                ALWAYS has a way to log a drive even if the tracker
-                missed it (the realistic scenario, given GPS background
-                capture on Android is best-effort). Self-only: a manual
-                trip is always logged under the current user, so it's
-                hidden when reviewing another driver. */}
-            {viewingSelf ? <ManualLogTrip action={addManualTrip} /> : null}
-            {/* Route reconstruction, the "phone died mid-drive" recovery.
-                Enter the stops; we compute the driving distance. */}
-            {viewingSelf ? (
-              <CompleteDriveFromStops action={addRouteTrip} />
-            ) : null}
-            {/* "My app closed on the drive back and the drive never
-                showed." Sweeps 45 days of staged points, closes drives
-                the phone left open, and reports what it could NOT turn
-                into a drive rather than reporting silence. Self-only:
-                the sweep runs against the caller's own staging pool. */}
-            {viewingSelf ? <RecoverLostDrives /> : null}
-
-            <p className="mt-8 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
-              Deduction uses the IRS standard mileage rate for the
-              trip&apos;s tax year and applies only to trips marked
-              business. Standard-mileage and actual-vehicle-expense
-              methods are mutually exclusive per vehicle per year -
-              confirm your method with your preparer.
-            </p>
+            {/* 249 characters in one block before, which is the "too many
+                words" complaint in its longest single instance on this
+                screen. Same two facts, shorter, and split so neither
+                block is a wall. Held under 170 rendered characters by
+                MilesFirstDrive.ct.spec.tsx, which measures what is on
+                screen rather than what is in the source. */}
+            <div className="mt-8 grid gap-1 text-[11px] text-ink-muted leading-relaxed max-w-2xl">
+              <p>
+                Deduction uses the IRS standard mileage rate for the
+                drive&apos;s tax year, business drives only.
+              </p>
+              <p>
+                Standard mileage and actual expenses are exclusive per
+                vehicle per year. Confirm your method with your preparer.
+              </p>
+            </div>
           </>
         )}
       </section>
     </main>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone = "neutral",
-  caption,
-  compact = false,
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "good" | "warn";
-  caption?: string;
-  compact?: boolean;
-}) {
-  const dot =
-    tone === "good"
-      ? "bg-emerald-500"
-      : tone === "warn"
-        ? "bg-amber-400"
-        : "bg-gold-400";
-  return (
-    <article
-      className={
-        "card flex items-center gap-3 " + (compact ? "p-3" : "p-4")
-      }
-    >
-      <span aria-hidden="true" className={"size-2.5 rounded-full " + dot} />
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
-          {label}
-        </div>
-        <div
-          className={
-            "display text-forest-900 tabular-nums mt-0.5 " +
-            (compact ? "text-lg" : "text-2xl")
-          }
-        >
-          {value}
-        </div>
-        {caption ? (
-          <div className="text-[11px] text-ink-muted mt-0.5">{caption}</div>
-        ) : null}
-      </div>
-    </article>
   );
 }

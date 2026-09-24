@@ -108,7 +108,7 @@ export function MileageLogBuilder() {
             Your business trips for {TAX_YEAR}
           </caption>
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.16em] text-gold-700">
+            <tr className="text-left mono-label">
               <th scope="col" className="font-medium px-2 pb-1">Date</th>
               <th scope="col" className="font-medium px-2 pb-1">Business purpose</th>
               <th scope="col" className="font-medium px-2 pb-1">From</th>
@@ -184,7 +184,7 @@ export function MileageLogBuilder() {
                       className="input py-2 text-right"
                     />
                   </td>
-                  <td className="px-2 py-3 text-right tabular-nums text-forest-900 whitespace-nowrap">
+                  <td className="px-2 py-3 text-right figure text-forest-900 whitespace-nowrap">
                     {row && row.deductionCents > 0
                       ? formatCents(row.deductionCents)
                       : "-"}
@@ -199,7 +199,7 @@ export function MileageLogBuilder() {
                       type="button"
                       onClick={() => removeRow(i)}
                       aria-label={`Remove trip ${i + 1}`}
-                      className="text-ink-muted hover:text-forest-900 text-lg leading-none px-1"
+                      className="inline-flex items-center justify-center h-11 w-9 text-ink-muted hover:text-forest-900 text-lg leading-none"
                     >
                       &times;
                     </button>
@@ -210,21 +210,15 @@ export function MileageLogBuilder() {
           </tbody>
         </table>
 
-        <button
-          type="button"
-          onClick={addRow}
-          className="mt-3 inline-flex items-center justify-center h-10 px-4 rounded-[0.625rem] border border-gold-300/40 text-sm text-forest-800 hover:bg-cream/70 transition-colors"
-        >
+        <button type="button" onClick={addRow} className="btn-quiet mt-3">
           Add a trip
         </button>
       </div>
 
       <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-start">
         <div className="card p-5 sm:p-6">
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-            Your log so far
-          </div>
-          <div className="mt-1 display text-3xl sm:text-4xl text-forest-900">
+          <div className="mono-label">Your log so far</div>
+          <div className="mt-1 figure font-medium text-3xl sm:text-4xl text-forest-900">
             {formatCents(summary.totalDeductionCents)}
           </div>
           <p className="mt-1 text-sm text-ink-soft">
@@ -234,7 +228,7 @@ export function MileageLogBuilder() {
           </p>
 
           {summary.incompleteCount > 0 ? (
-            <div className="mt-4 rounded-xl border border-gold-300/60 bg-cream/70 px-4 py-3">
+            <div className="mt-4 rounded-xl border border-edge px-4 py-3">
               <p className="text-sm font-medium text-forest-800">
                 {summary.incompleteCount}{" "}
                 {summary.incompleteCount === 1 ? "trip needs" : "trips need"}{" "}
@@ -272,26 +266,23 @@ export function MileageLogBuilder() {
           type="button"
           onClick={downloadCsv}
           disabled={!hasRows}
-          className="inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] bg-forest-900 text-cream text-sm font-semibold hover:bg-forest-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+          className="btn-primary whitespace-nowrap"
         >
           Download CSV
         </button>
       </div>
 
-      <div className="rounded-2xl bg-forest-900 text-cream p-6">
-        <p className="text-sm leading-relaxed">
+      <div className="border-t border-edge pt-5">
+        <p className="text-sm leading-relaxed text-ink-soft">
           Typing this out once a year is the part that fails.{" "}
-          <span className="text-gold-300">
+          <strong className="font-medium text-forest-900">
             Taxottic writes the log as you drive
-          </span>
+          </strong>
           , by GPS, with the date, the route and a map already attached, so
           the record exists before anyone asks for it.
         </p>
-        <Link
-          href="/login"
-          className="mt-4 inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] bg-gold-300 text-forest-900 text-sm font-semibold hover:bg-gold-200 transition-colors"
-        >
-          Keep my log automatically, free →
+        <Link href="/login" className="btn-quiet mt-4">
+          Keep my log automatically, free
         </Link>
       </div>
     </div>

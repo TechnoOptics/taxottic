@@ -1,8 +1,6 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 
 export const metadata = {
   title: "Get the app",
@@ -60,31 +58,11 @@ export default async function GetPage() {
         : null;
 
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          borderBottom: "1px solid rgba(213, 187, 126, 0.14)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Wordmark />
-          <MarketingNav />
-          <SignInIconLink />
-        </div>
-      </header>
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell>
 
       <section className="max-w-2xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <div className="text-[10px] uppercase tracking-[0.32em] text-gold-700 font-medium">
-          Install Taxottic
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-4xl text-forest-900">
+        <h1 className="display text-3xl sm:text-4xl text-forest-900">
           Get the app
         </h1>
         <p className="mt-3 text-sm text-ink-soft leading-relaxed max-w-lg">
@@ -115,14 +93,14 @@ export default async function GetPage() {
         {/* Every option stays reachable: UA detection is a hint, and
             people forward these links between devices. */}
         <div className="mt-10 pt-8 border-t border-forest-100">
-          <h2 className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+          <h2 className="mono-label">
             All the ways in
           </h2>
           <ul className="mt-4 space-y-3">
             <li>
               <a
                 href={APP_STORE_URL}
-                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950"
+                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950 inline-flex items-center min-h-11"
               >
                 iPhone, App Store
               </a>
@@ -130,7 +108,7 @@ export default async function GetPage() {
             <li>
               <a
                 href={PLAY_URL}
-                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950"
+                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950 inline-flex items-center min-h-11"
               >
                 Android, Google Play
               </a>
@@ -138,7 +116,7 @@ export default async function GetPage() {
             <li>
               <Link
                 href="/login"
-                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950"
+                className="text-sm text-forest-800 underline underline-offset-4 hover:text-forest-950 inline-flex items-center min-h-11"
               >
                 Any browser, no install
               </Link>
@@ -152,7 +130,7 @@ export default async function GetPage() {
         </div>
 
         <div className="mt-10 pt-8 border-t border-forest-100">
-          <h2 className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+          <h2 className="mono-label">
             After you install
           </h2>
           <ol className="mt-4 space-y-2 text-sm text-ink-soft leading-relaxed list-decimal pl-4">
@@ -182,6 +160,7 @@ export default async function GetPage() {
           </p>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

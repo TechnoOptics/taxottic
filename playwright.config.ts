@@ -46,11 +46,19 @@ export default defineConfig({
     // all 16 page snapshots and all 14 component snapshots byte-identical
     // across every run, and byte-identical to the committed *-linux.png
     // baselines. Zero differing pixels, so on CI this costs nothing and
-    // any threshold would be safe. macOS is not quite zero — five local
+    // any threshold would be safe. macOS was not quite zero — five local
     // runs moved one snapshot (compare-hub mobile, the Next dev-tools
-    // badge failing to paint once), which counts 0.43% of that page at
+    // badge failing to paint once), which counted 0.43% of that page at
     // this threshold against the 1% budget above, versus 0.26% at the
     // default.
+    //
+    // That badge was the whole macOS floor, and it is gone: the dev-tools
+    // overlay is disabled in next.config.ts (`devIndicators: false`) and
+    // the baselines were regenerated without it, so the only element that
+    // ever moved between identical macOS runs no longer renders. See
+    // lib/visual/dev-indicators.test.ts for the measurement, including why
+    // the gate below could never have caught it — the badge costs less
+    // than the 1% budget on every page, so it came and went in silence.
     //
     // Why not go lower, given a zero floor. Because a floor measured today
     // is not a guarantee: the runner image and the bundled Chromium both

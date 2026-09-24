@@ -4,11 +4,18 @@ import {
   evaluateDriveTrackingHealth,
   type DriveHealthResult,
 } from "@/lib/mileage/device-health";
+import { evaluateDeviceCause, type DeviceCause } from "@/lib/mileage/device-cause";
 
 export type DriverHealthRow = {
   userId: string;
   label: string;
   health: DriveHealthResult;
+  /** What the phone's own status row says is wrong, or null when the
+   *  row does not know. See device-cause.ts. */
+  cause: DeviceCause | null;
+  /** "ios" | "android" | "web" as the heartbeat reports it, so the
+   *  cause can name the right Settings path. */
+  platform: string | null;
 };
 
 /**
@@ -81,34 +88,52 @@ export async function loadTeamTrackingHealth(
     }
   }
 
-  // Toggle intent overlay (best-effort).
+  // Toggle intent overlay (best-effort), plus the device-truth columns
+  // the phone wrote about itself. Those name the cause when there is
+  // one: a row that says location_authorization = 'whenInUse' knows why
+  // it is silent, and the manager should be told that rather than a
+  // guess.
+  type StatusRow = {
+    driver_user_id: string;
+    tracking_enabled: boolean | null;
+    background_refresh: boolean | null;
+    platform: string | null;
+    location_authorization: string | null;
+    low_power_mode: boolean | null;
+    battery_optimized: boolean | null;
+  };
   const { data: statuses } = await admin
     .from("mileage_device_status")
-    .select("driver_user_id, tracking_enabled, background_refresh")
+    .select("driver_user_id, tracking_enabled, background_refresh, platform, location_authorization, low_power_mode, battery_optimized")
     .eq("company_id", companyId)
     .in("driver_user_id", ids);
-  const enabledById = new Map(
-    (statuses ?? []).map((s) => [
-      s.driver_user_id as string,
-      s.tracking_enabled as boolean | null,
-    ]),
-  );
-  const bgRefreshById = new Map(
-    (statuses ?? []).map((s) => [
-      s.driver_user_id as string,
-      s.background_refresh as boolean | null,
-    ]),
+  const statusById = new Map(
+    ((statuses ?? []) as StatusRow[]).map((s) => [s.driver_user_id, s]),
   );
 
-  return drivers.map((d) => ({
-    userId: d.userId,
-    label: d.label,
-    health: evaluateDriveTrackingHealth({
-      nowMs,
-      lastUploadMs: lastUpload.get(d.userId) ?? null,
-      lastMovementMs: lastMovement.get(d.userId) ?? null,
-      trackingEnabled: enabledById.get(d.userId) ?? null,
-      backgroundRefresh: bgRefreshById.get(d.userId) ?? null,
-    }),
-  }));
+  return drivers.map((d) => {
+    const s = statusById.get(d.userId);
+    return {
+      userId: d.userId,
+      label: d.label,
+      health: evaluateDriveTrackingHealth({
+        nowMs,
+        lastUploadMs: lastUpload.get(d.userId) ?? null,
+        lastMovementMs: lastMovement.get(d.userId) ?? null,
+        trackingEnabled: s?.tracking_enabled ?? null,
+        backgroundRefresh: s?.background_refresh ?? null,
+      }),
+      cause: s
+        ? evaluateDeviceCause({
+            platform: s.platform ?? null,
+            locationAuthorization: s.location_authorization ?? null,
+            backgroundRefresh: s.background_refresh ?? null,
+            lowPowerMode: s.low_power_mode ?? null,
+            batteryOptimized: s.battery_optimized ?? null,
+            trackingEnabled: s.tracking_enabled ?? null,
+          })
+        : null,
+      platform: s?.platform ?? null,
+    };
+  });
 }

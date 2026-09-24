@@ -103,9 +103,7 @@ export function EffectiveTaxRateCalculator({
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       <div className="card p-6 sm:p-7">
-        <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-          Your income
-        </div>
+        <div className="mono-label">Your income</div>
         <h2 className="display text-xl text-forest-900 mt-1">
           What do you earn?
         </h2>
@@ -188,33 +186,31 @@ export function EffectiveTaxRateCalculator({
 
       <div className="lg:sticky lg:top-6">
         {result ? (
-          <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-                Effective tax rate
-              </div>
+          <div className="card p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-3">
+              <div className="mono-label">Effective tax rate</div>
               <ShareButton onShare={share} copied={copied} />
             </div>
-            <div className="mt-1 display text-5xl sm:text-6xl text-forest-900">
+            <div className="mt-1 figure font-medium text-5xl sm:text-6xl text-forest-900">
               {(result.effectiveRate * 100).toFixed(1)}%
             </div>
 
             <dl className="mt-5 grid gap-2.5 text-sm">
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-ink-soft">Marginal federal bracket</dt>
-                <dd className="tabular-nums font-medium text-forest-900">
+                <dd className="figure font-medium text-forest-900">
                   {(result.marginalRate * 100).toFixed(0)}%
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-ink-soft">Total estimated tax</dt>
-                <dd className="tabular-nums font-medium text-forest-900">
+                <dd className="figure font-medium text-forest-900">
                   {formatCents(result.totalTaxCents)}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-ink-soft">After-tax income</dt>
-                <dd className="tabular-nums font-medium text-emerald-700">
+                <dd className="figure font-medium text-emerald-700">
                   {formatCents(result.afterTaxCents)}
                 </dd>
               </div>
@@ -228,17 +224,16 @@ export function EffectiveTaxRateCalculator({
               that matters for decisions like a raise or an extra contract.
             </p>
 
-            <div className="mt-6 rounded-xl bg-forest-900 text-cream px-5 py-4">
-              <div className="text-sm leading-relaxed text-cream/90">
+            <div className="mt-6 border-t border-edge pt-5">
+              <p className="text-sm leading-relaxed text-ink-soft">
                 Self-employed or side-hustling? Taxottic keeps this{" "}
-                <span className="text-gold-300 font-medium">live all year</span>{" "}
+                <strong className="font-medium text-forest-900">
+                  live all year
+                </strong>{" "}
                 and finds the deductions that lower it.
-              </div>
-              <Link
-                href="/login?intent=signup"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
-              >
-                Start free →
+              </p>
+              <Link href="/login?intent=signup" className="btn-primary mt-3">
+                Start free
               </Link>
             </div>
 
@@ -250,7 +245,7 @@ export function EffectiveTaxRateCalculator({
         ) : (
           <div className="card p-6 sm:p-7 grid place-items-center text-center min-h-[240px]">
             <div>
-              <ChartIcon className="size-9 mx-auto text-gold-700" />
+              <ChartIcon className="size-9 mx-auto text-ink-muted" />
               <p className="mt-3 text-sm text-ink-soft max-w-xs">
                 Enter your income to see your real effective tax rate, your
                 marginal bracket, and your after-tax take-home.

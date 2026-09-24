@@ -23,12 +23,42 @@ import { PUBLIC_PAGES } from "./public-pages";
  * empty) + masking of live values before their screenshots are stable.
  */
 
+/**
+ * The app-download banner is `position: fixed` to the bottom of the
+ * VIEWPORT, and it mounts from an effect that reads localStorage.
+ *
+ * A fullPage screenshot is stitched by scrolling, so a fixed element
+ * lands wherever the viewport happened to be when its strip was
+ * captured. On the home page that put the banner over the instrument
+ * panel on some runs and in its resting place on others: the same page,
+ * two legitimate images. That is the ~3% intermittent home diff PR 1
+ * recorded as failing 2 of 4 CI runs and could not explain, and it was
+ * always going to be unexplainable from the pass/fail alone.
+ *
+ * Dismissing it before the first paint is the honest fix rather than
+ * masking a rectangle: it is exactly the state of a reader who has
+ * closed the banner once, the component then returns null, and nothing
+ * fixed is left on the page to float.
+ */
+const BANNER_DISMISS_KEY = "taxottic-app-banner-dismissed-v1";
+
 for (const p of PUBLIC_PAGES) {
   test(`visual: ${p.name}`, async ({ page }) => {
+    await page.addInitScript((key) => {
+      try {
+        window.localStorage.setItem(key, "1");
+      } catch {
+        /* private mode: the banner stays, and so does the flake */
+      }
+    }, BANNER_DISMISS_KEY);
     await page.goto(p.path, { waitUntil: "networkidle" });
     // Web fonts must be ready or text metrics differ between runs.
     await page.evaluate(() => document.fonts.ready);
     await settleImages(page);
+    // The marketing header is deliberately fixed and must stay in the
+    // baseline, so this does not forbid fixed positioning outright. The
+    // banner was the element that MOVED between runs, because it mounts
+    // from an effect rather than being there from the first paint.
     await expect(page).toHaveScreenshot(`${p.name}.png`, {
       fullPage: true,
       // animations:"disabled" (set in playwright.config) also blanks the
@@ -44,8 +74,11 @@ for (const p of PUBLIC_PAGES) {
  * NOT wait for images the browser deferred. Anything with loading="lazy"
  * below the viewport races the screenshot: the request is often aborted while
  * it is still off-screen, so the same page snapshots with the image present on
- * one run and blank on the next. The home page's photography (see
- * public/marketing/CREDITS.md) is exactly that shape.
+ * one run and blank on the next. The home page's four stock photographs were
+ * exactly that shape. They are gone (the Year rewrite dropped them, and
+ * lib/marketing/year-grammar.test.ts pins that public/marketing does not come
+ * back), but the guides and the store badges still carry deferred images, so
+ * this stays.
  *
  * So: promote every deferred image to eager, scroll the document once to fire
  * anything gated on intersection, return to the top, and only then wait for

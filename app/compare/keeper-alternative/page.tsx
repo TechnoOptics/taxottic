@@ -1,7 +1,5 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 const SITE = "https://taxottic.com";
@@ -89,27 +87,11 @@ const VERIFIED = "Verified February 2026 against Keeper's own site.";
 
 export default function KeeperAlternativePage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="compare">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-2">
         <nav
@@ -126,10 +108,7 @@ export default function KeeperAlternativePage() {
           <span aria-hidden="true">/</span>
           <span className="text-forest-800">Keeper</span>
         </nav>
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700 mt-6">
-          Compare
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 mt-6 leading-tight">
           A Keeper alternative, focused on the forecast.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
@@ -231,7 +210,7 @@ export default function KeeperAlternativePage() {
         </div>
 
         <div className="rounded-2xl bg-forest-900 text-cream p-7 text-center">
-          <h2 className="display text-2xl text-gold-300">
+          <h2 className="display text-2xl text-cream">
             See your number in 60 seconds
           </h2>
           <p className="mt-2 text-sm text-cream/90 max-w-md mx-auto leading-relaxed">
@@ -241,19 +220,20 @@ export default function KeeperAlternativePage() {
           <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
             <Link
               href="/login?intent=signup"
-              className="rounded-full bg-gold-400 px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-gold-300 transition-colors"
+              className="rounded-sm bg-cream px-5 py-2.5 text-sm font-semibold text-forest-950 hover:bg-cream/90 transition-colors"
             >
-              Start free →
+              Start free
             </Link>
             <Link
               href="/calculators/self-employment-tax"
-              className="rounded-full border border-cream/30 px-5 py-2.5 text-sm font-medium text-cream hover:bg-cream/10 transition-colors"
+              className="rounded-sm border border-cream/30 px-5 py-2.5 text-sm font-medium text-cream hover:bg-cream/10 transition-colors"
             >
               Try a calculator
             </Link>
           </div>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

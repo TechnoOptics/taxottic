@@ -14,13 +14,17 @@ const SLUG = "quarterly-estimated-taxes-explained";
 const TITLE = "Quarterly estimated taxes, explained";
 const DESCRIPTION =
   "Who owes quarterly estimated taxes, the four due dates, how to estimate each payment, and how the safe-harbor rule lets you avoid the IRS underpayment penalty.";
+// The guide's series line. One constant for three places: the
+// visible shell, the OG card and the Article JSON-LD image, which the
+// OG route renders in the eyebrow position.
+const SERIES = "Estimates";
 
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: `/guides/${SLUG}` },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}`, width: 1200, height: 630 }] },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}`] },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: `/guides/${SLUG}`, type: "article", images: [{ url: `/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [`/api/og/guide?title=${encodeURIComponent(TITLE)}&series=${encodeURIComponent(SERIES)}`] },
   robots: {
     index: true,
     follow: true,
@@ -31,6 +35,7 @@ export const metadata = {
 const ARTICLE_LD = guideArticleLd({
   slug: SLUG,
   title: TITLE,
+  series: SERIES,
   description: DESCRIPTION,
   published: "2026-06-08",
   modified: "2026-07-04",
@@ -84,7 +89,7 @@ export default function Page() {
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={FAQ_LD} />
       <GuideShell
-        kicker="Estimates"
+        series={SERIES}
         title={TITLE}
         lead="No employer is withholding tax from your income, so the IRS asks you to prepay it four times a year. Here's who owes, when, how much, and how to never trip the penalty."
         updated="June 2026"

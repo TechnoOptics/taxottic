@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createSandboxExcludingClient } from "@/lib/hq/elevated-client";
 import { updateFeedbackStatus } from "../actions";
 
 const KIND_LABEL: Record<string, string> = {
@@ -14,7 +14,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export default async function AdminFeedbackPage() {
   const { user } = await requireSuperAdmin();
-  const admin = createServiceClient();
+  const admin = createSandboxExcludingClient();
 
   const { data: items } = await admin
     .from("feedback")

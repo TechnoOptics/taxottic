@@ -1,0 +1,53 @@
+-- mileage_points_raw carried two indexes that are the same index.
+--
+-- WHAT WAS THERE
+--
+--   mileage_points_raw_identity_uq   UNIQUE (driver_user_id, company_id, captured_at)
+--   mileage_points_raw_window_idx           (driver_user_id, company_id, captured_at)
+--
+-- Same three columns, same order, neither partial. A btree serves a
+-- query by its leading columns, so every scan the second can serve the
+-- first serves identically. The second adds no read capability at all.
+--
+-- WHY IT COSTS SOMETHING
+--
+-- This is the hottest write path in the product. Every GPS fix a phone
+-- uploads becomes an insert here, and the finalize and stitch crons
+-- update the same rows to mark them consumed. Measured on production
+-- on 2026-08-22:
+--
+--   live rows            94,173
+--   heap                 15 MB
+--   all indexes          29 MB      nearly twice the data it indexes
+--   window_idx           10 MB      about a third of that
+--   inserts              157,282    since the last stats reset
+--   updates              162,974
+--
+-- Every one of those 320,000 write operations maintained a duplicate
+-- 10 MB btree for nothing. Index maintenance is not free on a table
+-- being written to continuously by phones in the field, and this is
+-- the table whose ingest latency the tracker actually feels.
+--
+-- WHY THIS IS SAFE
+--
+--   - window_idx backs no constraint. Read out of pg_constraint, not
+--     assumed: its conindid join returns null.
+--   - identity_uq is the one that must stay. It is what the ingest
+--     upsert's idempotency key resolves against, so dropping THAT
+--     would break duplicate suppression. It is deliberately kept.
+--   - pending_idx has the same three columns but carries
+--     `where consumed_at is null`, which makes it a different, much
+--     smaller index (3.8 MB) serving the drain query. Not redundant,
+--     not touched.
+--
+-- window_idx had 35,835 scans, so it is in use rather than dead. That
+-- is not an argument for keeping it: those scans move to identity_uq,
+-- which has identical columns and is already the most-used index on
+-- the table at 746,521 scans.
+--
+-- Plain DROP INDEX rather than CONCURRENTLY: a drop is a catalog
+-- change plus an unlink, its ACCESS EXCLUSIVE lock is held for
+-- milliseconds, and CONCURRENTLY cannot run inside the transaction a
+-- migration executes in.
+
+drop index if exists public.mileage_points_raw_window_idx;

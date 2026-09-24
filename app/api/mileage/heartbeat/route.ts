@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { parseSignalReport } from "@/lib/mileage/signals";
 import { WEB_BUILD_ID } from "@/lib/build-id";
 
 export const runtime = "nodejs";
 
 /**
  * Device-state heartbeat (reliability plan, workstream C). The tracker
- * reports its OWN view of health — toggle state, buffer depth, seconds
+ * reports its OWN view of health: toggle state, buffer depth, seconds
  * since the last native callback, flush failure streak, and (once the
  * native DeviceStatus plugin ships) the actual location-authorization
  * level. This turns "the server infers death from hours of GPS silence"
@@ -85,6 +86,30 @@ const CAR_PROBE_VALUES = new Set([
   "ok",
   "unavailable",
   "null",
+  "error",
+  "timeout",
+]);
+
+/** Why the geofence read returned what it did. Allowlisted like the
+ *  others so a client cannot write arbitrary text into a column that
+ *  gets grouped on.
+ *
+ *  Same five words as PROBE_VALUES above, deliberately: all three probe
+ *  outcomes sit side by side in one row, so a word must not mean one
+ *  thing in geofence_probe and another in device_probe. Kept as its own
+ *  Set rather than aliased to PROBE_VALUES so that widening one
+ *  client union cannot silently widen the other two columns.
+ *
+ *  Read geofence_probe WITH geofence_probe_ms. "error" is both an
+ *  unregistered plugin (rejects in 1-2ms) and a live plugin that threw
+ *  (slower); nothing else tells them apart. Collapsing them is what
+ *  reported self_check = "dead=geofence_plugin" on a phone whose own
+ *  heartbeats carried arm state "armed" 163 times.
+ *  See lib/mileage/geofence.ts. */
+const GEOFENCE_PROBE_VALUES = new Set([
+  "ok",
+  "null",
+  "unavailable",
   "error",
   "timeout",
 ]);
@@ -194,6 +219,45 @@ export async function POST(req: NextRequest) {
     car_disconnects: num("carDisconnects"),
     car_bluetooth_adapter: str("carBluetoothAdapter", 16),
     car_pending_signals: num("carPendingSignals"),
+    // VEHICLE SIGNALS drained from the iOS native buffer.
+    //
+    // The four functions that produce this (drainVehicleSignals,
+    // clearVehicleSignals, queryMotionHistory, auditCaptureGap) shipped
+    // in the iOS binary with ZERO callers: built, bridged, registered,
+    // and never once invoked. lib/mileage/vehicle-signal-wiring.test.ts
+    // holds the call site in place; these columns are where the answer
+    // lands.
+    //
+    // Read vehicle_probe FIRST, like car_probe. "null" means the bridge
+    // answered and the buffer was empty, which given that zero car
+    // connections have ever been recorded on either platform is a real
+    // and expected outcome, and is itself the finding.
+    vehicle_probe: oneOf("vehicleProbe", PROBE_VALUES),
+    vehicle_probe_ms: num("vehicleProbeMs"),
+    // Client-controlled input, so it is PARSED rather than stored.
+    // parseSignalReport is the only thing between an arbitrary JSON blob
+    // and this column: it drops unknown kinds, signals the claimed
+    // platform cannot produce, future timestamps and backwards
+    // intervals, and records each refusal with a reason so a producer
+    // emitting garbage is visible instead of looking like a quiet
+    // device. Null when the client sent nothing at all, which is what an
+    // app build older than this looks like.
+    vehicle_signals: body.vehicleSignals
+      ? parseSignalReport(body.vehicleSignals, Date.now())
+      : null,
+    // Why a silent device is silent. CoreMotion denied is the most
+    // likely explanation for an empty buffer, and without it that is
+    // indistinguishable from "the driver did not drive".
+    motion_available:
+      typeof body.motionAvailable === "boolean" ? body.motionAvailable : null,
+    motion_authorization: str("motionAuthorization", 20),
+    // The capture-gap audit. DURATION ONLY: motion history contains no
+    // location, so this says a drive happened and never where it went.
+    // Nothing downstream may turn it into a distance, because a
+    // fabricated mile is worse than a missed one.
+    motion_audit_status: str("motionAuditStatus", 20),
+    motion_audit_window_s: num("motionAuditWindowS"),
+    motion_gap_automotive_ms: num("motionGapAutomotiveMs"),
     tracking_enabled: body.trackingEnabled === true,
     buffer_size: num("bufferSize") ?? 0,
     last_cb_age_s: num("lastCbAgeS"),
@@ -261,6 +325,20 @@ export async function POST(req: NextRequest) {
     // dead ones first, so the most serious finding is the last thing
     // lost rather than the first.
     self_check: str("selfCheck", 200),
+    // THE TREATMENT COLUMNS, next to the diagnosis they answer.
+    //
+    // self_check says what is broken. These say what the device did
+    // about it, on the same row, so nobody has to join a beat against
+    // its neighbour to find out whether the repairer ran.
+    //
+    // Free text, same reasoning as self_check: it carries ids and
+    // states ("geofence_armed:capped"), not a code. 80 chars holds both
+    // repairable ids with their longest state and room to spare.
+    self_repair: str("selfRepair", 80),
+    // Monotonic per install, never reset by a successful repair. It is
+    // the difference between "this device has never needed a repair"
+    // and "this device repaired itself and you cannot tell".
+    self_repair_attempts: num("selfRepairAttempts"),
     exit_probe_ms: num("exitProbeMs"),
     exit_probe_stage: oneOf("exitProbeStage", STAGE_VALUES),
     // OS app-state truth (@capacitor/app appStateChange), not
@@ -293,6 +371,11 @@ export async function POST(req: NextRequest) {
     // verbatim rather than collapsed into a boolean, because "why"
     // is the whole value.
     geofence_arm_state: str("geofenceArmState", 40),
+    // Read this BEFORE geofence_arm_state, never after. It is the
+    // difference between a plugin that is not there and a read that did
+    // not come back, and those want opposite responses.
+    geofence_probe: oneOf("geofenceProbe", GEOFENCE_PROBE_VALUES),
+    geofence_probe_ms: num("geofenceProbeMs"),
     geofence_count: num("geofenceCount"),
     geofence_capture: str("geofenceCapture", 40),
     geofence_buffered_fixes: num("geofenceBufferedFixes"),
@@ -314,6 +397,19 @@ export async function POST(req: NextRequest) {
     // like from the outside.
     native_drain_checked: num("nativeDrainChecked"),
     native_drain_suppressed: num("nativeDrainSuppressed"),
+    // The NATIVE uploader's own outcome, posted by the Android capture
+    // service with no JavaScript in the process. See
+    // supabase/migrations/20260922090000_heartbeat_native_upload.sql.
+    // Read native_upload_reason FIRST and on its own: it is
+    // TaxotticUploader.Result's vocabulary verbatim (ok, no_config,
+    // no_session, bad_origin, empty, http_<code>, io_error), and
+    // 'no_session' everywhere means the cookie jar is empty in a
+    // cold-started process, which is the single assumption this design
+    // could not settle without a phone. Every other column in this row
+    // looks healthy in that case.
+    native_upload_reason: str("nativeUploadReason", 24),
+    native_upload_trigger: str("nativeUploadTrigger", 24),
+    native_upload_points: num("nativeUploadPoints"),
     reported_at: reportedAt,
   };
 

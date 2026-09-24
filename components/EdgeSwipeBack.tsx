@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { backAction } from "@/lib/native/back-action";
 
 /**
  * Left-edge swipe → go back, for the native shell only.
@@ -89,7 +90,7 @@ export function EdgeSwipeBack() {
       try {
         const { App } = await import("@capacitor/app");
         const h = await App.addListener("backButton", ({ canGoBack }) => {
-          if (canGoBack || window.history.length > 1) {
+          if (backAction(canGoBack) === "back") {
             window.history.back();
           } else {
             void App.exitApp();

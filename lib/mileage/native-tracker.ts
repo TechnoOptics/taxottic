@@ -28,6 +28,7 @@
 
 import type { GpsPoint } from "./segmentation";
 import {
+  STATIONARY_CLOSE_MS as DE_STATIONARY_CLOSE_MS,
   STATIONARY_SPEED_MPS as DE_STATIONARY_SPEED_MPS,
   WALK_SPEED_MIN_MPS as DE_WALK_MIN_MPS,
   WALK_SPEED_MAX_MPS as DE_WALK_MAX_MPS,
@@ -47,6 +48,7 @@ import {
 } from "./self-check";
 import { getCarSignalsProbed } from "./car-signals";
 import {
+  beatOnForeground,
   ensureHeartbeatTimer,
   registerHeartbeatSender,
 } from "./heartbeat-timer";
@@ -57,16 +59,24 @@ import {
   getOsExitInfoProbed,
   readDeviceStatusCache,
   refreshDeviceStatusCache,
+  collectVehicleSignals,
+  clearVehicleSignals,
 } from "./device-status";
 import type { DeviceProbeOutcome, DeviceProbeStage } from "./device-status";
 import {
   stopGeofenceCapture,
   startGeofenceCapture,
   syncLearnedPlaces,
-  getGeofenceState,
+  probeGeofenceState,
 } from "./geofence";
 import type { GeofenceArmState } from "./geofence";
 import { drainNativeBuffers, nativeDrainDiag } from "./native-drain";
+import {
+  nativeRepairs,
+  readRepairLedger,
+  runSelfRepairs,
+  writeRepairLedger,
+} from "./self-repair";
 import { haversineMeters } from "./segmentation";
 import { getDeviceId } from "./device-id";
 
@@ -119,7 +129,7 @@ const LS_HB_DIAG = "taxottic.mileage.heartbeatDiag";
  *  of the live buffer so they stop blocking the queue head, kept for
  *  diagnosis. Capped; oldest quarantined batches are discarded first. */
 const LS_DEADLETTER = "taxottic.mileage.deadletter";
-/** "1" while flushes are failing 401 after a refresh attempt — the
+/** "1" while flushes are failing 401 after a refresh attempt, the
  *  session is genuinely dead and the user must sign in again. Read by
  *  MileageTrackingReminder; cleared on the next successful flush. */
 const LS_AUTH_BLOCKED = "taxottic.mileage.authBlocked";
@@ -224,7 +234,7 @@ let driveEndPosting = false;
 let deLastMovingTs = 0;
 // GPS walk-away state: where the car stopped (first below-driving-speed
 // fix after driving) and how many subsequent fixes landed in the
-// walking-speed band. Permission-free walk detection — see drive-end.ts.
+// walking-speed band. Permission-free walk detection, see drive-end.ts.
 let deParkLat = 0;
 let deParkLng = 0;
 let deParkSet = false;
@@ -309,7 +319,7 @@ export const trackerDiag = {
   cbLastError: "" as string,
   /** Consecutive failed flushes; drives the backoff (skip ticks). */
   failStreak: 0 as number,
-  /** Points evicted at MAX_BUFFER (oldest dropped) — data loss signal. */
+  /** Points evicted at MAX_BUFFER (oldest dropped), data loss signal. */
   evictedPoints: 0 as number,
   /** Parked fixes suppressed as scatter. Pure savings, not data loss:
    *  each carried no movement and the keepalive still reports. */
@@ -436,7 +446,7 @@ function persistBuffer() {
   try {
     // The buffer is stored WITH its owning company (audit major #12):
     // a bare point array adopted by whichever company was active at
-    // reload time attributed one company's miles — and deductions — to
+    // reload time attributed one company's miles, and deductions, to
     // another for multi-company drivers.
     window.localStorage.setItem(
       LS_BUFFER,
@@ -539,7 +549,7 @@ async function drainOrphanBuffer(): Promise<void> {
     // points also remain in localStorage until persistBuffer overwrites,
     // which only happens after this drain on the happy path.
   } catch {
-    /* offline — retry on the next start */
+    /* offline, retry on the next start */
   }
 }
 
@@ -556,8 +566,8 @@ async function drainOrphanBuffer(): Promise<void> {
  */
 /**
  * Drive-end check, run every flush tick while tracking. When the vehicle
- * has been stationary and the driver has walked away (step burst) — or
- * the stationary fallback elapses — force-close the trip with a
+ * has been stationary and the driver has walked away (step burst), or
+ * the stationary fallback elapses, force-close the trip with a
  * sessionEnded flush so it materializes in ~30s instead of the server's
  * 5-min parked timer. Decision logic is the unit-tested evaluateDriveEnd.
  */
@@ -590,7 +600,7 @@ async function maybeCloseDrive(): Promise<void> {
     try {
       // Force-close FIRST; only consume the drive-end state once the
       // server confirmed (2xx). On failure everything stays armed, so
-      // the very next tick re-evaluates and retries — the close can be
+      // the very next tick re-evaluates and retries, the close can be
       // late, but it can no longer be lost.
       const ok = await flush({ sessionEnded: true });
       if (ok) {
@@ -626,7 +636,7 @@ async function maybeCloseDrive(): Promise<void> {
 async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
   const sessionEnded = opts?.sessionEnded === true;
   if (flushing) {
-    // Ordinary ticks can just skip — another flush is already moving the
+    // Ordinary ticks can just skip, another flush is already moving the
     // queue. A sessionEnded flush must NEVER be dropped (it closes the
     // trip): wait out the in-flight one, then proceed.
     if (!sessionEnded) return false;
@@ -689,7 +699,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
         await createClient().auth.refreshSession();
         res = await post();
       } catch {
-        /* refresh unavailable (offline) — fall through to 401 handling */
+        /* refresh unavailable (offline), fall through to 401 handling */
       }
     }
     trackerDiag.flushLastStatus = res.status;
@@ -733,7 +743,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
       trackerDiag.failStreak++;
       if (res.status === 401) {
         // Refresh already failed above: the session is dead. Keep the
-        // buffer (points are safe locally) but tell the user — a silent
+        // buffer (points are safe locally) but tell the user, a silent
         // 401 loop is how a full day of drives went missing before.
         try {
           localStorage.setItem(LS_AUTH_BLOCKED, "1");
@@ -752,7 +762,7 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
           while (dead.length > 5) dead.shift();
           localStorage.setItem(LS_DEADLETTER, JSON.stringify(dead));
         } catch {
-          /* quota — drop without quarantine, unblocking still matters */
+          /* quota, drop without quarantine, unblocking still matters */
         }
         buffer = removeUploadedPoints(buffer, batch);
         persistBuffer();
@@ -778,13 +788,13 @@ async function flush(opts?: { sessionEnded?: boolean }): Promise<boolean> {
  * Report device-truth to the server (reliability plan, workstream C):
  * toggle state, buffer depth, callback age, failure streak. Fired on
  * start/stop/resume and every ~5 min while tracking (every 10th flush
- * tick). Best-effort — a lost heartbeat costs nothing; the server keeps
+ * tick). Best-effort, a lost heartbeat costs nothing; the server keeps
  * the last one it saw. Native-plugin fields (authorization, battery)
  * join this payload when the DeviceStatus plugin ships.
  */
 /** Time-box a native-bridge promise: a hung plugin call must degrade to
  *  null, never wedge the caller (observed: a device whose heartbeats
- *  stopped entirely while flushes kept working — the un-time-boxed
+ *  stopped entirely while flushes kept working, the un-time-boxed
  *  getDeviceStatus await was the only difference between the paths). */
 function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([
@@ -843,7 +853,19 @@ function installAppStateWatch(): void {
         // A genuine foregrounding. This is the moment the bridge
         // demonstrably answers, so it is the moment to capture device
         // truth for every heartbeat that follows.
-        if (isActive) void refreshDeviceStatusCache().catch(() => {});
+        if (isActive) {
+          void refreshDeviceStatusCache().catch(() => {});
+          // ...and to TELL THE SERVER the phone is alive. The line above
+          // writes a local cache and posts nothing, which left
+          // mileage_device_status.reported_at frozen at the moment the
+          // driver parked. A finished drive cannot close without a
+          // heartbeat a full dwell newer than its last GPS point, so the
+          // drive stayed invisible until the next drive, the cron, or the
+          // six-hour ceiling. Wall-clock gated inside beatOnForeground, so
+          // app switching costs at most one beat per heartbeat interval,
+          // and it can never shorten a live drive: see ./tail-close.ts.
+          void beatOnForeground();
+        }
       });
     } catch {
       /* web / @capacitor/app absent: appActive stays null (unknown) */
@@ -900,15 +922,21 @@ function measureTimerLag(ms: number): Promise<number> {
  *  Also reports the measured wall-clock elapsed and the last stage the
  *  probe reached, so a "timeout" says how long it really waited (vs the
  *  nominal box) and which await it was sitting in. */
-async function probeWithin<T>(
+/** Exported for lib/mileage/geofence-probe.test.ts ONLY.
+ *  The self-check now reads a timeout as "we did not manage to look"
+ *  rather than as a dead plugin, so the one value this helper invents
+ *  is load-bearing: if it ever resolved anything other than "timeout"
+ *  for a call that never settles, a real dead plugin would be filed as
+ *  unknown and a slow one convicted. That was an untested constant. */
+export async function probeWithin<T, O extends string = DeviceProbeOutcome>(
   fn: (onStage: (s: DeviceProbeStage) => void) => Promise<{
     value: T | null;
-    outcome: DeviceProbeOutcome;
+    outcome: O;
   }>,
   ms: number,
 ): Promise<{
   value: T | null;
-  outcome: DeviceProbeOutcome;
+  outcome: O | "error" | "timeout";
   ms: number;
   stage: DeviceProbeStage;
 }> {
@@ -919,13 +947,16 @@ async function probeWithin<T>(
   };
   const timeout = new Promise<{
     value: T | null;
-    outcome: DeviceProbeOutcome;
+    outcome: O | "error" | "timeout";
   }>((resolve) =>
     setTimeout(() => resolve({ value: null, outcome: "timeout" }), ms),
   );
-  const run = Promise.resolve()
+  const run: Promise<{
+    value: T | null;
+    outcome: O | "error" | "timeout";
+  }> = Promise.resolve()
     .then(() => fn(onStage))
-    .catch(() => ({ value: null, outcome: "error" as DeviceProbeOutcome }));
+    .catch(() => ({ value: null, outcome: "error" as const }));
   const settled = await Promise.race([run, timeout]);
   return { ...settled, ms: Date.now() - startedAt, stage };
 }
@@ -969,19 +1000,19 @@ export async function sendHeartbeat(): Promise<void> {
     // when the DeviceStatus plugin is in this binary; null on web/old
     // builds and the heartbeat still carries the JS-visible fields.
     // TIME-BOXED: device truth is a bonus, the heartbeat itself is the
-    // point — it must go out even when the native bridge is wedged.
+    // point, it must go out even when the native bridge is wedged.
     // Called through the STATIC import above, not a dynamic one.
     //
     // This used to be `import("@/lib/mileage/device-status")` inside a
-    // 3s timeout — a different specifier for a module this file already
+    // 3s timeout, a different specifier for a module this file already
     // imports relatively. Mixed specifiers can resolve to a separate
     // lazy chunk, and if that chunk is slow or unfetchable (remote-URL
     // WebView, backgrounded, poor signal) the timeout fires and EVERY
     // device field lands as null at once. That matches production
     // exactly: location_authorization / precise_location /
     // battery_optimized / low_power_mode were null on 100%% of devices
-    // on BOTH platforms — even on Android, where the native plugin
-    // demonstrably works (verified live over CDP) — while app_version
+    // on BOTH platforms, even on Android, where the native plugin
+    // demonstrably works (verified live over CDP), while app_version
     // survived because @capacitor/app is already-loaded vendor code.
     // A JS-layer cause is the only kind that explains a cross-platform
     // symptom with a healthy native layer.
@@ -999,7 +1030,7 @@ export async function sendHeartbeat(): Promise<void> {
     const timerLag = measureTimerLag(1_000);
     const dsProbe = await probeWithin(getDeviceStatusProbed, 3_000);
     const ds = dsProbe.value;
-    // App version (was never sent — the manager health view showed
+    // App version (was never sent, the manager health view showed
     // app_version null for every device). Guarded + time-boxed like
     // everything else on the bridge.
     const exitProbe = await probeWithin(getOsExitInfoProbed, 2_000);
@@ -1012,6 +1043,39 @@ export async function sendHeartbeat(): Promise<void> {
       () => getCarSignalsProbed(),
       2_000,
     );
+    // THE VEHICLE-SIGNAL DRAIN.
+    //
+    // drainVehicleSignals, clearVehicleSignals and auditCaptureGap have
+    // existed in device-status.ts and in the iOS binary with ZERO
+    // callers. Nothing invoked them, so the native buffer filled and
+    // aged out and no row anywhere recorded a single vehicle signal.
+    // This is the missing consumer, and it goes HERE rather than in a
+    // new timer or a page effect for one reason: sendHeartbeat is the
+    // only path measured executing on both platforms in the field (497
+    // iOS beats and 41 Android beats over the last 7 days), and the
+    // failure this repo keeps repeating is wiring a consumer to a path
+    // that never runs.
+    //
+    // Time-boxed at 3s rather than 2s: unlike the other probes this one
+    // may also ask CoreMotion for a gap audit, which is a real query
+    // against seven days of history. Still boxed, because a heartbeat
+    // that never sends is worse than one missing a field.
+    //
+    // The platform comes from Capacitor, not from device truth. Reading
+    // it from `truth` is how the self-check ended up inert on exactly
+    // the devices it existed to catch.
+    const beatPlatform = (() => {
+      const p = cap?.getPlatform?.();
+      return p === "ios" || p === "android" ? p : "web";
+    })();
+    const vehicleProbe = await probeWithin(
+      async () => {
+        const value = await collectVehicleSignals(beatPlatform, Date.now());
+        return { value, outcome: value.outcome };
+      },
+      3_000,
+    );
+    const vehicle = vehicleProbe.value;
     const timerLagMs = Math.round(await timerLag);
     // Device truth, live if the probe answered and cached otherwise.
     // The cache is only ever written by a SUCCESSFUL read (see
@@ -1027,7 +1091,11 @@ export async function sendHeartbeat(): Promise<void> {
         : null;
     // Geofence resurrection net health. Time-boxed like every other
     // bridge read: this is diagnosis, the heartbeat itself is the point.
-    const geofence = await within(getGeofenceState(), 2_000).catch(() => null);
+    const geofenceProbe = await probeWithin(
+      () => probeGeofenceState(),
+      2_000,
+    );
+    const geofence = geofenceProbe.value;
     let appVersion: string | null = null;
     try {
       const info = await within(
@@ -1038,6 +1106,125 @@ export async function sendHeartbeat(): Promise<void> {
     } catch {
       /* web / plugin missing */
     }
+    // ONE evaluation, both reported and acted on.
+    //
+    // Hoisted out of the payload because ./self-repair.ts now reads
+    // these same verdicts to decide what to fix. Evaluating twice
+    // would be two sources of truth, and the one that disagreed would
+    // be the one nobody read.
+    const selfCheckChecks = evaluateSelfCheck({
+          // Platform from Capacitor, NOT from `truth`.
+          //
+          // truth is `ds ?? cached?.value ?? null`, i.e. the device
+          // status the plugin returns. When the plugin is DEAD there is
+          // no live read and no cache, so truth is null and this fell
+          // back to "web", every capability reported `unsupported`, and
+          // the summary came out "ok".
+          //
+          // The self-check was therefore inert on precisely the devices
+          // it exists to catch: Grace's iPhone, with two dead plugins,
+          // summarised as healthy. The flagship test passed only because
+          // its fixture hardcodes platform "ios", a state production
+          // could not reach.
+          platform: (() => {
+            const plat = cap?.getPlatform?.();
+            return plat === "ios" || plat === "android" ? plat : "web";
+          })(),
+          // outcome, not stage. getDeviceStatusProbed calls
+          // onStage("done") BEFORE checking whether a value came back,
+          // so a plugin that answers with nothing reaches "done" and
+          // would have been reported live while every device-truth
+          // field was missing. outcome distinguishes ok / null /
+          // unavailable / error / timeout, and it is already in this
+          // same payload.
+          deviceStatusOk: dsProbe.outcome === "ok",
+          deviceStatusMs: dsProbe.ms,
+          deviceStatusStage: dsProbe.stage,
+          geofenceArmState: geofence?.armState ?? null,
+          geofenceCount: geofence?.registeredCount ?? null,
+          // Why the read returned what it did. "timeout" means we did
+          // not manage to look, which a backgrounded WebView produces
+          // routinely on a perfectly healthy device, and "error" on its
+          // own is a live plugin that threw.
+          geofenceProbe: geofenceProbe.outcome,
+          // Read WITH the outcome, never without it. An "error" inside
+          // UNREGISTERED_MS_CEILING is the unregistered signature and
+          // the only thing that convicts this plugin; the same outcome
+          // at 400ms is a live plugin that threw.
+          geofenceProbeMs: geofenceProbe.ms,
+          // "We looked" means THIS read returned, not that some other
+          // bridge call happened to succeed. The old expression was
+          // `geofence != null || dsProbe.outcome !== "timeout"`, which
+          // let a healthy device-status read vouch for a geofence read
+          // that had timed out, and that is what produced a dead
+          // verdict for a plugin that answers.
+          probed: geofenceProbe.outcome !== "timeout",
+          locationAuthorization: truth?.locationAuthorization ?? null,
+          // Same source as the heartbeat column four lines up, so the
+          // verdict and the raw value can never disagree. Null when the
+          // plugin has not answered, which the check reports as unknown
+          // rather than as "not throttled".
+          lowPowerMode: truth?.lowPowerMode ?? null,
+          // These were hardcoded null under a comment claiming car
+          // signals are "NOT fetched on this path". They are: carProbe
+          // is awaited earlier in this same function and its value is
+          // written to six columns of this very heartbeat, a few lines
+          // below. The comment was wrong, so two checks reported
+          // "unknown" forever and never ran in production.
+          //
+          // That is the same defect the platform bug was, in the same
+          // call site: the module is correct and the caller does not
+          // feed it. A check that cannot reach a verdict is worse than
+          // no check, because it occupies the slot where a real one
+          // would go.
+          //
+          // Worth wiring rather than deleting: bluetooth_permission is
+          // the check that distinguishes "the driver declined" from
+          // "we never showed the prompt", and the second is our bug.
+          // It sat broken with six paired cars precisely because those
+          // two look identical in the permission value alone.
+          bluetoothPermission: carProbe.value?.bluetoothPermission ?? null,
+          bluetoothPermissionAsked:
+            carProbe.value?.bluetoothPermissionAsked ?? null,
+          // outcome, not presence, for the same reason deviceStatusOk
+          // uses outcome above: a probe that returns nothing must not
+          // read as a plugin that answered.
+          carSignalsOk: carProbe.outcome === "ok",
+    });
+    // STEP B OF docs/design/self-healing-capture.md: act on the two
+    // verdicts a device can repair by itself, then report what was
+    // attempted on this same beat. Deliberately before the POST rather
+    // than after it, so the verdict and the repair that answered it
+    // can never come from different heartbeats.
+    //
+    // No timer anywhere: this rides the heartbeat, which is driven by
+    // ingest and therefore by the location callbacks that keep firing
+    // while a backgrounded WebView's setInterval is frozen. Every gate
+    // inside runSelfRepairs compares wall clock. See ./native-drain.ts.
+    // One reading of the clock for the whole pass. The backoff stamp and
+    // the drive gate are both wall-clock comparisons, and a pass that
+    // took them from two different Date.now() calls could stamp a repair
+    // at a moment it did not decide anything at.
+    const repairNowMs = Date.now();
+    const repair = await runSelfRepairs(selfCheckChecks, {
+      nowMs: repairNowMs,
+      // A drive in flight outranks every repair, and drive-end.ts
+      // already owns the definition of when a drive is over. Reusing
+      // its constant keeps the repairer from inventing a second one
+      // that disagrees.
+      driving:
+        deHasDriven &&
+        deLastMovingTs > 0 &&
+        repairNowMs - deLastMovingTs < DE_STATIONARY_CLOSE_MS,
+      // Same source as the heartbeat column and as the self-check
+      // input above. It answers the one question the verdict cannot:
+      // `denied` covers both "chose While Using" (still promptable)
+      // and "refused outright" (the OS will show nothing).
+      locationAuthorization: truth?.locationAuthorization ?? null,
+      ledger: readRepairLedger(),
+      exec: nativeRepairs(companyId),
+      save: writeRepairLedger,
+    });
     const res = await fetch("/api/mileage/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1070,7 +1257,7 @@ export async function sendHeartbeat(): Promise<void> {
         batteryOptimized: truth?.batteryOptimized ?? null,
         lowPowerMode: truth?.lowPowerMode ?? null,
         // Background App Refresh OFF means iOS relaunches us for NO
-        // location event — SLC and geofences both go dead silent with
+        // location event, SLC and geofences both go dead silent with
         // no error to log. The device could always read this; it was
         // never transmitted, so the blocker stayed invisible.
         backgroundRefresh: truth?.backgroundRefresh ?? null,
@@ -1117,77 +1304,24 @@ export async function sendHeartbeat(): Promise<void> {
         // Named rather than counted: a count says something is wrong, a
         // name says what to fix, and this string is what gets read in a
         // database row by someone who was not here today.
-        selfCheck: summarizeForHeartbeat(
-          evaluateSelfCheck({
-            // Platform from Capacitor, NOT from `truth`.
-            //
-            // truth is `ds ?? cached?.value ?? null`, i.e. the device
-            // status the plugin returns. When the plugin is DEAD there is
-            // no live read and no cache, so truth is null and this fell
-            // back to "web", every capability reported `unsupported`, and
-            // the summary came out "ok".
-            //
-            // The self-check was therefore inert on precisely the devices
-            // it exists to catch: Grace's iPhone, with two dead plugins,
-            // summarised as healthy. The flagship test passed only because
-            // its fixture hardcodes platform "ios", a state production
-            // could not reach.
-            platform: (() => {
-              const plat = cap?.getPlatform?.();
-              return plat === "ios" || plat === "android" ? plat : "web";
-            })(),
-            // outcome, not stage. getDeviceStatusProbed calls
-            // onStage("done") BEFORE checking whether a value came back,
-            // so a plugin that answers with nothing reaches "done" and
-            // would have been reported live while every device-truth
-            // field was missing. outcome distinguishes ok / null /
-            // unavailable / error / timeout, and it is already in this
-            // same payload.
-            deviceStatusOk: dsProbe.outcome === "ok",
-            deviceStatusMs: dsProbe.ms,
-            deviceStatusStage: dsProbe.stage,
-            geofenceArmState: geofence?.armState ?? null,
-            geofenceCount: geofence?.registeredCount ?? null,
-            // A 2 second time box around getGeofenceState collapses
-            // "no plugin", "threw" and "timed out" into one null. A
-            // backgrounded WebView times out routinely in this codebase,
-            // so treating that null as proof of a dead plugin would
-            // accuse the iOS registration bug on a healthy device. Only
-            // claim we looked when the read actually returned.
-            probed: geofence != null || dsProbe.outcome !== "timeout",
-            locationAuthorization: truth?.locationAuthorization ?? null,
-            // Same source as the heartbeat column four lines up, so the
-            // verdict and the raw value can never disagree. Null when the
-            // plugin has not answered, which the check reports as unknown
-            // rather than as "not throttled".
-            lowPowerMode: truth?.lowPowerMode ?? null,
-            // These were hardcoded null under a comment claiming car
-            // signals are "NOT fetched on this path". They are: carProbe
-            // is awaited earlier in this same function and its value is
-            // written to six columns of this very heartbeat, a few lines
-            // below. The comment was wrong, so two checks reported
-            // "unknown" forever and never ran in production.
-            //
-            // That is the same defect the platform bug was, in the same
-            // call site: the module is correct and the caller does not
-            // feed it. A check that cannot reach a verdict is worse than
-            // no check, because it occupies the slot where a real one
-            // would go.
-            //
-            // Worth wiring rather than deleting: bluetooth_permission is
-            // the check that distinguishes "the driver declined" from
-            // "we never showed the prompt", and the second is our bug.
-            // It sat broken with six paired cars precisely because those
-            // two look identical in the permission value alone.
-            bluetoothPermission: carProbe.value?.bluetoothPermission ?? null,
-            bluetoothPermissionAsked:
-              carProbe.value?.bluetoothPermissionAsked ?? null,
-            // outcome, not presence, for the same reason deviceStatusOk
-            // uses outcome above: a probe that returns nothing must not
-            // read as a plugin that answered.
-            carSignalsOk: carProbe.outcome === "ok",
-          }),
-        ),
+        selfCheck: summarizeForHeartbeat(selfCheckChecks),
+        // AND WHAT WE DID ABOUT IT. selfCheck above is the diagnosis;
+        // these two are the treatment, on the same row, so the pair can
+        // be read without a join.
+        //
+        // "none" is a healthy device. "<id>:ok" and "<id>:prompted" are
+        // an attempt made this beat. "<id>:healed" is the only proof a
+        // repair actually worked. "<id>:capped" is the repairer saying
+        // it has given up, which is the state that must never be
+        // silent: a supervisor that quits without saying so looks
+        // exactly like a device that was never broken.
+        selfRepair: repair.summary,
+        // Attempts this install has EVER made, across every fault,
+        // surviving both a heal and a reload. Without it a device that
+        // repaired itself and a device that never tried report the same
+        // thing, and "is the repairer running in production at all"
+        // cannot be answered from one row.
+        selfRepairAttempts: repair.attempts,
         exitProbeMs: exitProbe.ms,
         exitProbeStage: exitProbe.stage,
         // Was the app actually in the foreground when the probes ran?
@@ -1246,6 +1380,35 @@ export async function sendHeartbeat(): Promise<void> {
         carDisconnects: carProbe.value?.vehicleDisconnects ?? null,
         carBluetoothAdapter: carProbe.value?.bluetoothAdapter ?? null,
         carPendingSignals: carProbe.value?.pendingSignals ?? null,
+        // VEHICLE SIGNALS, drained from the iOS native buffer and folded
+        // into intervals by lib/mileage/signal-adapter.ts.
+        //
+        // Read vehicleProbe FIRST, exactly like carProbe: "error" or
+        // "timeout" is a finding about the bridge, "null" means the
+        // bridge answered and the buffer was empty, and only "ok" means
+        // signals actually arrived. Zero car connections have ever been
+        // recorded on either platform, so "null" forever is a live
+        // possibility and is itself the answer we are missing today.
+        vehicleProbe: vehicleProbe.outcome,
+        vehicleProbeMs: vehicleProbe.ms,
+        // The folded observations, validated server-side before they are
+        // stored. Never a distance: motion history holds no location.
+        vehicleSignals: vehicle
+          ? { observations: vehicle.observations, rejected: vehicle.rejected }
+          : null,
+        // Why a silent device is silent. CoreMotion denied is the single
+        // most likely explanation for an empty buffer, and without this
+        // it is indistinguishable from "the user did not drive".
+        motionAvailable: vehicle?.motionAvailable ?? null,
+        motionAuthorization: vehicle?.motionAuthorization ?? null,
+        // The capture-gap audit: what the OS says we were doing during a
+        // window we recorded nothing for. DURATION ONLY. Motion history
+        // contains no location, so this can establish that a drive
+        // happened and never where it went or how far, and a gap must be
+        // surfaced rather than filled.
+        motionAuditStatus: vehicle?.auditStatus ?? null,
+        motionAuditWindowS: vehicle?.auditWindowS ?? null,
+        motionGapAutomotiveMs: vehicle?.gapAutomotiveMs ?? null,
         // Learned-place geofence mesh. Without these, a device whose
         // mesh silently failed to register looks identical to one that
         // simply had no drives, which is the ambiguity that let a
@@ -1258,6 +1421,17 @@ export async function sendHeartbeat(): Promise<void> {
         // reported as a healthy tracking day.
         geofenceArmState: geofence?.armState ?? null,
         geofenceCount: geofence?.registeredCount ?? null,
+        // Read these two BEFORE the arm state, and always together. A
+        // null arm state next to "timeout" is a read that never came
+        // back; next to "error" in a millisecond or two it is a plugin
+        // that was never registered with the bridge, and next to the
+        // same "error" at 400ms it is a live plugin that threw.
+        // Collapsing them is what produced a dead verdict on a phone
+        // whose own heartbeats said "armed" 163 times, and keying only
+        // on a "no plugin" outcome would have made the dead verdict
+        // unreachable, because there is no such outcome on a device.
+        geofenceProbe: geofenceProbe.outcome,
+        geofenceProbeMs: geofenceProbe.ms,
         geofenceCapture: geofence?.lastCapture?.state ?? null,
         geofenceBufferedFixes: geofence?.bufferedFixes ?? null,
         // Did the native buffer get drained by anything other than a
@@ -1266,6 +1440,21 @@ export async function sendHeartbeat(): Promise<void> {
         // counter alone cannot distinguish from having no backlog.
         nativeDrainTrigger: nativeDrainDiag.lastTrigger,
         nativeDrainPoints: nativeDrainDiag.lastPoints,
+        // And did the NATIVE uploader, the one that runs with no JS in
+        // the process at all, get anywhere? Read the reason before the
+        // count, always. The drain fields above can only ever describe
+        // an app that was alive; these describe the hours it was not,
+        // which is where the 5.9 day p90 actually lives.
+        //
+        // "no_session" on every row is the expected shape of the one
+        // failure nobody could rule out before shipping: CookieManager
+        // returning nothing in a process started cold by a geofence
+        // receiver that has never created a WebView. It looks identical
+        // to a healthy device from every other column, so it gets its
+        // own.
+        nativeUploadReason: geofence?.lastUpload?.reason ?? null,
+        nativeUploadTrigger: geofence?.lastUpload?.trigger ?? null,
+        nativeUploadPoints: geofence?.lastUpload?.posted ?? null,
         // And is the duplicate suppression still alive? The two native
         // buffers hold the same fix stream and posting both stored one
         // drive twice, which made the merged pool unsegmentable. That
@@ -1282,6 +1471,14 @@ export async function sendHeartbeat(): Promise<void> {
       .toISOString()
       .slice(11, 19)}`;
     writeHeartbeatDiag(res.ok ? "ok" : "http", String(res.status));
+    // Acknowledge the native buffer ONLY after the server took the data,
+    // the same discipline as drainNativeLocationBuffer. Clearing before
+    // this point would mean a failed upload silently destroys the only
+    // record that a drive was missed, which is worse than having no
+    // record at all. A duplicate read next beat costs nothing.
+    if (res.ok && vehicle && vehicle.upToTs > 0) {
+      await clearVehicleSignals(vehicle.upToTs);
+    }
   } catch (e) {
     trackerDiag.hbLastResult =
       "err:" + String((e as Error)?.message ?? e).slice(0, 60);
@@ -1293,9 +1490,13 @@ export async function sendHeartbeat(): Promise<void> {
 // Hand the sender to the timer module. Module scope on purpose: any ingest
 // path can then arm the heartbeat without importing this file, which would
 // be a cycle (this file imports device-status, one of those paths).
-registerHeartbeatSender(() => {
-  void sendHeartbeat();
-});
+//
+// RETURNS the promise rather than voiding it. beatOnForeground awaits this
+// to know when the beat has actually landed, and the drive log re-renders
+// on that. A `void sendHeartbeat()` here resolves the await instantly, puts
+// the render back in front of the evidence, and leaves every test that
+// registers its own sender green while production is broken.
+registerHeartbeatSender(() => sendHeartbeat());
 
 /**
  * Persist the outcome of the last heartbeat attempt.
@@ -1538,7 +1739,7 @@ export async function startMileageTracking(
       // A real fix proves the watcher is alive, so the restart budget
       // resets. It used to be a per-SESSION cap of 3 that a parked
       // phone (no fixes while stationary, which is correct behaviour)
-      // burned through — leaving nothing left for an actual zombie
+      // burned through, leaving nothing left for an actual zombie
       // tracker later in the same session (audit #30).
       trackerDiag.watchdogRestarts = 0;
         if (error) {
@@ -1601,7 +1802,7 @@ export async function startMileageTracking(
           // calling it on every driving fix costs one bridge hop.
           //
           // This is the case the geofence and Bluetooth wake sources
-          // cannot cover, because there is nothing to wake — the app is
+          // cannot cover, because there is nothing to wake, the app is
           // already running. Already running is not the same as
           // surviving, and the gap between the two is where drives have
           // been disappearing: importance 400 is CACHED, and CACHED is
@@ -1612,7 +1813,7 @@ export async function startMileageTracking(
               trackerDiag.driveForegroundService = ok ? "held" : "refused";
             });
           }
-          // Any walk evidence was traffic creep or noise — reset
+          // Any walk evidence was traffic creep or noise, reset
           // EVERYTHING, including the hard-stop clock, and update the
           // driving heading (used to tell a walker leaving the road from
           // a jam creeping along it).
@@ -1646,7 +1847,7 @@ export async function startMileageTracking(
           } else if (!armed) {
             // Sub-driving movement BEFORE a qualifying hard stop: that is
             // a car creeping in traffic, never a walker (you cannot walk
-            // away from a car that hasn't stopped). Reset the clock — a
+            // away from a car that hasn't stopped). Reset the clock, a
             // real park will restart it and pass with ease.
             deHardStopStartTs = 0;
             deParkSet = false;
@@ -1933,7 +2134,7 @@ export async function openMileageLocationSettings(): Promise<void> {
     );
     if (await openLocationSettingsPrecise()) return;
   } catch {
-    /* device-status plugin absent — fall through to Capgo openSettings */
+    /* device-status plugin absent, fall through to Capgo openSettings */
   }
   const bg = await guard();
   try {
@@ -1986,7 +2187,7 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   companyId = savedCompany;
   void flush(); // drain a killed-mid-drive leftover
   // Upload whatever the NATIVE layer captured while this page was not
-  // alive — on iOS that is the entire morning commute after an
+  // alive, on iOS that is the entire morning commute after an
   // overnight termination, and on Android whatever the geofence
   // resurrection service recorded while the WebView was dead. Late
   // points are fine: the finalizer runs a 45-day window and reconciles,
@@ -2019,7 +2220,7 @@ export async function resumeMileageTrackingIfEnabled(): Promise<void> {
   // WebView watcher is not a foreground service. It is a page in a
   // process that drops to importance 400 (CACHED) the moment the screen
   // goes off. So the handoff was never service-to-service, it was
-  // protected-to-unprotected, and it fired at app launch — which, on a
+  // protected-to-unprotected, and it fired at app launch, which, on a
   // geofence resurrection, is precisely the start of a drive.
   //
   // Android then collects the survivor. Four kills in three days with
@@ -2074,7 +2275,7 @@ export async function openLocationSettings(): Promise<void> {
     );
     if (await openLocationSettingsPrecise()) return;
   } catch {
-    /* device-status plugin absent — fall through to Capgo openSettings */
+    /* device-status plugin absent, fall through to Capgo openSettings */
   }
   const bg = await guard();
   if (!bg) return;

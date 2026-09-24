@@ -44,7 +44,7 @@ struct ContentView: View {
             .tabViewStyle(.verticalPage)
 
             // The fluted gold bezel rides the rim, turning with the
-            // crown — and on Set-Aside it IS the value dial.
+            // crown, and on Set-Aside it IS the value dial.
             FlutedBezel(progress: bezel)
 
             if s == .empty {
@@ -67,7 +67,7 @@ struct ContentView: View {
 
 // MARK: Hero
 
-/// The maker's signature — brand name under 12 o'clock like a fine
+/// The maker's signature, brand name under 12 o'clock like a fine
 /// watch dial: tracked brushed-gold wordmark + the house gold
 /// flourish (dot · bar · dot, same motif as the app icon).
 private struct Wordmark: View {
@@ -108,7 +108,7 @@ private struct HeroPage: View {
                 .font(.system(size: 10, design: .rounded))
                 .foregroundStyle(Brand.creamMuted)
 
-            // Quick capture — log a deductible the instant you pay.
+            // Quick capture, log a deductible the instant you pay.
             Button(action: onCapture) {
                 Text("＋ Capture expense")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))

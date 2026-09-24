@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WebOnly } from "@/components/WebOnly";
 import { requireUserWithAdmin } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { AvatarUploader } from "@/components/AvatarUploader";
@@ -397,10 +398,24 @@ export default async function SettingsPage() {
           <p className="mt-2 text-sm text-ink-soft">
             Change tier, top up credits, or update payment.
           </p>
+          {/* 3.1.1: a tappable route into the purchase page is a
+              purchase control. Web only; native states where it lives. */}
           <div className="mt-4">
-            <Link href="/billing" className="btn-ghost text-sm">
-              Open billing
-            </Link>
+            <WebOnly
+              fallback={
+                <p className="text-sm text-ink-soft">
+                  Manage your plan and credits at{" "}
+                  <span className="font-medium text-forest-800">
+                    taxottic.com
+                  </span>{" "}
+                  in your browser.
+                </p>
+              }
+            >
+              <Link href="/billing" className="btn-ghost text-sm">
+                Open billing
+              </Link>
+            </WebOnly>
           </div>
         </section>
 

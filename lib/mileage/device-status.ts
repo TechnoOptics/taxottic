@@ -37,6 +37,12 @@ import { ensureHeartbeatTimer } from "./heartbeat-timer";
 import { UPLOAD_BATCH_MAX } from "./flush-policy";
 import type { CoverageCheck } from "./drain-coverage";
 import { postAccepted, postJson } from "./post-json";
+import { foldVehicleSignalEvents } from "./signal-adapter";
+import type {
+  SignalObservation,
+  SignalPlatform,
+  SignalRejection,
+} from "./signals";
 
 export type DeviceStatus = {
   platform: string;
@@ -161,7 +167,7 @@ type DeviceStatusPlugin = {
   queryStepsSince(opts: { fromMs: number }): Promise<{ steps: number; available: boolean }>;
   requestActivityRecognition(): Promise<{ granted: boolean }>;
   /** Deep-links to THIS app's Location permission screen (Android) or
-   *  the app's Settings page (iOS) — closer than the generic app-details
+   *  the app's Settings page (iOS), closer than the generic app-details
    *  page the Capgo plugin's openSettings can reach. */
   openLocationSettings(): Promise<void>;
   enableBackgroundRevival(opts: { companyId: string }): Promise<{ ok: boolean }>;
@@ -294,7 +300,7 @@ async function guard(
     // Measured in production: every field sourced from this plugin was
     // NULL on 100% of devices (0/2) across BOTH platforms, while fields
     // from other sources (@capacitor/app version, tracker callback age)
-    // populated fine — so the plugin was unreachable from JS even on
+    // populated fine, so the plugin was unreachable from JS even on
     // Android, where it is correctly registered via
     // MainActivity.registerPlugin AND annotated @CapacitorPlugin. The
     // availability probe was the only thing common to both platforms,
@@ -303,7 +309,7 @@ async function guard(
     // page's JS context at the moment we ask (and the Android build
     // runs useLegacyBridge).
     //
-    // registerPlugin() itself is safe to call regardless — a missing
+    // registerPlugin() itself is safe to call regardless, a missing
     // native implementation simply makes the METHOD CALL reject, which
     // every caller already handles. Failing at the call site is strictly
     // better than refusing to try: the old gate turned "maybe present"
@@ -478,14 +484,14 @@ export async function openLocationSettingsPrecise(): Promise<boolean> {
 /**
  * FIRM auto-exemption (all Android phones + tablets): make sure the OS
  * isn't battery-optimizing us, prompting the native "allow background"
- * dialog automatically when it is — so a driver never has to discover
+ * dialog automatically when it is, so a driver never has to discover
  * the setup wizard to keep tracking alive. Called on launch + resume
  * (see CapacitorNativeInit) whenever tracking is enabled.
  *
  * Throttled: at most one auto-prompt per ATTEMPT_INTERVAL so we don't
  * nag on every resume, but we DO re-prompt after the interval if the
  * OS silently re-optimized us (Samsung re-enables "sleeping apps" after
- * firmware updates — the exact repeat failure this guards against).
+ * firmware updates, the exact repeat failure this guards against).
  * A grant clears the throttle immediately so the next revocation
  * re-prompts without delay.
  */
@@ -567,7 +573,7 @@ export async function onAuthorizationChanged(
  * Steps taken since `fromMs` (epoch ms), from the device motion
  * coprocessor. Drives the drive-end "walked away" signal
  * (lib/mileage/drive-end.ts). Returns 0 on web / older binaries / when
- * Motion permission is unavailable — the drive-end logic then relies on
+ * Motion permission is unavailable, the drive-end logic then relies on
  * the stationary-timeout fallback, so a 0 is always safe.
  */
 export async function queryStepsSince(fromMs: number): Promise<number> {
@@ -584,7 +590,7 @@ export async function queryStepsSince(fromMs: number): Promise<number> {
 /**
  * Ask for the motion/step permission that powers walk-away drive-end.
  * Android: the ACTIVITY_RECOGNITION runtime prompt. iOS: the plugin has
- * no explicit request — the first pedometer query triggers the Motion &
+ * no explicit request, the first pedometer query triggers the Motion &
  * Fitness prompt, so we fire a probe query instead.
  */
 export async function requestMotionPermission(): Promise<boolean> {
@@ -638,7 +644,7 @@ export async function setBackgroundRevival(
  * flush costs nothing.
  *
  * Returns the number of points handed to the server (0 when there was
- * nothing, or on any failure — the buffer is left intact to retry).
+ * nothing, or on any failure, the buffer is left intact to retry).
  *
  * Called from lib/mileage/native-drain.ts rather than only at app
  * launch. See the matching notes on drainGeofenceBuffer for why the
@@ -742,7 +748,7 @@ export type OsExitInfo = {
  *
  * This is the difference between "tracking stopped" and "Android killed
  * the process for excessive resource usage while the foreground service
- * was alive" — the second is actionable, the first is a guess. Android
+ * was alive", the second is actionable, the first is a guess. Android
  * gives a per-event reason; iOS gives 24h counters, so we surface the
  * dominant non-normal counter as the reason.
  *
@@ -820,33 +826,45 @@ export async function getOsExitInfoProbed(onStage?: StageSink): Promise<{
  * data, so a failed hand-off cannot lose the evidence that a drive was
  * missed.
  *
- * Returns an empty list on web, on Android and on binaries without the
- * native side, so a caller needs no platform check.
+ * Returns nothing on web, on Android and on binaries without the native
+ * side, so a caller needs no platform check.
+ *
+ * Reports an OUTCOME alongside the value, like getDeviceStatusProbed and
+ * getOsExitInfoProbed above. "the bridge did not answer" and "the bridge
+ * answered and the buffer was empty" need completely different
+ * responses, and collapsing them into one empty object is precisely how
+ * a dead capability comes to read as a quiet device.
  */
-export async function drainVehicleSignals(): Promise<{
+export type VehicleSignalDrain = {
   events: VehicleSignalEvent[];
   bootMs: number;
   motionAvailable: boolean;
   motionAuthorization: string;
+};
+
+export async function drainVehicleSignals(): Promise<{
+  value: VehicleSignalDrain | null;
+  outcome: DeviceProbeOutcome;
 }> {
-  const empty = {
-    events: [] as VehicleSignalEvent[],
-    bootMs: 0,
-    motionAvailable: false,
-    motionAuthorization: "notDetermined",
-  };
   const plugin = (await guard())?.p ?? null;
-  if (!plugin) return empty;
+  if (!plugin) return { value: null, outcome: "unavailable" };
   try {
     const r = await plugin.drainVehicleSignals();
+    if (!r) return { value: null, outcome: "null" };
+    const events = Array.isArray(r.events) ? r.events : [];
     return {
-      events: Array.isArray(r?.events) ? r.events : [],
-      bootMs: typeof r?.bootMs === "number" ? r.bootMs : 0,
-      motionAvailable: r?.motionAvailable === true,
-      motionAuthorization: r?.motionAuthorization ?? "notDetermined",
+      value: {
+        events,
+        bootMs: typeof r.bootMs === "number" ? r.bootMs : 0,
+        motionAvailable: r.motionAvailable === true,
+        motionAuthorization: r.motionAuthorization ?? "notDetermined",
+      },
+      // An empty buffer is a real answer from a working bridge and must
+      // not read as a drain that found something.
+      outcome: events.length > 0 ? "ok" : "null",
     };
   } catch {
-    return empty;
+    return { value: null, outcome: "error" };
   }
 }
 
@@ -926,4 +944,167 @@ export async function setExitBreadcrumb(note: string): Promise<void> {
   } catch {
     /* older binary */
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * The consumer for the four functions above
+ *
+ * `drainVehicleSignals`, `clearVehicleSignals`, `queryMotionHistory`
+ * and `auditCaptureGap` shipped in the iOS binary with ZERO callers.
+ * They compiled, they type-checked, they were registered on the bridge,
+ * and nothing in the app ever invoked one. That is this codebase's
+ * defining failure mode, and the symptom is always the same: a NULL
+ * that reads as "no data yet".
+ *
+ * This is the missing consumer. It reads the native buffer, folds the
+ * instants into intervals (lib/mileage/signal-adapter.ts, salvaged from
+ * the closed PR #496) and hands the result to the caller. It scores
+ * nothing and decides nothing, because ZERO car connections have ever
+ * been recorded on either platform and there is nothing yet to weigh.
+ * Making the drain run and the answer visible is the entire deliverable;
+ * finding out that these signals never fire would be a successful
+ * outcome, not a failed one.
+ * ------------------------------------------------------------------ */
+
+/** Where the motion-history audit has already looked. Persisted, because
+ *  the in-memory tracker state is erased by every service-worker
+ *  reload and an audit window that resets is an audit that never runs. */
+const LS_MOTION_AUDIT_TO = "taxottic.mileage.motionAuditTo";
+
+/** Shorter than this and there is nothing worth asking the OS about. */
+const MIN_AUDIT_WINDOW_MS = 30 * 60_000;
+
+/** iOS retains about seven days of motion history, but a watermark that
+ *  far behind means we were not watching, and a "gap" we never watched
+ *  is not a gap. One day is the most we will claim to have missed. */
+const MAX_AUDIT_LOOKBACK_MS = 24 * 60 * 60_000;
+
+export type VehicleSignalCollection = {
+  /** Whether the bridge answered at all. Read this BEFORE the fields
+   *  below, exactly like device_probe: "error" is a finding about the
+   *  bridge, not an absence of cars. */
+  outcome: DeviceProbeOutcome;
+  observations: SignalObservation[];
+  rejected: SignalRejection[];
+  /** CoreMotion availability and authorization, which is the most
+   *  likely reason for a silent device. */
+  motionAvailable: boolean | null;
+  motionAuthorization: string | null;
+  /** Status of this beat's gap audit, or "skipped" when none was due. */
+  auditStatus: string | null;
+  auditWindowS: number | null;
+  /** Automotive time the OS says fell inside an audited capture gap.
+   *  Duration only: motion history holds no location, so this can never
+   *  become a distance. */
+  gapAutomotiveMs: number;
+  clockCorrections: number;
+  /** Highest wall-clock ts consumed. Pass to clearVehicleSignals AFTER
+   *  the server accepted, never before. 0 when there is nothing. */
+  upToTs: number;
+};
+
+function readAuditWatermark(): number | null {
+  try {
+    const raw = window.localStorage.getItem(LS_MOTION_AUDIT_TO);
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeAuditWatermark(toMs: number): void {
+  try {
+    window.localStorage.setItem(LS_MOTION_AUDIT_TO, String(toMs));
+  } catch {
+    /* private mode: we simply audit nothing, which is the safe default */
+  }
+}
+
+/**
+ * Read everything the native vehicle-signal layer has recorded.
+ *
+ * Read-then-acknowledge, deliberately: this NEVER clears the buffer. The
+ * caller clears only after the server confirmed, so a failed hand-off
+ * cannot take the evidence of a missed drive with it.
+ */
+export async function collectVehicleSignals(
+  platform: SignalPlatform,
+  nowMs: number,
+): Promise<VehicleSignalCollection> {
+  const empty: VehicleSignalCollection = {
+    outcome: "unavailable",
+    observations: [],
+    rejected: [],
+    motionAvailable: null,
+    motionAuthorization: null,
+    auditStatus: null,
+    auditWindowS: null,
+    gapAutomotiveMs: 0,
+    clockCorrections: 0,
+    upToTs: 0,
+  };
+  const plugin = (await guard())?.p ?? null;
+  if (!plugin) return empty;
+
+  // Audit FIRST. The native audit records its finding into the same
+  // buffer the drain reads, so asking now means the answer arrives in
+  // this beat rather than the next one.
+  let auditStatus = "skipped";
+  let auditWindowS: number | null = null;
+  const watermark = readAuditWatermark();
+  if (watermark === null) {
+    // First run on this device. Auditing back over a period we were
+    // never watching would report gaps we have no business calling gaps.
+    writeAuditWatermark(nowMs);
+  } else {
+    const fromMs = Math.max(watermark, nowMs - MAX_AUDIT_LOOKBACK_MS);
+    if (nowMs - fromMs >= MIN_AUDIT_WINDOW_MS) {
+      // Through the exported wrapper, not the plugin proxy. Reaching
+      // past it would leave auditCaptureGap() itself with zero callers,
+      // which is the exact defect this whole change exists to close.
+      const audit: CaptureGapAudit | null = await auditCaptureGap(
+        fromMs,
+        nowMs,
+      );
+      if (audit) {
+        auditStatus = audit.status ?? "error";
+        auditWindowS = Math.round((nowMs - fromMs) / 1000);
+        // Only on an answer. Advancing past a window the OS refused to
+        // describe would lose it for good.
+        writeAuditWatermark(nowMs);
+      }
+    }
+  }
+
+  // Likewise through the exported wrapper. It already normalises the
+  // native shape and reports whether the bridge answered at all.
+  const drain = await drainVehicleSignals();
+  const raw = drain.value;
+  if (!raw) {
+    return { ...empty, outcome: drain.outcome, auditStatus, auditWindowS };
+  }
+
+  const events = raw.events;
+  const folded = foldVehicleSignalEvents(events, {
+    platform,
+    nowMs,
+    bootMs: raw.bootMs,
+  });
+
+  return {
+    outcome: drain.outcome,
+    observations: folded.observations,
+    rejected: folded.rejected,
+    motionAvailable: raw.motionAvailable === true,
+    motionAuthorization: raw.motionAuthorization ?? "notDetermined",
+    auditStatus,
+    auditWindowS,
+    gapAutomotiveMs: folded.gaps.reduce((a, g) => a + g.automotiveMs, 0),
+    clockCorrections: folded.clockCorrections,
+    upToTs: events.reduce(
+      (a, e) => (typeof e?.tsMs === "number" ? Math.max(a, e.tsMs) : a),
+      0,
+    ),
+  };
 }

@@ -576,8 +576,8 @@ export function MileageMap({
           </div>
           Set <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in the
           deployment env (HTTP-referrer restricted to taxottic.com
-          + the app WebView, Maps JavaScript API). Trips + the
-          deduction below still work without the map.
+          + the app WebView, Maps JavaScript API). Trips and the
+          deduction still work without the map.
         </div>
       </div>
     );
@@ -588,8 +588,8 @@ export function MileageMap({
         className="card flex items-center justify-center text-sm text-red-700"
         style={{ height }}
       >
-        Couldn&apos;t load the map. The mileage + deduction figures
-        below are unaffected.
+        Couldn&apos;t load the map. The mileage and deduction figures
+        are unaffected.
       </div>
     );
   }
@@ -685,4 +685,350 @@ export function MileageMap({
       )}
     </div>
   );
+}
+
+/** A drive on the map minus its route: everything the page knows about
+ *  it without reading a single GPS fix. */
+export type RoutelessTrip = Omit<MapTrip, "points">;
+
+/** One fix of a drive's route. `captured_at` is carried because the
+ *  first and last fix name where a drive started and ended, which is
+ *  what a row uses when neither end matched a saved place. Same shape as
+ *  DriveThumbnail's `DrivePoint`, which aliases this. */
+export type RoutePoint = { lat: number; lng: number; captured_at: string };
+
+/** One fix, as the drives route sends it. `trip_id` travels with every
+ *  point so a batch can be split back up by drive. */
+type BatchPoint = RoutePoint & { trip_id: string };
+
+/**
+ * Every route this caller has been given, plus which drives have been
+ * answered for.
+ *
+ * `settled` is the half that matters to a caller with rows as well as a
+ * map. A drive that is NOT settled has a route on its way, and anything
+ * else on screen that wants it must wait rather than ask for its own
+ * copy; a drive that is settled and missing from `routes` is one the
+ * batch did not cover (it fell past the route's cap, or it is not the
+ * caller's), and asking for it separately is the right thing to do.
+ * Without that distinction a row cannot tell "not here yet" from "not
+ * coming", and the safe reading of a bare empty map is to fetch, which
+ * is how you end up fetching every route twice.
+ */
+export type TripRoutes = {
+  routes: Map<string, RoutePoint[]>;
+  settled: ReadonlySet<string>;
+};
+
+const NO_ROUTES: TripRoutes = {
+  routes: new Map(),
+  settled: new Set(),
+};
+
+/**
+ * Attempts one batch gets, and the waits between them.
+ *
+ * Bounded, and short. The thing being avoided is a LATCH: the load-more
+ * control on this same branch turned itself off on one empty response
+ * and could not come back inside the session, and a batch that marked
+ * its ids asked before it knew whether the request had worked was the
+ * same bug in a different component. One dropped connection on a phone
+ * leaving the map permanently blank is not a failure mode this feature
+ * gets to have twice.
+ *
+ * Not retried forever, and not retried at all for an ANSWER. A batch
+ * that comes back `{ points: [] }` has told us those drives have no
+ * stored route, and asking again would be asking the same question.
+ */
+const BATCH_ATTEMPTS = 3;
+const BATCH_RETRY_MS = [300, 1200];
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * The routes for a set of drives, fetched in as few requests as the id
+ * list allows: one, and then one more only when the caller learns about
+ * drives it had not heard of (a page of older ones).
+ *
+ * Ids already asked about are never asked about again, so re-rendering,
+ * filtering the list down and filtering it back up all cost nothing. The
+ * accumulated answer is what lets ONE owner feed both a map and a list
+ * of rows from a single request.
+ */
+export function useTripRoutes(
+  tripIds: readonly string[] | undefined,
+  scope?: RouteScope,
+): TripRoutes {
+  // A string, not an array: it is the effect's only dependency, and an
+  // array literal from a caller would re-arm it on every render.
+  const key = (tripIds ?? []).join(",");
+  // Same reason: the scope is flattened into the query string it will
+  // become, so an object literal from a caller cannot re-arm the effect.
+  const scopeQuery = scopeToQuery(scope);
+  const [state, setState] = useState<TripRoutes>(NO_ROUTES);
+  const asked = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const wanted = key
+      .split(",")
+      .filter(Boolean)
+      .filter((id) => !asked.current.has(id));
+    if (wanted.length === 0) return;
+    let cancelled = false;
+
+    /** Merge an answer in, and record that these drives have had one. */
+    const settle = (ids: string[], got: Map<string, RoutePoint[]>) =>
+      setState((prev) => {
+        const routes = new Map(prev.routes);
+        for (const [id, pts] of got) routes.set(id, pts);
+        const settled = new Set(prev.settled);
+        // EVERY id asked for is settled, including the ones that came
+        // back with nothing. That is the answer: no route is coming from
+        // this batch, so whoever wants one may now go and ask.
+        for (const id of ids) settled.add(id);
+        return { routes, settled };
+      });
+
+    void (async () => {
+      for (let attempt = 0; attempt < BATCH_ATTEMPTS; attempt++) {
+        if (attempt > 0) {
+          await wait(
+            BATCH_RETRY_MS[attempt - 1] ??
+              BATCH_RETRY_MS[BATCH_RETRY_MS.length - 1],
+          );
+          if (cancelled) return;
+        }
+        const answer = await loadRoutes(wanted.join(","), scopeQuery);
+        if (cancelled) return;
+        // No answer, only a failure to get one. The ids are deliberately
+        // NOT marked asked here, so this batch is retried above and, if
+        // it runs out of attempts, the next time this caller learns
+        // about a drive (a page of older ones) it asks for these again
+        // on the same trip.
+        if (!answer.answered) continue;
+        for (const id of wanted) asked.current.add(id);
+        settle(wanted, answer.routes);
+        return;
+      }
+      // Out of attempts. Settle them anyway, without marking them asked:
+      // a row that wanted one of these routes has been waiting for this
+      // batch, and it must be released to fetch its own rather than
+      // waiting on something that is no longer coming. That is the
+      // latch this whole retry exists to avoid, one level down.
+      settle(wanted, new Map());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [key, scopeQuery]);
+
+  return state;
+}
+
+/**
+ * WHICH LOG THE IDS CAME OUT OF, and why the batch says so.
+ *
+ * The drives route serves a bare `?trip=` strictly to the caller: a lone
+ * uuid is guessable and a polyline is minute-by-minute movement. But the
+ * team overlay's whole job is every driver's trail in their own colour,
+ * and under that rule it drew the manager's own and nothing else, with
+ * the legend still naming drivers who had none.
+ *
+ * So a batch that came out of a real drive list names that list. The
+ * server then resolves the scope itself, with the same helper and the
+ * same roster it serves the list with, and answers for the ids inside
+ * it: exactly the drives the caller's own list already showed them,
+ * which for a teammate is confirmed business drives only. Nothing here
+ * is trusted; it only says which question to ask.
+ */
+export type RouteScope = {
+  companyId: string;
+  /** The raw `?driver=` the page was read under. Laundered server-side
+   *  by resolveTripScope; a value the caller is not entitled to simply
+   *  collapses to their own drives. */
+  driverParam?: string;
+};
+
+function scopeToQuery(scope: RouteScope | undefined): string {
+  if (!scope?.companyId) return "";
+  const qs = new URLSearchParams({ company: scope.companyId });
+  if (scope.driverParam) qs.set("driver", scope.driverParam);
+  return `&${qs.toString()}`;
+}
+
+/**
+ * The map, with its routes fetched after it has painted.
+ *
+ * The page used to read every polyline on the server before it sent a
+ * byte, in a loop that could make sixty sequential database round trips.
+ * Task 2 deleted that loop and left the map's `points` arrays empty, so
+ * the largest element on /mileage drew nothing at all. This is what puts
+ * the routes back without putting the round trips back.
+ *
+ * Three rules hold it together:
+ *
+ *  1. ONE request for the whole map, never one per drive. Sixty requests
+ *     from the browser is the same cost as sixty from the server, just
+ *     harder to see in a trace. The route takes the whole id list and
+ *     answers once.
+ *  2. The map is on screen before its routes are. Every drive starts
+ *     with an empty route, so the frame, the saved places and the legend
+ *     paint immediately and the trails appear when the answer lands. No
+ *     spinner: a map without its trails is still a map, and a spinner
+ *     that cannot resolve is worse than a quiet gap.
+ *  3. A failure is silent, exactly as it is for a row's thumbnail. The
+ *     route answers `{ points: [] }` for a drive that is not the
+ *     caller's, so an empty answer is a normal answer rather than an
+ *     error, and an aborted fetch is treated the same way.
+ */
+export function MileageMapRoutes({
+  tripIds,
+  trips,
+  places = [],
+  height,
+  focusMode = false,
+  focusTripId = null,
+  routes,
+  scope,
+}: {
+  /** The drives to draw, in order. Authoritative when given: it is both
+   *  what is asked for and what is drawn, so a caller holding ids and no
+   *  metadata is a first-class one. Defaults to the ids in `trips`. */
+  tripIds?: string[];
+  /** How to draw each of them. Looked up by id; an id with no entry
+   *  draws unclassified, which is honestly what it is. */
+  trips?: RoutelessTrip[];
+  places?: MapPlace[];
+  height?: number;
+  focusMode?: boolean;
+  /** Draw only this drive, when it is one of them. The REQUEST is still
+   *  the whole list: focusing a drive is a tap, and a tap that costs a
+   *  round trip is the dead control this branch has already fixed once
+   *  (the range filter). An id that is not in the list draws all of
+   *  them, which is what the reviewer's own fallback did. */
+  focusTripId?: string | null;
+  /** Routes an owner above this one already holds. Given them, this
+   *  component asks for nothing: DriveLog fetches once for its map AND
+   *  its rows, because two fetches of the same sixty routes is the cost
+   *  this whole change exists to delete. */
+  routes?: Map<string, RoutePoint[]>;
+  /** Which drive log these ids came out of, when this component is the
+   *  one fetching. See {@link RouteScope}: without it the team overlay
+   *  draws the manager's own trails and nobody else's. */
+  scope?: RouteScope;
+}) {
+  const ids = tripIds ?? (trips ?? []).map((t) => t.id);
+  // A string, not an array: an array literal from a parent would re-arm
+  // the memo below on every render.
+  const key = ids.join(",");
+  // Nothing is asked for when the routes were handed down.
+  const fetched = useTripRoutes(routes ? undefined : ids, scope);
+  const known = routes ?? fetched.routes;
+
+  const drawn = useMemo<MapTrip[]>(() => {
+    const styleById = new Map((trips ?? []).map((t) => [t.id, t]));
+    const all = key
+      .split(",")
+      .filter(Boolean)
+      .map((id) => ({
+        ...(styleById.get(id) ?? {
+          id,
+          classification: "unclassified" as const,
+        }),
+        points: known.get(id) ?? [],
+      }));
+    const focused = focusTripId
+      ? all.find((t) => t.id === focusTripId)
+      : undefined;
+    return focused ? [focused] : all;
+  }, [key, trips, known, focusTripId]);
+
+  return (
+    <MileageMap
+      trips={drawn}
+      places={places}
+      height={height}
+      focusMode={focusMode}
+    />
+  );
+}
+
+/**
+ * What one attempt at a batch came back with.
+ *
+ * `answered: false` is the only case worth asking again, and keeping it
+ * separate is the whole point. Folding every outcome into an empty map
+ * is what made a dropped connection indistinguishable from "those
+ * drives have no stored route", so the ids were marked done and the map
+ * stayed blank for the rest of the session.
+ */
+type RouteAnswer = {
+  answered: boolean;
+  routes: Map<string, RoutePoint[]>;
+};
+
+const NO_ANSWER: RouteAnswer = { answered: false, routes: new Map() };
+const ANSWERED_EMPTY: RouteAnswer = { answered: true, routes: new Map() };
+
+/** Every drive's route on this map, in one request. */
+async function loadRoutes(
+  idList: string,
+  scopeQuery: string,
+): Promise<RouteAnswer> {
+  try {
+    const res = await fetch(
+      `/api/mileage/drives?trip=${encodeURIComponent(idList)}${scopeQuery}`,
+    );
+    // A server error is worth asking again about; a refusal is not. A
+    // 401 says the session has gone and a 400 says the request was
+    // wrong, and neither changes by being repeated three times.
+    if (!res.ok) return res.status >= 500 ? NO_ANSWER : ANSWERED_EMPTY;
+    const json = await res.json();
+    // A 200 whose body is not the contract is a proxy or a captive
+    // portal talking, not this route. Treated as no answer.
+    if (!Array.isArray(json?.points)) return NO_ANSWER;
+    return { answered: true, routes: groupByTrip(json.points as BatchPoint[]) };
+  } catch {
+    // Offline, aborted, or a body that is not JSON at all.
+    return NO_ANSWER;
+  }
+}
+
+/**
+ * Split a batch back into one route per drive, each in the order it was
+ * driven.
+ *
+ * The RPC behind the route ends `order by trip_id, captured_at`, and
+ * this does not lean on that. A route drawn in arrival order reverses a
+ * drive: its direction arrows point backwards and its start disc lands
+ * on its destination. Same rule, and the same reason, as `takePoints` in
+ * components/mileage/TripList.tsx.
+ */
+function groupByTrip(points: BatchPoint[]): Map<string, RoutePoint[]> {
+  const by = new Map<string, BatchPoint[]>();
+  for (const p of points) {
+    if (typeof p?.trip_id !== "string") continue;
+    const arr = by.get(p.trip_id);
+    if (arr) arr.push(p);
+    else by.set(p.trip_id, [p]);
+  }
+  const out = new Map<string, RoutePoint[]>();
+  for (const [id, pts] of by) {
+    out.set(
+      id,
+      [...pts]
+        .sort((a, b) =>
+          a.captured_at < b.captured_at
+            ? -1
+            : a.captured_at > b.captured_at
+              ? 1
+              : 0,
+        )
+        // `trip_id` is dropped and `captured_at` kept: the map reads
+        // lat/lng, and a row reads the first and last fix's time to
+        // name the two ends of a drive that matched no saved place.
+        .map((p) => ({ lat: p.lat, lng: p.lng, captured_at: p.captured_at })),
+    );
+  }
+  return out;
 }

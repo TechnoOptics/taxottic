@@ -173,6 +173,25 @@ export function RefreshIcon({ className }: IconProps) {
   );
 }
 
+/** Tick. Confirms a queue is empty or a step is done. */
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <path d="M5 12.5 9.5 17 19 7.5" />
+    </Frame>
+  );
+}
+
+/** Clock face. Anything scheduled by time of day. */
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 1.8" />
+    </Frame>
+  );
+}
+
 /** Handset. Marks a feature that only exists in the mobile app. */
 export function PhoneIcon({ className }: IconProps) {
   return (
@@ -213,6 +232,36 @@ export function ArrowSwapIcon({ className }: IconProps) {
     <Frame className={className}>
       <path d="M4 8.5h14M14.5 5l3.5 3.5-3.5 3.5" />
       <path d="M20 15.5H6M9.5 12 6 15.5 9.5 19" />
+    </Frame>
+  );
+}
+
+/** Chevron pointing down. Disclosure marker on a collapsed <summary>;
+ *  the caller rotates it with `group-open:rotate-180` when open. */
+export function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </Frame>
+  );
+}
+
+/** Calendar. Marks the Today tab / anything scheduled by date. */
+export function CalendarIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 9.5h17" />
+      <path d="M8 3v3.5M16 3v3.5" />
+    </Frame>
+  );
+}
+
+/** Three stacked lines. "More" / open the menu. */
+export function MenuIcon({ className }: IconProps) {
+  return (
+    <Frame className={className}>
+      <path d="M4 6.5h16M4 12h16M4 17.5h16" />
     </Frame>
   );
 }

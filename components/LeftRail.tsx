@@ -704,8 +704,7 @@ export function LeftRail({
     activeCompany == null ? null : (
       <div className="mt-3 grid gap-1">
         {/* Company identity chip as the section header: a serif monogram
-            in a navy tile (gold letter + hairline gold ring, echoing the
-            dashboard company card) next to the gold-caps name. Gives the
+            in a quiet surface tile next to the company name. Gives the
             per-company section a sense of "whose books am I in" instead of
             a bare text label. Truncates on long names; full name on hover. */}
         <div
@@ -713,7 +712,7 @@ export function LeftRail({
           title={activeCompany.name}
         >
           <span
-            className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-forest-900 text-gold-300 text-[13px] leading-none ring-1 ring-gold-300/40"
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-2)] text-foreground text-[13px] leading-none ring-1 ring-edge"
             style={{ fontFamily: "var(--font-display)" }}
             aria-hidden="true"
           >

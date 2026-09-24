@@ -1,8 +1,6 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MileageLogBuilder } from "@/components/calculators/MileageLogBuilder";
 import { ratePeriodsForYear } from "@/lib/calculators/mileage-reimbursement";
@@ -175,29 +173,13 @@ const FAQ_LD = {
 
 export default function Page() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={APP_LD} />
       <JsonLd data={HOWTO_LD} />
       <JsonLd data={FAQ_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14">
         <nav
@@ -213,17 +195,14 @@ export default function Page() {
           <span className="text-forest-800">Mileage log</span>
         </nav>
 
-        <div className="mt-4 text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-          Free tool · {TAX_YEAR}
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight max-w-3xl">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 mt-6 leading-tight max-w-3xl">
           IRS Mileage Log
         </h1>
         <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
           Enter your business trips and get a log with the date, purpose and
           miles Publication 463 expects, priced at the {TAX_YEAR} standard
-          rate. Download it as CSV. Nothing is uploaded, and nothing is
-          filled in for you.
+          rate. Free, and you download it as CSV. Nothing is uploaded, and
+          nothing is filled in for you.
         </p>
       </section>
 
@@ -308,21 +287,21 @@ export default function Page() {
           Working out what the miles are worth instead?{" "}
           <Link
             href="/calculators/mileage-deduction"
-            className="text-gold-700 underline underline-offset-2 hover:text-forest-900"
+            className="text-forest-800 underline underline-offset-2 hover:text-forest-900"
           >
             Mileage deduction calculator
           </Link>
           . Reimbursing staff rather than claiming your own?{" "}
           <Link
             href="/calculators/mileage-reimbursement"
-            className="text-gold-700 underline underline-offset-2 hover:text-forest-900"
+            className="text-forest-800 underline underline-offset-2 hover:text-forest-900"
           >
             Employee mileage reimbursement calculator
           </Link>
           . The longer explanation lives in{" "}
           <Link
             href="/guides/business-mileage-deduction"
-            className="text-gold-700 underline underline-offset-2 hover:text-forest-900"
+            className="text-forest-800 underline underline-offset-2 hover:text-forest-900"
           >
             the mileage deduction guide
           </Link>
@@ -336,6 +315,7 @@ export default function Page() {
           and confirm your situation with a licensed CPA.
         </p>
       </section>
+      </PageShell>
     </main>
   );
 }

@@ -1,8 +1,6 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MileageReimbursementCalculator } from "@/components/calculators/MileageReimbursementCalculator";
 import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
@@ -145,28 +143,12 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
   const initial = { drivers: s.drivers, miles: s.miles, rate: s.rate };
 
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={APP_LD} />
       <JsonLd data={FAQ_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14">
         <nav
@@ -184,16 +166,13 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
           <span className="text-forest-800">Mileage reimbursement</span>
         </nav>
 
-        <div className="mt-4 text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-          Free calculator · {TAX_YEAR}
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight max-w-3xl">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 mt-6 leading-tight max-w-3xl">
           Employee Mileage Reimbursement Calculator
         </h1>
         <p className="mt-4 text-base sm:text-lg text-ink-soft max-w-2xl leading-relaxed">
           Work out what reimbursing your team&rsquo;s business driving costs
           for the year at the IRS standard rate, and what it costs after the
-          deduction. Instant, no sign-up.
+          deduction. Free for {TAX_YEAR}, instant, no sign-up.
         </p>
       </section>
 
@@ -240,14 +219,14 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
             GPS, per driver, with a map attached. See{" "}
             <Link
               href="/guides/business-mileage-deduction"
-              className="text-gold-700 underline underline-offset-2 hover:text-forest-900"
+              className="text-forest-800 underline underline-offset-2 hover:text-forest-900"
             >
               the mileage deduction guide
             </Link>{" "}
             for how the log is meant to look, or the{" "}
             <Link
               href="/calculators/mileage-deduction"
-              className="text-gold-700 underline underline-offset-2 hover:text-forest-900"
+              className="text-forest-800 underline underline-offset-2 hover:text-forest-900"
             >
               personal mileage deduction calculator
             </Link>{" "}
@@ -281,6 +260,7 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
           substantiation rules.
         </p>
       </section>
+      </PageShell>
     </main>
   );
 }

@@ -5,6 +5,13 @@ type WordmarkProps = {
   href?: string;
   size?: "sm" | "md" | "lg";
   tone?: "forest" | "cream";
+  /**
+   * Extra classes for the anchor. The wordmark renders its own <a> and
+   * must never be wrapped in another one (see the note below), so a
+   * caller that needs the link itself sized, typically `min-h-11` to make
+   * the home link a full tap target, passes it here.
+   */
+  className?: string;
 };
 
 const sizeMap = {
@@ -36,6 +43,7 @@ export function Wordmark({
   href = "/",
   size = "md",
   tone = "forest",
+  className = "",
 }: WordmarkProps) {
   const height = sizeMap[size];
   const src =
@@ -53,7 +61,10 @@ export function Wordmark({
       aria-label="Taxottic home"
       // min-w-0 lets the wordmark shrink when its flex parent (e.g. the
       // AppHeader) is squeezed on very narrow viewports (<300px foldables).
-      className="inline-flex items-center select-none min-w-0"
+      className={
+        "inline-flex items-center select-none min-w-0" +
+        (className ? ` ${className}` : "")
+      }
     >
       <Image
         src={src}

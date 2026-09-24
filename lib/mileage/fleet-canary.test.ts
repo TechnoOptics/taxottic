@@ -32,7 +32,7 @@ describe("evaluateFleetCapture", () => {
 
   it("CRITICAL: total fleet silence", () => {
     // The 'our devices have not tracked our drives this whole week'
-    // incident — caught on day one instead of day six.
+    // incident, caught on day one instead of day six.
     const v = evaluateFleetCapture(day("2026-07-25", 0, 0), healthy);
     expect(v.status).toBe("critical");
     expect(v.reason).toContain("fully down");

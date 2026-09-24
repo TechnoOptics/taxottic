@@ -42,6 +42,7 @@ describe("guideArticleLd", () => {
     slug: "business-mileage-deduction",
     title: "Business mileage deduction: how to track and claim it",
     description: "How the business mileage deduction works.",
+    series: "Mileage",
     published: "2026-06-08",
     modified: "2026-07-04",
   });
@@ -55,6 +56,14 @@ describe("guideArticleLd", () => {
   it("carries both dates, so freshness is legible to a crawler", () => {
     expect(ld.datePublished).toBe("2026-06-08");
     expect(ld.dateModified).toBe("2026-07-04");
+  });
+
+  it("carries the series into the image, so the card is not a generic one", () => {
+    // The OG route renders `series` above the title and falls back to
+    // "Free guide" without it. That fallback was what every card showed:
+    // no caller passed the parameter. The JSON-LD image and the page's
+    // own openGraph image are the same URL, so it is asserted here.
+    expect(ld.image[0]).toContain("&series=Mileage");
   });
 
   it("URL-encodes the title into the image, so a colon cannot break it", () => {

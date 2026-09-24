@@ -1,7 +1,7 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
+import { LedgerList } from "@/components/marketing/LedgerList";
+import { entryId, formatEntryDate } from "@/lib/marketing/changelog-format";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 
 export const metadata = {
   title: "Changelog, what's new in Taxottic",
@@ -152,43 +152,14 @@ const TAG_LABEL: Record<Tag, string> = {
   security: "Security",
 };
 
-const TAG_TONE: Record<Tag, string> = {
-  shipped: "bg-emerald-50 border-emerald-100 text-emerald-700",
-  fix: "bg-amber-50 border-amber-100 text-amber-800",
-  ops: "bg-forest-50 border-forest-100 text-forest-700",
-  security: "bg-red-50 border-red-100 text-red-700",
-};
-
 export default function ChangelogPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          // Native iOS overlays the WebView under the status bar, pad by
-          // the real safe-area inset so the wordmark clears the notch /
-          // Dynamic Island (matches app/page.tsx + AppHeader). 0 on web.
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav />
-          <SignInIconLink />
-        </div>
-      </header>
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="changelog">
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-8">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Changelog
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight">
-          What we shipped, when.
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
+          Changelog: what we shipped, when.
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-xl leading-relaxed">
           We update Taxottic in small, frequent steps. This page is the
@@ -203,42 +174,26 @@ export default function ChangelogPage() {
         </p>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 grid gap-7">
-        {ENTRIES.map((e, i) => (
-          <article key={i} className="card p-5 sm:p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="display text-lg text-forest-900">{e.title}</h2>
-              <time
-                dateTime={e.date}
-                className="text-[11px] text-ink-muted tracking-wide"
-              >
-                {new Intl.DateTimeFormat("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  timeZone: "UTC",
-                }).format(new Date(`${e.date}T00:00:00Z`))}
-              </time>
-            </div>
-            <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-              {e.body}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {e.tags.map((t) => (
-                <span
-                  key={t}
-                  className={
-                    "text-[10px] uppercase tracking-[0.18em] px-2 py-0.5 rounded-full border " +
-                    TAG_TONE[t]
-                  }
-                >
-                  {TAG_LABEL[t]}
-                </span>
-              ))}
-            </div>
-          </article>
-        ))}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+        {/* No href. A changelog entry is a record, not a destination:
+            the row used to link to `#${entryId(e)}`, which is the id on
+            its own <li>, so every row was a link to itself and clicking
+            or tabbing one did nothing visible. The id stays, so
+            /changelog#... still lands on the row it names. */}
+        <LedgerList
+          ariaLabel="Changes"
+          items={ENTRIES.map((e) => ({
+            id: entryId(e),
+            title: e.title,
+            blurb: e.body,
+            date: formatEntryDate(e.date),
+            dateTime: e.date,
+            tag: e.tags.map((t) => TAG_LABEL[t]).join(" \u00b7 "),
+          }))}
+        />
       </section>
+
+      </PageShell>
     </main>
   );
 }

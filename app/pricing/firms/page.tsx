@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
+import { PageShell } from "@/components/marketing/PageShell";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 // Tier 3 #5: Firm pricing page.
@@ -134,36 +134,21 @@ const TIERS: Tier[] = [
 
 export default function FirmPricingPage() {
   return (
-    <main id="main" className="min-h-screen">
-      <header className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10">
-        <div className="flex items-center justify-between">
-          <Wordmark size="sm" />
-          <span className="sr-only">Taxottic home</span>
-          <nav className="text-sm flex items-center gap-3">
-            <Link href="/pricing" className="text-ink-soft hover:text-forest-800">
-              Individuals
-            </Link>
-            <Link
-              href="/firms/request-account"
-              className="btn-primary text-sm"
-            >
-              Request account
-            </Link>
-          </nav>
-        </div>
-      </header>
-
+    <main id="main" data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      {/* The firm page's own CTA rides in the shell's slot; the nav's
+          Pricing item is the route back to the individual tiers. */}
+      <PageShell
+        current="pricing"
+        cta={{ href: "/firms/request-account", label: "Request account" }}
+      >
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700">
-          Pricing for firms
-        </div>
-        <h1 className="display mt-2 text-4xl sm:text-5xl text-forest-900 leading-tight">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 leading-tight">
           A cockpit your firm will actually use.
         </h1>
         <p className="mt-4 text-base text-ink-soft leading-relaxed max-w-2xl">
           Multi-client roster, branded portals, e-signature,
           scheduling, invoicing, and tax-form auto-drafting in one
-          calm place. Pick a tier; cancel anytime; pay annually for
+          place. Pick a tier; cancel anytime; pay annually for
           ~15% off.
         </p>
 
@@ -173,7 +158,7 @@ export default function FirmPricingPage() {
               key={t.id}
               className="card p-5 sm:p-6 flex flex-col"
             >
-              <div className="text-[10px] uppercase tracking-[0.2em] text-gold-700">
+              <div className="mono-label">
                 {t.name}
               </div>
               <div className="mt-2 display text-3xl text-forest-900">
@@ -191,7 +176,7 @@ export default function FirmPricingPage() {
               <ul className="mt-4 grid gap-1.5 text-xs text-forest-900 leading-relaxed flex-1">
                 {t.highlights.map((h) => (
                   <li key={h} className="flex items-start gap-1.5">
-                    <span aria-hidden="true" className="text-gold-700 mt-0.5">
+                    <span aria-hidden="true" className="text-muted mt-0.5">
                       ✓
                     </span>
                     <span>{h}</span>
@@ -202,7 +187,7 @@ export default function FirmPricingPage() {
                 href={t.cta.href}
                 className="btn-primary text-sm mt-5 text-center"
               >
-                {t.cta.label} →
+                {t.cta.label}
               </Link>
             </article>
           ))}
@@ -272,6 +257,7 @@ export default function FirmPricingPage() {
           })),
         }}
       />
+      </PageShell>
     </main>
   );
 }

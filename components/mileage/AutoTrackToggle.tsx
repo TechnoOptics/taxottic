@@ -6,7 +6,12 @@ import {
   stopMileageTracking,
   trackerDiag,
   onTrackerStartSettle,
+  openLocationSettings,
 } from "@/lib/mileage/native-tracker";
+import {
+  authorizationFromCache,
+  locationBlocked,
+} from "@/lib/mileage/location-blocked";
 
 type DenialPath = "settings" | "retry";
 
@@ -45,6 +50,8 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
   // toggle; a small link expands it back in for anyone who wants the
   // detail.
   const [showDetails, setShowDetails] = useState(false);
+  /** Last authorization the OS reported. Null on web and before the read. */
+  const [authorization, setAuthorization] = useState<string | null>(null);
   useEffect(() => {
     try {
       if (
@@ -115,6 +122,73 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
       });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // The OS answer, watched rather than assumed. iOS can move Location
+  // from Always to While Using with the app closed, and this control
+  // went on reading ON through all of it: 20 days, nothing recorded, a
+  // gold switch (iOS audit C4). The cached device-truth read gives the
+  // state at mount and the native listener gives the moment it changes.
+  // Dynamically imported for the same reason the rest of this file is:
+  // the module is native-only, and on web it resolves to no listener.
+  useEffect(() => {
+    let cancelled = false;
+    let off: (() => void) | null = null;
+    void import("@/lib/mileage/device-status")
+      .then(async (m) => {
+        if (cancelled) return;
+        // Seeded from the cache only while that read is fresh. The cache
+        // is written by a live probe and a live probe runs only from the
+        // tracker's start path, so a driver with tracking off carries the
+        // last whenInUse the phone ever reported: trusting it unbounded
+        // would latch the blocked branch with no way out.
+        const cached = m.readDeviceStatusCache();
+        const seed = authorizationFromCache(
+          cached
+            ? {
+                locationAuthorization: cached.value.locationAuthorization,
+                ageMs: cached.ageMs,
+              }
+            : null,
+        );
+        if (seed) setAuthorization(seed);
+        const unsub = await m.onAuthorizationChanged((auth) =>
+          setAuthorization(auth),
+        );
+        if (cancelled) unsub();
+        else off = unsub;
+        // Then ask the phone. A foreground mount is when the bridge
+        // demonstrably answers, and this is the exit from the blocked
+        // branch for a driver who granted Always while the app was dead:
+        // no other path refreshes this cache while tracking is off. On
+        // web the probe writes nothing and the read stays null.
+        await m.refreshDeviceStatusCache();
+        if (cancelled) return;
+        // Bounded exactly like the seed, because the refresh rewrites the
+        // cache only when the probe came back ok. On an unavailable,
+        // error or null outcome the read below returns the SAME old
+        // entry, so an unbounded read here would put the stale whenInUse
+        // straight back. Applied unconditionally: a cache too old to
+        // speak for the phone must clear the block, not preserve it.
+        const probed = m.readDeviceStatusCache();
+        setAuthorization(
+          authorizationFromCache(
+            probed
+              ? {
+                  locationAuthorization: probed.value.locationAuthorization,
+                  ageMs: probed.ageMs,
+                }
+              : null,
+          ),
+        );
+      })
+      .catch(() => {
+        /* web, or a binary without the plugin: no OS answer to read */
+      });
+    return () => {
+      cancelled = true;
+      off?.();
     };
   }, []);
 
@@ -231,6 +305,15 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
     }
   };
 
+  // While the OS says While Using there is nothing an on/off switch can
+  // do: the background watcher cannot arm, so a switch reading ON would
+  // be a lie and a switch the driver could flip would be a loop. The one
+  // useful action takes its place.
+  const blocked = locationBlocked({
+    locationAuthorization: authorization,
+    trackingEnabled: enabled,
+  });
+
   return (
     <div className="card p-4">
       <div className="flex items-start justify-between gap-4">
@@ -264,40 +347,57 @@ export function AutoTrackToggle({ companyId }: { companyId: string }) {
               .
             </p>
           ) : null}
+          {blocked ? (
+            <p className="mt-2 text-xs text-amber-800 leading-relaxed">
+              {blocked.short}. {blocked.fix}.
+            </p>
+          ) : null}
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
-          aria-label="Log my drives automatically"
-          onClick={onToggle}
-          disabled={busy || !ready || (!supported && !enabled)}
-          className={
-            "shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full " +
-            "transition-all duration-200 ring-1 ring-inset shadow-sm " +
-            "disabled:opacity-50 disabled:cursor-not-allowed " +
-            (enabled
-              ? // ON, brand gold gradient. gold-300 → gold-500 reads
-                // as warm and premium, with gold-600 ring for the
-                // edge definition. Matches the CompanyNav and FAB
-                // gold accents elsewhere on the page.
-                "bg-gradient-to-r from-gold-300 to-gold-500 ring-gold-600"
-              : // OFF, red so it's immediately obvious the tracker
-                // isn't running. User feedback: when drives went
-                // unlogged on real-drive day, the previous gray-on-
-                // gray off-state read as "neutral / fine" rather than
-                // "you're not capturing anything right now."
-                "bg-gradient-to-r from-rose-400 to-rose-600 ring-rose-700")
-          }
-        >
-          <span
+        {blocked ? (
+          <button
+            type="button"
+            onClick={() => {
+              void openLocationSettings();
+            }}
+            className="btn-primary shrink-0 text-xs py-1.5 px-3 min-h-11"
+          >
+            Open location settings
+          </button>
+        ) : (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Log my drives automatically"
+            onClick={onToggle}
+            disabled={busy || !ready || (!supported && !enabled)}
             className={
-              "inline-block h-5 w-5 transform rounded-full bg-white shadow " +
-              "transition-transform duration-200 " +
-              (enabled ? "translate-x-5" : "translate-x-0.5")
+              "shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full " +
+              "transition-all duration-200 ring-1 ring-inset shadow-sm " +
+              "disabled:opacity-50 disabled:cursor-not-allowed " +
+              (enabled
+                ? // ON, brand gold gradient. gold-300 → gold-500 reads
+                  // as warm and premium, with gold-600 ring for the
+                  // edge definition. Matches the CompanyNav and FAB
+                  // gold accents elsewhere on the page.
+                  "bg-gradient-to-r from-gold-300 to-gold-500 ring-gold-600"
+                : // OFF, red so it's immediately obvious the tracker
+                  // isn't running. User feedback: when drives went
+                  // unlogged on real-drive day, the previous gray-on-
+                  // gray off-state read as "neutral / fine" rather than
+                  // "you're not capturing anything right now."
+                  "bg-gradient-to-r from-rose-400 to-rose-600 ring-rose-700")
             }
-          />
-        </button>
+          >
+            <span
+              className={
+                "inline-block h-5 w-5 transform rounded-full bg-white shadow " +
+                "transition-transform duration-200 " +
+                (enabled ? "translate-x-5" : "translate-x-0.5")
+              }
+            />
+          </button>
+        )}
       </div>
       {!supported && ready ? (
         <p className="mt-2 text-[11px] text-ink-muted">

@@ -19,7 +19,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *   snapshot is already business- or personal-scoped by the server, or
  *   omits `forecast` entirely for a free/empty state).
  *
- * Java (the Capacitor app module is Java-only — no Kotlin toolchain on
+ * Java (the Capacitor app module is Java-only, no Kotlin toolchain on
  * the release build; mirrors TaxotticWatchBridgePlugin). Everything is
  * guarded so a malformed call can never crash the host app; the JS side
  * additionally gates on isPluginAvailable (the #69 graceful-degradation

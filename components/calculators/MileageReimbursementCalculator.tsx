@@ -72,9 +72,7 @@ export function MileageReimbursementCalculator({
   return (
     <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       <div className="card p-6 sm:p-7">
-        <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-          Your team
-        </div>
+        <div className="mono-label">Your team</div>
         <h2 className="display text-xl text-forest-900 mt-1">
           Who drives, and how far?
         </h2>
@@ -131,9 +129,9 @@ export function MileageReimbursementCalculator({
             </select>
           </label>
 
-          <div className="rounded-xl bg-cream/70 border border-gold-300/40 px-4 py-3 text-sm text-ink-soft">
+          <div className="border-t border-edge pt-4 text-sm text-ink-soft">
             {TAX_YEAR} IRS standard mileage rate:{" "}
-            <span className="font-medium text-forest-800">
+            <span className="figure font-medium text-forest-800">
               {r.isSplitYear
                 ? r.periods
                     .map((p) => `${p.centsPerMile}¢ (${p.label})`)
@@ -152,19 +150,17 @@ export function MileageReimbursementCalculator({
 
       <div className="lg:sticky lg:top-6">
         {hasEntered ? (
-          <div className="card p-6 sm:p-7 border-gold-300/60">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
-                Reimbursement for the year
-              </div>
+          <div className="card p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-3">
+              <div className="mono-label">Reimbursement for the year</div>
               <ShareButton onShare={share} copied={copied} />
             </div>
-            <div className="mt-1 display text-4xl sm:text-5xl text-forest-900">
+            <div className="mt-1 figure font-medium text-4xl sm:text-5xl text-forest-900">
               {formatCents(r.totalCents)}
             </div>
             <p className="mt-2 text-sm text-ink-soft">
               {r.periods.map((p) => (
-                <span key={p.label} className="block">
+                <span key={p.label} className="figure block">
                   {p.miles.toLocaleString("en-US")} miles × {p.centsPerMile}
                   ¢/mile ({p.label})
                 </span>
@@ -176,26 +172,26 @@ export function MileageReimbursementCalculator({
               </span>
             </p>
 
-            <dl className="mt-5 grid gap-2">
-              <div className="flex items-baseline justify-between gap-3 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">
-                <dt className="text-sm text-ink-soft">Per driver, per year</dt>
-                <dd className="display text-lg text-forest-900 tabular-nums">
+            <dl className="mt-5 border-t border-edge">
+              <div className="stat-row">
+                <dt className="stat-row-label">Per driver, per year</dt>
+                <dd className="figure stat-row-value">
                   {formatCents(r.perDriverCents)}
                 </dd>
               </div>
-              <div className="flex items-baseline justify-between gap-3 rounded-xl bg-cream/70 border border-gold-300/50 px-4 py-3">
-                <dt className="text-sm text-ink-soft">
+              <div className="stat-row">
+                <dt className="stat-row-label">
                   Tax saved (it&rsquo;s deductible)
                 </dt>
-                <dd className="display text-lg text-forest-900 tabular-nums">
+                <dd className="figure stat-row-value">
                   {formatCents(r.taxSavedCents)}
                 </dd>
               </div>
-              <div className="flex items-baseline justify-between gap-3 rounded-xl border border-gold-300/60 px-4 py-3">
-                <dt className="text-sm font-medium text-forest-800">
+              <div className="stat-row">
+                <dt className="stat-row-label font-medium">
                   Net cost after tax
                 </dt>
-                <dd className="display text-xl text-forest-900 tabular-nums">
+                <dd className="figure stat-row-value">
                   {formatCents(r.netCostCents)}
                 </dd>
               </div>
@@ -211,7 +207,7 @@ export function MileageReimbursementCalculator({
           </div>
         ) : (
           <div className="card p-8 text-center">
-            <CarIcon className="size-9 mx-auto text-gold-700" />
+            <CarIcon className="size-9 mx-auto text-ink-muted" />
             <p className="mt-3 text-sm text-ink-soft">
               Enter how many people drive and roughly how far, and this will
               price a year of reimbursement at the IRS standard rate.
@@ -219,20 +215,17 @@ export function MileageReimbursementCalculator({
           </div>
         )}
 
-        <div className="mt-4 rounded-2xl bg-forest-900 text-cream p-6">
-          <p className="text-sm leading-relaxed">
-            <span className="text-gold-300">
+        <div className="mt-6 border-t border-edge pt-5">
+          <p className="text-sm leading-relaxed text-ink-soft">
+            <strong className="font-medium text-forest-900">
               Taxottic captures those miles for you
-            </span>{" "}
+            </strong>{" "}
             in the background, per driver, with a map and an IRS-ready log,
             so the number above comes from what actually happened rather
             than from what someone remembered.
           </p>
-          <Link
-            href="/login"
-            className="mt-4 inline-flex items-center justify-center h-11 px-5 rounded-[0.625rem] bg-gold-300 text-forest-900 text-sm font-semibold hover:bg-gold-200 transition-colors"
-          >
-            Track my team&rsquo;s miles, free →
+          <Link href="/login" className="btn-primary mt-4">
+            Track my team&rsquo;s miles, free
           </Link>
         </div>
       </div>

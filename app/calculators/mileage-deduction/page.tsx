@@ -1,8 +1,6 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MileageDeductionCalculator } from "@/components/calculators/MileageDeductionCalculator";
 import { buildCalcMetadata, readSearch, type Search } from "@/lib/calculators/page-meta";
@@ -164,28 +162,12 @@ export default async function MileageDeductionCalculatorPage({
   // shared before it existed still work: they set miles only.
   const initial = { miles: s.miles, miles2: s.miles2, rate: s.rate };
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={APP_LD} />
       <JsonLd data={FAQ_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-2">
         <nav
@@ -202,16 +184,13 @@ export default async function MileageDeductionCalculatorPage({
           <span aria-hidden="true">/</span>
           <span className="text-forest-800">Mileage deduction</span>
         </nav>
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700 mt-6">
-          Free calculator · 2026
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight max-w-3xl">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 mt-6 leading-tight max-w-3xl">
           Mileage Deduction Calculator
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           Turn your business miles into a tax deduction at the {TAX_YEAR} IRS
           {RATE_PERIODS ? " rates" : " rate"} -
-          and see roughly what it saves you. Instant, no sign-up.
+          and see roughly what it saves you. Free, instant, no sign-up.
         </p>
       </section>
 
@@ -260,8 +239,8 @@ export default async function MileageDeductionCalculatorPage({
           </div>
         </div>
 
-        <div className="card p-6 border-gold-300/60">
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+        <div className="card p-6 border-edge">
+          <div className="mono-label">
             Keep going
           </div>
           <h2 className="display text-xl text-forest-900 mt-1">
@@ -271,7 +250,7 @@ export default async function MileageDeductionCalculatorPage({
             <li>
               <Link
                 href="/guides/business-mileage-deduction"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
                 The business mileage deduction (full guide)
               </Link>
@@ -279,7 +258,7 @@ export default async function MileageDeductionCalculatorPage({
             <li>
               <Link
                 href="/calculators/self-employment-tax"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
                 Self-employment tax calculator
               </Link>
@@ -287,7 +266,7 @@ export default async function MileageDeductionCalculatorPage({
             <li>
               <Link
                 href="/guides/schedule-c-deductions"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
                 Schedule C deductions you can write off
               </Link>
@@ -295,14 +274,15 @@ export default async function MileageDeductionCalculatorPage({
             <li>
               <Link
                 href="/calculators"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
-                All free tax calculators →
+                All free tax calculators
               </Link>
             </li>
           </ul>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

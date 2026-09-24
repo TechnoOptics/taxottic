@@ -70,17 +70,17 @@ const securityHeaders = [
       //   connect-src  needs maps.googleapis.com + maps.gstatic.com
       //                (XHR for Places autocomplete results, tile metadata)
       // Without these the browser blocks the Maps script BEFORE the
-      // request reaches Google — the network panel surfaces it as a
+      // request reaches Google. The network panel surfaces it as a
       // generic 503, which sent us on a long debug detour through
       // referrer restrictions, billing, and SW caches before we
       // grep'd this header and saw the missing entries. Don't
       // wildcard-google: list only the Maps subdomains the loader
       // actually hits.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.plaid.com https://cdn.plaid.cloud https://js.stripe.com https://*.vercel-insights.com https://maps.googleapis.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.plaid.com https://cdn.plaid.cloud https://js.stripe.com https://maps.googleapis.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://maps.gstatic.com https://maps.googleapis.com https://streetviewpixels-pa.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.stripe.com https://*.plaid.com https://cdn.plaid.com https://cdn.plaid.cloud https://*.vercel-insights.com https://maps.googleapis.com https://maps.gstatic.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.stripe.com https://*.plaid.com https://cdn.plaid.com https://cdn.plaid.cloud https://maps.googleapis.com https://maps.gstatic.com",
       "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://*.plaid.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
@@ -124,6 +124,26 @@ const nextConfig: NextConfig = {
   // audit flagged this as a P2 fingerprint-reduction item; this knob is
   // the one-line fix.
   poweredByHeader: false,
+  // Turn off the dev-tools overlay (the dark circular "N", bottom-left).
+  //
+  // It is dev-only chrome that production never serves, and the
+  // visual-regression suite runs against `npm run dev` (see the webServer
+  // block in playwright.config.ts), so it was being baked into the
+  // committed baselines as though it were product. Measured on the
+  // baselines at 48dc742: the badge is a 38x38 disc at x19-56 sitting in
+  // 13 of 32 committed snapshots, and NOT in the other 19 — the same page
+  // has it on Linux and not on macOS (calc-mileage-deduction desktop),
+  // because the overlay mounts after hydration and races the capture.
+  // That makes it both wrong and unstable: it is the entire measured
+  // macOS noise floor quoted in playwright.config.ts (one of five runs
+  // moved compare-hub mobile by 3,710 pixels, 0.43% of the 1% budget,
+  // purely on the badge failing to paint).
+  //
+  // Killing it at the source rather than hiding it from the spec keeps
+  // the baselines a record of what the app renders, and leaves nothing
+  // for a future Next version to silently reintroduce under a changed
+  // selector. Guarded by lib/visual/dev-indicators.test.ts.
+  devIndicators: false,
   async headers() {
     return [
       {

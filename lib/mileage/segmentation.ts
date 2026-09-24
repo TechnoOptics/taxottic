@@ -186,7 +186,7 @@ function totalMeters(points: GpsPoint[]): number {
  *  (urban-canyon multipath, cold-start cell fixes) and get dropped
  *  BEFORE segmentation. A 500 m jump from one bad fix reads as > 8 m/s
  *  "driving" and can open a phantom trip or inflate a real one's
- *  distance — the type has always documented accuracyM as "used to
+ *  distance, the type has always documented accuracyM as "used to
  *  ignore jittery fixes", but nothing enforced it until now. */
 export const MAX_ACCURACY_M = 100;
 

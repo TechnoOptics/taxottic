@@ -7,6 +7,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.app.ActivityManager;
 import android.app.ApplicationExitInfo;
+import java.util.ArrayList;
 import java.util.List;
 import java.nio.charset.StandardCharsets;
 import android.content.Context;
@@ -17,8 +18,10 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
 
+import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -33,13 +36,13 @@ import java.util.ArrayDeque;
  * Device-truth probe for mileage reliability (plan §C), Android side.
  * Reports what nothing else in the stack can see: whether background
  * location ("Allow all the time") is actually granted, and whether the
- * OS is battery-optimizing Taxottic — the Samsung starvation that
+ * OS is battery-optimizing Taxottic, the Samsung starvation that
  * reduced capture to 2 fixes per drive has NO other detectable signal.
  *
  * Also exposes the two battery-exemption intents the setup wizard
  * drives: the direct request dialog (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
  * on Google's acceptable-use list for apps whose core function breaks
- * under Doze — continuous mileage tracking is the canonical case) and
+ * under Doze; continuous mileage tracking is the canonical case) and
  * the policy-safe settings list as fallback.
  */
 @CapacitorPlugin(
@@ -102,7 +105,7 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
 
     /** Steps since `fromMs`. available=false when the sensor/permission
      *  is missing OR we have no baseline sample at/before fromMs yet
-     *  (just armed) — callers treat that as 0 and use the timeout. */
+     *  (just armed); callers treat that as 0 and use the timeout. */
     @PluginMethod
     public void queryStepsSince(PluginCall call) {
         armStepListener(); // re-try in case permission arrived after load
@@ -162,11 +165,16 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
 
     @PluginMethod
     public void getStatus(PluginCall call) {
-        Context ctx = getContext();
-        boolean fine = granted(Manifest.permission.ACCESS_FINE_LOCATION);
-        boolean coarse = granted(Manifest.permission.ACCESS_COARSE_LOCATION);
+        call.resolve(buildStatus(getContext(), hasMotionPermission()));
+    }
+
+    /** The device-truth payload, as a pure function of the context so an
+     *  instrumented test can pin its shape without a bridge. */
+    static JSObject buildStatus(Context ctx, boolean motionPermission) {
+        boolean fine = granted(ctx, Manifest.permission.ACCESS_FINE_LOCATION);
+        boolean coarse = granted(ctx, Manifest.permission.ACCESS_COARSE_LOCATION);
         boolean background = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-                || granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+                || granted(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION);
 
         String auth;
         if (!fine && !coarse) {
@@ -187,8 +195,33 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
         out.put("preciseLocation", fine);
         out.put("batteryOptimized", !ignoring);
         out.put("manufacturer", Build.MANUFACTURER);
-        out.put("motionPermission", hasMotionPermission());
-        call.resolve(out);
+        out.put("motionPermission", motionPermission);
+        putBackgroundRestricted(ctx, out);
+        return out;
+    }
+
+    private static boolean granted(Context ctx, String permission) {
+        return ContextCompat.checkSelfPermission(ctx, permission)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
+     * ActivityManager.isBackgroundRestricted() (API 28+): the user, or
+     * Samsung's "Deep sleeping apps", set RUN_ANY_IN_BACKGROUND to ignore
+     * for this package. That is a different switch from battery
+     * optimization (isIgnoringBatteryOptimizations above) and was never
+     * reported, so a phone in that state read as healthy. Omitted below
+     * API 28 rather than faked.
+     */
+    static void putBackgroundRestricted(Context ctx, JSObject out) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
+        try {
+            ActivityManager am =
+                (ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
+            if (am != null) out.put("isBackgroundRestricted", am.isBackgroundRestricted());
+        } catch (Exception ignored) {
+            // A failed read must never take the rest of the payload down.
+        }
     }
 
     /** Direct exemption dialog ("Allow Taxottic to always run in
@@ -232,6 +265,16 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
      * tracker" from "we were already cached and idle".
      *
      * Needs no permission for our own package.
+     *
+     * Every fetched record is reported, not only the newest. Ten days of
+     * production on a Galaxy Z Fold 5 showed that each multi-day capture
+     * gap was followed by a harmless wake-source death (low_memory at
+     * importance 400 after a resurrection drive finished) that overwrote
+     * the tracker's own death record before the next heartbeat, so for
+     * four outages the cause was lost. The one record that survived
+     * could not be attributed to the app process versus the WebView's
+     * sandboxed renderer, because the process name was never kept.
+     * `history` fixes both; the top-level fields stay as they were.
      */
     @PluginMethod
     public void getExitInfo(PluginCall call) {
@@ -245,39 +288,119 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
         try {
             ActivityManager am =
                 (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+            // The per-package ring buffer holds about 16 records.
             List<ApplicationExitInfo> exits =
-                am.getHistoricalProcessExitReasons(null, 0, 5);
-            if (exits == null || exits.isEmpty()) {
-                ret.put("available", false);
-                call.resolve(ret);
-                return;
+                am.getHistoricalProcessExitReasons(null, 0, EXIT_HISTORY_MAX);
+            List<ExitRecord> records = new ArrayList<>();
+            if (exits != null) {
+                for (ApplicationExitInfo exit : exits) records.add(ExitRecord.from(exit));
             }
-            ApplicationExitInfo last = exits.get(0); // newest first
-            ret.put("available", true);
-            ret.put("reason", last.getReason());
-            ret.put("reasonName", reasonName(last.getReason()));
-            ret.put("status", last.getStatus());
-            ret.put("timestamp", last.getTimestamp());
-            ret.put("importance", last.getImportance());
-            // IMPORTANCE_FOREGROUND_SERVICE (125) or better means the
-            // tracking service was still live when the OS killed us.
-            ret.put(
-                "fgsWasAlive",
-                last.getImportance()
-                    <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE);
-            ret.put("pssKb", last.getPss());
-            ret.put("rssKb", last.getRss());
-            String desc = last.getDescription();
-            if (desc != null) ret.put("description", desc);
-            byte[] summary = last.getProcessStateSummary();
-            if (summary != null) {
-                ret.put("breadcrumb", new String(summary, StandardCharsets.UTF_8));
-            }
+            ret = shapeExitInfo(records);
+            ret.put("platform", "android");
+            putBackgroundRestricted(getContext(), ret);
         } catch (Exception e) {
             ret.put("available", false);
             ret.put("error", String.valueOf(e.getMessage()));
         }
         call.resolve(ret);
+    }
+
+    private static final int EXIT_HISTORY_MAX = 16;
+    private static final int BREADCRUMB_MAX_CHARS = 200;
+
+    /** A plain copy of one ApplicationExitInfo, which has no public
+     *  constructor, so the JSON shaping below can be tested directly. */
+    static final class ExitRecord {
+        final String processName;
+        final int reason;
+        final int status;
+        final int importance;
+        final long timestamp;
+        final String description;
+        final byte[] stateSummary;
+        final long pssKb;
+        final long rssKb;
+
+        ExitRecord(String processName, int reason, int status, int importance,
+                long timestamp, String description, byte[] stateSummary,
+                long pssKb, long rssKb) {
+            this.processName = processName;
+            this.reason = reason;
+            this.status = status;
+            this.importance = importance;
+            this.timestamp = timestamp;
+            this.description = description;
+            this.stateSummary = stateSummary;
+            this.pssKb = pssKb;
+            this.rssKb = rssKb;
+        }
+
+        @RequiresApi(Build.VERSION_CODES.R)
+        static ExitRecord from(ApplicationExitInfo info) {
+            return new ExitRecord(info.getProcessName(), info.getReason(),
+                    info.getStatus(), info.getImportance(), info.getTimestamp(),
+                    info.getDescription(), info.getProcessStateSummary(),
+                    info.getPss(), info.getRss());
+        }
+    }
+
+    /** Records newest first, as the OS returns them. */
+    static JSObject shapeExitInfo(List<ExitRecord> exits) {
+        JSObject ret = new JSObject();
+        if (exits == null || exits.isEmpty()) {
+            ret.put("available", false);
+            return ret;
+        }
+        ExitRecord last = exits.get(0);
+        ret.put("available", true);
+        ret.put("reason", last.reason);
+        ret.put("reasonName", reasonName(last.reason));
+        ret.put("status", last.status);
+        ret.put("timestamp", last.timestamp);
+        ret.put("importance", last.importance);
+        // IMPORTANCE_FOREGROUND_SERVICE (125) or better means the
+        // tracking service was still live when the OS killed us.
+        ret.put("fgsWasAlive", fgsWasAlive(last.importance));
+        ret.put("pssKb", last.pssKb);
+        ret.put("rssKb", last.rssKb);
+        if (last.description != null) ret.put("description", last.description);
+        String crumb = breadcrumb(last.stateSummary);
+        if (crumb != null) ret.put("breadcrumb", crumb);
+
+        JSArray history = new JSArray();
+        for (ExitRecord exit : exits) {
+            JSObject entry = new JSObject();
+            entry.put("processName", exit.processName);
+            entry.put("reason", exit.reason);
+            entry.put("reasonName", reasonName(exit.reason));
+            entry.put("status", exit.status);
+            entry.put("importance", exit.importance);
+            entry.put("fgsWasAlive", fgsWasAlive(exit.importance));
+            entry.put("timestamp", exit.timestamp);
+            entry.put("pssKb", exit.pssKb);
+            entry.put("rssKb", exit.rssKb);
+            if (exit.description != null) entry.put("description", exit.description);
+            String entryCrumb = breadcrumb(exit.stateSummary);
+            if (entryCrumb != null) entry.put("breadcrumb", entryCrumb);
+            history.put(entry);
+        }
+        ret.put("history", history);
+        return ret;
+    }
+
+    private static boolean fgsWasAlive(int importance) {
+        return importance
+            <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
+    }
+
+    /** The setProcessStateSummary bytes as UTF-8, bounded so a stray
+     *  binary summary cannot bloat the heartbeat. */
+    private static String breadcrumb(byte[] summary) {
+        if (summary == null) return null;
+        String text = new String(summary, StandardCharsets.UTF_8);
+        return text.length() > BREADCRUMB_MAX_CHARS
+            ? text.substring(0, BREADCRUMB_MAX_CHARS)
+            : text;
     }
 
     /** Leave a breadcrumb the NEXT exit record will carry, so we learn
@@ -298,7 +421,7 @@ public class TaxotticDeviceStatusPlugin extends Plugin {
                 }
                 am.setProcessStateSummary(bytes);
             } catch (Exception ignored) {
-                // Throttled or unavailable — never break the caller.
+                // Throttled or unavailable. Never break the caller.
             }
         }
         call.resolve();

@@ -1,8 +1,6 @@
-import { MarketingNav } from "@/components/MarketingNav";
+import { PageShell } from "@/components/marketing/PageShell";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Wordmark } from "@/components/Wordmark";
-import { SignInIconLink } from "@/components/SignInIconLink";
 import { JsonLd } from "@/components/seo/JsonLd";
 import {
   SelfEmploymentTaxCalculator,
@@ -172,28 +170,12 @@ export default async function SelfEmploymentTaxCalculatorPage({
 }) {
   const initial = readInitial(await searchParams);
   return (
-    <main className="min-h-screen bg-[var(--color-cream)]">
+    <main data-grammar="year" className="min-h-screen bg-[var(--color-cream)]">
+      <PageShell current="calculators">
       <JsonLd data={BREADCRUMB_LD} />
       <JsonLd data={APP_LD} />
       <JsonLd data={FAQ_LD} />
 
-      <header
-        className="relative"
-        style={{
-          background:
-            "linear-gradient(180deg, #2a3a5e 0%, #1d2843 60%, #121a2a 100%)",
-          paddingTop:
-            "max(var(--app-safe-top, 0px), env(safe-area-inset-top, 0px))",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Wordmark size="md" tone="cream" />
-          <MarketingNav current="calculators" />
-          <SignInIconLink />
-        </div>
-      </header>
 
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-2">
@@ -211,16 +193,13 @@ export default async function SelfEmploymentTaxCalculatorPage({
           <span aria-hidden="true">/</span>
           <span className="text-forest-800">Self-employment tax</span>
         </nav>
-        <div className="text-xs uppercase tracking-[0.2em] text-gold-700 mt-6">
-          Free calculator · 2026
-        </div>
-        <h1 className="display mt-2 text-3xl sm:text-5xl text-forest-900 leading-tight max-w-3xl">
+        <h1 className="display text-4xl sm:text-6xl text-forest-900 mt-6 leading-tight max-w-3xl">
           Self-Employment Tax Calculator
         </h1>
         <p className="mt-4 text-sm sm:text-base text-ink-soft max-w-2xl leading-relaxed">
           See what you&rsquo;ll actually owe on your 1099 income, self-employment
           tax, federal and state income tax, your QBI deduction, and your next
-          quarterly payment. Instant, no sign-up, and it runs the same
+          quarterly payment. Free for 2026, instant, no sign-up, and it runs the same
           IRS-aligned engine as Taxottic.
         </p>
       </section>
@@ -273,8 +252,8 @@ export default async function SelfEmploymentTaxCalculatorPage({
           </div>
         </div>
 
-        <div className="card p-6 border-gold-300/60">
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+        <div className="card p-6 border-edge">
+          <div className="mono-label">
             Keep going
           </div>
           <h2 className="display text-xl text-forest-900 mt-1">
@@ -284,7 +263,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
             <li>
               <Link
                 href="/guides/self-employment-tax-how-much-to-set-aside"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
                 How much should I set aside for self-employment tax?
               </Link>
@@ -292,7 +271,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
             <li>
               <Link
                 href="/guides/quarterly-estimated-taxes-explained"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
                 Quarterly estimated taxes, explained
               </Link>
@@ -300,7 +279,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
             <li>
               <Link
                 href="/guides/schedule-c-deductions"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
                 Schedule C deductions you can write off
               </Link>
@@ -308,16 +287,16 @@ export default async function SelfEmploymentTaxCalculatorPage({
             <li>
               <Link
                 href="/calculators"
-                className="text-gold-800 hover:text-gold-900 underline underline-offset-2"
+                className="text-forest-800 hover:text-forest-900 underline underline-offset-2"
               >
-                All free tax calculators →
+                All free tax calculators
               </Link>
             </li>
           </ul>
         </div>
 
         <div className="card p-6">
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+          <div className="mono-label">
             By state
           </div>
           <h2 className="display text-xl text-forest-900 mt-1">
@@ -332,7 +311,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
               <Link
                 key={s.code}
                 href={`/calculators/self-employment-tax/${s.slug}`}
-                className="text-gold-800 hover:text-gold-900 truncate"
+                className="text-forest-800 hover:text-forest-900 truncate"
               >
                 {s.name}
               </Link>
@@ -341,7 +320,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
         </div>
 
         <div className="card p-6">
-          <div className="text-[10px] uppercase tracking-[0.28em] text-gold-700 font-medium">
+          <div className="mono-label">
             By income
           </div>
           <h2 className="display text-xl text-forest-900 mt-1">
@@ -356,7 +335,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
               <Link
                 key={n}
                 href={`/calculators/self-employment-tax/on/${n}`}
-                className="text-gold-800 hover:text-gold-900"
+                className="text-forest-800 hover:text-forest-900"
               >
                 {formatDollars(n)}
               </Link>
@@ -364,6 +343,7 @@ export default async function SelfEmploymentTaxCalculatorPage({
           </div>
         </div>
       </section>
+      </PageShell>
     </main>
   );
 }

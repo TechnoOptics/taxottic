@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { NATIVE_COOKIE } from "@/lib/native/front-door";
+import { pushDecision, type Receive } from "@/lib/native/push-gate";
+import { hasReachedToday, REACHED_TODAY_EVENT } from "@/lib/native/reached-today";
+import { barOf, statusBarPlan } from "@/lib/native/status-bar";
 
 /**
  * One-shot native runtime setup, mounted at the root layout next to
@@ -8,10 +12,11 @@ import { useEffect } from "react";
  * (isNativePlatform() false). Two jobs:
  *
  *  1. StatusBar, belt-and-suspenders with capacitor.config.ts:
- *     overlay the WebView + light (white) text, so the dark-green
- *     header extends behind the status bar with readable white
- *     clock/battery/signal. Config sets this at launch; doing it
- *     again at runtime survives any plugin re-init.
+ *     overlay handling, plus a style and colour that follow the
+ *     page's data-bar attribute through lib/native/status-bar.ts.
+ *     The plan is reapplied on resize, orientation change,
+ *     visibility change and attribute change, and every listener is
+ *     removed again when the effect is cleaned up.
  *
  *  2. Push notifications, request permission + register so the
  *     OS prompt actually appears and the device gets a token.
@@ -28,6 +33,7 @@ import { useEffect } from "react";
 export function CapacitorNativeInit() {
   useEffect(() => {
     let cancelled = false;
+    const teardown: Array<() => void> = [];
 
     (async () => {
       if (typeof window === "undefined") return;
@@ -45,6 +51,11 @@ export function CapacitorNativeInit() {
       }
       if (!Capacitor?.isNativePlatform()) return;
 
+      // Mark the shell for the server (lib/native/front-door.ts). One
+      // year, Lax, Secure: the WebView loads https://taxottic.com.
+      // Secure means the cookie is never set on a plain-http local dev server.
+      document.cookie = `${NATIVE_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
+
       // --- StatusBar: per-platform so the header never overlaps it ---
       // iOS: overlay the WebView; the header's env(safe-area-inset-top)
       //   padding clears the notch WHEN WKWebView reports it, but that
@@ -56,8 +67,9 @@ export function CapacitorNativeInit() {
       //   status bar, so the header rendered ON TOP of the clock /
       //   battery ("header overlapping the notification bar"). With
       //   overlay=false the OS reserves a solid status-bar strip; we
-      //   paint it the brand dark green so it's seamless with the
-      //   header and the header starts cleanly below it.
+      //   paint it the colour statusBarPlan picks from the page's
+      //   data-bar attribute, so the strip always matches whatever
+      //   the page puts directly below it.
       if (Capacitor.isPluginAvailable("StatusBar")) {
         try {
           const isAndroid = Capacitor.getPlatform() === "android";
@@ -70,8 +82,37 @@ export function CapacitorNativeInit() {
           await StatusBar.setOverlaysWebView({ overlay: !isAndroid }).catch(
             () => {},
           );
-          // Style.Dark == light/WHITE content (for dark backgrounds).
-          await StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+          // Style and colour follow the page: html[data-bar] (set by
+          // NavyBar while the app header is mounted) and html[data-theme]
+          // decide both the plugin style and the band's colour, and the
+          // plan is reapplied on every change below. See
+          // lib/native/status-bar.ts.
+          const applyStatusBar = () => {
+            if (cancelled) return;
+            const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+            const plan = statusBarPlan(barOf(document.documentElement), theme);
+            void StatusBar.setStyle({ style: plan.style === "Dark" ? Style.Dark : Style.Light }).catch(() => {});
+            if (isAndroid) void StatusBar.setBackgroundColor({ color: plan.color }).catch(() => {});
+          };
+          applyStatusBar();
+          window.addEventListener("resize", applyStatusBar);
+          teardown.push(() =>
+            window.removeEventListener("resize", applyStatusBar),
+          );
+          window.addEventListener("orientationchange", applyStatusBar);
+          teardown.push(() =>
+            window.removeEventListener("orientationchange", applyStatusBar),
+          );
+          document.addEventListener("visibilitychange", applyStatusBar);
+          teardown.push(() =>
+            document.removeEventListener("visibilitychange", applyStatusBar),
+          );
+          const barObserver = new MutationObserver(applyStatusBar);
+          barObserver.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["data-bar", "data-theme"],
+          });
+          teardown.push(() => barObserver.disconnect());
           if (!isAndroid) {
             // --- iOS: measure the REAL safe-area insets natively ---
             // The header/FAB/sheet all position off
@@ -129,14 +170,6 @@ export function CapacitorNativeInit() {
             }
           }
           if (isAndroid) {
-            // Match the header's TOP gradient stop so the OS-reserved
-            // status-bar strip (overlay=false) blends into the header
-            // instead of showing a hard dark band ("green bar")
-            // between the clock and the header. (#121a2a is the
-            // BOTTOM of the header gradient, wrong end for the strip.)
-            await StatusBar.setBackgroundColor({ color: "#2a3a5e" }).catch(
-              () => {},
-            );
             // Android safe-top is platform-dependent and env() can't be
             // trusted (the Android WebView reports
             // env(safe-area-inset-top)=0 even when drawing UNDER the
@@ -286,48 +319,78 @@ export function CapacitorNativeInit() {
               }).catch(() => {});
             },
           );
-          const perm = await PushNotifications.checkPermissions();
-          let receive = perm.receive;
-          if (receive === "prompt" || receive === "prompt-with-rationale") {
-            receive = (await PushNotifications.requestPermissions()).receive;
-          }
-          // CRITICAL: register() on Android calls into FirebaseMessaging
-          // which throws IllegalStateException ON THE NATIVE THREAD if
-          // google-services.json hasn't been installed. The native
-          // throw is NOT caught by this JS try/catch, it propagates
-          // up through the Capacitor plugin worker and crashes the
-          // entire app process before the WebView finishes loading.
-          // Diagnosed on emulator-5554 May 22, 2026.
-          //
           // Gate on a build-time flag so we only call register() once
           // Firebase is actually wired up (google-services.json in
           // android/app/, GoogleService-Info.plist for iOS, env var
-          // flipped). The other PushNotifications APIs (listeners,
-          // checkPermissions) don't touch Firebase so they're safe to
-          // keep running unconditionally, they're just no-ops without
-          // a registered token.
-          const pushEnabled =
-            process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1";
-          // Report the branch BEFORE acting on it. These two conditions
-          // are the ones that produce total silence today: neither calls
-          // register(), so neither can ever fire registrationError, and
-          // both leave device_tokens empty with no explanation. `receive`
-          // is carried as the detail because "denied" and
-          // "prompt-with-rationale" mean different things to the user.
-          if (!pushEnabled) {
-            reportPush("flag_disabled", `receive=${receive}`);
-          } else if (receive !== "granted") {
-            reportPush("permission_denied", `receive=${receive}`);
-          }
-          if (receive === "granted" && pushEnabled) {
-            // Stamped before the call. If this status is still what the
-            // table holds hours later, then register() was reached and
-            // APNs answered with neither a token nor an error — a silent
-            // hang that no error handler could ever have surfaced, and a
-            // completely different bug from a refused permission.
-            reportPush("register_called", `receive=${receive}`);
-            await PushNotifications.register();
-          }
+          // flipped). CRITICAL: register() on Android calls into
+          // FirebaseMessaging which throws IllegalStateException ON THE
+          // NATIVE THREAD if google-services.json hasn't been installed.
+          // The native throw is NOT caught by this JS try/catch, it
+          // propagates up through the Capacitor plugin worker and
+          // crashes the entire app process before the WebView finishes
+          // loading. Diagnosed on emulator-5554 May 22, 2026.
+          //
+          // The prompt itself waits for two gates (pushDecision, spec
+          // 4.5): a session exists, and the user has reached Today once.
+          // Android only grants two prompts before blocking the app
+          // (POST_NOTIFICATIONS USER_FIXED), and asking a signed-out
+          // visitor on the marketing page burned both. runPushGate can
+          // run again once Today is reached (the REACHED_TODAY_EVENT
+          // listener below), so a launch that starts signed-out but
+          // signs in and reaches Today still gets asked once.
+          const runPushGate = async () => {
+            let hasSession = false;
+            try {
+              const { createClient } = await import("@/lib/supabase/client");
+              const { data } = await createClient().auth.getSession();
+              hasSession = Boolean(data.session);
+            } catch {
+              /* no client: treat as signed out */
+            }
+            const perm = await PushNotifications.checkPermissions();
+            const decision = pushDecision({
+              hasSession,
+              reachedToday: hasReachedToday(),
+              receive: perm.receive as Receive,
+              pushEnabled:
+                process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1",
+            });
+            reportPush(decision.report, `receive=${perm.receive}`);
+            if (decision.prompt) {
+              const asked = await PushNotifications.requestPermissions();
+              const after = pushDecision({
+                hasSession,
+                reachedToday: true,
+                receive: asked.receive as Receive,
+                pushEnabled:
+                  process.env.NEXT_PUBLIC_PUSH_NOTIFICATIONS_ENABLED === "1",
+              });
+              reportPush(after.report, `receive=${asked.receive}`);
+              // Stamped before the call. If this status is still what
+              // the table holds hours later, then register() was
+              // reached and APNs answered with neither a token nor an
+              // error, a silent hang that no error handler could ever
+              // have surfaced, and a completely different bug from a
+              // refused permission.
+              if (after.register) await PushNotifications.register();
+              return;
+            }
+            if (decision.register) await PushNotifications.register();
+          };
+          // Armed BEFORE the first run, not after it. runPushGate awaits
+          // a dynamic import and a session read, so a user who lands
+          // straight on Today can dispatch the event inside that window;
+          // a listener registered afterwards never hears it and the ask
+          // waits for the next cold start.
+          const onReachedToday = () => {
+            if (cancelled) return;
+            void runPushGate().catch(() => {});
+          };
+          window.addEventListener(REACHED_TODAY_EVENT, onReachedToday);
+          teardown.push(() =>
+            window.removeEventListener(REACHED_TODAY_EVENT, onReachedToday),
+          );
+          await runPushGate();
         } catch (err) {
           // Previously swallowed entirely. A throw here (dynamic import
           // failing, a plugin API that moved between versions) left the
@@ -435,6 +498,7 @@ export function CapacitorNativeInit() {
 
     return () => {
       cancelled = true;
+      for (const t of teardown.splice(0)) t();
     };
   }, []);
 
